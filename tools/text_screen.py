@@ -1,0 +1,646 @@
+#!/usr/bin/env python3
+"""Zero-token screen over raw posting text, before any model reads it.
+
+Many triage knockouts used to be nothing more than a stated salary range whose
+maximum sat below the walk-away floor, and each one cost a share of a model
+call to discover. A regex finds those for free.
+
+Same discipline as `tools/score_posting.py`: this cuts ONLY on a quotable
+stated fact, and every cut carries the sentence it was made from. Anything
+requiring judgment is left alone for the model stages.
+
+Cuts made here:
+  eligibility  citizenship, permanent residency, a security clearance or a
+               work-status condition the profile does not meet, stated as a
+               condition (the profile's own patterns)
+  salary       the whole stated range tops out below the floor (the market's
+               currency only; a range in another currency is not compared)
+  language     a language the profile does not hold, named as a requirement
+               and not a nice-to-have
+
+Flags (never cuts): a years bar, a stated or equivalence-clause degree.
+
+`stated_years()` is the one reading of a years bar shared by this screen,
+`fit.py` and `opportunity.py`. It is sentence-level, needs a requirement cue,
+refuses a company boast, and reads the LOW end of a range.
+
+Usage:
+    python3 tools/text_screen.py postings.json --out screened.json
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import person  # noqa: E402
+
+_S = person.module("search")
+CUR = getattr(_S, "CURRENCY_SYMBOL", "$")
+SALARY_FLOOR = _S.SALARY_FLOOR
+
+# Below this a posting is not a low offer, it is a different job level, and no
+# negotiation closes the gap. Between the two numbers the posting is flagged and
+# ranked, never deleted: CLAUDE.md's own rule is that a stated range under the
+# target "is a decision input, not an exclusion", and the code was cutting.
+# A posted range is a starting position, it is often stale, and it is the one
+# number in a posting that moves for the right candidate.
+ABSURD_SALARY = getattr(_S, "SALARY_CUT_BELOW", 0)
+YEARS_HELD = _S.YEARS_HELD
+_BOUNDS = tuple(getattr(_S, "SALARY_RANGE_BOUNDS", (0, 10 ** 9)))
+
+_C = re.escape(CUR)
+MONEY = re.compile(_C + r"\s?(\d{2,3})[,.](\d{3})(?:\.\d+)?|" + _C + r"\s?(\d{2,3})\s?[kK]\b")
+RANGE_CUE = re.compile(r"salary|compensation|pay range|hiring range|base pay|annual|per year|/yr", re.I)
+HOURLY = re.compile(r"per hour|hourly|/\s?h(ou)?r|an hour", re.I)
+# The market's patterns are the profile's (search.py), loaded here:
+#   FOREIGN_CURRENCY  a range in another currency is not compared against the
+#                     floor, it is left to the scorer
+#   LANGUAGE_GATE     (language, required pattern, asset pattern) for each
+#                     language the market raises that the candidate lacks
+#   ELIGIBILITY, ENTITLED, PERMIT_ACCEPTED and the ELIGIBILITY_* terms: the
+#                     statuses a posting can require and how the candidate's
+#                     own status meets them
+#   DESIGNATION, DESIGNATED_TITLE  the market's professional credentials
+#   RESEARCH_ML       a discipline the candidate does not hold, whose
+#                     techniques mark a role whose core is research
+_NEVER = re.compile(r"(?!x)x")
+FOREIGN_CURRENCY = getattr(_S, "FOREIGN_CURRENCY", _NEVER)
+LANGUAGE_GATE = list(getattr(_S, "LANGUAGE_GATE", []))
+
+
+# The language gate once covered only the one language the market keeps
+# raising. A posting that made another language essential for working with
+# overseas suppliers sailed through.
+# Any language the candidate does not hold, stated as a requirement, is
+# the same hard bar, so every language below is checked except those the
+# profile holds (search.py LANGUAGES_HELD).
+#
+# "polish" is the trap here and it is not hypothetical: it is ordinary business
+# English ("strong communication skills and polish in client-facing work"), it
+# lands in the same sentence as "required" by construction because that is what
+# a communication-skills bullet looks like, and the cut fired on it. It needs
+# language context. So do the handful of others that are also English words or
+# nationalities: German, Italian, Dutch, Hebrew, Turkish, Korean.
+_HELD = {x.lower() for x in getattr(_S, "LANGUAGES_HELD", ("english",))}
+_UNAMBIGUOUS_LANGUAGE = "|".join(
+    x for x in ("mandarin|cantonese|chinese|spanish|portuguese|hindi|"
+                "punjabi|urdu|arabic|japanese|tagalog|vietnamese|"
+                "russian|ukrainian|farsi|persian").split("|") if x not in _HELD)
+_ALSO_AN_ENGLISH_WORD = "|".join(
+    x for x in "polish|german|italian|dutch|hebrew|turkish|korean".split("|") if x not in _HELD)
+# A language cue next to the word, on either side, is what makes it a language.
+_LANG_CUE = (r"(?:language|fluen\w*|nativ\w*|speak\w*|spoken|written|"
+             r"bilingual|proficien\w*|literac\w*|translat\w*)")
+OTHER_LANGUAGE = re.compile("|".join(
+    ([r"\b(?:" + _UNAMBIGUOUS_LANGUAGE + r")\b"] if _UNAMBIGUOUS_LANGUAGE else [])
+    + ([r"\b(?:" + _ALSO_AN_ENGLISH_WORD + r")\s+" + _LANG_CUE,
+        _LANG_CUE + r"\s+(?:in\s+)?(?:" + _ALSO_AN_ENGLISH_WORD + r")\b"]
+       if _ALSO_AN_ENGLISH_WORD else [])
+) or r"(?!x)x", re.I)
+LANGUAGE_REQUIRED = re.compile(
+    r"\b(fluen\w*|nativ\w*|bilingual|proficien\w*|requir\w*|must speak|"
+    r"mandatory|essential|written and (spoken|oral))\b", re.I)
+
+ELIGIBILITY = getattr(_S, "ELIGIBILITY", _NEVER)
+ENTITLED = getattr(_S, "ENTITLED", _NEVER)
+PERMIT_ACCEPTED = getattr(_S, "PERMIT_ACCEPTED", _NEVER)
+_STATUS_TERMS = getattr(_S, "ELIGIBILITY_STATUS_TERMS", _NEVER)
+_NOT_BY_PERMIT = getattr(_S, "ELIGIBILITY_NOT_BY_PERMIT", _NEVER)
+_ALWAYS = getattr(_S, "ELIGIBILITY_ALWAYS", _NEVER)
+ELIGIBILITY_CUT_REASON = getattr(_S, "ELIGIBILITY_CUT_REASON",
+                                 "eligibility gate: a status the candidate does not hold stated as a condition")
+CONDITION = re.compile(
+    r"\b(must|required|require[sd]?|requirement|only|eligib\w+|need to be|"
+    r"needs? to|restricted to|limited to|condition of|prerequisite|"
+    r"be able to obtain|ability to obtain|hold(?:s|ing)? a|will be required|"
+    r"is mandatory|mandatory|are subject to)\b", re.I)
+ENCOURAGE = re.compile(
+    r"\b(encouraged?|welcome|preference|priority|equal opportunity|diversity|"
+    r"self[- ]identify|equity|inclusi\w+|regardless of|all qualified|"
+    r"without regard|indigenous|accommodat\w+|do not require|not required|"
+    r"no (?:citizenship|clearance|security clearance) (?:is )?required)\b", re.I)
+
+
+WORD_NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6,
+            "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11,
+            "twelve": 12, "fifteen": 15, "twenty": 20}
+_NUM = r"(\d{1,2}|" + "|".join(WORD_NUM) + r")"
+# A range ("3-7 years", "4 to 6 years") states its LOW end as the bar. Reading
+# the high end as the requirement cut postings whose real bar the profile met,
+# so the low end is what counts and every dash form matches.
+# The token right after "years" must open an experience phrase, or "18 years
+# or older ... criminal background check" reads as a bar.
+YEARS = re.compile(
+    r"\b" + _NUM + r"\s*(?:\+|(?:\s*(?:-|–|—|to)\s*" + _NUM + r"))?\s*(?:\+\s*)?"
+    r"(?:years?|yrs?)\b\s*"
+    r"(?:(?:of|in|’|'|working|relevant|progressive|professional|hands[- ]on|"
+    r"related|industry|practical|proven|demonstrated|direct|prior|full[- ]time|"
+    r"solid|strong|recent|previous|combined|equivalent|total|minimum|"
+    r"post[- ]\w+|as an?|as)\b[^.\n]{0,40}?)?"
+    r"(experience|exp\b|\brole\b|\bbackground\b)", re.I)
+# A professional designation is a credential gate, not a skills gap: no amount
+# of adjacent experience substitutes for an examining body's credential. A
+# pricing posting can require an actuarial designation in progress, and a full
+# resume and cover letter used to be written for one before this existed.
+DESIGNATION = getattr(_S, "DESIGNATION", _NEVER)
+DESIGNATED_TITLE = getattr(_S, "DESIGNATED_TITLE", _NEVER)
+DESIGNATION_REQUIRED = re.compile(
+    r"\b(progress(ing|ion)? (toward|towards)|working toward|actively pursuing|"
+    r"enrolled in|passed|completed|must (hold|have|possess)|required|requirement)\b", re.I)
+
+# Research-grade ML: the deep-learning blocker was narrowed to roles whose core
+# IS deep learning, which let through a role built on causal inference,
+# contextual bandits and off-policy evaluation. Those are a different discipline
+# from applied analytics, not a harder version of it. The techniques are the
+# profile's (search.py RESEARCH_ML).
+RESEARCH_ML = getattr(_S, "RESEARCH_ML", _NEVER)
+
+# "Minimum Qualifications" is usually a heading a sentence or two above the
+# degree line, and postings arrive with markdown in them, so a sentence-local
+# regex misses it. One posting read "- **Education:** Advanced degree (Master's or
+# Ph.D.)" under a "**Minimum Qualifications:**" heading.
+MINIMUM_HEADING = re.compile(r"minimum (qualification|requirement)s?|"
+                             r"basic qualifications|required qualifications", re.I)
+EDUCATION_LABEL = re.compile(r"education\W{0,4}\s*(an?\s+)?advanced\s+degree", re.I)
+
+
+def under_minimum_qualifications(text, sentence):
+    """True when this sentence sits under a minimum-qualifications heading.
+
+    Looks back a short way from where the sentence starts rather than inside
+    it, because the heading is nearly always its own line above.
+    """
+    if EDUCATION_LABEL.search(sentence):
+        return True
+    i = text.find(sentence[:60])
+    if i < 0:
+        return False
+    return bool(MINIMUM_HEADING.search(text[max(0, i - 700):i]))
+
+DEGREE = re.compile(r"\b(master'?s?|msc|m\.s\.|mba|ph\.?d|doctorate|graduate degree|advanced degree)\b", re.I)
+# "Master" is a data-architecture word before it is a degree. A posting can
+# list "master data management" among its data skills and be flagged as
+# stating a graduate requirement. `mastering`, `master plan` and
+# `masterclass` are the same trap. A degree word followed by one of these is
+# not a degree. Nor is a Scrum Master, which a business analyst posting asks
+# for, or the verb: a posting says "learn to use and master the various
+# internal data warehouse tables", and `fit.py` docked it 9 points for a
+# graduate degree.
+NOT_A_DEGREE = re.compile(
+    r"\bmaster'?s?\s+(?:data|plan|class|file|record|copy|agreement|service|key|list|"
+    r"catalog\w*|schedule|budget|brand|template|node|branch)\b"
+    r"|\bmaster(?:ing|ed|y)\b"
+    r"|(?<=\bscrum\s)master\b"
+    r"|\bmaster\s+(?:the|a|an|our|your|its|their|this|these|those|new)\b", re.I)
+ESCAPE = re.compile(r"or equivalent|or comparable|or relevant experience|equivalent experience|"
+                    r"or an equivalent|equivalent practical|or related experience", re.I)
+PREFERRED = re.compile(r"preferred|asset|nice to have|ideally|a plus|bonus|desirable", re.I)
+
+# A years figure only bars the candidate if the sentence is ABOUT the candidate.
+# "With more than 40 years of experience, we're the team behind <a lender>" must
+# not cut a role: company history is not a requirement. So a years cut needs a
+# requirement cue and must not carry a company-boast cue.
+WANTS = re.compile(r"\b(?:requir\w*|qualificat\w*|must have|minimum|at least|you have|"
+                   r"you'?ll bring|you bring|you'?ll need|you need|you should have|"
+                   r"we'?re looking for|looking for|proven|demonstrated|ideal candidate|"
+                   r"experience (?:in|with|as)|background in|track record|"
+                   r"candidates? (?:should|must|will))\b", re.I)
+# "We're looking for" is a requirement heading, not a company boast, and reading
+# it as one discarded the sentence behind it: "Who We're Looking For 5+ years
+# of experience in data science" had its bar thrown away by the rule meant to
+# ignore "we've been in business since 1994".
+BOAST = re.compile(r"\b((?:we'?re|we are|we have|we'?ve)"
+                   r"(?!\s+(?:looking\s+for|seeking|hiring|after|in\s+search))|"
+                   r"our (team|company|firm|history|story)|"
+                   r"the team behind|serving (customers|clients)|in business|founded|"
+                   r"is an? (leading|global|proud|canadian|trusted|top|growing|fast)|"
+                   r"company with|firm with|provider|pioneer|since \d{4}|has been)\b", re.I)
+# A figure this far out is a boast unless the sentence is unmistakably a bar.
+STRONG_WANT = re.compile(r"\b(requir|must|minimum|at least|qualificat)\w*", re.I)
+
+
+# A bullet list scraped out of HTML arrives with the punctuation stripped, so
+# the whole list is one "sentence". The longest runs to thousands of
+# characters against a median of 100, and every gate here works on proximity
+# inside a sentence: with a 40-character window, "required" from one bullet
+# and "French" from another land next to each other and the posting is cut for
+# a language nobody asked for. Roles in the candidate's own city were cut that
+# way.
+MAX_SENTENCE = 300
+
+# What separates two bullets when the full stops are gone. The last one is the
+# signature of a list joined with nothing: a word ending mid-clause butting
+# straight into the capitalised start of the next bullet, as in "...prevent
+# customer dissatisfaction Conduct audits of dealers' warehouse operations".
+_BULLET_BREAK = re.compile(
+    r"\s*[\u2022\u2023\u25aa\u25cf\u00b7\u2043]\s*"
+    r"|\s{2,}"
+    r"|\s+[|]\s+"
+    r"|(?<=[a-z,)])\s+(?=[A-Z][a-z]{2,}\s)")
+
+# `findall` needs a group to count, and the pattern above has none by design:
+# splitting on a captured group would keep the separator in the output.
+_BULLET_BREAK = re.compile("(%s)" % _BULLET_BREAK.pattern)
+
+# The headings a posting puts between its blocks. They are the real separator
+# inside a joined blob and they are high-precision, so they are taken as a
+# boundary whatever sits in front of them: a "5+ years of experience in data
+# science" bar follows "Who We're Looking For" immediately after a sentence of
+# company boast, and without this the boast and the bar stay in one sentence
+# and the boast wins. The heading stays with the text it introduces,
+# which is why this is a lookahead.
+_SECTION_HEADING = re.compile(
+    r"(?=\b(?:who (?:you are|we(?:'re| are)? looking for)"
+    r"|what (?:you(?:'ll| will)? do|we(?:'re| are)? looking for|you(?:'ll| will)? bring)"
+    r"|the impact you(?:'ll| will)? have"
+    r"|(?:minimum|preferred|basic|required|key)\s+qualifications"
+    r"|qualifications|requirements|responsibilities|what you need"
+    r"|about (?:you|the role|the team|this role)"
+    r"|your (?:profile|background|experience)"
+    r"|you (?:will|'ll) (?:have|bring|need))\b)", re.I)
+
+
+def sentences(text: str) -> list[str]:
+    """Sentences, with run-together bullet lists broken back apart.
+
+    Only over-long pieces are split further. Ordinary prose is left exactly as
+    it was, because the aggressive break would cut it at every proper noun; a
+    piece three times the median length is a list, not a sentence.
+    """
+    out = []
+    for piece in re.split(r"(?<=[.!?;])\s+|\n+", text or ""):
+        piece = piece.strip()
+        if not piece:
+            continue
+        if _is_run_together(piece):
+            out.extend(_break_bullets(piece))
+        else:
+            out.append(piece)
+    return out
+
+
+# The shortest thing a bullet can be. Without a floor the capitalised-word rule
+# shreds a heading: "process Who You Are 5+ years of Fintech" came apart into
+# "Who", "You", "Are 5+ years of" and "Fintech or payments experience", and the
+# piece holding the number lost the requirement cue that makes it a bar, and
+# the flag disappeared.
+MIN_PIECE = 40
+
+
+def _break_bullets(piece: str) -> list:
+    """`piece` split at bullet boundaries, keeping each part long enough to read.
+
+    A boundary is only taken when there is a clause in front of it, so the rule
+    separates two bullets without taking a heading apart word by word.
+    """
+    # (where the piece ends, where the next begins, is it a heading). A bullet
+    # boundary is whitespace and is consumed; a heading is a lookahead and stays
+    # with the block it introduces.
+    breaks = sorted([(m.start(), m.end(), False) for m in _BULLET_BREAK.finditer(piece)]
+                    + [(m.start(), m.start(), True)
+                       for m in _SECTION_HEADING.finditer(piece) if m.start()])
+    out, start = [], 0
+    for begin, after, heading in breaks:
+        if begin < start or (not heading and begin - start < MIN_PIECE):
+            continue
+        chunk = piece[start:begin].strip()
+        if chunk:
+            out.append(chunk)
+        start = after
+    tail = piece[start:].strip()
+    if tail:
+        out.append(tail)
+    return out or [piece]
+
+
+def _is_run_together(piece: str) -> bool:
+    """Is this a bullet list with the punctuation gone, or one long sentence?
+
+    Length alone does not tell them apart: a list that cut a local role for
+    French ran only a couple of hundred characters, comfortably inside anything
+    a real sentence might reach. What tells them apart is how many times a
+    clause ends mid-flow and the next word starts capitalised, which happens
+    once in an ordinary sentence with a proper noun in it and four times in a
+    joined list.
+
+    The count matters because the split is not free. "Must be fluent in French"
+    breaks at "in French", and the half with the language in it no longer
+    carries the cue, so a genuine requirement written as a short bullet would
+    stop being caught. Requiring several boundaries keeps those intact.
+    """
+    if len(piece) > MAX_SENTENCE:
+        return True
+    # A posting heading part-way through is a joined blob whatever its length.
+    # A bar can follow "Who We're Looking For" one clause after a sentence of
+    # company boast, and while they share a sentence the boast rule wins and the
+    # bar is never seen.
+    if any(m.start() for m in _SECTION_HEADING.finditer(piece)):
+        return True
+    # Counted the same way the split takes them, which is the only count that
+    # means anything: three raw boundaries is an ordinary sentence with three
+    # proper nouns in it. "The role reports to the Director of Analytics in
+    # Manchester and owns forecasting" has exactly three, and it is one sentence.
+    return len(_break_bullets(piece)) >= 3
+
+
+def evidence(sentence: str, match, width: int = 90) -> str:
+    """The matched phrase with enough either side to check it.
+
+    Quoting the first 200 characters of the containing sentence is what a cut
+    used to show, and on a 4,601-character list that is 200 characters of
+    something else entirely: the reader is asked to accept "French stated as a
+    requirement" under a quote about warehouse audits.
+    """
+    if match is None:
+        return sentence[:200]
+    start = max(match.start() - width, 0)
+    end = min(match.end() + width, len(sentence))
+    return ("..." if start else "") + sentence[start:end].strip() + ("..." if end < len(sentence)
+                                                                     else "")
+
+
+def _num(tok: str) -> int:
+    return int(tok) if tok.isdigit() else WORD_NUM[tok.lower()]
+
+
+def years_bars(text: str) -> list[tuple[int, str]]:
+    """Every years bar a posting states for the CANDIDATE, with its sentence.
+
+    Sentence-level. A sentence counts only when it carries a requirement cue and
+    no company-boast cue, is not a nice-to-have, and the figure opens an
+    experience phrase. A range contributes its low end. Sorted ascending, so the
+    first entry is the lowest bar stated anywhere in the posting.
+    """
+    found = []
+    for s in sentences(text or ""):
+        if PREFERRED.search(s) or BOAST.search(s) or not WANTS.search(s):
+            continue
+        for m in YEARS.finditer(s):
+            n = _num(m.group(1))
+            if n > 25 or (n > 12 and not STRONG_WANT.search(s)):
+                continue
+            found.append((n, s[:220]))
+    return sorted(found, key=lambda x: x[0])
+
+
+def stated_years(text: str) -> tuple[int | None, str]:
+    """The HIGHEST years bar stated, and the sentence it came from.
+
+    Kept at the highest because a screening decision should read a posting at
+    its harshest. `entry_years()` is the companion for the scoring decision,
+    which should not.
+    """
+    bars = years_bars(text)
+    return (bars[-1][0], bars[-1][1]) if bars else (None, "")
+
+
+def entry_years(text: str) -> tuple[int | None, int | None, str]:
+    """The bar that actually gates entry, the highest stated, and the quote.
+
+    A posting is a wish list written by several people. "3+ years of SQL" in the
+    requirements and "10+ years in logistics" three paragraphs down are
+    not one bar of ten; the three is what the recruiter screens on and the ten is
+    somebody's aspiration for the ideal hire.
+
+    Reading only the highest made every multi-bar posting look like a Principal
+    role. That is not a rare shape: it is how a posting that lists requirements
+    per skill is written.
+
+    So the entry bar is the LOWEST stated, and the highest travels alongside it
+    so the scorer can say the spread out loud. A posting stating one bar is
+    unaffected: low and high are the same number.
+    """
+    bars = years_bars(text)
+    if not bars:
+        return None, None, ""
+    return bars[0][0], bars[-1][0], bars[0][1]
+
+
+def salary_range(text: str) -> tuple[int | None, int | None, str]:
+    """(low, high, quote) of the stated pay range, in the market's currency,
+    with the highest top.
+
+    One parser for both callers. `salary_max()` needs only the top, to flag a
+    range under the floor; `tools/bar.py` needs the midpoint, to say whether a
+    posting clears the candidate's pay bar, and reading the range twice two
+    different ways is how the two would come to disagree about one posting.
+    """
+    lo = hi = None
+    quote = ""
+    for s in sentences(text):
+        if not RANGE_CUE.search(s) or HOURLY.search(s) or FOREIGN_CURRENCY.search(s):
+            continue
+        vals = []
+        for m in MONEY.finditer(s):
+            if m.group(1):
+                vals.append(int(m.group(1) + m.group(2)))
+            elif m.group(3):
+                vals.append(int(m.group(3)) * 1000)
+        vals = [v for v in vals if _BOUNDS[0] <= v <= _BOUNDS[1]]
+        if len(vals) >= 2 and (hi is None or max(vals) > hi):
+            lo, hi, quote = min(vals), max(vals), s[:220]
+    return lo, hi, quote
+
+
+def salary_max(text: str) -> tuple[int | None, str]:
+    """Highest annual figure in a sentence that reads like a pay range."""
+    _, hi, quote = salary_range(text)
+    return hi, quote
+
+
+def eligibility_cut(text: str) -> str | None:
+    """The sentence that states, as a condition, a status the candidate lacks."""
+    for s in sentences(text):
+        if not ELIGIBILITY.search(s) or ENCOURAGE.search(s):
+            continue
+        # "must be legally entitled to work in <country>" alone is met by a
+        # candidate who is; only a status term beside it, with a condition cue,
+        # is a bar.
+        if ENTITLED.search(s) and not _STATUS_TERMS.search(s):
+            continue
+        # The same sentence naming a work permit as an ACCEPTED status is a
+        # list of routes in, and the candidate's own status may be one of them.
+        # Some bars (a clearance) are never satisfied that way, so they still cut.
+        if PERMIT_ACCEPTED.search(s) and not _NOT_BY_PERMIT.search(s):
+            continue
+        if CONDITION.search(s) or _ALWAYS.search(s):
+            return s[:220]
+    return None
+
+
+def designation_cut(text):
+    """The sentence stating a professional designation as a condition, or None.
+
+    "Support for actuarial exams" and "CPA an asset" are not gates; a title
+    that IS the designation, or a qualification line demanding progress toward
+    one, is. Held designations are none of these, so any match is a real bar.
+    """
+    for s in sentences(text):
+        if not DESIGNATION.search(s):
+            continue
+        if PREFERRED.search(s) or ENCOURAGE.search(s):
+            continue
+        if DESIGNATION_REQUIRED.search(s):
+            return s[:200]
+    # A title naming the profession outright, repeated through the posting,
+    # is the same bar whether or not a qualification line spells it out.
+    head = text[:400]
+    if DESIGNATED_TITLE.search(head) and len(DESIGNATED_TITLE.findall(text)) >= 3:
+        return head.split("\n")[0][:200]
+    return None
+
+
+RESEARCH_ML_MIN = 3
+
+
+def research_ml_flag(text):
+    """(sentence, count) when research ML is the core of the role, else (None, 0).
+
+    One mention is a nice-to-have on an applied role. Three or more distinct
+    techniques means the job IS the research: a posting can name causal
+    inference, treatment effects, bandits, policy learning, off-policy
+    evaluation and uncertainty estimation, and a full application used to be
+    written for it.
+    """
+    hits = {m.group(0).lower() for m in RESEARCH_ML.finditer(text)}
+    if len(hits) < RESEARCH_ML_MIN:
+        return None, 0
+    for s in sentences(text):
+        if RESEARCH_ML.search(s):
+            return s[:200], len(hits)
+    return None, 0
+
+
+def _states_a_degree(sentence: str) -> bool:
+    """Is the degree word in this sentence a qualification or a data-modelling term?"""
+    m = DEGREE.search(sentence)
+    if not m:
+        return False
+    return not NOT_A_DEGREE.match(sentence, m.start())
+
+
+def screen(job: dict) -> dict:
+    text = (job.get("desc") or "")
+    cuts, flags = [], []
+    if len(text) < 400:
+        return {**job, "text_screen": "thin", "cuts": [], "flags": ["posting body too short to screen"]}
+
+    e = eligibility_cut(text)
+    if e:
+        cuts.append(f'{ELIGIBILITY_CUT_REASON}: "{e}"')
+
+    hi, q = salary_max(text)
+    if hi is not None and hi < ABSURD_SALARY:
+        cuts.append(f'stated range tops out at {CUR}{hi:,}, below {CUR}{ABSURD_SALARY:,}: '
+                    f'a different job level, not a negotiation: "{q}"')
+    elif hi is not None and hi < SALARY_FLOOR:
+        flags.append(f'stated range tops out at {CUR}{hi:,}, under the {CUR}{SALARY_FLOOR:,} '
+                     f'target; a decision input, never a cut, because a posted range '
+                     f'is a starting position and is often stale: "{q}"')
+
+    for lang, required, soft in LANGUAGE_GATE:
+        for s in sentences(text):
+            m = required.search(s)
+            if m and not soft.search(s):
+                cuts.append(f'{lang} stated as a requirement: "{evidence(s, m)}"')
+                break
+
+    softs = [soft for _, _, soft in LANGUAGE_GATE]
+    for s in sentences(text):
+        m = OTHER_LANGUAGE.search(s)
+        if m and LANGUAGE_REQUIRED.search(s) and not any(x.search(s) for x in softs):
+            cuts.append(f'{m.group(0)} stated as a requirement: "{evidence(s, m)}"')
+            break
+
+    # A title written in another language is that language's job: the whole
+    # working language is that one, whatever the body says.
+    title_lang = getattr(_S, "TITLE_LANGUAGE", None)
+    head = (job.get("title") or "") + " " + text[:200]
+    if title_lang and title_lang[1].search(head):
+        cuts.append(f'job title is in {title_lang[0]}: "{(job.get("title") or head)[:120]}"')
+
+    n, q = stated_years(text)
+    if n is not None and n >= 6:
+        flags.append(f'stated {n}+ years against roughly {YEARS_HELD} held; a stretch the scorer weighs, never a cut: "{q[:200]}"')
+    elif n == 5:
+        flags.append("stated 5 years; a stretch, not a bar")
+
+    d = designation_cut(text)
+    if d:
+        cuts.append(f'professional designation stated as a requirement: "{d}"')
+
+    r, hits = research_ml_flag(text)
+    if r:
+        cuts.append(f'research-grade ML is the core of the role ({hits}): "{r}"')
+
+    for s in sentences(text) if getattr(_S, "DEGREE_FLAGS", True) else ():
+        if not _states_a_degree(s) or PREFERRED.search(s):
+            continue
+        if ESCAPE.search(s):
+            flags.append("graduate degree named, but the same sentence offers an equivalence route")
+        elif under_minimum_qualifications(text, s):
+            # This was once a CUT, added after a posting listed "Advanced degree
+            # (Master's or Ph.D.)" under Minimum Qualifications and only got a
+            # flag. It was reversed on a general
+            # rule: a candidate who has everything else is not filtered out for
+            # one missing item, and plenty of these postings hire without the
+            # Master's.
+            #
+            # So it stays visible and the scorer decides: fit.py already docks
+            # points for a stated graduate requirement, which demotes the role
+            # without deleting it. The bar is real and it is not a wall.
+            flags.append(f'advanced degree under a minimum-qualifications heading, '
+                         f'with no equivalence route offered. Ranked down, not cut: '
+                         f'apply anyway where the rest matches: "{s[:200]}"')
+        elif re.search(r"required|must have|qualifications", s, re.I):
+            flags.append(f'graduate degree stated as required: "{s[:200]}"')
+        else:
+            # A degree mentioned in passing ("many of our data scientists hold
+            # advanced degrees") is not a requirement, so keep reading. The loop
+            # used to stop at the first degree word whatever it said, and a
+            # later "Minimum Qualifications: Master's ... required" was never
+            # read.
+            continue
+        break
+
+    return {**job, "text_screen": "cut" if cuts else "pass", "cuts": cuts, "flags": flags}
+
+
+def load_jobs(path: str) -> list[dict]:
+    data = json.load(open(path))
+    return list(data.values()) if isinstance(data, dict) else list(data)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("infile")
+    ap.add_argument("--out", help="survivors, for the next stage")
+    ap.add_argument("--out-all", dest="out_all", help="every record with its verdict")
+    a = ap.parse_args()
+    jobs = load_jobs(a.infile)
+    out = [screen(j) for j in jobs]
+    keep = [j for j in out if j["text_screen"] != "cut"]
+    cut = [j for j in out if j["text_screen"] == "cut"]
+    # --out is what the next stage extracts, so it holds SURVIVORS only. It
+    # used to hold every record tagged with its verdict, which meant a caller
+    # that forgot to filter paid a model to re-read postings this stage had
+    # already cut for free - exactly what used to happen. Use
+    # --out-all when the cut records are wanted too (to record why).
+    if a.out:
+        json.dump(keep, open(a.out, "w"), indent=1)
+    if a.out_all:
+        json.dump(out, open(a.out_all, "w"), indent=1)
+    for j in cut:
+        print(f"CUT  {(j.get('company') or '')[:26]:26} {(j.get('title') or '')[:38]:38} {j['cuts'][0][:70]}")
+    print(f"\n{len(jobs)} screened, {len(keep)} survive, {len(cut)} cut on a quoted stated fact "
+          f"(0 model tokens)", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

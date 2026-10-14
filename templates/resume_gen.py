@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""LaTeX templates for the tailored resume and cover letter.
+
+Boilerplate is shared so it cannot drift between documents; only the selected
+content varies per posting. Bullet text is NOT here: tools/bullet_library.py
+is the single copy, drawn from 01-candidate-profile.md and never escalated. A
+second copy in this file once kept a Claude Code clause that had already been
+moved out of the library.
+"""
+import datetime as _dt
+import os
+import sys
+
+# Derived from this file's location, like every other tool here. It was the
+# literal string "/home/user/ai-job-search", which is the path the cloud
+# container happens to clone into, so it worked in the only environment anybody
+# had run it in. Anywhere else, and SETUP.md documents macOS, Windows and Linux
+# paths, resume_gen would have written a resume to a directory that does
+# not exist, or worse, to a stale copy at that path.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import person  # noqa: E402
+import docpaths  # noqa: E402
+
+# Everything about the person comes from the profile: the name and contact
+# line, the document noun and headings, the paper, education, certifications
+# and sign-off. The templates below hold the layout and nothing else.
+_ID = person.get("identity")
+_DOC = person.get("documents")
+_ROLES = person.module("roles")
+_H = _DOC["headings"]
+
+RESUME_HEAD = r"""%% {noun_title} - {name}
+%% Tailored for: {company} - {role}
+%% Compile with: lualatex {fname}.tex
+
+\documentclass[11pt,{paper},sans]{{moderncv}}
+\moderncvstyle{{banking}}
+\moderncvcolor{{blue}}
+%% ATS: a name with no descenders sets the city one baselineskip below a 30pt
+%% name, and position-sorting extractors then read the name and the city as one
+%% word. A zero-width rule with depth forces the gap the extractor expects.
+\renewcommand*{{\namestyle}}[1]{{{{\namefont#1\rule[-0.42em]{{0pt}}{{0pt}}}}}}
+%% ATS: the default bullet is a FontAwesome circle whose metrics make layout
+%% extractors insert blank lines mid-bullet, splitting one bullet into two
+%% paragraphs. A text bullet from the body font does not.
+\AtBeginDocument{{\renewcommand*{{\labelitemi}}{{\strut\textcolor{{color1}}{{\large\rmfamily\textbullet}}}}}}
+
+\renewcommand*{{\namefont}}{{\fontsize{{30}}{{32}}\bfseries\upshape}}
+\colorlet{{firstnamecolor}}{{color1}}
+\colorlet{{lastnamecolor}}{{color1}}
+\colorlet{{namecolor}}{{color1}}
+\renewcommand*{{\sectionstyle}}[1]{{{{\sectionfont\color{{color1}}#1}}}}
+
+\usepackage[utf8]{{inputenc}}
+\usepackage{{needspace}}
+
+%% ATS: fontawesome glyphs extract as their own names ("MOBILE-ALT", "Envelope")
+%% and land in the text layer directly in front of the phone number and email,
+%% where a parser reading the contact block sees them as part of the value.
+%% The icons are decoration; the contact details are the point. Drop the icons.
+\renewcommand*{{\mobilephonesymbol}}{{}}
+\renewcommand*{{\fixedphonesymbol}}{{}}
+\renewcommand*{{\emailsymbol}}{{}}
+\renewcommand*{{\addresssymbol}}{{}}
+\renewcommand*{{\homepagesymbol}}{{}}
+
+%% A labelled, left-aligned line with a hanging indent, for the blocks that are
+%% lists of things rather than achievements. Bullets are reserved for what the
+%% candidate did; a skills inventory rendered as bullets flattens that
+%% distinction and reads as a wall.
+\newcommand{{\blockline}}[2]{{%
+  \par\noindent\hangindent=1.1em\hangafter=1\relax
+  \textbf{{#1}}: #2\par\vspace{{1.5pt}}}}
+\AtEndPreamble{{\hypersetup{{
+    colorlinks=true, linkcolor=blue, filecolor=magenta, urlcolor=blue,
+    pdftitle={{{name} - {noun_title}}}, pdfsubject={{{noun_title} of {name}}},
+    pdfkeywords={{{pdf_keywords}}}, pdfpagemode=UseNone,
+}}}}
+\usepackage[scale=0.885]{{geometry}}
+\usepackage{{import}}
+
+\name{{{first}}}{{{last}}}
+\address{{{location}}}{{}}{{}}
+{contact_lines}
+
+\begin{{document}}
+\makecvtitle
+\enlargethispage{{3\baselineskip}}
+
+\vspace{{-22pt}}
+\section{{{h_summary}}}
+\vspace{{1pt}}
+\small{{{summary}}}
+
+\section{{{h_experience}}}
+\vspace{{0pt}}
+"""
+
+JOB = r"""
+\needspace{{{ns}\baselineskip}}
+\cventry{{{dates}}}{{{title}}}{{{employer}, {loc}}}{{}}{{}}{{%
+\begin{{itemize}}
+{bullets}
+\end{{itemize}}}}
+"""
+
+RESUME_TAIL = r"""
+\section{{{h_skills}}}
+\vspace{{1pt}}
+{skills}
+
+\section{{{h_education}}}
+\vspace{{1pt}}
+\par\noindent\hangindent=1.1em\hangafter=1\relax {education} {edu}\par
+{certifications}\end{{document}}
+"""
+
+CERTIFICATIONS = r"""
+\section{{{h_certifications}}}
+\vspace{{1pt}}
+\par\noindent\hangindent=1.1em\hangafter=1\relax {certs}\par
+"""
+
+LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Cover Letter - {company}, {role}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\documentclass[]{{cover}}
+\usepackage{{fancyhdr}}
+
+\pagestyle{{fancy}}
+\fancyhf{{}}
+
+\rfoot{{Page \thepage \hspace{{0pt}}}}
+\thispagestyle{{empty}}
+\renewcommand{{\headrulewidth}}{{0pt}}
+\begin{{document}}
+
+\namesection{{}}{{\Huge{{{name}}}}}{{{letter_contact}
+}}
+
+\currentdate{{{letter_date}}}
+\lettercontent{{Dear {salutation},}}
+
+\lettercontent{{{p1}}}
+
+\lettercontent{{{p2}}}
+
+\lettercontent{{{lead}}}
+
+{{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{{Raleway-Medium}}\fontsize{{11pt}}{{13pt}}\selectfont
+\begin{{itemize}}
+{bullets}
+\end{{itemize}}\par}}
+\vspace{{6pt}}
+
+\lettercontent{{{p4}}}
+
+\begin{{flushright}}
+\closing{{{closing}}}
+
+\signature{{{name}}}
+\end{{flushright}}
+\end{{document}}
+"""
+
+# Bullet text lives in the profile's bullets.py, the only copy. The education
+# detail sentence is chosen per draft from the profile's EDUCATION_DETAILS.
+EDU_DETAILS = dict(_ROLES.EDUCATION_DETAILS)
+EDU_STD = EDU_DETAILS[_ROLES.EDUCATION_DEFAULT]
+
+_LATEX_SPECIAL = {"&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_", "$": r"\$"}
+
+
+def _tex(s):
+    """Escape a plain-text profile value for LaTeX. URLs are not passed here."""
+    return "".join(_LATEX_SPECIAL.get(c, c) for c in str(s))
+
+
+def _href(url, label):
+    return "\\href{%s}{%s}" % (url, _tex(label))
+
+
+def _identity():
+    """The fields both templates fill from the profile."""
+    noun = _DOC.get("noun", "resume")
+    extra = [_tex(x) for x in _DOC.get("resume_extra", [])]
+    links = []
+    if _ID.get("linkedin"):
+        links.append(_href(_ID["linkedin"], _ID.get("linkedin_label") or "LinkedIn"))
+    contact = []
+    if _ID.get("phone"):
+        contact.append("\\phone[mobile]{%s}" % _tex(_ID["phone"]))
+    if _ID.get("email"):
+        contact.append("\\email{%s}" % _ID["email"])
+    if links or extra:
+        contact.append("\\extrainfo{%s}" % " \\textbullet{} ".join(links + extra))
+    head = []
+    if _ID.get("email"):
+        head.append("  " + _href("mailto:" + _ID["email"], _ID["email"]))
+    if _ID.get("phone"):
+        head.append(_tex(_ID["phone"]))
+    if _ID.get("linkedin"):
+        head.append(" \\urlstyle{same}" + _href(_ID["linkedin"], "LinkedIn"))
+    certs = getattr(_ROLES, "CERTIFICATIONS", "")
+    return dict(
+        name=_tex(_ID["name"]), first=_tex(_ID["first"]), last=_tex(_ID["last"]),
+        location=_tex(_ID.get("location", "")),
+        noun_title=noun[:1].upper() + noun[1:],
+        paper=_DOC.get("paper", "letterpaper"),
+        pdf_keywords=_tex(_DOC.get("pdf_keywords", noun)),
+        contact_lines="\n".join(contact),
+        letter_contact=" | ".join(head),
+        closing=_tex(_DOC.get("closing", "Kind regards,")),
+        education=_ROLES.EDUCATION,
+        certifications=CERTIFICATIONS.format(h_certifications=_H["certifications"], certs=certs)
+        if certs else "",
+        **{f"h_{k}": v for k, v in _H.items()},
+    )
+
+
+def resume(a):
+    jobs = ""
+    for j in a["jobs"]:
+        bl = "\n".join(f"    \\item {b}" for b in j["bullets"])
+        # Escaped: an employer called "Brindle & Hart" is an alignment tab to
+        # LaTeX, and the compile fails on the first one.
+        jobs += JOB.format(ns=j.get("ns", 5), dates=_tex(j["dates"]), title=_tex(j["title"]),
+                           employer=_tex(j["employer"]), loc=_tex(j["loc"]), bullets=bl)
+    me = _identity()
+    body = (RESUME_HEAD.format(company=a["company"], role=a["role"],
+                               fname=docpaths.resume_stem(a["abbr"]),
+                               summary=a["summary"], **me)
+            + jobs
+            + RESUME_TAIL.format(edu=a.get("edu", EDU_STD), skills=a["skills"], **me))
+    p = docpaths.resume_tex(a["abbr"])
+    open(p, "w").write(body)
+    return p
+
+
+def _long_date(d=None):
+    """The letter date in the profile's convention: `March 4, 2026`
+    (month_day_year, North American) or `4 March 2026` (day_month_year).
+
+    The day is formatted by hand rather than with `%-d`, which is a glibc
+    extension: it raises on Windows, and SETUP.md documents a Windows path.
+    """
+    d = d or _dt.date.today()
+    if _DOC.get("date_format") == "day_month_year":
+        return "%d %s %d" % (d.day, d.strftime("%B"), d.year)
+    return "%s %d, %d" % (d.strftime("%B"), d.day, d.year)
+
+
+def letter(a):
+    # The label and the sentence need a separator: without one the page read
+    # "Demand forecasting Gradient-boosted model estimating weekly SKU demand
+    # across regional depots", which is a run-on in print and in every text
+    # extraction.
+    # No emphasis. Bold and italics in a letter's bullets read as shouting, and
+    # a template that adds them puts them on every letter at once. The colon
+    # carries the separation on its own.
+    bl = "\n".join(f"    \\item {t}: {x}" for t, x in a["cl_bullets"])
+    # The date is written into the .tex, not left as \today.
+    #
+    # \today is evaluated at COMPILE time, so every recompile silently re-dated
+    # the letter. The committed PDF is the record of what an employer
+    # received; re-running verify_batch.sh over an old batch, or recompiling
+    # one letter to check a claim, moved the date on the archive while leaving
+    # the content identical. It happened: letters drafted on one day came back
+    # dated days later, from a compile whose only purpose was to read them.
+    #
+    # `letter_date` lets a caller pin it; the default is the day it is written,
+    # which is what \today meant to say. Either way the .tex reproduces its own
+    # PDF afterwards, which is the property that was missing.
+    suffix = _DOC.get("salutation_suffix", " hiring team")
+    body = LETTER.format(company=a["company"], role=a["role"],
+                         salutation=a.get("salutation", f"{a['company']}{suffix}"),
+                         letter_date=a.get("letter_date") or _long_date(),
+                         p1=a["p1"], p2=a["p2"], lead=a["lead"], bullets=bl, p4=a["p4"],
+                         **_identity())
+    p = docpaths.letter_tex(a["abbr"])
+    open(p, "w").write(body)
+    return p

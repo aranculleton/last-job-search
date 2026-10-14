@@ -1,0 +1,5 @@
+{
+  "seen": {
+    "https://example.com/jobs/9": {"company": "Thornbury Bank", "title": "Risk Analyst", "url": "https://example.com/jobs/9", "first_seen": "2026-09-01", "status": "excluded", "exclusion_reason": "eligibility gate: British nationality stated as a condition", "location": "Manchester, England, United Kingdom", "portal": "linkedin"}
+  }
+}

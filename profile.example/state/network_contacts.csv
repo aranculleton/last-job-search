@@ -1,0 +1,3 @@
+contact_id,name,title,company,company_key,location,linkedin_url,email,tier,route,route_detail,referred_by,signal,signal_date,first_contacted,channel,status,next_action,next_action_due,outcome,linked_application,notes
+fernhill_freight_halloway,Wren Halloway,Head of Supply Chain Analytics,Fernhill Freight,fernhill freight,"Manchester, England, United Kingdom",https://www.linkedin.com/in/example-wren-halloway,,2,cold,,,,,2026-09-21,linkedin,awaiting_reply,,,,,example contact
+larkspur_retail_castellan,Juno Castellan,Analytics Manager,Larkspur Retail,larkspur retail,"Leeds, England, United Kingdom",https://www.linkedin.com/in/example-juno-castellan,,2,alumni,University of Leeds alumni,,,,2026-09-10,linkedin,in_conversation,send the CV,2026-10-20,,,example contact

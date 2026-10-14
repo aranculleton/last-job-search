@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""Build the public app from a person's repo: everything app-owned, nothing personal.
+
+    python3 tools/build_app.py <out_dir> [--tokens-out FILE] [--show] [--test]
+
+1. Exports the COMMITTED tree (`git archive HEAD`, so uncommitted edits never
+   ship) and deletes every path tools/personal_paths.py calls personal.
+2. Builds the denylist from this repo's profile and state, which only a
+   person's repo has: the person's name, contact details, LinkedIn handle,
+   file prefix, every employer and school in their history, every person in
+   network_contacts.csv and network_threads.csv, every company in the
+   tracker, and any extra lines in profile/leak_tokens.txt (people or facts
+   that appear nowhere else, a partner's name for instance).
+3. Runs tools/leak_scan.py over the exported tree with that list. Exit 1 on
+   any finding. With --test, also runs the exported tree's own test suite
+   against its example person, the way the app's CI will.
+
+The denylist is written only where --tokens-out says (default: a temp file
+that is deleted). It is personal data: never commit it, never pass it to the
+app. The app's CI gets the same list from an encrypted Actions secret.
+
+ALLOWED_ORGANIZATIONS are companies that may appear in the app even though
+the person applied to them, because the app names them as platforms or tools
+whatever the person did: an AI vendor whose model runs the app, the portals
+it searches, the hosting it uses, a cloud product a skill is named after.
+Each is a decision; keep the list short.
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import person  # noqa: E402
+from personal_paths import is_personal  # noqa: E402
+
+ROOT = person.ROOT
+
+ALLOWED_ORGANIZATIONS = {
+    # The app runs on Claude; Claude Code, claude.ai and the commit trailers
+    # name the vendor in every copy.
+    "Anthropic",
+    # Platforms the app is built on or searches.
+    "LinkedIn", "GitHub",
+    # A brand spelt with a lower-case first letter, which tone.py lists so a
+    # sentence opening on it is not "corrected". Naming it says nothing about
+    # whether anyone applied there.
+    "eBay",
+}
+
+
+def export(out_dir: str) -> list[str]:
+    """`git archive HEAD` into out_dir, minus personal paths. Returns what was removed."""
+    if os.path.exists(out_dir) and os.listdir(out_dir):
+        raise SystemExit(f"build_app: {out_dir} exists and is not empty")
+    os.makedirs(out_dir, exist_ok=True)
+    arc = subprocess.run(["git", "-C", ROOT, "archive", "--format=tar", "HEAD"],
+                         capture_output=True, check=True).stdout
+    subprocess.run(["tar", "-x", "-C", out_dir], input=arc, check=True)
+    removed = []
+    for dp, _dns, fns in os.walk(out_dir, topdown=False):
+        for fn in fns:
+            full = os.path.join(dp, fn)
+            rel = os.path.relpath(full, out_dir).replace(os.sep, "/")
+            if is_personal(rel):
+                os.remove(full)
+                removed.append(rel)
+        if dp != out_dir and not os.listdir(dp):
+            os.rmdir(dp)
+    return removed
+
+
+def _csv(path: str) -> list[dict]:
+    try:
+        with open(path, newline="", encoding="utf-8") as fh:
+            return list(csv.DictReader(fh))
+    except OSError:
+        return []
+
+
+def _school(education_tex: str) -> list[str]:
+    """The institution named in the profile's Education line."""
+    plain = re.sub(r"\\[a-zA-Z]+\{([^}]*)\}", r"\1", education_tex)
+    return [m.strip() for m in re.findall(r"(?:University|College|School|Institute) of [A-Z][\w ]+?(?=[,(.]|$)"
+                                          r"|[A-Z][\w ]+ (?:University|College)", plain)]
+
+
+def _looks_like_a_name(v: str) -> bool:
+    """Two to four capitalised words of letters (any script), as "Zoë Varga" or "Tomasz K."."""
+    words = v.split()
+    return 2 <= len(words) <= 4 and all(
+        w[0].isupper() and all(c.isalpha() or c in "'-." for c in w) for w in words)
+
+
+_PERSON_KEYS = {"linkedin_url", "headline", "title", "email", "why_not_now", "location"}
+_PREP_HEADING = re.compile(r"^# Prep - ([^,\n]+),", re.M)
+
+
+_CREDENTIAL = re.compile(r"^(?:[A-Z]{2,5}|Ph\.?D\.?|P\.Eng\.?|M\.?Sc\.?|B\.?Sc\.?)$")
+
+
+def name_forms(name: str) -> list[str]:
+    """Every form a recorded name is written in elsewhere.
+
+    The contact book records "Xiu Mei (Sally) Ho, PhD"; a comment writes
+    "Xiu Mei (Sally) Ho", "Xiu Mei Ho" or "Sally Ho". An entry matches
+    only the form it holds, so each form is its own entry.
+    """
+    base = name.split(",")[0].split()
+    while len(base) > 2 and _CREDENTIAL.match(base[-1]):
+        base.pop()
+    base = " ".join(base)
+    forms = [base]
+    bare = " ".join(re.sub(r"\([^)]*\)", " ", base).split())
+    nick = re.search(r"\(([^)]+)\)", base)
+    if nick:
+        forms += [bare, nick.group(1).strip() + " " + bare.split()[-1]]
+    # "Juno Maeve Castellan" may go by Maeve: every given name with the surname.
+    words = bare.split()
+    if len(words) >= 3:
+        forms += [f"{w} {words[-1]}" for w in given_names(bare)]
+    seen: set[str] = set()
+    return [f for f in forms if len(f.split()) >= 2 and not (f in seen or seen.add(f))]
+
+
+def given_names(name: str) -> list[str]:
+    """Each name a person might be greeted by: every capitalised word but the last."""
+    words = " ".join(re.sub(r"\([^)]*\)", " ", name.split(",")[0]).split()).split()
+    while len(words) > 2 and _CREDENTIAL.match(words[-1]):
+        words.pop()
+    nick = re.findall(r"\(([^)]+)\)", name)
+    return [w.strip(".,") for w in words[:-1] + nick
+            if len(w.strip(".,")) > 2 and w[0].isupper() and not _CREDENTIAL.match(w)]
+
+
+_COMPANY_SUFFIX = re.compile(
+    r"[,.]?\s+(?:inc|ltd|limited|llc|llp|plc|corp|corporation|company|co|group|holdings"
+    r"|beverage company|technologies|services)\.?$", re.I)
+
+
+def company_forms(company: str) -> list[str]:
+    """The company as recorded and as people write it: "Acme Foods Company Inc."
+    is "Acme Foods" in a comment, and only the recorded form was an entry."""
+    core = " ".join(re.sub(r"\([^)]*\)", " ", company).split())
+    prev = None
+    while prev != core:
+        prev, core = core, _COMPANY_SUFFIX.sub("", core).strip()
+    return [company] + ([core] if core != company and len(core) > 3 else [])
+
+
+def _people() -> list[str]:
+    """Every person named in the profile's and the state's JSON and prep docs."""
+    found: set[str] = set()
+
+    def walk(o):
+        if isinstance(o, dict):
+            v = o.get("name")
+            if isinstance(v, str) and _looks_like_a_name(v.strip()) and _PERSON_KEYS & set(o):
+                found.add(v.strip())
+            for x in o.values():
+                walk(x)
+        elif isinstance(o, list):
+            for x in o:
+                walk(x)
+
+    roots = [person.path(), person.state("documents"), person.state("company_research")]
+    for root in roots:
+        for dp, _, fns in os.walk(root):
+            for f in fns:
+                full = os.path.join(dp, f)
+                try:
+                    if f.endswith(".json"):
+                        with open(full, encoding="utf-8") as fh:
+                            walk(json.load(fh))
+                    elif f == "prep.md":
+                        with open(full, encoding="utf-8") as fh:
+                            found.update(m.strip() for m in _PREP_HEADING.findall(fh.read()))
+                except (OSError, ValueError):
+                    continue
+    return sorted({f for n in found for f in name_forms(n) if len(f.replace(".", "")) > 4})
+
+
+def denylist() -> list[str]:
+    """One token per line, in leak_scan.py's format. "=" marks case-sensitive."""
+    out: list[str] = []
+    add = out.append
+    ident = person.get("identity")
+    for k in ("name", "first", "last"):
+        if ident.get(k) and len(ident[k]) > 2:
+            add(ident[k])
+    add(ident.get("file_prefix", ""))
+    email = ident.get("email", "")
+    if email:
+        add(email)
+        add(email.split("@")[0])
+        dom = email.split("@")[1]
+        if dom.count(".") == 1 and dom not in ("gmail.com", "outlook.com", "hotmail.com", "yahoo.com"):
+            add(dom)
+    phone = re.sub(r"\D", "", ident.get("phone", ""))
+    if len(phone) >= 10:
+        # The number in every grouping people write it, and its parts: the area
+        # code and the line number alone are enough to find the rest.
+        add(phone[-10:-7])
+        add(phone[-7:-4] + " " + phone[-4:])
+        add(phone[-7:])
+        add(phone[-4:])
+    handle = re.search(r"linkedin\.com/in/([^/?#]+)", ident.get("linkedin", ""))
+    if handle:
+        add(handle.group(1))
+    roles = person.module("roles")
+    for r in roles.ROLES:
+        add("=" + r["employer"])
+    for s in _school(getattr(roles, "EDUCATION", "")):
+        add(s)
+        m = re.search(r" of ([A-Z]\w+)$", s)
+        if m:
+            add(m.group(1))
+    for row in _csv(person.state("network_contacts.csv")):
+        name = (row.get("name") or "").strip()
+        if len(name.split()) >= 2:
+            out.extend(name_forms(name))
+            # A contact also appears by first name in an example message
+            # ("Hi Sasha, ..."). The greeting form is precise; the bare first
+            # name would fire on every other person who shares it. Every given
+            # name gets one, because people go by a middle name too.
+            for first in given_names(name):
+                add(f"=Hi {first}")
+                add(f"=Dear {first}")
+        url = row.get("linkedin_url") or ""
+        h = re.search(r"linkedin\.com/in/([^/?#]+)", url)
+        if h:
+            add(h.group(1))
+        if row.get("email"):
+            add(row["email"].strip())
+    # Threads name their person by contact_id, which is itself a name slug
+    # ("firstname_lastname"); the contacts file holds the names.
+    ids = {(r.get("contact_id") or "").strip() for r in _csv(person.state("network_contacts.csv"))}
+    ids |= {(r.get("contact_id") or "").strip() for r in _csv(person.state("network_threads.csv"))}
+    out += sorted(i for i in ids if "_" in i)
+    for row in _csv(person.state("job_search_tracker.csv")):
+        company = (row.get("company") or "").strip()
+        if company and company not in ALLOWED_ORGANIZATIONS:
+            for form in company_forms(company):
+                if form not in ALLOWED_ORGANIZATIONS:
+                    add("=" + form)
+        cp = (row.get("contact_person") or "").strip()
+        if len(cp.split()) >= 2:
+            out.extend(name_forms(cp))
+    # Everybody a discovery run or a prep doc ever named, not only the people who
+    # became contacts: the people found and dropped are real too, and a comment
+    # that cites "the run dropped <name>" carries them into the app.
+    for name in _people():
+        add(name)
+        for first in given_names(name):
+            add(f"=Hi {first}")
+            add(f"=Dear {first}")
+    extra = person.path("leak_tokens.txt")
+    if os.path.isfile(extra):
+        with open(extra, encoding="utf-8") as fh:
+            out += [line.rstrip("\n") for line in fh]
+    seen, uniq = set(), []
+    for t in out:
+        t = (t or "").strip()
+        if t and t not in seen:
+            seen.add(t)
+            uniq.append(t)
+    return uniq
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("out_dir")
+    ap.add_argument("--tokens-out", help="keep the denylist here (personal data: never commit it)")
+    ap.add_argument("--show", action="store_true", help="print matched text (local use only)")
+    ap.add_argument("--test", action="store_true", help="run the exported tree's tests too")
+    a = ap.parse_args(argv)
+
+    removed = export(a.out_dir)
+    print(f"build_app: exported HEAD to {a.out_dir}, removed {len(removed)} personal path(s)")
+    tokens = denylist()
+    keep = a.tokens_out
+    tmp = None
+    if not keep:
+        fd, tmp = tempfile.mkstemp(prefix="leak_tokens_")
+        os.close(fd)
+        keep = tmp
+    with open(keep, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(tokens) + "\n")
+    try:
+        cmd = [sys.executable, os.path.join(ROOT, "tools", "leak_scan.py"), a.out_dir, "--tokens", keep]
+        if a.show:
+            cmd.append("--show")
+        env = dict(os.environ, LJS_LEAK_TOKENS="")
+        rc = subprocess.run(cmd, env=env).returncode
+    finally:
+        if tmp:
+            os.remove(tmp)
+    if rc != 0:
+        print("build_app: LEAK SCAN FAILED. Nothing from this tree may be pushed.", file=sys.stderr)
+        return 1
+    print(f"build_app: leak scan clean ({len(tokens)} denylist entries)")
+    if a.test:
+        env = {k: v for k, v in os.environ.items() if k not in ("LJS_PROFILE", "LJS_STATE")}
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+        # The tests run in a throwaway copy, so the export stays exactly the tree
+        # that was scanned: no .git, no bytecode, nothing a test wrote. The copy
+        # becomes a one-commit repository because some tests ask git what is
+        # tracked, as they would in a fresh copy of the app.
+        work = tempfile.mkdtemp(prefix="app_test_")
+        try:
+            shutil.copytree(a.out_dir, work, dirs_exist_ok=True)
+            for cmd in (["git", "init", "-q"], ["git", "add", "-A"],
+                        ["git", "-c", "user.name=build_app", "-c", "user.email=build_app@example.com",
+                         "commit", "-q", "-m", "app tree"]):
+                subprocess.run(cmd, cwd=work, check=True, capture_output=True)
+            t = subprocess.run([sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"],
+                               cwd=work, env=env)
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
+        if t.returncode != 0:
+            print("build_app: the app tree's own tests failed", file=sys.stderr)
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

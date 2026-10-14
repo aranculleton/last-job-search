@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""The step between a ranked shortlist and a draft: stage the picks, then assemble.
+
+A person picks postings from a round. Before this existed, the drafting session
+did the rest by hand every time: find the rows in `06_shortlist.json`, write each
+posting where a drafter could read it, work out the filename, build the
+`apps_in.json` that `tools/outreach.py` wants, and afterwards stitch the drafted
+fields, the posting text and the abbreviation back together into the
+`drafts.json` that `tools/fit_to_page.py` renders. Each of those was a place to
+get it slightly wrong, and one of them was a place to get it badly wrong:
+
+**A second role at an employer overwrote the documents already sent to it.**
+`doc_name.suffix("Acme")` is `Acme` whatever the role, and one round picked
+second roles at three employers while `cv/<Prefix>_Resume_Acme.tex` and its
+like were the resumes those employers had already received. `05-cv-templates.md` asks for a role token in that case, and nothing
+enforced it, so the render would have replaced the record `/interview` reads
+with a document the employer never saw. Staging now derives the name, checks
+it against the tracker, and appends a PascalCase role token whenever the name
+belongs to a different application.
+
+    python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...]
+    python3 tools/stage_picks.py assemble <round_dir>
+
+A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
+
+`stage` writes, under <round_dir>:
+    picks/NN_<slug>.md   the posting, fenced by tools/untrusted.py, with the
+                         shortlist's scores and routing notes above the fence
+    picks.json           [{file, company, role, slug, abbr}], the `args.picks`
+                         of the saved draft-applications workflow
+    apps_in.json         the shortlist rows with `abbr`, for tools/outreach.py
+
+`assemble` reads each `<round_dir>/audit_<slug>.json` the workflow's audit stage
+writes (a one-element list holding the corrected draft) and writes
+`<round_dir>/drafts.json` with the posting text and the abbreviation filled in.
+A pick with no audited draft is reported, never silently dropped.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import doc_name  # noqa: E402
+import docpaths  # noqa: E402
+import person  # noqa: E402
+import untrusted  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TRACKER = person.state("job_search_tracker.csv")
+
+# Words that say nothing about which role this is. A token built from them
+# ("Acme_Manager", "Acme_Associate") separates two files and tells a person
+# reading the filename nothing. The profile's city and country words join them
+# (_market_words below).
+_FILLER = {
+    "a", "an", "and", "the", "of", "for", "to", "in", "at", "with", "on",
+    "senior", "sr", "junior", "jr", "lead", "principal", "staff", "associate",
+    "manager", "director", "head", "specialist", "consultant", "analyst",
+    "ii", "iii", "iv", "i", "1", "2", "3", "contract", "month", "months",
+    "12", "fixed", "term", "remote", "hybrid",
+    "global",
+}
+
+
+def _market_words():
+    """The person's country and city: in every posting title, naming no role."""
+    words = set(getattr(person.module("employers"), "NAME_FILLER", ())
+                if person.exists("employers.py") else ())
+    words |= {w.lower() for w in re.findall(r"[A-Za-z]+", person.get("identity.location", ""))
+              if len(w) > 2}
+    return words
+
+
+_FILLER |= _market_words()
+
+
+def slug(company: str) -> str:
+    s = re.sub(r"[^a-z0-9]+", "_", (company or "").lower()).strip("_")
+    return s or "employer"
+
+
+def role_token(role: str, taken: set[str] | None = None) -> str:
+    """A short PascalCase token naming the role, e.g. "PricingStrategy".
+
+    Prefers what follows a dash or comma, because titles put the team there
+    ("Manager - Pricing Strategy", "Associate, Data Science - Supply Chain
+    Analytics"), and falls back to the whole title.
+    """
+    taken = taken or set()
+    parts = [p for p in re.split(r"\s[-–—]\s|,|\(|\)", role or "") if p.strip()]
+    candidates = list(reversed(parts)) + [role or ""]
+    for text in candidates:
+        words = [w for w in re.findall(r"[A-Za-z0-9]+", text) if w.lower() not in _FILLER]
+        if not words:
+            continue
+        for n in (2, 3, 1):
+            tok = "".join(w[:1].upper() + w[1:] for w in words[:n])
+            if tok and tok not in taken and len(tok) <= 24:
+                return tok
+    return "Role"
+
+
+def _tracker_rows(path: str = TRACKER) -> list[dict]:
+    return doc_name.tracker_rows(path)
+
+
+def _norm(s: str) -> str:
+    return doc_name._norm(s)
+
+
+def owners(abbr: str, rows: list[dict]) -> list[dict]:
+    """Tracker rows whose recorded documents already carry this name."""
+    return doc_name.owners(abbr, rows)
+
+
+def file_taken(abbr: str, root: str = ROOT) -> bool:
+    """True when either document exists under this name in any letter case.
+
+    `os.path.exists` is case-sensitive on Linux, where this runs, and the
+    checkout is also opened on macOS, where `_Acme.tex` and `_ACME.tex`
+    are the same file.
+    """
+    for folder, stem in (("cv", docpaths.resume_stem(abbr) + ".tex"),
+                         ("cover_letters", docpaths.letter_stem(abbr) + ".tex")):
+        try:
+            names = os.listdir(os.path.join(root, folder))
+        except OSError:
+            continue
+        if stem.casefold() in {n.casefold() for n in names}:
+            return True
+    return False
+
+
+def choose_abbr(company: str, role: str, rows: list[dict], root: str = ROOT,
+                claimed: set[str] | None = None) -> str:
+    """The filename suffix for this application, never one another application owns.
+
+    The plain company name is used when nothing holds it, or when the only
+    holder is this same role (a regenerated draft keeps its name). Otherwise a
+    role token is appended, lengthened until it is free.
+    """
+    claimed = claimed if claimed is not None else set()
+    base = doc_name.suffix(company, "")
+    held = owners(base, rows)
+    same = all(_norm(r.get("role")) == _norm(role) for r in held)
+    if base not in claimed and (not held or same) and (held or not file_taken(base, root)):
+        return base
+    tried: set[str] = set()
+    for _ in range(6):
+        tok = role_token(role, tried)
+        tried.add(tok)
+        abbr = doc_name.suffix(company, tok)
+        if abbr not in claimed and not owners(abbr, rows) and not file_taken(abbr, root):
+            return abbr
+    raise ValueError(
+        f"no free filename for {company!r} / {role!r}: {base} and every role token tried "
+        "belong to other applications. Pass a Company::title pick with a clearer title.")
+
+
+def _find(shortlist: list[dict], pick: str) -> dict:
+    if pick.isdigit():
+        i = int(pick)
+        if not 1 <= i <= len(shortlist):
+            raise SystemExit(f"pick {pick} is outside the shortlist (1..{len(shortlist)})")
+        return shortlist[i - 1]
+    if "::" not in pick:
+        raise SystemExit(f"pick {pick!r} is neither a rank nor Company::title words")
+    company, title = pick.split("::", 1)
+    hits = [r for r in shortlist
+            if _norm(company) in _norm(r.get("company")) and _norm(title) in _norm(r.get("title"))]
+    if len(hits) != 1:
+        raise SystemExit(f"pick {pick!r} matched {len(hits)} shortlist rows; make it unique")
+    return hits[0]
+
+
+def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
+          root: str = ROOT) -> list[dict]:
+    with open(os.path.join(round_dir, "06_shortlist.json"), encoding="utf-8") as fh:
+        shortlist = json.load(fh)
+    rows = _tracker_rows() if rows is None else rows
+    os.makedirs(os.path.join(round_dir, "picks"), exist_ok=True)
+    staged, apps_in, claimed, seen_slugs = [], [], set(), set()
+    for n, pick in enumerate(picks, 1):
+        r = _find(shortlist, pick)
+        abbr = choose_abbr(r["company"], r["title"], rows, root, claimed)
+        claimed.add(abbr)
+        s = slug(r["company"])
+        if s in seen_slugs:
+            s = f"{s}_{n}"
+        seen_slugs.add(s)
+        path = os.path.join(round_dir, "picks", f"{n:02d}_{s}.md")
+        head = [
+            f"# {r['company']} | {r['title']}", "",
+            f"- abbr: {abbr}",
+            f"- location: {r.get('location', '')}",
+            f"- posted: {r.get('date', '')}",
+            f"- url: {r.get('url', '')}",
+            f"- portal: {r.get('portal', '')}",
+            f"- fit {r.get('fit')}, opportunity {r.get('opportunity')}, priority {r.get('priority')}",
+            f"- flags: {json.dumps(r.get('flags') or [])}",
+            f"- fit_why: {json.dumps(r.get('fit_why') or [])}",
+            f"- warm_route_note: {r.get('warm_route_note') or ''}",
+            f"- outreach_pending_note: {r.get('outreach_pending_note') or ''}",
+            f"- throttle_override_note: {r.get('throttle_override_note') or ''}",
+            "",
+        ]
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(head) + "\n" + untrusted.fence(r.get("desc") or "") + "\n")
+        staged.append({"file": path, "company": r["company"], "role": r["title"],
+                       "slug": s, "abbr": abbr})
+        apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr))
+    with open(os.path.join(round_dir, "picks.json"), "w", encoding="utf-8") as fh:
+        json.dump(staged, fh, indent=1)
+    with open(os.path.join(round_dir, "apps_in.json"), "w", encoding="utf-8") as fh:
+        json.dump(apps_in, fh, indent=1)
+    return staged
+
+
+def assemble(round_dir: str) -> tuple[list[dict], list[str]]:
+    with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
+        staged = json.load(fh)
+    drafts, missing = [], []
+    for p in staged:
+        path = os.path.join(round_dir, f"audit_{p['slug']}.json")
+        try:
+            with open(path, encoding="utf-8") as fh:
+                got = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            missing.append(p["company"])
+            continue
+        d = got[0] if isinstance(got, list) else got
+        with open(p["file"], encoding="utf-8") as fh:
+            text = fh.read()
+        posting = untrusted.unfence(text)
+        if posting == text:
+            # No fence means a pick written by hand, and its header carries the
+            # scorer's notes. `unfence` would hand back the whole file, so the
+            # allocator would target the scorer's words as if the employer had
+            # written them, and a phrase from a fit_why note can land on the
+            # skills line.
+            raise SystemExit(f"{p['file']} has no untrusted fence; re-stage it with `stage`")
+        d = dict(d, abbr=p["abbr"], posting=posting)
+        d.setdefault("company", p["company"])
+        drafts.append(d)
+    with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8") as fh:
+        json.dump(drafts, fh, indent=1)
+        fh.write("\n")
+    return drafts, missing
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("stage")
+    s.add_argument("round_dir")
+    s.add_argument("picks", nargs="+")
+    a = sub.add_parser("assemble")
+    a.add_argument("round_dir")
+    args = ap.parse_args()
+    if args.cmd == "stage":
+        for p in stage(args.round_dir, args.picks):
+            print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
+        print(f"\nargs for the draft-applications workflow: {os.path.join(args.round_dir, 'picks.json')}")
+        return 0
+    drafts, missing = assemble(args.round_dir)
+    print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")
+    if missing:
+        print("NO AUDITED DRAFT for: " + ", ".join(missing))
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

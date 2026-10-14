@@ -1,0 +1,4 @@
+date,company,sector,role,role_type,channel,status,contact_person,fit_rating,notes,cv_file,cover_letter_file,source,deadline
+2026-09-08,Larkspur Retail,Retail,Senior Supply Chain Analyst,data,company site,applied,,72,example row,cv/Morgan_Ellis_CV_Larkspur.tex,cover_letters/Morgan_Ellis_Cover_Letter_Larkspur.tex,https://example.com/jobs/1,
+2026-09-20,Fernhill Freight,Logistics,Operations Analyst,data,LinkedIn,drafted,,68,example row,cv/Morgan_Ellis_CV_Fernhill.tex,cover_letters/Morgan_Ellis_Cover_Letter_Fernhill.tex,https://example.com/jobs/2,
+2026-08-01,Quayside Foods,Grocery,Demand Planning Analyst,data,company site,rejected,,64,example row,,,https://example.com/jobs/3,

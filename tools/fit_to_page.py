@@ -1,0 +1,436 @@
+"""Render, compile, measure, trim, repeat until the resume is one page.
+
+LaTeX page breaks are not predictable from source length, so the only reliable
+way to hit one page is to compile and measure. This trims in a fixed order,
+weakest content first, so what survives is always the strongest material:
+
+  1. the lowest-scoring bullet for THIS posting, wherever it sits
+  2. never below any employer's floor
+  3. then shorten the tools line
+
+Then it grows the page back: the strongest absent bullet is added and kept
+only if the resume is still one page. A bullet the trimmer removed is never
+offered back by the grower; the two used to hand the same bullet back and
+forth, one overflow per application, at four LaTeX runs a round.
+
+Every compile is measured once and the measurement is carried forward, so
+the document on disk always matches the draft and nothing is compiled twice
+to learn the same page count.
+
+The cover letter is trimmed in the order 06-cover-letter-templates.md gives:
+the bullets, then the close, then any fifth block, then the opening. The
+company paragraph is last and only when nothing else got the letter onto the
+page, because that file says never to cut it to make room and it holds the one
+fact about the employer that was independently verified.
+"""
+import json, os, re, subprocess, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import render_application as R
+import allocate
+import bullet_library as LIB
+import untrusted
+import docpaths
+
+# Derived from this file's location, like every other tool here. It was the
+# literal string "/home/user/ai-job-search", which is the path the cloud
+# container happens to clone into, so it worked in the only environment anybody
+# had run it in. Anywhere else, and SETUP.md documents macOS, Windows and Linux
+# paths, fit_to_page would have written a resume to a directory that does
+# not exist, or worse, to a stale copy at that path.
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+# The two icon packages moderncv loads, fontawesome5 and academicons, are the
+# only things the documents used from texlive-fonts-extra: 1.5 MB of a 1.7 GB
+# package that every fresh container had to download. They are vendored in
+# texmf/ (see texmf/README.md) and found through TEXMFHOME, so the install is
+# a third of the size and nothing else about the compile changes.
+TEXMF = os.path.join(ROOT, "texmf")
+
+
+def tex_env(base=None):
+    """The environment for a LaTeX run, with the repo's texmf/ searchable.
+
+    A TEXMFHOME already set is kept, after ours, rather than replaced."""
+    env = dict(os.environ if base is None else base)
+    prior = env.get("TEXMFHOME")
+    env["TEXMFHOME"] = TEXMF if not prior or prior == TEXMF else "{%s,%s}" % (TEXMF, prior)
+    return env
+
+
+MAX_LINES = 50
+# 03-writing-style.md: "200-250 words of BODY text". The body is what the
+# candidate wrote; the header, address, date, salutation and signature block
+# are template. Counting the whole PDF inflates the figure by roughly 45 words
+# and let letters ship over the limit while the fit loop reported them fine.
+# Measure the body from the application object, which is exact, rather than
+# from the rendered page, which is not.
+MAX_BODY_WORDS = 250
+
+
+def _pages(pdf):
+    out = subprocess.run(["pdfinfo", pdf], capture_output=True, text=True).stdout
+    m = re.search(r"Pages:\s+(\d+)", out)
+    return int(m.group(1)) if m else 9
+
+
+def _lines(pdf):
+    """Non-blank text lines, for the report only. One pdftotext run."""
+    p = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
+                       capture_output=True, text=True)
+    return len([l for l in p.stdout.splitlines() if l.strip()])
+
+
+def resume_pdf(abbr):
+    return docpaths.resume_pdf(abbr)
+
+
+def letter_pdf(abbr):
+    return docpaths.letter_pdf(abbr)
+
+
+class CompileFailed(RuntimeError):
+    """A LaTeX run that did not produce a document.
+
+    Raised rather than returned so that no caller can mistake a failure for a
+    page count. `_pages()` returns 9 when it cannot read a PDF, which reads as
+    "too long" and would have been silently trimmed against.
+    """
+
+
+def _compile(engine, tex, cwd, pdf, passes=1):
+    """Run `engine` over `tex`, and return the page count of what it produced.
+
+    Two things here are the fix for one bug, and it is worth saying which.
+
+    The exit status was never checked. `subprocess.run` was called with neither
+    `check=True` nor any inspection of `.returncode`, so a LaTeX run that
+    aborted on a syntax error was indistinguishable from one that succeeded.
+
+    Nothing removed the previous PDF first. Put together, an aborted recompile
+    left the PREVIOUS run's PDF on disk, `_pages()` read it as one page, the
+    fit loop reported clean, and every downstream check, including the text
+    layer and the claims audit, ran happily against a document that did not
+    correspond to its own .tex. The failure is silent by construction: the file
+    is there, it is a valid PDF, and it is the wrong one.
+
+    So the target is deleted before the run and its absence afterwards is the
+    failure signal, which is stronger than the exit status alone: lualatex
+    exits non-zero on warnings it recovers from, and exits zero in
+    nonstopmode on some errors that still produce no output.
+    """
+    try:
+        os.remove(pdf)
+    except FileNotFoundError:
+        pass
+    last = None
+    for _ in range(passes):
+        last = subprocess.run([engine, "-interaction=nonstopmode", tex],
+                              cwd=cwd, capture_output=True, env=tex_env())
+    out = (last.stdout or b"").decode("utf-8", "replace") if last else ""
+    if not os.path.exists(pdf):
+        tail = out.splitlines()
+        log = "\n".join(l for l in tail if l.startswith("!"))[:800]
+        raise CompileFailed(
+            f"{engine} produced no PDF for {tex}"
+            + (f"\n{log}" if log else "\n(no error line in the log)"))
+
+    # A font that cannot be loaded is not an absence. `cover.cls` names its
+    # fonts by a path relative to the working directory, so a compile started
+    # from the wrong place reports "The font Lato-Lig cannot be found", picks
+    # a default, writes a perfectly valid one-page PDF and exits 1. Every
+    # check after this one passes: the page count is right, the text layer
+    # extracts, the claims are grounded. The letter is simply in the wrong
+    # typeface from top to bottom, and nothing says so.
+    if "fontspec Error" in out or "cannot be found" in out:
+        missing = sorted({m for m in re.findall(r'The font "([^"]+)" cannot be found', out)})
+        raise CompileFailed(
+            f"{engine} could not load {len(missing) or 'some'} font(s) for {tex}"
+            + (f": {', '.join(missing[:6])}" if missing else "")
+            + f". It substituted defaults and still wrote {os.path.basename(pdf)}, "
+            f"so the PDF is valid and wrong. Check the working directory: "
+            f"the font paths in the template are relative to it.")
+    return _pages(pdf)
+
+
+def compile_resume(abbr, passes=1):
+    r"""lualatex; returns the page count.
+
+    One pass settles the page count, which is all a measurement needs, and the
+    second pass doubled the cost of every one. But moderncv's footer carries
+    "\thepage/\pageref{lastpage}", and a page reference needs the second pass
+    to pick up the current .aux. A resume that was briefly two pages during
+    trimming therefore printed "1/2" on a one-page document, and shipped that
+    way. So measurements stay at one pass and the final render asks for two.
+    """
+    return _compile("lualatex", docpaths.resume_stem(abbr) + ".tex",
+                    f"{ROOT}/cv", resume_pdf(abbr), passes)
+
+
+def compile_letter(abbr):
+    """One xelatex pass; returns the page count."""
+    return _compile("xelatex", docpaths.letter_stem(abbr) + ".tex",
+                    f"{ROOT}/cover_letters", letter_pdf(abbr))
+
+
+def body_words(a):
+    """Words the candidate actually wrote: the four blocks plus the bullets,
+    labels included (the label is printed, so the reader reads it). This is
+    the one body count; audit_letters imports it rather than keeping its own."""
+    # Count every prose field the letter carries, not a fixed four.
+    #
+    # This listed p1, p2, lead and p4 by name. Real letters render five and six
+    # prose blocks, so an entire paragraph was invisible to the trim loop: a
+    # letter could measure 294 words here and 397 on the page. The 250-word cap
+    # was being enforced against a number that was never the number on the
+    # page, which is exactly the "word count wrong" that then had to be fixed
+    # by hand.
+    #
+    # Anything that looks like a paragraph counts. A new field added to the
+    # application object gets counted automatically rather than silently
+    # escaping the cap.
+    # `concession` is not counted: build() never renders it (it is the
+    # drafter's note about where a concession sits), and counting it made the
+    # trimmer cut real sentences to pay for words no reader sees.
+    keys = sorted(k for k in a
+                  if re.fullmatch(r"p\d+|lead|intro|opening|closing", k)
+                  and isinstance(a.get(k), str))
+    parts = [a.get(k, "") for k in keys]
+    parts += [f"{b.get('label','')} {b.get('text','')}" for b in a.get("cl_bullets", [])]
+    txt = " ".join(parts)
+    txt = re.sub(r"\\[a-zA-Z]+\{?|\}|\\%|\\\$", "", txt)
+    return len(txt.split())
+
+
+def _scores(a):
+    return allocate.bullet_scores(a.get("posting", "") or a.get("role", ""))
+
+
+def _employer(j):
+    return j["employer"]
+
+
+def grow_resume(a, caps=None, skip=()):
+    """Add back the strongest absent bullet for THIS posting that fits the caps.
+
+    The loop below only ever removed content, so a resume trimmed by one line
+    stayed a bullet short of the page for good. Growth is by score, not by
+    employer position: on a pricing posting the next bullet in comes from one
+    role, on a product posting from another. `skip` holds what the
+    trimmer already removed this run; offering it back is a guaranteed
+    overflow. `caps` is computed once per fit, not once per call.
+    """
+    scores = _scores(a)
+    caps = caps or allocate.caps_for(a.get("posting", ""))
+    have = {b for j in a["jobs"] for b in j["bullets"]}
+    blocked = set(skip)
+    for b in have:
+        blocked |= R.CONFLICTS.get(b, set())
+    cands = []
+    for j in a["jobs"]:
+        e = _employer(j)
+        if len(j["bullets"]) >= caps[e]:
+            continue
+        for b in LIB.LIB[e]:
+            if b not in have and b not in blocked:
+                cands.append((scores[b], b, j))
+    if not cands:
+        return None
+    _, b, j = max(cands)
+    j["bullets"].append(b)
+    return b
+
+
+def trim_resume(a):
+    """Remove the weakest bullet for THIS posting, honouring every floor.
+
+    Returns the bullet id removed, "tools" when the tools line was shortened
+    instead, or None when nothing more can come off.
+    """
+    scores = _scores(a)
+    cands = [(scores[b], b, j) for j in a["jobs"]
+             if len(j["bullets"]) > allocate.FLOOR[_employer(j)]
+             for b in j["bullets"]]
+    if cands:
+        _, b, j = min(cands)
+        j["bullets"].remove(b)
+        return b
+    # Everyone is at floor; shorten the tools line instead.
+    parts = [p.strip() for p in a.get("tools", "").split(",")]
+    if len(parts) > 8:
+        a["tools"] = ", ".join(parts[:-3])
+        return "tools"
+    return None
+
+
+def shorten(text, budget):
+    """Drop whole trailing sentences until under budget. Never cuts mid-sentence."""
+    sents = R.split_sentences(text)
+    while len(" ".join(sents).split()) > budget and len(sents) > 1:
+        sents.pop()
+    return " ".join(sents)
+
+
+def _try(a, key, budget):
+    """Shorten a field only if sentence removal actually changes it.
+
+    shorten() drops whole trailing sentences, so a single long sentence comes
+    back unchanged. Returning True on a no-op made the fit loop spin without
+    progress until it hit its iteration cap, which is why letters stayed long
+    while reporting that trimming had run.
+    """
+    before = a[key] if isinstance(key, str) else key["text"]
+    after = shorten(before, budget)
+    if after == before:
+        return False
+    if isinstance(key, str):
+        a[key] = after
+    else:
+        key["text"] = after
+    return True
+
+
+def trim_letter(a, over):
+    """Cut in the order 06-cover-letter-templates.md gives, which ends at p2.
+
+    That file's "How to cut, in order" is: the second sentence of any bullet,
+    any bullet duplicating the resume, adjectives and scene-setting, a fourth
+    bullet. Then: "Never cut the company-specific paragraph to make room."
+
+    p2 is that paragraph. It carried the one fact about the employer that was
+    independently verified, and `outreach.py` reads its first sentence as the
+    fact the LinkedIn note is built on. It was being cut first, ahead of the
+    bullets and the closing, so the cheapest thing to lose was the only thing
+    in the letter that could not be written without doing the research.
+
+    It is still reachable, last and only when nothing else got the letter onto
+    the page, because a letter that overflows is not delivered at all.
+
+    Any extra paragraph (p3 and beyond) is trimmed before p1, because a letter
+    that grew a fifth prose block is long for that reason. This used to trim a
+    fixed four fields, so an extra paragraph could not be cut at all and the
+    loop would spin to its iteration cap and give up with the letter still
+    over. Letters were undercounted, and some were also untrimmable.
+    """
+    for b in a["cl_bullets"]:
+        if len(b["text"].split()) > 22 and _try(a, b, 20):
+            return True
+    if len(a["p4"].split()) > 35 and _try(a, "p4", max(30, len(a["p4"].split()) - over)):
+        return True
+    extras = sorted(k for k in a
+                    if re.fullmatch(r"p\d+", k) and k not in ("p1", "p2", "p4")
+                    and isinstance(a.get(k), str))
+    for k in extras:
+        if len(a[k].split()) > 40 and _try(a, k, max(35, len(a[k].split()) - over)):
+            return True
+    if len(a["p1"].split()) > 45 and _try(a, "p1", 42):
+        return True
+    # Last. See above: losing the researched paragraph beats losing the page.
+    if len(a["p2"].split()) > 45 and _try(a, "p2", max(40, len(a["p2"].split()) - over)):
+        return True
+    return False
+
+
+def _render_resume(a):
+    R.resume(R.build(a))
+    return compile_resume(a["abbr"])
+
+
+def _render_letter(a):
+    R.letter(R.build(a))
+    return compile_letter(a["abbr"])
+
+
+def fit(a):
+    """Returns ((resume_pages, resume_lines), letter_pages), each the last
+    measurement of the document that is on disk when this returns."""
+    abbr = a["abbr"]
+    R.jobs_for(a)                                   # dedupe + order before any cap reasoning
+    caps = allocate.caps_for(a.get("posting", ""))  # once per fit
+    trimmed = set()
+    pages = _render_resume(a)
+    for _ in range(9):
+        if pages <= 1:
+            break
+        gone = trim_resume(a)
+        if not gone:
+            break
+        if gone != "tools":
+            trimmed.add(gone)
+        pages = _render_resume(a)
+    # Fill the page. Add a bullet, recompile, and keep it only if the resume is
+    # still one page; otherwise put the page back the way it was and stop.
+    for _ in range(8):
+        if pages > 1:
+            break
+        snapshot = [list(j["bullets"]) for j in a["jobs"]]
+        if not grow_resume(a, caps, skip=trimmed):
+            break
+        grown = _render_resume(a)
+        if grown > 1:
+            # strict: snapshot is taken from a["jobs"], so a length
+            # mismatch is a bug, and silently dropping a job's bullets
+            # is the quiet kind that ships.
+            for j, b in zip(a["jobs"], snapshot, strict=True):
+                j["bullets"] = b
+            pages = _render_resume(a)   # the PDF on disk must match the draft
+            break
+        pages = grown
+    lpages = _render_letter(a)
+    for _ in range(9):
+        words = body_words(a)
+        if lpages <= 1 and words <= MAX_BODY_WORDS:
+            break
+        if not trim_letter(a, max(8, words - MAX_BODY_WORDS)):
+            break
+        lpages = _render_letter(a)
+    # Settle the page reference in the footer now that the layout is final.
+    pages = compile_resume(abbr, passes=2)
+    return (pages, _lines(resume_pdf(abbr))), lpages
+
+
+def load(path):
+    """The drafts in `path`, and which of them had their posting read in.
+
+    A kept draft (`documents/applications/<slug>/draft.json`, written by
+    `tools/outreach.py`) names its posting instead of carrying it, because
+    committed posting text lives only inside the untrusted fence in
+    `job_posting.md`. It is read back through that fence here.
+    """
+    with open(path, encoding="utf-8") as fh:
+        apps = json.load(fh)
+    here = os.path.dirname(os.path.abspath(path))
+    read_in = set()
+    for i, a in enumerate(apps):
+        if "posting" in a or not a.get("posting_from"):
+            continue
+        with open(os.path.join(here, a["posting_from"]), encoding="utf-8") as fh:
+            text = fh.read()
+        posting = untrusted.unfence(text)
+        if posting == text:
+            raise SystemExit(f"{a['posting_from']} has no untrusted fence; not reading it")
+        a["posting"] = posting
+        read_in.add(i)
+    return apps, read_in
+
+
+def save(path, apps, read_in):
+    """Write the drafts back, never with a posting that arrived fenced."""
+    out = [{k: v for k, v in a.items() if not (i in read_in and k == "posting")}
+           for i, a in enumerate(apps)]
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(out, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
+
+
+if __name__ == "__main__":
+    apps, read_in = load(sys.argv[1])
+    # Refuse the whole batch before the first compile, so a name that belongs
+    # to another application never gets half a batch rendered over it.
+    R.check_batch(apps)
+    for a in apps:
+        (rp, rl), lp = fit(a)
+        bw = body_words(a)
+        flag = "" if (rp == 1 and lp == 1 and bw <= MAX_BODY_WORDS) else "   <-- CHECK"
+        print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  letter {lp}p/{bw} body words{flag}")
+    save(sys.argv[1], apps, read_in)

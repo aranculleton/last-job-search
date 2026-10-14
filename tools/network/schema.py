@@ -1,0 +1,106 @@
+"""The contract every networking module shares.
+
+Design note on integration. The brief asks for networking to extend the
+application system rather than sit beside it, and the join already exists:
+`tools/company_key.py` turns a bank's legal name, its initials and its capital
+markets division into one key. Contacts carry that key, applications carry that key,
+so a thread and an application at the same employer find each other without a
+second identity scheme. Company-level findings live in the existing
+`company_research/` cache, which already has a `network_contacts_note` field
+nobody was writing to.
+
+Two files hold networking state, both CSV like the tracker so they open in a
+spreadsheet and diff in git:
+
+  network_contacts.csv   one row per person
+  network_threads.csv    one row per message sent or received
+
+A person is not a thread. Someone can be contacted on LinkedIn, then email,
+then a call; the contact row holds who they are, the thread rows hold what
+happened. Deriving status from messages rather than storing it means the
+status can never drift from the evidence.
+"""
+
+CONTACT_COLUMNS = [
+    "contact_id",        # stable slug: company_key + surname, e.g. "acme_halloway"
+    "name",
+    "title",
+    "company",           # as written
+    "company_key",       # company_key.key(company) - the join to the tracker
+    "location",
+    "linkedin_url",
+    "email",
+    "tier",              # 1 live hiring intent | 2 hiring authority | 3 senior IC | 4 adjacent
+    "route",             # cold | alumni_employer | alumni_school | referral | mutual | hiring_team
+    "route_detail",      # "Acme alumni", "referred by Jane Smith", "named on the posting"
+    "referred_by",       # contact_id of the referrer, for the referral graph
+    "signal",            # the quoted hiring signal, for tier 1
+    "signal_date",
+    "first_contacted",
+    "channel",           # connection | inmail | email | intro
+    "status",            # see THREAD_STATUSES
+    "next_action",
+    "next_action_due",
+    "outcome",
+    "linked_application",  # cv_file of the related application row, if any
+    "notes",
+]
+
+THREAD_COLUMNS = [
+    "contact_id",
+    "date",
+    "direction",         # out | in
+    "channel",
+    "scenario",          # reply_engine classification, for inbound
+    "summary",           # one line, what was said
+    "full_text",         # the message, for reply context
+]
+
+# Ordered by how far the thread has progressed. A status later in this list
+# never reverts to an earlier one without an explicit outcome.
+THREAD_STATUSES = [
+    "not_contacted",
+    "awaiting_reply",        # we sent, they have not answered
+    # Accepted the connection request and said nothing. A different state from
+    # awaiting_reply, and a better one: a 1st-degree connection is a free and
+    # permanent DM channel, and clicking accept is a small signal of interest
+    # that not replying does not cancel. Kept apart because, as one bucket, the
+    # state hid every accepted-but-silent contact inside "sent and ignored"
+    # when the two need opposite follow-ups.
+    "connected_no_reply",
+    "replied_needs_response",  # they answered, we owe a reply
+    "in_conversation",       # back and forth, nothing owed right now
+    "call_booked",
+    "referral_in_progress",
+    "converted_to_application",
+    "gone_cold",             # no reply after a nudge
+    "closed",                # explicit no, or we walked away
+]
+
+OWED_BY_US = {"replied_needs_response"}
+TERMINAL = {"gone_cold", "closed", "converted_to_application"}
+
+# Platform limits the output has to fit inside. LinkedIn caps connection
+# requests weekly and InMail credits monthly; sending more than the user can
+# actually send produces a list they cannot action.
+LIMITS = {
+    "connections_per_week": 20,   # conservative: LinkedIn's soft cap is ~100/wk but
+                                  # unanswered requests count against future ones
+    "inmail_credits_per_month": 5,
+    "connection_note_chars": 300,
+    "inmail_words": (150, 200),
+    # A nudge is capped BELOW the note it is chasing, which is the whole point.
+    # Someone who ignored a 300 character message is not going to respond to an
+    # even longer one, especially a senior reader. A first message is an
+    # introduction and earns its 300 characters. A nudge has already been
+    # declined once, so every extra word is spent arguing with someone who has
+    # not engaged. It gets less room, not more.
+    # `gone_quiet` in reply.py has always said two sentences; this makes it
+    # a number the composer can refuse to exceed.
+    "nudge_chars": 280,
+}
+
+# Follow-up cadence, in business days. The brief is explicit that 24-48 hours
+# reads as impatient and 5-7 business days is the correct window.
+FOLLOWUP_BUSINESS_DAYS = 6
+MAX_NUDGES = 1

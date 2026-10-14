@@ -1,0 +1,11 @@
+{
+  "_about": "A placeholder registry: the example person has no routines. A real profile's lists the ops session and each routine's trigger id; automation/README.md explains the design.",
+  "timezone": "Europe/London",
+  "ops_session": {"id": "session_EXAMPLE", "title": "Job search ops (scheduled routines run here)"},
+  "stub": "Scheduled run: {label}. You are in the Job search ops session. Run `git fetch origin master`, then read `automation/prompts/_common.md` and `{prompt_file}` as they are on origin/master (`git show origin/master:<path>`) and follow them exactly. If either cannot be read, still deliver: call fire_trigger (Claude_Code_Remote) with trigger_id \"{relay_id}\" and text \"{Label} could not start: <the reason, one line>\".",
+  "routines": [
+    {"key": "relay", "name": "Job search: deliver to phone", "trigger_id": "trig_EXAMPLERELAY", "mode": "fresh_session", "cron": null, "notifications": {"push": true, "email": true}, "prompt_file": "automation/prompts/relay.md", "what": "Repeats the ops session's finished message as a push and an email."},
+    {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": "trig_EXAMPLEBRIEF", "mode": "ops_session", "cron": "CRON_TZ=Europe/London 56 7 * * *", "prompt_file": "automation/prompts/morning_brief.md", "what": "What is owed, then a short TLDR."},
+    {"key": "job_round", "name": "Job search: job round", "trigger_id": "trig_EXAMPLEROUND", "mode": "ops_session", "cron": "CRON_TZ=Europe/London 52 6 * * 1,4", "prompt_file": "automation/prompts/job_round.md", "what": "A scored round and the top 8."}
+  ]
+}

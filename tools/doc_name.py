@@ -1,0 +1,149 @@
+"""The filename suffix on a resume or cover letter, derived from the company.
+
+The employer sees the filename on the attachment, so it has to read like a
+person named it. The rule used to ask for a 2-to-4 character UPPERCASE
+abbreviation, which is right for a company that genuinely writes itself that
+way (IBM, SAP) and wrong for every company that does not. Applied to the rest
+it produced <Name>_Resume_ACMEWIDGETS.pdf: not an abbreviation at all, just the
+company name shouted, and a name like that reads as machine-generated.
+
+So: a company writes its own name, and this returns it. A name styled with an
+inner capital keeps it, a lower-case letter in an initialism keeps it, a word
+stays a word. Only the names in KNOWN override that, and every one of them is
+either an abbreviation people actually say out loud or a company that styles
+itself in capitals. KNOWN is the profile's (employers.py ABBREVIATIONS),
+because which companies need one depends on who the person applies to.
+
+The derivation is here rather than in the drafter's head because the drafter
+got it wrong across a batch of documents while the rule sat in markdown two
+files away.
+"""
+from __future__ import annotations
+
+import csv
+import os
+import re
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import docpaths  # noqa: E402
+import person  # noqa: E402
+
+TRACKER = person.state("job_search_tracker.csv")
+_EMP = person.module("employers") if person.exists("employers.py") else None
+
+# An established abbreviation people say out loud, or a name whose own styling
+# is not what title-casing would produce. Keyed on the lowercased company name.
+KNOWN = dict(getattr(_EMP, "ABBREVIATIONS", {}))
+
+# Dropped from the END of a name before shortening. They identify the legal
+# entity, not the company anybody names in conversation. Only ever from the
+# end: "Co" leads "Co-Ventures", and stripping it from the front left the
+# file named <Name>_Resume_Ventures. The profile adds its market's words
+# (employers.py NAME_FILLER: a country name, so "Acme Ireland" is Acme).
+GENERIC = {"inc", "ltd", "limited", "llc", "llp", "corp", "corporation",
+           "company", "co", "group", "holdings", "plc",
+           "technologies", "technology", "software", "solutions",
+           "international", "worldwide", "financial"} | set(getattr(_EMP, "NAME_FILLER", ()))
+
+MAX_CHARS = 14   # long enough for a two-word brand, short enough to stay a name
+
+
+def _words(company: str) -> list[str]:
+    """Words, with a hyphenated name kept whole: Co-Ventures is one word."""
+    parts = re.split(r"[^A-Za-z0-9-]+", str(company or "").strip())
+    return [p.strip("-") for p in parts if p.strip("-")]
+
+
+def suffix(company: str, role_token: str = "") -> str:
+    """The `<Name>` in <Prefix>_Resume_<Name>.tex.
+
+    `role_token` is appended only when applying to two different roles at one
+    employer, which is the one case where the company name alone collides.
+    """
+    words = _words(company)
+    if not words:
+        return ""
+    known = KNOWN.get(" ".join(words).lower())
+    if known is None:
+        # Drop the trailing generic words, but never all of them: "The Co Group"
+        # is nothing at all once "the" and "co" are gone.
+        kept = list(words)
+        if len(kept) > 1 and kept[0].lower() == "the":
+            kept.pop(0)
+        while len(kept) > 1 and kept[-1].lower() in GENERIC:
+            kept.pop()
+        # Truncate on a word boundary. Cutting mid-word gave a brand plus three
+        # letters of the next word, which reads as a typo rather than as a
+        # shortening.
+        out = ""
+        for w in kept:
+            w = w.replace("-", "")
+            if out and len(out) + len(w) > MAX_CHARS:
+                break
+            out += w
+        known = out or kept[0].replace("-", "")[:MAX_CHARS]
+    token = re.sub(r"[^A-Za-z0-9]", "", role_token)
+    return known + ("_" + token if token else "")
+
+
+def is_shouty(name: str) -> bool:
+    """A suffix that is a word in capitals rather than an abbreviation.
+
+    Everything in KNOWN is allowed however it is cased. Anything else longer
+    than four characters and entirely upper-case is the failure mode this
+    module exists to stop.
+    """
+    n = str(name or "").split("_")[0]
+    if n in set(KNOWN.values()):
+        return False
+    return len(n) > 4 and n.isupper()
+
+
+def tracker_rows(path: str = TRACKER) -> list[dict]:
+    try:
+        with open(path, newline="", encoding="utf-8") as fh:
+            return list(csv.DictReader(fh))
+    except OSError:
+        return []
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(s or "").lower()).strip()
+
+
+def owners(name: str, rows: list[dict]) -> list[dict]:
+    """Tracker rows whose recorded resume or letter already carries this name."""
+    # Case-folded: `_Acme.tex` and `_ACME.tex` are one file on macOS and
+    # Windows, so a second Acme role would replace the documents already sent.
+    stems = {docpaths.resume_rel(name, "").casefold(),
+             docpaths.letter_rel(name, "").casefold()}
+    return [r for r in rows
+            if any(os.path.splitext((r.get(col) or "").strip())[0].casefold() in stems
+                   for col in ("cv_file", "cover_letter_file"))]
+
+
+def check_free(name: str, company: str, role: str, rows: list[dict]) -> None:
+    """Raise when writing this name would replace another application's documents.
+
+    `suffix()` gives one name per employer, so a second role there derives the
+    name the first one was sent under. A round can pick second roles at
+    employers whose resumes are already on file under their plain names;
+    rendering would overwrite the record `/interview` reads with a document
+    nobody sent. A regenerated draft for the SAME role keeps its name, so only
+    a different role is refused.
+    """
+    for r in owners(name, rows):
+        if _norm(r.get("role")) != _norm(role):
+            raise FileExistsError(
+                f"{name} already holds the documents for {r.get('company')}, "
+                f"{r.get('role')!r} ({r.get('status')}, {r.get('date')}). Rendering "
+                f"{company}, {role!r} under it would overwrite them. Give the draft an "
+                f"abbr with a role token, e.g. {suffix(company, 'RoleName')}, or stage "
+                "it with tools/stage_picks.py, which picks one.")
+
+
+if __name__ == "__main__":   # pragma: no cover
+    import sys
+    for c in sys.argv[1:]:
+        print("%-34s -> %s" % (c, suffix(c)))

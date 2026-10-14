@@ -1,0 +1,410 @@
+# CI for this fork: LaTeX smoke compiles, skill/command lint, CLI typechecks,
+# the Python suite, and the guards that keep personal data and permissions where
+# they belong.
+#
+# This repo is a fork of MadsLorentzen/ai-job-search that has diverged far enough
+# to have its own pipeline, its own market and its own state. Three jobs here used
+# to be gated on `github.repository == 'MadsLorentzen/ai-job-search'`, which meant
+# they had never run once since the fork: the framework-version guard, the stock
+# PDF structure assertions, and placeholder-integrity. Dead CI is worse than no CI,
+# because it reads like coverage. Each has been retargeted to what is actually true
+# here rather than deleted:
+#
+#   - framework-version now runs. The markers on the methodology files are how
+#     tools/check_upstream_updates.py reports which of them an upstream change
+#     would touch, so letting them rot costs the one tool that makes porting
+#     tractable.
+#   - placeholder-integrity now checks only the two EXAMPLE documents. CLAUDE.md
+#     and the profile files are populated here on purpose, so asserting they still
+#     hold `[YOUR_NAME]` was guaranteed to fail; asserting the example templates
+#     still hold theirs is what keeps the smoke compiles independent of real
+#     personal data.
+#   - the stock PDF assertions now run, because cv/main_example.tex and
+#     cover_letters/cover_example.tex are still the unpopulated upstream templates
+#     and still compile to 2 and 1 pages.
+#
+# Deliberately NOT here: live smoke tests of the job-portal CLIs. They hit real
+# portals (network-flaky, and linkedin-search is personal-use only per its own ToS
+# warning, so CI-automated requests would violate that). CI runs typechecks and the
+# checked-in fixture/mock suites only; live portal testing stays a local, on-demand
+# step.
+#
+# Also deliberately not here: compiling the committed resume/letter pairs. Those
+# are artifacts of finished applications, not sources; tools/verify_batch.sh
+# checks a batch at the point it is produced, which is when a finding can still
+# change what goes out.
+#
+# Security posture: tools/security_guards.py fails any change that widens
+# settings.json permissions, weakens the personal-data gitignore rules, or adds
+# package lifecycle scripts. Honest limit: a PR can edit this workflow itself, so
+# these guards catch accidents and casual attempts, not a determined author.
+# Actions are pinned to commit SHAs; the token is read-only.
+
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      latex:
+        description: "Also compile the example documents on both TeX Live legs (about 6 more billed minutes on a private repo)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# GitHub bills per JOB, rounded up to the nearest minute. Sixteen of this
+# workflow's jobs finished in 6 to 30 seconds and each still billed a full
+# minute, so a run that did about four minutes of work cost 22. At 97 runs
+# that is the whole 2,000-minute monthly allowance.
+#
+# A superseded run is the purest form of that waste. One session pushed four
+# times in ten minutes and all four runs went to completion; three were
+# obsolete before they finished, at 22 minutes each.
+#
+# MASTER IS CANCELLED TOO, and the first version of this block was wrong to
+# exempt it. The reasoning then was that master is the branch every other chat
+# starts from, so a run that would say it is broken has to finish. That is
+# backwards. A cancelled run is only ever superseded by a run on a NEWER commit,
+# which tests a state that includes the old one, and the final push in any burst
+# is superseded by nothing and always completes. Master's current state is
+# verified either way. All that is lost is knowing which intermediate commit
+# broke something, and nobody here bisects a burst.
+#
+# What exempting master cost, measured: nearly every commit on master was
+# pushed directly rather than through a PR, one run each, and one day of 78
+# commits took 48 runs and 1,045 billed minutes, which is half the monthly
+# allowance. With this group those 78 pushes collapse to the handful that were
+# not immediately superseded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# EVERY job carries a timeout. The default is 360 minutes, and at $0.008 a
+# minute one hung `bun install` or apt fetch is $2.88, from a single job
+# nobody is watching. That is the failure mode that
+# makes "it will not happen again" impossible to promise without this line.
+#
+# The numbers below are roughly 5x the observed run time, so a real slowdown
+# still passes and a hang is cut off.
+# PRIVATE REPOS RUN NOTHING UNLESS ASKED. Every job below is gated on the
+# repository being public, or on a manual dispatch.
+#
+#   - The public app gets Actions minutes free, so it runs everything on every
+#     PR and push.
+#   - A private copy spends its owner's 2,000-minute allowance. That includes
+#     the maintainer's own repo and every copy anyone makes with "Use this
+#     template", whose Claude pushes state commits several times a day. A
+#     morning brief alone can open a PR every day that changes only
+#     documents/briefs/, and each one bills about five minutes for a PR run
+#     and a merge run that cannot fail on anything it touched.
+#
+# In a private copy, `./tools/ci_local.sh` IS CI: every check here is a script
+# in this repo, it fetches Python 3.10 with uv when the container lacks it, and
+# a clean run is the evidence a PR states. Dispatch this workflow by hand
+# (Actions tab, CI, Run workflow) only when ci_local.sh reports a SKIP that
+# matters for the change. Skipped jobs bill nothing.
+jobs:
+  checks:
+    # ONE job, because GitHub bills per JOB rounded up to the nearest minute.
+    # This used to be six: lint, security-guards, example-templates,
+    # discover-clis, cli-checks and a 3.13 test leg. Each finished in 6 to 30
+    # seconds and each billed a full minute, so six billed minutes bought
+    # under a minute of work.
+    #
+    # What is lost is a separate red X per check. Every step below is named
+    # and grouped, so the log says which one failed; with one developer and
+    # several Claude sessions that is a fair trade for 6 minutes a push.
+    # What is NOT lost is any check: all of them still run, in one machine's
+    # worth of billed time.
+    name: Checks (lint, guards, CLIs, tests)
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      latex: ${{ steps.changed.outputs.latex }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.13"
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - run: pip install pyyaml ruff pytest
+
+      # The two LaTeX legs are the only slow jobs left, ~3 billed minutes
+      # each, and most pushes are Python and Markdown. This job already
+      # fetches full history for the framework-version guard, so the check
+      # costs no job and no minute. It fails OPEN: a compile that should have
+      # run and did not is worse than one that ran needlessly.
+      - id: changed
+        name: Does this change touch LaTeX
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "manual run; latex=${{ inputs.latex }}"
+            echo "latex=${{ inputs.latex }}" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          base="${{ github.event.pull_request.base.sha || github.event.before }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "no usable base ref; compiling to be safe"
+            echo "latex=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if git diff --name-only "$base" HEAD \
+             | grep -qE '^(cv/|cover_letters/|templates/|texmf/|tools/(fit_to_page|render_application|verify_pdf)\.py|\.github/workflows/)'; then
+            echo "latex=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "latex=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Lint skills, commands, settings
+        run: python tools/lint_skills.py
+      # Scoped to pyflakes, syntax errors and bugbear. See .ruff.toml for why
+      # the broader default set is not used: it reports over a thousand style
+      # preferences on this repo, and a linter that shouts that much gets
+      # switched off. This set found six late-binding closures and two dead
+      # locals the day it was enabled.
+      - name: Lint Python (bugs only)
+        run: python -m ruff check --no-cache tools/ templates/ tests/
+      # Every weight in fit.py was set by argument, and nothing could tell an
+      # improvement from a lucky change. This scores the real posting corpus
+      # against a recorded baseline; drift is reported, not forbidden, and a
+      # deliberate retune re-records it in the same commit.
+      - name: Scoring baseline
+        # A person's own corpus (profile/tests/fixtures); the app has none.
+        if: hashFiles('profile/tests/fixtures/score_baseline.json') != ''
+        run: python tools/score_eval.py
+      - name: Framework version guard
+        run: python tools/check_framework_version.py
+      - name: Security guards (permissions, gitignore, manifests)
+        run: python tools/security_guards.py
+
+      - name: The two example documents must not carry real personal data
+        # They are what latex-smoke compiles, they are the structural
+        # reference /apply works from, and they are the one place real contact
+        # details could be pasted without anyone noticing, because nobody
+        # reads a file whose job is to be a template.
+        run: |
+          fail=0
+          check() {
+            if ! grep -q "$2" "$1"; then
+              echo "::error file=$1::expected placeholder token $2 - real personal data may have been pasted into an example template"
+              fail=1
+            fi
+          }
+          check cv/main_example.tex '\\name{\[First\]}{\[Last\]}'
+          check cv/main_example.tex '\\email{\[your\.email@example\.com\]}'
+          check cover_letters/cover_example.tex '\[YOUR NAME\]'
+          check cover_letters/cover_example.tex 'Dear \[Hiring Manager / Team\]'
+          exit $fail
+      - name: The real profile must NOT be mistaken for a template
+        # The inverse guard, and the one that matters on a private repo: if
+        # someone runs /setup here by accident it wipes the populated profile
+        # back to placeholders, and 01-candidate-profile.md is the source of
+        # truth for every fact that reaches an employer. A file that has
+        # reverted to `[YOUR_NAME]` is not a template restored, it is a
+        # profile lost.
+        run: |
+          fail=0
+          for f in profile/CLAUDE.md profile/01-candidate-profile.md; do
+            [ -f "$f" ] || continue   # the app ships no profile
+            if grep -q '\[YOUR_NAME\]\|\[YOUR_EMAIL\]\|\[YOUR_PRIMARY_SKILLS\]' "$f"; then
+              echo "::error file=$f::reverted to template placeholders - the populated profile has been lost"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Leak scan (the app carries no person)
+        # Only in the app: a person's repo carries profile/ on purpose, and its
+        # own ci_local.sh scans the app tree it would contribute. Without the
+        # secret the structural checks still run (personal paths, emails, phone
+        # numbers, LinkedIn handles); LEAK_TOKENS adds the names, one per line.
+        # The log prints an entry's number, never the entry.
+        if: hashFiles('profile/person.json') == ''
+        env:
+          LJS_LEAK_TOKENS: ${{ secrets.LEAK_TOKENS }}
+        run: python tools/leak_scan.py .
+
+      - name: Typecheck and test every portal CLI
+        # Discovered, not hardcoded, so a portal CLI added in a fork (the
+        # /add-portal path) is checked without the fork editing this workflow.
+        # The loop reports every failure before failing once, so one broken
+        # CLI does not hide the next.
+        run: |
+          failed=""
+          for pkg in .agents/skills/*/cli/package.json; do
+            [ -f "$pkg" ] || continue
+            dir=$(dirname "$pkg"); tool=$(basename "$(dirname "$dir")")
+            echo "::group::$tool"
+            (
+              cd "$dir" || exit 1
+              bun install || exit 1
+              bun run typecheck || exit 1
+              if find tests -type f -name '*.test.ts' 2>/dev/null | grep -q .; then
+                bun test || exit 1
+              else
+                echo "No Bun tests found for $tool; skipping"
+              fi
+            ) || failed="$failed $tool"
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::CLI checks failed for:$failed"
+            exit 1
+          fi
+
+      # pytest, not `unittest discover`. The discover runner collects TestCase
+      # subclasses only, and 201 of this repo's tests are module-level
+      # functions using parametrize, tmp_path and monkeypatch. They passed
+      # locally and never ran here at all, the screened-posting regression
+      # corpus among them, which is the one suite whose whole job is to stop a
+      # known bad hit coming back.
+      - name: Tests (Python 3.13)
+        run: python -m pytest tests -q
+      # A person's own suite, where there is one (never in the app). A separate
+      # process: the tools read the profile once, at import.
+      - name: Person's tests (Python 3.13)
+        if: hashFiles('profile/tests/conftest.py') != ''
+        run: python -m pytest profile/tests -q
+
+  python-floor:
+    # The one leg that is worth a second machine. 3.10 caught a bare
+    # `import tomllib`, stdlib only from 3.11, that had passed locally and on
+    # every other leg. 3.11, 3.12 and 3.14 have never failed alone while both
+    # ends were green, and each cost a billed minute on every push.
+    name: Tests (Python 3.10, the supported floor)
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.10"
+      - run: pip install pytest
+      - run: python -m pytest tests -q
+      - if: hashFiles('profile/tests/conftest.py') != ''
+        run: python -m pytest profile/tests -q
+
+  dependency-review:
+    name: Dependency review
+    # Requires the repo's Dependency graph, which not every repo (upstream or
+    # fork) has enabled - so the graph is probed first, and the job warns and
+    # passes instead of hard-failing if it's unavailable (the same
+    # graceful-skip pattern the workflow uses for optional tools), rather than
+    # being gated to a specific repository. Enabling Dependency graph under
+    # Settings -> Advanced Security activates the real check on any repo.
+    if: ${{ github.event_name == 'pull_request' && !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Probe Dependency graph availability
+        id: graph
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ github.token }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/dependency-graph/sbom")
+          if [ "$code" = "200" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Dependency graph is not enabled on this repository (HTTP $code). Dependency review was skipped - enable Dependency graph under Settings -> Advanced Security to activate this check."
+          fi
+      - name: Dependency review
+        if: steps.graph.outputs.enabled == 'true'
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: high
+
+  latex-smoke:
+    # Two legs. texlive/texlive:latest tracks current TeX Live (moderncv 2.5+);
+    # debian:bookworm compiles on apt-packaged TeX Live 2022 with moderncv
+    # 2.3.1 - the environment #242 hit and the one texlive:latest can never
+    # catch a regression in, because it never shipped the old class. The
+    # README's Linux setup path is apt, so both ends of the moderncv range
+    # users actually have stay compiled.
+    #
+    # Gated on `checks`: these are ~3 billed minutes each and most pushes do
+    # not touch LaTeX at all.
+    name: Compile example CV and cover letter (${{ matrix.leg.name }})
+    needs: checks
+    if: needs.checks.outputs.latex == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container: ${{ matrix.leg.container }}
+    strategy:
+      fail-fast: false
+      matrix:
+        leg:
+          - name: texlive-latest
+            container: texlive/texlive:latest
+          - name: debian-bookworm
+            container: debian:bookworm
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Install apt-packaged TeX Live (bookworm leg)
+        if: matrix.leg.name == 'debian-bookworm'
+        # --no-install-recommends keeps the leg lean. hyperref's xetex driver
+        # probes the pzdr metrics from texlive-fonts-recommended (the cover
+        # letter fails without it), so that one is named. texlive-fonts-extra
+        # is deliberately absent: moderncv's fontawesome5 and academicons are
+        # vendored in texmf/ (texmf/README.md), and this leg is the proof that
+        # the documents compile without the 1.7 GB package.
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            texlive-luatex texlive-latex-extra texlive-xetex \
+            texlive-fonts-recommended \
+            poppler-utils python3
+      - name: Install PDF inspection tools
+        run: |
+          if ! command -v pdfinfo >/dev/null || ! command -v pdftotext >/dev/null; then
+            apt-get update
+            apt-get install -y --no-install-recommends poppler-utils
+          fi
+      - name: Compile CV example (lualatex)
+        run: |
+          export TEXMFHOME="$PWD/texmf"
+          cd cv
+          lualatex -interaction=nonstopmode -halt-on-error main_example.tex
+          test -f main_example.pdf
+          if grep -q '^!' main_example.log; then
+            echo '::error::lualatex reported errors compiling cv/main_example.tex'
+            grep -A3 '^!' main_example.log
+            exit 1
+          fi
+      - name: Compile cover letter example (xelatex)
+        run: |
+          cd cover_letters
+          xelatex -interaction=nonstopmode -halt-on-error cover_example.tex
+          test -f cover_example.pdf
+          if grep -q '^!' cover_example.log; then
+            echo '::error::xelatex reported errors compiling cover_letters/cover_example.tex'
+            grep -A3 '^!' cover_example.log
+            exit 1
+          fi
+      - name: Verify extractable PDF text
+        run: |
+          python3 tools/verify_pdf.py cv/main_example.pdf --min-chars 100
+          python3 tools/verify_pdf.py cover_letters/cover_example.pdf --min-chars 100
+      - name: Assert example PDF structure
+        # cv/main_example.tex and cover_letters/cover_example.tex are still the
+        # unpopulated upstream templates and are the two files this leg compiles,
+        # so their shape is assertable here exactly as it was upstream.
+        run: |
+          python3 tools/verify_pdf.py cv/main_example.pdf \
+            --pages 2 \
+            --contains '[your.email@example.com]' \
+            --contains 'Professional Experience' \
+            --contains 'Achievement'
+          python3 tools/verify_pdf.py cover_letters/cover_example.pdf \
+            --pages 1 \
+            --contains 'your.email@example.com' \
+            --contains 'Dear [Hiring Manager / Team]'

@@ -1,0 +1,22 @@
+# Scoped to rules that catch bugs, not rules that have opinions.
+#
+# Ruff's broader default set reports 1,068 findings on this repo, almost all of
+# them style preferences: `re.I` rather than `re.IGNORECASE`, quote characters,
+# import ordering. None of those is wrong here, and a linter that shouts a
+# thousand times is a linter somebody switches off, which costs more than it
+# ever saved.
+#
+# So: pyflakes (undefined names, unused imports, dead locals), the syntax
+# errors, and bugbear (late-binding closures, mutable defaults, unguarded zip).
+# Every one of those is a real defect class. Enabling this found six
+# late-binding closures in tools/network/state.py and two dead locals left
+# behind by an earlier dead-code removal.
+line-length = 100
+target-version = "py310"
+
+[lint]
+select = ["E9", "F", "B"]
+
+[lint.per-file-ignores]
+# The skills and fixtures are data, and the portal CLIs are TypeScript.
+"tests/fixtures/*" = ["F"]

@@ -1,0 +1,4 @@
+contact_id,date,direction,channel,scenario,summary,full_text
+larkspur_retail_castellan,2026-09-10,outbound,linkedin,first_note,first note,"Hi Juno, hope you're well. We were both at Leeds. I work in supply-chain analytics in Manchester and I'm looking for my next role. How is the analytics team set up at Larkspur?"
+larkspur_retail_castellan,2026-09-12,inbound,linkedin,detailed_generous,replied,"Hi Morgan, happy to help. Send me your CV and I'll pass it on."
+fernhill_freight_halloway,2026-09-21,outbound,linkedin,first_note,first note,"Hi Wren, hope you're well. I saw Fernhill opened a Manchester hub. I work in supply-chain analytics here. How is the new site's planning team set up?"
