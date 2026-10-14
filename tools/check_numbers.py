@@ -69,12 +69,16 @@ SMALL = 10
 _UNIT_NOISE = r"(?:em|ex|pt|pc|bp|dd|cc|sp|in|cm|mm|baselineskip|textwidth|linewidth)"
 _RESIDUE = re.compile(r"\d[\d.]*\s*" + _UNIT_NOISE + r"\b", re.I)
 
+# Every unit word ends on a word boundary. Without it "2024 Weekend" read as
+# "2024 week", which is no longer a year, so a resume whose dates run into a
+# capitalised word failed verify_batch.sh; "12 monthly reviews", "3 hourly
+# checks" and "2023 Daytime cover" broke the same way.
 _NUM = re.compile(
     r"(?<![\w.])"
     r"(\d[\d,]*(?:\.\d+)?)"
     r"\s*"
-    r"(%|k\b|m\b|bn\b|b\b|million|billion|thousand|hours?|hrs?|days?|weeks?|"
-    r"months?|years?|x\b)?",
+    r"(%|(?:k|m|bn|b|million|billion|thousand|hours?|hrs?|days?|weeks?|"
+    r"months?|years?|x)\b)?",
     re.I)
 
 _MAGNITUDE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6,

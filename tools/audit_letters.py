@@ -11,15 +11,21 @@ import render_application as R
 from fit_to_page import body_words
 import docpaths
 import person
+import company_key
+import doc_name
 
 # The opening must name one of the candidate's employers: that is the
-# credential. The pronoun is the one the profile gives, for the drafter-text
-# check below. The banned nouns are the document word the market does NOT use
-# ("CV" where it is a resume, "resume" where it is a CV).
-_EMPLOYERS = re.compile("|".join(re.escape(r["employer"]) for r in person.module("roles").ROLES))
+# credential. It is matched as people write it (render_application's
+# EMPLOYER_NAMED: "Brindle & Hart" names Brindle & Hart Logistics), not as the
+# exact string in roles.py. The pronoun is the one the profile gives, for the
+# drafter-text check below. The banned nouns are the document word the market
+# does NOT use ("CV" where it is a resume, "resume" where it is a CV).
+_EMPLOYERS = R.EMPLOYER_NAMED
 _POSS = re.escape(person.get("identity.pronouns.possessive", "their"))
 _NOUNS = [n for n in person.get("documents.banned_nouns", [])]
 _DASHES = person.get("documents.banned_characters", ["\u2014", "\u2013"])
+_SAL_PREFIX = person.get("documents.salutation_prefix", "Dear")
+_SAL_SUFFIX = R._SALUTATION_SUFFIX.strip()
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # The shapes a concession actually takes in drafted letters: "I have not
@@ -82,6 +88,20 @@ def pdf_text(abbr):
     return out.stdout
 
 
+# The opener 03-writing-style.md bans: a first sentence that announces the
+# application ("I am applying for the <role> role", "I am writing to express
+# my interest"). The portal already told the reader which role this is, and
+# the one sentence a recruiter is guaranteed to read is spent on it.
+ANNOUNCES = re.compile(
+    r"\b(?:I am|I['’]m)\s+(?:writing\s+(?:to|in)\b|applying\b|"
+    r"(?:delighted|pleased|excited|keen|happy|eager|thrilled)\s+to\s+apply\b|"
+    r"interested\s+in\s+(?:the|this|your)\b)"
+    r"|\bI\s+(?:would\s+like|wish|want)\s+to\s+(?:apply|express|submit)\b"
+    r"|\bplease\s+(?:accept|find)\b|\bmy\s+application\s+for\b"
+    r"|\bto\s+apply\s+for\b|\bapplication\s+for\s+the\b"
+    r"|\bwith\s+(?:great|much)\s+(?:interest|enthusiasm)\b", re.I)
+
+
 def role_named(role, opening):
     """Any two consecutive words of the role title, in order, in the opening.
     A one-word title ("Analyst") is named when that word appears."""
@@ -92,15 +112,33 @@ def role_named(role, opening):
     return any(f"{words[i].lower()} {words[i+1].lower()}" in o for i in range(len(words) - 1))
 
 
-def audit(a):
+def audit(a, batch=()):
+    """The flags for one letter. `batch` is every draft rendered with it: two
+    roles at one employer is the case where the letter must name its role."""
     flags = []
     p1, p2, p4 = _plain(a["p1"]), _plain(a["p2"]), _plain(a.get("p4", ""))
     body = " ".join([p1, p2, _plain(a.get("lead", "")), p4]
                     + [_plain(b["text"]) for b in a["cl_bullets"]])
-    if not role_named(a["role"], p1):
-        flags.append("opening does not name the role")
+    # The role is NOT required in the opening. 03-writing-style.md: "let the
+    # role be obvious", and name it in a subject line or a second clause only
+    # when it genuinely needs naming. Requiring it here pushed every letter
+    # back to the "I am applying for the <role> role" opener the guide bans.
+    first = (sentences(a["p1"]) or [""])[0]
+    m = ANNOUNCES.search(first)
+    if m:
+        flags.append(f"opening announces the application (\"{m.group(0)}\"); open on "
+                     f"what you can answer and let the role be obvious")
+    # The one case that does need it: several roles at one employer in this
+    # batch, where the reader may hold two of the candidate's letters.
+    key = company_key.key(a["company"])
+    if any(o is not a and company_key.key(o["company"]) == key
+           and doc_name._norm(o["role"]) != doc_name._norm(a["role"]) for o in batch) \
+            and not role_named(a["role"], body):
+        flags.append("another role at this employer is in the batch, and this letter "
+                     "never names its own")
     if not _EMPLOYERS.search(p1):
-        flags.append("opening names no employer")
+        flags.append("opening names none of the candidate's employers (if it uses a "
+                     "name roles.py does not hold, add it to that role's known_as)")
     # A company called "The Something" used to check for "The", which every
     # letter contains.
     short = R.short_name(a["company"]).split()[0]
@@ -124,7 +162,7 @@ def audit(a):
         lab = b["label"].rstrip(": ").strip()
         if lab and _plain(b["text"]).lower().startswith(lab.lower()):
             flags.append(f"bullet text repeats its label ({lab[:20]})")
-    t = pdf_text(a["abbr"])
+    t = pdf_text(R.final_abbr(a))
     # The drafter's own notes must never reach the page. Letters have shipped
     # with "conceded in one sentence mid-letter in p2" in their closing.
     meta = re.search(r"conceded|mid-paragraph|mid-letter|posting's stated|states no gaps|"
@@ -140,7 +178,10 @@ def audit(a):
         flags.append("dash")
     if re.search(r"\b(\w+(?: \w+){1,3}) \1\b", t):
         flags.append("doubled phrase in PDF")
-    if re.search(r"Dear .*(, Inc|Inc\.|LLC|Ltd\.) hiring", t):
+    sal = re.search(re.escape(_SAL_PREFIX) + r"\s+(.+?)" + (re.escape(_SAL_SUFFIX)
+                                                          if _SAL_SUFFIX else r"\s*,?\s*$"),
+                    t, re.M)
+    if sal and R.LEGAL_SUFFIX.search(sal.group(1).strip()):
         flags.append("legal suffix in salutation")
     return flags, body_words(a)
 
@@ -152,10 +193,10 @@ if __name__ == "__main__":
     apps = json.load(open(sys.argv[1]))
     bad = 0
     for a in apps:
-        flags, w = audit(a)
+        flags, w = audit(a, apps)
         if w > MAX_BODY_WORDS:
             flags.append(f"{w} body words, over the {MAX_BODY_WORDS} cap")
-        print(f"{'!!' if flags else '  '} {a['abbr']:9s} {w:4d} body words  {'; '.join(flags)}")
+        print(f"{'!!' if flags else '  '} {R.final_abbr(a):9s} {w:4d} body words  {'; '.join(flags)}")
         bad += bool(flags)
     print(f"\n{len(apps) - bad}/{len(apps)} letters clean")
     # It always exited 0, so `verify_batch.sh` read PIPESTATUS[0], got zero, and

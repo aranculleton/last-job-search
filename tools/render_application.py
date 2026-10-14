@@ -10,6 +10,7 @@ import bullet_library as LIBRARY
 import allocate
 import doc_name
 import person
+import company_key
 
 # Every bullet the profile supports, themed. The generator used to draw from
 # fourteen strings in the template, so a logistics resume and a retail
@@ -123,10 +124,29 @@ def split_sentences(text):
     return [x for x in SENT_SPLIT.split((text or "").strip()) if x]
 
 LEGAL_SUFFIX = re.compile(
-    r",?\s+(inc|llc|l\.l\.c|ltd|limited|corp|corporation|plc|"
-    r"s\.a|n\.v|gmbh|pty|ag|ab|oy|nv|sa)\.?$", re.I)
+    r",?\s+(?:"
+    # A compound form comes off whole: "Co., Ltd." and "Pvt Ltd" are one
+    # suffix, and stripping only the last word left "Acme Co" and "Acme Pvt".
+    # "Co" on its own is never a suffix: "Tamworth & Co." is the name.
+    r"(?:co\.?,?|pvt\.?|private|pte\.?)\s+(?:ltd|limited)|sdn\.?\s+bhd|"
+    r"inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|plc|p\.l\.c|"
+    r"llp|lp|l\.p|s\.a|n\.v|b\.v|bv|s\.p\.a|spa|s\.a\.s|sas|s\.r\.l|srl|"
+    r"gmbh|pty|ag|ab|oy|nv|sa|se|kk|"
+    # Ireland's company types: designated activity, limited by guarantee,
+    # unlimited, and the Irish-language Teoranta. ULC is Canada's unlimited.
+    r"dac|clg|uc|ulc|teoranta|teo"
+    r")\.?$", re.I)
 # "Group", "Holdings" and "Company" are part of the name, not a legal suffix:
 # Harbour Group is Harbour Group. Only entity types come off.
+
+
+def strip_legal(name):
+    """The name with every trailing legal form removed, one at a time:
+    "Acme Pty Ltd" is Acme, not "Acme Pty"."""
+    prev, name = None, (name or "").strip()
+    while name != prev:
+        prev, name = name, LEGAL_SUFFIX.sub("", name).strip(" ,")
+    return name
 
 
 def short_name(company):
@@ -139,10 +159,61 @@ def short_name(company):
     audit and the outreach note so all three agree on what the company is called.
     """
     name = (company or "").strip()
-    stripped = LEGAL_SUFFIX.sub("", name).strip(" ,.")
-    if stripped != name:
+    stripped = strip_legal(name).strip(" ,.")
+    if stripped != name.strip(" ,."):
         stripped = re.sub(r"\s+(group|holdings)$", "", stripped, flags=re.I)
     return re.sub(r"^the\s+", "", stripped, flags=re.I).strip(" ,.")
+
+
+# The candidate's employers as people write them. A letter says "at Brindle &
+# Hart", not "at Brindle & Hart Logistics", and an exact match on the legal
+# string failed letters the style guide asks for. Accepted, per role: the name
+# in roles.py; its short_name and company key; the profile's COMPANY_ALIASES
+# that resolve to the same key; `known_as` on the role (a string or a list:
+# "Oakmere" for Oakmere Foods); and its leading words, two or more, when the
+# name has three or more. Matched across any punctuation, so "Brindle & Hart"
+# and "Brindle and Hart" are one form only when the profile says so.
+_NAME_STOP = {"of", "and", "the", "de", "du", "des", "for", "la", "le", "et", "in", "at", "y"}
+
+
+def _name_words(s):
+    return re.sub(r"[^\w]+", " ", (s or "").lower()).split()
+
+
+def _employer_forms(roles):
+    aliases = company_key.ALIASES
+    forms = set()
+    for r in roles:
+        emp = r["employer"]
+        k = company_key.key(emp)
+        known = r.get("known_as") or ()
+        names = [emp, short_name(emp), k, *(a for a, v in aliases.items() if v == k),
+                 *([known] if isinstance(known, str) else known)]
+        words = _name_words(short_name(emp))
+        names += [" ".join(words[:n]) for n in range(2, len(words))
+                  if words[n - 1] not in _NAME_STOP]
+        forms |= {" ".join(_name_words(n)) for n in names if _name_words(n)}
+    return sorted(forms, key=len, reverse=True)
+
+
+def _form_pattern(form):
+    """Words across any punctuation, case-blind. A one-word form must open on
+    a capital, because it can be an ordinary word too: an employer called
+    Target is named by "at Target", not by "I target"."""
+    words = form.split()
+    if len(words) == 1:
+        w = words[0]
+        return "(?-i:%s)%s" % (re.escape(w[0].upper()), re.escape(w[1:]))
+    return r"[\W_]+".join(re.escape(w) for w in words)
+
+
+_FORMS = _employer_forms(ROLES)
+# Shared by the letter audit (the opening must carry a credential) and the
+# outreach note (its hook is the sentence that names one), so the two cannot
+# disagree about whether a sentence names the candidate's employer.
+EMPLOYER_NAMED = re.compile(
+    r"\b(?:%s)\b" % "|".join(_form_pattern(f) for f in _FORMS),
+    re.I) if _FORMS else re.compile(r"(?!x)x")
 
 
 def salutation(company):
@@ -237,9 +308,17 @@ def _clause_trim(sent, budget):
 
 def final_abbr(a):
     """The name build() will write under: derived from the company, plus the
-    role token a supplied abbr carries after its first underscore."""
+    role token a supplied abbr carries after its first underscore.
+
+    Every tool that opens a draft's files asks this rather than reading
+    `abbr`: a draft may carry none, or one build() will replace, and both used
+    to end in a bare KeyError or a compile looking for a file never written."""
+    company = str(a.get("company") or "").strip()
+    if not company:
+        raise ValueError(f"a draft has no company, so its files cannot be named: "
+                         f"role {a.get('role') or '(none)'!r}, abbr {a.get('abbr') or '(none)'!r}")
     abbr = a.get("abbr") or ""
-    return doc_name.suffix(a["company"], abbr.split("_", 1)[1] if "_" in abbr else "")
+    return doc_name.suffix(company, abbr.split("_", 1)[1] if "_" in abbr else "")
 
 
 def build(a):

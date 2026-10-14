@@ -44,6 +44,14 @@ _COUNTRY = tuple(getattr(_EMP, "COUNTRY_WORDS", ()))
 SUFFIX = re.compile(
     r"\b(inc|llc|ltd|limited|pty|corp|corporation|company|group|holdings|plc|lp|"
     r"llp|" + "".join(re.escape(c) + r" inc|" for c in _COUNTRY) + r"s\.?a\.?|gmbh|ag)\b\.?", re.I)
+# Legal forms that are only ever a suffix, so they come off the end alone:
+# "uc" or "se" mid-name ("UC Davis") is part of the name. Ireland's DAC, CLG,
+# UC and Teoranta, Canada's ULC, and the forms the punctuation pass splits
+# ("S.p.A." arrives as "s p a"). "co" goes too, after "ltd" has gone:
+# "Acme Co., Ltd." and "Acme & Co." are the employer the tracker calls Acme.
+TRAILING_FORM = re.compile(
+    r"\s+(dac|clg|uc|ulc|teoranta|teo|pvt|private|pte|sdn bhd|bhd|incorporated|"
+    r"bv|b v|nv|n v|oy|ab|se|spa|s p a|sas|s a s|srl|s r l|s a|p l c|kk|co)$")
 # Trailing qualifiers that name where or what the employer is, not who:
 # "Acme UK", "Acme Financial Group", "Acme Insurance", "Acme Concession
 # Company Limited". Stripped only when a name remains.
@@ -114,6 +122,8 @@ def key(name: str | None) -> str:
     if s in ALIASES:
         return ALIASES[s]
     stripped = SPACE.sub(" ", SUFFIX.sub(" ", s)).strip()
+    while TRAILING_FORM.search(stripped) and TRAILING_FORM.sub("", stripped).strip():
+        stripped = TRAILING_FORM.sub("", stripped).strip()
     if stripped in ALIASES:
         return ALIASES[stripped]
     m = SEPARATE.match(stripped)

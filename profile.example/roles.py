@@ -9,9 +9,12 @@ ROLES = [
     dict(employer="Brindle & Hart Logistics", title="Senior Operations Analyst",
          dates="Mar 2023 - Present", loc="Manchester, UK", short="BH",
          tenure_months=31, floor=2, cap=4),
+    # known_as: the name people use for the employer, when it is not the one
+    # above. A letter says "at Oakmere", and the letter audit and the outreach
+    # note accept it as naming this employer. A string or a list.
     dict(employer="Oakmere Foods", title="Supply Chain Data Analyst",
          dates="Sep 2020 - Feb 2023", loc="Leeds, UK", short="OF",
-         tenure_months=29, floor=2, cap=4, verify_min=2),
+         tenure_months=29, floor=2, cap=4, verify_min=2, known_as="Oakmere"),
     dict(employer="Saltmarsh Analytics", title="Graduate Analyst",
          dates="Sep 2019 - Aug 2020", loc="Manchester, UK", short="SA", ns=4,
          tenure_months=12, floor=1, cap=2,
