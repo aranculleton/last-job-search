@@ -47,7 +47,7 @@ def _strip(path, names):
     """Remove each top-level assignment of these names from a profile module."""
     src = open(path, encoding="utf-8").read()
     for name in names:
-        src = re.sub(rf"^{name}\b[^\n]*\n(?:[ \t)\]][^\n]*\n)*", "", src, flags=re.M)
+        src = re.sub(rf"^{name}\b[^\n]*\n(?:[ \t)\]}}][^\n]*\n)*", "", src, flags=re.M)
     open(path, "w", encoding="utf-8").write(src)
 
 
@@ -210,3 +210,61 @@ class ContractWorkCanBeTheTarget(unittest.TestCase):
             fh.write("\nOPP_CONTRACT = None\n")
         self.addCleanup(shutil.rmtree, d, True)
         return prof
+
+
+NET_PROBE = r'''
+import sys
+sys.path.insert(0, "tools"); sys.path.insert(0, "tools/network")
+import discovery, reply
+print("director_of_nursing_in_function", bool(discovery.FUNCTION_TITLE.search("Director of Nursing")))
+try:
+    discovery.queries_for("Acme", location="Leeds", mode="cold")
+    print("titles", "searched")
+except discovery.NoTitles as e:
+    print("titles", "refused", "TITLE_SETS" in str(e))
+except TypeError:
+    print("titles", "signature")
+print("in_marketing_is_mismatch", bool(reply._hits("Thanks! I'm in marketing these days.", reply.MISMATCH)))
+print("different_team_is_mismatch", bool(reply._hits("I'm in a different team entirely now.", reply.MISMATCH)))
+'''
+
+
+class NetworkingAssumesNoFunction(unittest.TestCase):
+    """Discovery searched every employer for data scientists, counted only data
+    titles as in function, and read "I'm in marketing" as a mismatch, for
+    everybody. Those are the person's now."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(prefix="ljs_net_")
+        prof = os.path.join(cls.tmp, "profile")
+        shutil.copytree(EXAMPLE, prof)
+        _strip(os.path.join(prof, "networking.py"),
+               ["TITLE_SETS", "FUNCTION_TITLE", "HANDS_ON_TITLE", "HIRING_ROLE_NOUNS",
+                "HIRING_HEADLINE_NOUNS", "OTHER_FUNCTIONS", "OTHER_FUNCTIONS_MOVED",
+                "OWN_FUNCTION_WORDS"])
+        env = dict(os.environ, LJS_PROFILE=prof, PYTHONDONTWRITEBYTECODE="1")
+        out = subprocess.run([sys.executable, "-c", NET_PROBE], cwd=ROOT, env=env,
+                             capture_output=True, text=True, timeout=120)
+        cls.err = out.stderr
+        cls.got = dict(line.split(" ", 1) for line in out.stdout.splitlines())
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_unset_function_never_writes_an_employer_off(self):
+        self.assertEqual(self.got.get("director_of_nursing_in_function"), "True", self.err)
+
+    def test_no_titles_means_no_search_and_a_reason(self):
+        self.assertEqual(self.got.get("titles"), "refused True", self.err)
+
+    def test_another_function_is_not_assumed(self):
+        self.assertEqual(self.got.get("in_marketing_is_mismatch"), "False", self.err)
+        self.assertEqual(self.got.get("different_team_is_mismatch"), "True", self.err)
+
+    def test_the_example_keeps_its_own_function(self):
+        sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+        import discovery
+        self.assertFalse(discovery.FUNCTION_TITLE.search("Director of Nursing"))
+        self.assertTrue(discovery.FUNCTION_TITLE.search("Director of Analytics"))

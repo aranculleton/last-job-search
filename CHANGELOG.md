@@ -23,6 +23,17 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Networking looks for your colleagues, not a data team's.** `/network` searched every
+  employer for data scientists, counted only data titles as "in function" (so a nurse's run
+  would write every employer off as having no relevant presence), and read "I'm in
+  marketing" in a reply as a mismatch for everybody. `profile/networking.py` now holds
+  `TITLE_SETS`, `FUNCTION_TITLE`, `HANDS_ON_TITLE`, `HIRING_ROLE_NOUNS`,
+  `HIRING_HEADLINE_NOUNS`, `OTHER_FUNCTIONS`, `OTHER_FUNCTIONS_MOVED`, `OWN_FUNCTION_WORDS`
+  and optionally `NOT_HIRING_TITLES` (`None` for someone in sales).
+  **After this sync, add them to your `networking.py`**: `/network` refuses to search
+  without `TITLE_SETS`, and without `FUNCTION_TITLE` every in-market manager counts as in
+  your function. `profile.example/networking.py` shows the shape (a data team's values).
+
 Found by a sweep of the whole app for anything that assumed a data analyst a few years in,
 in North America. **Nothing to do unless a default below is wrong for you**; each is a
 setting now, and `python3 tools/profile_names.py` lists every one.

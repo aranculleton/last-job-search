@@ -87,14 +87,12 @@ REPLY_EVIDENCE = getattr(_NET, "REPLY_EVIDENCE", None) or {
     "institution_exec": (0, 0),
 }
 
-# Titles that name the work. Ranked above titles that name the org.
-HANDS_ON_TITLE = re.compile(
-    r"\b(?:tech(?:nical)?\s+lead|lead\s+(?:data|ml|machine|analytics|engineer)"
-    r"|data\s+scien(?:ce|tist)\s*(?:&|and)?\s*ai\s+lead(?:er)?"
-    r"|head\s+of\s+data(?:\s*(?:&|and)\s*ai)?"
-    r"|staff\s+(?:data|applied|machine)"
-    r"|principal\s+(?:data|applied|machine)"
-    r"|applied\s+(?:ai|ml|scientist))", re.I)
+# Titles that name the work. Ranked above titles that name the org. Ordering
+# only, and the person's: a data team's "Lead Data Scientist" is a nursing
+# team's "Clinical Nurse Lead". networking.py HANDS_ON_TITLE; unset, nobody is
+# ranked up for it.
+_NEVER = re.compile(r"(?!x)x")
+HANDS_ON_TITLE = _NET_GET("HANDS_ON_TITLE", None) or _NEVER
 
 # Titles that name the org rather than the work. Still worth contacting; they
 # just sort below the ones above when a run has more names than slots.
@@ -270,45 +268,24 @@ HARD_MAX_QUERIES = 3
 # budget is the scarcer resource.
 MAX_TITLES_PER_QUERY = 4
 
-# Title sets for the person's function (here data and analytics), split the way
-# brief 3.3 splits the tiers: hiring authority (tier 2) and senior IC (tier 3).
-# `function` is deliberately junior-blind: in the alumni modes the hook is the
-# shared employer, not the seniority, and an alumnus two rungs down still
-# answers and still knows who is hiring. `recruiting` is for hiring_team, where
-# the posting proves there is an open req and the recruiter is the named route.
-TITLE_SETS = {
-    "hiring_authority": [
-        "Head of Data",
-        "Director of Data Science",
-        "Director of Analytics",
-        "Data Science Manager",
-        "Analytics Manager",
-        "VP Data",
-        "Head of Data Science",
-        "Senior Manager, Analytics",
-    ],
-    "senior_ic": [
-        "Staff Data Scientist",
-        "Principal Data Scientist",
-        "Lead Data Scientist",
-        "Senior Data Scientist",
-        "Staff Data Engineer",
-        "Senior Analytics Engineer",
-        "Lead Data Analyst",
-    ],
-    "function": [
-        "Data Scientist",
-        "Data Analyst",
-        "Analytics Engineer",
-        "Data Engineer",
-    ],
-    "recruiting": [
-        "Technical Recruiter",
-        "Talent Acquisition Partner",
-        "Recruiting Manager",
-        "Talent Partner",
-    ],
-}
+# Title sets for the person's function, split the way brief 3.3 splits the
+# tiers: hiring authority (tier 2) and senior IC (tier 3). `function` is
+# deliberately junior-blind: in the alumni modes the hook is the shared
+# employer, not the seniority, and an alumnus two rungs down still answers and
+# still knows who is hiring. `recruiting` is for hiring_team, where the posting
+# proves there is an open req and the recruiter is the named route.
+#
+# The titles are the person's (networking.py TITLE_SETS). They were a data
+# team's, written here, so a discovery run for anybody else searched for data
+# scientists at every employer. A profile without them cannot run a search:
+# queries_for() says so rather than searching for someone else's colleagues.
+TITLE_SETS = dict(_NET_GET("TITLE_SETS", None) or {})
+TITLE_GROUPS = ("hiring_authority", "senior_ic", "function", "recruiting")
+
+
+class NoTitles(RuntimeError):
+    """The profile names no TITLE_SETS, so there is nothing to search for."""
+
 
 # Mode names match the `route` vocabulary in schema.py, so the mode that found
 # someone is the route recorded against them with no mapping table in between.
@@ -364,6 +341,11 @@ def _title_groups(titles, mode):
                 flat.append(t)
         return [flat[i:i + MAX_TITLES_PER_QUERY]
                 for i in range(0, len(flat), MAX_TITLES_PER_QUERY)][:MAX_QUERIES]
+    missing = [g for g in MODE_TITLE_GROUPS[mode] if not TITLE_SETS.get(g)]
+    if missing:
+        raise NoTitles(
+            f"profile/networking.py TITLE_SETS has no {', '.join(missing)} titles: the "
+            f"job titles of the people to find, in {TITLE_GROUPS}. /setup writes them.")
     return [TITLE_SETS[g][:MAX_TITLES_PER_QUERY] for g in MODE_TITLE_GROUPS[mode]]
 
 
@@ -421,25 +403,35 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
 # in-house recruiter whose line read "recruiting talented data scientists and
 # data science managers" scored tier 4. That is the plainest hiring statement
 # a result set can hold.
+# The role nouns a hiring post names, as a regex fragment: networking.py
+# HIRING_ROLE_NOUNS ("recruiting ... <noun>") and HIRING_HEADLINE_NOUNS
+# ("Hiring <noun> at ..."), the second defaulting to the first. Unset, they are
+# the person's own function titles, plural optional: a nurse's "hiring staff
+# nurses" is a signal and a data team's "hiring data scientists" is not.
+def _nouns_from_titles():
+    titles = TITLE_SETS.get("function") or []
+    return "|".join(re.escape(t.lower()) + "s?" for t in titles) or r"(?!x)x"
+
+
+_ROLE_NOUNS = _NET_GET("HIRING_ROLE_NOUNS", None) or _nouns_from_titles()
+_HEADLINE_NOUNS = _NET_GET("HIRING_HEADLINE_NOUNS", None) or _ROLE_NOUNS
+
 HIRING_SIGNAL = re.compile(
     r"(we[’']?re hiring|we are hiring|i[’']?m looking for|i am looking for|"
     r"dm me|join my team|open roles?|we are seeking|we[’']?re seeking|"
     r"reach out if|"
-    # "recruiting <anything> data scientists". The gap is bounded and the role
-    # noun is required, so "recruiting is hard for data teams right now" stays
-    # out while "recruiting talented and passionate data scientists" comes in.
-    r"recruiting\b[^.\n]{0,40}?\b(?:data scientists?|data engineers?|"
-    r"data analysts?|analytics engineers?|machine learning engineers?|"
-    r"data science|analytics)\b|"
+    # "recruiting <anything> <role>". The gap is bounded and the role noun is
+    # required, so "recruiting is hard for our teams right now" stays out while
+    # "recruiting talented and passionate <role>s" comes in.
+    r"recruiting\b[^.\n]{0,40}?\b(?:" + _ROLE_NOUNS + r")\b|"
     r"hiring (?:for|several|a|an|multiple)\b|now hiring|"
-    # "<Company>'s Data team is hiring in <City>, <City> or remote" and
-    # "Hiring Senior Data Scientists at <Company>" are two tier-1 shapes that
+    # "<Company>'s team is hiring in <City>, <City> or remote" and
+    # "Hiring Senior <role>s at <Company>" are two tier-1 shapes that
     # once read as no signal: the first says "is hiring in", the second opens
     # on a bare "Hiring" and a role.
     r"(?:is|are|team)\s+hiring\s+(?:in|for|across|now)\b|"
-    r"^\s*hiring\s+(?:(?:senior|staff|lead|principal|junior)\s+)?(?:data scientists?|"
-    r"data engineers?|data analysts?|analytics engineers?|machine learning engineers?|"
-    r"ml engineers?|applied scientists?)\b|"
+    r"^\s*hiring\s+(?:(?:senior|staff|lead|principal|junior)\s+)?(?:"
+    + _HEADLINE_NOUNS + r")\b|"
     r"my team is growing|growing my team|we have an opening)", re.I | re.M)
 
 # The quote is pasted into a message as evidence, so it has to be quotable.
@@ -517,13 +509,12 @@ AUTHORITY_TITLE = re.compile(
 SENIOR_IC_TITLE = re.compile(r"\b(principal|staff|lead|senior|sr\.?)\b", re.I)
 
 # Tier 2 is authority "on a team matching the user's function", so authority
-# alone is not enough: a Director of Marketing in the home city is tier 4.
-FUNCTION_TITLE = re.compile(
-    r"\b(data|analytics|analytic|analysis|machine learning|ml|ai|"
-    r"artificial intelligence|insight|insights|quantitative|quant|"
-    r"decision scien\w+|business intelligence|bi|research scien\w+|"
-    r"statistic\w*|econometric\w*|forecast\w*|experimentation|risk model\w*)\b",
-    re.I)
+# alone is not enough: a Director of Marketing is tier 4 to a data analyst and
+# tier 2 to a marketer. networking.py FUNCTION_TITLE. Unset, every title is in
+# function: a run ranks by authority and seniority alone, which over-includes.
+# A data team's list as the default would write every employer off for a nurse
+# as having "no relevant presence".
+FUNCTION_TITLE = _NET_GET("FUNCTION_TITLE", None) or re.compile(r".", re.S)
 
 # The home city's metro, as a person's location may name it: a search for the
 # home city accepts anyone in one of these. networking.py's METRO.
@@ -684,12 +675,14 @@ DISQUALIFIERS = (
     # mentions working with the solutions architects is not one of them.
     # The rule is deliberately blunt about "Solutions Architect, Data & AI",
     # which reads technical and is not.
-    Rule("revenue_role", "title", re.compile(
+    # The person's (networking.py NOT_HIRING_TITLES; None turns it off): for
+    # somebody in sales these are exactly the people to reach.
+    Rule("revenue_role", "title", _NET_GET("NOT_HIRING_TITLES", re.compile(
         r"\b(solutions? architect|field engineer(?:ing)?|"
         r"cloud (?:&|and) ai specialist|technical account manager|"
         r"client partner|head of industry|customer success|sales engineer|"
         r"partner manager|account executive|solutions? consultant|"
-        r"pre-?sales|business development)\b", re.I),
+        r"pre-?sales|business development)\b", re.I)) or _NEVER,
         "revenue role dressed as technical, does not hire for technical teams"),
 
     Rule("spam_urgency", "text", re.compile(
