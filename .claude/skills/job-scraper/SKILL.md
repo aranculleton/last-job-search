@@ -2,8 +2,8 @@
 name: scrape
 description: >
   Finds new job postings matching your profile via installed portal-search CLIs
-  (freehire, local job boards, and any skills added with /add-portal; whichever are on,
-  per tools/portals.py) and employer ATS boards. Deduplicates
+  (LinkedIn, freehire, local job boards, and any skills added with /add-portal; whichever
+  are on, per tools/portals.py) and employer ATS boards. Deduplicates
   across runs. Triggers on: job scrape, find jobs, search jobs, new jobs, job search,
   scrape jobs, /scrape
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run .agents/skills/*/cli/src/cli.ts *), WebFetch, WebSearch, Agent, AskUserQuestion
@@ -67,7 +67,7 @@ If this fails (bun not installed), skip to **1c (WebSearch fallback)** for all p
 
 Discover all installed portal CLI skills by reading every `SKILL.md` found under `.agents/skills/*/SKILL.md`. Each file documents that portal's exact CLI flags and usage examples. **Use each portal's own documented interface - do not guess flags.** This approach automatically includes any new portals added via `/add-portal` without requiring changes to this file.
 
-**Honor the `enabled` toggle.** Run `python3 tools/portals.py`: it prints each portal ON or off and why. A portal's `SKILL.md` frontmatter `enabled:` is the app's default (a missing key means enabled), and `profile/search.py` `PORTALS` is the person's say, which wins for every portal it names. Skip each portal that is off, send it no request at all, and record it for the Step 5 summary. A `SKILL.md` is the app's and is never edited to switch a portal: `tools/sync_app.py` would put it back. `linkedin-search` ships off because LinkedIn's robots.txt and terms forbid automated access.
+**Honor the `enabled` toggle.** Run `python3 tools/portals.py`: it prints each portal ON or off and why. A portal's `SKILL.md` frontmatter `enabled:` is the app's default (a missing key means enabled), and `profile/search.py` `PORTALS` is the person's say, which wins for every portal it names. Skip each portal that is off, send it no request at all, and record it for the Step 5 summary. A `SKILL.md` is the app's and is never edited to switch a portal: `tools/sync_app.py` would put it back. `linkedin-search` and `freehire-search` are on by default.
 
 For each **enabled** portal skill:
 

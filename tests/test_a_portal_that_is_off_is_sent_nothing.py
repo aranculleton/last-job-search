@@ -25,9 +25,9 @@ ON = {"linkedin-search": True, "freehire-search": True}
 
 class TheDefaults(unittest.TestCase):
 
-    def test_linkedin_ships_off_and_freehire_on(self):
+    def test_linkedin_and_freehire_ship_on(self):
         d = portals.defaults()
-        self.assertIs(d["linkedin-search"], False)
+        self.assertIs(d["linkedin-search"], True)
         self.assertIs(d["freehire-search"], True)
 
     def test_the_danish_portals_ship_off(self):
@@ -39,7 +39,7 @@ class TheDefaults(unittest.TestCase):
 
     def test_the_example_person_takes_the_defaults(self):
         self.assertEqual(portals.overrides(), {})
-        self.assertFalse(portals.is_enabled("linkedin-search"))
+        self.assertTrue(portals.is_enabled("linkedin-search"))
         self.assertTrue(portals.is_enabled("freehire-search"))
 
 
@@ -83,7 +83,8 @@ class TheDetailFetchAsksFirst(unittest.TestCase):
 
     def test_a_posting_from_a_portal_that_is_off_is_not_fetched(self):
         with mock.patch.object(hydrate.subprocess, "run",
-                               side_effect=AssertionError("a request was sent")):
+                               side_effect=AssertionError("a request was sent")), \
+             mock.patch.object(hydrate.portals, "is_enabled", return_value=False):
             got = hydrate.fetch({"portal": "linkedin", "id": "1", "url": "u"})
         self.assertIn("is off", got["hydrate_error"])
 

@@ -99,7 +99,7 @@ def portal_cli(skill: str, env_var: str) -> str:
 CLI = {"linkedin": functools.partial(portal_cli, "linkedin-search", "LINKEDIN_CLI"),
        "freehire": functools.partial(portal_cli, "freehire-search", "FREEHIRE_CLI")}
 # A portal that is off is sent nothing, a detail fetch included
-# (tools/portals.py says why linkedin-search ships off).
+# (tools/portals.py).
 SKILL = {"linkedin": "linkedin-search", "freehire": "freehire-search"}
 
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
