@@ -125,8 +125,11 @@ def _within(text, budget):
 #
 # These are the app's defaults; a profile's voice.py may set OUTREACH_ASKS.
 _VOICE = person.module("voice") if person.exists("voice.py") else None
+# The person's word for the document (person.json documents.noun): a CV market
+# read "does not fit on a resume" in a note from someone who calls it a CV.
+_NOUN = person.get("documents.noun", "resume")
 ASKS = tuple(getattr(_VOICE, "OUTREACH_ASKS", (
-    "If it would help to have the context that does not fit on a resume, "
+    f"If it would help to have the context that does not fit on a {_NOUN}, "
     "I'd welcome a short conversation.",
     "Glad to give you the short version if that is useful.",
     "If you are the right person to ask about the team, I'd welcome a few minutes.",
@@ -242,7 +245,7 @@ def write(a, meta, today):
         f.write(f"- **Source:** {url}\n" if url else "")
         f.write(f"- **Retrieved:** {meta.get('date', today)} via {meta.get('portal', 'portal search')}\n")
         f.write(f"- **Location:** {meta.get('location', '')}\n")
-        f.write(f"- **Resume:** {docpaths.resume_rel(a['abbr'], '.pdf')}\n")
+        f.write(f"- **{docpaths.noun_word()}:** {docpaths.resume_rel(a['abbr'], '.pdf')}\n")
         f.write(f"- **Cover letter:** {docpaths.letter_rel(a['abbr'], '.pdf')}\n\n")
         # A `---` rule is not a fence: the posting author controls the text and
         # can write one, plus a heading that looks like ours. The nonce cannot

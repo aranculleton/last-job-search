@@ -134,6 +134,14 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **Messages say your word for the document.** The email composer wrote "My resume is
+  attached", the referral ask "Happy to send my resume", one outreach-note close "does not
+  fit on a resume", and the reply guidance "Do not attach a file named CV; the attachment
+  says resume", whatever `person.json` `documents.noun` said. All of them now use your noun,
+  the guidance names your banned word, and `tone.check` reports any word in
+  `documents.banned_nouns` in a message (`document_noun`; "CV" keeps its old rule), so
+  "my resume" no longer passes in a CV market. "Resume" as a verb is not flagged.
+
 - **A credential stated as "essential", "mandatory" or "must be registered" is a credential
   gate.** "A recognised accounting qualification (ACA, ACCA or CIMA) is essential" passed,
   so a full application could be drafted for a job you cannot hold. The sentence must still
