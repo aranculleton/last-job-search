@@ -238,20 +238,26 @@ licensed third-party data, the second is a Gmail sync cursor with no value in gi
 
 **`automation/README.md` is the whole story; `profile/routines.json` is the registry.**
 
-The routines, when they run and where they report are the person's: `profile/routines.json`
+The scheduled tasks, when they run and where they report are the person's: `profile/routines.json`
 and the automation section of `profile/CLAUDE.md`.
 
-**The shape, and why.** A routine created through the API cannot have a repository attached,
-so it cannot clone this private repo. So the work routines fire into one long-lived session,
-**Job search ops**, created with the repo as its source. A routine bound to a session cannot
-notify, so that session ends each run by calling `fire_trigger` on a fresh-session **relay**
-routine with the finished text, and the relay is what pushes and emails. Each work routine's
-stored prompt is a stub that reads `automation/prompts/<key>.md` from master, so **changing
-what a routine does is a normal PR**; only a schedule change needs `update_trigger`.
+**The shape, and why.** Two set-ups work, and the README walks a person through either:
+**(a)** one chat per task ("Job search: morning brief", "Job search: shortlist" for the
+twice-weekly round), created with the private repo, each task bound to its own chat, whose
+reply is the briefing (no push); or **(b)** each task made in the Claude app's Routines screen with the
+repo ticked and notifications on (push, and a new chat every run). Each task's stored prompt
+is a stub that reads `automation/prompts/_common.md` and its own file from master, so
+**changing what a task does is a normal PR**; only a schedule change needs `update_trigger`
+or the Routines screen. The final reply is the message; nothing depends on `fire_trigger`.
+An older shared-chat set-up that relays to the phone through a fresh-session task still
+works only from a chat made before 14 October 2026: never archive, delete or rebuild one,
+and never test a chat-bound task with `fire_trigger` (use a one-off `run_once_at` task
+bound to the chat). `python3 tools/routines.py check` validates the registry, and
+`ci_local.sh` runs it.
 
 **Silence is the alarm.** The brief is delivered every day even when nothing is due, so a
 morning with no brief means the automation is broken. `automation/README.md` has the
-rebuild steps if the ops session is lost.
+set-up steps if a chat or a task is lost.
 
 **Every dated follow-up is automatic by construction.** The brief reads `next_action_due`
 from `network_contacts.csv` and the nudge schedule from the tracker, so a reminder is created

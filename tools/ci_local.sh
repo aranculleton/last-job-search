@@ -84,6 +84,14 @@ else
   printf '  %-42s n/a   (a person'"'"'s own, in profile/tests/fixtures)\n' "scoring baseline"
 fi
 run "framework version guard" python3 tools/check_framework_version.py
+# A person's scheduled tasks: a missing prompt file, a mistyped id or a cron
+# with no CRON_TZ fails here rather than at seven in the morning. The app's
+# own tests check the example's registry.
+if [ -f profile/routines.json ]; then
+  run "scheduled-task registry" python3 tools/routines.py check profile/routines.json
+else
+  printf '  %-42s n/a   (a person'"'"'s own, in profile/routines.json)\n' "scheduled-task registry"
+fi
 
 echo
 echo "security"
