@@ -11,7 +11,7 @@ description: >
   positions open, remote jobs, "are there any X jobs in <place>", look up this
   job posting.
 context: fork
-enabled: true  # set to false to keep this portal installed but have /scrape skip it
+enabled: false  # off by default: LinkedIn's robots.txt and terms forbid automated access (tools/portals.py); a person turns it on in profile/search.py PORTALS
 allowed-tools: Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts *)
 ---
 
@@ -31,6 +31,11 @@ forker in any market out of the box.
 This uses LinkedIn's public job pages; automated access is against LinkedIn's Terms of
 Service, so **keep volume low and don't use it commercially or for bulk data collection.**
 Run it on your own responsibility.
+
+**It ships off.** LinkedIn's robots.txt disallows every path, these endpoints included, for
+every crawler it does not name, and a `tools/run_round.py` round sends a portal thousands of
+requests, which is bulk collection by this section's own measure. Turning it on is a
+person's own decision, in `profile/search.py` `PORTALS`; `tools/portals.py` has the detail.
 
 ## When to use this skill
 

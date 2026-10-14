@@ -45,6 +45,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import portals  # noqa: E402
 from prefilter import annotate, age_days  # noqa: E402
 
 # --------------------------------------------------------------- portal CLIs
@@ -99,6 +100,10 @@ def portal_cli(skill: str, env_var: str) -> str:
 # not stop anything that merely imports this module.
 LINKEDIN = functools.partial(portal_cli, "linkedin-search", "LINKEDIN_CLI")
 FREEHIRE = functools.partial(portal_cli, "freehire-search", "FREEHIRE_CLI")
+# The portals this file can call, by skill name. Whether each one IS called is
+# tools/portals.py's answer: the app's default, then the person's PORTALS. An
+# enabled portal with no adapter here is run by /scrape from its SKILL.md.
+WIRED = {"linkedin-search": "linkedin", "freehire-search": "freehire"}
 
 # What is searched is the person's: profile/search.py's SCRAPE_* names the
 # locations (portals file a posting under whichever municipality the employer
@@ -233,14 +238,19 @@ class PortalDown(RuntimeError):
     """A portal answered, without error, and returned nothing at all."""
 
 
-def canary(jobage: int = CANARY_JOBAGE) -> dict[str, tuple[bool, str]]:
+def canary(jobage: int = CANARY_JOBAGE,
+           on: dict[str, bool] | None = None) -> dict[str, tuple[bool, str]]:
     """One broad probe per enabled portal. {portal: (healthy, detail)}."""
+    on = portals.enabled() if on is None else on
     out: dict[str, tuple[bool, str]] = {}
     probes = (
         ("linkedin", lambda: linkedin(CANARY_QUERY, CANARY_LOCATION, 1, jobage)),
         ("freehire", lambda: freehire(CANARY_QUERY, 1, jobage)),
     )
+    wanted = {short for skill, short in WIRED.items() if on.get(skill)}
     for name, fn in probes:
+        if name not in wanted:
+            continue
         try:
             rows_, err = fn()
         except Exception as e:                      # a build or resolve failure
@@ -296,6 +306,40 @@ def failure_report(sent: dict[str, int], failed: dict[str, list[str]]) -> tuple[
     return "\n".join(lines), bad
 
 
+def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
+    """(kind, query, location, page) for every request, for the portals that are on."""
+    li, fh = on.get("linkedin-search"), on.get("freehire-search")
+    tasks = []
+    # LinkedIn: every query against the home city deep, the rest shallow.
+    if li:
+        for q in QUERIES:
+            for loc in LOCATIONS:
+                depth = pages if loc.startswith(DEEP) else 2
+                for pg in range(1, depth + 1):
+                    tasks.append(("li", q, loc, pg))
+        for q in QUERIES:
+            for loc in REMOTE_LOCATIONS:
+                for pg in range(1, 3):
+                    tasks.append(("lir", q, loc, pg))
+    if fh:
+        for q in QUERIES:
+            for pg in range(1, pages + 1):
+                tasks.append(("fh", q, None, pg))
+    # The named-employer pass. Shallow, because a company search that needs
+    # five pages is not finding that company, it is finding the query words.
+    for emp in EMPLOYERS:
+        for t in EMPLOYER_QUERIES:
+            q = f"{emp} {t}"
+            if li:
+                for loc in EMPLOYER_LOCATIONS:
+                    tasks.append(("li", q, loc, 1))
+                for loc in EMPLOYER_REMOTE:
+                    tasks.append(("lir", q, loc, 1))
+            if fh:
+                tasks.append(("fh", q, None, 1))
+    return tasks
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
@@ -314,12 +358,22 @@ def main() -> int:
         return 1
     os.makedirs(a.out, exist_ok=True)
 
-    # Two broad probes, before ~3,300 requests. A portal that has gone quiet is
-    # reported as broken here rather than as a thin market three widenings
-    # later. It does not abort the round: the other portal's results are still
-    # worth having, and a round that says so beats a round that stops.
+    on = portals.enabled()
+    for name in portals.unknown():
+        print(f"portals: PORTALS in profile/search.py names {name!r}, which is not "
+              f"an installed portal, so it switches nothing", file=sys.stderr)
+    print("portals: " + ", ".join(f"{n} {'on' if v else 'off'}" for n, v in on.items()
+                                  if n in WIRED))
+    for name in sorted(n for n, v in on.items() if v and n not in WIRED):
+        print(f"portals: {name} is on but this scrape has no adapter for it; "
+              f"/scrape runs it from its SKILL.md")
+
+    # One broad probe per portal that is on, before the sweep. A portal that has
+    # gone quiet is reported as broken here rather than as a thin market three
+    # widenings later. It does not abort the round: the other sources' results
+    # are still worth having, and a round that says so beats a round that stops.
     if not a.skip_canary:
-        health = canary(a.jobage)
+        health = canary(a.jobage, on)
         report, ok = canary_report(health)
         print("portal health:")
         print(report)
@@ -328,30 +382,10 @@ def main() -> int:
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()}},
                       open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)
 
-    tasks = []
-    # LinkedIn: every query against the home city deep, the rest shallow.
-    for q in QUERIES:
-        for loc in LOCATIONS:
-            depth = a.pages if loc.startswith(DEEP) else 2
-            for pg in range(1, depth + 1):
-                tasks.append(("li", q, loc, pg))
-    for q in QUERIES:
-        for loc in REMOTE_LOCATIONS:
-            for pg in range(1, 3):
-                tasks.append(("lir", q, loc, pg))
-    for q in QUERIES:
-        for pg in range(1, a.pages + 1):
-            tasks.append(("fh", q, None, pg))
-    # The named-employer pass. Shallow, because a company search that needs
-    # five pages is not finding that company, it is finding the query words.
-    for emp in EMPLOYERS:
-        for t in EMPLOYER_QUERIES:
-            q = f"{emp} {t}"
-            for loc in EMPLOYER_LOCATIONS:
-                tasks.append(("li", q, loc, 1))
-            for loc in EMPLOYER_REMOTE:
-                tasks.append(("lir", q, loc, 1))
-            tasks.append(("fh", q, None, 1))
+    tasks = build_tasks(on, a.pages)
+    if not tasks:
+        print("portals: none of the portals this scrape can call is on, so this "
+              "round is the employer boards alone (python3 tools/portals.py)")
 
     seen: dict[str, dict] = {}
     sent: dict[str, int] = {}

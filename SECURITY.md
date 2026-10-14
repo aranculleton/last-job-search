@@ -87,7 +87,8 @@ never sending anything itself.
 
 - Portal CLIs make live requests only when run. CI never does: it typechecks and runs
   fixture tests. `linkedin-search` is personal-use only per its own terms warning, and
-  CI-automating it would breach that.
+  CI-automating it would breach that. It ships off (`tools/portals.py` says why), and
+  `scrape_wide.py` and `hydrate.py` send a portal that is off no request at all.
 - `tools/robots_check.py` gates the browser-header retry against `robots.txt`.
 - The four Danish portal CLIs ship disabled. They are kept as reference implementations
   for `/add-portal`, not as live code paths.

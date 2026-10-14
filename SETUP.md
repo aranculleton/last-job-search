@@ -50,11 +50,14 @@ finding it out three hours in costs the session.
 
 ### Portal CLIs
 
-Only needed if you are running `/scrape` or `run_round.py` against live portals. Two are
-enabled; the four Danish ones ship disabled and are kept as reference implementations.
+Only needed if you are running `/scrape` or `run_round.py` against live portals.
+`freehire-search` is on by default. `linkedin-search` ships off, because LinkedIn's
+robots.txt and terms forbid automated access, and the four Danish ones ship off as
+reference implementations. A person turns one on in `profile/search.py` `PORTALS`;
+`python3 tools/portals.py` prints what a round will search.
 
 ```bash
-for tool in linkedin-search freehire-search; do
+for tool in freehire-search linkedin-search; do
   (cd .agents/skills/$tool/cli && bun install)
 done
 ```

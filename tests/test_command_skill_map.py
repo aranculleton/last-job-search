@@ -120,11 +120,14 @@ class ThePortalsAreWhatTheMapClaims(unittest.TestCase):
         m = re.search(r"^enabled:\s*(true|false)", s, re.M)
         return m and m.group(1) == "true"
 
-    def test_only_linkedin_and_freehire_are_enabled(self):
+    def test_only_freehire_is_enabled_by_default(self):
+        # linkedin-search ships off: LinkedIn's robots.txt and terms forbid
+        # automated access (tools/portals.py). A person turns it on in their
+        # profile, never here.
         enabled = sorted(d for d in os.listdir(AGENT_SKILLS)
                          if os.path.isdir(os.path.join(AGENT_SKILLS, d))
                          and self._enabled(d))
-        self.assertEqual(enabled, ["freehire-search", "linkedin-search"])
+        self.assertEqual(enabled, ["freehire-search"])
 
     def test_the_four_danish_portals_are_all_off(self):
         for name in ("jobbank-search", "jobdanmark-search", "jobindex-search",

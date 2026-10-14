@@ -44,6 +44,9 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import portals  # noqa: E402
+
 # --------------------------------------------------------------- portal CLIs
 #
 # These pointed at one build in one session's scratchpad directory, named with
@@ -95,6 +98,9 @@ def portal_cli(skill: str, env_var: str) -> str:
 # Resolved on first use, not at import: see the note on `portal_cli`.
 CLI = {"linkedin": functools.partial(portal_cli, "linkedin-search", "LINKEDIN_CLI"),
        "freehire": functools.partial(portal_cli, "freehire-search", "FREEHIRE_CLI")}
+# A portal that is off is sent nothing, a detail fetch included
+# (tools/portals.py says why linkedin-search ships off).
+SKILL = {"linkedin": "linkedin-search", "freehire": "freehire-search"}
 
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
 # requirements off bodies in a round, which is exactly the text the screen and
@@ -110,6 +116,8 @@ def fetch(job: dict, timeout: int = 60) -> dict:
     resolve = CLI.get(portal)
     if not resolve:
         return {**job, "hydrate_error": f"no detail CLI for portal {portal!r}"}
+    if not portals.is_enabled(SKILL[portal]):
+        return {**job, "hydrate_error": f"{SKILL[portal]} is off (python3 tools/portals.py)"}
     try:
         cli = resolve()
     except (OSError, RuntimeError) as e:

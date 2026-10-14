@@ -37,8 +37,10 @@ import scrape_wide  # noqa: E402
 
 MODULES = (hydrate, scrape_wide)
 
-# The portals this repo actually runs. A disabled portal may have no build.
-ENABLED = ("linkedin-search", "freehire-search")
+# The portals scrape_wide and hydrate can call. One may ship off
+# (tools/portals.py), but a person can turn it on, so its resolver must still
+# work. The Danish portals have no adapter there and may have no build.
+WIRED = ("linkedin-search", "freehire-search")
 
 
 class TestTheResolverReturnsSomethingRunnable(unittest.TestCase):
@@ -46,9 +48,9 @@ class TestTheResolverReturnsSomethingRunnable(unittest.TestCase):
         for mod in MODULES:
             mod.portal_cli.cache_clear()
 
-    def test_every_enabled_portal_resolves_to_its_own_bundle(self):
+    def test_every_wired_portal_resolves_to_its_own_bundle(self):
         for mod in MODULES:
-            for portal in ENABLED:
+            for portal in WIRED:
                 with self.subTest(module=mod.__name__, portal=portal):
                     path = mod.portal_cli(portal, "PORTAL_CLI_UNSET_IN_TEST")
                     self.assertTrue(path.endswith(".mjs"),
@@ -61,7 +63,7 @@ class TestTheResolverReturnsSomethingRunnable(unittest.TestCase):
     def test_the_result_is_never_a_single_character(self):
         """The exact shape of the bug: iterating a string instead of a tuple."""
         for mod in MODULES:
-            for portal in ENABLED:
+            for portal in WIRED:
                 with self.subTest(module=mod.__name__, portal=portal):
                     path = mod.portal_cli(portal, "PORTAL_CLI_UNSET_IN_TEST")
                     self.assertGreater(len(path), 1, path)
@@ -69,7 +71,7 @@ class TestTheResolverReturnsSomethingRunnable(unittest.TestCase):
 
     def test_both_modules_agree(self):
         """They resolve the same portal the same way or one of them is wrong."""
-        for portal in ENABLED:
+        for portal in WIRED:
             with self.subTest(portal=portal):
                 seen = {mod.portal_cli(portal, "PORTAL_CLI_UNSET_IN_TEST")
                         for mod in MODULES}
