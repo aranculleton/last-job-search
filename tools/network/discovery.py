@@ -677,13 +677,16 @@ DISQUALIFIERS = (
     # which reads technical and is not.
     # The person's (networking.py NOT_HIRING_TITLES; None turns it off): for
     # somebody in sales these are exactly the people to reach.
+    # The reason is the person's too (networking.py NOT_HIRING_REASON): "dressed
+    # as technical" only says something to somebody in a technical function.
     Rule("revenue_role", "title", _NET_GET("NOT_HIRING_TITLES", re.compile(
         r"\b(solutions? architect|field engineer(?:ing)?|"
         r"cloud (?:&|and) ai specialist|technical account manager|"
         r"client partner|head of industry|customer success|sales engineer|"
         r"partner manager|account executive|solutions? consultant|"
         r"pre-?sales|business development)\b", re.I)) or _NEVER,
-        "revenue role dressed as technical, does not hire for technical teams"),
+        _NET_GET("NOT_HIRING_REASON",
+                 "a customer-facing revenue role, which does not hire for your function")),
 
     Rule("spam_urgency", "text", re.compile(
         r"\b(immediate hiring|urgent(?:ly)? hiring|hiring urgently|"
@@ -708,11 +711,17 @@ DISQUALIFIERS = (
 
     # Bulk lists spanning unrelated disciplines. Three of these in one run of
     # text is a harvest, not a vacancy.
+    # The role words are the person's to change (networking.py SPAM_BULK_ROLES):
+    # three of these in a run is a harvest for an IT or office search, and a
+    # hospital's real nursing post for somebody who is a nurse. The default list
+    # is kept; a person whose own job is on it removes that word.
     Rule("spam_bulk_roles", "text", re.compile(
-        r"(?:\b(?:java|\.net|dotnet|sap|qa tester|qa analyst|devops|salesforce|"
-        r"nurse|rn|truck driver|mechanical engineer|civil engineer|"
-        r"scrum master|network engineer|ios|android|php|sql developer|"
-        r"help ?desk|technician|peoplesoft|workday)\b[^\n]{0,40}){3,}", re.I),
+        r"(?:\b(?:" + "|".join(_NET_GET("SPAM_BULK_ROLES", (
+            r"java", r"\.net", r"dotnet", r"sap", r"qa tester", r"qa analyst", r"devops",
+            r"salesforce", r"nurse", r"rn", r"truck driver", r"mechanical engineer",
+            r"civil engineer", r"scrum master", r"network engineer", r"ios", r"android",
+            r"php", r"sql developer", r"help ?desk", r"technician", r"peoplesoft",
+            r"workday"))) + r")\b[^\n]{0,40}){3,}", re.I),
         "staffing spam, bulk role list spanning unrelated disciplines"),
 
     Rule("spam_contract_vehicle", "text", re.compile(
