@@ -15,12 +15,23 @@ nothing until the candidate picks. `_common.md` first.
    employer. Keep warm-route warnings ("DO NOT APPLY COLD") visible next to the role.
 3. Commit `documents/rounds/<rN>.json` and `job_scraper/seen_jobs.json` (`git add -f` for
    the latter) and land them per `_common.md`.
-4. The message:
+4. The message, written to be read on a phone: one role per block, the role and employer
+   first, the details on one short line, the link on its own line (a link inside a sentence
+   breaks on a small screen). Dates as the profile writes them, pay only where a band is
+   stated, and a warm-route or pending-outreach note on its own line under the role it
+   belongs to. A failed step goes in one line above everything, and only when a step failed.
 
 ```
-Round <rN>: <n> at 60+, <n> at 75+
-<the top 8 after step 2, numbered: score | company | role | posted | one-line reason | apply link>
-Reply in <the chat to reply in, per _common.md> with the numbers to draft (e.g. draft 1,3,5), and say if you have already applied to any.
+Shortlist <rN>: <n> roles at 60+, <n> at 75+
+
+1. <Role>, <Employer> (<score>)
+   <Location> · posted <date> · <one reason: the stated band, or the strongest match>
+   <apply link>
+
+2. ...
+
+Reply in <the chat to reply in, per _common.md> with the numbers to draft, for example
+"draft 1, 3", and say if you have already applied to any.
 ```
 
 5. **When the candidate replies with picks** (in this chat): record any "already applied"

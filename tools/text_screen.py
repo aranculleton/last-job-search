@@ -586,6 +586,37 @@ def eligibility_cut(text: str) -> str | None:
     return None
 
 
+# A vacancy open only to the employer's own staff. Nobody outside can be hired
+# into it, however well they match: a test round put "Data Analyst Support |
+# Internal Mobility" eighth on a shortlist. The title says so ("Internal
+# Mobility", "internal applicants only") or a sentence restricts who may apply.
+# "Internal candidates will be prioritised" and "internal and external
+# applicants welcome" are not restrictions, and "Internal Audit" is a job. The
+# patterns are English; a profile in another language sets search.py
+# INTERNAL_ONLY_TITLE and INTERNAL_ONLY.
+INTERNAL_ONLY_TITLE = getattr(_S, "INTERNAL_ONLY_TITLE", None) or re.compile(
+    r"\binternal (?:mobility|only|transfer|candidates? only|applicants? only)\b", re.I)
+INTERNAL_ONLY = getattr(_S, "INTERNAL_ONLY", None) or re.compile(
+    r"\b(?:open|available|restricted|limited) (?:only )?to (?:current|existing|internal) "
+    r"(?:\w+ )?(?:employees|staff|colleagues|team members|candidates|applicants)"
+    r"(?! and)(?:,? only)?"
+    r"|\b(?:internal|existing staff|current employees) (?:applicants|candidates|staff)? ?only\b"
+    r"|\bonly (?:open to |for )?(?:current|existing|internal) "
+    r"(?:\w+ )?(?:employees|staff|colleagues|candidates|applicants)\b", re.I)
+_RESTRICTS = re.compile(r"\bonly\b|\brestricted\b|\blimited to\b", re.I)
+
+
+def internal_only(title: str, text: str) -> str | None:
+    """The title or sentence that restricts a vacancy to the employer's own staff."""
+    if INTERNAL_ONLY_TITLE.search(title or ""):
+        return (title or "")[:200]
+    for s in sentences(text):
+        m = INTERNAL_ONLY.search(s)
+        if m and _RESTRICTS.search(m.group(0)):
+            return s[:200]
+    return None
+
+
 def designation_cut(text):
     """The sentence stating a professional designation as a condition, or None.
 
@@ -656,6 +687,10 @@ def screen(job: dict) -> dict:
     e = eligibility_cut(text)
     if e:
         cuts.append(f'{ELIGIBILITY_CUT_REASON}: "{e}"')
+
+    i = internal_only(job.get("title") or "", text)
+    if i:
+        cuts.append(f'open to the employer\'s own staff only: "{i}"')
 
     hi, q = salary_max(text)
     if hi is not None and hi < ABSURD_SALARY:
