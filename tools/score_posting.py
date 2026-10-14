@@ -138,10 +138,10 @@ def screen(r: dict) -> dict:
     # Employers pad years bars and screeners read them as guides, so both are
     # now signals that ORDER the queue and let a real scoring pass weigh them.
     yr = r.get("years_required")
-    if yr is not None and yr >= 8:
+    if yr is not None and yr - YEARS_HELD >= 4:
         flags.append(f"stated {yr}+ years against roughly {YEARS_HELD} held; "
                      f"a real stretch, weigh it against the domain match")
-    elif yr is not None and yr >= 6:
+    elif yr is not None and yr - YEARS_HELD >= 2:
         flags.append(f"stated {yr}+ years against roughly {YEARS_HELD} held; "
                      f"a stretch, not a bar")
 
@@ -160,7 +160,7 @@ def screen(r: dict) -> dict:
                     f"{_CUR}{SALARY_FLOOR:,} walk-away floor")
 
     # --- Judgment signals. These ORDER the queue. They never discard.
-    if r.get("people_management_required"):
+    if r.get("people_management_required") and not getattr(_SEARCH, "MANAGES_PEOPLE", False):
         flags.append("direct reports required; no formal people management held")
     fn = r.get("core_function") or "other"
     if fn in WRONG_FAMILY:

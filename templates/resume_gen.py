@@ -89,11 +89,21 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 \enlargethispage{{3\baselineskip}}
 
 \vspace{{-22pt}}
-\section{{{h_summary}}}
+"""
+
+# The sections, in the order documents.section_order names (default below).
+# Experience before education is the convention for somebody whose argument is
+# what they did; a recent graduate, whose degree is the strongest thing they
+# have, often leads with education instead, and that is the person's call.
+SECTION_ORDER = ("summary", "experience", "skills", "education", "certifications")
+
+SUMMARY = r"""\section{{{h_summary}}}
 \vspace{{1pt}}
 \small{{{summary}}}
 
-\section{{{h_experience}}}
+"""
+
+EXPERIENCE = r"""\section{{{h_experience}}}
 \vspace{{0pt}}
 """
 
@@ -105,16 +115,19 @@ JOB = r"""
 \end{{itemize}}}}
 """
 
-RESUME_TAIL = r"""
+SKILLS = r"""
 \section{{{h_skills}}}
 \vspace{{1pt}}
 {skills}
 
-\section{{{h_education}}}
+"""
+
+EDUCATION = r"""\section{{{h_education}}}
 \vspace{{1pt}}
 \par\noindent\hangindent=1.1em\hangafter=1\relax {education} {edu}\par
-{certifications}\end{{document}}
 """
+
+RESUME_END = "\\end{document}\n"
 
 CERTIFICATIONS = r"""
 \section{{{h_certifications}}}
@@ -132,7 +145,7 @@ LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \pagestyle{{fancy}}
 \fancyhf{{}}
 
-\rfoot{{Page \thepage \hspace{{0pt}}}}
+\rfoot{{{page_label} \thepage \hspace{{0pt}}}}
 \thispagestyle{{empty}}
 \renewcommand{{\headrulewidth}}{{0pt}}
 \begin{{document}}
@@ -141,7 +154,7 @@ LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 }}
 
 \currentdate{{{letter_date}}}
-\lettercontent{{Dear {salutation},}}
+\lettercontent{{{salutation_prefix} {salutation},}}
 
 \lettercontent{{{p1}}}
 
@@ -220,6 +233,15 @@ def _identity():
     )
 
 
+def section_order():
+    """documents.section_order, checked: every section once, nothing unknown."""
+    order = tuple(_DOC.get("section_order") or SECTION_ORDER)
+    if sorted(order) != sorted(SECTION_ORDER):
+        raise ValueError(f"documents.section_order must name each of {SECTION_ORDER} "
+                         f"exactly once; it is {order}")
+    return order
+
+
 def resume(a):
     jobs = ""
     for j in a["jobs"]:
@@ -229,11 +251,17 @@ def resume(a):
         jobs += JOB.format(ns=j.get("ns", 5), dates=_tex(j["dates"]), title=_tex(j["title"]),
                            employer=_tex(j["employer"]), loc=_tex(j["loc"]), bullets=bl)
     me = _identity()
+    sections = {
+        "summary": SUMMARY.format(summary=a["summary"], **me),
+        "experience": EXPERIENCE.format(**me) + jobs,
+        "skills": SKILLS.format(skills=a["skills"], **me),
+        "education": EDUCATION.format(edu=a.get("edu", EDU_STD), **me),
+        "certifications": me["certifications"],
+    }
     body = (RESUME_HEAD.format(company=a["company"], role=a["role"],
-                               fname=docpaths.resume_stem(a["abbr"]),
-                               summary=a["summary"], **me)
-            + jobs
-            + RESUME_TAIL.format(edu=a.get("edu", EDU_STD), skills=a["skills"], **me))
+                               fname=docpaths.resume_stem(a["abbr"]), **me)
+            + "".join(sections[k] for k in section_order())
+            + RESUME_END)
     p = docpaths.resume_tex(a["abbr"])
     open(p, "w").write(body)
     return p
@@ -282,6 +310,10 @@ def letter(a):
                          letter_paper="" if paper == "letterpaper" else paper,
                          salutation=a.get("salutation", f"{a['company']}{suffix}"),
                          letter_date=a.get("letter_date") or _long_date(),
+                         # The two words the letter prints that are not the
+                         # person's content: in their document language.
+                         page_label=_tex(_DOC.get("page_label", "Page")),
+                         salutation_prefix=_tex(_DOC.get("salutation_prefix", "Dear")),
                          p1=a["p1"], p2=a["p2"], lead=a["lead"], bullets=bl, p4=a["p4"],
                          **_identity())
     p = docpaths.letter_tex(a["abbr"])

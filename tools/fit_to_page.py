@@ -30,6 +30,12 @@ import allocate
 import bullet_library as LIB
 import untrusted
 import docpaths
+import person
+
+# How many pages the resume fills: documents.resume_pages, default one. One page
+# is the norm for a few years' experience in most English-speaking markets; a
+# long career, an academic CV or a market that expects two says so here.
+PAGES = int(person.get("documents.resume_pages", 1) or 1)
 
 # Derived from this file's location, like every other tool here. It was the
 # literal string "/home/user/ai-job-search", which is the path the cloud
@@ -350,7 +356,7 @@ def fit(a):
     trimmed = set()
     pages = _render_resume(a)
     for _ in range(9):
-        if pages <= 1:
+        if pages <= PAGES:
             break
         gone = trim_resume(a)
         if not gone:
@@ -359,15 +365,15 @@ def fit(a):
             trimmed.add(gone)
         pages = _render_resume(a)
     # Fill the page. Add a bullet, recompile, and keep it only if the resume is
-    # still one page; otherwise put the page back the way it was and stop.
+    # still within its pages; otherwise put the page back the way it was and stop.
     for _ in range(8):
-        if pages > 1:
+        if pages > PAGES:
             break
         snapshot = [list(j["bullets"]) for j in a["jobs"]]
         if not grow_resume(a, caps, skip=trimmed):
             break
         grown = _render_resume(a)
-        if grown > 1:
+        if grown > PAGES:
             # strict: snapshot is taken from a["jobs"], so a length
             # mismatch is a bug, and silently dropping a job's bullets
             # is the quiet kind that ships.

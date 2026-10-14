@@ -564,11 +564,12 @@ def screen(job: dict) -> dict:
     if title_lang and title_lang[1].search(head):
         cuts.append(f'job title is in {title_lang[0]}: "{(job.get("title") or head)[:120]}"')
 
+    # Measured from the years held (see tools/fit.py), not from fixed numbers.
     n, q = stated_years(text)
-    if n is not None and n >= 6:
+    if n is not None and n - YEARS_HELD >= 2:
         flags.append(f'stated {n}+ years against roughly {YEARS_HELD} held; a stretch the scorer weighs, never a cut: "{q[:200]}"')
-    elif n == 5:
-        flags.append("stated 5 years; a stretch, not a bar")
+    elif n is not None and n - YEARS_HELD == 1:
+        flags.append(f"stated {n} years; a stretch, not a bar")
 
     d = designation_cut(text)
     if d:

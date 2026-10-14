@@ -18,6 +18,8 @@
     "spelling": "british",
     "paper": "a4paper",
     "date_format": "day_month_year",
+    "resume_pages": 1,
+    "section_order": ["summary", "experience", "skills", "education", "certifications"],
     "resume_extra": ["Right to work in the UK"],
     "pdf_keywords": "CV, operations analyst, supply chain, SQL, Python, Manchester",
     "headings": {
@@ -28,6 +30,8 @@
       "certifications": "Certifications"
     },
     "salutation_suffix": " hiring team",
-    "closing": "Kind regards,"
+    "salutation_prefix": "Dear",
+    "closing": "Kind regards,",
+    "page_label": "Page"
   }
 }

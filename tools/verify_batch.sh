@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Verify every rendered application in a drafts.json: one page each, chronology,
+# Verify every rendered application in a drafts.json: the resume within the
+# profile's page count (documents.resume_pages, default 1), a one-page letter, chronology,
 # bullets per employer, clean text layer (pdftotext, and pypdf for run-together
 # words), contact details, the pinned skill, no parentheses in the skills
 # block, no duplicated bullets. Then claims and letters.
@@ -41,7 +42,8 @@ for a in $ABBRS; do
   tr '\n' ' ' < $VB/vb_r.txt | tr -s ' ' > $VB/vb_r1.txt
   p=""
   rp=$(pdfinfo "$R"|awk '/^Pages/{print $2}'); cp=$(pdfinfo "$C"|awk '/^Pages/{print $2}')
-  [ "$rp" = 1 ] || p="$p RESUME_${rp}p"; [ "$cp" = 1 ] || p="$p LETTER_${cp}p"
+  [ "$rp" -ge 1 ] 2>/dev/null && [ "$rp" -le "$RESUME_PAGES" ] || p="$p RESUME_${rp}p"
+  [ "$cp" = 1 ] || p="$p LETTER_${cp}p"
   ord=$(sed -n "/^$H_EXPERIENCE/,/^$H_EDUCATION/p" $VB/vb_r.txt | grep -oE "^($ROLE_ALT)" | tr '\n' '>')
   [ "$ord" = "$ROLE_ORDER" ] || p="$p CHRONO"
   grep -q 'Core Competencies' $VB/vb_r.txt && p="$p COMPETENCIES"

@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.5
+framework_version: 2.1.6
 ---
 
 # Resume Templates and Tailoring Guide
@@ -219,9 +219,13 @@ Write 5-7 lines that function as an "elevator pitch": a concise, compelling intr
 
 When the role sits outside your home domain, **lead with the domain-transfer argument** - the one or two sentences connecting your background to their problem (e.g. wave physics to radar signal processing) belong in the profile statement's opening, not buried in the cover letter. It is the strongest card a domain-changer holds; play it first.
 
-**Create 2-3 profile statement templates for your main role types:**
+**The person's 2-3 profile statement templates, one per main role type, are in
+`profile/CLAUDE.md`** (/setup writes them there). Draft from those. The four below are the
+fictional example person's, kept to show the shape: an identity first, the strongest
+evidence with its number, and a tailoring note. Never borrow their wording or their
+structure of claims for a real person.
 
-<!-- SETUP: These are populated based on your background -->
+<!-- Worked example: Morgan Ellis, the fictional person in profile.example/. -->
 **For Demand Planning / Forecasting roles:**
 > Operations analyst with seven years turning warehouse, transport and supplier data into forecasts that move stock. Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and six distribution centres at Brindle & Hart Logistics, cutting forecast error from 22% to 14% and freeing an estimated £1.1M of safety stock. Comfortable owning the whole path from raw warehouse feeds to the planners who act on the number. `[Tailor: name their product category and the planning horizon the posting asks for.]`
 

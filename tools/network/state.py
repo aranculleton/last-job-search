@@ -60,6 +60,14 @@ from throttle import FINAL as _THROTTLE_FINAL  # noqa: E402
 import person  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(_HERE))
+# The person's weekend, as Python weekday numbers (Monday 0). Saturday and
+# Sunday unless profile/search.py WEEKEND says otherwise: in much of the world
+# the working week runs Sunday to Thursday, and a follow-up "five business
+# days" later lands on a different date there.
+try:
+    WEEKEND = frozenset(getattr(person.module("search"), "WEEKEND", (5, 6)))
+except person.NoProfile:
+    WEEKEND = frozenset((5, 6))
 CONTACTS_CSV = person.state("network_contacts.csv")
 THREADS_CSV = person.state("network_threads.csv")
 TRACKER_CSV = person.state("job_search_tracker.csv")
@@ -143,11 +151,11 @@ def business_days_between(a, b) -> int:
     if b < a:
         return -business_days_between(b, a)
     weeks, extra = divmod((b - a).days, 7)
-    days = weeks * 5
+    days = weeks * (7 - len(WEEKEND))
     d = a
     for _ in range(extra):
         d += datetime.timedelta(days=1)
-        if d.weekday() < 5:
+        if d.weekday() not in WEEKEND:
             days += 1
     return days
 
@@ -161,7 +169,7 @@ def add_business_days(start, count: int) -> datetime.date:
     d = _need_date(start, "start date")
     for _ in range(max(count, 0)):
         d += datetime.timedelta(days=1)
-        while d.weekday() >= 5:
+        while d.weekday() in WEEKEND:
             d += datetime.timedelta(days=1)
     return d
 

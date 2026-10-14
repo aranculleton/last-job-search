@@ -1,10 +1,13 @@
 ---
-framework_version: 1.1.2
+framework_version: 1.1.3
 ---
 
 # Interview Preparation Guide
 
-<!-- SETUP: STAR examples are personalized by running /setup based on your actual experience -->
+The method is the app's; the examples are not anybody's. The STAR examples below belong to
+Morgan Ellis, the fictional person in `profile.example/`, and show the shape only. A real
+person's are in `profile/07-interview-prep.md`, which /setup writes and `/interview` reads.
+Never use these for a real person, and never edit this file for one.
 
 ## STAR Format
 
@@ -14,8 +17,8 @@ Keep answers to 1-2 minutes. Be specific. End with what you learned or would do 
 
 ## Ready-Made STAR Examples
 
-<!-- Worked examples for Morgan Ellis, the fictional example person in profile.example/;
-/setup replaces them with the candidate's own, drawn from the resume. In a real set every
+<!-- Worked examples for Morgan Ellis, the fictional example person in profile.example/.
+A real person's own, drawn from their resume, are in profile/07-interview-prep.md. In a real set every
 number appears on the resume; do not inflate any of them in the room. Where an interviewer
 pushes for detail the resume does not carry, say what you actually remember and flag the rest
 as approximate. -->
