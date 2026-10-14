@@ -73,6 +73,7 @@ RULES = (
     "exclamation_to_senior",
     "saw_your_post",
     "british_spelling",
+    "document_noun",
     "unsupported_claim",
     "sentence_starts_with_contraction",
 )
@@ -772,6 +773,23 @@ _IZE_SPELLING = _DOC.get("spelling", "") in ("canadian", "american")
 _BANS_CV = "CV" in _DOC.get("banned_nouns", [])
 
 
+def _noun_pattern(noun):
+    """A banned document noun as it shows up in a message. "resume" is also a
+    verb ("happy to resume the conversation"), so it counts only after a word
+    that makes it the document, or inside a filename (_Resume_)."""
+    if noun.upper() == "CV":
+        return None                          # _CV, reported as british_spelling
+    word = re.escape(noun).replace("e", "[eé]") if noun.lower() == "resume" else re.escape(noun)
+    return re.compile(
+        r"(?:\b(?:my|the|a|an|your|our|their|his|her|updated|attached|full|current)\s+|_)"
+        r"(?:%s)s?(?![A-Za-z])" % word, re.I)
+
+
+# Every word the market does not use for the document, not only "CV": a person
+# whose document is a CV bans "resume", and messages saying "my resume" passed.
+_BANNED_NOUNS = [p for p in (_noun_pattern(n) for n in _DOC.get("banned_nouns", [])) if p]
+
+
 def _british(text) -> list:
     out = []
     if _IZE_SPELLING:
@@ -780,6 +798,9 @@ def _british(text) -> list:
     if _BANS_CV:
         out += [Violation("british_spelling", _around(text, m.start(), 16))
                 for m in _CV.finditer(text)]
+    for rx in _BANNED_NOUNS:
+        out += [Violation("document_noun", _around(text, m.start(), 16))
+                for m in rx.finditer(text)]
     return out
 
 

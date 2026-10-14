@@ -601,10 +601,19 @@ class Scenario:
     matcher: Callable = field(compare=False, repr=False, default=None)
 
 
+# The person's word for the document, and the one their market does not use:
+# person.json documents.noun and banned_nouns. The guidance said "Email the
+# resume" and "Do not attach a file named CV" to a person whose document is a
+# CV, which is the opposite of their rule.
+_DOCS = person.get("documents", {}) or {}
+_NOUN = _DOCS.get("noun", "resume")
+_NOUN_RULE = tuple(f"Do not attach a file named {b}; the attachment says {_NOUN}."
+                   for b in _DOCS.get("banned_nouns", [])[:1])
+
 # Sent when they asked for the resume but left no address. Asking for one is a
 # reply; guessing at a corporate address format is how a first impression lands
 # in a bounce folder.
-NO_ADDRESS_ACTION = ("Ask for the best address, or attach the resume in this thread if the "
+NO_ADDRESS_ACTION = (f"Ask for the best address, or attach the {_NOUN} in this thread if the "
                      "channel carries attachments.")
 
 # Sent when the scenario is a booking but the message carries no link, which
@@ -661,31 +670,32 @@ SCENARIOS = {s.name: s for s in (
     ),
     Scenario(
         name="send_resume",
-        move=("Email the resume now, attached, with a short context paragraph. Say once in "
+        move=(f"Email the {_NOUN} now, attached, with a short context paragraph. Say once in "
               "the thread that it is sent."),
         sentences=(1, 2),
         owes_action=True,
-        next_action=("Email the resume to {email} today, attached, with a short paragraph of "
-                     "context so they do not have to go and find the original message."),
+        next_action=("Email the " + _NOUN + " to {email} today, attached, with a short "
+                     "paragraph of context so they do not have to go and find the original "
+                     "message."),
         do_not=(
             "Do not wait to be asked twice.",
             "Do not over-trim the email; someone who asked for it expects substance.",
-            "Do not attach a file named CV; the attachment says resume.",
+            *_NOUN_RULE,
         ),
         matcher=_match_send_resume,
     ),
     Scenario(
         name="referral_offered",
-        move=("Accept immediately and make it easy: offer the resume unprompted, one "
+        move=(f"Accept immediately and make it easy: offer the {_NOUN} unprompted, one "
               "clarifying question at most."),
         sentences=(2, 4),
         owes_action=True,
-        next_action=("Have the resume ready to send, and record the chain in "
+        next_action=(f"Have the {_NOUN} ready to send, and record the chain in "
                      "network_contacts.csv (route=referral, referred_by) so the intro "
                      "message can lead with their name."),
         do_not=(
             "Do not bury the referrer's name when writing to the person they named.",
-            "Do not make them chase you for the resume.",
+            f"Do not make them chase you for the {_NOUN}.",
             "Do not ask more than one clarifying question.",
         ),
         matcher=_match_referral,
@@ -746,7 +756,7 @@ SCENARIOS = {s.name: s for s in (
     ),
     Scenario(
         name="low_effort",
-        move=("Move it forward with one concrete, low-friction step: offer the resume, or "
+        move=(f"Move it forward with one concrete, low-friction step: offer the {_NOUN}, or "
               "propose two specific times."),
         sentences=(1, 2),
         owes_action=False,

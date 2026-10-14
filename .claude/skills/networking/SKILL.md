@@ -153,6 +153,11 @@ Run alumni modes before cold modes for any company where both are possible.
 
 ## Composition
 
+**The document is the person's word for it.** "Resume" in this skill and its playbooks means
+whatever `person.json` `documents.noun` says: in a CV market every message says CV, and a
+word in `documents.banned_nouns` in a message is a `tone.check` finding (`document_noun`).
+The composers already write the person's word.
+
 ### What outreach is for: referrals
 
 Every first message exists to start a conversation, and the conversation is

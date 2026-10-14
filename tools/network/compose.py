@@ -42,6 +42,10 @@ import tone  # noqa: E402
 
 # The person's voice, work authorization and places: profile/networking.py.
 _NET = person.module("networking")
+# The person's word for the document ("resume", "CV"): person.json
+# documents.noun. Every message says it the way their market does; a CV market
+# reading "My resume is attached" sees a template from somewhere else.
+NOUN = person.get("documents.noun", "resume")
 
 
 class TooLong(ValueError):
@@ -698,7 +702,7 @@ def referral_ask(name, context, role, link, close=None) -> str:
     if not re.match(r"https?://", str(link).strip()):
         raise ValueError("link must be the posting's URL, so they can act from the message")
     close = close or ("Would you be comfortable referring me for it? Happy to send my "
-                      "resume and a couple of lines you can forward, and no problem at "
+                      f"{NOUN} and a couple of lines you can forward, and no problem at "
                       "all if not.")
     # The link goes on its own line at the end: a URL closing a sentence picks
     # up the full stop, and LinkedIn then links to a page that does not exist.
@@ -795,7 +799,8 @@ def email(name, subject, context, body, ask, sign_off=None, attachment=True,
 
     The attachment is named in the body so the filename is visible to the tone
     check: a file called First_Last_CV_Employer.pdf contradicts a message that
-    says resume, and the reader sees both.
+    says resume, and the reader sees both. The word is the person's
+    (documents.noun).
     """
     if not str(context or "").strip():
         raise ValueError(
@@ -815,9 +820,9 @@ def email(name, subject, context, body, ask, sign_off=None, attachment=True,
         # attached (resume)." into every email composed without a filename. A
         # parenthetical is only worth writing when it names the actual file.
         named = "" if attachment is True else " ".join(str(attachment).split())
-        blocks.append(f"My resume is attached ({named})."
-                      if named and named.lower() not in ("resume", "cv")
-                      else "My resume is attached.")
+        blocks.append(f"My {NOUN} is attached ({named})."
+                      if named and named.lower() not in ("resume", "cv", NOUN.lower())
+                      else f"My {NOUN} is attached.")
     # `False` is how a caller says no sign-off on purpose; `None` takes the
     # register default rather than silently ending the email on a full stop.
     if sign_off is None:
