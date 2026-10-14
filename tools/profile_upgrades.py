@@ -537,7 +537,16 @@ def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
             continue
         if touched:
             _git("add", "-f", "--", *touched)
-            _git("commit", "-q", "-m", f"Profile upgrade: {u.id}", "-m", u.gives)
+            c = _git("commit", "-q", "-m", f"Profile upgrade: {u.id}", "-m", u.gives)
+            if c.returncode != 0:
+                # No git identity in this session, a hook, anything: undo rather
+                # than leave the person's files changed and uncommitted.
+                _git("reset", "-q", "--", *touched)
+                _git("checkout", "--", ".")
+                _git("clean", "-fdq", "--", *touched)
+                why = ((c.stderr or c.stdout).strip().splitlines() or ["no error text"])[-1]
+                notes.append(f"{u.id}: not applied (the commit failed: {why[:120]})")
+                continue
             notes.append(f"{u.id}: applied, {len(touched)} file(s), committed")
     return notes
 

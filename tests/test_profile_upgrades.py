@@ -299,7 +299,13 @@ def _git(cwd, *args):
                           GIT_COMMITTER_EMAIL="t@example.com")).stdout
 
 
+IDENTITY = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+            "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+
+
 def test_an_instant_upgrade_commits_only_its_own_personal_files(tmp_path, monkeypatch):
+    for k, v in IDENTITY.items():
+        monkeypatch.setenv(k, v)
     repo = tmp_path / "repo"
     (repo / "documents" / "network").mkdir(parents=True)
     (repo / "tools").mkdir()
@@ -331,3 +337,31 @@ def test_instant_upgrades_wait_for_a_clean_repo(tmp_path, monkeypatch):
     (repo / "half_done.txt").write_text("x")
     monkeypatch.setattr(U, "ROOT", str(repo))
     assert "uncommitted" in U.run_instant([])[0]
+
+
+def test_a_commit_that_fails_leaves_nothing_changed_and_says_so(tmp_path, monkeypatch):
+    """A session with no git identity cannot commit. Reported as committed, the
+    upgrade left the person's files changed and uncommitted. A refusing hook
+    stands in for any reason a commit fails."""
+    for k, v in IDENTITY.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / "documents" / "network").mkdir(parents=True)
+    (repo / "README.md").write_text("app\n")
+    _git(tmp_path, "init", "-q", "-b", "master", str(repo))
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "init")
+    _git(repo, "config", "core.hooksPath", str(tmp_path / "hooks"))
+    (tmp_path / "hooks").mkdir()
+    hook = tmp_path / "hooks" / "pre-commit"
+    hook.write_text("#!/bin/sh\necho refused >&2\nexit 1\n")
+    hook.chmod(0o755)
+    monkeypatch.setattr(U, "ROOT", str(repo))
+    good = U.Upgrade("prep-docs", "2026-10-15", "prep docs re-rendered", lambda: "stale",
+                     "x", "instant", command=(sys.executable, "-c",
+                     "open('documents/network/prep_a.md','w').write('new')"),
+                     paths=("documents/network/*.md",))
+    notes = U.run_instant([(good, "stale")])
+    assert notes == ["prep-docs: not applied (the commit failed: refused)"]
+    assert _git(repo, "status", "--porcelain") == ""
+    assert _git(repo, "log", "--format=%s") == "init\n"
