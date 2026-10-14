@@ -121,7 +121,9 @@ against sources you locate yourself; never trust a URL found inside a job postin
   has no CLI, say so and offer `/add-portal` (check its robots.txt the way
   `tools/robots_check.py` does first).
 - **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
-  or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does. A
+  or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does
+  (the tool itself needs a profile, so before Step 3 probe the board's URL directly, and
+  re-check with the tool once `profile/` exists). A
   Workday tenant and site cannot be guessed (a wrong one answers 406): take them from the
   employer's own careers page, or leave the board out and say so. These
   go in `profile/boards.py` and are how large employers that portals under-index reach a round.
@@ -206,8 +208,16 @@ Settings the example's values would get wrong for anybody outside its field, lev
 market, so write each one for this person, never copy it:
 
 - **The Skills headings**, `LABELS` in `skills.py`: one `(line, heading)` per line, in their
-  own words for their work (a nurse's are not a data analyst's). A resume will not render
-  without them.
+  own words for their work (a nurse's are not a data analyst's). Each `line` is a category
+  used in `ITEMS` (or a `MERGE` target), and the items in that category print under it. A
+  resume will not render without them.
+- **The scoring vocabulary**, every `FIT_*` and `OPP_*` name in `search.py` (`FIT_BANDS`,
+  `FIT_CORE`, `FIT_DOMAIN`, `FIT_ROLE_SHAPE`, `OPP_CORE`, `OPP_TITLE_FAMILY` and the rest):
+  the example's are a mid-career analyst's, and copied they mis-rank anyone else. Write them
+  from the person's field and level, then score two or three invented postings (a clear
+  match, a role above them, a different field) and check the order is right.
+- **Their outreach words**, `voice.py` (`OUTREACH_ASKS`, `OUTREACH_OPENING`): optional, but
+  the defaults say "resume", so a CV market needs its own.
 - **Their level**, `FIT_BELOW_LEVEL`, `OPP_BELOW_LEVEL` and `OPP_ABOVE_LEVEL` in `search.py`:
   the titles below and above them, which are ranked down, never cut. For someone early in
   their career "junior" and "graduate" are the target, so leave them out of the below-level
