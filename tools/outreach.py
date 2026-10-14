@@ -144,8 +144,9 @@ def _ask_for(a):
 
 # The candidate's employers, from the profile. A note that names none of them
 # carries no credential, and the credential is the part that earns a reply.
-CREDENTIAL = re.compile(r"\b(?:%s)\b" % "|".join(
-    re.escape(r["employer"]) for r in person.module("roles").ROLES))
+# Matched as people write them, by the same matcher the letter audit uses
+# (render_application.EMPLOYER_NAMED), so the two never disagree.
+CREDENTIAL = R.EMPLOYER_NAMED
 
 
 def check_note(note):
@@ -295,7 +296,16 @@ if __name__ == "__main__":
     if len(sys.argv) > 2:
         raw = json.load(open(sys.argv[2]))
         for m in (raw if isinstance(raw, list) else raw.values()):
+            if not m.get("abbr"):
+                raise SystemExit(f"{sys.argv[2]}: the row for {m.get('company') or '(no company)'} "
+                                 "has no abbr, so no draft can be matched to it; stage it "
+                                 "with tools/stage_picks.py")
             meta[m["abbr"].upper()] = m
     for a in drafts:
-        d = write(a, meta.get(a["abbr"].upper(), {}), today)
+        # Matched on the abbr the draft arrived with, then on the name its
+        # files were written under (fit_to_page settles it), which is the
+        # name every path below uses.
+        supplied = (a.get("abbr") or "").upper()
+        a["abbr"] = R.final_abbr(a)
+        d = write(a, meta.get(supplied) or meta.get(a["abbr"].upper(), {}), today)
         print("wrote", os.path.relpath(d, ROOT), "|", len(outreach_note(a).split()), "words")

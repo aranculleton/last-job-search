@@ -110,6 +110,27 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **`verify_batch.sh` no longer fails letters written the way the style guide asks.**
+  `audit_letters.py` required the opening to name the role, which pushed every letter back
+  to the "I am applying for the <role> role" opener `03-writing-style.md` bans; it now flags
+  that opener instead, and asks for the role only when the batch holds two roles at one
+  employer. The opening must still name one of your employers, but as people write it: "at
+  Brindle & Hart" names Brindle & Hart Logistics. **If you call an employer something
+  `roles.py` does not hold** ("Oakmere" for Oakmere Foods), add `known_as="Oakmere"` to that
+  role; the outreach note's hook uses the same matcher.
+- **A date running into a capitalised word is no longer a claim.** `check_numbers.py` read
+  "2024 Weekend" as "2024 week" (and "12 monthly", "3 hourly", "2023 Daytime" likewise), an
+  ungrounded number that failed the batch.
+- **Ireland's DAC, CLG, UC and Teoranta, Canada's ULC, and "Pvt Ltd", "Pte Ltd", "Pty Ltd" and
+  "Co., Ltd."** come off the salutation, the outreach note, the document file name and the
+  company key, so the throttle sees "Acme DAC" and "Acme" as one employer. "Acme Pty Ltd"
+  used to become "Acme Pty". A draft re-rendered after this sync for an employer with one of
+  these forms is written under the shorter name.
+- **A draft's file name is settled before it is rendered.** `fit_to_page.py` read a
+  hand-written `abbr` ("FF") before the renderer replaced it with the derived one, so the
+  last compile looked for a file never written; a draft with no `abbr` was a bare
+  `KeyError` there, in `outreach.py` and in `record_drafts.py`. A shortlist row with none
+  now says so and names the employer.
 - **The leak scan no longer treats a placeholder as a person.** An employer entry such as
   "Projects", "Freelance" or "Career break" became a denylist entry, matched the app's own
   headings, and forced a rename on the person's resume. Placeholders are skipped; a real

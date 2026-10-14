@@ -350,7 +350,11 @@ def _render_letter(a):
 def fit(a):
     """Returns ((resume_pages, resume_lines), letter_pages), each the last
     measurement of the document that is on disk when this returns."""
-    abbr = a["abbr"]
+    # The name build() writes under, settled before the first render. Read
+    # from the draft as supplied, a hand-written abbr ("FF") was the name the
+    # final compile looked for after build() had written the derived one, and
+    # the whole fit ended in CompileFailed; a draft with none was a KeyError.
+    abbr = a["abbr"] = R.final_abbr(a)
     R.jobs_for(a)                                   # dedupe + order before any cap reasoning
     caps = allocate.caps_for(a.get("posting", ""))  # once per fit
     trimmed = set()

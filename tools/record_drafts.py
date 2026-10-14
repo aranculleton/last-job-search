@@ -147,6 +147,13 @@ def main() -> int:
     raw = json.load(open(a.apps_in, encoding="utf-8"))
     metas = {m["abbr"].upper(): m for m in (raw if isinstance(raw, list) else raw.values())
              if m.get("abbr")}
+    # The same matching as tools/outreach.py: the abbr the draft arrived with,
+    # then the name its files were written under, which every row records.
+    for d in drafts:
+        supplied = (d.get("abbr") or "").upper()
+        d["abbr"] = outreach.R.final_abbr(d)
+        if supplied in metas and d["abbr"].upper() not in metas:
+            metas[d["abbr"].upper()] = metas[supplied]
     missing = [d["company"] for d in drafts if d["abbr"].upper() not in metas]
     if missing:
         print("no shortlist row (apps_in.json) for: " + ", ".join(missing)
