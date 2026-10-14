@@ -23,6 +23,8 @@ The rules, enforced here rather than remembered:
 - Uncommitted changes stop it before anything happens. Anything the merge
   cannot settle aborts it and leaves the repo exactly as it was.
 - In the app itself, a no-op.
+- After every sync, "up to date" included, it lists the profile upgrades this
+  repo still needs and runs the instant ones (`tools/profile_upgrades.py`).
 
 The first sync of a template-made repo has no common commit, so it merges with
 --allow-unrelated-histories: identical files merge clean, and an app-owned file
@@ -352,10 +354,40 @@ def main(argv: list[str]) -> int:
         return 2
     _APP_PORTALS[:] = [_regex(g) for g in app_portals()]
     if a.check:
-        return check()
+        rc = check()
+        upgrades("--list")
+        return rc
     if a.adopt:
         return adopt()
-    return sync()
+    rc = sync()
+    if rc == 0:
+        upgrades("--after-sync")
+    return rc
+
+
+def upgrades(mode: str) -> None:
+    """The profile upgrades this repo still needs (tools/profile_upgrades.py).
+
+    Run as its own process, from the file the merge just brought in: this
+    sync_app is the copy that was on disk before the merge, so the registry it
+    could import would be the old one. After a sync the instant upgrades run and
+    commit on their own; a check only lists. Never changes the exit code: a
+    pending upgrade must not block anything.
+    """
+    script = os.path.join(ROOT, "tools", "profile_upgrades.py")
+    if not os.path.isfile(script):
+        return
+    try:
+        r = subprocess.run([sys.executable, script] + ([] if mode == "--list" else [mode]),
+                           cwd=ROOT, text=True, capture_output=True, timeout=600)
+        out = (r.stdout or "").rstrip()
+        if out:
+            print(out)
+        if r.returncode:
+            print(f"profile upgrades: the check exited {r.returncode}: "
+                  + ((r.stderr or "").strip().splitlines() or ["no error text"])[-1])
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"profile upgrades: could not be checked ({type(e).__name__})")
 
 
 if __name__ == "__main__":

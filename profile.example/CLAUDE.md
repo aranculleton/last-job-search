@@ -34,6 +34,16 @@ this file, is the source of truth for every fact below.
 - Roles requiring Welsh as a job condition
 - Gambling and tobacco employers
 
+## Profile statement templates
+`/apply` drafts the CV summary from these, tailored per posting; every claim in them is in
+`01-candidate-profile.md`.
+
+**Demand planning and forecasting roles:**
+> Operations analyst with seven years turning warehouse, transport and supplier data into forecasts that move stock. Built weekly demand-forecasting models in Python and SQL across 2,400 SKUs and six distribution centres at Brindle & Hart Logistics, cutting forecast error from 22% to 14% and freeing an estimated £1.1M of safety stock. `[Tailor: their product category and planning horizon.]`
+
+**Transport planning and logistics network roles:**
+> Operations analyst with direct transport-planning experience: a route-consolidation model that removed 9% of weekly van miles, the demand forecasts behind 2,400 SKUs, and the Power BI service-level reporting used by 30+ operations managers. `[Tailor: their network and the constraint they plan against.]`
+
 ## Document rules that are Morgan's
 - British spelling throughout (`documents.spelling` is `british`); the document is a CV.
 - Dates as "14 October 2026".

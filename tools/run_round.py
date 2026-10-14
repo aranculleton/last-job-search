@@ -253,6 +253,15 @@ def _portals_down(out_dir: str) -> list[str]:
     return []
 
 
+def _upgrades_line() -> str:
+    """The pending profile upgrades, one line, for the round's summary. Fails open."""
+    try:
+        import profile_upgrades
+        return profile_upgrades.line()
+    except Exception:
+        return ""
+
+
 def _boards_not_built() -> list[str]:
     """profile/search.py PORTAL_RESEARCH entries with no portal here. Fails open."""
     try:
@@ -392,6 +401,11 @@ def main():
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"
               + ("" if met else f"; kept {', '.join(DIAGNOSTICS)} without bodies"))
+    # Once per run: on the round that ends it, not on each widening.
+    if met or not (a.expand and a.round < MAX_ROUNDS):
+        pending_line = _upgrades_line()
+        if pending_line:
+            print(pending_line)
     if met:
         print("next: read the shortlist, confirm nothing already applied to "
               "directly, then draft.")

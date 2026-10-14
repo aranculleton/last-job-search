@@ -217,7 +217,45 @@ PORTAL_LOCATIONS: dict[str, list[str]] = {}
 #    "portal": "<name>-search", "status": "built" | "<why not, e.g. robots.txt
 #    disallows /jobs>", "source": "<where the coverage claim came from>",
 #    "checked": "YYYY-MM-DD"}
-PORTAL_RESEARCH: list[dict] = []
+PORTAL_RESEARCH: list[dict] = [
+    # Researched 14 Oct 2026 for this example's market (Manchester, supply chain and data
+    # analyst roles). Real boards and real robots.txt rules; nothing is built, because an
+    # example person has no repo of their own to build a portal in.
+    {"board": "Reed", "url": "https://www.reed.co.uk",
+     "covers": "UK general board, strong on Manchester analyst, planning and operations roles",
+     "status": "not built: robots.txt (*) disallows only /api/, /handlers/ and tracking query "
+               "strings, so search and postings are allowed, no Crawl-delay; public without "
+               "login; the official Jobseeker API (free key) is the cleaner route; worth building",
+     "source": "https://www.reed.co.uk/robots.txt", "checked": "2026-10-14"},
+    {"board": "GOV.UK Find a job", "url": "https://www.jobs.service.gov.uk/jobs",
+     "covers": "the UK public employment service, all fields, direct employers",
+     "status": "not built: robots.txt allows /jobs and disallows the rest, no Crawl-delay; "
+               "its terms allow reasonable automated copying for personal use; small for "
+               "Manchester analyst roles, but cheap and sanctioned, so worth a light portal",
+     "source": "https://www.jobs.service.gov.uk/robots.txt", "checked": "2026-10-14"},
+    {"board": "Totaljobs", "url": "https://www.totaljobs.com",
+     "covers": "UK general board, strong on office, analyst and logistics roles",
+     "status": "not built: robots.txt allows search and postings but caps paging at 5, no "
+               "Crawl-delay; automated fetches from a cloud container got no reply; build "
+               "after Reed, and test from the runtime first",
+     "source": "https://www.totaljobs.com/robots.txt", "checked": "2026-10-14"},
+    {"board": "CV-Library", "url": "https://www.cv-library.co.uk",
+     "covers": "UK general board, agency-heavy",
+     "status": "not built: robots.txt disallows every query string except jobId= and "
+               "page_number=, so only slug search pages work; a cloud container was "
+               "blocked (403); lower priority",
+     "source": "https://www.cv-library.co.uk/robots.txt", "checked": "2026-10-14"},
+    {"board": "Adzuna UK", "url": "https://www.adzuna.co.uk",
+     "covers": "UK aggregator across many boards, with salary estimates",
+     "status": "not built: mostly reposts other boards; robots.txt could not be read (403); "
+               "the official API needs a key, allows personal research and is rate limited",
+     "source": "https://developer.adzuna.com/docs/terms_of_service", "checked": "2026-10-14"},
+    {"board": "Indeed UK", "url": "https://uk.indeed.com",
+     "covers": "UK's largest general board",
+     "status": "not built: robots.txt disallows /viewjob and /job/ for every crawler, so "
+               "postings cannot be fetched; no public job-search API",
+     "source": "https://uk.indeed.com/robots.txt", "checked": "2026-10-14"},
+]
 # Read the person's LinkedIn job alerts into each round (tools/job_alerts.py), as
 # a Gmail search for the alert emails, without a date: the round adds one. Empty
 # is off, and stays off unless the person asks, because it reads their inbox.

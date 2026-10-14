@@ -16,6 +16,15 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Profile upgrades: what the app added since you set up, and what it needs from you.** `/setup`
+  runs once, so a part of the app that needs something on your side (your job boards researched,
+  a setting with no safe default, a portal rebuilt) never reached a profile written before it.
+  `tools/profile_upgrades.py` checks your repo for each one, and every sync now ends by listing
+  what is pending, with what runs it and how long it takes; the twice-weekly shortlist carries
+  the same line. **If you set up before 15 October 2026,** your next sync lists the upgrades
+  waiting for you. This sync is the old copy of the sync and cannot, so the session runs
+  `python3 tools/profile_upgrades.py` once to see them now. Nothing runs without a yes.
+  No profile upgrade: this is what lists them.
 - **Your LinkedIn job alerts can feed every round.** LinkedIn's alert emails are its own match
   for you, and they carry roles a keyword search ranks out of reach. Set `JOB_ALERT_QUERY` in
   `profile/search.py` (off unless you set it, because it reads your inbox) and the job round
@@ -24,6 +33,7 @@ make sense to somebody whose repo just received it.
   them with everything else. Built and tested on invented alert emails; the LinkedIn fetch was
   checked live. If your first real alerts yield nothing, say so: the id pattern is the one
   thing a real email could prove wrong.
+  Profile upgrade: `job-alerts`.
 - **Every round searches the job boards built for you.** A portal made by `/add-portal` for
   your country, field or level used to run only when you typed `/scrape`; `tools/scrape_wide.py`
   called LinkedIn and freehire by name and nothing else. Now any portal that is on and follows
@@ -59,6 +69,7 @@ make sense to somebody whose repo just received it.
   had one of the four on,** this sync deletes it; put it back as your own with
   `git checkout <this sync's commit>^1 -- .agents/skills/<name>` and commit, or build it
   fresh with `/add-portal`.
+  Profile upgrade: `missing-portal`.
 - **The screen's job-family flags and two networking reasons are your profile's.**
   `tools/score_posting.py`'s wrong-family and homonym flags ("reporting and dashboard building
   is the whole job", "'modelling' here is valuation") were an analyst's, and the networking
@@ -68,6 +79,7 @@ make sense to somebody whose repo just received it.
   list. **If you are an analyst and want the old flags**, copy the example's
   `SCREEN_WRONG_FAMILY`, `SCREEN_HOMONYMS` (`profile.example/search.py`) and
   `NOT_HIRING_REASON` (`profile.example/networking.py`) into your profile.
+  Profile upgrade: `screen-flags`.
 - **`person.json`'s keys are listed with everything else.** `python3 tools/profile_names.py
   person` shows every key a tool reads, whether it is needed or optional, whether the example
   sets it, and where it is read.
@@ -75,6 +87,7 @@ make sense to somebody whose repo just received it.
   permit holder; a citizen now writes one line, and a free-movement row covers EU/EEA and
   Swiss, Common Travel Area and Trans-Tasman citizens. **If your profile is a citizen's and
   was written from the old template**, nothing breaks; `/setup --section market` rewrites it.
+  No profile upgrade: nothing breaks, and the rewrite only tidies a citizen's eligibility gate.
 - **Scheduled briefings have two set-ups that work, written out step by step.**
   `automation/README.md` now walks through **(a)** one chat per task ("Job search: morning
   brief", and "Job search: shortlist" for the twice-weekly round, whose key and prompt file
@@ -91,6 +104,7 @@ make sense to somebody whose repo just received it.
   A long-lived scheduled chat is capped with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` on a
   cloud environment only those chats use; the app's `.claude/settings.json` is synced to
   everyone, so a per-model cap there would squeeze every chat on that model.
+  No profile upgrade: scheduled briefings are optional, set up from `automation/README.md`.
 - **A profile without employer tiers can meet the yield target.** `tools/fit.py` divided
   opportunity by a fixed 130 before multiplying it into priority, a number calibrated on a
   profile with tiers, leverage and core capabilities. Without them opportunity tops out at
@@ -119,10 +133,12 @@ setting now, and `python3 tools/profile_names.py` lists every one.
   flags likewise), which is right for someone with four years: twenty years' experience lost
   points on "10+ years", and a new graduate lost nothing on "6+". If your scores move after
   this sync, this is why, and it is the fix.
+  No profile upgrade: every profile already sets `YEARS_HELD`.
 - **`/interview` uses your own STAR examples** (`profile/07-interview-prep.md`). It read the
   app's guide, whose examples belong to the fictional example person. And `/apply` drafts your
   summary from the profile statement templates in your `profile/CLAUDE.md`, never from the
   example person's in `05-cv-templates.md`. If your `profile/CLAUDE.md` has none, add 2-3.
+  Profile upgrade: `interview-prep`.
 - **Your resume's page count and section order** are `documents.resume_pages` (default 1)
   and `documents.section_order` (default summary, experience, skills, education,
   certifications) in `person.json`; `fit_to_page.py` and `verify_batch.sh` follow them. A
@@ -133,6 +149,7 @@ setting now, and `python3 tools/profile_names.py` lists every one.
   business-day follow-up date. **Contract work** is docked 6 unless `OPP_CONTRACT = None`.
   `MANAGES_PEOPLE = True` stops the screen flagging roles with direct reports. The portal
   health probe's word is `CANARY_QUERY` (default "data").
+  Profile upgrade: `market-week`.
 
 Found by the first person set up outside data analysis. **If your profile was written before
 this, three things to do after this sync**, all in `profile/`:
@@ -151,6 +168,7 @@ this, three things to do after this sync**, all in `profile/`:
   `profile.example/search.py`. **If you cancelled the junior penalty in your profile** (a
   bonus for junior titles, say), take the cancellation out, or junior roles now score high
   twice over.
+  Profile upgrade: `level`.
 - **Your bullets' themes can be your own.** `tools/allocate.py` matched postings only against
   a data analyst's theme words, so a theme outside them scored nothing and bullets were picked
   on weight alone. Add `THEME_CUES` (theme -> the words postings use for it) to `bullets.py`;
@@ -170,6 +188,7 @@ this, three things to do after this sync**, all in `profile/`:
   `search.py` `PORTAL_COUNTRY`). `documents.paper` and `documents.letter_paper` still win
   where set, so **if your profile sets them only because the app once needed it, remove
   them** and let the country decide.
+  Profile upgrade: `country`.
 - **The guides no longer steer towards data work.** The networking skill and discovery
   playbook, the writing style's role-type language, `/expand`'s competency taxonomy and the
   upskill skill use field-neutral wording, with examples from several fields.
@@ -248,6 +267,7 @@ this, three things to do after this sync**, all in `profile/`:
   Brindle & Hart" names Brindle & Hart Logistics. **If you call an employer something
   `roles.py` does not hold** ("Oakmere" for Oakmere Foods), add `known_as="Oakmere"` to that
   role; the outreach note's hook uses the same matcher.
+  No profile upgrade: the audit names the employer when a short name needs `known_as`.
 - **A date running into a capitalised word is no longer a claim.** `check_numbers.py` read
   "2024 Weekend" as "2024 week" (and "12 monthly", "3 hourly", "2023 Daytime" likewise), an
   ungrounded number that failed the batch.
