@@ -16,6 +16,14 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Your LinkedIn job alerts can feed every round.** LinkedIn's alert emails are its own match
+  for you, and they carry roles a keyword search ranks out of reach. Set `JOB_ALERT_QUERY` in
+  `profile/search.py` (off unless you set it, because it reads your inbox) and the job round
+  searches Gmail for those emails only, `tools/job_alerts.py` takes the job ids from them and
+  fills each posting from LinkedIn's own page, and `run_round.py --alerts` screens and scores
+  them with everything else. Built and tested on invented alert emails; the LinkedIn fetch was
+  checked live. If your first real alerts yield nothing, say so: the id pattern is the one
+  thing a real email could prove wrong.
 - **Every round searches the job boards built for you.** A portal made by `/add-portal` for
   your country, field or level used to run only when you typed `/scrape`; `tools/scrape_wide.py`
   called LinkedIn and freehire by name and nothing else. Now any portal that is on and follows

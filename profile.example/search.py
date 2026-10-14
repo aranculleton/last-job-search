@@ -191,4 +191,9 @@ PORTAL_LOCATIONS: dict[str, list[str]] = {}
 #    disallows /jobs>", "source": "<where the coverage claim came from>",
 #    "checked": "YYYY-MM-DD"}
 PORTAL_RESEARCH: list[dict] = []
+# Read the person's LinkedIn job alerts into each round (tools/job_alerts.py), as
+# a Gmail search for the alert emails, without a date: the round adds one. Empty
+# is off, and stays off unless the person asks, because it reads their inbox.
+# /setup writes it as "from:<the sender on one of their own alerts>".
+JOB_ALERT_QUERY = ""
 CANARY_LOCATION = "United Kingdom"

@@ -293,6 +293,9 @@ def main():
                          "%s under the repo). A test pointing --out at a temp "
                          "directory must point this there too, or it writes "
                          "into the committed tree." % SUMMARY_DIR)
+    ap.add_argument("--alerts", default=None,
+                    help="scrape: postings from the person's job-alert emails "
+                         "(tools/job_alerts.py output)")
     ap.add_argument("--keep-intermediates", dest="keep", action="store_true",
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
@@ -323,7 +326,8 @@ def main():
         # scrape_wide's --out is a DIRECTORY holding scraped/kept/dropped.json.
         run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
              "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-             "--workers", str(a.workers)], log, deadline)
+             "--workers", str(a.workers)] + (["--alerts", a.alerts] if a.alerts else []),
+            log, deadline)
     scraped = os.path.join(scrape_dir, "kept.json")
 
     # `--seen` is what stops hydrate paying for postings this search already
@@ -401,6 +405,7 @@ def main():
              "--workers", str(a.workers), "--top", str(a.top), "--today", a.today,
              "--require", a.require, "--expand", "--round", str(a.round + 1)]
             + (["--keep-intermediates"] if a.keep else [])
+            + (["--alerts", a.alerts] if a.alerts else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
             + (["--tracker", a.tracker] if a.tracker else [])
             + (["--seen", a.seen] if a.seen else [])

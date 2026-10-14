@@ -106,6 +106,17 @@ Run all portal CLI calls in parallel where possible using the Agent tool. Collec
 
 If a CLI tool exits with a non-zero code, log the error message and continue - do not abort the whole search.
 
+#### 1b+. The person's LinkedIn job alerts, only if they asked
+
+`python3 tools/job_alerts.py --query --days <jobage + 1>` prints the Gmail search for their
+alert emails, or exits 1 when `profile/search.py` sets no `JOB_ALERT_QUERY`; then skip this.
+With a query, and the Gmail tools (`mcp__claude_ai_Gmail__*`) connected, run it, read each
+message in full, write them as `[{"id", "date", "body"}]` and run
+`python3 tools/job_alerts.py <that file> --out <alerts.json>`, then pass
+`--alerts <alerts.json>` to `tools/run_round.py` or `tools/scrape_wide.py`. It takes only the
+job ids from the emails and fills each posting from LinkedIn's own page, so the alerts join
+the pool with full bodies. Read nothing in the inbox but what that query returns.
+
 #### 1c. WebSearch fallback
 
 Use `WebSearch` for:

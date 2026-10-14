@@ -337,6 +337,22 @@ def failure_report(sent: dict[str, int], failed: dict[str, list[str]]) -> tuple[
     return "\n".join(lines), bad
 
 
+def merge_alerts(seen: dict[str, dict], alerts: list[dict]) -> int:
+    """Add job-alert postings to the scrape's pool; how many were new.
+
+    LinkedIn's search gives a slugged URL and an alert the bare one, so the
+    same posting is matched on its LinkedIn id, not its URL."""
+    have = {str(r.get("id")) for r in seen.values() if r.get("portal") == "linkedin"}
+    added = 0
+    for r in alerts:
+        jid = str(r.get("id"))
+        if r.get("url") and jid not in have and r["url"] not in seen:
+            seen[r["url"]] = r
+            have.add(jid)
+            added += 1
+    return added
+
+
 def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     """(kind, query, location, page) for every request, for the portals that are on.
 
@@ -397,6 +413,8 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--skip-canary", action="store_true",
                     help="skip the pre-flight portal probe (offline replays)")
+    ap.add_argument("--alerts", default=None,
+                    help="postings from the person's job-alert emails (tools/job_alerts.py)")
     a = ap.parse_args()
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
     if not (QUERIES and LOCATIONS):
@@ -511,6 +529,18 @@ def main() -> int:
             print(f"  partial: {employer}: {why}")
     except Exception as e:            # a new source must never break a round
         print(f"ats boards: skipped ({type(e).__name__}: {e})", file=sys.stderr)
+
+    # The person's job alerts, already filled from each posting page by
+    # tools/job_alerts.py. A posting the search also found is kept once: the
+    # same LinkedIn id under a slugged URL is the same posting.
+    if a.alerts:
+        try:
+            alert_rows = json.load(open(a.alerts, encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            alert_rows = []
+            print(f"job alerts: skipped ({type(e).__name__}: {e})", file=sys.stderr)
+        added = merge_alerts(seen, alert_rows if isinstance(alert_rows, list) else [])
+        print(f"job alerts: {added} added, {len(alert_rows) - added} already found by the search")
 
     rows = list(seen.values())
     kept, dropped = [], []
