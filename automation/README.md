@@ -1,93 +1,133 @@
 # Automation: what runs on a clock
 
-Everything here is described in `profile/routines.json`, the person's registry. The work
-itself is written in `prompts/`, which is the part that changes most and the part that needs
-nothing but a merge to master to change.
+Two scheduled tasks run the search without anyone asking. Their instructions live in
+`prompts/`, in git, so changing what a task does is a pull request and never an edit to
+the task. Which tasks exist, when they run and where they report is the person's own
+registry, `profile/routines.json` (`profile.example/routines.json` shows the shape).
 
-## What reaches the candidate's phone
-
-The times are the person's (`profile/routines.json`, and "This search's automation" in
-`profile/CLAUDE.md`).
-
-| Routine | What |
+| Task | What it delivers |
 |---|---|
-| **Morning brief**, every day | What is owed, then a TLDR: news at employers the candidate is in process with, their target employers, their market, their work authorization. Weekdays include drafted replies and nudges; weekends only count them. |
-| **Job round**, twice a week | A scored round and the top 8. Reply with picks in the "Job search ops" session and it drafts, verifies and records them. |
+| **Job search: morning brief**, every day | What is owed, then a TLDR: news at employers the candidate is in process with, their target employers, their market, their work authorization. Weekdays include drafted replies and nudges; weekends only count them. |
+| **Job search: job round**, twice a week | A scored round and the top 8. Reply with picks in the same chat and it drafts, verifies and records them. |
 
-**If no morning brief has arrived two hours after its time, the automation is broken.** The brief is sent
-every day even when nothing is due, so silence always means something failed. Tell any
-Claude chat "the routines are down" and point it at this file.
+**If no morning brief has arrived two hours after its time, the automation is broken.** The
+brief is sent every day even when nothing is due, so silence always means something failed.
+Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 
-## How it works, and why it is shaped like this
+## Set it up: pick one of two
+
+Only two set-ups work reliably, and they trade the same thing: where the briefing arrives.
+
+| | (a) One chat per briefing | (b) The Routines screen |
+|---|---|---|
+| Where the briefing arrives | A reply in that briefing's own chat | A push notification, and a new chat each run |
+| Push to your phone | No | Yes |
+| Where you reply to the job round | The "Job search: job round" chat | The chat that run opened |
+| Set up from | A chat (Claude does it) | The Claude app's Routines screen (you do it) |
+
+Both run on **your private repo**, never on the public app: a chat on the app holds none of
+your state, and anything it pushed would be public.
+
+### The prompt each task stores
+
+Every task stores this short stub, with its own name and file, and nothing else. Print the
+exact text for your registry with `python3 tools/routines.py stub <key>`.
+
+**Job search: morning brief**
 
 ```
- schedule ──► "Job search ops" session ──fire_trigger──► relay routine ──► push + email
-              (has the repo; does the work)               (fresh session; repeats the text)
+Scheduled run: morning brief. Run `git fetch origin master`, then read `automation/prompts/_common.md` and `automation/prompts/morning_brief.md` as they are on origin/master (`git show origin/master:<path>`) and follow them exactly. If either cannot be read, reply with one line saying which file and why.
 ```
 
-Three facts force this shape:
+**Job search: job round**
 
-1. **A routine created through the API cannot have a repository attached**, and the claude.ai
-   editor would not attach one to these either. A routine with no repository cannot clone a
-   private repo: the first three routines (25 Sep to 5 Oct) ran every morning, found nothing,
-   and sent only "cannot reach the repo".
-2. **A routine can fire into an existing session**, and a session created with the repo as its
-   source keeps it. So the work routines fire into the ops session.
-3. **A routine that fires into an existing session cannot send push or email notifications**;
-   only a fresh-session routine can. So the ops session finishes the work and fires the relay
-   routine with the message as its text, and the relay's own fresh session is what notifies.
+```
+Scheduled run: job round. Run `git fetch origin master`, then read `automation/prompts/_common.md` and `automation/prompts/job_round.md` as they are on origin/master (`git show origin/master:<path>`) and follow them exactly. If either cannot be read, reply with one line saying which file and why.
+```
 
-Each work routine's stored prompt is a short stub (`stub` in `profile/routines.json`) that says: pull
-master, read `prompts/_common.md` and the routine's own file, follow them. **So the
-instructions live in git, not in the account.** Change a prompt file, merge it, and the next
-run follows the new version. No routine needs editing for that.
+### (a) One chat per briefing
 
-## Changing something: say it to any Claude chat
+1. In Claude Code (claude.ai/code, or the Claude app's Code tab), start a **new chat with
+   your private repo selected**. Name it **Job search: morning brief**.
+2. Paste this into it, with your own time zone and time:
+
+   > Create a scheduled task that fires into this chat. Name: Job search: morning brief.
+   > Schedule: every day at 07:56, written as `CRON_TZ=Europe/London 56 7 * * *` with my
+   > IANA time zone. Prompt, exactly the morning brief stub in `automation/README.md`. Then
+   > add it to `profile/routines.json` with `setup` set to `chat_per_briefing`, this chat's
+   > session id and title under `chat`, and the trigger id you were given; run
+   > `python3 tools/routines.py check` and `./tools/ci_local.sh --quick`, and land it on
+   > master through a PR.
+
+3. Start a second new chat with the repo selected, named **Job search: job round**, and do
+   the same with the job round stub (for example `CRON_TZ=Europe/London 52 6 * * 1,4`,
+   Mondays and Thursdays at 06:52).
+4. Test each one as below. Each briefing then arrives as a reply in its own chat: one chat
+   to scroll, no push.
+
+### (b) The Routines screen
+
+1. In the Claude app, open **Routines** and create a new one for each task.
+2. **Name:** Job search: morning brief. **Repository:** tick your private repo.
+   **Schedule:** every day at your time, in your time zone. **Notifications:** on.
+   **Prompt:** the morning brief stub above, exactly.
+3. The same for **Job search: job round**, with its stub and its days.
+4. Ask any chat in your repo: "add my Routines-screen tasks to `profile/routines.json`, with
+   `setup` set to `routines_screen`". It records each name, cron and prompt file, and the
+   trigger ids from `list_triggers` if it can see them (they are optional here).
+5. Every run is a new chat, and its final reply is the push you get. Reply to the job round
+   in the chat that run opened.
+
+### Test it, without fire_trigger
+
+**Never test a chat-bound task with `fire_trigger`.** A manual fire ignores the chat the task
+is bound to and starts a new chat with no repo, which fails the way a task with no repo
+always does. Instead, in the task's own chat, say:
+
+> Create a one-off scheduled task bound to this chat, with `run_once_at` three minutes from
+> now and the same prompt as this chat's scheduled task. Do not use fire_trigger.
+
+It disables itself after it fires. Then check three things: the reply in the chat, the PR
+it opened, and that the PR merged into master. For a Routines-screen task, run it once from
+the Routines screen if it offers that, or give it a one-off time a few minutes ahead.
+
+### Check the registry
+
+`python3 tools/routines.py check` reads `profile/routines.json` and fails on a prompt file
+that does not exist, a malformed or repeated trigger or chat id, or a cron without
+`CRON_TZ=<your time zone>` (which would fire in UTC). `./tools/ci_local.sh` runs it whenever
+the registry exists, and `tests/test_automation.py` runs it on the example in the app's CI,
+so a broken set-up fails a check rather than a morning.
+
+## Phone delivery, and the older shared-chat set-up
+
+An older set-up sent every task into one shared chat, which then handed its finished
+message to a fresh-session **relay** task with `fire_trigger`, and the relay pushed it to the
+phone (`setup: "ops_relay"` in the registry; `prompts/relay.md` is the relay's text).
+**That hand-off is fragile.** Found on 14 October 2026: a chat created now is refused the
+`fire_trigger` step, even with a `permissions.allow` rule in `.claude/settings.json` and the
+person's explicit OK. A chat that was set up that way earlier can still make it.
+
+- **If yours still works, do not archive, delete or rebuild that chat.** A rebuilt one
+  cannot relay. `_common.md` still hands each message to the relay in that set-up, and the
+  reply stands on its own if the hand-off is refused.
+- **If it is lost, do not rebuild it.** Set up (a) or (b) instead. A trigger's bound chat
+  cannot be changed in place, so for (a) delete each old task (`delete_trigger`, after
+  reading it with `get_trigger`) and create it again from its new chat.
+
+## Changing something: say it to any Claude chat in your repo
 
 | Ask | What the chat does |
 |---|---|
 | "Make the brief shorter", "add X to the TLDR", "stop drafting on Fridays" | Edits the prompt file, opens a PR, merges it. Takes effect on the next run. |
-| "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json`, calls `update_trigger` on that `trigger_id` with the new cron (written with the registry's `CRON_TZ=<timezone>`), merges. |
-| "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies each with `update_trigger`, merges. |
-| "Add a routine that does Y" | Writes `prompts/<key>.md`, adds an entry, creates the trigger with `create_trigger` and `persistent_session_id` set to `ops_session.id` and the prompt from `stub`, records the new `trigger_id`, merges. |
-| "Pause the job round" | `update_trigger` with `enabled: false`. Say so in `profile/routines.json` (`"paused": "<date> <reason>"`). |
-
-**Never test a work routine with `fire_trigger`.** A manual fire ignores the session a
-routine is bound to and starts a fresh session with no repo, which fails exactly the way
-the old routines did (found 2026-10-05: the forced run went to a new session on a cheaper
-model and did nothing in 26 seconds). Only scheduled fires land in the ops session. To run
-one now, create a one-off trigger with `run_once_at` a couple of minutes ahead,
-`persistent_session_id` set to the ops session and the same stub prompt; it disables itself
-after firing. `fire_trigger` is right only for the relay, which is meant to start fresh.
-
-`tests/test_automation.py` checks the registry against the prompt files, so a typo in a
-path or a missing prompt fails CI before it can fail at 07:56.
-
-## If the ops session is lost
-
-If the session is archived or deleted, the work routines fire into nothing and no brief
-arrives. To rebuild:
-
-1. `create_session` with `source_url` set to this private repository's own URL
-   (`git remote get-url origin`; `profile/CLAUDE.md` names it), the same title, tag
-   `job-search-ops` and permission mode `auto`.
-2. For each `ops_session` routine, `delete_trigger` the old one and `create_trigger` a new one
-   with the same name, cron and stub prompt, bound to the new session id. A trigger's bound
-   session cannot be changed in place. Read the old trigger with `get_trigger` first: its
-   stored prompt is the stub already filled in, which is what the new one takes.
-3. Write the new ids into `profile/routines.json` and merge.
-4. Test with a one-off `run_once_at` trigger (above), never `fire_trigger`.
-
-**The repository matters.** The ops session must be created on the person's private repo,
-never on the public app (`aranculleton/last-job-search`): a session on the app holds none of
-the person's state, and anything it pushed would be public.
-
-The ops session's conversation grows by one turn a run and is compacted automatically. It is
-fine to open it and talk to it; replies to the job round's picks belong there.
+| "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json` and, for (a), calls `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), tells you what to change in the Routines screen. Merges the registry. |
+| "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies them the same way, merges. |
+| "Add a task that does Y" | Writes `prompts/<key>.md`, adds an entry, and sets the task up the way the registry's `setup` says. |
+| "Pause the job round" | `update_trigger` with `enabled: false` (or the Routines screen), and `"paused": "<date> <reason>"` on the entry. |
 
 ## Cost
 
-Each run is one turn in the ops session on the session's model, plus a cheap relay turn. News
-gathering for the TLDR is done by a sonnet subagent with a cap of about ten searches. The
-setup test on 2026-10-05 cost $0.82 for an empty run, most of it loading the repo's
-instructions into a new session; later runs reuse that context from cache.
+Each run is one turn on the chat's model. News gathering for the TLDR is done by a sonnet
+subagent with a cap of about ten searches. An empty run in a fresh chat cost $0.82 in a
+test, most of it loading the repo's instructions; a chat that is bound to its task reuses
+that context from cache on later runs, and is compacted automatically as it grows.

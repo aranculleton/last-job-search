@@ -20,10 +20,10 @@ nothing until the candidate picks. `_common.md` first.
 ```
 Round <rN>: <n> at 60+, <n> at 75+
 <the top 8 after step 2, numbered: score | company | role | posted | one-line reason | apply link>
-Reply in the "Job search ops" session with the numbers to draft (e.g. draft 1,3,5), and say if you have already applied to any.
+Reply in <the chat to reply in, per _common.md> with the numbers to draft (e.g. draft 1,3,5), and say if you have already applied to any.
 ```
 
-5. **When the candidate replies with picks** (here, in this session): record any "already applied"
+5. **When the candidate replies with picks** (in this chat): record any "already applied"
    answers in the tracker, then `./tools/setup_env.sh` (LaTeX this time), stage the picks
    with `tools/stage_picks.py`, run the saved `draft-applications` workflow, assemble, render
    with `tools/fit_to_page.py`, run `tools/check_claims.py` and `tools/verify_batch.sh` until

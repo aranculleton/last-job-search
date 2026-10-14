@@ -1,75 +1,142 @@
-"""The routine registry (profile/routines.json) matches the prompt files it points at.
+"""The scheduled-task registry matches the prompt files, and the set-up is generic.
 
-Each scheduled routine's stored prompt is a stub that tells the ops session to
-read a file from master. A wrong path there fails at 07:56 with nobody
-watching, so this checks it at CI time instead.
+Each scheduled task's stored prompt is a stub that tells its chat to read a file
+from master. A wrong path, a cron with no time zone or a mistyped id fails at
+seven in the morning with nobody watching, so tools/routines.py checks the
+registry, ci_local.sh runs it on a person's own, and this runs it on the
+example's and on every shape it must accept or refuse.
 """
+import copy
 import json
 import os
-import sys
 import re
+import subprocess
+import sys
+
+import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTO = os.path.join(ROOT, "automation")
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import routines  # noqa: E402
 
-# The registry of the profile in use: the example person's under tests/, a real
-# person's under their own run.
 REG = json.load(open(person.path("routines.json"), encoding="utf-8"))
-ROUTINES = {r["key"]: r for r in REG["routines"]}
+COMMON = open(os.path.join(AUTO, "prompts", "_common.md"), encoding="utf-8").read()
+README = open(os.path.join(AUTO, "README.md"), encoding="utf-8").read()
+
+# The older shape: every task into one shared chat, and a relay task for push.
+# Registries written before `setup` existed look like this and must still pass.
+OPS_RELAY = {
+    "timezone": "Europe/London",
+    "ops_session": {"id": "session_EXAMPLE", "title": "Scheduled tasks"},
+    "stub": ("Scheduled run: {label}. Run `git fetch origin master`, then read "
+             "`automation/prompts/_common.md` and `{prompt_file}` as they are on "
+             "origin/master and follow them exactly. If either cannot be read, still "
+             "deliver: call fire_trigger with trigger_id \"{relay_id}\" and text "
+             "\"{Label} could not start: <the reason>\"."),
+    "routines": [
+        {"key": "relay", "name": "relay", "trigger_id": "trig_EXAMPLERELAY",
+         "mode": "fresh_session", "cron": None, "notifications": {"push": True, "email": True},
+         "prompt_file": "automation/prompts/relay.md"},
+        {"key": "morning_brief", "name": "brief", "trigger_id": "trig_EXAMPLEBRIEF",
+         "mode": "ops_session", "cron": "CRON_TZ=Europe/London 56 7 * * *",
+         "prompt_file": "automation/prompts/morning_brief.md"},
+    ],
+}
+SCREEN = {
+    "setup": "routines_screen", "timezone": "America/Toronto",
+    "routines": [
+        {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": None,
+         "cron": "CRON_TZ=America/Toronto 56 7 * * *", "notifications": {"push": True},
+         "prompt_file": "automation/prompts/morning_brief.md"},
+    ],
+}
 
 
-def test_every_prompt_file_exists():
-    for r in REG["routines"]:
-        assert os.path.isfile(os.path.join(ROOT, r["prompt_file"])), r["prompt_file"]
-    assert os.path.isfile(os.path.join(AUTO, "prompts", "_common.md"))
+def test_the_example_registry_is_clean():
+    assert routines.check(REG) == []
 
 
-def test_keys_ids_and_names_are_unique():
-    for field in ("key", "trigger_id", "name"):
-        vals = [r[field] for r in REG["routines"]]
-        assert len(vals) == len(set(vals)), field
-    for r in REG["routines"]:
-        assert re.fullmatch(r"trig_[A-Za-z0-9]+", r["trigger_id"]), r["trigger_id"]
+@pytest.mark.parametrize("reg", [OPS_RELAY, SCREEN], ids=["ops_relay", "routines_screen"])
+def test_every_working_shape_is_accepted(reg):
+    assert routines.check(reg) == []
 
 
-def test_there_is_exactly_one_relay_and_it_notifies():
-    relays = [r for r in REG["routines"] if r["mode"] == "fresh_session"]
-    assert [r["key"] for r in relays] == ["relay"]
-    assert relays[0]["notifications"] == {"push": True, "email": True}
-    assert relays[0]["cron"] is None
+def _broken(reg, **change):
+    r = copy.deepcopy(reg)
+    r["routines"][0].update(change)
+    return routines.check(r)
 
 
-def test_work_routines_run_in_the_ops_session_on_the_registrys_time():
-    # The time zone is the person's (the registry's `timezone`); every work
-    # routine's cron must say it, or it fires in UTC and the brief is late.
-    tz = REG["timezone"]
-    assert re.fullmatch(r"[A-Za-z]+(?:/[A-Za-z_]+)+", tz), tz
-    assert re.fullmatch(r"session_[A-Za-z0-9]+", REG["ops_session"]["id"])
-    work = [r for r in REG["routines"] if r["mode"] == "ops_session"]
-    assert work, "no work routines"
-    for r in work:
-        assert r["cron"].startswith(f"CRON_TZ={tz} "), r["cron"]
-        assert len(r["cron"].split()) == 6, r["cron"]
+@pytest.mark.parametrize("change,says", [
+    ({"prompt_file": "automation/prompts/nope.md"}, "does not exist"),
+    ({"trigger_id": "trig-bad id"}, "not well formed"),
+    ({"trigger_id": "trig_EXAMPLEROUND"}, "share a trigger id"),
+    ({"cron": "56 7 * * *"}, "CRON_TZ"),
+    ({"cron": "CRON_TZ=America/Toronto 56 7 * * *"}, "CRON_TZ=Europe/London"),
+    ({"chat": {"title": "x", "session_id": "session_EXAMPLEROUND"}}, "share a chat"),
+    ({"chat": {"title": "x", "session_id": "sess 1"}}, "not well formed"),
+    ({"key": "job_round"}, "unique `key`"),
+])
+def test_a_broken_registry_fails_with_the_reason(change, says):
+    problems = _broken(REG, **change)
+    assert any(says in p for p in problems), problems
 
 
-def test_the_stub_names_the_right_files_and_the_relay():
-    relay_id = ROUTINES["relay"]["trigger_id"]
-    for r in REG["routines"]:
-        if r["mode"] != "ops_session":
+def test_a_routines_screen_task_must_notify():
+    problems = _broken(SCREEN, notifications={"push": False})
+    assert any("notifications on" in p for p in problems), problems
+
+
+def test_an_unknown_setup_is_refused():
+    assert routines.check({**REG, "setup": "relay"})
+
+
+def test_the_readme_stubs_are_what_the_tool_prints():
+    """The prompts a person pastes are the ones the registry would produce."""
+    for key in ("morning_brief", "job_round"):
+        assert routines.stub(REG, key) in README, key
+        assert routines.stub(REG, key) == routines.DEFAULT_STUB.format(
+            label=key.replace("_", " "), prompt_file=f"automation/prompts/{key}.md")
+
+
+def test_the_stub_cli_prints_a_tasks_prompt():
+    p = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"),
+                        "stub", "job_round"], capture_output=True, text=True)
+    assert p.returncode == 0 and "automation/prompts/job_round.md" in p.stdout
+
+
+def test_the_final_reply_is_the_message():
+    assert "Your final reply is the message" in COMMON
+    assert "Always deliver" in COMMON
+    # fire_trigger appears only in the paragraph for the older shared-chat set-up.
+    paras = [p for p in COMMON.split("\n\n") if "fire_trigger" in p]
+    assert paras and all("older ops set-up only" in p for p in paras), paras
+
+
+def test_both_set_ups_are_written_down_step_by_step():
+    for heading in ("### (a) One chat per briefing", "### (b) The Routines screen",
+                    "### Test it, without fire_trigger"):
+        assert heading in README, heading
+    assert "run_once_at" in README and "do not archive, delete or rebuild" in README
+
+
+def test_no_real_ids_or_private_repos_are_committed():
+    """Ids and names belong in a person's registry, never in the app."""
+    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
+                           text=True).stdout.split()
+    real = re.compile(r"\b(?:trig|session)_(?!EXAMPLE)[A-Za-z0-9]{6,}\b")
+    hits = []
+    for f in files:
+        if "node_modules" in f or not f.endswith((".md", ".json", ".py", ".sh", ".yml", ".txt")):
             continue
-        label = r["key"].replace("_", " ")
-        stub = REG["stub"].format(label=label, Label=label.capitalize(),
-                                  prompt_file=r["prompt_file"], relay_id=relay_id)
-        assert r["prompt_file"] in stub and relay_id in stub
-        assert "automation/prompts/_common.md" in stub
-
-
-def test_common_rules_say_always_deliver_through_the_relay():
-    common = open(os.path.join(AUTO, "prompts", "_common.md"), encoding="utf-8").read()
-    assert "fire_trigger" in common and "routines.json" in common
-    assert "Always deliver" in common
+        try:
+            text = open(os.path.join(ROOT, f), encoding="utf-8").read()
+        except (OSError, UnicodeDecodeError):
+            continue
+        hits += [f"{f}: {m.group(0)}" for m in real.finditer(text)]
+    assert hits == []
 
 
 def test_no_em_dashes_in_anything_the_person_reads():
@@ -80,7 +147,7 @@ def test_no_em_dashes_in_anything_the_person_reads():
 
 
 def test_prompts_never_ask_for_history_rewriting_git():
-    # The ops session runs in auto mode, whose permission check blocks these.
+    # Scheduled chats run in auto mode, whose permission check blocks these.
     # The first real brief (2026-10-05) stopped at `git checkout -B`.
     banned = ("checkout -B", "reset --hard", "--force", "force-with-lease", "rebase")
     for f in os.listdir(os.path.join(AUTO, "prompts")):
