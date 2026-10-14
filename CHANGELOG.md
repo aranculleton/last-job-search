@@ -23,6 +23,14 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A profile without employer tiers can meet the yield target.** `tools/fit.py` divided
+  opportunity by a fixed 130 before multiplying it into priority, a number calibrated on a
+  profile with tiers, leverage and core capabilities. Without them opportunity tops out at
+  58, so no posting ranked above about 45 and every round reported MISSED after three
+  expansions. The divisor is now 130 or the most your profile can score, whichever is lower
+  (`opportunity.SCALE`; `OPP_SCALE` in `search.py` pins it). **A profile that can score 130
+  ranks exactly as before**; one that cannot sees every priority rise in proportion, in the
+  same order.
 - **Networking looks for your colleagues, not a data team's.** `/network` searched every
   employer for data scientists, counted only data titles as "in function" (so a nurse's run
   would write every employer off as having no relevant presence), and read "I'm in
