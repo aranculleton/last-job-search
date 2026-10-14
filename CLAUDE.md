@@ -242,9 +242,9 @@ The scheduled tasks, when they run and where they report are the person's: `prof
 and the automation section of `profile/CLAUDE.md`.
 
 **The shape, and why.** Two set-ups work, and the README walks a person through either:
-**(a)** one chat per briefing ("Job search: morning brief", "Job search: job round"),
-created with the private repo, each task bound to its own chat, whose reply is the
-briefing (no push); or **(b)** each task made in the Claude app's Routines screen with the
+**(a)** one chat per task ("Job search: morning brief", "Job search: shortlist" for the
+twice-weekly round), created with the private repo, each task bound to its own chat, whose
+reply is the briefing (no push); or **(b)** each task made in the Claude app's Routines screen with the
 repo ticked and notifications on (push, and a new chat every run). Each task's stored prompt
 is a stub that reads `automation/prompts/_common.md` and its own file from master, so
 **changing what a task does is a normal PR**; only a schedule change needs `update_trigger`

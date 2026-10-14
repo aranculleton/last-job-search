@@ -24,9 +24,10 @@ make sense to somebody whose repo just received it.
 ### Changed
 
 - **Scheduled briefings have two set-ups that work, written out step by step.**
-  `automation/README.md` now walks through **(a)** one chat per briefing ("Job search:
-  morning brief", "Job search: job round"), created with your private repo and each task
-  bound to its own chat, whose reply is the briefing; or **(b)** each task made in the
+  `automation/README.md` now walks through **(a)** one chat per task ("Job search: morning
+  brief", and "Job search: shortlist" for the twice-weekly round, whose key and prompt file
+  stay `job_round`), created with your private repo and each task bound to its own chat,
+  whose reply is the briefing; or **(b)** each task made in the
   Claude app's Routines screen with the repo ticked and notifications on, for a push. It
   gives the exact prompt each task stores (`python3 tools/routines.py stub <key>` prints
   yours) and how to test without `fire_trigger`. `_common.md` makes the final reply the
@@ -35,6 +36,9 @@ make sense to somebody whose repo just received it.
   the README says why never to rebuild that chat (a chat made now is refused the hand-off).
   `python3 tools/routines.py check` validates `profile/routines.json` (prompt files exist,
   ids well formed and unique, every cron carries `CRON_TZ`), and `ci_local.sh` runs it.
+  A long-lived scheduled chat is capped with `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000` on a
+  cloud environment only those chats use; the app's `.claude/settings.json` is synced to
+  everyone, so a per-model cap there would squeeze every chat on that model.
 - **A profile without employer tiers can meet the yield target.** `tools/fit.py` divided
   opportunity by a fixed 130 before multiplying it into priority, a number calibrated on a
   profile with tiers, leverage and core capabilities. Without them opportunity tops out at

@@ -8,7 +8,7 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 | Task | What it delivers |
 |---|---|
 | **Job search: morning brief**, every day | What is owed, then a TLDR: news at employers the candidate is in process with, their target employers, their market, their work authorization. Weekdays include drafted replies and nudges; weekends only count them. |
-| **Job search: job round**, twice a week | A scored round and the top 8. Reply with picks in the same chat and it drafts, verifies and records them. |
+| **Job search: shortlist**, twice a week | A scored round of new postings and the top 8 (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
 **If no morning brief has arrived two hours after its time, the automation is broken.** The
 brief is sent every day even when nothing is due, so silence always means something failed.
@@ -22,7 +22,7 @@ Only two set-ups work reliably, and they trade the same thing: where the briefin
 |---|---|---|
 | Where the briefing arrives | A reply in that briefing's own chat | A push notification, and a new chat each run |
 | Push to your phone | No | Yes |
-| Where you reply to the job round | The "Job search: job round" chat | The chat that run opened |
+| Where you reply to the shortlist | The "Job search: shortlist" chat | The chat that run opened |
 | Set up from | A chat (Claude does it) | The Claude app's Routines screen (you do it) |
 
 Both run on **your private repo**, never on the public app: a chat on the app holds none of
@@ -39,7 +39,7 @@ exact text for your registry with `python3 tools/routines.py stub <key>`.
 Scheduled run: morning brief. Run `git fetch origin master`, then read `automation/prompts/_common.md` and `automation/prompts/morning_brief.md` as they are on origin/master (`git show origin/master:<path>`) and follow them exactly. If either cannot be read, reply with one line saying which file and why.
 ```
 
-**Job search: job round**
+**Job search: shortlist**
 
 ```
 Scheduled run: job round. Run `git fetch origin master`, then read `automation/prompts/_common.md` and `automation/prompts/job_round.md` as they are on origin/master (`git show origin/master:<path>`) and follow them exactly. If either cannot be read, reply with one line saying which file and why.
@@ -48,7 +48,8 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
 ### (a) One chat per briefing
 
 1. In Claude Code (claude.ai/code, or the Claude app's Code tab), start a **new chat with
-   your private repo selected**. Name it **Job search: morning brief**.
+   your private repo selected**, in the environment from "Keep a long-lived chat small"
+   below. Name it after its task: **Job search: morning brief**.
 2. Paste this into it, with your own time zone and time:
 
    > Create a scheduled task that fires into this chat. Name: Job search: morning brief.
@@ -59,9 +60,10 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
    > `python3 tools/routines.py check` and `./tools/ci_local.sh --quick`, and land it on
    > master through a PR.
 
-3. Start a second new chat with the repo selected, named **Job search: job round**, and do
-   the same with the job round stub (for example `CRON_TZ=Europe/London 52 6 * * 1,4`,
-   Mondays and Thursdays at 06:52).
+3. Start a second new chat with the repo selected, named **Job search: shortlist**, and do
+   the same with the shortlist stub (for example `CRON_TZ=Europe/London 52 6 * * 1,4`,
+   Mondays and Thursdays at 06:52). Set up only the tasks you want; each one is
+   independent.
 4. Test each one as below. Each briefing then arrives as a reply in its own chat: one chat
    to scroll, no push.
 
@@ -71,11 +73,11 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
 2. **Name:** Job search: morning brief. **Repository:** tick your private repo.
    **Schedule:** every day at your time, in your time zone. **Notifications:** on.
    **Prompt:** the morning brief stub above, exactly.
-3. The same for **Job search: job round**, with its stub and its days.
+3. The same for **Job search: shortlist**, with its stub and its days.
 4. Ask any chat in your repo: "add my Routines-screen tasks to `profile/routines.json`, with
    `setup` set to `routines_screen`". It records each name, cron and prompt file, and the
    trigger ids from `list_triggers` if it can see them (they are optional here).
-5. Every run is a new chat, and its final reply is the push you get. Reply to the job round
+5. Every run is a new chat, and its final reply is the push you get. Reply to the shortlist
    in the chat that run opened.
 
 ### Test it, without fire_trigger
@@ -90,6 +92,23 @@ always does. Instead, in the task's own chat, say:
 It disables itself after it fires. Then check three things: the reply in the chat, the PR
 it opened, and that the PR merged into master. For a Routines-screen task, run it once from
 the Routines screen if it offers that, or give it a one-off time a few minutes ahead.
+
+### Keep a long-lived chat small
+
+A chat a task is bound to grows by a run every time, and without a cap a chat on a
+1M-token model can carry hundreds of thousands of tokens into every run. Cap it with an
+environment variable on a cloud environment that only the scheduled chats use:
+
+1. In claude.ai/code, create a cloud environment for the scheduled chats (or copy the one
+   you use), with the same setup script and network access.
+2. Add the environment variable `CLAUDE_CODE_AUTO_COMPACT_WINDOW=200000`.
+3. Create the scheduled chats in that environment (step 1 of (a)).
+
+Only chats in that environment are capped, whatever their model, and your other chats keep
+their full window. Do not put the cap in `.claude/settings.json` instead: that file is the
+app's and is synced into every copy, so a `modelSettings.<model>.autoCompactWindow` there
+caps every chat on that model, for everyone. See
+[Set the auto-compact window](https://code.claude.com/docs/en/model-config#set-the-auto-compact-window).
 
 ### Check the registry
 
@@ -123,7 +142,7 @@ person's explicit OK. A chat that was set up that way earlier can still make it.
 | "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json` and, for (a), calls `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), tells you what to change in the Routines screen. Merges the registry. |
 | "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies them the same way, merges. |
 | "Add a task that does Y" | Writes `prompts/<key>.md`, adds an entry, and sets the task up the way the registry's `setup` says. |
-| "Pause the job round" | `update_trigger` with `enabled: false` (or the Routines screen), and `"paused": "<date> <reason>"` on the entry. |
+| "Pause the shortlist" | `update_trigger` with `enabled: false` (or the Routines screen), and `"paused": "<date> <reason>"` on the entry. |
 
 ## Cost
 

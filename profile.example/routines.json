@@ -1,5 +1,5 @@
 {
-  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (one chat per briefing, each task bound to its chat, the chat's reply is the briefing) or routines_screen (each task made in the Claude app's Routines screen with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
+  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to its own chat, named after the task, whose reply is the briefing) or routines_screen (each task made in the Claude app's Routines screen with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
   "setup": "chat_per_briefing",
   "timezone": "Europe/London",
   "routines": [
@@ -7,8 +7,8 @@
      "chat": {"title": "Job search: morning brief", "session_id": "session_EXAMPLEBRIEF"},
      "trigger_id": "trig_EXAMPLEBRIEF", "cron": "CRON_TZ=Europe/London 56 7 * * *",
      "prompt_file": "automation/prompts/morning_brief.md", "what": "What is owed, then a short TLDR."},
-    {"key": "job_round", "name": "Job search: job round",
-     "chat": {"title": "Job search: job round", "session_id": "session_EXAMPLEROUND"},
+    {"key": "job_round", "name": "Job search: shortlist",
+     "chat": {"title": "Job search: shortlist", "session_id": "session_EXAMPLEROUND"},
      "trigger_id": "trig_EXAMPLEROUND", "cron": "CRON_TZ=Europe/London 52 6 * * 1,4",
      "prompt_file": "automation/prompts/job_round.md", "what": "A scored round and the top 8."}
   ]

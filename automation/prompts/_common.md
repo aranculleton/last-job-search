@@ -50,11 +50,12 @@ Routines screen, and the ops chat's title (`ops_session.title` in the registry) 
 older ops set-up.
 
 **The older ops set-up only** (`setup` is `ops_relay`, or the registry has an
-`ops_session`): after writing the reply, also hand the same text to the relay task, so it
-reaches the phone. Load `fire_trigger` from the Claude_Code_Remote server and call it with
-`trigger_id` set to the `relay` entry's `trigger_id` and `text` set to the message. If the
-call is refused or fails, put one line saying so at the top of the reply. The reply stands
-either way.
+`ops_session`): once the message is finished and before the final reply, hand the same
+text to the relay task, so it reaches the phone. Load `fire_trigger` from the
+Claude_Code_Remote server and call it with `trigger_id` set to the `relay` entry's
+`trigger_id` and `text` set to the message. Then give the same text as the final reply. If
+the call is refused or fails, put one line saying so at the top of the reply. The reply
+stands either way.
 
 **Always deliver, even when there is nothing to report.** A day with no message is how
 the candidate finds out the automation is broken, so "Nothing due today" is still sent. If
