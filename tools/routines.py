@@ -13,8 +13,8 @@ whenever ci_local.sh runs, and the app's tests check the example's.
 Three set-ups are recognised (`setup` in the registry; automation/README.md
 walks through the first two):
 
-  chat_per_briefing  one chat per briefing, created with the repo, each task
-                     bound to its own chat; the chat's reply is the briefing
+  chat_per_briefing  chats created with the repo, each task bound to one (its
+                     own, or one shared by both); the chat's reply is the briefing
   routines_screen    each task created in the Claude app's Routines screen with
                      the repo ticked and notifications on; every run is a new chat
   ops_relay          the older shape: every task fires into one ops chat, which
@@ -112,15 +112,12 @@ def check(reg: dict, root: str = ROOT) -> list[str]:
     if COMMON not in s or "{prompt_file}" not in s:
         out.append(f"`stub` must name {COMMON} and {{prompt_file}}")
     if setup == "chat_per_briefing":
-        chats = []
+        # Two tasks may share a chat (one chat to scroll); each must name a real one.
         for r in work(reg):
             sid = (r.get("chat") or {}).get("session_id", "")
             if not SESSION_ID.fullmatch(sid or ""):
                 out.append(f"{r.get('key')}: chat.session_id {sid!r} is not well formed "
                            f"(session_ then letters and digits)")
-            chats.append(sid)
-        if len(chats) != len(set(chats)):
-            out.append("two briefings share a chat; each gets its own")
     if setup == "ops_relay":
         sid = (reg.get("ops_session") or {}).get("id", "")
         if not SESSION_ID.fullmatch(sid or ""):

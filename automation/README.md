@@ -64,8 +64,8 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
    the same with the shortlist stub (for example `CRON_TZ=Europe/London 52 6 * * 1,4`,
    Mondays and Thursdays at 06:52). Set up only the tasks you want; each one is
    independent.
-4. Test each one as below. Each briefing then arrives as a reply in its own chat: one chat
-   to scroll, no push.
+4. Test each one as below. Each briefing then arrives as a reply in its chat, with no push.
+   If you would rather scroll one chat, bind both tasks to the same one.
 
 ### (b) The Routines screen
 

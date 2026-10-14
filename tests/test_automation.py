@@ -75,13 +75,17 @@ def _broken(reg, **change):
     ({"trigger_id": "trig_EXAMPLEROUND"}, "share a trigger id"),
     ({"cron": "56 7 * * *"}, "CRON_TZ"),
     ({"cron": "CRON_TZ=America/Toronto 56 7 * * *"}, "CRON_TZ=Europe/London"),
-    ({"chat": {"title": "x", "session_id": "session_EXAMPLEROUND"}}, "share a chat"),
     ({"chat": {"title": "x", "session_id": "sess 1"}}, "not well formed"),
     ({"key": "job_round"}, "unique `key`"),
 ])
 def test_a_broken_registry_fails_with_the_reason(change, says):
     problems = _broken(REG, **change)
     assert any(says in p for p in problems), problems
+
+
+def test_two_tasks_may_share_one_chat():
+    """One chat to scroll is a choice a person may make."""
+    assert _broken(REG, chat={"title": "Job search", "session_id": "session_EXAMPLEROUND"}) == []
 
 
 def test_a_routines_screen_task_must_notify():
