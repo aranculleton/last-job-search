@@ -51,9 +51,8 @@ finding it out three hours in costs the session.
 ### Portal CLIs
 
 Only needed if you are running `/scrape` or `run_round.py` against live portals.
-`freehire-search` is on by default. `linkedin-search` ships off, because LinkedIn's
-robots.txt and terms forbid automated access, and the four Danish ones ship off as
-reference implementations. A person turns one on in `profile/search.py` `PORTALS`;
+`linkedin-search` and `freehire-search` are on by default; the four Danish ones ship off as
+reference implementations. A person switches any of them in `profile/search.py` `PORTALS`;
 `python3 tools/portals.py` prints what a round will search.
 
 ```bash

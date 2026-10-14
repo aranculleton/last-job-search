@@ -342,11 +342,11 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
   shares its name. Do not enable `jobbank-search` expecting coverage of another country.
   `jobindex-search`, `jobnet-search` and
   `jobdanmark-search` are Danish too and are kept only as reference implementations for
-  `/add-portal`. **`freehire-search` is the one portal on by default.** `linkedin-search`
-  ships off: LinkedIn's robots.txt and terms forbid automated access, and a round sends a
-  portal thousands of requests. A person turns any portal on or off in `profile/search.py`
-  `PORTALS`, never in its `SKILL.md`, which is the app's; `python3 tools/portals.py` prints
-  what the next round will search.
+  `/add-portal`. **`linkedin-search` and `freehire-search` are on by default.** A person
+  turns any portal on or off in `profile/search.py` `PORTALS`, never in its `SKILL.md`,
+  which is the app's; `python3 tools/portals.py` prints what the next round will search.
+  LinkedIn's robots.txt disallows its guest job endpoints for crawlers it does not name,
+  and `/setup` says so; switching it off is the person's call.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
   the employers named in `profile/boards.py` straight from their ATS (Greenhouse, Lever,
   Ashby, Workday), which is how large employers that a portal under-indexes reach a round,
@@ -467,8 +467,9 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **`job_scraper/do_not_target.json` is the one company-level exception, and it is a
   different claim.** A posting exclusion says a role was rejected. An entry there says the
   employer has **no relevant presence for that function in that city**, so there is no role
-  to stay in scope: an office that houses only sales, or only production, has no data role to
-  stay in scope for. `tools/throttle.py` reads it and skips the employer with
+  to stay in scope: an office that houses only sales, or only production, has no role to stay
+  in scope for unless one of those is the person's function. `tools/throttle.py` reads it and
+  skips the employer with
   the reason. Every entry names who established it and carries a **`review_after` date**,
   after which it stops suppressing and is reported as expired, because a company standing up
   a team in that city is exactly the fact that goes stale. Add an entry only on positive
@@ -478,7 +479,8 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Scoring is tiered, cheapest first.** A mechanical pre-filter, then a small-model knockout
   check against `profile/10-triage-blockers.md`, then full weighted scoring only on survivors, then
   adversarial verification only on postings scoring 70+. Never spend a full weighted evaluation
-  discovering a stated Master's requirement. See `11-cost-model.md` for the per-stage costs and
+  discovering a stated requirement the profile cannot meet, such as a licence or a degree. See
+  `11-cost-model.md` for the per-stage costs and
   the model to use at each stage.
 - **A posting at an employer where a conversation is already running surfaces with a warning,
   never suppressed.** `tools/throttle.py` reads `network_contacts.csv` and attaches

@@ -268,3 +268,45 @@ class NetworkingAssumesNoFunction(unittest.TestCase):
         import discovery
         self.assertFalse(discovery.FUNCTION_TITLE.search("Director of Nursing"))
         self.assertTrue(discovery.FUNCTION_TITLE.search("Director of Analytics"))
+
+
+class PaperFollowsTheCountry(unittest.TestCase):
+    """A4 or US Letter was a setting nobody knew to set. The country decides,
+    and an explicit setting still wins."""
+
+    def _paper(self, country, doc=None, kind="resume"):
+        import person
+        from unittest import mock
+        doc = doc or {}
+
+        def get(dotted, default=None):
+            if dotted.startswith("documents."):
+                return doc.get(dotted.split(".", 1)[1], default)
+            return default
+        with mock.patch.object(person, "get", get), \
+             mock.patch.object(person, "country", lambda: country):
+            return person.paper(kind)
+
+    def test_north_america_prints_on_letter(self):
+        for c in ("US", "CA", "MX"):
+            with self.subTest(country=c):
+                self.assertEqual(self._paper(c), "letterpaper")
+
+    def test_everywhere_else_prints_on_a4(self):
+        for c in ("GB", "IE", "AU", "DE", "IN", "ZA"):
+            with self.subTest(country=c):
+                self.assertEqual(self._paper(c), "a4paper")
+
+    def test_an_unknown_country_is_a4(self):
+        self.assertEqual(self._paper(""), "a4paper")
+
+    def test_an_explicit_setting_wins(self):
+        self.assertEqual(self._paper("CA", {"paper": "a4paper"}), "a4paper")
+        self.assertEqual(self._paper("GB", {"letter_paper": "letterpaper"}, "letter"),
+                         "letterpaper")
+        self.assertEqual(self._paper("GB", {"letter_paper": "letterpaper"}), "a4paper")
+
+    def test_the_example_reads_its_country(self):
+        import person
+        self.assertEqual(person.country(), "GB")
+        self.assertEqual(person.paper(), "a4paper")

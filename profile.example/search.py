@@ -172,7 +172,7 @@ SCRAPE_EMPLOYER_LOCATIONS = ["United Kingdom"]
 SCRAPE_EMPLOYER_REMOTE = ["United Kingdom"]
 PORTAL_COUNTRY = "GB"
 # The person's say over which portals run, by portal name, overriding each
-# portal's SKILL.md default. Empty takes the app's defaults: freehire-search on,
-# linkedin-search and the Danish portals off (tools/portals.py says why).
+# portal's SKILL.md default. Empty takes the app's defaults: linkedin-search and
+# freehire-search on, the Danish portals off (tools/portals.py).
 PORTALS: dict[str, bool] = {}
 CANARY_LOCATION = "United Kingdom"

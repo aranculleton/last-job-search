@@ -12,17 +12,13 @@ profile/search.py, and overrides the default for each portal it names:
 portal that is off is sent no request at all. `python3 tools/portals.py` prints
 what the next round will search and why.
 
-## Why linkedin-search ships off
+## linkedin-search, and what its default means
 
-LinkedIn's robots.txt disallows every path for every crawler it does not name,
-including the guest job endpoints the CLI calls, and says automated access
-without LinkedIn's express permission is "strictly prohibited". A round sent
-it several thousand requests, which its own SKILL.md rules out ("keep volume
-low and don't use it ... for bulk data collection"). The app already refuses
-an employer board whose robots.txt says no (`tools/ats_boards.py`), and
-/add-portal checks robots.txt before building one; its own default holds to
-the same rule. Turning it on is the person's decision, made in their profile
-with that in front of them.
+It ships on: in most markets it carries more postings than every other source
+together. LinkedIn's robots.txt disallows its guest job endpoints for crawlers
+it does not name, and a round sends it thousands of requests, so the person
+should know that, and `/setup` tells them. Turning it off is one line:
+`PORTALS = {"linkedin-search": False}`.
 """
 
 from __future__ import annotations

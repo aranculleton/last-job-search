@@ -45,7 +45,7 @@ session's title bar and click **Edit**:
 
 - **Network access:** the search has to reach job boards. Choose a level that allows general
   internet access, or keep a limited level and add these under **Allowed domains**:
-  `freehire.me`, `boards-api.greenhouse.io`,
+  `linkedin.com`, `www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`,
   `api.lever.co`, `api.ashbyhq.com`, `myworkdayjobs.com`. Leave **Allow package managers**
   ticked. The details are in
   [the cloud environment docs](https://code.claude.com/docs/en/cloud-environments#network-access).

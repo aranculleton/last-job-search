@@ -221,7 +221,7 @@ def _identity():
         name=_tex(_ID["name"]), first=_tex(_ID["first"]), last=_tex(_ID["last"]),
         location=_tex(_ID.get("location", "")),
         noun_title=noun[:1].upper() + noun[1:],
-        paper=_DOC.get("paper", "letterpaper"),
+        paper=person.paper("resume"),
         pdf_keywords=_tex(_DOC.get("pdf_keywords", noun)),
         contact_lines="\n".join(contact),
         letter_contact=" | ".join(head),
@@ -302,10 +302,9 @@ def letter(a):
     # which is what \today meant to say. Either way the .tex reproduces its own
     # PDF afterwards, which is the property that was missing.
     suffix = _DOC.get("salutation_suffix", " hiring team")
-    # The letter on the same paper as the resume unless the profile says
-    # otherwise (documents.letter_paper). US Letter is the class's default, so
-    # it is written as no option at all.
-    paper = _DOC.get("letter_paper") or _DOC.get("paper", "letterpaper")
+    # The country's paper unless the profile says otherwise (person.paper()).
+    # US Letter is the class's default, so it is written as no option at all.
+    paper = person.paper("letter")
     body = LETTER.format(company=a["company"], role=a["role"],
                          letter_paper="" if paper == "letterpaper" else paper,
                          salutation=a.get("salutation", f"{a['company']}{suffix}"),

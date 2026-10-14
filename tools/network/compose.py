@@ -757,14 +757,14 @@ def inmail(name, hook, who_line, evidence, close=DEFAULT_CLOSE, work_auth=None,
            sign_off=None, seniority="peer") -> str:
     """The brief 4.2 shape: the connection note plus one paragraph of evidence.
 
-    The evidence paragraph is what the credit buys. A named model, a dataset
-    size, a specific outcome. An InMail without it is a connection note that
+    The evidence paragraph is what the credit buys. A named piece of work, its
+    scale, a specific outcome. An InMail without it is a connection note that
     cost a scarce credit, which is the one way to waste this channel.
     """
     if not str(evidence or "").strip():
         raise ValueError(
-            "an InMail without a concrete evidence paragraph (a named model, a dataset "
-            "size, a specific outcome) spends a scarce credit on a connection note")
+            "an InMail without a concrete evidence paragraph (a named piece of work, its "
+            "scale, a specific outcome) spends a scarce credit on a connection note")
     auth = _checked_claim(work_auth, seniority) if work_auth else ""
     paragraphs = [
         f"{_greeting(name)} {_after_greeting(hook)}".strip(),

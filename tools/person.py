@@ -156,6 +156,43 @@ def text(name: str) -> str:
         return fh.read()
 
 
+# Where US Letter is the standard paper. Everywhere else uses A4, which is also
+# the default when the country is not known.
+LETTER_COUNTRIES = frozenset({
+    "US", "CA", "MX", "CL", "CO", "CR", "DO", "GT", "PA", "PH", "PR", "VE", "SV",
+    "NI", "BZ",
+})
+
+
+def country() -> str:
+    """The person's country as an ISO 3166 alpha-2 code, upper case, or "".
+
+    identity.country in person.json; failing that, search.py PORTAL_COUNTRY,
+    which every profile that scrapes already sets.
+    """
+    c = get("identity.country", "") or ""
+    if not c:
+        try:
+            c = getattr(module("search"), "PORTAL_COUNTRY", "") or ""
+        except NoProfile:
+            c = ""
+    return str(c).strip().upper()
+
+
+def paper(kind: str = "resume") -> str:
+    """The LaTeX paper option for a document: "letterpaper" or "a4paper".
+
+    The country decides (US Letter across most of the Americas, A4 everywhere
+    else), so nobody has to know which their market uses. An explicit setting
+    wins: documents.letter_paper for the letter, then documents.paper for both.
+    """
+    if kind == "letter" and get("documents.letter_paper", ""):
+        return get("documents.letter_paper")
+    if get("documents.paper", ""):
+        return get("documents.paper")
+    return "letterpaper" if country() in LETTER_COUNTRIES else "a4paper"
+
+
 def reset() -> None:
     """Forget cached files. Tests that switch LJS_PROFILE call this."""
     _modules.clear()
