@@ -1,10 +1,12 @@
 # Security
 
-This is a private, single-operator repository, not a distributed package. There is no
-downstream user base to coordinate a disclosure with, so this file is a statement of the
-threat model and the controls, not a vulnerability intake process.
+The app is public and holds no person. Each person's search runs in their own copy, made
+with "Use this template" and kept **private**, because it holds their history, their salary
+expectations and every contact they message. This file is a statement of the threat model
+and the controls, not a vulnerability intake process.
 
-If you have access to this repo and find something, say so directly. If the finding is in
+If you find something, open an issue on the app without personal details, or say so to the
+maintainer directly. If the finding is in
 code inherited from [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search),
 it likely affects every fork of that template, and the responsible path is their
 [private vulnerability reporting](https://github.com/MadsLorentzen/ai-job-search/security/advisories/new)
@@ -28,7 +30,7 @@ Ranked roughly by how bad it would be:
    on the strongest model available, cheapness is never a reason to risk a fabrication.
 2. **The contact list leaking.** `network_contacts.csv` names real people, their
    employers, and sometimes what they said in confidence about their own organisation.
-   This file is why the repo is private.
+   This file is why a person's copy must be private.
 3. **Prompt injection from a posting.** A posting body is attacker-controlled text. The
    interesting attack is not "ignore previous instructions": it is a posting that quietly
    steers company research to a URL the attacker controls, so the cover letter cites a
@@ -59,10 +61,14 @@ Ranked roughly by how bad it would be:
   native WebFetch and WebSearch are outside its reach, which is exactly why the
   instruction-level rules above have to carry their own weight.
 - **`.gitignore` is not edited.** Its rules are asserted by the guard, so weakening them
-  fails the build. Artifacts that genuinely belong in this private repo are force-added
-  with `git add -f`, which leaves the rules intact. The inversion is deliberate: upstream
-  ships "never commit the tracker" because its forks are public, and this repo is private
-  with ephemeral sessions, so uncommitted state is lost state.
+  fails the build. Artifacts that genuinely belong in a person's private copy are
+  force-added with `git add -f`, which leaves the rules intact. The inversion is
+  deliberate: upstream ships "never commit the tracker" because its forks are public, and
+  a person's copy is private with ephemeral sessions, so uncommitted state is lost state.
+- **The app never holds a person.** It is built from a person's repo by removing every
+  path `tools/personal_paths.py` lists and scanning what is left for their names and
+  facts (`tools/build_app.py`, `tools/leak_scan.py`); the app's CI runs the same scan on
+  every push.
 - **Nothing is sent.** No command in this repo submits an application, sends a message or
   emails a person. `/notion-sync` pushes filenames and status only; no document content
   is uploaded anywhere. Every artifact stops at a file on disk and waits for a human.

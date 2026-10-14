@@ -8,6 +8,11 @@ talking to. Nothing else needs to be open.
 
 It never submits anything. Every document stops as a file on disk, and a person sends it.
 
+**To use it:** read [START_HERE.md](START_HERE.md). In short: click **Use this template**,
+make your copy **Private**, open it in Claude Code, and say "set me up". Never fork it: a
+fork of a public repository is public, and your copy will hold your work history and the
+names of the people you talk to.
+
 ---
 
 ## What it does
@@ -68,10 +73,11 @@ Everything else is a slash command inside Claude Code: `/apply`, `/rank`, `/inte
 
 | | |
 |---|---|
+| Start your own search | [START_HERE.md](START_HERE.md) |
 | Set up a new machine | [SETUP.md](SETUP.md) |
 | Run a search end to end | [RUNBOOK.md](RUNBOOK.md) |
 | How each stage works and what it costs | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| The candidate, the rules, the command map | [CLAUDE.md](CLAUDE.md) |
+| The rules, the command map, how updates arrive | [CLAUDE.md](CLAUDE.md) |
 | Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
 
 Behaviour changes in those files, not in the Python. Job boards are plug-in CLIs under

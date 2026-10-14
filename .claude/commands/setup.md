@@ -1,432 +1,210 @@
-# /setup - Profile Onboarding
+# /setup - Set a person up
 
-You are running the onboarding setup for last-job-search. Your goal is to collect the user's professional information and populate all profile files so the `/apply` workflow works out of the box.
+You are setting up a job search for the person in front of you. They made this repo from the
+app with "Use this template", and everything about them goes into `profile/` and the state
+files at the root. Nothing else in the repo is theirs to change: the code, skills, docs and
+templates are the app's, and `tools/sync_app.py` keeps them current (CLAUDE.md, "App-owned
+files and personal files").
 
-There are three paths into setup. Step 0 picks the right one; all three converge on Step 3 (file generation) and Step 4 (confirmation).
-
----
-
-## Step 0: Welcome & Choose Path
-
-If `$ARGUMENTS` contains `--section <name>`, skip directly to that section in Path C for an update-only flow. Do not run the path-selection prompt below.
-
-Otherwise, first check where this working copy would publish to - **before anything is
-written, not after** (the Step 4 privacy note fires only once every file is already on
-disk, which is too late to inform the decision). Run `git remote get-url origin`; if the
-command fails (no remote, or not a git checkout), skip this check silently. If there is
-a GitHub `origin`, check it with `gh repo view <owner/repo> --json visibility,isFork`
-when `gh` is available. If the origin is a **public fork** of the template - or its
-visibility cannot be determined - warn now and wait:
-
-> **Heads-up before we start:** your `origin` points at `<owner/repo>`, which is a
-> public GitHub fork. This setup writes your personal data (name, contact details,
-> employment history, salary expectations) into **tracked** files, and anything you
-> commit *and push* to that fork is visible to anyone. Two safe options: keep your
-> profile commits local and never push them, or push to a **private** repository
-> instead - SETUP.md section 8 has the two-minute private-remote recipe. Want to
-> continue with the setup?
-
-Wait for the user's confirmation before showing the path prompt. A private origin, no
-origin, or a non-fork remote needs no warning - continue silently.
-
-Then, before greeting the user, scan the `documents/` folder. Use Glob with `documents/**/*` and count files per subfolder (`cv/`, `linkedin/`, `diplomas/`, `references/`, `applications/`).
-
-Then welcome the user with a single message that lists three paths. The wording changes based on what was found.
-
-**If `documents/` has files** in one or more subfolders, lead with Path A:
-
-> **Welcome to last-job-search.**
->
-> I'll help you build your professional profile so Claude can evaluate job postings, tailor CVs, write cover letters, and prepare you for interviews.
->
-> I see files in your `documents/` folder: [list per subfolder, e.g. "2 in cv/, 1 in linkedin/, 3 in references/"]. Three ways to start:
->
-> **Path A: Read my documents folder** (recommended for what you have) - I'll read everything in `documents/`, cross-reference for consistency, and build your profile from real source materials. Idempotent and safe to re-run as you add more documents.
->
-> **Path B: Single CV import** - Paste or @-mention a single CV/resume here. I'll extract it and ask follow-up questions for what's missing.
->
-> **Path C: Interview mode** - I'll walk you through structured questions section by section.
->
-> Which would you like?
-
-**If `documents/` is empty or missing**, surface Path A as a "do this if you have materials" option:
-
-> **Welcome to last-job-search.**
->
-> I'll help you build your professional profile so Claude can evaluate job postings, tailor CVs, write cover letters, and prepare you for interviews.
->
-> Three ways to start:
->
-> **Path A: Documents folder** (best signal if you have several materials) - Drop your CV / LinkedIn export / diplomas / reference letters in the `documents/` folder, then say "go". I'll read everything and build your profile from it. See `documents/README.md` for the folder layout.
->
-> **Path B: Single CV import** - Paste or @-mention a single CV/resume here. I'll extract it and ask follow-up questions for what's missing.
->
-> **Path C: Interview mode** - I'll walk you through structured questions section by section. Good if you're starting from scratch.
->
-> Which would you like?
-
-Wait for the user's choice. If they pick A but the folder is still empty, tell them what to add (point at `documents/README.md`) and stop.
+The person never sees a config value. They answer plain questions about themselves; you do
+the research about their market and write every file.
 
 ---
 
-## Path A: Documents Folder
+## Step 0: Make sure this is the right repo, and a private one
 
-Reads structured documents in `documents/`, cross-references them for consistency, and merges extracted data into the seven profile skill files. Read-before-write and idempotent: changes already present will not be proposed again.
+**Before anything is written, not after.** Run `git remote get-url origin` (skip silently if it
+fails: no remote, or not a git checkout). Then decide which of these it is.
 
-Follow these steps **exactly in order**.
+- **The app itself** (`https://github.com/aranculleton/last-job-search`, or a fork of it). Stop.
+  Nothing personal ever goes here, and a fork of a public repo is public too. Tell them:
 
-### Step A1: Inventory
+  > This is the app, not your own copy, and it is public. Make your own private copy first:
+  > on the app's GitHub page click **Use this template**, then **Create a new repository**,
+  > choose yourself as the owner, any name (say `my-job-search`), tick **Private**, and click
+  > **Create repository**. Then start a Claude Code session on that new repo and say "set me
+  > up". `START_HERE.md` walks through it.
 
-Use Glob with `documents/**/*` to scan the full tree. Print:
+- **A public repo of any other kind.** Stop and say why: setup writes their name, contact
+  details, work history, salary expectations and, later, every contact they message, into
+  tracked files, and a public repo shows all of it to anyone. Tell them how to make it
+  private (on GitHub: the repo's **Settings**, **General**, scroll to **Danger Zone**,
+  **Change repository visibility**, **Make private**), and wait. Never change it yourself.
 
-```
-## Documents Found
+- **Visibility unknown** (the GitHub tools cannot see it, no `gh`). Ask them to look: the repo's
+  GitHub page shows **Private** or **Public** next to its name. Wait for the answer.
 
-**cv/**: [list files, or "(empty)"]
-**linkedin/**: [list files, or "(empty)"]
-**diplomas/**: [list files, or "(empty)"]
-**references/**: [list files, or "(empty)"]
-**applications/**: [list subfolders with their files, or "(empty)"]
+- **Private.** Carry on.
 
-I will read these and cross-reference before proposing any changes.
-```
-
-If every subfolder is empty, stop and tell the user to populate the folder. Point at `documents/README.md` for the layout.
-
-### Step A2: Read Existing Skill Files
-
-Read these in parallel before extracting anything. You must know what is already there to make the merge intelligent.
-
-- `profile/01-candidate-profile.md`
-- `profile/02-behavioral-profile.md`
-- `.claude/skills/job-application-assistant/03-writing-style.md`
-- `profile/04-job-evaluation.md`
-- `.claude/skills/job-application-assistant/05-cv-templates.md`
-- `.claude/skills/job-application-assistant/06-cover-letter-templates.md`
-- `.claude/skills/job-application-assistant/07-interview-prep.md`
-
-Hold this content in context throughout Path A. Do not re-read.
-
-### Step A3: Parse Documents
-
-Read each document found in Step A1. Process subfolders in this order: `cv/`, `linkedin/`, `diplomas/`, `references/`, `applications/`.
-
-**`cv/` documents:** name, contact (email, phone, LinkedIn, GitHub), education (degree, institution, dates, thesis), work experience (title, company, dates, location, bullets), skills, languages (with any stated proficiency), publications, awards, profile/summary.
-
-**`linkedin/` documents:** About/summary section (full text, used for behavioral inference), work experience, education, skills and endorsements, **Languages section** (language name + self-rated proficiency level, e.g. "Spanish - Native or bilingual proficiency" - a high-confidence structured source, feeds the Language Gate in `04-job-evaluation.md`), certifications, volunteer work, publications, recommendations received (full text). If multiple LinkedIn exports are present, use the most recently modified file.
-
-**`diplomas/` documents:** official degree title and level, institution name (official spelling), graduation date, grade or distinction or GPA if visible.
-
-**`references/` documents:** referee name, title, organization; full text of the letter (extract specific quotes); competency language used.
-
-**`applications/<company>_<role>/` subfolders:**
-- `job_posting.md`: role title, company, required skills, experience level, sector, role type
-- the resume: `cv/<Prefix>_Resume_<ABBR>.tex` (`<Prefix>` is `identity.file_prefix` in `profile/person.json`), named in the tracker row's `cv_file` column per `documents/README.md` (no copy lives in the application folder itself) - profile statement, section ordering, framing for this role type
-- the cover letter: `cover_letters/<Prefix>_Cover_Letter_<ABBR>.tex`, named in the tracker row's `cover_letter_file` column per `documents/README.md` (no copy lives in the application folder itself) - opening structure, body structure, bullet style, closing, recurring phrases
-- `outcome.md`: status (in_progress/hired/offer_declined/rejected/no_response/interview_only), interview stages, notes. Skip `in_progress` applications for calibration - they have no final signal yet.
-
-After reading, proceed to Step A4 without intermediate output. The user sees a complete picture in Step A6.
-
-### Step A4: Cross-Reference Check
-
-Before mapping anything to skill files, check for inconsistencies:
-
-- Date mismatches between CV / LinkedIn / diploma
-- Title mismatches across documents for the same role
-- Education mismatches (degree name, graduation date)
-- Employer name variations
-
-If inconsistencies are found, present them as a numbered list and wait for the user to resolve each one before continuing:
-
-```
-## Cross-Reference Issues Found
-
-These need to be resolved before I continue. For each one, tell me which version is correct.
-
-1. **Role title mismatch - [COMPANY]:**
-   CV says: "[TITLE_A]"
-   LinkedIn says: "[TITLE_B]"
-   Which is correct?
-
-2. ...
-```
-
-If no inconsistencies, state "No cross-reference issues found." and continue.
-
-### Step A5: Build Change Sets
-
-For each skill file, compare extracted document content against the current file content from Step A2. Build two buckets.
-
-**Additive changes:** entirely new content not in the skill file in any form. Examples: a certification not in `01-candidate-profile.md`, a new endorsement skill, a referee not yet listed, a new behavioral quote from a reference letter, a new award.
-
-**Conflicting changes:** content that touches something already in a skill file but disagrees. Examples: a different date range for an existing job, a different job title for the same role, a different graduation date than what is recorded.
-
-**Inference rules** (apply when populating from inferred sources):
-
-- **`02-behavioral-profile.md`:** Source is LinkedIn About + recommendation letters. Extract recurring themes, adjectives, phrases about how the candidate works. Add only to "Strongest Behavioral Traits", "How [Candidate] Works Best", or "Management Style Preferences" sections. Do not overwrite existing scored assessments. Always label inferred additions: *[Inferred from LinkedIn About / Reference letter - review before relying on this]*
-- **`03-writing-style.md`:** Source is the cover letters at `cover_letters/<Prefix>_Cover_Letter_*.tex`, named per application in the tracker's `cover_letter_file` column (see `documents/README.md`), not a file inside the application folder. Extract recurring patterns. Add as observations under "## Patterns Observed in Past Applications". Do not modify existing rules. Only add if 2+ cover letters show a genuine pattern.
-- **`04-job-evaluation.md`:** Source is `job_posting.md` + `outcome.md` pairs. If an application reached interview or offer: note role type and sector as a confirmed strong-fit signal. If 2+ applications repeat a no-response or rejection pattern: note it. Add findings under "## Calibration from Past Applications". Do not modify the existing scoring framework.
-- **`05-cv-templates.md`:** Source is the resumes at `cv/<Prefix>_Resume_*.tex`, named per application in the tracker's `cv_file` column (see `documents/README.md`), not a file inside the application folder. Extract any profile statement that does not already appear in templates. Label with: *[Used for: <company>_<role>]*. **Ground before extracting:** archived drafts are tailored outputs, not source documents - verify every factual claim in an extracted statement (titles, employers, metrics, technologies) against `01-candidate-profile.md` and drop or correct any claim the profile does not support, keeping only the framing. A tailored draft that drifted must never become a template future applications start from.
-- **`06-cover-letter-templates.md`:** Source is the same cover letters as above (`cover_letters/<Prefix>_Cover_Letter_*.tex`, per the tracker's `cover_letter_file` column). Extract opening patterns, bullet structures, closing formulations. Add only what is structurally distinct from existing templates.
-- **`07-interview-prep.md`:** Source is CV bullets, LinkedIn descriptions, reference letter quotes. Identify achievements not yet covered by an existing STAR example. Do NOT draft full STAR examples. Add stubs under "## STAR Candidates (Complete Manually)":
-
-```markdown
-### [Achievement title]
-**Source:** [CV / LinkedIn / Reference letter - role/company]
-**What happened:** [one sentence]
-**Why it matters:** [interview question types this could answer]
-**S/T/A/R stub:**
-- Situation:
-- Task:
-- Action:
-- Result:
-```
-
-### Step A6: Present and Confirm Changes
-
-Present the full change set before writing anything.
-
-**Additive changes** (single grouped list, organized by target file):
-
-```
-## Proposed Additive Changes
-
-### 01-candidate-profile.md
-- [ ] New certification: [title], [issuer], [date] - extracted from LinkedIn
-- [ ] New reference: [name, title, company]
-  Quote: "[relevant quote]"
-
-### 02-behavioral-profile.md
-- [ ] New behavioral observation [labeled as inference]: "[phrase]"
-
-[and so on per file]
-```
-
-Then ask:
-
-> **Apply all additive changes?** These add new content without touching anything already in the files.
-> Reply **yes** to apply all, or list the numbers you want to skip.
-
-Wait for the response. Apply only the confirmed items.
-
-**Conflicting changes** (one at a time):
-
-```
-## Conflict 1 of [N]: Job title - [COMPANY]
-
-**Current in 01-candidate-profile.md:**
-[TITLE_A] - [COMPANY] ([START]-[END])
-
-**Proposed (from LinkedIn export):**
-[TITLE_B] - [COMPANY] ([START]-[END])
-
-Options:
-  [keep] Keep the existing text
-  [replace] Replace with the version from the document
-  [manual] I'll edit this myself - skip for now
-```
-
-Wait for the user's choice on each conflict. If no conflicts, state "No conflicting changes found." and skip this section.
-
-### Step A7: Write Confirmed Changes and Fill Gaps
-
-Apply the confirmed changes with the Edit tool. Make targeted edits only. Do not rewrite entire files. State which changes were applied per file. If a file has no confirmed changes, state "No changes made to [filename]."
-
-Documents cover skills, experience, education, references, and behavioral signal. They do not cover everything `/apply` and `/scrape` need. After the writes, ask follow-up questions for gaps:
-
-- Career goals and target role types
-- What excites the user in their next role
-- Deal-breakers and must-haves
-- Languages you work in professionally, with proficiency levels (only if not already extracted from `cv/` or `linkedin/` above) - this feeds the Language Gate in `04-job-evaluation.md`, so ask directly rather than skipping it
-- Salary expectations / baseline (optional)
-- Commute or location constraints (if not visible from CV)
-- Job search configuration (use the questions from Path C Section 9 below)
-
-Then proceed to Step 3 to populate the non-skill files (`CLAUDE.md`, `cv/main_example.tex`, `profile/search-queries.md`). Step 3 will detect that the seven skill files are already populated and skip those substeps.
+Then look for an existing `profile/`. If there is one, this is an update, not a setup: ask what
+they want to change and go to that part of Step 1 (`--section <name>` does this directly:
+`identity`, `history`, `search`, `market`, `voice`, `documents`). Never overwrite a filled
+profile wholesale, and never put placeholders back into one.
 
 ---
 
-## Path B: Single CV Import
+## Step 1: Find out who they are
 
-If the user provides a single CV/resume:
+Start from what they already have. Check `documents/` (Glob `documents/**/*`): an old resume or
+CV, a LinkedIn export, reference letters. If there is nothing there, offer two ways in and let
+them choose:
 
-1. Read the document thoroughly.
-2. Extract all structured information: name, contact, education, experience, skills, languages, publications, awards.
-3. Present a summary of what was extracted.
-4. Ask follow-up questions for gaps (behavioral profile, career goals, deal-breakers, languages and proficiency levels if not already extracted, salary expectations, references).
-5. Proceed to Step 3 (file generation).
+> I'll build your profile from what you already have, then ask about anything missing.
+> **Easiest:** paste your current resume or CV here, or drop it (and a LinkedIn export, if you
+> have one) into the `documents/` folder and say "go". **Or** we can just talk it through.
 
----
+**Reading documents.** Extract: name and contact details; education (degree, institution,
+dates); every role (title, employer, dates, location, what they did and what came of it);
+skills and tools; languages and how well; certifications (and whether each is held or only
+in progress); awards. Cross-check dates and titles between documents and ask about every
+disagreement before writing anything. A LinkedIn "About" and reference letters are the best
+signal for how they work; label anything you infer from them as inferred.
 
-## Path C: Interview Mode
+**Then ask, in plain words, only what the documents did not answer.** Conversational, a few
+at a time, never a form:
 
-Walk through each section conversationally. Ask questions naturally, not as a form. Let the user answer in their own words and you'll structure the data.
+- Where do you live, and where would you work? How far would you commute? Remote, hybrid,
+  on-site? Any other cities you would consider?
+- Do you have the right to work there? Will you need an employer to sponsor you, now or
+  later? (Ask what their status is called in their own words; you will work out what it
+  clears.)
+- What do you want to be doing day to day? Which kinds of role, and which fields or sectors?
+- What did you actually achieve in each role? Numbers where they have them. Ask for outcomes
+  before you infer any: "presented the recommendations to the client" beats "responsible for
+  analysis".
+- What are you earning now, and what would you need to move? Is there a number below which
+  you would not?
+- Anything you will not do: employers, sectors, a commute, a type of role?
+- Employers you would love to work for, and any you would rather not?
+- Which languages do you work in, and how well?
+- How do you like to come across: formal or plain, confident or understated? Anything you
+  never want to see written about you?
+- Is the search confidential? If your current employer must not know, say so.
+- How much notice do you have to give?
 
-### Section 1: Identity & Contact
-Ask about:
-- Full name
-- Location (city, country)
-- Phone, email, LinkedIn, GitHub
-- What languages they work in professionally, and roughly what level in each (native, fluent, conversational, a CEFR letter like B2 - whatever's natural for them to describe, doesn't need to be precise). Worth explaining why: a posting requiring a language they don't list at all gets auto-excluded later by the Language Gate, while one asking for a higher level in a language they do list gets flagged for their own judgment instead of silently passed or rejected - so it's worth being honest here rather than optimistic.
-- Current employment status
-- Family/commute constraints (if any)
+**Never ask them to name** a job board, an ATS, a spelling convention, a salary band source,
+a regex, a file or any config value. Those are your job in Step 2.
 
-### Section 2: Education
-For each degree:
-- Level (PhD, MSc, BSc, etc.), field, institution, years
-- Thesis topic (if applicable)
-- Key coursework or topics
-
-Also ask about certifications (online courses, professional certs).
-
-### Section 3: Professional Experience
-For each role (most recent first):
-- Job title, company, dates, location
-- Key responsibilities (3-5 bullets)
-- Key achievements or projects
-- Technologies/tools used
-
-Also ask about independent projects, freelance work, or side projects.
-
-### Section 4: Technical Skills
-- Programming languages + proficiency level
-- ML/AI frameworks and tools
-- Domain expertise
-- Software tools and platforms
-- Any other technical skills
-
-### Section 5: Publications & Awards (optional)
-- Peer-reviewed papers, conference presentations
-- Hackathons, competitions, awards
-- Skip if not applicable
-
-### Section 6: Behavioral Profile (optional)
-If they have a formal assessment (PI, DISC, Myers-Briggs, StrengthsFinder):
-- Ask them to describe or share the results
-
-If not, ask behavioral questions:
-- "What work environments do you thrive in?"
-- "What drains your energy at work?"
-- "How do you prefer to work in teams?"
-- "How do you make decisions, quickly or deliberately?"
-- "What's your communication style?"
-- Synthesize answers into a behavioral profile
-
-### Section 7: Career Goals & Preferences
-- Target roles and industries
-- What excites you in work
-- Deal-breakers and must-haves
-- Salary expectations/baseline (optional)
-- What environments to avoid
-- Commute/location constraints
-
-### Section 8: References (optional)
-For each reference:
-- Name, title, company, email, phone
-- Relationship to the user
-
-### Section 9: Job Search Configuration
-This section generates the search queries that power `/scrape`. Use the information from Sections 1, 4, and 7 to build targeted queries.
-
-Ask about:
-- **Role titles to search for:** Job titles for the same underlying work vary a lot across companies and markets - a "Data Scientist" role at one employer may be called "Insights Analyst" or "Data Consultant" at another. Ask about the function first: "What kind of work do you actually want to be doing day-to-day?" Then translate that into concrete search terms: "Given that, what job titles should I search for? For example: Data Scientist, ML Engineer, Geophysicist." Collect 3-8 specific titles, but keep the underlying function in mind - it feeds the category naming in `search-queries.md` and the Experience Match dimension in `04-job-evaluation.md`.
-- **Key skills as search terms:** "Which of your skills are most likely to appear in job postings?" Pick 3-5 that are distinctive and searchable.
-- **Target companies (optional):** "Are there specific companies you'd like to monitor for openings?"
-- **Geographic scope:** "Which cities or regions should I search in? How far are you willing to commute?" Use this to define the location filter tiers (ideal, acceptable, borderline, too far).
-- **Job portals:** "The repo ships country-agnostic search CLIs (`linkedin-search`, `freehire-search`, enabled by default) plus Danish portal demos (Jobindex, Jobbank, Jobdanmark, Jobnet) that ship **disabled**. `/scrape` auto-discovers whatever portal skills are installed under `.agents/skills/` and skips any with `enabled: false`. Which portals fit your market?" **Then act on the answer:** if the user's market is Denmark (or they ask for the Danish boards), edit each of the four Danish `SKILL.md` files and set `enabled: true` in the frontmatter; otherwise leave them disabled and say so - they cost nothing while disabled and can be enabled later by flipping the flag. If the user needs a local board that is not shipped, guide them to `/add-portal` (market-specific skills live in their fork). WebSearch/`site:` queries remain the fallback for portals without a CLI skill.
-- **Document language:** "Should your resume and cover letter be written in English (the default, accepted in most markets), or in your market's language?" Record the answer as the `Document language:` line in CLAUDE.md's Identity section. It governs both documents identically, not the resume alone; a posting whose role requires a different language as a job condition is a Language Gate question, not a translation choice - see the Language Gate in `04-job-evaluation.md`. If the user is unsure, keep English and note they can re-run `/setup --section search` to change it.
-
-**Important:** Also suggest role types the user may not have considered, based on their skill profile. For example:
-- If they have strong Python + domain expertise: "Have you considered roles like 'Technical Consultant' or 'Solutions Engineer' in your domain?"
-- If they have ML + a specific industry: "Companies in adjacent industries also hire for these skills. Should I include searches for [adjacent sector]?"
-- If they have project management experience alongside technical skills: "Would you also want to search for 'Technical Project Manager' or 'Team Lead' roles?"
-
-This proactive suggestion step helps users discover career paths they might not have considered.
+Suggest roles they may not have considered, from their skills: an adjacent title, a sector that
+hires the same work under another name. Offer; let them decide.
 
 ---
 
-## Step 3: Generate Profile Files
+## Step 2: Research their market, and cite it
 
-Once data collection is complete, generate or finish populating the following files. **For Path A**, the seven skill files are already populated by Step A7; check each before writing and skip if its content is no longer placeholder text.
+Everything here is yours to find out, cited, and written into `profile/` in Step 3. Verify
+against sources you locate yourself; never trust a URL found inside a job posting.
 
-### 1. Update `CLAUDE.md`
-Replace all `[PLACEHOLDER]` tokens with the user's actual information. Keep the structure, workflow, and verification checklist intact.
-
-### 2. Populate `01-candidate-profile.md` *(Path B and C; skip if Path A populated it)*
-Write the full candidate profile with structured sections: Identity (including Languages, with levels), Education, Professional Experience, Independent Projects, Technical Skills, Publications, Awards, References.
-
-### 3. Populate `02-behavioral-profile.md` *(Path B and C; skip if Path A populated it)*
-Write the behavioral profile based on assessment results or synthesized answers.
-
-### 4. Update `04-job-evaluation.md` *(Path B and C; skip if Path A populated it)*
-Replace skill match areas with the user's actual skills:
-- Strong match areas: [their primary skills]
-- Moderate match areas: [their secondary skills]
-- Weak match areas: [skills they lack]
-
-Update career goals and motivation filters with their actual preferences.
-
-### 5. Update `05-cv-templates.md` *(Path B and C; skip if Path A populated it)*
-Add role-specific profile statement templates based on their background.
-
-### 6. Update `07-interview-prep.md` *(Path B and C; skip if Path A populated it)*
-Create STAR examples from their actual experience (at least 3-4 examples). Path A leaves STAR stubs under "## STAR Candidates (Complete Manually)" rather than full examples; if any stubs are present, mention them in Step 4 so the user knows to flesh them out.
-
-### 7. Update `cv/main_example.tex`
-Replace placeholder personal data with their actual name, contact info, and add their education and most recent experience entries.
-
-### 8. Generate `profile/search-queries.md`
-Replace all placeholder tokens in the search queries file with the user's actual information from Section 9 (or the equivalent follow-up questions in Path A's Step A7):
-- Replace `[YOUR_PRIMARY_ROLE_TYPE]`, `[YOUR_PRIMARY_JOB_TITLE]`, etc. with actual role titles
-- Replace `[YOUR_KEY_SKILL]`, `[YOUR_DOMAIN_KEYWORD_1]`, etc. with actual skills and domain terms
-- Replace `[YOUR_CITY]`, `[YOUR_COUNTRY]`, `[YOUR_REGION]` with actual location
-- Fill in the location filter tiers (ideal, acceptable, borderline, too far) based on commute constraints
-- Organize queries into priority categories matching the user's career direction:
-  - Priority 1: Their strongest/most desired role direction
-  - Priority 2: Their domain expertise
-  - Priority 3: Adjacent roles they could pivot into
-  - Priority 4: Broader roles (wider net)
+- **Job boards.** Which boards serve their city and field. `linkedin-search` and
+  `freehire-search` are enabled and work anywhere; the Danish portals under `.agents/skills/`
+  ship disabled. If a board that matters for them has no CLI, say so and offer `/add-portal`
+  (check its robots.txt the way `tools/robots_check.py` does first).
+- **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
+  or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does. These
+  go in `profile/boards.py` and are how large employers that portals under-index reach a round.
+- **Eligibility.** The wording postings in their country use for citizenship, permanent
+  residence, security clearance and sponsorship, and what their status does and does not
+  clear. This is what the eligibility gate in `profile/search.py` matches, so get the
+  phrasing from real postings.
+- **Pay.** Salary norms for their role, level and city, from sources you can cite: the
+  walk-away floor, the target and the top of the band, in the local currency.
+- **Documents.** Local conventions: resume or CV, one page or two, photo or not, paper size,
+  spelling variant, date format, how a letter is signed off.
+- **Places.** The names their area goes by in postings (the metro area, the towns around it,
+  the region), the places worth a flag rather than a fail, and what counts as too far.
+- **Languages.** Which languages postings in their market tend to require, for the language
+  gate.
+- **Search terms.** The titles their target work is posted under, including the ones they
+  did not think of, and the queries `/scrape` should run.
 
 ---
 
-## Step 4: Confirm & Next Steps
+## Step 3: Write the profile
 
-Present a summary:
+`profile.example/` is a complete fictional person, and the shape every profile takes. For
+each file in it, write the person's own version at the same name under `profile/`. Read the
+example file first: its docstring and comments say what it holds and which tool reads it.
+Keep every name the tools read (constants, keys, headings); change only the content.
 
-> **Setup complete!** Here's what was generated:
+### 1. Write `profile/person.json`
+Identity (name, pronouns, file prefix, contact line, LinkedIn) and documents (noun, banned
+nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2.
+
+### 2. Write `profile/01-candidate-profile.md`
+The source of truth for every fact about them. Everything Step 1 established, with the detail
+that will not fit on one page kept under each role's "Additional detail available for
+tailoring". Anything not yet confirmed is written `[CONFIRM: ...]`, never guessed.
+
+### 3. Write `profile/02-behavioral-profile.md`
+How they work, from an assessment if they have one, or from their answers and references.
+Inferred lines are labelled as inferred.
+
+### 4. Write `profile/04-job-evaluation.md`
+Start from the app's template (`.claude/skills/job-application-assistant/04-job-evaluation.md`)
+and fill every `[PLACEHOLDER: ...]`: their gates, match areas, salary table and preferences.
+This is the copy scoring reads.
+
+### 5. Write `profile/07-interview-prep.md`
+Three or four STAR examples from their real achievements, in their words, plus answers to the
+hard questions their history invites. Stubs marked `[CONFIRM]` where details are missing.
+
+### 6. Write `profile/search-queries.md`
+The queries `/scrape` runs: role titles in priority order (their main direction, their domain,
+adjacent roles, a wider net), their key skills as search terms, and the location tiers.
+
+### 7. Write `profile/CLAUDE.md`
+The summary the root CLAUDE.md imports: identity, history in brief, skills, target sectors,
+deal-breakers, and any rule that is theirs rather than the app's (how they want to come
+across, what must never be said, confidentiality). Then "This search's automation": none yet.
+
+### 8. Write the rest of `profile/`
+`roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
+as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
+not, and the honest bridges between), `search.py` (pay, gates, locations, titles, what the
+scrape searches), `employers.py`, `boards.py`, `networking.py` (their voice: opener, a line
+about them, the ask, their home city and timezone), `claims.py`, `screening.py` (standard form
+answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
+`12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).
+
+### 9. Write the state files
+At the repo root, each with the header row from its counterpart in `profile.example/state/`
+and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.
+And `job_scraper/seen_jobs.json` as `{}` and `job_scraper/do_not_target.json` as
+`{"companies": {}}`.
+
+---
+
+## Step 4: Prove it works, then commit
+
+- `./tools/ci_local.sh --quick`. The app's suite runs on the example person and must pass;
+  this also loads the new profile through the tools, so a missing constant shows up here.
+- Render one resume and cover letter for a real posting they care about (`/apply`), read
+  both PDFs back, and show them. This is where a wrong spelling setting, an awkward summary
+  or a missing date comes to light, and the time to fix it is now.
+- Commit `profile/` and the state files and push. The tracker and the seen-jobs file are
+  ignored by `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule
+  says (`git add -f`), and never edit `.gitignore`.
+
+Then tell them, in a few lines:
+
+> **You're set up.** Your profile is in `profile/`, private to this repo.
 >
-> - `CLAUDE.md` - Your full candidate profile
-> - `profile/01-candidate-profile.md` - Structured profile
-> - `profile/02-behavioral-profile.md` - Behavioral assessment
-> - `profile/04-job-evaluation.md` - Personalized evaluation framework
-> - `.claude/skills/job-application-assistant/05-cv-templates.md` - CV templates with your profile statements
-> - `.claude/skills/job-application-assistant/07-interview-prep.md` - STAR examples from your experience
-> - `cv/main_example.tex` - Your LaTeX CV template
-> - `profile/search-queries.md` - Job search queries for `/scrape`
->
-> **Privacy note:** the files above now contain your personal data and are *tracked by git*.
-> A GitHub fork of the template is always public (forks of public repos cannot be made
-> private), so do not push these commits to a fork. Keep them local, or push to a private
-> repository instead - see SETUP.md section 8 for the private-remote setup.
->
-> **Try it out:**
-> - Run `/scrape` to search for matching jobs right now
-> - Run `/apply` with a job posting URL to see the full application workflow
-> - Run `/setup --section search` later to update your search queries as your priorities evolve
-
-If Path A left any STAR stubs in `07-interview-prep.md`, also note:
-
-> Path A flagged [N] STAR candidate stubs in `07-interview-prep.md` that need your situation/task/action/result details before you use them in interviews.
+> - Say **"find me jobs"** (or `/scrape`) for a scored shortlist.
+> - Paste a posting (or `/apply <link>`) for a tailored resume and cover letter.
+> - `/network` finds people worth talking to at the employers you want.
+> - Updates to the app arrive on their own at the start of each session.
+> - A daily brief on your phone is optional: `automation/README.md` sets it up.
 
 ---
 
-## Design Principles
+## Design principles
 
-- Three onboarding paths converge on the same skill files. Step 0 picks the right path based on what's in `documents/`. Steps 3 and 4 are shared.
-- Path A is read-before-write and idempotent. Re-running it as documents are added does not duplicate or overwrite existing content; conflicts are surfaced for explicit resolution.
-- Path A labels inferred behavioral or style additions so the user can review them critically before relying on them.
-- Each section in Path C is a natural conversation, not a form. The user can skip optional sections.
-- Synthesize answers into structured formats (the user does not need to know markdown or LaTeX).
-- Can be re-run with `--section <name>` to update specific sections (e.g., `/setup --section search` to reconfigure job search queries without re-doing the full profile).
-- Section 9 (search) in Path C, and the equivalent follow-up questions in Path A, proactively suggest role types the user may not have considered.
-- At the end, suggest running `/scrape` and `/apply` with a test job posting.
+- The person answers questions about themselves. Claude does the market research and writes
+  every file.
+- Nothing personal is written until the repo is known to be private. The app and any public
+  repo are refused.
+- `profile/` and the state files are the only things written. App-owned files are never
+  edited; a person's rules go in `profile/CLAUDE.md`.
+- Never invent a fact. Unconfirmed is `[CONFIRM: ...]`, and every researched setting cites
+  where it came from.
+- Re-runnable: with a profile present it updates the part asked for and leaves the rest alone.

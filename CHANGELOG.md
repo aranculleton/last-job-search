@@ -12,6 +12,28 @@ make sense to somebody whose repo just received it.
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- **`START_HERE.md`**, the five steps from this page to a working search, in plain words:
+  make a private copy with "Use this template", let Claude see it, set up the cloud
+  environment (the setup line and the job-board domains), say "set me up", and use it.
+  Linked from the top of the README.
+
+### Changed
+
+- **`/setup` writes `profile/` and nothing else.** It refuses the app itself and any public
+  repo before a word is written, asks the person only plain questions about themselves,
+  researches their market (boards, employer ATS, eligibility wording, pay, document
+  conventions, place names) and writes every profile file in the shape of
+  `profile.example/`, plus empty state files. It used to edit the app's own skill files,
+  CLAUDE.md and the example CV, which the next sync would undo.
+- **`/reset` has a `state` scope** and removes `profile/` whole rather than blanking files.
+  It never deletes the app's templates and fonts.
+- SECURITY.md, SETUP.md and the README describe the app as public and a person's copy as
+  private.
+
 ## [3.0.0] - 2026-10-14
 
 The first release as a template: one app, any number of people, each in their own private repo.

@@ -1,27 +1,19 @@
-"""Guards for the privacy posture of a repo that holds real people's names.
+"""Guards for the privacy posture of a person's repo, which holds real people's names.
 
-Upstream's version of this file (issue #345) pinned a warning next to the
-`gh repo fork` command in the README quick start, because forks of a public
-repo cannot be private and `/setup` then wrote personal data into tracked
-files. A real user hit exactly that.
+The app is public and holds no person. A person's repo is made from it with
+"Use this template" and must be private: it carries their history, their salary
+expectations and every contact they message, some of whom said things about
+their own employer in confidence.
 
-This fork is the private repo that warning was telling people to create, so
-there is no fork step left to warn next to. The risk did not go away, it
-inverted: the danger here is no longer walking into a public fork, it is
-someone later making *this* repo public, or a session weakening the rules that
-keep personal data out of a surface that could be published. A repo in use
-carries named contacts, who may have said things about their own employer in
-confidence, plus full employment history and salary expectations.
+Upstream's version of this file (issue #345) pinned a warning next to a `gh repo
+fork` quick start, because a fork of a public repo is public and /setup then
+wrote personal data into tracked files. A real user hit exactly that. The guards:
 
-So the guards are:
-
-1. The docs state plainly that this repo is private and say why, so the fact
-   survives the session that knew it.
-2. `/setup` still checks where the working copy would publish to BEFORE it
-   writes any profile file. That test is unchanged from upstream and still
-   load-bearing: `/setup` is exactly the command that would repopulate this
-   repo's personal data, and its closing notes fire after everything is
-   already on disk.
+1. The docs say plainly that a person's repo is private, and why, naming the file
+   that makes it so.
+2. The README never walks anyone into a fork.
+3. `/setup` checks where the working copy would publish to BEFORE it writes any
+   profile file, and refuses the app itself and any public repo.
 """
 import re
 import unittest
@@ -43,11 +35,11 @@ def section(text: str, heading: str) -> str:
     return match.group(1) if match else ""
 
 
-class TestTheDocsSayThisRepoIsPrivateAndWhy(unittest.TestCase):
+class TestTheDocsSayAPersonsRepoIsPrivateAndWhy(unittest.TestCase):
     def test_security_policy_names_the_contact_list_as_the_reason(self):
         text = SECURITY.read_text(encoding="utf-8")
         self.assertIn("private", text.lower(),
-                      "SECURITY.md must state the repo is private")
+                      "SECURITY.md must state a person's repo is private")
         self.assertIn("network_contacts.csv", text,
                       "SECURITY.md must name the file that is the reason it is private; "
                       "an abstract 'personal data' warning is the one people talk "
@@ -58,9 +50,8 @@ class TestTheDocsSayThisRepoIsPrivateAndWhy(unittest.TestCase):
         text = README.read_text(encoding="utf-8")
         self.assertNotIn(
             "gh repo fork", text,
-            "the README must not carry a fork-and-clone quick start: this repo is the "
-            "private destination, not a template to fork, and a fork of it would be "
-            "public with every contact's name in it",
+            "the README must not carry a fork-and-clone quick start: a fork of the "
+            "public app is public, and a person's contacts would be in it",
         )
 
     def test_readme_states_the_security_posture(self):
@@ -92,7 +83,7 @@ class TestSetupChecksOriginBeforeWriting(unittest.TestCase):
             "/setup must check where the working copy would publish to",
         )
         preflight_at = text.index("git remote get-url origin")
-        writes_at = text.index("## Step 3: Generate Profile Files")
+        writes_at = text.index("## Step 3: Write the profile")
         self.assertLess(
             preflight_at,
             writes_at,
@@ -104,6 +95,14 @@ class TestSetupChecksOriginBeforeWriting(unittest.TestCase):
             text[max(0, preflight_at - 2000) : preflight_at + 2000].lower(),
             "the preflight must be about public visibility, not just remote presence",
         )
+
+    def test_setup_refuses_the_app_itself(self):
+        text = SETUP_COMMAND.read_text(encoding="utf-8")
+        writes_at = text.index("## Step 3: Write the profile")
+        before = text[:writes_at]
+        self.assertIn("Use this template", before,
+                      "/setup must send someone in the app to make their own copy")
+        self.assertIn("Private", before)
 
 
 if __name__ == "__main__":
