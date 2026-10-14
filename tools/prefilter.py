@@ -218,7 +218,7 @@ def title_verdict(title: str) -> tuple[str, str]:
     for pat in POSITIVE:
         if re.search(pat, low):
             return "PASS", f"matches {pat!r}"
-    return "FAIL", "title names no analytics, data, modelling, risk or pricing work"
+    return "FAIL", "title matches none of the role families in profile/search.py POSITIVE"
 
 
 def age_days(job: dict, today: _dt.date | None = None) -> int | None:

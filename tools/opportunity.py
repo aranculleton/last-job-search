@@ -103,9 +103,13 @@ TITLE_FAMILY = list(getattr(_S, "OPP_TITLE_FAMILY", []))
 WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
 
 
-SENIOR_UP = re.compile(r"\b(director|vp|vice president|head of|chief|principal)\b", re.I)
-JUNIOR = re.compile(r"\b(intern|internship|co[- ]?op|student|graduate|junior|"
-                    r"entry[- ]level|apprentice)\b", re.I)
+# Titles above and below the person's level, docked 12 and 25. Both are the
+# person's (profile/search.py OPP_ABOVE_LEVEL, OPP_BELOW_LEVEL): a graduate
+# title is below one person and the target of the next. Unset, nothing is
+# docked for level.
+_NEVER = re.compile(r"(?!x)x")
+SENIOR_UP = getattr(_S, "OPP_ABOVE_LEVEL", None) or _NEVER
+JUNIOR = getattr(_S, "OPP_BELOW_LEVEL", None) or _NEVER
 CONTRACT = re.compile(r"\b(contract|fixed[- ]term|temporary|\d+[- ]month)\b", re.I)
 CUR = getattr(_S, "CURRENCY_SYMBOL", "$")
 SALARY = re.compile(re.escape(CUR) + r"\s?(\d{2,3})[,\s]?(\d{3})")

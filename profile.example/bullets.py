@@ -1,8 +1,10 @@
 """Morgan Ellis's work history as resume bullets. Fictional throughout.
 
 The shape every profile's bullets.py takes, read by tools/bullet_library.py:
-employer -> bullet id -> (themes, weight, text). THEMES come from the keys of
-tools/allocate.py THEME_CUES; WEIGHT is 6 to 10, how strong the bullet is when
+employer -> bullet id -> (themes, weight, text). THEMES are the keys of
+tools/allocate.py THEME_CUES, plus any this file adds in its own THEME_CUES
+(theme -> the words a posting uses for it); `python3 tools/allocate.py` names
+a theme no cue matches. WEIGHT is 6 to 10, how strong the bullet is when
 nothing in a posting matches it; text is LaTeX (escape %, $, &, #, _).
 """
 

@@ -130,6 +130,19 @@ FIT_BANDS = [
     (re.compile(r"\b(analyst|specialist|planner|scientist)\b", re.I),
      +6, "individual-contributor band"),
 ]
+# Titles below and above this person's level. A posting is ranked down for
+# them, never cut: tools/fit.py docks a below-level title 25, tools/opportunity.py
+# docks below 25 and above 12. Someone early in their career sets no
+# FIT_BELOW_LEVEL, or a narrower one ("intern|student"), because "junior" and
+# "graduate" are the roles they want.
+FIT_BELOW_LEVEL = re.compile(
+    r"\b(intern|internship|co[- ]?op|student|graduate|junior|entry[- ]level|"
+    r"new grad\w*|campus|early career|apprentice|trainee|"
+    r"post[- ]?doc\w*|postdoctoral|research fellow|phd candidate)\b", re.I)
+OPP_BELOW_LEVEL = re.compile(r"\b(intern|internship|co[- ]?op|student|graduate|junior|"
+                             r"entry[- ]level|apprentice)\b", re.I)
+OPP_ABOVE_LEVEL = re.compile(r"\b(director|vp|vice president|head of|chief|principal)\b", re.I)
+
 FIT_CORE = [
     (re.compile(r"\bsql\b", re.I), 9, "SQL"),
     (re.compile(r"\bpython\b", re.I), 8, "Python"),

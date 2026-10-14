@@ -34,6 +34,11 @@ import person  # noqa: E402
 #              only when the posting names them.
 #   PINNED     (category, item) always printed, or None.
 #   ANCHORS    items that lead their line whatever the posting emphasises.
+#   LABELS     (line, heading) for each rendered line, in page order: the
+#              headings are the person's words for their own work.
+#   MERGE      inventory category -> the line it prints on, where a profile
+#              has more categories than lines.
+#   MIN_PER_CATEGORY, MAX_PER_LINE   per line; default 1 and 6.
 _P = person.module("skills")
 NOT_HELD = _P.NOT_HELD
 ITEMS = _P.ITEMS
@@ -42,27 +47,43 @@ PINNED = getattr(_P, "PINNED", None)
 ANCHORS = tuple(getattr(_P, "ANCHORS", ()))
 
 
-# Three lines. Five labelled lines cost the page two experience bullets, the
-# wrong trade on a resume whose whole argument is what the candidate did.
-# Languages sit with modelling because "Python" alone says nothing and
-# "Python, demand forecasting, inventory analytics" says the job; BI sits with
-# delivery because both are how the work reaches a stakeholder.
-LABELS = [
-    ("lang",  "Languages and modelling"),
-    ("eng",   "Data engineering and cloud"),
-    ("bi",    "BI, tooling and delivery"),
-]
-
-# Five categories cost five lines. These fold into three without losing an item.
-MERGE = {"model": "lang", "work": "bi"}
-
+# The lines and their headings are the person's. They were written here once,
+# for a data analyst ("Languages and modelling", "Data engineering and cloud",
+# "BI, tooling and delivery"), and the first person set up outside that field
+# got their resume under those three headings, which the app could not have
+# noticed and they would have sent. So a profile with no LABELS renders no
+# Skills block at all: render() and lines() stop and say so.
+#
+# Three lines is the advice, not a rule here: five labelled lines cost the page
+# two experience bullets, the wrong trade on a resume whose whole argument is
+# what the candidate did. Put a bare tool beside the work it does ("Python"
+# alone says nothing; "Python, demand forecasting" says the job).
+LABELS = list(getattr(_P, "LABELS", ()))
+MERGE = dict(getattr(_P, "MERGE", {}))
 # A category that would render as one or two items is not worth a label line.
-MIN_PER_CATEGORY = {"lang": 1, "eng": 1, "bi": 1}
+MIN_PER_CATEGORY = {cat: 1 for cat, _ in LABELS}
+MIN_PER_CATEGORY.update(getattr(_P, "MIN_PER_CATEGORY", {}))
 # Tight. At 9/7/7 the block rendered five to seven lines carrying ~28 items,
 # which is a wall the recruiter skims past and page space the bullets should
 # have. The tiering in _rank() puts the posting's own words first, so cutting
 # the tail removes only what this employer never asked for.
-MAX_PER_LINE = {"lang": 7, "eng": 6, "bi": 5}
+MAX_PER_LINE = {cat: 6 for cat, _ in LABELS}
+MAX_PER_LINE.update(getattr(_P, "MAX_PER_LINE", {}))
+
+
+class NoHeadings(RuntimeError):
+    """The profile names no Skills headings, so no Skills block can be printed."""
+
+
+def _labels():
+    if not LABELS:
+        raise NoHeadings(
+            "profile/skills.py sets no LABELS, the Skills block's headings: "
+            "[(line, heading), ...] in page order, one per line, in the person's "
+            "own words for their work. /setup --section documents writes them.")
+    return LABELS
+
+
 # Counted in RENDERED tokens, not inventory items: "Python, pandas, NumPy,
 # scikit-learn" is one item but four things the reader's eye has to cross, so
 # an 18-item cap was still printing 23 tokens over six lines.
@@ -305,7 +326,7 @@ def _final(tools, context, posting="", company=""):
     line, item = PINNED
     if item not in sel.get(line, []):
         sel.setdefault(line, [])
-        if len(sel[line]) >= MAX_PER_LINE[line]:
+        if len(sel[line]) >= MAX_PER_LINE.get(line, 6):
             sel[line] = sel[line][:-1]
         sel[line].append(item)
     return sel
@@ -315,11 +336,11 @@ def render(tools, context="", posting="", company=""):
     """LaTeX for the Skills block."""
     sel = _final(tools, context, posting, company)
     return "\n".join("\\blockline{%s}{%s}" % (label, ", ".join(sel[cat]))
-                     for cat, label in LABELS
-                     if len(sel.get(cat, [])) >= MIN_PER_CATEGORY[cat])
+                     for cat, label in _labels()
+                     if len(sel.get(cat, [])) >= MIN_PER_CATEGORY.get(cat, 1))
 
 
 def lines(tools, context="", posting="", company=""):
     """Plain-text preview, for tests and for measuring the page budget."""
     sel = _final(tools, context, posting, company)
-    return [f"{label}: {', '.join(sel[cat])}" for cat, label in LABELS if sel.get(cat)]
+    return [f"{label}: {', '.join(sel[cat])}" for cat, label in _labels() if sel.get(cat)]

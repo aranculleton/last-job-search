@@ -23,6 +23,28 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+Found by the first person set up outside data analysis. **If your profile was written before
+this, three things to do after this sync**, all in `profile/`:
+
+- **Your resume's Skills headings are yours now, and a resume will not render without them.**
+  They were hard-coded as a data analyst's ("Languages and modelling", "Data engineering and
+  cloud", "BI, tooling and delivery") and printed on everybody's resume. Set `LABELS` in
+  `skills.py`: one `(line, heading)` per line, in your own words; `MERGE` and `MAX_PER_LINE`
+  are optional (`profile.example/skills.py` shows the shape). Rendering stops with
+  `NoHeadings` until you do.
+- **No title is docked for its level unless your profile says so.** `tools/fit.py` docked
+  every junior, graduate, intern or trainee title 25 points, and `tools/opportunity.py` docked
+  those 25 and director, head-of and principal titles 12, for everybody. They now read
+  `FIT_BELOW_LEVEL`, `OPP_BELOW_LEVEL` and `OPP_ABOVE_LEVEL` from `search.py`. If you are
+  mid-career and want the old behaviour, copy the three patterns from
+  `profile.example/search.py`. **If you cancelled the junior penalty in your profile** (a
+  bonus for junior titles, say), take the cancellation out, or junior roles now score high
+  twice over.
+- **Your bullets' themes can be your own.** `tools/allocate.py` matched postings only against
+  a data analyst's theme words, so a theme outside them scored nothing and bullets were picked
+  on weight alone. Add `THEME_CUES` (theme -> the words postings use for it) to `bullets.py`;
+  `python3 tools/allocate.py` names every theme no cue matches.
+
 - **LinkedIn is off by default, and a portal that is off is now actually off.**
   `linkedin-search` ships `enabled: false`: LinkedIn's robots.txt disallows every path for
   every crawler it does not name, its guest job endpoints included, and says automated
@@ -48,6 +70,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The leak scan no longer treats a placeholder as a person.** An employer entry such as
+  "Projects", "Freelance" or "Career break" became a denylist entry, matched the app's own
+  headings, and forced a rename on the person's resume. Placeholders are skipped; a real
+  employer with such a word in its name ("Acme Projects") is still an entry.
+- `/setup` checks for LaTeX and the job-board hosts first, and gives the environment settings
+  then, so they can be changed before the session that needs them rather than after.
+- The prefilter's title reason no longer says "analytics, data, modelling, risk or pricing";
+  it names the profile's `POSITIVE` list.
 - `tools/build_app.py` no longer writes a phone number out as an example: the one it had was
   a test person's own, and their leak scan failed on the app's file.
 
