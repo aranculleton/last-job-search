@@ -52,7 +52,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from company_key import key as company_key  # noqa: E402
-from text_screen import stated_years  # noqa: E402
+from text_screen import money_values, salary_range, stated_years  # noqa: E402
 import person  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -117,7 +117,6 @@ CONTRACT = getattr(_S, "OPP_CONTRACT",
                    re.compile(r"\b(contract|fixed[- ]term|temporary|\d+[- ]month)\b", re.I)
                    ) or _NEVER
 CUR = getattr(_S, "CURRENCY_SYMBOL", "$")
-SALARY = re.compile(re.escape(CUR) + r"\s?(\d{2,3})[,\s]?(\d{3})")
 
 YEARS_HELD = _S.YEARS_HELD
 TARGET_PAY = _S.SALARY_TARGET
@@ -277,10 +276,18 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     # Pay signal. A high stated band is a strong positive; a low one is a
     # penalty rather than a cut, because the range is often negotiable and an
     # unstated range is the norm in many markets.
-    sal = [int(f"{a}{b}") for a, b in SALARY.findall(body)]
-    sal = [s for s in sal if PLAUSIBLE[0] <= s <= PLAUSIBLE[1]]
-    if sal:
-        hi = max(sal)
+    # The screen's own reading of the stated range (text_screen.salary_range),
+    # so the two never disagree about one posting. Where it finds no range and
+    # no labelled figure, any amount in the market's currency is the top, as
+    # this always read it; a figure stated only as a minimum ("from £40,000")
+    # is not a top and earns or costs nothing.
+    lo, hi, _ = salary_range(body)
+    if hi is None and lo is None:
+        sal = [v for v in money_values(body) if PLAUSIBLE[0] <= v <= PLAUSIBLE[1]]
+        hi = max(sal) if sal else None
+    if hi is not None and not PLAUSIBLE[0] <= hi <= PLAUSIBLE[1]:
+        hi = None
+    if hi is not None:
         if hi >= HIGH_PAY:
             pts += 12; why.append(f"+12 stated top of band {CUR}{hi:,}")
         elif hi >= TARGET_PAY:

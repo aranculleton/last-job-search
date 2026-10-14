@@ -53,9 +53,110 @@ ABSURD_SALARY = getattr(_S, "SALARY_CUT_BELOW", 0)
 YEARS_HELD = _S.YEARS_HELD
 _BOUNDS = tuple(getattr(_S, "SALARY_RANGE_BOUNDS", (0, 10 ** 9)))
 
-_C = re.escape(CUR)
-MONEY = re.compile(_C + r"\s?(\d{2,3})[,.](\d{3})(?:\.\d+)?|" + _C + r"\s?(\d{2,3})\s?[kK]\b")
-RANGE_CUE = re.compile(r"salary|compensation|pay range|hiring range|base pay|annual|per year|/yr", re.I)
+# ---------------------------------------------------------------------------
+# Money in the market's currency, however the posting writes it. The old
+# pattern needed the symbol in front of every figure and a comma or dot
+# thousands separator, so "EUR 35,000", "45 000 €", "GBP 45,000 to 52,000",
+# "€45-55k" and "₹12,50,000" were all read as no salary stated: a range under
+# the floor was never flagged, and a high one never earned its points.
+#
+# An amount counts when the market's symbol or ISO code (search.py
+# CURRENCY_CODE) sits right before or right after it, or when it is the other
+# end of a range whose first end does ("GBP 45,000 to 52,000"); a multiplier on
+# one end of a range carries to a bare other end ("€45-55k"). Thousands may be
+# written with a comma, a dot or a space, and a rupee market's lakh grouping
+# and lakh, crore and LPA words are read. One parser serves this screen,
+# tools/bar.py (through salary_range) and tools/opportunity.py.
+# ---------------------------------------------------------------------------
+CODE = str(getattr(_S, "CURRENCY_CODE", "") or "")
+_NUMBER = (r"\d{1,2}(?:,\d{2})+,\d{3}(?!\d)"                       # 12,50,000
+           r"|\d{1,3}(?:(?:,|\.|[ \u00a0\u202f])\d{3}(?!\d))+(?:[.,]\d{1,2}(?!\d))?"
+           r"|\d+(?:[.,]\d+)?")
+_RANGE_JOIN = re.compile(r"\s*(?:-|\u2013|\u2014|to|and|until)\s*", re.I)
+_SCALE = {"k": 1_000, "lakh": 100_000, "lakhs": 100_000, "lac": 100_000, "lacs": 100_000,
+          "lpa": 100_000, "l": 100_000, "crore": 10_000_000, "crores": 10_000_000}
+_RUPEE_WORDS = {"lakh", "lakhs", "lac", "lacs", "lpa", "l", "crore", "crores"}
+# A single figure is read as pay only when a pay label sits right before it:
+# "Salary: €38,000", "salary up to £62,000", "base pay from $80,000". A lone
+# figure anywhere else in a pay sentence is as often a bonus, an allowance or
+# the employer's turnover, so it is left alone, as it always was.
+_LABELLED = re.compile(
+    r"\b(?:salary|base pay|base salary|pay|compensation|remuneration|package)\b\W{0,3}"
+    r"(?:(?:is|of|circa|c\.|approx\w*\.?|around|about|will be)\s*)*"
+    r"(?:(?P<up>up to|max\w*\.?)\s*|(?P<from>from|starting (?:at|from)|min\w*\.?)\s*)?$",
+    re.I)
+
+
+def _number(num: str) -> float:
+    """The figure a posting wrote, with its thousands separators read as such."""
+    if re.fullmatch(r"\d{1,2}(?:,\d{2})+,\d{3}", num):
+        return float(num.replace(",", ""))
+    if re.fullmatch(r"\d{1,3}(?:[,. \u00a0\u202f]\d{3})+(?:[.,]\d{1,2})?", num):
+        whole = re.sub(r"[.,]\d{1,2}$", "", num)
+        return float(re.sub(r"\D", "", whole))
+    return float(num.replace(",", "."))
+
+
+def money_parser(cur: str, code: str = ""):
+    """(money_values, labelled_value) for a market's symbol and ISO code."""
+    rupee = cur == "\u20b9" or code.upper() == "INR"
+    mark = "|".join(x for x in (re.escape(cur) if cur else "",
+                                r"(?<![A-Za-z])(?i:%s)(?![A-Za-z])" % re.escape(code) if code else "")
+                    if x) or r"(?!x)x"
+    mult = r"(?i:k|lakhs?|lacs?|lpa|crores?)(?![A-Za-z])" + (r"|L(?![A-Za-z])" if rupee else "")
+    amount = re.compile(r"(?P<pre>" + mark + r")?\s?(?P<num>" + _NUMBER + r")"
+                        r"(?:\s?(?P<mult>" + mult + r"))?(?:\s?(?P<post>" + mark + r"))?")
+
+    def values(sentence: str) -> list[int]:
+        """Every amount in the market's currency in one sentence, in order."""
+        found = []
+        for m in amount.finditer(sentence or ""):
+            mu = (m.group("mult") or "").lower()
+            marked = bool(m.group("pre") or m.group("post")) or (rupee and mu in _RUPEE_WORDS)
+            found.append([m, _number(m.group("num")), mu, marked])
+        # A range's bare end takes the other end's currency and multiplier.
+        for a, b in zip(found, found[1:]):
+            if a[3] == b[3] or not _RANGE_JOIN.fullmatch(sentence[a[0].end():b[0].start()]):
+                continue
+            a[3] = b[3] = True
+            if a[2] and not b[2] and b[1] < 1000:
+                b[2] = a[2]
+            elif b[2] and not a[2] and a[1] < 1000:
+                a[2] = b[2]
+        return [int(round(v * _SCALE.get(mu, 1))) for _, v, mu, marked in found if marked]
+
+    def labelled(sentence: str) -> tuple[int | None, int | None]:
+        """(low, high) for one figure introduced by a pay label, or (None, None).
+        "up to" states only the top and "from" only the bottom; a bare label
+        states both."""
+        for m in amount.finditer(sentence or ""):
+            if not (m.group("pre") or m.group("post")):
+                continue
+            lab = _LABELLED.search(sentence[:m.start()])
+            if not lab:
+                continue
+            v = int(round(_number(m.group("num")) * _SCALE.get((m.group("mult") or "").lower(), 1)))
+            if not _BOUNDS[0] <= v <= _BOUNDS[1]:
+                continue
+            if lab.group("up"):
+                return None, v
+            if lab.group("from"):
+                return v, None
+            return v, v
+        return None, None
+
+    return values, labelled
+
+
+money_values, labelled_value = money_parser(CUR, CODE)
+
+# "per annum", "p.a." and "DOE" are how the UK and Ireland write it, and a
+# range stated only that way ("We offer GBP 45,000 to 52,000 DOE") was read as
+# no salary at all.
+RANGE_CUE = re.compile(r"salary|compensation|remuneration|\bpay\b|hiring range|"
+                       r"annual|per year|/yr|per annum|\bp\.\s?a\b|\bpa\b|"
+                       r"depending on experience|\bdoe\b|\bote\b|we offer|package|"
+                       r"\bctc\b|\blpa\b", re.I)
 HOURLY = re.compile(r"per hour|hourly|/\s?h(ou)?r|an hour", re.I)
 # The market's patterns are the profile's (search.py), loaded here:
 #   FOREIGN_CURRENCY  a range in another currency is not compared against the
@@ -149,9 +250,20 @@ YEARS = re.compile(
 # resume and cover letter used to be written for one before this existed.
 DESIGNATION = getattr(_S, "DESIGNATION", _NEVER)
 DESIGNATED_TITLE = getattr(_S, "DESIGNATED_TITLE", _NEVER)
+# The words a posting uses to make the credential a condition. "Must be
+# registered", "essential" and "mandatory" are how the UK and Ireland say it
+# ("Membership of CIPS is mandatory", "a recognised accounting qualification
+# (ACA, ACCA or CIMA) is essential"), and each of those passed the gate: a full
+# application could be drafted for a job the candidate cannot legally hold.
+# The sentence still has to name one of the profile's credentials, and
+# PREFERRED and ENCOURAGE still win ("CIMA desirable"). Words that also mean
+# something else in a sentence naming a credential ("registered as a charity",
+# "reporting to our Chartered Accountant") are deliberately not here: a false
+# cut loses a role, which costs more than a false pass.
 DESIGNATION_REQUIRED = re.compile(
     r"\b(progress(ing|ion)? (toward|towards)|working toward|actively pursuing|"
-    r"enrolled in|passed|completed|must (hold|have|possess)|required|requirement)\b", re.I)
+    r"enrolled in|passed|completed|must (hold|have|possess|be)|required|requirement|"
+    r"essential|mandatory|a must|eligible for (registration|membership))\b", re.I)
 
 # Research-grade ML: the deep-learning blocker was narrowed to roles whose core
 # IS deep learning, which let through a role built on causal inference,
@@ -432,19 +544,20 @@ def salary_range(text: str) -> tuple[int | None, int | None, str]:
     """
     lo = hi = None
     quote = ""
+    single = (None, None, "")
     for s in sentences(text):
         if not RANGE_CUE.search(s) or HOURLY.search(s) or FOREIGN_CURRENCY.search(s):
             continue
-        vals = []
-        for m in MONEY.finditer(s):
-            if m.group(1):
-                vals.append(int(m.group(1) + m.group(2)))
-            elif m.group(3):
-                vals.append(int(m.group(3)) * 1000)
-        vals = [v for v in vals if _BOUNDS[0] <= v <= _BOUNDS[1]]
+        vals = [v for v in money_values(s) if _BOUNDS[0] <= v <= _BOUNDS[1]]
         if len(vals) >= 2 and (hi is None or max(vals) > hi):
             lo, hi, quote = min(vals), max(vals), s[:220]
-    return lo, hi, quote
+        elif len(vals) < 2 and single[2] == "":
+            one_lo, one_hi = labelled_value(s)
+            if one_lo or one_hi:
+                single = (one_lo, one_hi, s[:220])
+    # A stated range wins; a single labelled figure is read only when there is
+    # no range to read.
+    return (lo, hi, quote) if hi is not None else single
 
 
 def salary_max(text: str) -> tuple[int | None, str]:
@@ -524,11 +637,21 @@ def _states_a_degree(sentence: str) -> bool:
     return not NOT_A_DEGREE.match(sentence, m.start())
 
 
+# Under this a body is a snippet, not a posting: what it states is read, and
+# the row is marked thin so nobody mistakes silence for a clean posting.
+THIN = 400
+
+
 def screen(job: dict) -> dict:
     text = (job.get("desc") or "")
     cuts, flags = [], []
-    if len(text) < 400:
-        return {**job, "text_screen": "thin", "cuts": [], "flags": ["posting body too short to screen"]}
+    # A short body used to skip every gate and pass as "thin". A snippet that
+    # says "Active SC clearance required" or "Fluency in Welsh is essential" is
+    # the whole bar in one line, and it went through to scoring and drafting.
+    # So every gate reads what there is; the row is only marked thin.
+    thin = len(text) < THIN
+    if thin:
+        flags.append("posting body too short to screen fully; gates read what there is")
 
     e = eligibility_cut(text)
     if e:
@@ -609,7 +732,8 @@ def screen(job: dict) -> dict:
             continue
         break
 
-    return {**job, "text_screen": "cut" if cuts else "pass", "cuts": cuts, "flags": flags}
+    return {**job, "text_screen": "cut" if cuts else ("thin" if thin else "pass"),
+            "cuts": cuts, "flags": flags}
 
 
 def load_jobs(path: str) -> list[dict]:
