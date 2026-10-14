@@ -121,6 +121,9 @@ HANDS_ON_TITLE = re.compile(
     r"|principal\s+(?:data|applied|machine)"
     r"|applied\s+(?:ai|ml|scientist))", re.I)
 # The role nouns a hiring post names ("recruiting ... <noun>", "Hiring <noun>").
+# Why a revenue title (NOT_HIRING_TITLES, the default list here) is skipped,
+# in this person's terms.
+NOT_HIRING_REASON = "revenue role dressed as technical, does not hire for technical teams"
 HIRING_ROLE_NOUNS = (r"data scientists?|data engineers?|data analysts?|analytics engineers?|"
                      r"machine learning engineers?|data science|analytics")
 HIRING_HEADLINE_NOUNS = (r"data scientists?|data engineers?|data analysts?|"

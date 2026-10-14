@@ -56,6 +56,18 @@ make sense to somebody whose repo just received it.
   it a portal every round searches. Putting the old one back (`git checkout <this sync's
   commit>^1 -- .agents/skills/<name>`) gives one `/scrape` can run by hand only: it predates
   the portal contract, so rounds skip it.
+  had one of the four on,** this sync deletes it; put it back as your own with
+  `git checkout <this sync's commit>^1 -- .agents/skills/<name>` and commit, or build it
+  fresh with `/add-portal`.
+- **The screen's job-family flags and two networking reasons are your profile's.**
+  `tools/score_posting.py`'s wrong-family and homonym flags ("reporting and dashboard building
+  is the whole job", "'modelling' here is valuation") were an analyst's, and the networking
+  revenue-role reason said "dressed as technical" to everybody. They are now `SCREEN_WRONG_FAMILY`
+  and `SCREEN_HOMONYMS` in `search.py` and `NOT_HIRING_REASON` in `networking.py`, with neutral
+  defaults; `SPAM_BULK_ROLES` in `networking.py` can take your own job off the staffing-spam
+  list. **If you are an analyst and want the old flags**, copy the example's
+  `SCREEN_WRONG_FAMILY`, `SCREEN_HOMONYMS` (`profile.example/search.py`) and
+  `NOT_HIRING_REASON` (`profile.example/networking.py`) into your profile.
 - **`person.json`'s keys are listed with everything else.** `python3 tools/profile_names.py
   person` shows every key a tool reads, whether it is needed or optional, whether the example
   sets it, and where it is read.

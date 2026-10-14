@@ -67,33 +67,19 @@ YEARS_HELD = getattr(_SEARCH, "YEARS_HELD", 0)
 SALARY_FLOOR = getattr(_SEARCH, "SALARY_FLOOR", 0)
 _CUR = getattr(_SEARCH, "CURRENCY_SYMBOL", "$")
 
-# Function classifications that are NOT the analytics job family the profile is
-# in, however similar the vocabulary. Each of these was a real over-score.
-WRONG_FAMILY = {
-    "reporting_bi": "reporting and dashboard building is the whole job "
-                    "(a deal-breaker the profile names)",
-    "ml_engineering": "production ML engineering, a named weak-match area",
-    "research_science": "research science rather than decision-facing analytics",
-    "consulting_general": "strategy consulting with no technical stack named",
-    "ops_planning": "demand or supply planning, a different job family",
-    "software_engineering": "software engineering, a different job family",
-}
-
-# The homonym fields. Each separates two jobs that share a vocabulary.
-HOMONYM_FAILS = {
-    ("modelling_kind", "financial_valuation"):
-        "'modelling' here is financial or valuation modelling (DCF, fund and "
-        "portfolio work), not statistical or ML modelling",
-    ("risk_kind", "market_investment"):
-        "'risk' here is market, investment or portfolio risk, not account, "
-        "credit or fraud risk scoring",
-    ("risk_kind", "quant_library_engineering"):
-        "'risk' here means building and packaging quant pricing or risk "
-        "libraries, which is software engineering",
-    ("analytics_serves", "sales_gtm"):
-        "the analytics function serves sales or go-to-market, not product, "
-        "pricing, risk or experimentation",
-}
+# Job families that are not the person's, and the homonym fields that separate
+# two jobs sharing a vocabulary. Both are the profile's (search.py
+# SCREEN_WRONG_FAMILY and SCREEN_HOMONYMS), because they name the person's own
+# field: an analyst's are "reporting and dashboard building is the whole job"
+# and "'modelling' here is valuation, not statistics", and those mean nothing
+# to a teacher or a nurse. Each pairs the value the extractor returns with the
+# reason printed beside the flag:
+#   SCREEN_WRONG_FAMILY  {core_function value: why}
+#   SCREEN_HOMONYMS      {(field, value): why}
+# The extractor is asked for exactly these fields (job-scraper SKILL.md).
+# Unset, nothing is flagged on them; flags only order the queue, never cut.
+WRONG_FAMILY = dict(getattr(_SEARCH, "SCREEN_WRONG_FAMILY", {}) or {})
+HOMONYM_FAILS = dict(getattr(_SEARCH, "SCREEN_HOMONYMS", {}) or {})
 
 
 def screen(r: dict) -> dict:

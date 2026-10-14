@@ -228,8 +228,12 @@ market, so write each one for this person, never copy it:
   the example's are a mid-career analyst's, and copied they mis-rank anyone else. Write them
   from the person's field and level, then score two or three invented postings (a clear
   match, a role above them, a different field) and check the order is right.
-- **Their outreach words**, `voice.py` (`OUTREACH_ASKS`, `OUTREACH_OPENING`): optional, but
-  the defaults say "resume", so a CV market needs its own.
+- **Their outreach words**, `voice.py` (`OUTREACH_ASKS`, `OUTREACH_OPENING`): optional; the
+  defaults use their `documents.noun`.
+- **The screen's job-family flags**, `SCREEN_WRONG_FAMILY` and `SCREEN_HOMONYMS` in
+  `search.py`: the job families that are not theirs, and the words that name two different
+  jobs in their field (the example's are an analyst's: "modelling" that means valuation).
+  Optional; unset, nothing is flagged on them. Flags order the queue and never cut.
 - **Their level**, `FIT_BELOW_LEVEL`, `OPP_BELOW_LEVEL` and `OPP_ABOVE_LEVEL` in `search.py`:
   the titles below and above them, which are ranked down, never cut. For someone early in
   their career "junior" and "graduate" are the target, so leave them out of the below-level
@@ -249,6 +253,9 @@ market, so write each one for this person, never copy it:
   (a title on a team in their function), `HIRING_ROLE_NOUNS` (what a hiring post in their
   field calls the role), and for reading replies `OTHER_FUNCTIONS` and `OWN_FUNCTION_WORDS`.
   `/network` will not search without `TITLE_SETS`; the example's are a data team's.
+  `NOT_HIRING_REASON` says in their terms why revenue titles are skipped, and
+  `SPAM_BULK_ROLES` is the role list that marks a staffing harvest: drop their own job from
+  it if it is there (a nurse, a technician).
 
 ### 9. Build their job boards
 Run `/add-portal` for the board from Step 2 that adds the most coverage for them, and for

@@ -146,6 +146,33 @@ OPP_ABOVE_LEVEL = re.compile(r"\b(director|vp|vice president|head of|chief|princ
 # OPP_LEVERAGE. This profile sets none of them, so tools/fit.py rescales
 # opportunity to the most it can score (58) rather than 130; OPP_SCALE pins it.
 
+# tools/score_posting.py: job families that are not this person's, and the
+# homonym fields that separate two jobs sharing a vocabulary. Flags, never cuts.
+# The extractor is asked for each field named here.
+SCREEN_WRONG_FAMILY = {
+    "reporting_bi": "reporting and dashboard building is the whole job "
+                    "(a deal-breaker the profile names)",
+    "ml_engineering": "production ML engineering, a named weak-match area",
+    "research_science": "research science rather than decision-facing analytics",
+    "consulting_general": "strategy consulting with no technical stack named",
+    "ops_planning": "demand or supply planning, a different job family",
+    "software_engineering": "software engineering, a different job family",
+}
+SCREEN_HOMONYMS = {
+    ("modelling_kind", "financial_valuation"):
+        "'modelling' here is financial or valuation modelling (DCF, fund and "
+        "portfolio work), not statistical or ML modelling",
+    ("risk_kind", "market_investment"):
+        "'risk' here is market, investment or portfolio risk, not account, "
+        "credit or fraud risk scoring",
+    ("risk_kind", "quant_library_engineering"):
+        "'risk' here means building and packaging quant pricing or risk "
+        "libraries, which is software engineering",
+    ("analytics_serves", "sales_gtm"):
+        "the analytics function serves sales or go-to-market, not product, "
+        "pricing, risk or experimentation",
+}
+
 FIT_CORE = [
     (re.compile(r"\bsql\b", re.I), 9, "SQL"),
     (re.compile(r"\bpython\b", re.I), 8, "Python"),

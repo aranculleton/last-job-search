@@ -285,11 +285,16 @@ function. A keyword formula scores each of those far above what a capable model 
 them apart from the analytics job the profile is in
 **is** the judgment a fit score exists to make, and no keyword feature vector performs it.
 
-**The disambiguation fields** exist because of exactly those cases. Ask the extractor:
-`modelling_kind` (statistical_ml / financial_valuation / none), `risk_kind` (account_credit_fraud
-/ market_investment / quant_library_engineering / none), `analytics_serves` (product_pricing_risk
-/ sales_gtm / operations / none). They are closed questions a small model answers well, and they
-are what separates a matching role from one that merely shares its nouns.
+**The disambiguation fields** exist because of exactly those cases, and they are the person's,
+because the homonyms are their field's: `profile/search.py` `SCREEN_HOMONYMS` names each field and
+the value that means a different job, and `SCREEN_WRONG_FAMILY` the `core_function` values that
+are not their job. Ask the extractor `core_function` and every field named there, as closed
+questions. The example person's (an analyst's) are `modelling_kind` (statistical_ml /
+financial_valuation / none), `risk_kind` (account_credit_fraud / market_investment /
+quant_library_engineering / none) and `analytics_serves` (product_pricing_risk / sales_gtm /
+operations / none). They are closed questions a small model answers well, and they are what
+separates a matching role from one that merely shares its nouns. A profile with none set gets no
+flags from them, and loses nothing else.
 
 **The screen cuts on facts and flags judgments.** `tools/score_posting.py` ends a posting only on
 a stated, quoted fact: a gate failure, a stated 6+ years, a stated Master's or PhD with no
