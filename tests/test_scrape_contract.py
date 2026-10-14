@@ -26,7 +26,12 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRAPER_SKILL = REPO_ROOT / ".claude" / "skills" / "job-scraper" / "SKILL.md"
-PORTAL_CLIS = sorted((REPO_ROOT / ".agents" / "skills").glob("*-search"))
+# An installed portal is a folder with a SKILL.md, as tools/portals.py counts
+# them. A folder without one is what a deleted portal leaves in a container that
+# ran `bun install` before the sync deleted it: an ignored node_modules, which is
+# not a portal and must not turn a person's CI red.
+PORTAL_CLIS = [p for p in sorted((REPO_ROOT / ".agents" / "skills").glob("*-search"))
+               if (p / "SKILL.md").is_file()]
 
 # Derived, never copied: a hardcoded field list drifts in lockstep with
 # nothing - if Step 2's prose drops or adds a field, the known-good portals

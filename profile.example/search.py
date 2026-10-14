@@ -176,6 +176,19 @@ SCRAPE_EMPLOYER_REMOTE = ["United Kingdom"]
 PORTAL_COUNTRY = "GB"
 # The person's say over which portals run, by portal name, overriding each
 # portal's SKILL.md default. Empty takes the app's defaults: linkedin-search and
-# freehire-search on, the Danish portals off (tools/portals.py).
+# freehire-search on, and any portal built for this person on (tools/portals.py).
 PORTALS: dict[str, bool] = {}
+# The places a portal built for this person searches, as that board writes them,
+# when that differs from SCRAPE_LOCATIONS: {"<portal>-search": ["<place>"]}.
+# A portal not named searches the first of SCRAPE_LOCATIONS.
+PORTAL_LOCATIONS: dict[str, list[str]] = {}
+# The job boards researched for this person by /setup (or later, when a round
+# comes back thin): each one built as a portal or why not, with the source.
+# `python3 tools/portals.py` lists the ones with no portal, and a round that
+# misses its yield target names them. One entry per board:
+#   {"board": "<name>", "url": "<https://...>", "covers": "<market, field>",
+#    "portal": "<name>-search", "status": "built" | "<why not, e.g. robots.txt
+#    disallows /jobs>", "source": "<where the coverage claim came from>",
+#    "checked": "YYYY-MM-DD"}
+PORTAL_RESEARCH: list[dict] = []
 CANARY_LOCATION = "United Kingdom"

@@ -90,5 +90,6 @@ never sending anything itself.
   CI-automating it would breach that. A person can switch it off (`tools/portals.py`),
   and `scrape_wide.py` and `hydrate.py` send a portal that is off no request at all.
 - `tools/robots_check.py` gates the browser-header retry against `robots.txt`.
-- The four Danish portal CLIs ship disabled. They are kept as reference implementations
-  for `/add-portal`, not as live code paths.
+- The app ships only the two portals that work in any country. A person's own portals,
+  built by `/add-portal`, live in their private repo, are kept to the `crawl-delay` their
+  `SKILL.md` declares, and never reach the app: `tools/leak_scan.py` fails on one.

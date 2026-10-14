@@ -54,6 +54,12 @@ PERSONAL = (
     # templates and fonts there ship, listed in APP_EXCEPTIONS.
     "cv/**",
     "cover_letters/**",
+    # Job portals. The app ships only portals that work anywhere (APP_EXCEPTIONS);
+    # a board for one country or one field is the person's, built for them by
+    # /add-portal in their own repo. So the app's leak scan fails if a
+    # market's portal is ever added to the app, and a person's portal is never
+    # reported as drift by a sync or scanned as part of the app's tree.
+    ".agents/skills/**",
 )
 
 # Scaffolding inside personal directories that ships with the app, so a new
@@ -65,6 +71,8 @@ APP_EXCEPTIONS = (
     "cover_letters/cover.cls",
     "cover_letters/cover_example.tex",
     "cover_letters/OpenFonts/**",
+    ".agents/skills/linkedin-search/**",
+    ".agents/skills/freehire-search/**",
 )
 
 

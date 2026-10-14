@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.3
+framework_version: 1.0.4
 ---
 
 # Job Evaluation Framework
@@ -301,7 +301,7 @@ Present the evaluation as:
 
 ### Company Research Checklist
 - [ ] Checked company website (mission, values, recent news)
-- [ ] Checked review sites (Glassdoor, Jobindex, etc.)
+- [ ] Checked review sites (Glassdoor, Indeed, or the market's own)
 - [ ] Checked LinkedIn for team size, recent hires, connections
 - [ ] Checked media for restructuring, growth, or workplace issues
 - [ ] Identified network contacts who may know the team/manager

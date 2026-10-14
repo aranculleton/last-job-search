@@ -13,6 +13,7 @@ about.
 """
 import os
 import re
+import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -20,6 +21,8 @@ CLAUDE_MD = os.path.join(ROOT, "CLAUDE.md")
 COMMANDS = os.path.join(ROOT, ".claude", "commands")
 SKILLS = os.path.join(ROOT, ".claude", "skills")
 AGENT_SKILLS = os.path.join(ROOT, ".agents", "skills")
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import personal_paths  # noqa: E402
 
 SECTION = "## Commands and skills: what routes where"
 
@@ -120,19 +123,14 @@ class ThePortalsAreWhatTheMapClaims(unittest.TestCase):
         m = re.search(r"^enabled:\s*(true|false)", s, re.M)
         return m and m.group(1) == "true"
 
-    def test_linkedin_and_freehire_are_enabled_by_default(self):
+    def test_linkedin_and_freehire_are_the_apps_portals_and_on_by_default(self):
         # A person switches either off in their profile (PORTALS), never here.
-        enabled = sorted(d for d in os.listdir(AGENT_SKILLS)
-                         if os.path.isdir(os.path.join(AGENT_SKILLS, d))
-                         and self._enabled(d))
-        self.assertEqual(enabled, ["freehire-search", "linkedin-search"])
-
-    def test_the_four_danish_portals_are_all_off(self):
-        for name in ("jobbank-search", "jobdanmark-search", "jobindex-search",
-                     "jobnet-search"):
-            with self.subTest(portal=name):
-                self.assertFalse(self._enabled(name),
-                                 "%s is a Danish portal and is enabled" % name)
+        # Any other folder here is a portal the person built, and theirs.
+        apps = sorted(d for d in os.listdir(AGENT_SKILLS)
+                      if os.path.isdir(os.path.join(AGENT_SKILLS, d))
+                      and not personal_paths.is_personal(f".agents/skills/{d}/SKILL.md"))
+        self.assertEqual(apps, ["freehire-search", "linkedin-search"])
+        self.assertTrue(all(self._enabled(d) for d in apps))
 
 
 if __name__ == "__main__":

@@ -226,3 +226,55 @@ def test_a_shallow_clone_finds_its_last_sync_instead_of_starting_over(repos, tmp
     rc, out = run(shallow, app)
     assert rc == 0, out
     assert "1 new commit" in out and read(shallow, "tools/x.py") == "a = 9\n"
+
+
+# Job portals: the app ships the ones that work anywhere, and every other one
+# under .agents/skills/ is the person's, built by /add-portal in their own repo.
+
+def _add_app_portal(app, name):
+    pp = read(app, "tools/personal_paths.py")
+    anchor = '    ".agents/skills/freehire-search/**",\n'
+    assert anchor in pp
+    write(app, "tools/personal_paths.py",
+          pp.replace(anchor, anchor + f'    ".agents/skills/{name}/**",\n'))
+    write(app, f".agents/skills/{name}/SKILL.md", "---\nname: x\n---\n")
+
+
+def test_a_persons_own_portal_is_theirs_and_never_drift(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    write(me, ".agents/skills/localboard-search/SKILL.md", "---\nname: localboard-search\n---\n")
+    commit(me, "/add-portal")
+    rc, out = run(me, app, "--check")
+    assert "localboard" not in out, out
+    write(app, "tools/x.py", "a = 9\n")
+    commit(app, "app v9")
+    rc, out = run(me, app)
+    assert rc == 0, out
+    assert os.path.exists(os.path.join(me, ".agents/skills/localboard-search/SKILL.md"))
+
+
+def test_a_portal_the_app_starts_shipping_reaches_a_repo_on_the_old_rules(repos):
+    """The person's sync judges incoming paths by their own personal_paths, which
+    does not list the new portal yet; the app's own list is what lets it in."""
+    app, me = repos
+    assert run(me, app)[0] == 0
+    _add_app_portal(app, "worldboard-search")
+    commit(app, "ship a portal that works anywhere")
+    rc, out = run(me, app)
+    assert rc == 0, out
+    assert os.path.exists(os.path.join(me, ".agents/skills/worldboard-search/SKILL.md"))
+
+
+def test_the_app_cannot_claim_anything_but_a_portal_that_way(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    pp = read(app, "tools/personal_paths.py")
+    anchor = '    ".agents/skills/freehire-search/**",\n'
+    write(app, "tools/personal_paths.py", pp.replace(anchor, anchor + '    "job_search_tracker.csv",\n'))
+    write(app, "job_search_tracker.csv", "date,company\nleaked,row\n")
+    commit(app, "broken app")
+    before = head(me)
+    rc, out = run(me, app)
+    assert rc == 1 and "job_search_tracker.csv" in out
+    assert head(me) == before

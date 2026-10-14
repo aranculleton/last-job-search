@@ -13,7 +13,7 @@ one-row shortlist because --top truncated the --out file upstream, and the
 first version of this file handed scrape_wide's output DIRECTORY to hydrate
 as if it were a file and prefilter's dict to text_screen as if it were a list.
 
-  scrape_wide   both portals, paginated, the profile's locations, remote
+  scrape_wide   every portal that is on, paginated, the profile's locations, remote
                 locations and title queries (search.py SCRAPE_*),
                 plus the employer boards in ats_boards.py (Greenhouse, Lever,
                 Ashby, Workday)
@@ -253,6 +253,16 @@ def _portals_down(out_dir: str) -> list[str]:
     return []
 
 
+def _boards_not_built() -> list[str]:
+    """profile/search.py PORTAL_RESEARCH entries with no portal here. Fails open."""
+    try:
+        import portals
+        return [f"{r.get('board', '?')} ({r.get('status', 'not built')})"
+                for r in portals.not_built()]
+    except Exception:
+        return []
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="directory for this round's files")
@@ -422,6 +432,12 @@ def main():
     print("  widen next, in this order: more title variants, the remaining priority "
           "categories, wider PASS-set locations, adjacent target sectors and named "
           "employers, then the WebSearch fallback.")
+    # Coverage is the other lever. A board that serves this person's market and
+    # has no portal here contributes nothing to any round, however wide.
+    gaps = _boards_not_built()
+    if gaps:
+        print("  boards researched for you with no portal yet (each one is coverage "
+              "no round has): " + "; ".join(gaps) + ". Building one is /add-portal.")
     print("  do NOT pad with sub-60 postings, and do NOT relax a gate to hit the number.")
     return EXIT_YIELD_MISSED
 

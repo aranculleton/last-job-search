@@ -44,19 +44,62 @@ Exit: 0 synced or up to date, 1 stopped (uncommitted changes, a conflict, or
 from __future__ import annotations
 
 import argparse
+import ast
 import os
 import re
 import subprocess
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from personal_paths import is_personal  # noqa: E402
+from personal_paths import _regex  # noqa: E402
+from personal_paths import is_personal as _personal_here  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP_URL = "https://github.com/aranculleton/last-job-search"
 REMOTE = "app"
 BRANCH = "master"
 APP = f"{REMOTE}/{BRANCH}"
+
+
+# The app's own portals, as the app lists them. Every other portal under
+# .agents/skills/ is the person's (tools/personal_paths.py), and a sync judges
+# what comes in by the rules this repo already has, so a portal the app started
+# shipping after the last sync would read as the app touching a personal path
+# and stop the sync. Reading the app's list of its own portals lets it through.
+# Only `.agents/skills/<name>/**` entries are taken: the app can claim a portal
+# folder this way and nothing else, never the profile or the state. A portal the
+# person built under the same name as a new one of the app's is replaced by the
+# app's (a conflict on an app-owned path takes the app's version).
+_PORTAL_ENTRY = re.compile(r"\.agents/skills/[a-z0-9][a-z0-9-]*/\*\*\Z")
+_APP_PORTALS: list[re.Pattern] = []
+
+
+def is_personal(path: str) -> bool:
+    """personal_paths.is_personal, less any portal the app now ships."""
+    if any(r.match(path.replace(os.sep, "/")) for r in _APP_PORTALS):
+        return False
+    return _personal_here(path)
+
+
+def app_portals() -> list[str]:
+    """The `.agents/skills/<name>/**` entries in the app's APP_EXCEPTIONS. Read
+    as data, never run."""
+    r = git("show", f"{APP}:tools/personal_paths.py", check=False)
+    if r.returncode != 0:
+        return []
+    try:
+        tree = ast.parse(r.stdout)
+    except SyntaxError:
+        return []
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+                getattr(t, "id", None) == "APP_EXCEPTIONS" for t in node.targets):
+            try:
+                value = ast.literal_eval(node.value)
+            except ValueError:
+                return []
+            return [g for g in value if isinstance(g, str) and _PORTAL_ENTRY.match(g)]
+    return []
 
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
@@ -307,6 +350,7 @@ def main(argv: list[str]) -> int:
     if err:
         print(f"sync_app: {err}")
         return 2
+    _APP_PORTALS[:] = [_regex(g) for g in app_portals()]
     if a.check:
         return check()
     if a.adopt:

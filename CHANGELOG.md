@@ -16,6 +16,18 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Every round searches the job boards built for you.** A portal made by `/add-portal` for
+  your country, field or level used to run only when you typed `/scrape`; `tools/scrape_wide.py`
+  called LinkedIn and freehire by name and nothing else. Now any portal that is on and follows
+  the portal contract is searched, health-checked and hydrated in every round, scheduled ones
+  included, each kept to the `crawl-delay` its `SKILL.md` declares (one request a second when
+  it declares none), on its own thread so LinkedIn and freehire send exactly the requests they
+  did. `PORTAL_LOCATIONS` in `profile/search.py` gives a board its places as it writes them.
+- **`/setup` researches and builds your boards.** It finds the boards that serve your country,
+  city, field and level, checks each one's robots.txt, builds the best one or two with
+  `/add-portal`, and records every board it looked at, built or not, with its source, in
+  `profile/search.py` `PORTAL_RESEARCH`. `python3 tools/portals.py` lists the ones with no
+  portal, and a round that misses its yield target names them.
 - **`START_HERE.md`**, the five steps from this page to a working search, in plain words:
   make a private copy with "Use this template", let Claude see it, set up the cloud
   environment (the setup line and the job-board domains), say "set me up", and use it.
@@ -23,6 +35,15 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **The app ships no country's job boards.** The four Danish portals (`jobindex-search`,
+  `jobnet-search`, `jobdanmark-search`, `jobbank-search`) are deleted: the app is for anyone,
+  anywhere, and a board for one market belongs to the people in it. The app keeps
+  `linkedin-search` and `freehire-search`, which work in any country. Every other folder in
+  `.agents/skills/` is now yours (`tools/personal_paths.py`): a sync never touches it or calls
+  it drift, and the app's leak scan fails if one reaches the app. **If you search Denmark and
+  had one of the four on,** this sync deletes it; put it back as your own with
+  `git checkout <this sync's commit>^1 -- .agents/skills/<name>` and commit, or build it
+  fresh with `/add-portal`.
 - **`person.json`'s keys are listed with everything else.** `python3 tools/profile_names.py
   person` shows every key a tool reads, whether it is needed or optional, whether the example
   sets it, and where it is read.
