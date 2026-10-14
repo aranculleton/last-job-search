@@ -118,6 +118,24 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **A credential stated as "essential", "mandatory" or "must be registered" is a credential
+  gate.** "A recognised accounting qualification (ACA, ACCA or CIMA) is essential" passed,
+  so a full application could be drafted for a job you cannot hold. The sentence must still
+  name one of your profile's `DESIGNATION` credentials, and "desirable" still wins.
+- **A short posting is still read for its bars.** A body under 400 characters skipped every
+  gate; "Active SC clearance required" or "Fluency in Welsh is essential" in a snippet went
+  through. Every gate now reads what there is, and the row is still marked `thin`.
+- **Pay is read however the posting writes it.** "EUR 35,000", "45 000 €", "GBP 45,000 to
+  52,000", "€45-55k", "£45k-50k pa" and "₹12,50,000" (and lakh, crore and LPA) were read as
+  no salary stated, so a range under your floor was never flagged and a high one never
+  earned its points. The market's symbol or `CURRENCY_CODE` may sit before or after the
+  figure, a range's bare end takes the other end's currency, and "per annum", "p.a.",
+  "DOE", "package" and "CTC" are pay cues. A single figure counts only right after a pay
+  label ("Salary: €38,000"; "up to" is a top, "from" is a minimum and is not scored as one).
+  `tools/opportunity.py` now reads the screen's range rather than its own pattern, so the two
+  cannot disagree. **Scores move after this sync** where postings state pay in a form the
+  old pattern missed (a "k" figure, a code, a space separator); that is the fix.
+
 - **`verify_batch.sh` no longer fails letters written the way the style guide asks.**
   `audit_letters.py` required the opening to name the role, which pushed every letter back
   to the "I am applying for the <role> role" opener `03-writing-style.md` bans; it now flags
