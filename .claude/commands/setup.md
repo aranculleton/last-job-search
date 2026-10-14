@@ -260,6 +260,11 @@ the board writes places differently from `SCRAPE_LOCATIONS`, and mark each built
 are offered again when a round comes back thin. `python3 tools/portals.py` shows the result:
 what the next round searches, and what was researched and not built.
 
+If they get LinkedIn job alerts by email and have the Gmail connector, ask whether rounds
+should read them: it searches their inbox for the alert emails only, and adds LinkedIn's own
+matches for them to every round. On a yes, check the sender on one of their alerts and write
+`JOB_ALERT_QUERY = "from:<that sender>"` in `search.py`; otherwise leave it empty.
+
 ### 10. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`
 and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.

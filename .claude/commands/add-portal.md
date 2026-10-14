@@ -78,7 +78,7 @@ Create `.agents/skills/<name>/` with:
 These conventions are what make portal skills interchangeable for `/scrape` and for users reading any skill's docs:
 
 - **Commands:** `search` and `detail <id|url>`.
-- **Search flags:** `--query`/`-q`, `--jobage <days>` (posting age; map to the portal's parameter, note in SKILL.md if unsupported), `--page <n>` (1-indexed), `--limit <n>` (client-side cap), `--format json|table|plain` (default `json`). Add `--location`/`-l <place>` if the portal filters by place, taking a plain place name and resolving any id inside the CLI (Step 2.1). If it has no location filter, say `location: none` in the frontmatter and the round sends no `-l`.
+- **Search flags:** `--query`/`-q`, `--jobage <days>` (posting age; map to the portal's parameter, and where the board has none, still accept the flag and drop results older than it by their `date`: every round sends it), `--page <n>` (1-indexed), `--limit <n>` (client-side cap), `--format json|table|plain` (default `json`). Add `--location`/`-l <place>` if the portal filters by place, taking a plain place name and resolving any id inside the CLI (Step 2.1). If it has no location filter, say `location: none` in the frontmatter and the round sends no `-l`.
 - **JSON output shape:** `{ "meta": { "count": ..., "page": ... }, "results": [...] }` where each result has at least `id`, `title`, `company`, `location`, `date`, `url` (missing values are `null`, never omitted), and `description` when the result card shows any text: a round keeps it as the fallback body when the detail fetch fails, and as the only body when `detail: false`.
 - **`detail <id>`** returns `{ "id": ..., "description": "<the whole posting as text>", ... }`. The description must include the requirements and any "who can apply" or eligibility section: those are what the round's free screen cuts on.
 - **Errors:** written to **stderr** as `{ "error": "...", "code": "..." }`, exit code `1`. Never write errors to stdout.
@@ -93,12 +93,16 @@ These conventions are what make portal skills interchangeable for `/scrape` and 
 
   ```yaml
   enabled: true
+  contract: 1                       # the CLI takes every flag above; rounds call only portals that say so
   url: https://www.<board>          # the board itself; tools/env_check.py probes it
   crawl-delay: 5                    # robots.txt's Crawl-delay for *, else 1
   location: free-text               # or `none` where the board has no place filter
   detail: true                      # false where the posting page may not be fetched
   pages: 2                          # how deep each query goes; 2 suits most boards
+  canary-query: <word>              # one word the board always has postings for (the round's health probe)
   ```
+
+  Write `contract: 1` only once Step 4 has shown the CLI takes `search -q <q> [-l <place>] --jobage <n> --page <n> --format json` and `detail <id> --format json`: a round sends exactly that, and a portal that rejects a flag fails every request.
 - **`SKILL.md` body:** what the skill searches, the personal-use warning if Step 2 found terms restrictions, command reference with flags, 4-6 usage examples using the user's market (real cities, realistic roles), output-format table, and a Notes section recording portal quirks found in Step 2. If Step 2.5 found the portal needs a credential, add a **Setup** section naming the service, the exact environment variable to export, and the fact that every call is billed - stated where the user reads it before running the skill, not after.
 - **`url-reference.md`:** the endpoints, parameters table, and response-structure notes from Step 2 - this is the file a future maintainer needs when the portal changes its markup.
 - **`package.json`:** name `<portal>-cli`, `"type": "module"`, scripts `start`, `test` (`bun test --timeout 30000`), and `typecheck` (`tsc --noEmit`); dev-only dependencies in the zero-dependency default.
@@ -141,12 +145,12 @@ Do not proceed to Step 5 until search, detail, and tests all pass.
 
 Nothing needs wiring: `tools/scrape_wide.py` and `tools/hydrate.py` search and hydrate every portal that is on and has a CLI, and `/scrape` discovers `.agents/skills/*/SKILL.md`. What is left is the person's settings and the record:
 
-1. **Check what a round will do:** `python3 tools/portals.py` lists the portal as ON, with its pace, depth and whether it fetches details. If it says `NO CLI`, Step 4.7 was skipped.
+1. **Check what a round will do:** `python3 tools/portals.py` lists the portal as ON, with its pace, depth and whether it fetches details. `NO CLI` means there is no `cli/` at all; `no contract: 1` means the frontmatter line is missing. A missing bundle shows neither: a round builds it with bun if bun is there, and fails that portal if not, which is why Step 4.7 commits it.
 2. **Places.** If the board writes places differently from `profile/search.py` `SCRAPE_LOCATIONS` (LinkedIn's "Toronto, Ontario, Canada" against a board's "Toronto, ON"), add them to `PORTAL_LOCATIONS = {"<name>": ["<place>", ...]}` there. A portal not named searches the first of `SCRAPE_LOCATIONS`.
 3. **The record.** Add or update the board's entry in `profile/search.py` `PORTAL_RESEARCH` with `"portal": "<name>"`, `"status": "built"`, its URL, what it covers and the date. A board looked at and not built gets an entry too, with the reason as its status: a round that misses its yield target names it.
-4. **The network.** Run `python3 tools/env_check.py`. A cloud session's network policy can refuse the board's host; if it says so, the person adds the host under Allowed domains (the environment documentation has the steps), or every round will show the portal failing.
+4. **The network.** Run `python3 tools/env_check.py`. A cloud session's network policy can refuse the board's host; if it says so, the person adds the host under Allowed domains (the environment documentation has the steps), or every round reports the portal failing: it stops after three failures in a row, so the round goes on without it, but it searches nothing until the host is allowed.
 5. Optionally add WebSearch/`site:` queries for the board in `profile/search-queries.md`, so the fallback path still covers it if the CLI breaks.
-6. **Commit it:** `git add .agents/skills/<name> profile/search.py` and commit. It is the person's file, so a plain `git add` is enough and a sync never touches it. `./tools/ci_local.sh` typechecks and tests every portal CLI it finds, this one included.
+6. **Commit it:** `git add .agents/skills/<name> profile/search.py` and commit. It is the person's file, so a plain `git add` is enough and a sync never touches it. `./tools/ci_local.sh` typechecks every portal CLI it finds, this one included; run its tests with `bun run test` in its `cli/` when you change it.
 
 ---
 
