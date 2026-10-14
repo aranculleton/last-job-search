@@ -115,7 +115,7 @@ def money_parser(cur: str, code: str = ""):
             marked = bool(m.group("pre") or m.group("post")) or (rupee and mu in _RUPEE_WORDS)
             found.append([m, _number(m.group("num")), mu, marked])
         # A range's bare end takes the other end's currency and multiplier.
-        for a, b in zip(found, found[1:]):
+        for a, b in zip(found, found[1:], strict=False):
             if a[3] == b[3] or not _RANGE_JOIN.fullmatch(sentence[a[0].end():b[0].start()]):
                 continue
             a[3] = b[3] = True
