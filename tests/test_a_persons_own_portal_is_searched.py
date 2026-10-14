@@ -41,10 +41,14 @@ def skills(tmp_path, monkeypatch):
     for name in APP:
         (tmp_path / name).mkdir()
         (tmp_path / name / "SKILL.md").write_text(f"---\nname: {name}\nenabled: true\n---\n")
-    _portal(tmp_path, "cityboard-search", {"enabled": "true", "url": "https://board.example",
-                                           "crawl-delay": "5", "pages": "3"})
-    _portal(tmp_path, "nationalboard-search", {"enabled": "true", "location": "none",
-                                               "detail": "false"})
+    _portal(tmp_path, "cityboard-search", {"enabled": "true", "contract": "1",
+                                           "url": "https://board.example",
+                                           "crawl-delay": "5", "pages": "3",
+                                           "canary-query": "nurse"})
+    _portal(tmp_path, "nationalboard-search", {"enabled": "true", "contract": "1",
+                                               "location": "none", "detail": '"false"'})
+    # Restored from before the contract: on, with a CLI, and no `contract: 1`.
+    _portal(tmp_path, "oldboard-search", {"enabled": "true"})
     monkeypatch.setattr(portals, "SKILLS", str(tmp_path))
     monkeypatch.setattr(scrape_wide, "PORTAL_LOCATIONS", {"cityboard-search": ["Townsville, QX"]})
     portals.cli.cache_clear()
@@ -141,7 +145,7 @@ def _detail_ok(cmd, stdout, **kw):
 
 
 def test_a_persons_portal_is_hydrated_through_its_own_detail(skills, monkeypatch):
-    monkeypatch.setattr(hydrate, "pace", lambda skill: None)
+    monkeypatch.setattr(hydrate, "pace", lambda skill: True)
     monkeypatch.setattr(hydrate.subprocess, "run", _detail_ok)
     got = hydrate.fetch({"portal": "cityboard", "id": "7", "url": "u", "snippet": "A teaser."})
     assert got["desc"].startswith("The whole posting")
@@ -150,7 +154,7 @@ def test_a_persons_portal_is_hydrated_through_its_own_detail(skills, monkeypatch
 def test_when_the_detail_fails_the_snippet_stands_in_and_says_so(skills, monkeypatch):
     class Fail:
         returncode, stderr = 1, '{"error": "blocked"}'
-    monkeypatch.setattr(hydrate, "pace", lambda skill: None)
+    monkeypatch.setattr(hydrate, "pace", lambda skill: True)
     monkeypatch.setattr(hydrate.subprocess, "run", lambda *a, **k: Fail())
     got = hydrate.fetch({"portal": "cityboard", "id": "7", "url": "u", "snippet": "A teaser."})
     assert got["desc"] == "A teaser." and "detail exit 1" in got["hydrate_error"]
@@ -198,3 +202,63 @@ def test_a_board_researched_and_not_built_is_named_when_a_round_misses(skills, m
     assert [r["board"] for r in portals.not_built()] == ["Guild Jobs", "Walled Garden"]
     assert run_round._boards_not_built() == [
         "Guild Jobs (not built yet)", "Walled Garden (needs a login, so no portal can read it)"]
+
+
+def test_a_quoted_value_means_what_it_says(skills):
+    """`detail: "false"` is valid YAML for false; read raw it was a truthy string,
+    and a round fetched posting pages the board's robots.txt disallows."""
+    assert not portals.has_detail("nationalboard-search")
+
+
+def test_a_portal_built_before_the_contract_is_not_called(skills):
+    on = portals.enabled({})
+    assert "oldboard-search" not in scrape_wide.contract_portals(on)
+    assert "oldboard-search" not in {t[0] for t in scrape_wide.build_tasks(on, 5)}
+
+
+def test_a_failing_board_is_stopped_not_waited_out(skills, monkeypatch):
+    monkeypatch.setattr(scrape_wide, "contract", lambda *a: ([], "timeout after 90s"))
+    tasks = [("cityboard-search", "q", "Townsville, QX", p) for p in range(1, 41)]
+    rows, n, failed = scrape_wide.sweep("cityboard-search", tasks, 14, sleep=lambda s: None)
+    assert n == scrape_wide.SWEEP_MAX_FAILS
+    assert "stopped after 3 failures in a row; 37 requests not sent" in failed[-1]
+
+
+def test_a_slow_board_stops_at_its_budget(skills, monkeypatch):
+    now = [0.0]
+    monkeypatch.setattr(scrape_wide, "contract", lambda *a: ([{"url": "u"}], None))
+
+    def sleep(s):
+        now[0] += s * 100                       # every wait costs 500 seconds
+    tasks = [("cityboard-search", "q", "Townsville, QX", p) for p in range(1, 41)]
+    rows, n, failed = scrape_wide.sweep("cityboard-search", tasks, 14, sleep=sleep,
+                                        clock=lambda: now[0])
+    assert n < 40 and not failed
+
+
+def test_paced_detail_fetches_stop_at_their_budget(skills):
+    now = [100.0]
+    hydrate._PACE.clear()
+    assert hydrate.pace("cityboard-search", sleep=lambda s: None, clock=lambda: now[0])
+    now[0] += hydrate.PACE_BUDGET + 1
+    assert not hydrate.pace("cityboard-search", sleep=lambda s: None, clock=lambda: now[0])
+    hydrate._PACE.clear()
+
+
+def test_a_board_past_its_budget_keeps_its_snippet(skills, monkeypatch):
+    monkeypatch.setattr(hydrate, "pace", lambda skill: False)
+    monkeypatch.setattr(hydrate.subprocess, "run",
+                        lambda *a, **k: pytest.fail("fetched past the budget"))
+    got = hydrate.fetch({"portal": "cityboard", "id": "7", "url": "u", "snippet": "A teaser."})
+    assert got["desc"] == "A teaser." and "budget" in got["hydrate_error"]
+
+
+def test_a_persons_board_is_probed_with_its_own_word_over_a_month(skills, monkeypatch):
+    calls = []
+    monkeypatch.setattr(scrape_wide, "linkedin", lambda *a, **k: ([{"url": "u"}], None))
+    monkeypatch.setattr(scrape_wide, "freehire", lambda *a, **k: ([{"url": "u"}], None))
+    monkeypatch.setattr(scrape_wide, "contract",
+                        lambda skill, q, loc, page, jobage: calls.append((skill, q, jobage))
+                        or ([{"url": "u"}], None))
+    scrape_wide.canary(7, portals.enabled({}))
+    assert ("cityboard-search", "nurse", scrape_wide.CANARY_JOBAGE) in calls

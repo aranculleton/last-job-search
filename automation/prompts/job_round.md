@@ -9,9 +9,9 @@ nothing until the candidate picks. `_common.md` first.
    **Job alerts, if the person reads theirs here.** `python3 tools/job_alerts.py --query --days 8`
    prints a Gmail search, or exits 1 when they have not asked for alerts to be read: then
    skip to the run. With a query and the Gmail tools in this chat, `search_threads` with it
-   (paginate), `get_thread` with `messageFormat: FULL_CONTENT` for each, and write every
-   message as `{"id", "date": "YYYY-MM-DD", "body"}` into a JSON list at
-   `$SCRATCH/alerts_in.json`. Read nothing else in the inbox. Then
+   (paginate), `get_thread` with `messageFormat: FULL_CONTENT` for each, and write only the
+   messages in each thread from the sender the query names, as `{"id", "date", "body"}`,
+   into a JSON list at `$SCRATCH/alerts_in.json`. Read nothing else in the inbox. Then
    `python3 tools/job_alerts.py "$SCRATCH/alerts_in.json" --out "$SCRATCH/alerts.json"`.
    Without the Gmail tools here, say so in one line of the message and run without.
 

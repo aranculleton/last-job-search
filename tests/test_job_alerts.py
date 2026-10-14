@@ -107,3 +107,51 @@ def test_a_posting_the_search_also_found_is_kept_once():
                "portal": "linkedin"}]
     assert scrape_wide.merge_alerts(seen, alerts) == 1
     assert "https://www.linkedin.com/jobs/view/4011112222" in seen and len(seen) == 2
+
+
+def test_a_number_in_the_slug_is_not_the_id():
+    assert job_alerts.job_ids(
+        "https://www.linkedin.com/jobs/view/analyst-2024000-programme-4012345678?refId=1") == ["4012345678"]
+
+
+@pytest.mark.parametrize("raw,want", [
+    ("2026-10-11T07:02:00Z", "2026-10-11"),
+    ("Tue, 13 Oct 2026 07:02:11 +0000", "2026-10-13"),
+    ("1792134000000", "2026-10-16"),
+    ("not a date", ""),
+    ("", ""),
+])
+def test_email_dates_of_every_shape_become_a_day(raw, want):
+    assert job_alerts.day(raw) == want
+
+
+def test_a_message_with_no_date_never_hides_a_real_one():
+    body = "https://www.linkedin.com/comm/jobs/view/4012345678/"
+    assert job_alerts.collect([{"date": "", "body": body},
+                               {"date": "2026-10-12", "body": body}]) == {"4012345678": "2026-10-12"}
+
+
+def test_a_posting_with_no_employer_is_left_out():
+    rows, left = job_alerts.fill({"4012345678": "2026-10-11"}, pause=0,
+                                 fetch=lambda jid: ({"title": "Analyst", "company": "",
+                                                     "isActive": True}, None))
+    assert rows == [] and "no employer" in left["4012345678"]
+
+
+def test_the_inbox_is_not_searched_when_linkedin_is_off(monkeypatch, capsys):
+    class S:
+        JOB_ALERT_QUERY = "from:alerts@example.com"
+    monkeypatch.setattr(job_alerts.person, "module", lambda name: S)
+    monkeypatch.setattr(job_alerts.portals, "is_enabled", lambda name: False)
+    assert job_alerts.main(["--query"]) == 1
+    assert "from:" not in capsys.readouterr().out
+
+
+def test_every_fetch_failing_is_a_failed_step(tmp_path, monkeypatch):
+    msgs = tmp_path / "m.json"
+    msgs.write_text(json.dumps([{"id": "m", "date": "2026-10-12", "body": TEXT}]))
+    monkeypatch.setattr(job_alerts.portals, "is_enabled", lambda name: True)
+    monkeypatch.setattr(job_alerts, "detail", lambda jid: (None, "detail exit 1: blocked"))
+    monkeypatch.setattr(job_alerts, "fill",
+                        lambda found, **k: ([], {j: "detail exit 1: blocked" for j in found}))
+    assert job_alerts.main([str(msgs), "--out", str(tmp_path / "a.json")]) == 1

@@ -28,11 +28,13 @@ A person's portal declares, in its SKILL.md frontmatter, what a round needs to
 call it politely. `/add-portal` writes these from what it found:
 
     enabled: true
+    contract: 1           # its CLI takes the round's calls; without it, /scrape only
     url: https://www.example-board.test     # the board, for tools/env_check.py
     crawl-delay: 5        # seconds between requests: robots.txt's, else 1
     location: free-text   # takes -l <place>; `none` for a board with no location filter
     detail: true          # false where the posting page may not be fetched (robots.txt)
     pages: 2              # how deep a query goes
+    canary-query: nurse   # a word the board always has postings for (health probe)
 
 The places a round passes as `-l` are the person's: profile/search.py
 `PORTAL_LOCATIONS = {"<portal>": ["<place as the board writes it>"]}`, and
@@ -62,6 +64,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SKILLS = os.path.join(ROOT, ".agents", "skills")
 
 
+def _unquote(value: str) -> str:
+    """A YAML scalar as written, less its quotes: `detail: "false"` is false."""
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+        v = v[1:-1].strip()
+    return v
+
+
 def _flag(skill_md: str) -> bool:
     """A SKILL.md's `enabled:` value. A portal with no key is enabled."""
     with open(skill_md, encoding="utf-8") as fh:
@@ -69,7 +79,7 @@ def _flag(skill_md: str) -> bool:
     for line in head.splitlines():
         s = line.strip()
         if s.startswith("enabled:"):
-            value = s.split(":", 1)[1].split("#", 1)[0].strip().lower()
+            value = _unquote(s.split(":", 1)[1].split("#", 1)[0]).lower()
             return value not in ("false", "no", "0")
     return True
 
@@ -101,7 +111,7 @@ def meta(name: str, root: str | None = None) -> dict[str, str]:
         if line[:1] in (" ", "\t") or ":" not in line:
             continue                       # a folded description's continuation
         key, value = line.split(":", 1)
-        out[key.strip()] = value.split(" #", 1)[0].strip()
+        out[key.strip()] = _unquote(value.split(" #", 1)[0])
     return out
 
 
@@ -149,6 +159,14 @@ def pages(name: str, root: str | None = None) -> int:
 
 def url(name: str, root: str | None = None) -> str:
     return meta(name, root).get("url", "")
+
+
+def follows_contract(name: str, root: str | None = None) -> bool:
+    """Whether the portal says it takes the round's calls (`contract: 1`, which
+    /add-portal writes once its CLI accepts `search -q -l --jobage --page
+    --format json` and `detail <id>`). A portal without it, such as one built
+    before rounds called person portals, is searched by /scrape by hand only."""
+    return meta(name, root).get("contract", "") not in ("", "0", "false", "no")
 
 
 def has_cli(name: str, root: str | None = None) -> bool:
@@ -276,7 +294,8 @@ def main() -> int:
             how = (f"  {crawl_delay(name):g}s apart, {pages(name)} page(s)"
                    f"{'' if takes_location(name) else ', no location filter'}"
                    f"{'' if has_detail(name) else ', search text only (no detail fetch)'}"
-                   f"{'' if has_cli(name) else '; NO CLI, so rounds cannot call it'}")
+                   f"{'' if has_cli(name) else '; NO CLI, so rounds cannot call it'}"
+                   f"{'' if follows_contract(name) else '; no `contract: 1`, so rounds skip it (/add-portal)'}")
         print(f"  {'ON ' if on else 'off'}  {name:20} {why}{how}")
     for name in unknown(chosen):
         print(f"  ??   {name:20} named in PORTALS, but no portal has that name: "

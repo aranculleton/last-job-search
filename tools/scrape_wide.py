@@ -58,9 +58,9 @@ portal_cli = portals.cli
 LINKEDIN = functools.partial(portal_cli, "linkedin-search", "LINKEDIN_CLI")
 FREEHIRE = functools.partial(portal_cli, "freehire-search", "FREEHIRE_CLI")
 # The app's two portals, called here with their own request shapes. Every
-# other portal that is on and has a CLI is called through the portal contract
-# (`contract_search` below): a person's own board, built by /add-portal, is
-# searched by every round without anyone wiring it in.
+# other portal that is on, has a CLI and declares `contract: 1` is called
+# through the portal contract (`contract` below): a person's own board, built
+# by /add-portal, is searched by every round without anyone wiring it in.
 WIRED = {"linkedin-search": "linkedin", "freehire-search": "freehire"}
 
 # What is searched is the person's: profile/search.py's SCRAPE_* names the
@@ -199,9 +199,11 @@ def contract(skill: str, q: str, loc: str | None, page: int,
 
 
 def contract_portals(on: dict[str, bool]) -> list[str]:
-    """Every portal that is on, is not one of the app's two, and has a CLI."""
+    """Every portal that is on, is not one of the app's two, has a CLI and says
+    it follows the contract. One that does not (the Danish boards, restored by
+    hand, take none of these flags) would fail every request it was sent."""
     return [n for n, v in sorted(on.items())
-            if v and n not in WIRED and portals.has_cli(n)]
+            if v and n not in WIRED and portals.has_cli(n) and portals.follows_contract(n)]
 
 
 def portal_locations(skill: str) -> list[str | None]:
@@ -210,26 +212,46 @@ def portal_locations(skill: str) -> list[str | None]:
     return PORTAL_LOCATIONS.get(skill) or LOCATIONS[:1]
 
 
-def sweep(skill: str, tasks: list[tuple], jobage: int,
-          sleep=time.sleep) -> tuple[list[dict], int, list[str]]:
+# A person's portal gets this long in a round, and stops after this many
+# failures in a row. A board that is blocked or down fails every request, and
+# each can take run()'s 90-second timeout: without a stop, 60 of them outlast
+# the scrape stage's whole budget and the round is lost, LinkedIn and all.
+SWEEP_BUDGET = 20 * 60
+SWEEP_MAX_FAILS = 3
+
+
+def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
+          clock=time.monotonic) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
     takes its time without holding a worker the app's portals need. It waits
-    before the first request too: the health probe has just asked.
+    before the first request too: the health probe has just asked. It stops
+    at SWEEP_BUDGET or SWEEP_MAX_FAILS failures in a row, and says so.
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
+    start, streak, sent = clock(), 0, 0
     for _, q, loc, pg in tasks:
+        if streak >= SWEEP_MAX_FAILS:
+            failed.append(f"stopped after {streak} failures in a row; "
+                          f"{len(tasks) - sent} requests not sent")
+            break
+        if clock() - start > SWEEP_BUDGET:
+            print(f"portals: {skill} stopped at its {SWEEP_BUDGET // 60}-minute budget, "
+                  f"{len(tasks) - sent} of {len(tasks)} requests not sent", file=sys.stderr)
+            break
         if delay:
             sleep(delay)
         try:
             got, err = contract(skill, q, loc, pg, jobage)
         except Exception as e:
             got, err = [], f"{type(e).__name__}: {str(e)[:120]}"
+        sent += 1
+        streak = streak + 1 if err else 0
         if err:
             failed.append(err)
         rows += got
-    return rows, len(tasks), failed
+    return rows, sent, failed
 
 
 # ------------------------------------------------------------------ canary
@@ -273,10 +295,15 @@ def canary(jobage: int = CANARY_JOBAGE,
         ("freehire", lambda: freehire(CANARY_QUERY, 1, jobage)),
     ]
     wanted = {short for skill, short in WIRED.items() if on.get(skill)}
+    # A person's board is probed with its own word (`canary-query:`, a board for
+    # nurses has few postings saying "data") over CANARY_JOBAGE, not the round's
+    # window: a field board can go a week without a new posting.
     for skill in contract_portals(on):
         loc = portal_locations(skill)[0]
+        word = portals.meta(skill).get("canary-query") or CANARY_QUERY
         probes.append((portals.short(skill),
-                       functools.partial(contract, skill, CANARY_QUERY, loc, 1, jobage)))
+                       functools.partial(contract, skill, word, loc, 1,
+                                         max(jobage, CANARY_JOBAGE))))
         wanted.add(portals.short(skill))
     for name, fn in probes:
         if name not in wanted:
@@ -291,9 +318,8 @@ def canary(jobage: int = CANARY_JOBAGE,
             # fraction already covers it. Not the canary's job.
             out[name] = (True, f"probe errored ({err[:80]}), left to the scrape")
         elif not rows_:
-            out[name] = (False, f'0 results for "{CANARY_QUERY}" in '
-                                f'{CANARY_LOCATION if name in WIRED.values() else "its search"} '
-                                f'over {jobage} days')
+            out[name] = (False, f'0 results for the probe query in '
+                                f'{CANARY_LOCATION if name in WIRED.values() else "its search"}')
         else:
             out[name] = (True, f"{len(rows_)} results")
     return out
@@ -430,9 +456,10 @@ def main() -> int:
               f"an installed portal, so it switches nothing", file=sys.stderr)
     print("portals: " + ", ".join(f"{n} {'on' if v else 'off'}" for n, v in on.items()))
     for name in sorted(n for n, v in on.items() if v and n not in WIRED
-                       and not portals.has_cli(n)):
-        print(f"portals: {name} is on but has no CLI, so a round cannot call it; "
-              f"/scrape runs it from its SKILL.md")
+                       and not (portals.has_cli(n) and portals.follows_contract(n))):
+        why = "has no CLI" if not portals.has_cli(name) else "does not declare contract: 1"
+        print(f"portals: {name} is on but {why}, "
+              f"so a round cannot call it; /scrape runs it by hand, /add-portal rebuilds it")
 
     # One broad probe per portal that is on, before the sweep. A portal that has
     # gone quiet is reported as broken here rather than as a thin market three
@@ -539,7 +566,8 @@ def main() -> int:
         except (OSError, ValueError) as e:
             alert_rows = []
             print(f"job alerts: skipped ({type(e).__name__}: {e})", file=sys.stderr)
-        added = merge_alerts(seen, alert_rows if isinstance(alert_rows, list) else [])
+        alert_rows = [r for r in alert_rows if isinstance(r, dict)] if isinstance(alert_rows, list) else []
+        added = merge_alerts(seen, alert_rows)
         print(f"job alerts: {added} added, {len(alert_rows) - added} already found by the search")
 
     rows = list(seen.values())

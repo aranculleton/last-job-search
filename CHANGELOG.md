@@ -30,7 +30,10 @@ make sense to somebody whose repo just received it.
   the portal contract is searched, health-checked and hydrated in every round, scheduled ones
   included, each kept to the `crawl-delay` its `SKILL.md` declares (one request a second when
   it declares none), on its own thread so LinkedIn and freehire send exactly the requests they
-  did. `PORTAL_LOCATIONS` in `profile/search.py` gives a board its places as it writes them.
+  did. A portal is called only when its `SKILL.md` says `contract: 1` (`/add-portal` writes it
+  once the CLI takes the round's flags). A board that fails three requests in a row, or runs
+  past 20 minutes, is stopped and the round goes on; its detail fetches get 15. `PORTAL_LOCATIONS`
+  in `profile/search.py` gives a board its places as it writes them.
 - **`/setup` researches and builds your boards.** It finds the boards that serve your country,
   city, field and level, checks each one's robots.txt, builds the best one or two with
   `/add-portal`, and records every board it looked at, built or not, with its source, in
@@ -49,9 +52,10 @@ make sense to somebody whose repo just received it.
   `linkedin-search` and `freehire-search`, which work in any country. Every other folder in
   `.agents/skills/` is now yours (`tools/personal_paths.py`): a sync never touches it or calls
   it drift, and the app's leak scan fails if one reaches the app. **If you search Denmark and
-  had one of the four on,** this sync deletes it; put it back as your own with
-  `git checkout <this sync's commit>^1 -- .agents/skills/<name>` and commit, or build it
-  fresh with `/add-portal`.
+  had one of the four on,** this sync deletes it. Build it again with `/add-portal`, which makes
+  it a portal every round searches. Putting the old one back (`git checkout <this sync's
+  commit>^1 -- .agents/skills/<name>`) gives one `/scrape` can run by hand only: it predates
+  the portal contract, so rounds skip it.
 - **`person.json`'s keys are listed with everything else.** `python3 tools/profile_names.py
   person` shows every key a tool reads, whether it is needed or optional, whether the example
   sets it, and where it is read.
@@ -170,6 +174,10 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **A portal that went quiet is reported again.** `run_round.py` read the health probe's file
+  after pruning had deleted it, so a portal returning nothing was never named and a MISSED
+  round blamed the market. It is read first now, and a DOWN portal is named on every round,
+  met or missed.
 - **`ci_local.sh` is green again in a person's repo.** The check that no real scheduled-task or
   chat id is committed to the app read every tracked file, so after a sync it failed on
   `profile/routines.json` and `handoff/`, the person's own files and exactly where their ids

@@ -67,7 +67,7 @@ If this fails (bun not installed), skip to **1c (WebSearch fallback)** for all p
 
 Discover all installed portal CLI skills by reading every `SKILL.md` found under `.agents/skills/*/SKILL.md`. Each file documents that portal's exact CLI flags and usage examples. **Use each portal's own documented interface - do not guess flags.** This approach automatically includes any new portals added via `/add-portal` without requiring changes to this file.
 
-**Honor the `enabled` toggle.** Run `python3 tools/portals.py`: it prints each portal ON or off and why. A portal's `SKILL.md` frontmatter `enabled:` is the app's default (a missing key means enabled), and `profile/search.py` `PORTALS` is the person's say, which wins for every portal it names. Skip each portal that is off, send it no request at all, and record it for the Step 5 summary. A `SKILL.md` is the app's and is never edited to switch a portal: `tools/sync_app.py` would put it back. `linkedin-search` and `freehire-search` are on by default.
+**Honor the `enabled` toggle.** Run `python3 tools/portals.py`: it prints each portal ON or off and why. A portal's `SKILL.md` frontmatter `enabled:` is the app's default (a missing key means enabled), and `profile/search.py` `PORTALS` is the person's say, which wins for every portal it names. Skip each portal that is off, send it no request at all, and record it for the Step 5 summary. The app's two portals, `linkedin-search` and `freehire-search`, are on by default, and their `SKILL.md` is the app's: never edit it to switch one, because `tools/sync_app.py` would put it back. Every other portal is the person's own, built by `/add-portal`, and its `SKILL.md` is theirs. Running one by hand, keep to its frontmatter as a round does: `crawl-delay` seconds between requests, and never `detail` on a portal that says `detail: false`.
 
 For each **enabled** portal skill:
 
@@ -111,7 +111,8 @@ If a CLI tool exits with a non-zero code, log the error message and continue - d
 `python3 tools/job_alerts.py --query --days <jobage + 1>` prints the Gmail search for their
 alert emails, or exits 1 when `profile/search.py` sets no `JOB_ALERT_QUERY`; then skip this.
 With a query, and the Gmail tools (`mcp__claude_ai_Gmail__*`) connected, run it, read each
-message in full, write them as `[{"id", "date", "body"}]` and run
+message in full, keep only the messages from the sender the query names, write them as
+`[{"id", "date", "body"}]` and run
 `python3 tools/job_alerts.py <that file> --out <alerts.json>`, then pass
 `--alerts <alerts.json>` to `tools/run_round.py` or `tools/scrape_wide.py`. It takes only the
 job ids from the emails and fills each posting from LinkedIn's own page, so the alerts join

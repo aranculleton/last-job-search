@@ -50,7 +50,10 @@ import person  # noqa: E402
 import portals  # noqa: E402
 
 SKILL = "linkedin-search"
-JOB_LINK = re.compile(r"linkedin\.com/(?:comm/)?jobs/view/(?:[\w%.-]*?-)?(\d{6,})(?![\d])", re.I)
+# The id is the digit run that ENDS the path segment: a slug can carry numbers
+# of its own ("analyst-2024000-programme-4012345678"), and the first run is not
+# the id.
+JOB_LINK = re.compile(r"linkedin\.com/(?:comm/)?jobs/view/(?:[\w%.-]*-)?(\d{6,})(?=[/?#&\"'<>\s]|$)", re.I)
 BODY_CAP = 20_000
 # Few and gentle: an alert batch is tens of postings, not thousands.
 WORKERS = 3
@@ -65,13 +68,39 @@ def job_ids(body: str) -> list[str]:
     return out
 
 
+def day(value) -> str:
+    """A message date as YYYY-MM-DD, or "" when it cannot be read. Takes ISO
+    dates, email headers ("Tue, 13 Oct 2026 07:02:11 +0000") and Gmail's
+    epoch milliseconds. A date that cannot be read must not reach the round as
+    text: the age gate cannot parse it and would let the posting through."""
+    import datetime as dt
+    from email.utils import parsedate_to_datetime
+    s = str(value or "").strip()
+    if not s:
+        return ""
+    if re.fullmatch(r"\d{12,14}", s):
+        return dt.datetime.fromtimestamp(int(s) / 1000, dt.timezone.utc).date().isoformat()
+    try:
+        return dt.date.fromisoformat(s[:10]).isoformat()
+    except ValueError:
+        pass
+    try:
+        return parsedate_to_datetime(s).date().isoformat()
+    except (TypeError, ValueError, IndexError):
+        return ""
+
+
 def collect(messages: list[dict]) -> dict[str, str]:
-    """{job id: the date of the earliest alert that carried it}."""
+    """{job id: the date of the earliest alert that carried it}. A message with
+    no readable date never displaces a real one."""
     found: dict[str, str] = {}
     for msg in messages:
-        date = str(msg.get("date") or "")[:10]
+        if not isinstance(msg, dict):
+            continue
+        date = day(msg.get("date"))
         for jid in job_ids(str(msg.get("body") or "")):
-            if jid not in found or (date and date < found[jid]):
+            have = found.get(jid)
+            if have is None or (date and (not have or date < have)):
                 found[jid] = date
     return found
 
@@ -121,6 +150,10 @@ def fill(found: dict[str, str], fetch=detail, workers: int = WORKERS,
                 left[jid] = "closed: LinkedIn shows it no longer accepting applications"
             elif not d.get("title") or d.get("title") == "(untitled)":
                 left[jid] = "the posting page gave no title"
+            elif not (d.get("company") or "").strip():
+                # Every employer-keyed safeguard (a referral in flight, an open
+                # application, do_not_target, the bar) matches on the employer.
+                left[jid] = "the posting page gave no employer"
             else:
                 rows.append(row(jid, date, d))
     return rows, left
@@ -147,6 +180,11 @@ def main(argv: list[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.query:
         q = query(a.days)
+        if q and not portals.is_enabled(SKILL):
+            # Reading the inbox for postings that will never be fetched is
+            # reading it for nothing.
+            print(f"job alerts are off: {SKILL} is switched off (python3 tools/portals.py)")
+            return 1
         print(q or "job alerts are off: profile/search.py sets no JOB_ALERT_QUERY")
         return 0 if q else 1
     if not (a.messages and a.out):
@@ -166,7 +204,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {jid}: {why}")
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(rows, fh, indent=1)
-    return 0
+    # Every posting failed to fetch: say so as a failed step, not a quiet zero.
+    failed = [why for why in left.values() if not why.startswith("closed")]
+    return 1 if left and not rows and len(failed) == len(left) else 0
 
 
 if __name__ == "__main__":

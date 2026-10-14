@@ -65,21 +65,34 @@ SKILL = {"linkedin": "linkedin-search", "freehire": "freehire-search"}
 # One clock per paced portal: a board whose robots.txt asks for five seconds
 # between requests gets five seconds between detail fetches too, whatever the
 # number of workers.
+#
+# And a budget: at five seconds a fetch, 400 postings from one board is over
+# half an hour, past this stage's time limit in run_round.py, and a stage that
+# times out loses the whole round. Past the budget a posting keeps its search
+# snippet and says why.
 _PACE: dict[str, tuple[threading.Lock, list[float]]] = {}
 _PACE_GUARD = threading.Lock()
+PACE_BUDGET = 15 * 60
 
 
-def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> None:
+def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> bool:
+    """Wait this portal's turn. False once its paced fetches have had their budget."""
     delay = portals.crawl_delay(skill)
     if not delay:
-        return
+        return True
     with _PACE_GUARD:
-        lock, last = _PACE.setdefault(skill, (threading.Lock(), [0.0]))
+        lock, times = _PACE.setdefault(skill, (threading.Lock(), [0.0, 0.0]))
     with lock:
-        wait = last[0] + delay - clock()
+        now = clock()
+        if not times[1]:
+            times[1] = now
+        if now - times[1] > PACE_BUDGET:
+            return False
+        wait = times[0] + delay - now
         if wait > 0:
             sleep(wait)
-        last[0] = clock()
+        times[0] = clock()
+    return True
 
 
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
@@ -126,7 +139,9 @@ def _fetch(job: dict, timeout: int) -> dict:
         return {**job, "hydrate_error": f"{portal} CLI unavailable: {e}"}
     ident = job.get("id") or job.get("url")
     try:
-        pace(skill)
+        if not pace(skill):
+            return {**job, "hydrate_error": f"{skill}'s crawl-delay used its "
+                                            f"{PACE_BUDGET // 60}-minute budget in this round; not fetched"}
         # A FILE, not a pipe. Node writes to stdout asynchronously when it is a
         # pipe and synchronously when it is a regular file, so a CLI that calls
         # process.exit() after writing loses whatever has not drained. Under

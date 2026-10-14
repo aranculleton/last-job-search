@@ -379,6 +379,11 @@ def main():
     if summary:
         print(f"shortlist summary: {os.path.relpath(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
+    # Read before the prune below deletes 00_scrape/, or a portal that went
+    # quiet is never reported and the MISSED message blames the market.
+    down = _portals_down(a.out)
+    if down:
+        print(f"portal health: {', '.join(down)} DOWN (0 results to a deliberately broad probe)")
     if not a.keep:
         # A round that met its target is never re-read; one that missed is read
         # for exactly the three files the MISSED message below names, so those
@@ -423,7 +428,6 @@ def main():
     # Before anything about the market, say whether a board was even answering.
     # A portal that has gone quiet produces exactly this message, and every
     # sentence below it about a thin local market would be a true-sounding lie.
-    down = _portals_down(a.out)
     if down:
         print(f"  *** {', '.join(down)} returned nothing to the pre-flight probe. ***")
         print("  This round is NOT evidence about the market. Fix the portal and "
