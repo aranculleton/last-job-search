@@ -136,7 +136,7 @@ Also read the most recent existing CV and cover letter files for concrete struct
 *The source of truth for facts is the chain named in `profile/01-candidate-profile.md`'s **Source of Truth** section: the candidate's current resume named there, then `profile/01-candidate-profile.md`, then `profile/CLAUDE.md`'s Candidate Profile section. Existing tailored resumes may be read for structure and phrasing only, never as a source of claims. Do **not** read `cv/main_example.tex` as a fact source: it is an unpopulated upstream template and contributes nothing.*
 
 ### Requirement coverage (both documents)
-- **Every requirement the posting states gets addressed - matched or honestly gapped, never silently omitted.** A stated requirement the candidate lacks (a tool, a clearance, years of experience) is acknowledged with an honest bridge ("not in my daily toolkit yet; a natural extension of X"), because omission reads as hiding once an interviewer asks. Build the requirement list from Step 1 and check both drafts against it before Step 3.
+- **Every requirement the posting states gets addressed - matched or honestly gapped, never silently omitted.** A stated requirement the candidate lacks (a tool, a clearance, years of experience) is never volunteered as a gap: the resume states none, and the letter answers it with the honest neighbour `tools/bridges.py` records, or not at all (rule 8 of `03-writing-style.md`). A concession is written only where the requirement is so prominent that silence would read as evasion, and never in the closing. Build the requirement list from Step 1 and check both drafts against it before Step 3.
 - **Engage nice-to-haves by name** where the profile supports honest adjacency (e.g. "conceptually aligned with <named tool>"), and use the posting's own term over a synonym wherever it is truthfully applicable - including in CV section headings (a posting hiring for "MLOps" should find a heading containing "MLOps", not only a paraphrase).
 - **Address stated logistics and prerequisites** in the cover letter where the posting raises them: security clearance willingness, start date or availability, commute or location fit, and the posting's reference/job ID where one exists. When the employer operates across several countries, a truthful language-capabilities sentence mapped to their footprint is high-value targeting.
 
@@ -148,7 +148,7 @@ Also read the most recent existing CV and cover letter files for concrete struct
 - Tailor the profile statement and experience bullets to the specific role
 - Reframe skills and achievements to match job requirements
 - **One page.** Two only under the narrow exception in `05-cv-templates.md`, invoked and named explicitly in the Step 6 report.
-- **Check the page budget before compiling.** At this template's `scale=0.82` geometry, one page
+- **Check the page budget before compiling.** At this template's `scale=0.885` geometry, one page
   holds about **50 extracted text lines**. Rather than compiling, discovering a two-page spill,
   cutting, and compiling again, check the draft against that budget first:
   `pdftotext -layout -enc UTF-8 <a known one-page resume>.pdf - | grep -c .` returns 50 for a

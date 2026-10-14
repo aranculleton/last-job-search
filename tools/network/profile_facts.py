@@ -61,7 +61,10 @@ _HEADING = re.compile(r"^(#{2,3})\s+(.*?)\s*$")
 _BULLET = re.compile(r"^[-*]\s+(.+?)\s*$")
 _QUOTE = re.compile(r"^>\s?(.*)$")
 # "### Senior Operations Analyst - Brindle & Hart Logistics (Mar 2023 - Present)"
-_ROLE_HEADING = re.compile(r"^(?P<title>.+?)\s+-\s+(?P<company>.+?)\s*\((?P<dates>[^)]*)\)\s*$")
+# "### Title - Employer (dates)", optionally followed by ", City". The dash is
+# the separator because a title can hold a comma ("Manager, Pricing").
+_ROLE_HEADING = re.compile(
+    r"^(?P<title>.+?)\s+-\s+(?P<company>.+?)\s*\((?P<dates>[^)]*)\)\s*(?:,\s*(?P<where>[^,()]+))?$")
 _WS = re.compile(r"\s+")
 # Markdown that is markup rather than words. A prep document is read off a
 # phone, where `**bold**` renders as asterisks.

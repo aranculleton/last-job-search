@@ -126,7 +126,7 @@ LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Cover Letter - {company}, {role}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\documentclass[]{{cover}}
+\documentclass[{letter_paper}]{{cover}}
 \usepackage{{fancyhdr}}
 
 \pagestyle{{fancy}}
@@ -274,7 +274,12 @@ def letter(a):
     # which is what \today meant to say. Either way the .tex reproduces its own
     # PDF afterwards, which is the property that was missing.
     suffix = _DOC.get("salutation_suffix", " hiring team")
+    # The letter on the same paper as the resume unless the profile says
+    # otherwise (documents.letter_paper). US Letter is the class's default, so
+    # it is written as no option at all.
+    paper = _DOC.get("letter_paper") or _DOC.get("paper", "letterpaper")
     body = LETTER.format(company=a["company"], role=a["role"],
+                         letter_paper="" if paper == "letterpaper" else paper,
                          salutation=a.get("salutation", f"{a['company']}{suffix}"),
                          letter_date=a.get("letter_date") or _long_date(),
                          p1=a["p1"], p2=a["p2"], lead=a["lead"], bullets=bl, p4=a["p4"],

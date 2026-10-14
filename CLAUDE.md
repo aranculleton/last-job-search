@@ -183,14 +183,17 @@ guard passing.
 At the end of any session that produced application work, commit these:
 
 ```bash
-git add -f job_search_tracker.csv
-git add -f documents/cv/ documents/applications/
-git add -f cv/*_Resume_*.tex cv/*_Resume_*.pdf
-git add -f cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf
-git add -f job_scraper/seen_jobs.json job_scraper/do_not_target.json upskill/*.md
-git add network_contacts.csv network_threads.csv documents/network/
-git add documents/rounds/
+for p in job_search_tracker.csv network_contacts.csv network_threads.csv \
+         job_scraper/seen_jobs.json job_scraper/do_not_target.json \
+         documents/cv documents/applications documents/network documents/rounds \
+         cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
+         cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf upskill/*.md; do
+  [ -e "$p" ] && git add -f -- "$p"
+done
 ```
+
+One path at a time, and only what exists: a single `git add` with a path that does not
+exist yet (a new repo has no `upskill/*.md`) stages nothing at all, silently.
 
 `documents/rounds/<round>.json` is each search round's shortlist, the top 60 without
 the posting bodies. It takes a plain `git add`: it deliberately sits outside `rounds/`,

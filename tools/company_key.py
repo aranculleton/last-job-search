@@ -42,7 +42,7 @@ _COUNTRY = tuple(getattr(_EMP, "COUNTRY_WORDS", ()))
 # "Co-<something>" would lose its first word, "co-operators" becoming
 # "operators".
 SUFFIX = re.compile(
-    r"\b(inc|llc|ltd|limited|corp|corporation|company|group|holdings|plc|lp|"
+    r"\b(inc|llc|ltd|limited|pty|corp|corporation|company|group|holdings|plc|lp|"
     r"llp|" + "".join(re.escape(c) + r" inc|" for c in _COUNTRY) + r"s\.?a\.?|gmbh|ag)\b\.?", re.I)
 # Trailing qualifiers that name where or what the employer is, not who:
 # "Acme UK", "Acme Financial Group", "Acme Insurance", "Acme Concession

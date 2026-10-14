@@ -23,6 +23,7 @@ once its row is older than the threshold.
 from __future__ import annotations
 
 import datetime as dt
+import os
 import sys
 import unittest
 from pathlib import Path
@@ -117,11 +118,17 @@ def tracker_day_before_release(tracker):
     return min(dates) + dt.timedelta(days=throttle.SILENCE_DAYS - 1)
 
 
+# The example person's tracker, in the temporary state tests/conftest.py makes:
+# the app's suite never reads a real person's tracker, which can hold anything
+# (a repo's very first /apply leaves one drafted row and nothing to release).
+STATE_TRACKER = Path(os.environ.get("LJS_STATE", ROOT)) / "job_search_tracker.csv"
+
+
 class TheCommittedTrackerReleasesOverTime(unittest.TestCase):
-    """The real file, which is what made this a bug rather than a theory."""
+    """A committed tracker, the example person's, released over time."""
 
     def test_nothing_is_released_while_the_oldest_row_is_inside_the_threshold(self):
-        tracker = ROOT / "job_search_tracker.csv"
+        tracker = STATE_TRACKER
         if not tracker.is_file():
             self.skipTest("no committed tracker")
         day = tracker_day_before_release(str(tracker))
@@ -131,7 +138,7 @@ class TheCommittedTrackerReleasesOverTime(unittest.TestCase):
                          "the oldest committed row is younger than the threshold")
 
     def test_the_suppressed_set_drains_as_the_threshold_passes(self):
-        tracker = ROOT / "job_search_tracker.csv"
+        tracker = STATE_TRACKER
         if not tracker.is_file():
             self.skipTest("no committed tracker")
         day = tracker_day_before_release(str(tracker))
@@ -148,7 +155,7 @@ class TheCommittedTrackerReleasesOverTime(unittest.TestCase):
 
     def test_the_release_does_not_rewrite_the_tracker(self):
         """A `no_response` claim belongs to a person running /outcome."""
-        tracker = ROOT / "job_search_tracker.csv"
+        tracker = STATE_TRACKER
         if not tracker.is_file():
             self.skipTest("no committed tracker")
         before = tracker.read_bytes()

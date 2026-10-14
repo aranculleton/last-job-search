@@ -97,7 +97,7 @@ if [ -f profile/person.json ]; then
   run "leak scan (app tree built from HEAD)" python3 tools/build_app.py "$LEAK_OUT/app"
   rm -rf "$LEAK_OUT"
 else
-  run "leak scan (this tree)" python3 tools/leak_scan.py .
+  run "leak scan (what git would commit)" python3 tools/leak_scan.py . --git
 fi
 
 echo

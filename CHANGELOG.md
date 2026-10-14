@@ -34,6 +34,33 @@ make sense to somebody whose repo just received it.
 - SECURITY.md, SETUP.md and the README describe the app as public and a person's copy as
   private.
 
+### Fixed
+
+Found by the first end-to-end setup of a fictional person in a new market, from a fresh
+template copy:
+
+- **The leak scan failed for anyone without a North American phone number.** A non-North
+  American number now yields its national grouping (with and without the trunk 0) instead of
+  a three-digit slice that matched everywhere, and the reserved `example.*` domains the app's
+  templates use are never entries (`build_app.phone_forms()`).
+- **An app test read the person's own tracker**, and failed after a new repo's first `/apply`.
+  It reads the example person's temporary state, as every app test does.
+- **Scoring crashed on a profile shaped like the example.** The example's `FIT_MISSING` held
+  pairs where `tools/fit.py` reads triples; a new test scores a posting against the example.
+- **`tools/profile_names.py`** lists every name the tools read from a profile, whether a tool
+  needs it, whether the example sets it, and where it is read; `/setup` uses it, and a test
+  checks the example sets every name a tool cannot do without.
+- `/setup` writes `seen_jobs.json` as `{"seen": {}}` (the tools read that key), commits before
+  the checks that read the commit, states the role-heading shape, and says a Workday board
+  cannot be guessed.
+- The commit recipe in CLAUDE.md adds one existing path at a time: one `git add` with a path a
+  new repo does not have yet staged nothing at all.
+- The cover letter is printed on the profile's paper (`documents.letter_paper`, defaulting to
+  `documents.paper`), no longer always US Letter.
+- "Pty" is a company suffix; the duplicated-word check no longer fires on a phone number's
+  repeated digit groups; the example's role headings use the shape the prep tools read;
+  `/apply`'s rule on gaps now matches rule 8 of the writing style.
+
 ## [3.0.0] - 2026-10-14
 
 The first release as a template: one app, any number of people, each in their own private repo.

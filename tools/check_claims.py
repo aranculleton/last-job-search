@@ -122,7 +122,7 @@ def app_rules() -> dict:
         r["american-spelling" if spelling == "canadian" else f"{spelling}-spelling"] = (
             "ERROR", "american-spelling" if spelling == "canadian" else f"{spelling}-spelling",
             pat, why)
-    r["duplicated-word"] = ("ERROR", "duplicated-word", r"\b(\w{3,})\s+\1\b",
+    r["duplicated-word"] = ("ERROR", "duplicated-word", r"\b([^\W\d_]{3,})\s+\1\b",
                             "A word is repeated. Usually an editing slip.")
     r["unsupported-connective"] = (
         "WARN", "unsupported-connective",

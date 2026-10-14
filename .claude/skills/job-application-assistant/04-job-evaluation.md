@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.1
+framework_version: 1.0.2
 ---
 
 # Job Evaluation Framework
@@ -222,9 +222,9 @@ is absent:
   something specific suggests otherwise. Evidence means things you can actually check: size
   and maturity, a published benefits or total-rewards page, pension or retirement-plan matching, a
   Glassdoor or Indeed rating in the normal range, being on a recognized employer list, or a
-  comparable posted range from the same employer for a similar role. The largest banks,
-  major insurers, established tech companies and large consultancies clear this bar by
-  default.
+  comparable posted range from the same employer for a similar role. In most markets the
+  largest established employers clear this bar by default; name the ones that do in
+  [PLACEHOLDER: city].
 - **Total compensation is the thing, not base.** Bonus, pension or retirement-plan matching, health
   benefits, and, where the candidate's work status is time-limited, an employer likely to support
   a renewal or residency application can each be worth more than several thousand on base.
