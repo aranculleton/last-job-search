@@ -126,6 +126,16 @@ THEME_CUES = {
 WHOLE_WORD = {"aws", "gcp", "aml", "sla", "api", "git", "etl", "elt", "ltv", "qa", "rest",
               "seed", "gtm", "crm", "llm", "nhs", "sales", "default", "series a",
               "series b", "0 to 1", "controls", "credit"}
+
+# The themes above are a data analyst's, because that is who the app was built
+# for. A nurse's or a carpenter's bullets carry themes this list has never heard
+# of, and a theme with no cue scores nothing on any posting, so the allocator
+# falls back on bare weight and every resume comes out the same. A profile adds
+# its own in profile/bullets.py: THEME_CUES (theme -> cues, adding a theme or
+# replacing one's cues) and CUE_WHOLE_WORD (cues a suffix would change).
+_B = person.module("bullets")
+THEME_CUES.update(getattr(_B, "THEME_CUES", {}))
+WHOLE_WORD |= set(getattr(_B, "CUE_WHOLE_WORD", ()))
 CUE_RE = {theme: [re.compile(r"\b" + re.escape(c) + (r"\b" if c in WHOLE_WORD else ""))
                   for c in cues]
           for theme, cues in THEME_CUES.items()}
@@ -328,3 +338,20 @@ def explain(posting, budget=11):
     return dict(themes=[t for t, _ in ts],
                 alloc={e: len(v) for e, v in a.items()},
                 picks={e: [(b, round(scores[b], 1)) for b in v] for e, v in a.items()})
+
+
+def uncued_themes():
+    """Themes the profile's bullets carry that no cue matches.
+
+    Such a theme adds nothing to any posting's score, so a bullet tagged only
+    with it is chosen on weight alone. /setup runs this after writing
+    bullets.py; every name it returns needs cues in THEME_CUES there.
+    """
+    return sorted({t for ts in THEMES.values() for t in ts} - set(CUE_RE))
+
+
+if __name__ == "__main__":
+    missing = uncued_themes()
+    for t in missing:
+        print(f"no cues for theme {t!r}: add it to THEME_CUES in profile/bullets.py")
+    sys.exit(1 if missing else 0)

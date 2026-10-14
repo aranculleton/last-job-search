@@ -146,6 +146,23 @@ _COMPANY_SUFFIX = re.compile(
     r"|beverage company|technologies|services)\.?$", re.I)
 
 
+# What a resume puts where an employer goes when there is no employer: a run of
+# projects, freelance work, a career break. Nobody is identified by them, and
+# as entries they matched the app's own headings, so the first person set up
+# with a projects entry had to rename it on their resume to pass the scan.
+GENERIC_EMPLOYERS = re.compile(
+    r"(?:(?:selected|personal|independent|freelance|portfolio|creative|academic|"
+    r"university|student|side|other|various|key)\s+)?"
+    r"(?:projects?|freelance|freelancer|self[- ]employed|independent|contract(?:ing|or)?|"
+    r"consulting|consultancy|various|volunteer(?:ing)?|career break|sabbatical|"
+    r"portfolio|personal|travel(?:ling)?)", re.I)
+
+
+def _generic_employer(name: str) -> bool:
+    core = re.split(r"\s*[,(]", name.strip(), maxsplit=1)[0]
+    return bool(GENERIC_EMPLOYERS.fullmatch(core))
+
+
 def company_forms(company: str) -> list[str]:
     """The company as recorded and as people write it: "Acme Foods Company Inc."
     is "Acme Foods" in a comment, and only the recorded form was an entry."""
@@ -244,7 +261,8 @@ def denylist() -> list[str]:
         add(handle.group(1))
     roles = person.module("roles")
     for r in roles.ROLES:
-        add("=" + r["employer"])
+        if not _generic_employer(r["employer"]):
+            add("=" + r["employer"])
     for s in _school(getattr(roles, "EDUCATION", "")):
         add(s)
         m = re.search(r" of ([A-Z]\w+)$", s)

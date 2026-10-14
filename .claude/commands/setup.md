@@ -36,6 +36,24 @@ fails: no remote, or not a git checkout). Then decide which of these it is.
 
 - **Private.** Carry on.
 
+**Then check this session can do the whole job, and say so now, not at the end.** A setting
+changed in the cloud environment applies only to the next session, so a person told at the
+end has to come back; told now, they can change it while you work and use it next time.
+
+```bash
+command -v lualatex xelatex pdftotext >/dev/null && echo "latex: ok" || echo "latex: missing"
+for u in https://freehire.me https://boards-api.greenhouse.io https://api.lever.co; do
+  curl -sS -o /dev/null --max-time 8 -w "%{http_code} $u\n" "$u" || echo "blocked $u"
+done
+```
+
+If LaTeX is missing or a host is blocked, give them the two settings from `START_HERE.md`
+step 3 with the exact clicks (the cloud environment menu in the session's title bar, then
+**Edit**: the **Setup script** line, and **Network access** with its allowed domains), say
+that setup itself can carry on without them (web search still works for the research), and
+that the job search and the test resume need them, in a new session. If LaTeX is missing,
+`./tools/setup_env.sh` installs it for this session only.
+
 Then look for an existing `profile/`. If there is one, this is an update, not a setup: ask what
 they want to change and go to that part of Step 1 (`--section <name>` does this directly:
 `identity`, `history`, `search`, `market`, `voice`, `documents`). Never overwrite a filled
@@ -178,6 +196,20 @@ scrape searches), `employers.py`, `boards.py`, `networking.py` (their voice: ope
 about them, the ask, their home city and timezone), `claims.py`, `screening.py` (standard form
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
 `12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).
+
+Three settings the example's values would get wrong for anybody outside its field and level,
+so write each one for this person, never copy it:
+
+- **The Skills headings**, `LABELS` in `skills.py`: one `(line, heading)` per line, in their
+  own words for their work (a nurse's are not a data analyst's). A resume will not render
+  without them.
+- **Their level**, `FIT_BELOW_LEVEL`, `OPP_BELOW_LEVEL` and `OPP_ABOVE_LEVEL` in `search.py`:
+  the titles below and above them, which are ranked down, never cut. For someone early in
+  their career "junior" and "graduate" are the target, so leave them out of the below-level
+  patterns.
+- **Their themes**: a bullet's themes come from `tools/allocate.py` `THEME_CUES`, which is a
+  data analyst's list. Add the themes their work needs, with the words postings use for each,
+  as `THEME_CUES` in `bullets.py`; `python3 tools/allocate.py` names any theme no cue matches.
 
 ### 9. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`

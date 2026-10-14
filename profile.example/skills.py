@@ -45,6 +45,17 @@ PINNED = None
 
 ANCHORS = ("SQL", "Python, pandas")
 
+# The Skills block: one (line, heading) per rendered line, in page order, in
+# the person's own words for their work. Categories in ITEMS that have no line
+# of their own print on the line MERGE names.
+LABELS = [
+    ("lang", "Languages and modelling"),
+    ("eng", "Data engineering and cloud"),
+    ("bi", "BI, tooling and delivery"),
+]
+MERGE = {"model": "lang", "work": "bi"}
+MAX_PER_LINE = {"lang": 7, "eng": 6, "bi": 5}
+
 BRIDGES = [
     dict(asked="Power BI", pattern=r"\bpower\s?bi\b", verdict=HELD,
          have=["Power BI"], line="Power BI is the reporting tool I own day to day."),

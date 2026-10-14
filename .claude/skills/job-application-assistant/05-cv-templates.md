@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.4
+framework_version: 2.1.5
 ---
 
 # Resume Templates and Tailoring Guide
@@ -167,7 +167,7 @@ Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. A
 % 1. Summary: 40-48 words, three lines, identity first ("Operations analyst with...")
 % 2. Professional Experience: reverse-chronological, 12-14 bullets, allocated
 %    per posting by tools/allocate.py (tenure x recency x relevance)
-% 3. Skills: three labelled lines
+% 3. Skills: a few labelled lines, headed by the profile's LABELS
 % 4. Education: one line
 % 5. Certifications: one line, separate section
 % This order never changes. It moved three times across delivered batches
@@ -248,8 +248,10 @@ reader takes the summary and goes straight to what they did; the skills block is
 pass for the ATS and a stack check for the recruiter, and both read the whole page.
 Skills-first is a career-changer layout. The order is enforced by a test and never moves.
 
-The **Skills** section is three labelled lines, left aligned, comma separated, no parentheses: `Languages and modelling`, `Data engineering and
-cloud`, `BI, tooling and delivery`. `tools/skills_block.py` builds it from the tailor's
+The **Skills** section is a few labelled lines (three is the advice), left aligned, comma
+separated, no parentheses. The headings are the person's own words for their work,
+`LABELS` in `profile/skills.py`, and a resume will not render without them: the app once
+printed a data analyst's three on everybody's. `tools/skills_block.py` builds it from the tailor's
 selections against a fixed inventory and tops it up from what the page already claims.
 The profile's pinned item (`PINNED` in `profile/skills.py`) always prints. Nothing is invented.
 

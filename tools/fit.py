@@ -101,12 +101,12 @@ DOMAIN = list(getattr(_S, "FIT_DOMAIN", []))
 ROLE_SHAPE = getattr(_S, "FIT_ROLE_SHAPE", re.compile(r"(?!x)x"))
 DOMAIN_YEARS = getattr(_S, "FIT_DOMAIN_YEARS", re.compile(r"(?!x)x"))
 IN_FAMILY_HEAD = getattr(_S, "FIT_IN_FAMILY_HEAD", re.compile(r"(?!x)x"))
-JUNIOR = re.compile(
-    r"\b(intern|internship|co[- ]?op|student|graduate|junior|entry[- ]level|"
-    # "New Grad" is a common phrasing and does not contain "graduate".
-    r"new grad\w*|campus|early career|apprentice|trainee|"
-    # A postdoc is a research post, not a step up from four years in industry.
-    r"post[- ]?doc\w*|postdoctoral|research fellow|phd candidate)\b", re.I)
+# Titles below the person's level, docked 25. The person's, not the app's:
+# "junior" and "graduate" are below a four-year analyst and exactly right for
+# somebody a year out of university, and the app once docked them for
+# everybody. profile/search.py FIT_BELOW_LEVEL, a compiled regex over the
+# title; unset, no title is docked for its level.
+JUNIOR = getattr(_S, "FIT_BELOW_LEVEL", None) or re.compile(r"(?!x)x")
 
 # Job boards and aggregators list other companies' roles under their own name.
 # The posting may be real, but the employer is unknown, so it cannot be scored
