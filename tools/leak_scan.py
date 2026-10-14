@@ -86,7 +86,7 @@ ALLOW = (
     ("texmf/**", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"),
 )
 
-SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".venv", "venv"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "venv"}
 
 
 def _is_binary(data: bytes) -> bool:

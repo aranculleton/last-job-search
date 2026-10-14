@@ -12,20 +12,15 @@ while being documented in documents/README.md and protected as personal
 data by tools/security_guards.py (review finding F26, 2026-08-19), so a
 reset silently kept the user's hand-pasted job postings.
 
-Profile scope: the same class of gap, one scope over. /setup Step 3
-populates six skill files, and /reset profile cleared four of them -
-`04-job-evaluation.md` (the user's match areas, career goals, financial
-situation and schedule constraints) was listed by name as containing
-"framework rules, not candidate data", and `job-scraper/search-queries.md`
-(their role titles, city and commute tiers) appeared nowhere in reset.md.
-Both are tracked and unignored, and CI's placeholder-integrity job guards
-04-job-evaluation.md under "personal data may have been committed", so a
-"blank" profile left /rank scoring against the old skills and /scrape
-running the old city.
+Profile and state scopes: the same class of gap. /setup writes a person's
+profile/ and their state files; a /reset that missed one would leave /rank
+scoring against an old profile or /scrape skipping postings as already seen,
+while saying the slate is clean. And /setup must write nothing else: in a
+person's repo an app-owned file is the app's, and the next sync puts it back.
 
-Both file lists are derived - the documents folders from the repository
-tree, the profile files from /setup Step 3's own headings - so a new drop
-folder or a new /setup target fails this test until /reset covers it.
+Both lists are derived - the documents folders from the repository tree, the
+files /setup writes from its own Step 3 - so a new drop folder or a new /setup
+target fails this test until /reset covers it.
 """
 import re
 import subprocess
@@ -91,86 +86,58 @@ def section(text: str, start: str, end: str) -> str:
     return text[begin : text.index(end, begin)]
 
 
-def setup_step3_skill_files():
-    """Skill files /setup Step 3 populates, derived from its own headings.
-
-    Step 3's targets are written as '### <n>. <verb> `<target>`', where the
-    target is either a bare filename resolved against .claude/skills/ or
-    profile/, or a repo-relative path. Non-skill targets (CLAUDE.md, cv/main_example.tex)
-    are dropped: /reset profile's scope is skill files only.
-    """
+def setup_step3_targets():
+    """Every path /setup Step 3 writes: its `profile/...` targets and state files."""
     step3 = section(SETUP.read_text(encoding="utf-8"), "## Step 3:", "## Step 4:")
-    files = set()
-    # A profile file exists in the app as the example person's copy
-    # (profile.example/), and in a person's repo as their own (profile/).
-    def in_a_profile(name):
-        return (REPO / "profile" / name).exists() or (REPO / "profile.example" / name).exists()
-
-    for target in re.findall(r"^###\s+\d+\.\s+\w+\s+`([^`]+)`", step3, re.MULTILINE):
-        if target.startswith("profile/") and in_a_profile(target[len("profile/"):]):
-            files.add(Path(target).name)
-            continue
-        if (REPO / target).exists():
-            if target.startswith(".claude/skills/"):
-                files.add(Path(target).name)
-            continue
-        matches = list((REPO / ".claude" / "skills").glob(f"*/{target}"))
-        # The person's own documents moved from the skill directory to profile/.
-        if matches or in_a_profile(target):
-            files.add(Path(target).name)
-    return files
+    targets = set(re.findall(r"`(profile/[^`]+)`", step3))
+    state = section(step3, "Write the state files", "---")
+    targets |= set(re.findall(r"`([\w/]+\.(?:csv|json))`", state))
+    return targets
 
 
-class TestResetCoversEveryPersonalizedSkillFile(unittest.TestCase):
+class TestSetupWritesOnlyWhatIsThePersons(unittest.TestCase):
+    def test_every_step3_target_is_a_personal_path(self):
+        import sys
+        sys.path.insert(0, str(REPO / "tools"))
+        from personal_paths import is_personal
+        targets = setup_step3_targets()
+        self.assertGreaterEqual(len(targets), 10, targets)
+        app_owned = sorted(t for t in targets if not is_personal(t))
+        self.assertEqual(app_owned, [],
+                         "/setup Step 3 writes these app-owned paths, which the next "
+                         f"sync would put back: {app_owned}")
+
+
+class TestResetCoversWhatSetupWrites(unittest.TestCase):
     def setUp(self):
         self.text = RESET.read_text(encoding="utf-8")
-        self.files = setup_step3_skill_files()
-        # /setup must actually still name these targets, or every assertion
-        # below would pass vacuously against an empty set.
-        self.assertGreaterEqual(len(self.files), 6, self.files)
-        self.assertIn("04-job-evaluation.md", self.files)
-        self.assertIn("search-queries.md", self.files)
+        self.targets = setup_step3_targets()
+        self.state = sorted(t for t in self.targets if not t.startswith("profile/"))
+        # /setup must still name its state files, or the checks below are vacuous.
+        self.assertIn("job_search_tracker.csv", self.state)
+        self.assertIn("network_threads.csv", self.state)
 
-    def test_preview_lists_every_personalized_skill_file(self):
-        preview = section(
-            self.text, "### If scope includes `profile`:", "### If scope includes `documents`:"
-        )
-        missing = sorted(f for f in self.files if f not in preview)
-        self.assertEqual(
-            missing,
-            [],
-            "reset.md's profile preview never mentions these files that /setup "
-            "Step 3 writes candidate data into, so the user types RESET against "
-            f"a list that omits them: {missing}",
-        )
+    def test_profile_scope_previews_and_removes_the_whole_profile(self):
+        preview = section(self.text, "### If scope includes `profile`:", "### If scope includes `state`:")
+        execution = section(self.text, "### Profile reset", "### State reset")
+        self.assertIn("profile/", preview)
+        self.assertIn("rm -rf profile/", execution)
 
-    def test_execution_clears_every_personalized_skill_file(self):
-        execution = section(self.text, "### Profile reset", "### Documents reset")
-        missing = sorted(f for f in self.files if f not in execution)
-        self.assertEqual(
-            missing,
-            [],
-            "reset.md's Step 3 profile pass has no instruction for these files, "
-            'yet the command then reports the skill files are "now blank": '
-            f"{missing}",
-        )
+    def test_state_scope_previews_and_removes_every_state_file(self):
+        preview = section(self.text, "### If scope includes `state`:", "### If scope includes `documents`:")
+        execution = section(self.text, "### State reset", "### Documents reset")
+        missing_preview = [f for f in self.state if f not in preview]
+        missing_exec = [f for f in self.state if f not in execution]
+        self.assertEqual(missing_preview, [],
+                         f"/reset's state preview never mentions: {missing_preview}")
+        self.assertEqual(missing_exec, [],
+                         f"/reset's state pass never removes: {missing_exec}")
 
-    def test_preserved_list_claims_no_personalized_file_is_framework_only(self):
-        """A file /setup personalizes must never be listed as framework-only.
-
-        This is the specific regression: 04-job-evaluation.md was named in the
-        "NOT touched (they contain framework rules, not candidate data)" list,
-        so merely searching reset.md for the filename would have found it.
-        """
-        preserved = section(self.text, "The following files are NOT touched", "```")
-        mislabeled = sorted(f for f in self.files if f in preserved)
-        self.assertEqual(
-            mislabeled,
-            [],
-            "reset.md tells the user these files contain 'framework rules, not "
-            "candidate data', but /setup Step 3 writes candidate data into them: "
-            f"{mislabeled}",
-        )
+    def test_documents_scope_never_deletes_the_apps_templates(self):
+        execution = section(self.text, "### Documents reset", "## Step 4:")
+        self.assertIn("is_personal", execution,
+                      "the cv/ and cover_letters/ pass must ask personal_paths, or it "
+                      "deletes the app's templates and fonts with the person's files")
 
 
 if __name__ == "__main__":

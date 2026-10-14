@@ -8,9 +8,10 @@ Two paths. Most sessions take the first.
 - **[Local machine](#b-local-machine)** is for working on the pipeline itself, where a
   persistent LaTeX install and a real browser are worth having.
 
-The profile is already populated. There is no onboarding interview to run: `/setup`
-exists but is for a fresh candidate, and running it here would overwrite
-`profile/01-candidate-profile.md`. See [Resetting](#resetting) before you touch it.
+This file is about the machine. Starting your own search is [START_HERE.md](START_HERE.md):
+make a private copy with **Use this template**, then say "set me up" and `/setup` builds
+your profile. In a copy that already has a `profile/`, `/setup` updates the part you ask
+about and never overwrites the rest; see [Resetting](#resetting) before starting over.
 
 ---
 
@@ -189,10 +190,11 @@ is not penalised in scoring.
 
 ## Resetting
 
-`/reset` wipes profile data or the documents folder. `/setup` repopulates it by interview,
-from a `documents/` folder, or from a pasted resume.
+`/reset` removes your profile, your search's state or your documents folder, after you
+confirm. `/setup` builds a profile again by interview, from a `documents/` folder, or from
+a pasted resume.
 
-Neither is a routine operation in this repo. `profile/01-candidate-profile.md` is the
+Neither is a routine operation. `profile/01-candidate-profile.md` is the
 source of truth for every fact that reaches an employer, it takes several sessions of
 `/expand` to build, and it holds more than any one resume shows on purpose: per-role
 "additional detail available for tailoring" blocks and a reserve experience section that
