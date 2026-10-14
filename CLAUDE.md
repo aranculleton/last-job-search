@@ -342,7 +342,11 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
   shares its name. Do not enable `jobbank-search` expecting coverage of another country.
   `jobindex-search`, `jobnet-search` and
   `jobdanmark-search` are Danish too and are kept only as reference implementations for
-  `/add-portal`. The only enabled portals are `linkedin-search` and `freehire-search`.
+  `/add-portal`. **`freehire-search` is the one portal on by default.** `linkedin-search`
+  ships off: LinkedIn's robots.txt and terms forbid automated access, and a round sends a
+  portal thousands of requests. A person turns any portal on or off in `profile/search.py`
+  `PORTALS`, never in its `SKILL.md`, which is the app's; `python3 tools/portals.py` prints
+  what the next round will search.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
   the employers named in `profile/boards.py` straight from their ATS (Greenhouse, Lever,
   Ashby, Workday), which is how large employers that a portal under-indexes reach a round,

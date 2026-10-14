@@ -23,6 +23,18 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **LinkedIn is off by default, and a portal that is off is now actually off.**
+  `linkedin-search` ships `enabled: false`: LinkedIn's robots.txt disallows every path for
+  every crawler it does not name, its guest job endpoints included, and says automated
+  access without its permission is "strictly prohibited", while a round sent it thousands of
+  requests. The `enabled:` flag used to switch off nothing a round did, because
+  `tools/scrape_wide.py` called LinkedIn and freehire by name; it, `tools/hydrate.py` and
+  `/scrape` now ask **`tools/portals.py`**, and a portal that is off is sent no search, probe
+  or detail request. **If your rounds relied on LinkedIn they will be thinner from now on.**
+  Turning it back on is your decision, made knowing the above: `PORTALS =
+  {"linkedin-search": True}` in `profile/search.py`. That is also where any portal is
+  switched; its `SKILL.md` is the app's, and a sync would undo an edit there.
+  `python3 tools/portals.py` prints what the next round searches and why.
 - **`/setup` writes `profile/` and nothing else.** It refuses the app itself and any public
   repo before a word is written, asks the person only plain questions about themselves,
   researches their market (boards, employer ATS, eligibility wording, pay, document
@@ -35,6 +47,9 @@ make sense to somebody whose repo just received it.
   private.
 
 ### Fixed
+
+- `tools/build_app.py` no longer writes a phone number out as an example: the one it had was
+  a test person's own, and their leak scan failed on the app's file.
 
 Found by the first end-to-end setup of a fictional person in a new market, from a fresh
 template copy:

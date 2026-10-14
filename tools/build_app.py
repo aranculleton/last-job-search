@@ -194,10 +194,14 @@ def phone_forms(written: str) -> list[str]:
     A North American number: the area code, the line number in its two usual
     groupings and its last four digits, any of which finds the rest. Anywhere
     else: the number as grouped after the country code, and with the trunk 0 it
-    is dialled with nationally. Matching ignores separators, so "400 000 000"
-    also finds "400000000". Short groups alone would match everywhere, so they
-    are never entries: the first version took a North American slice of an
-    Australian mobile and blocked every "140" in the app.
+    is dialled with nationally. Matching ignores separators, so the grouped form
+    also finds the digits run together. Short groups alone would match
+    everywhere, so they are never entries: the first version took a North
+    American slice of an Australian mobile and blocked every "140" in the app.
+
+    No number is written out in this file. An example in an app file is in
+    every person's repo, and the one written here once was a test person's own
+    number, which their leak scan rightly failed.
     """
     phone = re.sub(r"\D", "", written)
     groups = re.findall(r"\d+", written)
