@@ -37,10 +37,10 @@ import datetime as dt
 import functools
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,59 +50,17 @@ from prefilter import annotate, age_days  # noqa: E402
 
 # --------------------------------------------------------------- portal CLIs
 #
-# These pointed at one build in one session's scratchpad directory, named with
-# that session's own UUID. A scratchpad does not survive the container, so on
-# every fresh checkout the scrape resolved both paths to files that were not
-# there and produced nothing, with no error saying why.
-#
-# The sources are in the repo and carry no runtime dependencies. This finds a
-# build if one exists, makes one if bun is there, and says what to run if
-# neither.
-CLI_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                        ".agents", "skills")
-
-
-@functools.lru_cache(maxsize=None)
-def portal_cli(skill: str, env_var: str) -> str:
-    """The runnable CLI for a portal skill, built on demand.
-
-    Returns a path to a bundled `.mjs`. Raises with the build command when the
-    sources are present but nothing can build them, because a scrape that
-    quietly returns nothing is the failure this whole module exists to avoid.
-    """
-    override = os.environ.get(env_var, "").strip()
-    if override:
-        if not os.path.exists(override):
-            raise FileNotFoundError("%s points at %s, which does not exist"
-                                    % (env_var, override))
-        return override
-    dist = os.path.join(CLI_ROOT, skill, "cli", "dist", "cli.mjs")
-    if os.path.exists(dist):
-        return dist
-    src = os.path.join(CLI_ROOT, skill, "cli", "src", "cli.ts")
-    if not os.path.exists(src):
-        raise FileNotFoundError(
-            "no CLI for %s: neither a build nor %s. Is .agents/skills/%s present?"
-            % (skill, src, skill))
-    if not shutil.which("bun"):
-        raise RuntimeError(
-            "%s needs building and bun is not installed. Install bun, or build "
-            "it elsewhere and point %s at the result." % (skill, env_var))
-    os.makedirs(os.path.dirname(dist), exist_ok=True)
-    build = subprocess.run(["bun", "build", src, "--target", "node",
-                            "--outfile", dist],
-                           capture_output=True, text=True)
-    if build.returncode or not os.path.exists(dist):
-        raise RuntimeError("bun build failed for %s:\n%s"
-                           % (skill, (build.stderr or build.stdout)[:800]))
-    return dist
+# tools/portals.py finds or builds each portal's CLI (one resolver for this file
+# and hydrate.py), and says which portals are on.
+portal_cli = portals.cli
 # Resolved on first use, not at import. A build failure should stop a scrape,
 # not stop anything that merely imports this module.
 LINKEDIN = functools.partial(portal_cli, "linkedin-search", "LINKEDIN_CLI")
 FREEHIRE = functools.partial(portal_cli, "freehire-search", "FREEHIRE_CLI")
-# The portals this file can call, by skill name. Whether each one IS called is
-# tools/portals.py's answer: the app's default, then the person's PORTALS. An
-# enabled portal with no adapter here is run by /scrape from its SKILL.md.
+# The app's two portals, called here with their own request shapes. Every
+# other portal that is on and has a CLI is called through the portal contract
+# (`contract_search` below): a person's own board, built by /add-portal, is
+# searched by every round without anyone wiring it in.
 WIRED = {"linkedin-search": "linkedin", "freehire-search": "freehire"}
 
 # What is searched is the person's: profile/search.py's SCRAPE_* names the
@@ -128,6 +86,11 @@ QUERIES = list(getattr(_S, "SCRAPE_QUERIES", ()))
 # The location prefix searched to the full --pages depth; the rest go two deep.
 DEEP = getattr(_S, "SCRAPE_DEEP", LOCATIONS[0] if LOCATIONS else "")
 PORTAL_COUNTRY = getattr(_S, "PORTAL_COUNTRY", "")
+# The places passed to a person's own portal, as that board writes them
+# ("Toronto, ON" where LinkedIn wants "Toronto, Ontario, Canada"). A portal not
+# named searches the first of SCRAPE_LOCATIONS.
+PORTAL_LOCATIONS = {str(k): list(v) for k, v in
+                    dict(getattr(_S, "PORTAL_LOCATIONS", {}) or {}).items()}
 
 
 def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
@@ -210,6 +173,65 @@ def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
     return out, err
 
 
+def contract(skill: str, q: str, loc: str | None, page: int,
+             jobage: int) -> tuple[list[dict], str | None]:
+    """One search on a portal that follows the portal contract (/add-portal).
+
+    A search result's `description` is kept as `snippet`, not as the body:
+    most boards return a teaser there, and a teaser would stop hydrate.py
+    fetching the real posting. Where the board's posting pages may not be
+    fetched (`detail: false`), the snippet is all there is, and it is the body.
+    """
+    cmd = (["node", "--no-warnings", portal_cli(skill), "search", "-q", q]
+           + (["-l", loc] if loc else [])
+           + ["--jobage", str(jobage), "--page", str(page), "--format", "json"])
+    d, err = run(cmd)
+    whole = not portals.has_detail(skill)
+    out = []
+    for r in (d or {}).get("results", []):
+        text = r.get("description") or None
+        out.append({"id": None if r.get("id") is None else str(r.get("id")),
+                    "title": r.get("title"), "company": r.get("company"),
+                    "url": r.get("url"), "location": r.get("location"),
+                    "date": (r.get("date") or "")[:10], "portal": portals.short(skill),
+                    "desc": text if whole else None, "snippet": text})
+    return out, err
+
+
+def contract_portals(on: dict[str, bool]) -> list[str]:
+    """Every portal that is on, is not one of the app's two, and has a CLI."""
+    return [n for n, v in sorted(on.items())
+            if v and n not in WIRED and portals.has_cli(n)]
+
+
+def portal_locations(skill: str) -> list[str | None]:
+    if not portals.takes_location(skill):
+        return [None]
+    return PORTAL_LOCATIONS.get(skill) or LOCATIONS[:1]
+
+
+def sweep(skill: str, tasks: list[tuple], jobage: int,
+          sleep=time.sleep) -> tuple[list[dict], int, list[str]]:
+    """Every request for one person's portal, one at a time, `crawl-delay` apart.
+
+    Its own thread, so a board that asks for five seconds between requests
+    takes its time without holding a worker the app's portals need. It waits
+    before the first request too: the health probe has just asked.
+    """
+    delay, rows, failed = portals.crawl_delay(skill), [], []
+    for _, q, loc, pg in tasks:
+        if delay:
+            sleep(delay)
+        try:
+            got, err = contract(skill, q, loc, pg, jobage)
+        except Exception as e:
+            got, err = [], f"{type(e).__name__}: {str(e)[:120]}"
+        if err:
+            failed.append(err)
+        rows += got
+    return rows, len(tasks), failed
+
+
 # ------------------------------------------------------------------ canary
 #
 # A portal that BREAKS is loud. A portal that goes quiet is not, and quiet is
@@ -246,11 +268,16 @@ def canary(jobage: int = CANARY_JOBAGE,
     """One broad probe per enabled portal. {portal: (healthy, detail)}."""
     on = portals.enabled() if on is None else on
     out: dict[str, tuple[bool, str]] = {}
-    probes = (
+    probes = [
         ("linkedin", lambda: linkedin(CANARY_QUERY, CANARY_LOCATION, 1, jobage)),
         ("freehire", lambda: freehire(CANARY_QUERY, 1, jobage)),
-    )
+    ]
     wanted = {short for skill, short in WIRED.items() if on.get(skill)}
+    for skill in contract_portals(on):
+        loc = portal_locations(skill)[0]
+        probes.append((portals.short(skill),
+                       functools.partial(contract, skill, CANARY_QUERY, loc, 1, jobage)))
+        wanted.add(portals.short(skill))
     for name, fn in probes:
         if name not in wanted:
             continue
@@ -265,7 +292,8 @@ def canary(jobage: int = CANARY_JOBAGE,
             out[name] = (True, f"probe errored ({err[:80]}), left to the scrape")
         elif not rows_:
             out[name] = (False, f'0 results for "{CANARY_QUERY}" in '
-                                f'{CANARY_LOCATION} over {jobage} days')
+                                f'{CANARY_LOCATION if name in WIRED.values() else "its search"} '
+                                f'over {jobage} days')
         else:
             out[name] = (True, f"{len(rows_)} results")
     return out
@@ -310,7 +338,11 @@ def failure_report(sent: dict[str, int], failed: dict[str, list[str]]) -> tuple[
 
 
 def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
-    """(kind, query, location, page) for every request, for the portals that are on."""
+    """(kind, query, location, page) for every request, for the portals that are on.
+
+    `kind` is "li", "lir" or "fh" for the app's two portals, and the portal's
+    own name for a person's portal, whose requests come last and are sent by
+    `sweep`, paced."""
     li, fh = on.get("linkedin-search"), on.get("freehire-search")
     tasks = []
     # LinkedIn: every query against the home city deep, the rest shallow.
@@ -340,6 +372,19 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
                     tasks.append(("lir", q, loc, 1))
             if fh:
                 tasks.append(("fh", q, None, 1))
+    # A person's own portals: every query at each of its places, as deep as it
+    # says (`pages:`, capped by --pages), and the named employers on page one at
+    # its first place.
+    for skill in contract_portals(on):
+        places = portal_locations(skill)
+        depth = min(pages, portals.pages(skill))
+        for q in QUERIES:
+            for loc in places:
+                for pg in range(1, depth + 1):
+                    tasks.append((skill, q, loc, pg))
+        for emp in EMPLOYERS:
+            for t in EMPLOYER_QUERIES:
+                tasks.append((skill, f"{emp} {t}", places[0], 1))
     return tasks
 
 
@@ -365,10 +410,10 @@ def main() -> int:
     for name in portals.unknown():
         print(f"portals: PORTALS in profile/search.py names {name!r}, which is not "
               f"an installed portal, so it switches nothing", file=sys.stderr)
-    print("portals: " + ", ".join(f"{n} {'on' if v else 'off'}" for n, v in on.items()
-                                  if n in WIRED))
-    for name in sorted(n for n, v in on.items() if v and n not in WIRED):
-        print(f"portals: {name} is on but this scrape has no adapter for it; "
+    print("portals: " + ", ".join(f"{n} {'on' if v else 'off'}" for n, v in on.items()))
+    for name in sorted(n for n, v in on.items() if v and n not in WIRED
+                       and not portals.has_cli(n)):
+        print(f"portals: {name} is on but has no CLI, so a round cannot call it; "
               f"/scrape runs it from its SKILL.md")
 
     # One broad probe per portal that is on, before the sweep. A portal that has
@@ -393,9 +438,18 @@ def main() -> int:
     seen: dict[str, dict] = {}
     sent: dict[str, int] = {}
     failed: dict[str, list[str]] = {}
+    mine: dict[str, list[tuple]] = {}
+    for task in tasks:
+        if task[0] not in ("li", "lir", "fh"):
+            mine.setdefault(task[0], []).append(task)
+    paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
+    sweeps = {paced.submit(sweep, skill, ts, a.jobage): portals.short(skill)
+              for skill, ts in mine.items()}
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         futs = {}
         for kind, q, loc, pg in tasks:
+            if kind in mine:
+                continue
             portal = "freehire" if kind == "fh" else "linkedin"
             sent[portal] = sent.get(portal, 0) + 1
             if kind == "li":
@@ -415,6 +469,19 @@ def main() -> int:
             for r in rows_:
                 if r.get("url"):
                     seen.setdefault(r["url"], r)
+    for f in as_completed(sweeps):
+        portal = sweeps[f]
+        try:
+            rows_, n, errs = f.result()
+        except Exception as e:
+            rows_, n, errs = [], 1, [f"{type(e).__name__}: {str(e)[:120]}"]
+        sent[portal] = n
+        if errs:
+            failed.setdefault(portal, []).extend(errs)
+        for r in rows_:
+            if r.get("url"):
+                seen.setdefault(r["url"], r)
+    paced.shutdown()
 
     # Employer boards, straight from the ATS: Greenhouse, Lever, Ashby and
     # Workday. No key, no HTML, and keyed by EMPLOYER rather than by keyword,

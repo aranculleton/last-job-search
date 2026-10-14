@@ -82,12 +82,11 @@ def disabled_portal_prefixes(root: str = ".agents/skills") -> list[str]:
 
     `path_exists` answers "does this fork still ship it", which is the right
     question for a commit touching a file that was deleted. It is the wrong
-    question for a portal that is still on disk and switched off, and this fork
-    has four of those: the Danish portals are kept as reference implementations
-    for `/add-portal` and are never run. An upstream fix to `jobindex-search`
-    applies perfectly here and means nothing, so it was arriving in the weekly
-    report under "worth reviewing" every week, which is how a report gets
-    skimmed and then ignored.
+    question for a portal that is still on disk and switched off: an upstream
+    fix to it applies perfectly here and means nothing. The four Danish portals
+    sat here switched off until 2026-10 (they are deleted now), and every
+    upstream fix to one arrived in the weekly report under "worth reviewing",
+    which is how a report gets skimmed and then ignored.
 
     Read from the SKILL.md rather than from a list in this file, so enabling a
     portal is a one-line change in one place and the triage follows it.

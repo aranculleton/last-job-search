@@ -341,18 +341,19 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 - **`job-scraper` vs `scrape`.** One skill. The directory is `job-scraper`, the declared
   `name:` is `scrape`, and `/scrape` is the command. Not three things.
 - **`.claude/skills/` vs `.agents/skills/`.** The first is the four skills above. The
-  second is six portal CLIs that `/scrape` calls; they are search tools, not advice, and
-  they are never invoked directly.
-- **`jobbank-search` is Danish.** It is Akademikernes Jobbank (`jobbank.dk`), it ships
-  `enabled: false`, and it has nothing to do with any national government job board that
-  shares its name. Do not enable `jobbank-search` expecting coverage of another country.
-  `jobindex-search`, `jobnet-search` and
-  `jobdanmark-search` are Danish too and are kept only as reference implementations for
-  `/add-portal`. **`linkedin-search` and `freehire-search` are on by default.** A person
-  turns any portal on or off in `profile/search.py` `PORTALS`, never in its `SKILL.md`,
-  which is the app's; `python3 tools/portals.py` prints what the next round will search.
+  second is the job-portal CLIs that rounds and `/scrape` call; they are search tools, not
+  advice, and they are never invoked directly.
+- **The app ships two portals, and every other one is the person's.** `linkedin-search`
+  and `freehire-search` work in any country and are on by default; a person turns either
+  off in `profile/search.py` `PORTALS`, never in its `SKILL.md`, which is the app's.
   LinkedIn's robots.txt disallows its guest job endpoints for crawlers it does not name,
-  and `/setup` says so; switching it off is the person's call.
+  and `/setup` says so; switching it off is the person's call. A board for one country,
+  field or level is built for the person by `/add-portal` (which `/setup` runs for the
+  boards its research found), lives in their repo as a personal path
+  (`tools/personal_paths.py`), and is searched by every round, kept to the `crawl-delay`
+  its `SKILL.md` declares. The app never carries one: its leak scan fails if it does.
+  `python3 tools/portals.py` prints what the next round will search, and the boards
+  researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
   the employers named in `profile/boards.py` straight from their ATS (Greenhouse, Lever,
   Ashby, Workday), which is how large employers that a portal under-indexes reach a round,

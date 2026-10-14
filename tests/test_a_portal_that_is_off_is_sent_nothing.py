@@ -16,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import hydrate  # noqa: E402
+import personal_paths  # noqa: E402
 import portals  # noqa: E402
 import scrape_wide  # noqa: E402
 
@@ -30,12 +31,14 @@ class TheDefaults(unittest.TestCase):
         self.assertIs(d["linkedin-search"], True)
         self.assertIs(d["freehire-search"], True)
 
-    def test_the_danish_portals_ship_off(self):
-        d = portals.defaults()
-        for name in ("jobbank-search", "jobdanmark-search", "jobindex-search",
-                     "jobnet-search"):
-            with self.subTest(portal=name):
-                self.assertIs(d[name], False)
+    def test_the_app_ships_only_the_portals_that_work_anywhere(self):
+        """A board for one country is the person's, built by /add-portal in their
+        own repo. The four Danish boards shipped here until 2026-10; a person
+        anywhere else got four switches for a market that was not theirs. A
+        person's own portals are personal files, so this runs in their repo too."""
+        apps = [n for n in portals.defaults()
+                if not personal_paths.is_personal(f".agents/skills/{n}/SKILL.md")]
+        self.assertEqual(sorted(apps), sorted(portals.APP_PORTALS))
 
     def test_the_example_person_takes_the_defaults(self):
         self.assertEqual(portals.overrides(), {})
@@ -46,10 +49,9 @@ class TheDefaults(unittest.TestCase):
 class ThePersonHasTheLastWord(unittest.TestCase):
 
     def test_portals_overrides_each_portal_it_names(self):
-        got = portals.enabled({"linkedin-search": True, "freehire-search": False})
-        self.assertIs(got["linkedin-search"], True)
+        got = portals.enabled({"freehire-search": False})
+        self.assertIs(got["linkedin-search"], True, "a portal not named keeps its default")
         self.assertIs(got["freehire-search"], False)
-        self.assertIs(got["jobindex-search"], False, "a portal not named keeps its default")
 
     def test_a_misspelt_name_is_reported_not_silently_ignored(self):
         self.assertEqual(portals.unknown({"linkedin": True, "freehire-search": True}),

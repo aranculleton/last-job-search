@@ -38,10 +38,11 @@ import argparse
 import functools
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -49,58 +50,37 @@ import portals  # noqa: E402
 
 # --------------------------------------------------------------- portal CLIs
 #
-# These pointed at one build in one session's scratchpad directory, named with
-# that session's own UUID. A scratchpad does not survive the container, so on
-# every fresh checkout the scrape resolved both paths to files that were not
-# there and produced nothing, with no error saying why.
-#
-# The sources are in the repo and carry no runtime dependencies. This finds a
-# build if one exists, makes one if bun is there, and says what to run if
-# neither.
-CLI_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                        ".agents", "skills")
-
-
-@functools.lru_cache(maxsize=None)
-def portal_cli(skill: str, env_var: str) -> str:
-    """The runnable CLI for a portal skill, built on demand.
-
-    Returns a path to a bundled `.mjs`. Raises with the build command when the
-    sources are present but nothing can build them, because a scrape that
-    quietly returns nothing is the failure this whole module exists to avoid.
-    """
-    override = os.environ.get(env_var, "").strip()
-    if override:
-        if not os.path.exists(override):
-            raise FileNotFoundError("%s points at %s, which does not exist"
-                                    % (env_var, override))
-        return override
-    dist = os.path.join(CLI_ROOT, skill, "cli", "dist", "cli.mjs")
-    if os.path.exists(dist):
-        return dist
-    src = os.path.join(CLI_ROOT, skill, "cli", "src", "cli.ts")
-    if not os.path.exists(src):
-        raise FileNotFoundError(
-            "no CLI for %s: neither a build nor %s. Is .agents/skills/%s present?"
-            % (skill, src, skill))
-    if not shutil.which("bun"):
-        raise RuntimeError(
-            "%s needs building and bun is not installed. Install bun, or build "
-            "it elsewhere and point %s at the result." % (skill, env_var))
-    os.makedirs(os.path.dirname(dist), exist_ok=True)
-    build = subprocess.run(["bun", "build", src, "--target", "node",
-                            "--outfile", dist],
-                           capture_output=True, text=True)
-    if build.returncode or not os.path.exists(dist):
-        raise RuntimeError("bun build failed for %s:\n%s"
-                           % (skill, (build.stderr or build.stdout)[:800]))
-    return dist
-# Resolved on first use, not at import: see the note on `portal_cli`.
+# tools/portals.py finds or builds each portal's CLI (one resolver for this file
+# and scrape_wide.py), says which are on, and maps a posting's `portal` field
+# back to its folder. Any portal that follows the contract can be hydrated: the
+# app's two, and every portal a person built with /add-portal.
+portal_cli = portals.cli
+# Resolved on first use, not at import: see tools/portals.py `cli`.
 CLI = {"linkedin": functools.partial(portal_cli, "linkedin-search", "LINKEDIN_CLI"),
        "freehire": functools.partial(portal_cli, "freehire-search", "FREEHIRE_CLI")}
 # A portal that is off is sent nothing, a detail fetch included
 # (tools/portals.py).
 SKILL = {"linkedin": "linkedin-search", "freehire": "freehire-search"}
+
+# One clock per paced portal: a board whose robots.txt asks for five seconds
+# between requests gets five seconds between detail fetches too, whatever the
+# number of workers.
+_PACE: dict[str, tuple[threading.Lock, list[float]]] = {}
+_PACE_GUARD = threading.Lock()
+
+
+def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> None:
+    delay = portals.crawl_delay(skill)
+    if not delay:
+        return
+    with _PACE_GUARD:
+        lock, last = _PACE.setdefault(skill, (threading.Lock(), [0.0]))
+    with lock:
+        wait = last[0] + delay - clock()
+        if wait > 0:
+            sleep(wait)
+        last[0] = clock()
+
 
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
 # requirements off bodies in a round, which is exactly the text the screen and
@@ -109,15 +89,33 @@ BODY_CAP = 20_000
 
 
 def fetch(job: dict, timeout: int = 60) -> dict:
-    """Return the job with `desc` filled in where it was missing, or `hydrate_error` set."""
+    """Return the job with `desc` filled in where it was missing, or `hydrate_error` set.
+
+    A posting from a person's portal may carry the board's search `snippet`.
+    When the full body cannot be had, the snippet stands in for it, and
+    `hydrate_error` still says why, so a thin body can be told from a short
+    posting.
+    """
     if (job.get("desc") or "").strip():
         return job
+    out = _fetch(job, timeout)
+    if not (out.get("desc") or "").strip() and (job.get("snippet") or "").strip():
+        out = {**out, "desc": job["snippet"][:BODY_CAP]}
+    return out
+
+
+def _fetch(job: dict, timeout: int) -> dict:
     portal = job.get("portal") or ""
-    resolve = CLI.get(portal)
+    skill = SKILL.get(portal) or portals.skill_of(portal)
+    resolve = CLI.get(portal) or (skill and portals.has_cli(skill)
+                                  and functools.partial(portal_cli, skill))
     if not resolve:
         return {**job, "hydrate_error": f"no detail CLI for portal {portal!r}"}
-    if not portals.is_enabled(SKILL[portal]):
-        return {**job, "hydrate_error": f"{SKILL[portal]} is off (python3 tools/portals.py)"}
+    if not portals.is_enabled(skill):
+        return {**job, "hydrate_error": f"{skill} is off (python3 tools/portals.py)"}
+    if portal not in CLI and not portals.has_detail(skill):
+        return {**job, "hydrate_error": f"{skill} takes no detail fetch (detail: false in "
+                                        f"its SKILL.md); the search text is the body"}
     try:
         cli = resolve()
     except (OSError, RuntimeError) as e:
@@ -128,6 +126,7 @@ def fetch(job: dict, timeout: int = 60) -> dict:
         return {**job, "hydrate_error": f"{portal} CLI unavailable: {e}"}
     ident = job.get("id") or job.get("url")
     try:
+        pace(skill)
         # A FILE, not a pipe. Node writes to stdout asynchronously when it is a
         # pipe and synchronously when it is a regular file, so a CLI that calls
         # process.exit() after writing loses whatever has not drained. Under

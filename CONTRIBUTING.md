@@ -130,5 +130,5 @@ lacks into worth-reviewing versus probably-skip, and writes a rolling issue. It 
 merges or pushes.
 
 Port by hand, and read the diff rather than trusting a clean cherry-pick. On a fork,
-"applies cleanly" is not "correct": a commit fixing one of the four disabled Danish
-portals will apply perfectly and mean nothing here.
+"applies cleanly" is not "correct": a commit fixing a portal this app no longer ships (the
+upstream's Danish boards, deleted here in 2026-10) means nothing here.

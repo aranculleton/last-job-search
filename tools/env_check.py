@@ -14,10 +14,11 @@ What it reads:
             check), pypdf (the same, and it can be installed but broken: a
             container's system `cryptography` makes it panic in pyo3 until
             `pip3 install --upgrade cffi`), bun (the portal CLIs)
-  hosts     the job boards the app calls. A proxy that answers CONNECT with 403
-            or 407 is the environment's network policy: the host goes under
-            Allowed domains. Any other failure is the host or DNS. A host that
-            answers at all, even 401 or 404, is reachable.
+  hosts     the job boards the app calls, and every board the person has a
+            portal for (the `url:` in its SKILL.md). A proxy that answers
+            CONNECT with 403 or 407 is the environment's network policy: the
+            host goes under Allowed domains. Any other failure is the host or
+            DNS. A host that answers at all, even 401 or 404, is reachable.
 
 Workday has no host to probe until a person has a board on it (every Workday
 site is `<tenant>.<wdN>.myworkdayjobs.com`), so it is probed through the first
@@ -41,6 +42,20 @@ HOSTS = (
     ("Ashby", "https://api.ashbyhq.com"),
 )
 POLICY = {"403", "407"}
+
+
+def hosts() -> list[tuple[str, str]]:
+    """The app's hosts, then each enabled portal of the person's that names a `url:`."""
+    out = list(HOSTS)
+    try:
+        import portals
+        for name, on in portals.enabled().items():
+            u = portals.url(name)
+            if on and name not in portals.APP_PORTALS and u.startswith("http"):
+                out.append((name, u))
+    except Exception:
+        pass
+    return out
 
 
 def classify(exit_code: int, connect: str, code: str) -> str:
@@ -115,7 +130,7 @@ def main() -> int:
          "" if shutil.which("bun") else "missing; the portal CLIs need it (SETUP.md)")
 
     print("job boards")
-    for name, url in HOSTS:
+    for name, url in hosts():
         verdict, detail = probe(url)
         line(f"{name} ({url.split('//')[1]})", verdict == "reachable", detail)
     wd = workday_url()

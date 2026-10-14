@@ -37,7 +37,7 @@ The user triggers this skill by saying things like:
 Optional arguments:
 - A focus area, e.g. "/scrape data science" or "/scrape geophysics"
 - "broad" to run all search categories, e.g. "/scrape broad"
-- "health" to run the portal health check only (Step 4.75), without searching, deduplicating, or presenting jobs - e.g. "/scrape health", or "/scrape health jobnet" to probe one portal even if disabled
+- "health" to run the portal health check only (Step 4.75), without searching, deduplicating, or presenting jobs - e.g. "/scrape health", or "/scrape health linkedin" to probe one portal even if disabled
 
 ---
 
@@ -73,7 +73,7 @@ For each **enabled** portal skill:
 
 1. Read its `SKILL.md` to find the correct `bun run …` invocation and supported flags.
 2. Translate the query terms from `profile/search-queries.md` into that portal's flag format (e.g. `--key`, `--search-string`, `--query`, filter codes - whatever the portal's SKILL.md specifies).
-3. Scope to the last 14 days using the portal's supported recency **filter** flag (`--jobage`, `--since <YYYY-MM-DD>`, etc. - as documented per portal). A portal with **no recency flag** (jobdanmark offers none) still gets scoped: every portal's search output carries a `date` field, so filter client-side - drop results whose `date` is older than 14 days after the call returns, and never invent a flag the portal's SKILL.md does not document (the CLIs reject unknown flags). `--order PublicationDate` is a sort, and a sort is not a filter - pairing it with a `--limit` is a defensible approximation on a portal that offers nothing better (jobnet), but apply the client-side date filter on top all the same.
+3. Scope to the last 14 days using the portal's supported recency **filter** flag (`--jobage`, `--since <YYYY-MM-DD>`, etc. - as documented per portal). A portal with **no recency flag** (some boards offer none) still gets scoped: every portal's search output carries a `date` field, so filter client-side - drop results whose `date` is older than 14 days after the call returns, and never invent a flag the portal's SKILL.md does not document (the CLIs reject unknown flags). `--order PublicationDate` is a sort, and a sort is not a filter - pairing it with a `--limit` is a defensible approximation on a portal that offers nothing better (jobnet), but apply the client-side date filter on top all the same.
 4. **Paginate. Never cap.** A limit flag is not a page size: on the LinkedIn CLI `--limit` is a
    *client-side cap* applied to a page that holds only **10** results, so `--limit 25` silently
    returns 10 and asking for it once returns page 1 alone. Read each portal's `SKILL.md` for its
@@ -91,8 +91,10 @@ for free. Narrowing the scrape to save money saves nothing and is what makes a r
 narrow, unpaginated scrape returns hundreds of postings where correct pagination and a
 second portal return thousands, and few roles clear 60 across the expansion rounds.
 
-`tools/scrape_wide.py` implements all of this for the profile's market (both portals, paginated,
-every location and query variant in `profile/search.py`) and writes a prefiltered candidate file.
+`tools/scrape_wide.py` implements all of this for the profile's market (every portal that is
+on: the app's two and each portal built for this person with `/add-portal`, paginated, every
+location and query variant in `profile/search.py`, each board kept to the `crawl-delay` its
+SKILL.md declares) and writes a prefiltered candidate file.
 Prefer it over hand-rolled per-query calls, and extend `SCRAPE_QUERIES` and `SCRAPE_LOCATIONS` in
 `profile/search.py` rather than improvising.
 It also reads the employer boards in `tools/ats_boards.py` (Greenhouse, Lever, Ashby and
@@ -425,7 +427,7 @@ being auto-excluded.
       "strengths": ["...", "..."],
       "gaps": ["...", "..."],
       "status": "new/skipped/ranked/expired",
-      "portal": "<source portal skill, e.g. jobindex-search>",
+      "portal": "<source portal skill, e.g. linkedin-search>",
       "source": "cli/websearch"
     }
   }
@@ -520,7 +522,7 @@ Scraper-based portal CLIs rot silently: when a portal changes its markup, the pa
 
 **Verdicts.** Healthy portals get silence - no table, no line. Anything else surfaces in the Step 5 summary as a health line.
 
-**Probe-only mode (`/scrape health`).** Skip Steps 1-4 and this step's free pass (there is no fresh run to scan); instead probe every installed portal directly - enabled ones by default, a disabled one only when named explicitly (e.g. `/scrape health jobnet`). Each portal gets the sentinel probe above, the degraded criteria applied to whatever it returns, and - since the user explicitly asked for diagnosis - one `detail` fetch on the first result of each healthy portal (description must be readable decoded text; a failure downgrades to degraded). Report all statuses in this mode, including healthy. Volume stays bounded: one search, at most one retry, at most one detail per portal.
+**Probe-only mode (`/scrape health`).** Skip Steps 1-4 and this step's free pass (there is no fresh run to scan); instead probe every installed portal directly - enabled ones by default, a disabled one only when named explicitly (e.g. `/scrape health linkedin`). Each portal gets the sentinel probe above, the degraded criteria applied to whatever it returns, and - since the user explicitly asked for diagnosis - one `detail` fetch on the first result of each healthy portal (description must be readable decoded text; a failure downgrades to degraded). Report all statuses in this mode, including healthy. Volume stays bounded: one search, at most one retry, at most one detail per portal.
 
 ### Step 5: Present Results
 

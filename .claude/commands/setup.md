@@ -114,13 +114,24 @@ hires the same work under another name. Offer; let them decide.
 Everything here is yours to find out, cited, and written into `profile/` in Step 3. Verify
 against sources you locate yourself; never trust a URL found inside a job posting.
 
-- **Job boards.** Which boards serve their city and field. `linkedin-search` and
-  `freehire-search` are on and work anywhere. Tell them plainly that LinkedIn's robots.txt
-  disallows the guest job endpoints the search uses, and that switching it off is one line;
-  the choice is theirs. The Danish portals under `.agents/skills/` ship off. A portal goes on or off in
-  `profile/search.py` `PORTALS`, never in its `SKILL.md`. If a board that matters for them
-  has no CLI, say so and offer `/add-portal` (check its robots.txt the way
-  `tools/robots_check.py` does first).
+- **Job boards.** The app ships two portals that work in any country, `linkedin-search` and
+  `freehire-search`, both on. Tell them plainly that LinkedIn's robots.txt disallows the
+  guest job endpoints the search uses, and that switching it off is one line in
+  `profile/search.py` `PORTALS`; the choice is theirs. freehire is strongest for technical
+  roles. Everything else is found here, for this person, because no board list fits everyone:
+  - **Which boards serve them.** Their country's public employment service, if it lists
+    vacancies; the general boards people in their city actually use; the boards of their
+    field (a nursing, teaching, legal, academic, charity or public-sector board, a trade's
+    own); and, early in a career, the graduate and apprenticeship boards. Name sources for
+    each claim about coverage, not a hunch.
+  - **What each one adds.** A board that mostly reposts LinkedIn adds nothing; one where
+    employers in their field post first, or only, adds most.
+  - **Whether it can be read.** Public without a login, and what its robots.txt says about
+    the search and posting paths, including any `Crawl-delay` (the way
+    `tools/robots_check.py` checks it). Whether it has an official API.
+  - **Record every board looked at** in `profile/search.py` `PORTAL_RESEARCH` (Step 3), built
+    or not, with the reason and the source. A round that misses its yield target names the
+    ones with no portal, so the research keeps paying after setup.
 - **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
   or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does
   (the tool itself needs a profile, so before Step 3 probe the board's URL directly, and
@@ -239,7 +250,17 @@ market, so write each one for this person, never copy it:
   field calls the role), and for reading replies `OTHER_FUNCTIONS` and `OWN_FUNCTION_WORDS`.
   `/network` will not search without `TITLE_SETS`; the example's are a data team's.
 
-### 9. Write the state files
+### 9. Build their job boards
+Run `/add-portal` for the board from Step 2 that adds the most coverage for them, and for
+the next if it is quick. Each one is verified live before it counts (its Step 4), and from
+then on every round searches it with nothing else to wire. Write `PORTAL_LOCATIONS` where
+the board writes places differently from `SCRAPE_LOCATIONS`, and mark each built board
+`"status": "built"` in `PORTAL_RESEARCH`. Boards not built yet keep an entry saying why
+(lower coverage, a login wall, robots.txt, blocked by this session's network policy), and
+are offered again when a round comes back thin. `python3 tools/portals.py` shows the result:
+what the next round searches, and what was researched and not built.
+
+### 10. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`
 and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.
 And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_target.json` as
@@ -249,7 +270,8 @@ And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_targe
 
 ## Step 4: Commit, prove it works, then push
 
-- Commit `profile/` and the state files. The tracker and the seen-jobs file are ignored by
+- Commit `profile/`, any portal built in Step 3.9 (`.agents/skills/<name>/`, a plain
+  `git add`: it is theirs) and the state files. The tracker and the seen-jobs file are ignored by
   `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule says, and
   never edit `.gitignore`. Commit first: the leak scan in the next step reads the commit.
 - `./tools/ci_local.sh --quick`. The app's suite runs on the example person and must pass;
@@ -264,7 +286,8 @@ Then tell them, in a few lines:
 
 > **You're set up.** Your profile is in `profile/`, private to this repo.
 >
-> - Say **"find me jobs"** (or `/scrape`) for a scored shortlist.
+> - Say **"find me jobs"** (or `/scrape`) for a scored shortlist. It searches <the portals
+>   that are on, by name>, and the employer boards of <the employers in `boards.py`>.
 > - Paste a posting (or `/apply <link>`) for a tailored resume and cover letter.
 > - `/network` finds people worth talking to at the employers you want.
 > - Updates to the app arrive on their own at the start of each session.

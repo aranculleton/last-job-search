@@ -201,11 +201,10 @@ class DisabledPortalCommitsAreSkipped(TriageRepoFixture):
     """A portal that is on disk and switched off is not a portal this fork runs.
 
     `path_exists` answers "does this fork still ship the file", which is right
-    for a deleted file and wrong for a disabled one. This fork keeps the four
-    Danish portals as reference implementations for `/add-portal` and never
-    runs them, so an upstream fix to `jobindex-search` applies perfectly and
-    means nothing. Every one of those was arriving under "worth reviewing",
-    which is how a weekly report gets skimmed and then ignored.
+    for a deleted file and wrong for a disabled one. An upstream fix to a portal
+    this fork keeps switched off applies perfectly and means nothing. Every one
+    of those was arriving under "worth reviewing", which is how a weekly report
+    gets skimmed and then ignored.
     """
 
     def _portal(self, name, enabled):
@@ -214,11 +213,11 @@ class DisabledPortalCommitsAreSkipped(TriageRepoFixture):
         self.write(f".agents/skills/{name}/cli/src/cli.ts", "export const x = 1;\n")
 
     def test_a_commit_only_touching_a_disabled_portal_is_skipped(self):
-        self._portal("jobindex-search", "false")
-        self.commit("fork: ship jobindex-search disabled")
-        self.write(".agents/skills/jobindex-search/cli/src/cli.ts",
+        self._portal("oldboard-search", "false")
+        self.commit("fork: ship oldboard-search disabled")
+        self.write(".agents/skills/oldboard-search/cli/src/cli.ts",
                    "export const x = 2;\n")
-        self.commit("upstream: fix jobindex-search parsing")
+        self.commit("upstream: fix oldboard-search parsing")
         self.set_upstream_to_head()
         git(self.root, "reset", "--hard", "HEAD~1")
 
@@ -243,10 +242,10 @@ class DisabledPortalCommitsAreSkipped(TriageRepoFixture):
 
     def test_a_commit_touching_both_is_worth_reviewing(self):
         """The enabled half is real work; the disabled half must not hide it."""
-        self._portal("jobindex-search", "false")
+        self._portal("oldboard-search", "false")
         self._portal("linkedin-search", "true")
         self.commit("fork: ship both")
-        self.write(".agents/skills/jobindex-search/cli/src/cli.ts", "export const x = 3;\n")
+        self.write(".agents/skills/oldboard-search/cli/src/cli.ts", "export const x = 3;\n")
         self.write(".agents/skills/linkedin-search/cli/src/cli.ts", "export const x = 3;\n")
         self.commit("upstream: shared fix across two portals")
         self.set_upstream_to_head()

@@ -37,9 +37,10 @@ import scrape_wide  # noqa: E402
 
 MODULES = (hydrate, scrape_wide)
 
-# The portals scrape_wide and hydrate can call. One may ship off
+# The app's own portals, which ship with a build. Either may be off
 # (tools/portals.py), but a person can turn it on, so its resolver must still
-# work. The Danish portals have no adapter there and may have no build.
+# work. Both modules now share tools/portals.py `cli`; they are still checked
+# one by one, because a module could stop using it.
 WIRED = ("linkedin-search", "freehire-search")
 
 

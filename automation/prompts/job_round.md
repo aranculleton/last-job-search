@@ -7,7 +7,9 @@ nothing until the candidate picks. `_common.md` first.
    file in `documents/rounds/`. Run, with `$SCRATCH` a scratch directory outside the repo:
    `python3 tools/run_round.py --out "$SCRATCH/rN" --jobage 7 --expand`
    Read the exit code: 0 met the yield target, 2 missed it (report what the MISSED message
-   says), 1 a stage broke (diagnose it and say so; never paper over it).
+   says), 1 a stage broke (diagnose it and say so; never paper over it). A portal the
+   health probe reports DOWN goes in the message's first line: a quiet board is not a
+   thin market.
 2. From the shortlist, drop anything failing the candidate's bar (`tools/bar.py`, and the
    target sectors and exclusions in `profile/CLAUDE.md`), any employer with a live interview
    process or referral hold, anything already drafted or applied to in
@@ -33,6 +35,10 @@ Shortlist <rN>: <n> roles at 60+, <n> at 75+
 Reply in <the chat to reply in, per _common.md> with the numbers to draft, for example
 "draft 1, 3", and say if you have already applied to any.
 ```
+
+   When the round missed its yield target, add one line under the list: the counts, and
+   the boards the MISSED message names as researched with no portal yet, with "say 'build
+   <board>' and I will add it" (that is `/add-portal`, run when they ask, never here).
 
 5. **When the candidate replies with picks** (in this chat): record any "already applied"
    answers in the tracker, then `./tools/setup_env.sh` (LaTeX this time), stage the picks
