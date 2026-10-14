@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.2
+framework_version: 1.0.3
 ---
 
 # Job Evaluation Framework
@@ -10,7 +10,7 @@ The method is the app's; the values are the person's. /setup writes the filled-i
 
 ## Eligibility Gate - run before scoring
 
-If the candidate is not a citizen or permanent resident of the country they are applying in, run this first. It is a hard filter, not a scoring dimension, and it is separate from work-permit *timing*: timing asks "can they work the required hours yet?", eligibility asks "are they permitted to hold this job at all?". A candidate can pass timing and still be categorically excluded.
+Run this first, for every candidate. It is a hard filter, not a scoring dimension. For a citizen or permanent resident of the country they search in, most of it collapses to PASS: what still fails is a clearance they do not hold, a role open only to another country's citizens, and a role in another country where they would need a visa. For anyone on a permit or visa, it is separate from work-permit *timing*: timing asks "can they work the required hours yet?", eligibility asks "are they permitted to hold this job at all?". A candidate can pass timing and still be categorically excluded.
 
 Read the posting's eligibility / work rights / "who can apply" section **verbatim** and classify:
 
@@ -18,7 +18,7 @@ Read the posting's eligibility / work rights / "who can apply" section **verbati
 |-----------------|---------|
 | Names a **citizenship or permanent-residency requirement** ("must be a citizen of X", "permanent resident", "PR required", "full working rights" where the employer means citizen/PR) | **FAIL - hard stop.** Do not score, do not draft. Quote the exact wording back to the user. |
 | Requires a **security clearance** at any level | **FAIL** in most countries, since clearance is normally gated on citizenship. Verify the specific scheme rather than assuming. |
-| **Explicitly names** the candidate's permit class, or says "international applicants welcome", "visa holders considered", "we sponsor" | **PASS** - verified acceptance. Worth noting as a positive in the application. |
+| **Explicitly names** the candidate's status (their citizenship, residency or permit class), or says "international applicants welcome", "visa holders considered", "we sponsor" | **PASS** - verified acceptance. Worth noting as a positive in the application. |
 | **Silent** on citizenship or residency | **PROCEED, but mark unverified.** Check the employer's own careers or international-applicant page before drafting. |
 
 **Two rules that are easy to get wrong:**
@@ -30,7 +30,7 @@ Read the posting's eligibility / work rights / "who can apply" section **verbati
 
 If the candidate's permit also constrains *hours* or *start date* (a student visa with a term-time cap, a permit that begins on graduation), record that as a second gate under this section during `/setup`, with the specific dates. Do not merge it with the eligibility question above - they fail for different reasons and need different answers.
 
-**This profile: [PLACEHOLDER: work status and base city, e.g. "<permit class>, <City>" or "citizen, <City>"].** [PLACEHOLDER: one or two sentences from the Work authorization line in `profile/01-candidate-profile.md`: the status or permit held, the country it covers, whether sponsorship is required now or in future, and the date the candidate confirmed it.] Both questions below are answered without hedging:
+**This profile: [PLACEHOLDER: work status and base city, e.g. "citizen, <City>", "permanent resident, <City>" or "<permit class>, <City>"].** [PLACEHOLDER: one or two sentences from the Work authorization line in `profile/01-candidate-profile.md`: the status held (citizenship, residency or permit), the country it covers, whether sponsorship is required now or in future, and the date the candidate confirmed it. For a citizen this is one line: "Citizen of <Country>; no sponsorship needed, now or in future."] Both questions below are answered without hedging:
 
 - **"Are you legally entitled to work in [PLACEHOLDER: country]?" -> [PLACEHOLDER: YES or NO].** [PLACEHOLDER: why, e.g. "A <permit class> holder is legally entitled to work in <Country> right now."] Where the answer is yes, never answer this question with a hedge, and never let a posting's generic "must be legally entitled to work in <Country>" line trigger a FAIL. It does not.
 - **"Do you now or will you in the future require sponsorship?" -> [PLACEHOLDER: YES or NO, and the date the candidate confirmed it].** Answer this plainly on application forms and in conversation. Where the answer is no, do not hedge it, do not add a caveat about the candidate's status, and do not treat it as a question that needs revisiting.
@@ -50,6 +50,7 @@ What that produces, by employer type:
 | **[PLACEHOLDER: other country] role via a nationality-gated status** ([PLACEHOLDER: the route, e.g. a treaty work status open only to citizens of named countries]) | **FAIL** unless the candidate holds the required citizenship. A work permit does not confer it. Do not treat an employer's "we support <status>" as a route for a candidate without that citizenship. This overrides the more general "employer explicitly sponsors" row in dimension 4's location table. |
 | **[PLACEHOLDER: other country] role with genuine visa sponsorship** ([PLACEHOLDER: the visa classes]) | **PASS with FLAG**, and be realistic in the report: [PLACEHOLDER: what the route involves, e.g. "<visa class> is lottery-gated and slow"], and few employers will run it for a mid-level hire. Worth flagging, not worth building the search around. |
 | **Based in [PLACEHOLDER: other country], remote, employer explicitly hires from [PLACEHOLDER: country]** | **PASS.** Often the only reliably viable cross-border route for a candidate without that country's citizenship. Quote the wording that establishes it. |
+| **[PLACEHOLDER: other country] role inside a free-movement area the candidate's citizenship covers** (EU/EEA and Switzerland for their citizens; the Common Travel Area for Irish and British citizens; the Trans-Tasman arrangement for Australian and New Zealand citizens) | **PASS** on eligibility: no sponsorship and no visa application is involved. Location and language gates still apply. Delete this row if the candidate holds no such citizenship. |
 
 **A time-limited work status changes the strategy, so surface it.** [PLACEHOLDER: keep this block only if the candidate's work status has an expiry date; delete it for a citizen, a permanent resident or anyone whose status does not expire.] Where the status is time-limited and its expiry date is still marked `[CONFIRM: ...]` in `profile/01-candidate-profile.md`, until it is filled in:
 

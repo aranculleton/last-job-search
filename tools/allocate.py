@@ -107,7 +107,12 @@ THEME_CUES = {
                    "troubleshoot", "debug", "root cause"],
  "reliability":   ["reliability", "uptime", "sla", "downtime", "resilien"],
  "documentation": ["documentation", "confluence", "runbook", "specification"],
- "mentoring":     ["mentor", "coach", "junior", "guide the team", "knowledge sharing"],
+ # "junior" on its own was a cue, so every posting FOR a junior role scored
+ # mentoring bullets up: the word names the level of the job far more often
+ # than people the hire would develop. It counts only as the object of the work.
+ "mentoring":     ["mentor", "coach", "guide the team", "knowledge sharing", "upskill",
+                   "develop junior", "developing junior", "train junior", "training junior",
+                   "support junior", "supporting junior"],
  "automation":    ["automat", "manual effort", "efficiency", "self-serve", "self-service"],
  "compliance":    ["compliance", "gdpr", "privacy", "safeguard", "trust and safety",
                    "child", "age verification"],
