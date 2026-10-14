@@ -141,6 +141,16 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **A vacancy open only to the employer's own staff is cut.** A test of the scheduled
+  shortlist ranked an "Internal Mobility" posting eighth; nothing screened for it. A title
+  saying "internal mobility", "internal only" or "internal applicants only", or a sentence
+  restricting the role to current or existing staff, is now a cut with the quote. "Internal
+  candidates will be prioritised" and "Internal Audit" are not. Postings in another language
+  use `INTERNAL_ONLY_TITLE` and `INTERNAL_ONLY` in `search.py`.
+- **The shortlist message reads well on a phone.** One role per block (role, employer and
+  score first, location, posting date and one reason on the next line, the link on its own
+  line), warm-route notes under their role, and a failure line only when a step failed.
+
 - **A junior role no longer scores mentoring bullets up.** `tools/allocate.py` counted the
   bare word "junior" as a mentoring cue, so every posting for a junior role pulled your
   mentoring bullets forward. It now counts "junior" only as the object of the work
