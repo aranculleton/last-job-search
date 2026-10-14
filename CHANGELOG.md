@@ -23,6 +23,13 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **`person.json`'s keys are listed with everything else.** `python3 tools/profile_names.py
+  person` shows every key a tool reads, whether it is needed or optional, whether the example
+  sets it, and where it is read.
+- **The evaluation template is written for any work status.** `04-job-evaluation.md` assumed a
+  permit holder; a citizen now writes one line, and a free-movement row covers EU/EEA and
+  Swiss, Common Travel Area and Trans-Tasman citizens. **If your profile is a citizen's and
+  was written from the old template**, nothing breaks; `/setup --section market` rewrites it.
 - **Scheduled briefings have two set-ups that work, written out step by step.**
   `automation/README.md` now walks through **(a)** one chat per task ("Job search: morning
   brief", and "Job search: shortlist" for the twice-weekly round, whose key and prompt file
@@ -133,6 +140,16 @@ this, three things to do after this sync**, all in `profile/`:
   private.
 
 ### Fixed
+
+- **A junior role no longer scores mentoring bullets up.** `tools/allocate.py` counted the
+  bare word "junior" as a mentoring cue, so every posting for a junior role pulled your
+  mentoring bullets forward. It now counts "junior" only as the object of the work
+  ("develop junior", "train junior", "support junior"), plus "upskill".
+- **`/setup`'s environment check is `python3 tools/env_check.py`.** The old inline check read
+  any HTTP status as success, so a host your network policy refused still "answered", and it
+  never looked at Ashby, Workday, pypdf or bun. It now names a policy refusal as one, catches
+  a pypdf that is installed but panics (the `cffi` case), checks bun, and probes LinkedIn,
+  freehire, Greenhouse, Lever, Ashby and your first Workday board.
 
 - **Messages say your word for the document.** The email composer wrote "My resume is
   attached", the referral ask "Happy to send my resume", one outreach-note close "does not

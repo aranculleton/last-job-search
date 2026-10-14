@@ -41,13 +41,14 @@ changed in the cloud environment applies only to the next session, so a person t
 end has to come back; told now, they can change it while you work and use it next time.
 
 ```bash
-command -v lualatex xelatex pdftotext >/dev/null && echo "latex: ok" || echo "latex: missing"
-for u in https://freehire.me https://boards-api.greenhouse.io https://api.lever.co; do
-  curl -sS -o /dev/null --max-time 8 -w "%{http_code} $u\n" "$u" || echo "blocked $u"
-done
+python3 tools/env_check.py
 ```
 
-If LaTeX is missing or a host is blocked, give them the two settings from `START_HERE.md`
+It reports LaTeX, Poppler, pypdf (including the broken-`cffi` case), bun, and every job
+board the app calls: LinkedIn, freehire, Greenhouse, Lever, Ashby, and Workday once a
+Workday board is on file. A host the network policy refuses is named as such, which a bare
+HTTP status could not tell apart from a host that answered. If anything is missing or a
+host is blocked, give them the two settings from `START_HERE.md`
 step 3 with the exact clicks (the cloud environment menu in the session's title bar, then
 **Edit**: the **Setup script** line, and **Network access** with its allowed domains), say
 that setup itself can carry on without them (web search still works for the research), and
