@@ -278,3 +278,31 @@ def test_the_app_cannot_claim_anything_but_a_portal_that_way(repos):
     rc, out = run(me, app)
     assert rc == 1 and "job_search_tracker.csv" in out
     assert head(me) == before
+
+
+# Profile upgrades: the sync ends by listing what this repo still needs, from the
+# registry the merge just brought in, whether it merged anything or not.
+
+STUB = ('import sys\n'
+        'if "--after-sync" in sys.argv or len(sys.argv) == 1:\n'
+        '    print("Profile upgrades pending (1):\\n  boards  run: /setup --section boards")\n')
+
+
+def test_the_sync_lists_pending_upgrades_after_merging_and_when_up_to_date(repos):
+    app, me = repos
+    write(app, "tools/profile_upgrades.py", STUB)
+    commit(app, "app ships the registry")
+    rc, out = run(me, app)
+    assert rc == 0 and "Profile upgrades pending (1)" in out, out
+    rc, out = run(me, app)
+    assert rc == 0 and "up to date" in out and "Profile upgrades pending (1)" in out, out
+    rc, out = run(me, app, "--check")
+    assert rc == 0 and "Profile upgrades pending (1)" in out, out
+
+
+def test_a_broken_registry_never_changes_the_syncs_answer(repos):
+    app, me = repos
+    write(app, "tools/profile_upgrades.py", "raise SystemExit(3)\n")
+    commit(app, "a broken registry")
+    rc, out = run(me, app)
+    assert rc == 0 and "profile upgrades: the check exited 3" in out, out

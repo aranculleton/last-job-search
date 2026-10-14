@@ -47,6 +47,9 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
 "draft 1, 3", and say if you have already applied to any.
 ```
 
+   If the round printed a "Profile upgrades pending" line, end the message with it as it
+   stands (it names what to run); never run an upgrade from this task.
+
    When the round missed its yield target, add one line under the list: the counts, and
    the boards the MISSED message names as researched with no portal yet, with "say 'build
    <board>' and I will add it" (that is `/add-portal`, run when they ask, never here).

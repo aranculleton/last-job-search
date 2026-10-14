@@ -57,8 +57,19 @@ that the job search and the test resume need them, in a new session. If LaTeX is
 
 Then look for an existing `profile/`. If there is one, this is an update, not a setup: ask what
 they want to change and go to that part of Step 1 (`--section <name>` does this directly:
-`identity`, `history`, `search`, `market`, `voice`, `documents`). Never overwrite a filled
-profile wholesale, and never put placeholders back into one.
+`identity`, `history`, `search`, `market`, `voice`, `documents`, `boards`). Never overwrite a
+filled profile wholesale, and never put placeholders back into one.
+
+**Run for a profile upgrade** (`python3 tools/profile_upgrades.py` names the section), do that
+section alone on the existing profile, and leave the trace its upgrade checks for, dated: a
+look that finds nothing worth building still writes what was looked at and why not. Then run
+the check again and say what is still pending.
+
+**`--section boards`** is Step 2's "Job boards" research and Step 3.9's build, on their own:
+the boards for their country, field and level, each recorded in `profile/search.py`
+`PORTAL_RESEARCH` with its source and the date (`"checked"`), the best one or two built with
+`/add-portal`, `PORTAL_LOCATIONS` where a board writes places its own way, and the job-alerts
+question (`JOB_ALERT_QUERY`). It touches nothing else in the profile.
 
 ---
 
@@ -286,6 +297,8 @@ And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_targe
   `git add`: it is theirs) and the state files. The tracker and the seen-jobs file are ignored by
   `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule says, and
   never edit `.gitignore`. Commit first: the leak scan in the next step reads the commit.
+- `python3 tools/profile_upgrades.py` says none pending: a fresh setup leaves every trace
+  the upgrades look for. Anything it lists is a step of this setup that was skipped.
 - `./tools/ci_local.sh --quick`. The app's suite runs on the example person and must pass;
   the leak scan builds the app from this commit and checks none of the person's data is in
   an app-owned file. A failure that names an app-owned file is the app's to fix: report it,

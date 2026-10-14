@@ -51,6 +51,14 @@ Every session in a person's repo starts with the same four steps, before anythin
 3. **No `profile/`?** Then nothing here can run yet. Start with `/setup`, before anything else.
 4. **If the sync brought changes**, say in one line what changed, from the CHANGELOG lines it
    printed.
+5. **Profile upgrades.** The sync ends by listing the profile upgrades this repo still needs
+   (`tools/profile_upgrades.py`): a part of the app that switched on after this person set up
+   and needs something done on their side (a `/setup` section, a portal built or rebuilt, a
+   question answered). The instant ones it has already run and committed. If any are listed,
+   say so in one line and offer to run them; never run one in the middle of an unrelated task
+   without a yes. A search request goes ahead on what is there, and repeats the pending line
+   once at the end. If the sync printed nothing about upgrades (its first run after this
+   arrived is the old copy), run `python3 tools/profile_upgrades.py` once yourself.
 
 In the app itself, step 2 is a no-op and step 3 does not apply: the app has no profile and
 must never get one.
@@ -106,6 +114,13 @@ These apply whenever the change is to the app, whichever repo the session starte
 - Small PRs and batched commits. A change that touches how documents, scores or messages
   come out is checked by rendering the same inputs before and after and comparing the
   outputs; any difference is named in the PR, or it is a bug.
+- **Never ship a feature that only works after a person does something nobody told them
+  about.** If an existing user has to act for a change to reach them (a `/setup` section, a
+  portal built or rebuilt with `/add-portal`, a re-render, a new state file or column, a
+  profile name with no safe default), register it in `tools/profile_upgrades.py` with a
+  `pending()` that checks their repo for the trace the action leaves, and name it in the
+  CHANGELOG entry (`Profile upgrade: <id>`). A new profile name with a safe default goes in
+  `SAFE_DEFAULTS` with the reason. `tests/test_profile_upgrades.py` fails on either missing.
 
 ## Master is the trunk. Finish on it, start from it.
 

@@ -39,6 +39,12 @@ _GETATTR_ALIAS = re.compile(r"getattr\(\s*(\w+)\s*,\s*\"(" + _NAME + r")\"")
 _GETATTR_INLINE = re.compile(r"getattr\(\s*_?person\.module\(\"(\w+)\"\)\s*,\s*\"(" + _NAME + r")\"")
 _ATTR_INLINE = re.compile(r"_?person\.module\(\"(\w+)\"\)\.(" + _NAME + r")\b")
 _ATTR_ALIAS = re.compile(r"\b(\w+)\.(" + _NAME + r")\b")
+# A reader written as a wrapper, `def _NET_GET(name, default): return
+# getattr(_NET, name, default)`, then called `_NET_GET("TITLE_SETS", None)`.
+# Unseen, every networking name read that way was missing from this list, so no
+# check could ever say a profile lacked one.
+_GETTER_DEF = re.compile(r"def (\w+)\(\s*(\w+)\s*,\s*(\w+)\s*\)\s*(?:->[^:]+)?:\s*\n"
+                         r"\s*return getattr\(\s*(\w+)\s*,\s*\2\s*,\s*\3\s*\)")
 
 
 def _files():
@@ -58,6 +64,10 @@ def collect() -> dict:
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().splitlines()
         alias = {a: m for line in lines for a, m in _BIND.findall(line)}
+        getters = {fn: alias[a] for fn, _, _, a in _GETTER_DEF.findall("\n".join(lines))
+                   if a in alias}
+        getter_call = (re.compile(r"\b(" + "|".join(map(re.escape, getters)) + r")\(\s*\"("
+                                  + _NAME + r")\"") if getters else None)
         for n, line in enumerate(lines, 1):
             if line.lstrip().startswith("#"):
                 continue
@@ -67,6 +77,9 @@ def collect() -> dict:
             for a, name in _GETATTR_ALIAS.findall(line):
                 if a in alias:
                     hits.append((alias[a], name, False))
+            if getter_call:
+                for fn, name in getter_call.findall(line):
+                    hits.append((getters[fn], name, False))
             soft = {(m, nm) for m, nm, _ in hits}
             for mod, name in _ATTR_INLINE.findall(line):
                 if (mod, name) not in soft:
