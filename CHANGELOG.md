@@ -141,6 +141,10 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **`ci_local.sh` is green again in a person's repo.** The check that no real scheduled-task or
+  chat id is committed to the app read every tracked file, so after a sync it failed on
+  `profile/routines.json` and `handoff/`, the person's own files and exactly where their ids
+  belong. It now skips what `tools/personal_paths.py` calls personal.
 - **A vacancy open only to the employer's own staff is cut.** A test of the scheduled
   shortlist ranked an "Internal Mobility" posting eighth; nothing screened for it. A title
   saying "internal mobility", "internal only" or "internal applicants only", or a sentence

@@ -19,6 +19,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AUTO = os.path.join(ROOT, "automation")
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import personal_paths  # noqa: E402
 import routines  # noqa: E402
 
 REG = json.load(open(person.path("routines.json"), encoding="utf-8"))
@@ -126,21 +127,40 @@ def test_both_set_ups_are_written_down_step_by_step():
     assert "run_once_at" in README and "do not archive, delete or rebuild" in README
 
 
-def test_no_real_ids_or_private_repos_are_committed():
-    """Ids and names belong in a person's registry, never in the app."""
-    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                           text=True).stdout.split()
-    real = re.compile(r"\b(?:trig|session)_(?!EXAMPLE)[A-Za-z0-9]{6,}\b")
+REAL_ID = re.compile(r"\b(?:trig|session)_(?!EXAMPLE)[A-Za-z0-9]{6,}\b")
+
+
+def id_hits(files, read):
+    """Real-looking ids in the app's own files. A person's own files are where
+    their ids live (profile/routines.json, notes under handoff/), so they are
+    skipped: without that this failed in every person's repo after a sync, on
+    exactly the files the ids are meant to be in."""
     hits = []
     for f in files:
         if "node_modules" in f or not f.endswith((".md", ".json", ".py", ".sh", ".yml", ".txt")):
             continue
+        if personal_paths.is_personal(f):
+            continue
         try:
-            text = open(os.path.join(ROOT, f), encoding="utf-8").read()
+            text = read(f)
         except (OSError, UnicodeDecodeError):
             continue
-        hits += [f"{f}: {m.group(0)}" for m in real.finditer(text)]
-    assert hits == []
+        hits += [f"{f}: {m.group(0)}" for m in REAL_ID.finditer(text)]
+    return hits
+
+
+def test_no_real_ids_or_private_repos_are_committed():
+    """Ids and names belong in a person's registry, never in the app."""
+    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
+                           text=True).stdout.split()
+    assert id_hits(files, lambda f: open(os.path.join(ROOT, f), encoding="utf-8").read()) == []
+
+
+def test_a_persons_own_files_are_skipped_and_the_apps_are_still_read():
+    read = []
+    files = ["profile/routines.json", "handoff/split/notes.md", "automation/README.md"]
+    id_hits(files, lambda f: read.append(f) or "")
+    assert read == ["automation/README.md"]
 
 
 def test_no_em_dashes_in_anything_the_person_reads():
