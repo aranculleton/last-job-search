@@ -451,7 +451,9 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Only four things are still hard cuts**, because no framing survives them: an
   **eligibility** bar the profile cannot clear (a citizenship, residency or clearance
   requirement, or a requirement to live elsewhere), a **language** requirement, a **professional credential** gate (actuarial
-  exams, an accounting or engineering licence), and a role whose **core is research ML**. Those are different jobs,
+  exams, an accounting or engineering licence), and a role whose **core is a discipline the
+  person does not hold** that the profile names as a different job (`search.py` `RESEARCH_ML`,
+  research machine learning for an analyst; nothing for a researcher). Those are different jobs,
   not missing skills. Everything else gets ranked.
 - **Every posting ruled out is written back to `seen_jobs.json`** with `status: "excluded"`,
   a checkable `exclusion_reason` and a date, so it never resurfaces. The gate that enforces

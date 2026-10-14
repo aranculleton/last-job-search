@@ -112,3 +112,101 @@ class APlaceholderIsNotAPerson(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class YearsAreMeasuredFromThePerson(unittest.TestCase):
+    """The bands were fixed at 7/9/11/13 years: right for four years held,
+    wrong for everybody else."""
+
+    POSTING = {"title": "Operations Analyst", "company": "Acme",
+               "desc": "Requirements: at least 10 years of experience in operations."}
+
+    def _years_note(self, held):
+        import fit
+        from unittest import mock
+        with mock.patch.object(fit, "YEARS_HELD", held):
+            res = fit.fit(self.POSTING)
+        return [w for w in res["fit_why"] if "years" in w and "stated" in w]
+
+    def test_twenty_years_held_is_not_docked_for_ten(self):
+        self.assertEqual([w for w in self._years_note(20) if w.startswith("-")], [])
+        self.assertEqual(self._years_note(20), [], "ten years is no stretch at twenty")
+
+    def test_two_years_held_is_docked_for_ten(self):
+        self.assertTrue([w for w in self._years_note(2) if w.startswith("-")])
+
+
+class TheDocumentIsThePersons(unittest.TestCase):
+
+    def _render(self, **doc):
+        import importlib
+        from unittest import mock
+        sys.path.insert(0, os.path.join(ROOT, "templates"))
+        rg = importlib.import_module("resume_gen")
+        out = os.path.join(tempfile.mkdtemp(prefix="ljs_rg_"), "r.tex")
+        a = {"company": "Acme", "role": "Analyst", "abbr": "ACME", "summary": "S.",
+             "skills": "K", "jobs": [{"dates": "2020", "title": "T", "employer": "E",
+                                      "loc": "L", "bullets": ["b"]}]}
+        with mock.patch.dict(rg._DOC, doc), \
+             mock.patch.object(rg.docpaths, "resume_tex", lambda abbr: out):
+            rg.resume(a)
+        return open(out, encoding="utf-8").read(), rg
+
+    def test_a_graduate_can_lead_with_education(self):
+        order = ["summary", "education", "experience", "skills", "certifications"]
+        tex, rg = self._render(section_order=order)
+        heads = rg._H
+        self.assertLess(tex.index("\\section{%s}" % heads["education"]),
+                        tex.index("\\section{%s}" % heads["experience"]))
+
+    def test_an_order_that_drops_a_section_is_refused(self):
+        with self.assertRaises(ValueError):
+            self._render(section_order=["summary", "experience"])
+
+    def test_the_letter_speaks_the_persons_language(self):
+        import importlib
+        from unittest import mock
+        rg = importlib.import_module("resume_gen")
+        out = os.path.join(tempfile.mkdtemp(prefix="ljs_rg_"), "l.tex")
+        a = {"company": "Acme", "role": "Analyst", "abbr": "ACME", "p1": "x", "p2": "y",
+             "lead": "z", "cl_bullets": [("a", "b")], "p4": "w", "letter_date": "1 May 2026"}
+        with mock.patch.dict(rg._DOC, {"salutation_prefix": "Hej", "page_label": "Sida"}), \
+             mock.patch.object(rg.docpaths, "letter_tex", lambda abbr: out):
+            rg.letter(a)
+        tex = open(out, encoding="utf-8").read()
+        self.assertIn("{Hej ", tex)
+        self.assertIn("{Sida \\thepage", tex)
+
+
+class TheWeekIsThePersons(unittest.TestCase):
+
+    def test_a_friday_saturday_weekend(self):
+        import datetime
+        from unittest import mock
+        sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+        import state
+        thu = datetime.date(2026, 10, 15)          # a Thursday
+        with mock.patch.object(state, "WEEKEND", frozenset({4, 5})):
+            self.assertEqual(state.add_business_days(thu, 1), datetime.date(2026, 10, 18))
+        self.assertEqual(state.add_business_days(thu, 1), datetime.date(2026, 10, 16))
+
+
+class ContractWorkCanBeTheTarget(unittest.TestCase):
+
+    def test_opp_contract_none_docks_nothing(self):
+        out = subprocess.run(
+            [sys.executable, "-c",
+             "import sys; sys.path.insert(0,'tools'); import opportunity as o; "
+             "print(bool(o.CONTRACT.search('locum nurse, 6-month contract')))"],
+            cwd=ROOT, capture_output=True, text=True, timeout=60,
+            env=dict(os.environ, LJS_PROFILE=self._profile(), PYTHONDONTWRITEBYTECODE="1"))
+        self.assertEqual(out.stdout.strip(), "False", out.stderr)
+
+    def _profile(self):
+        d = tempfile.mkdtemp(prefix="ljs_contract_")
+        prof = os.path.join(d, "profile")
+        shutil.copytree(EXAMPLE, prof)
+        with open(os.path.join(prof, "search.py"), "a", encoding="utf-8") as fh:
+            fh.write("\nOPP_CONTRACT = None\n")
+        self.addCleanup(shutil.rmtree, d, True)
+        return prof

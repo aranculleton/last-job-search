@@ -227,7 +227,10 @@ def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
 # broad that zero results cannot be the market's fault. Zero results with no
 # error is the signal: the portal answered, and had nothing to say about
 # "data" in the whole country, which is not a thing that is true.
-CANARY_QUERY = "data"
+# A word every board in the person's market has thousands of postings for. The
+# default suits an English-language board; a board in another language, or a
+# field where "data" is rare, names its own (search.py CANARY_QUERY).
+CANARY_QUERY = getattr(_S, "CANARY_QUERY", "data")
 CANARY_LOCATION = getattr(_S, "CANARY_LOCATION", LOCATIONS[-1] if LOCATIONS else "")
 # A generous age window, so the probe is not measuring how recently anyone
 # posted. Wider than any real round would use.

@@ -109,9 +109,12 @@ def shell() -> str:
         PINNED=pinned[1] if pinned else "",
         # A profile with no certifications renders no Certifications section.
         SECTIONS=json.dumps([heads[k] for k in
-                             ("summary", "experience", "skills", "education", "certifications")
+                             (person.get("documents.section_order", None)
+                              or ("summary", "experience", "skills", "education",
+                                  "certifications"))
                              if k != "certifications"
                              or getattr(person.module("roles"), "CERTIFICATIONS", "")]),
+        RESUME_PAGES=str(person.get("documents.resume_pages", 1) or 1),
         H_EXPERIENCE=heads["experience"],
         H_SKILLS=heads["skills"],
         H_EDUCATION=heads["education"],

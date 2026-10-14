@@ -23,6 +23,30 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+Found by a sweep of the whole app for anything that assumed a data analyst a few years in,
+in North America. **Nothing to do unless a default below is wrong for you**; each is a
+setting now, and `python3 tools/profile_names.py` lists every one.
+
+- **Experience thresholds are measured from your own `YEARS_HELD`.** They were fixed at 7, 9,
+  11 and 13 years in `tools/fit.py` (6, 8 and 10 in `tools/opportunity.py`, and the screens'
+  flags likewise), which is right for someone with four years: twenty years' experience lost
+  points on "10+ years", and a new graduate lost nothing on "6+". If your scores move after
+  this sync, this is why, and it is the fix.
+- **`/interview` uses your own STAR examples** (`profile/07-interview-prep.md`). It read the
+  app's guide, whose examples belong to the fictional example person. And `/apply` drafts your
+  summary from the profile statement templates in your `profile/CLAUDE.md`, never from the
+  example person's in `05-cv-templates.md`. If your `profile/CLAUDE.md` has none, add 2-3.
+- **Your resume's page count and section order** are `documents.resume_pages` (default 1)
+  and `documents.section_order` (default summary, experience, skills, education,
+  certifications) in `person.json`; `fit_to_page.py` and `verify_batch.sh` follow them. A
+  recent graduate can lead with education; a long career can take two pages.
+- **The letter's "Dear" and "Page"** are `documents.salutation_prefix` and
+  `documents.page_label`, for a letter in another language.
+- **Your weekend** (`search.py` `WEEKEND`, default Saturday and Sunday) sets every
+  business-day follow-up date. **Contract work** is docked 6 unless `OPP_CONTRACT = None`.
+  `MANAGES_PEOPLE = True` stops the screen flagging roles with direct reports. The portal
+  health probe's word is `CANARY_QUERY` (default "data").
+
 Found by the first person set up outside data analysis. **If your profile was written before
 this, three things to do after this sync**, all in `profile/`:
 

@@ -306,13 +306,16 @@ def recipient(row: dict, people=(), docs: str = DOCS,
 
 
 def _notice_day(day: datetime.date) -> datetime.date:
-    """The day a one-off notice is shown: the day itself, or the Monday after a weekend.
+    """The day a one-off notice is shown: the day itself, or the first working day after a weekend.
 
     Said once means said on a day somebody reads it. The routine pasting this
     into a push notification may run on weekdays only, and a stop falling on a
     Saturday would then never be said at all.
     """
-    return day + datetime.timedelta(days=7 - day.weekday() if day.weekday() >= 5 else 0)
+    weekend = frozenset(getattr(person.module("search"), "WEEKEND", (5, 6)))
+    while day.weekday() in weekend:
+        day += datetime.timedelta(days=1)
+    return day
 
 
 def review(rows: list[dict], today: datetime.date, warm: dict | None = None,

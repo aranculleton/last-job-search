@@ -157,7 +157,10 @@ setting it, and set the ones their market needs that the example leaves out.
 ### 1. Write `profile/person.json`
 Identity (name, pronouns, file prefix, contact line, LinkedIn) and documents (noun, banned
 nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2. The letter is
-printed on the resume's paper unless `documents.letter_paper` says otherwise.
+printed on the resume's paper unless `documents.letter_paper` says otherwise. Also, from their
+market and level: `resume_pages` (1 unless their market or a long career expects 2),
+`section_order` (a recent graduate often leads with education), and, for a letter in
+another language, `salutation_prefix` and `page_label`.
 
 ### 2. Write `profile/01-candidate-profile.md`
 The source of truth for every fact about them. Everything Step 1 established, with the detail
@@ -186,7 +189,9 @@ adjacent roles, a wider net), their key skills as search terms, and the location
 ### 7. Write `profile/CLAUDE.md`
 The summary the root CLAUDE.md imports: identity, history in brief, skills, target sectors,
 deal-breakers, and any rule that is theirs rather than the app's (how they want to come
-across, what must never be said, confidentiality). Then "This search's automation": none yet.
+across, what must never be said, confidentiality). Include 2-3 **profile statement templates**,
+one per main role type they want, built from their own strongest evidence: `/apply` drafts the
+resume summary from these, never from the example person's in `05-cv-templates.md`. Then "This search's automation": none yet.
 
 ### 8. Write the rest of `profile/`
 `roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
@@ -197,8 +202,8 @@ about them, the ask, their home city and timezone), `claims.py`, `screening.py` 
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
 `12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).
 
-Three settings the example's values would get wrong for anybody outside its field and level,
-so write each one for this person, never copy it:
+Settings the example's values would get wrong for anybody outside its field, level or
+market, so write each one for this person, never copy it:
 
 - **The Skills headings**, `LABELS` in `skills.py`: one `(line, heading)` per line, in their
   own words for their work (a nurse's are not a data analyst's). A resume will not render
@@ -210,6 +215,13 @@ so write each one for this person, never copy it:
 - **Their themes**: a bullet's themes come from `tools/allocate.py` `THEME_CUES`, which is a
   data analyst's list. Add the themes their work needs, with the words postings use for each,
   as `THEME_CUES` in `bullets.py`; `python3 tools/allocate.py` names any theme no cue matches.
+- **`YEARS_HELD`** in `search.py`: their years in the work they are applying for. Every
+  experience threshold is measured from it.
+- **Their working week and contract preference**, in `search.py`: `WEEKEND` where it is not
+  Saturday and Sunday, `OPP_CONTRACT = None` for someone who wants contract, locum, supply or
+  seasonal work, and `MANAGES_PEOPLE = True` for someone who has had direct reports.
+- **`CANARY_QUERY`** in `search.py` where "data" is not a word every board in their market
+  has thousands of postings for (another language, or a field where it is rare).
 
 ### 9. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`

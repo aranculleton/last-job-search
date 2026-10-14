@@ -110,7 +110,12 @@ WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
 _NEVER = re.compile(r"(?!x)x")
 SENIOR_UP = getattr(_S, "OPP_ABOVE_LEVEL", None) or _NEVER
 JUNIOR = getattr(_S, "OPP_BELOW_LEVEL", None) or _NEVER
-CONTRACT = re.compile(r"\b(contract|fixed[- ]term|temporary|\d+[- ]month)\b", re.I)
+# A contract, fixed-term or temporary title, docked 6. Most people want a
+# permanent role, so this is the default; a locum, supply or seasonal worker
+# sets OPP_CONTRACT = None in search.py (or a narrower pattern).
+CONTRACT = getattr(_S, "OPP_CONTRACT",
+                   re.compile(r"\b(contract|fixed[- ]term|temporary|\d+[- ]month)\b", re.I)
+                   ) or _NEVER
 CUR = getattr(_S, "CURRENCY_SYMBOL", "$")
 SALARY = re.compile(re.escape(CUR) + r"\s?(\d{2,3})[,\s]?(\d{3})")
 
@@ -231,14 +236,16 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     # (text_screen.stated_years): requirement-cued, boast-guarded, low end of a
     # range. The old max() over every "N years" in the body docked -14 for
     # "over 20 years of experience delivering" and "18 years or older".
+    # Measured from the years held, not from fixed numbers (see tools/fit.py).
     bar, _ = stated_years(body)
-    if bar and bar >= 10:
+    over = (bar - YEARS_HELD) if bar else 0
+    if bar and over >= 6:
         pts -= 14
         why.append(f"-14 stated {bar}+ years, a long way above {YEARS_HELD}")
-    elif bar and bar >= 8:
+    elif bar and over >= 4:
         pts -= 8
         why.append(f"-8 stated {bar}+ years, a real stretch")
-    elif bar and bar >= 6:
+    elif bar and over >= 2:
         pts -= 3
         why.append(f"-3 stated {bar}+ years, a mild stretch")
 

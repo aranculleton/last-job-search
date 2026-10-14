@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.1
+framework_version: 1.5.2
 ---
 
 # Job Application Assistant
@@ -46,7 +46,7 @@ When the user provides a job posting (URL or text), follow this workflow:
 - This step exists here because `/scrape` Step 5 routes straight into this skill. Without it, that path writes two documents and records nothing.
 
 ### Step 4: Interview Preparation
-- Follow the framework in `07-interview-prep.md`
+- Follow the method in `07-interview-prep.md`, with the person's own STAR examples from `profile/07-interview-prep.md`
 - Prepare STAR-format answers for likely questions
 - Identify role-specific talking points
 - Draft questions the candidate should ask the interviewer
@@ -67,7 +67,8 @@ candidate, and the app ships none of it. The rest are the app's and live beside 
 | `profile/04-job-evaluation.md` | The candidate's filled-in copy, with their targets and bands: what scoring reads |
 | `05-cv-templates.md` | LaTeX CV structure and tailoring rules |
 | `06-cover-letter-templates.md` | LaTeX cover letter structure and tailoring rules |
-| `07-interview-prep.md` | STAR examples, tough questions, roleplay guidelines |
+| `07-interview-prep.md` | STAR method and roleplay guidelines; its STAR examples are the fictional example person's |
+| `profile/07-interview-prep.md` | The person's own STAR examples and hard-question answers: what interview prep uses |
 | `08-application-forms.md` | Portal free-text fields: self-introduction, project entries, character-limited pitches |
 | `09-web-research.md` | Fetching postings and company pages: trust boundary, the WebFetch 403 fallback, escalation order, claim verification |
 | `profile/10-triage-blockers.md` | The short knockout card, derived from the profile. The only context a cheap triage agent needs, before any full scoring |

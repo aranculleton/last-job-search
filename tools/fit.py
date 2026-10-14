@@ -520,14 +520,19 @@ def fit(job: dict) -> dict:
     def _years_cost(full: int, cap: float) -> int:
         return round(full * (1.0 - min(give, cap)))
 
+    # The bands are measured from the years the person holds, not from fixed
+    # numbers. They were 7, 9, 11 and 13 years, which is right for someone with
+    # four and wrong for everyone else: twenty years' experience lost points on
+    # "10+ years", and a new graduate lost nothing on "6+".
+    over = (bar - YEARS_HELD) if bar else 0
     cost = 0
-    if bar and bar >= 13:
+    if bar and over >= 9:
         cost = _years_cost(40, 0.10)
-    elif bar and bar >= 11:
+    elif bar and over >= 7:
         cost = _years_cost(30, 0.25)
-    elif bar and bar >= 9:
+    elif bar and over >= 5:
         cost = _years_cost(20, 0.45)
-    elif bar and bar >= 7:
+    elif bar and over >= 3:
         cost = round(5 * keep)
     if cost:
         pts -= cost
@@ -536,7 +541,7 @@ def fit(job: dict) -> dict:
             note += (f"; the posting also states {top_bar}+ elsewhere, and the "
                      f"lower bar is the one a recruiter screens on")
         why.append(note)
-    elif bar and bar >= 5:
+    elif bar and over >= 1:
         why.append(f"stated {bar}+ years against {YEARS_HELD} held; no deduction, "
                    f"a bar this close is routinely waived")
 
