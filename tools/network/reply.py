@@ -422,21 +422,30 @@ REJECTION = _rx(
      r"(careers|jobs)\s+(page|site|board)\b"),
 )
 
+_OTHER_FUNCTIONS = getattr(_NET, "OTHER_FUNCTIONS", None)
+# "I have moved to marketing" and "I switched over to sales" are the same fact
+# as "I'm in marketing"; a move is also to product, design or operations.
+_OTHER_FUNCTIONS_MOVED = getattr(_NET, "OTHER_FUNCTIONS_MOVED", None) or _OTHER_FUNCTIONS
+_OWN_FUNCTION_WORDS = getattr(_NET, "OWN_FUNCTION_WORDS", None) or "that"
+
 MISMATCH = _rx(
     (0.9, "no longer at the company",
      r"\bI\s+(left|no longer work|am no longer|moved on from|departed)\b|\bmy last day\b|"
      r"\bI(?:'ve|’ve| have) since (joined|moved|left)\b|\bI used to work\b|"
      r"\bI(?:'m|’m| am) now at\b"),
     (0.86, "a different function",
-     r"\bI(?:'m|\u2019m| am)\s+(in|on)\s+(sales|marketing|recruit\w*|hr|people|finance|legal|"
-     r"support|customer success|the commercial)\b|\bI(?:'m|\u2019m| am) a recruiter\b|"
-     r"\bI don'?t work (in|on|with) (data|analytics|engineering|that)\b|"
-     r"\bI do not work (in|on|with) (data|analytics|engineering|that)\b|"
-     # "I have moved to marketing" and "I switched over to sales" are the same
-     # fact as "I'm in marketing" and were not matching.
-     r"\bI(?:'ve|\u2019ve)?\s+(?:have\s+)?(?:moved|switched|transferred|shifted)\s+"
-     r"(?:over\s+)?(?:to|into)\s+(sales|marketing|recruit\w*|hr|people|finance|legal|"
-     r"support|customer success|product|design|ops|operations)\b|"
+     # The functions that are not the person's, and the words for their own:
+     # networking.py OTHER_FUNCTIONS and OWN_FUNCTION_WORDS, regex fragments.
+     # "I'm in marketing" is a mismatch to a data analyst and a match to a
+     # marketer, so neither list is the app's to set. Unset, only the
+     # function-free shapes below count.
+     (r"\bI(?:'m|\u2019m| am)\s+(in|on)\s+(" + _OTHER_FUNCTIONS + r")\b|"
+      + (r"\bI(?:'m|\u2019m| am) a recruiter\b|" if "recruit" in _OTHER_FUNCTIONS else "")
+      + r"\bI(?:'ve|\u2019ve)?\s+(?:have\s+)?(?:moved|switched|transferred|shifted)\s+"
+      r"(?:over\s+)?(?:to|into)\s+(" + _OTHER_FUNCTIONS_MOVED + r")\b|"
+      if _OTHER_FUNCTIONS else "")
+     + r"\bI don'?t work (in|on|with) (" + _OWN_FUNCTION_WORDS + r")\b|"
+     r"\bI do not work (in|on|with) (" + _OWN_FUNCTION_WORDS + r")\b|"
      r"\bdifferent (team|part of the business) entirely\b"),
     (0.86, "states there is no presence in this market",
      r"\bwe (don'?t|do not) (hire|recruit|have)\b[^.!?\n]{0,40}\b("

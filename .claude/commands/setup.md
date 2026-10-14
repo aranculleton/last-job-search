@@ -222,6 +222,11 @@ market, so write each one for this person, never copy it:
   seasonal work, and `MANAGES_PEOPLE = True` for someone who has had direct reports.
 - **`CANARY_QUERY`** in `search.py` where "data" is not a word every board in their market
   has thousands of postings for (another language, or a field where it is rare).
+- **Who they network with**, in `networking.py`: `TITLE_SETS` (the job titles of the people
+  to find: hiring authority, senior peers, their own function, recruiters), `FUNCTION_TITLE`
+  (a title on a team in their function), `HIRING_ROLE_NOUNS` (what a hiring post in their
+  field calls the role), and for reading replies `OTHER_FUNCTIONS` and `OWN_FUNCTION_WORDS`.
+  `/network` will not search without `TITLE_SETS`; the example's are a data team's.
 
 ### 9. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`
