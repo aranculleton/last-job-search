@@ -188,6 +188,31 @@ def _tier_of(c: str) -> tuple[int, str]:
     return 0, ""
 
 
+def ceiling() -> int:
+    """The most this profile's opportunity score can reach: every positive term
+    in `score` at its top. A profile with no employer tiers, no leverage and no
+    core capabilities tops out at 58 (base 40, a high stated band, posted today).
+    """
+    tier_top = (30 if TIER_1 else 20 if TIER_2 else 14 if YC_AND_BACKED
+                else 10 if TIER_3 else 0)
+    core = sum(p for _, p in CORE if p > 0)
+    leverage = min(30, sum(e[1] for e in LEVERAGE if e[1] > 0))
+    families = sum(max(0, p) for _, p in (*TITLE_FAMILY, *WRONG_FAMILY))
+    return 40 + tier_top + core + leverage + families + 12 + 6
+
+
+# What tools/fit.py divides opportunity by before multiplying it into priority.
+# 130 was calibrated on a profile with tiers, leverage and core capabilities,
+# whose raw opportunity runs well past 130. Fixed at 130 for everybody, a
+# profile without them could never reach the yield target: its opportunity
+# tops out near 58, so no posting's priority passed about 45, and every round
+# reported a thin market that was really the scale. So the scale is 130 or the
+# most this profile can score, whichever is lower; a profile that reaches 130
+# ranks exactly as before. `OPP_SCALE` in search.py pins it.
+CALIBRATED_SCALE = 130
+SCALE = getattr(_S, "OPP_SCALE", None) or min(CALIBRATED_SCALE, ceiling())
+
+
 def score(job: dict, today: dt.date | None = None) -> dict:
     body = (job.get("desc") or "")[:20000]
     title = job.get("title") or ""

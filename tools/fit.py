@@ -55,6 +55,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from text_screen import NOT_A_DEGREE, entry_years, sentences  # noqa: E402
 from prefilter import location_verdict  # noqa: E402
+from opportunity import SCALE as OPP_SCALE  # noqa: E402
 import person  # noqa: E402
 
 _S = person.module("search")
@@ -600,15 +601,17 @@ def main() -> int:
         # Opportunity is unbounded above, so it is rescaled to sit on the same
         # scale as fit. It used to be clamped to 100 here as well, and the clamp
         # threw away the whole top of the range: raw opportunity runs well past
-        # 130, so everything from there up landed on the same number. Combined
-        # with the old hard cap on core, that is why so many shortlist rows
-        # shared a score with another row.
+        # 130 on a profile with tiers and leverage, so everything from there up
+        # landed on the same number. Combined with the old hard cap on core,
+        # that is why so many shortlist rows shared a score with another row.
         #
         # So the rescaled value is kept unclamped for ranking and clamped only
         # for display. The product still cannot be carried by one factor: fit is
         # 0-100 and a spectacular employer with a poor match is still demoted by
-        # the floor below.
-        o_rank = o * 100 / 130.0
+        # the floor below. The divisor is opportunity.SCALE: 130, or the most a
+        # profile without tiers or leverage can score, so that profile can
+        # reach the yield target at all.
+        o_rank = o * 100 / float(OPP_SCALE)
         o = max(0, min(100, round(o_rank)))
         pri = round(f["fit"] * o_rank / 100)
         # A floor, because the product alone still lets a spectacular employer

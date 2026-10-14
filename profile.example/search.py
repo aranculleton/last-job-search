@@ -142,6 +142,9 @@ FIT_BELOW_LEVEL = re.compile(
 OPP_BELOW_LEVEL = re.compile(r"\b(intern|internship|co[- ]?op|student|graduate|junior|"
                              r"entry[- ]level|apprentice)\b", re.I)
 OPP_ABOVE_LEVEL = re.compile(r"\b(director|vp|vice president|head of|chief|principal)\b", re.I)
+# tools/opportunity.py also adds employer tiers (employers.py), OPP_CORE and
+# OPP_LEVERAGE. This profile sets none of them, so tools/fit.py rescales
+# opportunity to the most it can score (58) rather than 130; OPP_SCALE pins it.
 
 FIT_CORE = [
     (re.compile(r"\bsql\b", re.I), 9, "SQL"),
