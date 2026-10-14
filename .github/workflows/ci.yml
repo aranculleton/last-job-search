@@ -228,7 +228,7 @@ jobs:
         if: hashFiles('profile/person.json') == ''
         env:
           LJS_LEAK_TOKENS: ${{ secrets.LEAK_TOKENS }}
-        run: python tools/leak_scan.py .
+        run: python tools/leak_scan.py . --git
 
       - name: Typecheck and test every portal CLI
         # Discovered, not hardcoded, so a portal CLI added in a fork (the

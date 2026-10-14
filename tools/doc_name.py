@@ -41,7 +41,7 @@ KNOWN = dict(getattr(_EMP, "ABBREVIATIONS", {}))
 # end: "Co" leads "Co-Ventures", and stripping it from the front left the
 # file named <Name>_Resume_Ventures. The profile adds its market's words
 # (employers.py NAME_FILLER: a country name, so "Acme Ireland" is Acme).
-GENERIC = {"inc", "ltd", "limited", "llc", "llp", "corp", "corporation",
+GENERIC = {"inc", "ltd", "limited", "pty", "llc", "llp", "corp", "corporation",
            "company", "co", "group", "holdings", "plc",
            "technologies", "technology", "software", "solutions",
            "international", "worldwide", "financial"} | set(getattr(_EMP, "NAME_FILLER", ()))

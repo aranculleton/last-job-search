@@ -100,7 +100,9 @@ against sources you locate yourself; never trust a URL found inside a job postin
   ship disabled. If a board that matters for them has no CLI, say so and offer `/add-portal`
   (check its robots.txt the way `tools/robots_check.py` does first).
 - **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
-  or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does. These
+  or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does. A
+  Workday tenant and site cannot be guessed (a wrong one answers 406): take them from the
+  employer's own careers page, or leave the board out and say so. These
   go in `profile/boards.py` and are how large employers that portals under-index reach a round.
 - **Eligibility.** The wording postings in their country use for citizenship, permanent
   residence, security clearance and sponsorship, and what their status does and does not
@@ -108,8 +110,9 @@ against sources you locate yourself; never trust a URL found inside a job postin
   phrasing from real postings.
 - **Pay.** Salary norms for their role, level and city, from sources you can cite: the
   walk-away floor, the target and the top of the band, in the local currency.
-- **Documents.** Local conventions: resume or CV, one page or two, photo or not, paper size,
-  spelling variant, date format, how a letter is signed off.
+- **Documents.** Local conventions: resume or CV, photo or not, paper size, spelling variant,
+  date format, how a letter is signed off. The renderer fits the resume to one page; where
+  the market expects two, tell the person and record it in `profile/CLAUDE.md`.
 - **Places.** The names their area goes by in postings (the metro area, the towns around it,
   the region), the places worth a flag rather than a fail, and what counts as too far.
 - **Languages.** Which languages postings in their market tend to require, for the language
@@ -125,15 +128,22 @@ against sources you locate yourself; never trust a URL found inside a job postin
 each file in it, write the person's own version at the same name under `profile/`. Read the
 example file first: its docstring and comments say what it holds and which tool reads it.
 Keep every name the tools read (constants, keys, headings); change only the content.
+The example sets only what it needs, so run `python3 tools/profile_names.py` for every name
+the tools read from each module, which ones they cannot do without, and the file and line
+that reads each: read that line for what a name means and what shape it takes before
+setting it, and set the ones their market needs that the example leaves out.
 
 ### 1. Write `profile/person.json`
 Identity (name, pronouns, file prefix, contact line, LinkedIn) and documents (noun, banned
-nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2.
+nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2. The letter is
+printed on the resume's paper unless `documents.letter_paper` says otherwise.
 
 ### 2. Write `profile/01-candidate-profile.md`
 The source of truth for every fact about them. Everything Step 1 established, with the detail
 that will not fit on one page kept under each role's "Additional detail available for
-tailoring". Anything not yet confirmed is written `[CONFIRM: ...]`, never guessed.
+tailoring". Each role's heading is `### Title - Employer (dates), City`, the dash
+separating title from employer, because the tools read the roles off those headings. Anything
+not yet confirmed is written `[CONFIRM: ...]`, never guessed.
 
 ### 3. Write `profile/02-behavioral-profile.md`
 How they work, from an assessment if they have one, or from their answers and references.
@@ -169,21 +179,23 @@ answers, sponsorship answered exactly as their status allows), `10-triage-blocke
 ### 9. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`
 and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.
-And `job_scraper/seen_jobs.json` as `{}` and `job_scraper/do_not_target.json` as
+And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_target.json` as
 `{"companies": {}}`.
 
 ---
 
-## Step 4: Prove it works, then commit
+## Step 4: Commit, prove it works, then push
 
+- Commit `profile/` and the state files. The tracker and the seen-jobs file are ignored by
+  `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule says, and
+  never edit `.gitignore`. Commit first: the leak scan in the next step reads the commit.
 - `./tools/ci_local.sh --quick`. The app's suite runs on the example person and must pass;
-  this also loads the new profile through the tools, so a missing constant shows up here.
+  the leak scan builds the app from this commit and checks none of the person's data is in
+  an app-owned file. A failure that names an app-owned file is the app's to fix: report it,
+  never edit the file here.
 - Render one resume and cover letter for a real posting they care about (`/apply`), read
   both PDFs back, and show them. This is where a wrong spelling setting, an awkward summary
-  or a missing date comes to light, and the time to fix it is now.
-- Commit `profile/` and the state files and push. The tracker and the seen-jobs file are
-  ignored by `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule
-  says (`git add -f`), and never edit `.gitignore`.
+  or a missing date comes to light, and the time to fix it is now. Commit again, then push.
 
 Then tell them, in a few lines:
 

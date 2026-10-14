@@ -136,3 +136,26 @@ def test_every_form_of_a_recorded_name_and_company_is_an_entry():
     assert build_app.given_names("Tomasz Kowal MBA") == ["Tomasz"]
     assert build_app.company_forms("Harbour Freight Company Inc.") == [
         "Harbour Freight Company Inc.", "Harbour Freight"]
+
+
+def test_a_phone_number_is_an_entry_in_the_forms_it_is_written_anywhere():
+    import build_app
+    assert build_app.phone_forms("+1 312 555 0142") == ["312", "555 0142", "5550142", "0142"]
+    au = "+61" + " 400 111 222"            # assembled, so this file passes the scan it tests
+    assert build_app.phone_forms(au) == ["400 111 222", "0400 111 222"]
+    assert build_app.phone_forms("0400 111 222") == ["0400 111 222"]
+    assert build_app.phone_forms("020 7946 0011") == ["020 7946 0011"]
+    # never a short group on its own: it would match everywhere
+    assert all(len(f.replace(" ", "")) >= 4 for f in build_app.phone_forms("+44 7700 900123"))
+
+
+def test_git_mode_scans_what_would_be_committed_and_nothing_else(tmp_path, monkeypatch):
+    """Ignored build output can never be pushed; a new, unignored file can."""
+    import subprocess
+    t = _tree(tmp_path, {".gitignore": "*.pdf\n", "README.md": "clean\n",
+                         "build.pdf": "Zorblax Quux\n", "new_notes.md": "Zorblax Quux\n"})
+    subprocess.run(["git", "init", "-q", t], check=True)
+    subprocess.run(["git", "-C", t, "add", "README.md", ".gitignore"], check=True)
+    monkeypatch.setenv("LJS_LEAK_TOKENS", "Zorblax Quux")
+    found = leak_scan.scan(t, leak_scan.load_tokens(None), leak_scan.load_allow(None), git=True)
+    assert [f.split(":")[0] for f in found] == ["new_notes.md"]

@@ -139,7 +139,8 @@ FIT_CORE = [
     (re.compile(r"\b(stakeholder|cross[- ]functional)\w*", re.I), 4, "stakeholder-facing"),
 ]
 FIT_MISSING = [
-    (re.compile(r"\b(spark|pyspark|scala)\b", re.I), "big-data engineering"),
+    # (pattern, points at full demand, why): weighed by how hard the posting asks
+    (re.compile(r"\b(spark|pyspark|scala)\b", re.I), -8, "big-data engineering is not held"),
 ]
 
 # ---------------------------------------------------------------------------

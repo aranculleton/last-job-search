@@ -188,6 +188,32 @@ def _people() -> list[str]:
     return sorted({f for n in found for f in name_forms(n) if len(f.replace(".", "")) > 4})
 
 
+def phone_forms(written: str) -> list[str]:
+    """The entries a phone number needs, in the forms it gets written.
+
+    A North American number: the area code, the line number in its two usual
+    groupings and its last four digits, any of which finds the rest. Anywhere
+    else: the number as grouped after the country code, and with the trunk 0 it
+    is dialled with nationally. Matching ignores separators, so "400 000 000"
+    also finds "400000000". Short groups alone would match everywhere, so they
+    are never entries: the first version took a North American slice of an
+    Australian mobile and blocked every "140" in the app.
+    """
+    phone = re.sub(r"\D", "", written)
+    groups = re.findall(r"\d+", written)
+    plus = written.strip().startswith("+")
+    if plus and groups:
+        groups = groups[1:]                         # drop the country code
+    nanp = (len(phone) == 11 and written.strip().startswith("+1")
+            or len(phone) == 10 and not plus and phone[0] in "23456789")
+    if nanp:
+        return [phone[-10:-7], phone[-7:-4] + " " + phone[-4:], phone[-7:], phone[-4:]]
+    national = " ".join(groups)
+    if len(national.replace(" ", "")) < 8:
+        return []
+    return [national] + ([] if national.startswith("0") else ["0" + national])
+
+
 def denylist() -> list[str]:
     """One token per line, in leak_scan.py's format. "=" marks case-sensitive."""
     out: list[str] = []
@@ -202,16 +228,13 @@ def denylist() -> list[str]:
         add(email)
         add(email.split("@")[0])
         dom = email.split("@")[1]
-        if dom.count(".") == 1 and dom not in ("gmail.com", "outlook.com", "hotmail.com", "yahoo.com"):
+        # A shared mail provider's domain is everybody's, and the reserved
+        # example domains are what the app's own templates use.
+        shared = ("gmail.com", "outlook.com", "hotmail.com", "yahoo.com", "icloud.com")
+        if dom.count(".") == 1 and dom not in shared and not dom.startswith("example."):
             add(dom)
-    phone = re.sub(r"\D", "", ident.get("phone", ""))
-    if len(phone) >= 10:
-        # The number in every grouping people write it, and its parts: the area
-        # code and the line number alone are enough to find the rest.
-        add(phone[-10:-7])
-        add(phone[-7:-4] + " " + phone[-4:])
-        add(phone[-7:])
-        add(phone[-4:])
+    for form in phone_forms(ident.get("phone", "")):
+        add(form)
     handle = re.search(r"linkedin\.com/in/([^/?#]+)", ident.get("linkedin", ""))
     if handle:
         add(handle.group(1))
