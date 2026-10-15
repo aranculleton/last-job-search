@@ -38,7 +38,7 @@ If there is no `profile/`, nothing here can run: start with `/setup`.
 
 This repo is either **the app** (`github.com/aranculleton/last-job-search`, public, no
 `profile/`) or **a person's repo**, made from the app with "Use this template" and private.
-Every session in a person's repo starts with the same four steps, before anything else:
+Every session in a person's repo starts with the same five steps, before anything else:
 
 1. **Pull master**: `git fetch origin master && git merge origin/master`. Another chat may have
    merged since this container was built.
@@ -67,6 +67,11 @@ Every session in a person's repo starts with the same four steps, before anythin
      marker was and commit it. The rest wait for the next session.
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
+   - **One chat per update.** Only the chat whose own sync brought an update in applies its
+     upgrades and asks its questions. Any other chat open on the repo is told "being applied
+     by the chat that brought this update in" and starts nothing and asks nothing; if they
+     are still pending two hours later, its next sync hands them over. So the chat that
+     brought the update in lands that sync on master promptly, before its other work.
 
 In the app itself, step 2 is a no-op and step 3 does not apply: the app has no profile and
 must never get one.
@@ -166,6 +171,14 @@ So, every session:
 3. **Never leave a merged branch around**, and never start new work on an old one.
 4. If the work genuinely is not finishable this session, say so in the last message and
    name the branch, so the next chat is told where to look rather than left to find out.
+
+**Two chats changing the same state file is not a conflict to resolve by hand.** The
+tracker, the contact book, the message log and `seen_jobs.json` merge row by row
+(`tools/merge_state.py`, which every sync wires into git): rows either side added are both
+kept, and notes both sides added are both kept. Git stops only where both sides changed the
+same field of the same row to different values; keep the later one, by its date. Before
+merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
+happens in the container, where the driver is set, and not on GitHub, where it is not.
 
 The one thing that is **not** negotiable in the other direction: do not push to master
 without CI green. It is the branch every other chat starts from, so a broken master

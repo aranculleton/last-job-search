@@ -22,6 +22,17 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Several chats open on one repo no longer trip over each other.**
+  - *Updates:* when an update brought upgrades in, every open chat started the same
+    background /upgrade and asked the same questions. Now only the chat whose own sync
+    brought it in does. The others say "being applied by the chat that brought this update
+    in" and stay quiet, and take over after two hours if anything is still pending.
+  - *State files:* two chats that each logged a message, added a tracker row or ruled out
+    a posting met as a merge conflict. The tracker, contact book, message log and
+    `seen_jobs.json` now merge row by row (`tools/merge_state.py`, which every sync wires
+    into git). Rows and notes from both sides are kept. Git stops only where both changed
+    the same field of the same row two ways.
+
 - **What a line-by-line audit of a real repo found, fixed.** Each was reproduced on real
   input first.
   - *Search:*
