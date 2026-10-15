@@ -181,7 +181,7 @@ METHODS: dict[str, dict] = {
                   "RUNBOOK.md", "texmf/*", "cv/main_example.tex", "cover_letters/cover.cls",
                   "cover_letters/cover_example.tex", "cover_letters/OpenFonts/*"),
         "versions": (_first(),),
-        "fingerprint": "72c510ae31cc0c4b",
+        "fingerprint": "e858111f160f40a9",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -359,17 +359,30 @@ def regions(path: str = SETUP) -> dict[str, list[str]]:
     return out
 
 
+def _tracked() -> list[str] | None:
+    """Every file git tracks here, or None without git. Only tracked files count: a
+    glob over the disk also caught `__pycache__`, so the hash differed between machines."""
+    try:
+        r = subprocess.run(["git", "-C", ROOT, "ls-files"], text=True, capture_output=True,
+                           timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.splitlines() if r.returncode == 0 else None
+
+
 def files(name: str) -> list[str]:
     """The app files that say how a method is done, globs expanded, sorted."""
     out = set()
+    tracked = None
     for pat in METHODS[name]["files"]:
         if any(c in pat for c in "*?["):
-            base = pat.split("*")[0]
-            for dirpath, _dirs, names in os.walk(os.path.join(ROOT, base)):
-                for n in names:
-                    rel = os.path.relpath(os.path.join(dirpath, n), ROOT).replace(os.sep, "/")
-                    if fnmatch.fnmatch(rel, pat) and not is_personal(rel):
-                        out.add(rel)
+            if tracked is None:
+                tracked = _tracked()
+            if tracked is None:
+                tracked = [os.path.relpath(os.path.join(d, n), ROOT).replace(os.sep, "/")
+                           for d, dirs, names in os.walk(ROOT)
+                           if "__pycache__" not in d and "/.git" not in d for n in names]
+            out.update(f for f in tracked if fnmatch.fnmatch(f, pat) and not is_personal(f))
         else:
             out.add(pat)
     return sorted(out)
