@@ -1,10 +1,10 @@
 # last-job-search
 
-**The last job search tool you'll ever need.** Claude will finds jobs that fit you, scores each one, writes
-and checks a resume and cover letter for the ones you choose, finds the people worth talking to
-and drafts what to say, keeps track of every application and conversation, reminds you when to
-follow up, and gets you ready for interviews. It never sends anything. You stay in charge of
-what goes out.
+**The last job search tool you'll ever need.** Claude finds jobs that fit you, scores each one,
+writes and checks a resume and cover letter for the ones you choose, finds the people worth
+talking to and drafts what to say, keeps track of every application and conversation, reminds
+you when to follow up, and gets you ready for interviews. It never sends anything. You stay in
+charge of what goes out.
 
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
