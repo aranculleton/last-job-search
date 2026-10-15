@@ -44,7 +44,7 @@ same folder, so nothing about one application is left in a second system.
 
 **Subfolder naming:** `<company>_<role>_<abbr>` - lowercase, underscores for spaces.
 Every run of characters that is not a letter or digit becomes a single underscore (so
-`Novo Nordisk A/S` becomes `novo_nordisk_a_s`), and leading and trailing underscores are
+`Oakmere Foods A/S` becomes `oakmere_foods_a_s`), and leading and trailing underscores are
 trimmed. The name is truncated to 80 characters before the abbreviation is appended. If the derived name is empty, stop and ask the user for a company or
 role containing at least one letter or digit; do not create a file or directory. Every non-empty
 result is therefore a single path component whatever the posting contains.
@@ -65,15 +65,15 @@ Each folder holds:
 
 - **`job_posting.md`** - the posting with its source URL, portal and retrieval date.
 - **`screening_answers.md`** - the eight to twelve closed fields a portal asks before it
-  will accept a submission (sponsorship, work authorization, salary expectation),
+  will accept a submission (sponsorship, work authorisation, salary expectation),
   written by `/apply` Step 6b on every application.
 - **`outreach.md`** - a sub-80-word note to the hiring manager or recruiter, built from
   the cover letter's verified company fact. Sending it is the candidate's call.
 - **`form_fields.txt`** - answers given to the portal's own questions, so a follow-up or
   a second application does not contradict the first.
 - **`interview_prep_<stage>.md`** - written by `/interview` when one lands.
-- **`outcome.md`** - written by `/outcome` once there is a result. `/setup` Path A parses
-  it, so the header is fixed:
+- **`outcome.md`** - written by `/outcome` once there is a result. Later sessions and
+  `tools/what_works.py` read it, so the header is fixed:
 
   ```markdown
   # Outcome: <Company> - <Role>

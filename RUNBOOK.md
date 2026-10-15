@@ -8,8 +8,8 @@ spends them only on writing.
 ```bash
 apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex \
   texlive-fonts-recommended poppler-utils   # icon fonts are vendored in texmf/, see its README
-pip3 install --upgrade cffi pytest pypdf
-python3 -m pytest tests -q          # over 450 tests; all green before anything else
+pip3 install --upgrade cffi && pip3 install -r requirements.txt
+python3 -m pytest tests -q          # over 900 tests; all green before anything else
 ./tools/ci_local.sh                 # or this: every check CI runs, ~40s, no Actions minutes
 ```
 
@@ -28,7 +28,9 @@ round lands is decided by where you point `--out`.
 
 The round handles the keeping and the deleting itself. It writes the top 60 of the
 shortlist, without the posting bodies, to `documents/rounds/<round>.json` at about 30KB,
-then deletes the stage files and prints how much it freed. That summary file is the one
+then deletes the stage files and prints how much it freed. It keeps `06_shortlist.json`, cut
+to the same 60 with their bodies, because drafting is staged from it; in a later session,
+when `rounds/` is gone, `stage_picks.py` reads `documents/rounds/` and fetches the bodies again. That summary file is the one
 to commit, and it takes a plain `git add`: it sits outside `rounds/` deliberately,
 because a keeper inside an ignored tree would need a `!` negation and
 `tools/security_guards.py` rejects negations outside its reviewed allowlist.
@@ -48,12 +50,15 @@ everything previously excluded re-evaluated.
 **Read the exit code.** 0 means the yield target was met, 2 means it was missed, 1 means
 a stage actually broke. A thin market and a broken pipeline are different answers.
 
-**Anything older than 14 days is already gone** from the portals. If one is blocked by
-the session's egress policy the log says `connect_rejected`; that is environment policy,
-not a bug. To re-run every free stage on a scrape that already succeeded, without
-touching the portals:
+**`--jobage` is the window in days.** The default, 14, is also the prefilter's hard cap, so
+nothing older is ever ranked; the twice-weekly round uses 7. If a portal is blocked by the
+session's egress policy the log says `connect_rejected`; that is environment policy, not a
+bug. To re-run every free stage on a scrape that already succeeded, without touching the
+portals, the first run must have kept its stage files (`--keep-intermediates`), because a
+normal round deletes `00_scrape/`:
 
 ```bash
+python3 tools/run_round.py --out "$SCRATCH/r1" --keep-intermediates
 python3 tools/run_round.py --out "$SCRATCH/r1b" --from-scraped "$SCRATCH/r1/00_scrape/kept.json"
 ```
 
@@ -127,7 +132,7 @@ Save as `$SCRATCH/r1/drafts.json` (a list), with the shortlist rows as
 
 ```bash
 python3 tools/fit_to_page.py "$SCRATCH/r1/drafts.json"
-python3 tools/check_claims.py cv/*_Resume_*.tex cover_letters/*_Cover_Letter_*.tex
+python3 tools/check_claims.py cv/*_Resume_*.tex cv/*_CV_*.tex cover_letters/*_Cover_Letter_*.tex
 tools/verify_batch.sh "$SCRATCH/r1/drafts.json"
 python3 tools/outreach.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json"
 ```
@@ -138,14 +143,16 @@ posting until one page, then grows back the strongest absent one that still fits
 `check_claims` must report **0 error-level findings**. `audit_letters`, which
 `verify_batch.sh` runs, must report every letter clean. `verify_batch.sh` exits non-zero
 on any finding and checks pages, chronology, section order, bullets per employer, contact
-details as literal text, duplicated phrasing, em dashes, the word "CV", and the ATS text
-layer.
+details as literal text, duplicated phrasing, em dashes, the document nouns the profile
+bans (`person.json` `documents.banned_nouns`), and the ATS text layer. The resume's filename
+noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
+`cv/<Prefix>_CV_<ABBR>`; the globs here cover both.
 
 `outreach` writes `documents/applications/<slug>/job_posting.md` and `outreach.md`. The
 outreach note is a sub-80-word message to the hiring manager or recruiter built from the
 letter's verified company fact. Sending it is the user's call; every application gets one.
 
-Then read three PDFs by eye. Not the .tex, the PDF. LaTeX page-break decisions are not
+Then read every resume and letter in the batch by eye. Not the .tex, the PDF. LaTeX page-break decisions are not
 predictable from source, which is the whole reason this step exists.
 
 ## 4. Record and persist
@@ -156,7 +163,7 @@ writes each `screening_answers.md`. Then:
 
 ```bash
 git add -f job_search_tracker.csv documents/applications/ job_scraper/seen_jobs.json
-git add -f cv/*_Resume_*.tex cv/*_Resume_*.pdf
+git add -f cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf
 git add -f cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf
 git add documents/rounds/
 git commit && git push
@@ -180,8 +187,8 @@ session cannot see and will duplicate.
 - A first follow-up is due 7 days after applying and a second 7 days after the first
   actually went. **After sending one, append `followed up YYYY-MM-DD` to the row's notes**,
   the form `/outcome` Step 2b writes: the second is timed from that date, and without it
-  the next run offers the first again. After two, or 45 days of silence, the chase stops
-  and says so once.
+  the next run offers the first again. A week after the second, or 45 days after applying
+  with no reply, the chase stops and says so once.
 - A follow-up with nobody on file is listed without a draft. Put the recruiter or hiring
   manager in the row's `contact_person` column and the draft is addressed to them.
 - `DO NOT CHASE` in a row's notes holds its follow-ups, with the reason shown; `until

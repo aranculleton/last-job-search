@@ -234,7 +234,8 @@ make sense to somebody whose repo just received it.
   what is pending, with what runs it and how long it takes; the twice-weekly shortlist carries
   the same line. **If you set up before 15 October 2026,** your next sync lists the upgrades
   waiting for you. This sync is the old copy of the sync and cannot, so the session runs
-  `python3 tools/profile_upgrades.py` once to see them now. Nothing runs without a yes.
+  `python3 tools/profile_upgrades.py` once to see them now. Nothing runs without a yes
+  (superseded: upgrades Claude can do alone now apply themselves; see the later entry).
   No profile upgrade: this is what lists them.
 - **Your LinkedIn job alerts can feed every round.** LinkedIn's alert emails are its own match
   for you, and they carry roles a keyword search ranks out of reach. Set `JOB_ALERT_QUERY` in

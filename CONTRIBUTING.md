@@ -142,8 +142,8 @@ Put Python tool tests in `tests/`, portal CLI tests in `.agents/skills/<name>/cl
 
 **Reproduce on the real path, not a constructed input.** A test that fails before the fix
 and passes after is necessary but not sufficient: the failing input has to be one the
-pipeline actually produces. The corpus in `tests/fixtures/screened_postings/` is the model
-to follow. Each file is a real posting, named `pass__*` or `cut__*` for what must happen
+pipeline actually produces. A person's screened-postings corpus (`profile/tests/fixtures/screened_postings/`, read by
+`tools/score_eval.py`; the app has none of its own) is the model to follow. Each file is a real posting, named `pass__*` or `cut__*` for what must happen
 to it, and it pins both directions: the ones that must keep being cut, and the ones that
 must keep passing because each was wrongly cut once.
 

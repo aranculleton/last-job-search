@@ -70,8 +70,10 @@ Ranked roughly by how bad it would be:
   facts (`tools/build_app.py`, `tools/leak_scan.py`); the app's CI runs the same scan on
   every push.
 - **Nothing is sent.** No command in this repo submits an application, sends a message or
-  emails a person. `/notion-sync` pushes filenames and status only; no document content
-  is uploaded anywhere. Every artifact stops at a file on disk and waits for a human.
+  emails a person. `/notion-sync`, when a person sets it up, copies each tracked job's
+  title, company, score, status, deadline, channel, posting URL, the resume and letter
+  filenames and the tracker's dated notes to their own Notion database; no document
+  content is uploaded anywhere. Every artifact stops at a file on disk and waits for a human.
 - **Secrets are not in the repo.** `salary_data.json` (licensed third-party data) and
   `gmail_sync/state.json` (a sync cursor) stay uncommitted. No API keys are stored here;
   the portal CLIs hit public endpoints.
@@ -87,7 +89,8 @@ never sending anything itself.
 
 - Portal CLIs make live requests only when run. CI never does: it typechecks and runs
   fixture tests. `linkedin-search` is personal-use only per its own terms warning, and
-  CI-automating it would breach that. A person can switch it off (`tools/portals.py`),
+  CI-automating it would breach that. A person can switch it off in `profile/search.py` `PORTALS` (`tools/portals.py` prints
+  what is on),
   and `scrape_wide.py` and `hydrate.py` send a portal that is off no request at all.
 - `tools/robots_check.py` gates the browser-header retry against `robots.txt`.
 - The app ships only the two portals that work in any country. A person's own portals,

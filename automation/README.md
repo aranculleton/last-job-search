@@ -7,8 +7,8 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 
 | Task | What it delivers |
 |---|---|
-| **Job search: morning brief**, every day | What is owed, then a TLDR: news at employers the candidate is in process with, their target employers, their market, their work authorization. Weekdays include drafted replies and nudges; weekends only count them. |
-| **Job search: shortlist**, twice a week | A scored round of new postings and the top 8 (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
+| **Job search: morning brief**, every day | What is owed, then a TLDR: news at employers the candidate is in process with, their target employers, their market, their work authorisation. Weekdays include drafted replies and nudges; weekends only count them. |
+| **Job search: shortlist**, twice a week | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
 **If no morning brief has arrived two hours after its time, the automation is broken.** The
 brief is sent every day even when nothing is due, so silence always means something failed.
@@ -48,22 +48,22 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
 ### (a) One chat per briefing
 
 1. In Claude Code (claude.ai/code, or the Claude app's Code tab), start a **new chat with
-   your private repo selected**, in the environment from "Keep a long-lived chat small"
-   below. Name it after its task: **Job search: morning brief**.
-2. Paste this into it, with your own time zone and time:
+   your private repo selected**. Name it after its task: **Job search: morning brief**.
+   (Optional, and cheaper over months: first make the capped environment in "Keep a
+   long-lived chat small" below, and start the chat in it.)
+2. Paste this into it:
 
-   > Create a scheduled task that fires into this chat. Name: Job search: morning brief.
-   > Schedule: every day at 07:56, written as `CRON_TZ=Europe/London 56 7 * * *` with my
-   > IANA time zone. Prompt, exactly the morning brief stub in `automation/README.md`. Then
-   > add it to `profile/routines.json` with `setup` set to `chat_per_briefing`, this chat's
-   > session id and title under `chat`, and the trigger id you were given; run
-   > `python3 tools/routines.py check` and `./tools/ci_local.sh --quick`, and land it on
-   > master through a PR.
+   > Set up my morning brief in this chat. Ask me what time I want it and which city I am
+   > in, then create a scheduled task that fires into this chat, named Job search: morning
+   > brief, with the morning brief stub in `automation/README.md` as its prompt. Record it
+   > in `profile/routines.json` (`setup` `chat_per_briefing`, this chat's session id and
+   > title under `chat`, the trigger id), run `python3 tools/routines.py check` and
+   > `./tools/ci_local.sh --quick`, and land it on master through a PR.
 
-3. Start a second new chat with the repo selected, named **Job search: shortlist**, and do
-   the same with the shortlist stub (for example `CRON_TZ=Europe/London 52 6 * * 1,4`,
-   Mondays and Thursdays at 06:52). Set up only the tasks you want; each one is
-   independent.
+   Claude asks two questions and writes the schedule itself; you never type one.
+3. Start a second new chat with the repo selected, named **Job search: shortlist**, and paste
+   the same with "shortlist" in place of "morning brief" (two mornings a week suits most
+   searches). Set up only the tasks you want; each one is independent.
 4. Test each one as below. Each briefing then arrives as a reply in its chat, with no push.
    If you would rather scroll one chat, bind both tasks to the same one.
 
@@ -75,8 +75,10 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
    **Prompt:** the morning brief stub above, exactly.
 3. The same for **Job search: shortlist**, with its stub and its days.
 4. Ask any chat in your repo: "add my Routines-screen tasks to `profile/routines.json`, with
-   `setup` set to `routines_screen`". It records each name, cron and prompt file, and the
-   trigger ids from `list_triggers` if it can see them (they are optional here).
+   `setup` set to `routines_screen`". It records each name, cron and prompt file, with
+   `"notifications": {"push": true}` on each (`routines.py check` fails without it, because
+   a task nobody hears from is broken), and the trigger ids from `list_triggers` if it can
+   see them (they are optional here).
 5. Every run is a new chat, and its final reply is the push you get. Reply to the shortlist
    in the chat that run opened.
 
@@ -138,10 +140,10 @@ person's explicit OK. A chat that was set up that way earlier can still make it.
 
 | Ask | What the chat does |
 |---|---|
-| "Make the brief shorter", "add X to the TLDR", "stop drafting on Fridays" | Edits the prompt file, opens a PR, merges it. Takes effect on the next run. |
+| "Make the brief shorter", "add X to the TLDR", "stop drafting on Fridays" | Writes it into `profile/CLAUDE.md`, section "This search's automation", which every run reads and which is yours. The prompt files under `prompts/` are the app's: a sync puts an edit to them back. Takes effect on the next run. |
 | "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json` and, for (a), calls `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), tells you what to change in the Routines screen. Merges the registry. |
 | "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies them the same way, merges. |
-| "Add a task that does Y" | Writes `prompts/<key>.md`, adds an entry, and sets the task up the way the registry's `setup` says. |
+| "Add a task that does Y" | A new kind of task needs its own prompt file in the app (`prompts/<key>.md`), so it is a change to the app: the maintainer makes it, anyone else gets it written up as an issue. Until then, what an existing task should also do goes in `profile/CLAUDE.md`. |
 | "Pause the shortlist" | `update_trigger` with `enabled: false` (or the Routines screen), and `"paused": "<date> <reason>"` on the entry. |
 
 ## Cost
