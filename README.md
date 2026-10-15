@@ -75,7 +75,8 @@ You never need any of this to use it.
 | Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
 | Working on the app itself | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-Scraping, filtering and scoring are Python and Bash, so a search can read thousands of
+The employer-board reader is also published on its own, as the open-source library
+[openroles](https://github.com/aranculleton/openroles). Scraping, filtering and scoring are Python and Bash, so a search can read thousands of
 postings at no model cost; the model is used once you have chosen what to write. Over 900
 tests run in the app's CI and, in your copy, through `./tools/ci_local.sh`.
 

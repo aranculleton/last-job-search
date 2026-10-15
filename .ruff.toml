@@ -20,3 +20,5 @@ select = ["E9", "F", "B"]
 [lint.per-file-ignores]
 # The skills and fixtures are data, and the portal CLIs are TypeScript.
 "tests/fixtures/*" = ["F"]
+# A vendored copy of openroles, which supports Python 3.9: zip(strict=) is 3.10+.
+"tools/openroles/*" = ["B905"]

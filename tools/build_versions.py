@@ -73,7 +73,7 @@ METHODS: dict[str, dict] = {
         "gives": "the job boards that serve your market found, built and searched every round",
         "run": "/setup --section boards",
         "files": (".claude/commands/add-portal.md", "tools/robots_check.py",
-                  "tools/ats_boards.py", "tools/portals.py"),
+                  "tools/ats_boards.py", "tools/portals.py", "tools/openroles/*"),
         "versions": (
             _first("the first release: LinkedIn and freehire, and /add-portal offered"),
             (2, "2026-10-15", True, "the boards that serve your country, field and level researched "
@@ -84,8 +84,9 @@ METHODS: dict[str, dict] = {
                                     "roles where the board can filter for them"),
             (4, "2026-10-15", False, "an invented example in place of a real city"),
             (5, "2026-10-15", False, "employer boards date a posting by when it was first published, not last edited"),
+            (6, "2026-10-15", False, "--find locates an employer's board from its name or careers page (through the vendored openroles), and Lever postings include their requirement lists"),
         ),
-        "fingerprint": "c657689745873532",
+        "fingerprint": "0e21172321250ad4",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",

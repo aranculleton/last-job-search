@@ -20,6 +20,17 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Finding an employer's board, and Lever's full postings.**
+  - `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL) finds an
+    employer's Greenhouse, Lever or Ashby board and counts what a round would get from it.
+    The finding is [openroles](https://github.com/aranculleton/openroles), the open-source
+    library this reader grew into, vendored in `tools/openroles/`, so nothing new needs
+    installing. A round still reads boards with `ats_boards.py` itself.
+  - Lever postings now include their requirement lists. Before, only the intro was read, so
+    a Lever role was scored without its requirements.
+
 ### Fixed
 
 - **The docs now say what the build does, and newcomers get a plain-English start.**

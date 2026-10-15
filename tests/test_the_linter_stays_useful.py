@@ -91,6 +91,8 @@ class TheDependenciesAreWrittenDown(unittest.TestCase):
         local = {p.stem for p in (ROOT / "tools").rglob("*.py")}
         local |= {p.stem for p in (ROOT / "templates").rglob("*.py")}
         local |= {"network"}
+        # A package folder under tools/ is local too: the vendored openroles is one.
+        local |= {p.parent.name for p in (ROOT / "tools").glob("*/__init__.py")}
         third = set()
         for p in list((ROOT / "tools").rglob("*.py")) + list((ROOT / "templates").rglob("*.py")):
             for n in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):

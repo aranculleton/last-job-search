@@ -47,6 +47,7 @@ into silence. It re-checks the refused ones too, and says when a rule lifts.
 
 Usage:
     python3 tools/ats_boards.py --out ats.json
+    python3 tools/ats_boards.py --find "<Employer>"           # or its careers page URL
     python3 tools/ats_boards.py --probe
     python3 tools/ats_boards.py --add greenhouse <board>    # verify then print
     python3 tools/ats_boards.py --add ashby <board>
@@ -395,6 +396,23 @@ def greenhouse(employer: str, token: str) -> tuple[list[dict], str | None]:
     return out, None
 
 
+def _lever_body(j: dict) -> str | None:
+    """The intro, every list (requirements, responsibilities), then the closing text.
+
+    `descriptionPlain` alone is only the intro: a posting's requirements live in
+    `lists`, and reading the intro alone scored Lever roles without them.
+    """
+    parts = [str(j.get("descriptionPlain") or "").strip()]
+    for block in j.get("lists") or []:
+        if isinstance(block, dict):
+            head = " ".join(str(block.get("text") or "").split())
+            body = _text(str(block.get("content") or ""))
+            if head or body:
+                parts.append(f"{head}\n{body}".strip())
+    parts.append(str(j.get("additionalPlain") or "").strip())
+    return "\n\n".join(p for p in parts if p)[:BODY_CAP] or None
+
+
 def lever(employer: str, token: str) -> tuple[list[dict], str | None]:
     data = _get(LEVER.format(token=token))
     if not isinstance(data, list):
@@ -414,7 +432,7 @@ def lever(employer: str, token: str) -> tuple[list[dict], str | None]:
             "location": loc,
             "date": _epoch_ms_date(j.get("createdAt")),
             "portal": "lever",
-            "desc": j.get("descriptionPlain") or None,
+            "desc": _lever_body(j),
         })
     return out, None
 
@@ -937,14 +955,46 @@ def probe(boards=None) -> dict[str, str]:
     return out
 
 
+def find(target: str) -> list[tuple[str, str, int, str | None]]:
+    """[(kind, token, rows in range, why it returned none)] for an employer's name or careers page.
+
+    How a board gets into the map in the first place. The finding is the vendored
+    openroles (tools/openroles/): it tries the board names an employer is likely to use
+    on Greenhouse, Lever and Ashby, or reads a careers page for the board it links to.
+    Workday cannot be guessed from a name: give its careers site URL. Each board found
+    is then read the way a round reads it, so the count is what a round would get.
+    """
+    from openroles import _http as _or_http
+    from openroles import detect
+    _or_http.USER_AGENT = UA
+    _or_http.AGENTS = ROBOTS_AGENTS
+    out = []
+    for board in detect(target):
+        rows, err = FETCH[board.ats](target, board.token)
+        out.append((board.ats, board.token, len(rows), err))
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--out", help="write the rows as JSON")
     ap.add_argument("--probe", action="store_true", help="re-check every token")
+    ap.add_argument("--find", metavar="EMPLOYER_OR_URL",
+                    help="find an employer's board from its name or careers page")
     ap.add_argument("--add", nargs=2, metavar=("PROVIDER", "TOKEN"),
                     help="verify one board before adding it to the map; for "
                          "workday, TOKEN may be the careers site's URL")
     a = ap.parse_args()
+
+    if a.find:
+        found = find(a.find)
+        for kind, token, in_range, err in found:
+            print(f"{kind}/{token}: {in_range} in-range job(s)" + (f" [{err}]" if err else ""))
+            print(f'  map entry: "<Employer>": ("{kind}", "{token}"),')
+        if not found:
+            print(f"ats_boards: no Greenhouse, Lever or Ashby board found for {a.find!r}; "
+                  "for Workday, give the careers site's URL", file=sys.stderr)
+        return 0 if found else 1
 
     if a.add:
         kind, token = a.add
