@@ -14,6 +14,15 @@ Usage: `/reply <contact name or company>`, then paste their message.
 
 3. **Check it is worth continuing.** `reply.should_continue()`. After two
    explicit nos, recommend a warm close instead of a reply. Say so plainly.
+   A "not hiring, but happy to chat" is not a no, and a thread at `call_booked` or
+   `referral_in_progress` is never stopped.
+
+   **When the scenario is `gone_quiet`** (nothing pasted, and we spoke last), run
+   `reply.nudge_due(rows, today)` before drafting anything. If it is not due, or one
+   nudge has already gone out, draft nothing and say why: a second nudge costs more
+   than it recovers. If it is due, the nudge is `compose.nudge()`, with a new reason
+   to answer, and `reply.following_up_is_honest(rows, today)` says whether an apology
+   for the gap is owed.
 
 4. **Get the guidance.** `reply.guidance()` gives the move, the target length
    derived from their message, what not to do, and any action owed outside the

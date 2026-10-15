@@ -123,6 +123,8 @@ at a time, never a form:
   never want to see written about you?
 - Is the search confidential? If your current employer must not know, say so.
 - How much notice do you have to give?
+- Do you pay for LinkedIn Premium? (It decides how long a connection note can be and whether
+  InMail is there at all.)
 
 **Never ask them to name** a job board, an ATS, a spelling convention, a salary band source,
 a regex, a file or any config value. Those are your job in Step 2.
@@ -275,7 +277,10 @@ resume summary from these, never from the example person's in `05-cv-templates.m
 as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
 not, and the honest bridges between), `search.py` (pay, gates, locations, titles, what the
 scrape searches), `employers.py`, `boards.py`, `networking.py` (their voice: opener, a line
-about them, the ask, their home city and timezone), `claims.py`, `screening.py` (standard form
+about them, the ask, their home city and timezone, and `LINKEDIN_PLAN`, "free" or
+"premium", from their answer; on a free account the whole connection note is 200
+characters, so the opener, the line about them and the ask together stay near 120),
+`claims.py`, `screening.py` (standard form
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
 `12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).
 

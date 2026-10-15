@@ -24,6 +24,12 @@ import untrusted
 import docpaths
 import person
 
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
+try:
+    import schema as _schema          # the person's LinkedIn limits
+    import tone as _tone
+except ImportError:                   # the note is still worth writing without them
+    _schema = _tone = None
 try:
     from throttle import warm_routes, pending_outreach
     from company_key import key as _company_key
@@ -167,6 +173,14 @@ def check_note(note):
         problems.append("names none of the candidate's employers, so it carries no credential")
     if len(APPLYING.findall(note)) > 1:
         problems.append("says it has applied more than once")
+    # The networking rules every other outbound message meets: a status the
+    # profile does not hold, banned and excusing phrases, an exclamation to a
+    # senior reader. Only voice_check ran here, so a note claiming citizenship
+    # the candidate does not hold went through.
+    if _tone is not None:
+        problems += [f"{v.rule}: {v.text}" for v in
+                     _tone.check(note.replace("[name]", "Sam"), recipient_seniority="senior",
+                                 name="Sam")]
     try:
         import voice_check
     except ImportError:
@@ -174,6 +188,26 @@ def check_note(note):
     problems += [f"{f['rule']}: {f['match']}" for f in voice_check.check(note)
                  if f["severity"] == "hard"]
     return problems
+
+
+def short_note(a, limit=None):
+    """The note cut to fit a connection request, for someone not yet connected.
+
+    The note runs to about 470 characters, which goes as a message to a
+    connection or as an InMail, never as a connection request (300 characters on
+    Premium, 200 on a free account). Same pieces, fewer of them.
+    """
+    limit = limit or (_schema.LIMITS["connection_note_chars"] if _schema else 200)
+    company, role = R.short_name(a["company"]), a["role"]
+    opening = OPENING.format(role=role, company=company)
+    sents = [s for s in R.split_sentences(_plain(a.get("p1", ""))) if not APPLYING.search(s)]
+    hook = next((s for s in sents if CREDENTIAL.search(s)), "")
+    ask = _ask_for(a)
+    for parts in ((opening, hook, ask), (opening, ask), (opening,)):
+        note = " ".join(x for x in parts if x)
+        if len(note) <= limit:
+            return note
+    return ""
 
 
 def outreach_note(a):
@@ -264,16 +298,25 @@ def write(a, meta, today):
         json.dump([kept], f, indent=1, ensure_ascii=False)
         f.write("\n")
     known = _known_contacts(a["company"])
+    replied = [p for p in known if p.get("status") not in SENT_NO_REPLY]
     with open(os.path.join(d, "outreach.md"), "w") as f:
         f.write(f"# Outreach note - {a['company']}, {a['role']}\n\n")
-        if known:
+        if replied:
             # Without this the note says "message the hiring manager" at an
             # employer where a thread is already open, and the candidate sends a
             # cold introduction to somebody already mid-conversation with them.
             # There is no recovering from that one.
-            f.write("## STOP. There is already a live thread at this employer.\n\n"
-                    "Do not send a cold note here. Use the existing thread, or ask "
-                    "the person below for the referral.\n\n")
+            f.write("## STOP. There is already a live conversation at this employer.\n\n"
+                    "Do not send a cold note here. Ask the person below for the referral "
+                    "inside that conversation (compose.referral_ask).\n\n")
+        elif known:
+            # Messaged and silent: asking them for a referral is the third stage
+            # sent as the first, and a second message to somebody sitting on the
+            # first is the one thing CLAUDE.md says not to do.
+            f.write("## Someone here has been messaged and has not replied.\n\n"
+                    "Applying is fine. Do not message them again, and do not send this note "
+                    "to them: it is for a different person, the hiring manager or recruiter.\n\n")
+        if known:
             for p in known:
                 line = f"- **{p['name']}**"
                 if p.get("title"):
@@ -284,15 +327,37 @@ def write(a, meta, today):
                 f.write(line + "\n")
             f.write("\nThe note below is the cold version. Keep it only if none of "
                     "the people above is the right route in.\n\n")
-        f.write("Send on LinkedIn to the hiring manager or the recruiter named on the posting, "
-                "the same day as the application. Replace [name]. Do not attach anything.\n\n")
-        f.write("---\n\n" + outreach_note(a) + "\n\n---\n\n")
-        f.write(f"Words: {len(outreach_note(a).split())}\n")
+        note = outreach_note(a)
+        limit = _schema.LIMITS["connection_note_chars"] if _schema else 200
+        f.write("Send to the hiring manager or the recruiter named on the posting, the same "
+                "day as the application. Replace [name]. Do not attach anything.\n\n")
+        f.write("---\n\n" + note + "\n\n---\n\n")
+        f.write(f"Words: {len(note.split())}. Characters: {len(note)}.\n\n")
+        if len(note) > limit:
+            short = short_note(a, limit)
+            f.write(f"Longer than a connection request ({limit} characters on your LinkedIn "
+                    "plan): send it as a message to someone you are already connected with, "
+                    "or as an InMail. To someone you are not connected with, send this as the "
+                    "connection request instead:\n\n")
+            f.write("---\n\n" + (short or "(nothing fits; send the request without a note)")
+                    + "\n\n---\n\n")
+        problems = check_note(note)
+        if problems:
+            f.write("**Check before sending:** " + "; ".join(problems) + "\n")
     return d
+
+
+SENT_NO_REPLY = {"awaiting_reply", "connected_no_reply"}
 
 
 if __name__ == "__main__":
     import datetime
+    if sys.argv[1:2] == ["--check-note"]:
+        # /apply writes its note by hand: the same checks the assembled note meets.
+        found = check_note(" ".join(sys.argv[2:]))
+        for problem in found:
+            print(problem)
+        sys.exit(1 if found else 0)
     today = datetime.date.today().isoformat()
     drafts = json.load(open(sys.argv[1]))
     meta = {}

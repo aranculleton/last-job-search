@@ -21,6 +21,9 @@ happened. Deriving status from messages rather than storing it means the
 status can never drift from the evidence.
 """
 
+import os
+import sys
+
 CONTACT_COLUMNS = [
     "contact_id",        # stable slug: company_key + surname, e.g. "acme_halloway"
     "name",
@@ -83,12 +86,44 @@ TERMINAL = {"gone_cold", "closed", "converted_to_application"}
 # Platform limits the output has to fit inside. LinkedIn caps connection
 # requests weekly and InMail credits monthly; sending more than the user can
 # actually send produces a list they cannot action.
+#
+# Which limits apply depends on the person's LinkedIn account, and they were
+# Premium's for everyone: a 300-character note, InMail credits, no monthly cap on
+# personalised notes. A free account gets a shorter note (reported as 200
+# characters), a handful of personalised notes a month and no InMail except to an
+# Open Profile, so its drafts could not be sent. The plan is the person's
+# (profile/networking.py LINKEDIN_PLAN), and with none recorded the free limits
+# apply: a note short enough for free is short enough for Premium, never the
+# other way round. LINKEDIN_LIMITS there overrides any number (a Business or
+# Sales Navigator plan carries more InMail credits).
+PLANS = {
+    "free": {"connection_note_chars": 200, "personal_notes_per_month": 5,
+             "inmail_credits_per_month": 0},
+    "premium": {"connection_note_chars": 300, "personal_notes_per_month": None,
+                "inmail_credits_per_month": 5},
+}
+
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import person  # noqa: E402
+
+# Written as a plain binding so tools/profile_names.py sees the names read here.
+_NETWORKING = person.module("networking") if person.exists("networking.py") else None
+PLAN = str(getattr(_NETWORKING, "LINKEDIN_PLAN", "") or "free").strip().lower()
+if PLAN not in PLANS:
+    PLAN = "free"
+
 LIMITS = {
     "connections_per_week": 20,   # conservative: LinkedIn's soft cap is ~100/wk but
                                   # unanswered requests count against future ones
-    "inmail_credits_per_month": 5,
-    "connection_note_chars": 300,
-    "inmail_words": (150, 200),
+    **PLANS[PLAN],
+    # A ceiling, not a target: an InMail is the first note with room for one
+    # paragraph of evidence, and padding it to a word count is the failure.
+    "inmail_words": (None, 200),
+    # LinkedIn's subject field takes about 200 characters; a subject is a label,
+    # so the composer holds it to a few words well inside that.
+    "inmail_subject_chars": 200,
+    "inmail_subject_words": 8,
     # A nudge is capped BELOW the note it is chasing, which is the whole point.
     # Someone who ignored a 300 character message is not going to respond to an
     # even longer one, especially a senior reader. A first message is an
@@ -99,6 +134,9 @@ LIMITS = {
     # a number the composer can refuse to exceed.
     "nudge_chars": 280,
 }
+LIMITS.update(dict(getattr(_NETWORKING, "LINKEDIN_LIMITS", {}) or {}))
+# Below the note it chases, whatever the plan allows the note.
+LIMITS["nudge_chars"] = min(LIMITS["nudge_chars"], LIMITS["connection_note_chars"] - 20)
 
 # Follow-up cadence, in business days. The brief is explicit that 24-48 hours
 # reads as impatient and 5-7 business days is the correct window.

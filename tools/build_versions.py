@@ -94,8 +94,11 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-15", True, "the scoring vocabulary, level patterns, screen flags and years "
                                     "of experience written for your field, not the example analyst's"),
+            (3, "2026-10-15", False, "asks for your LinkedIn plan with the rest of networking.py "
+                                     "and keeps the note's pieces short enough for a free account; "
+                                     "the plan reaches older profiles as its own question"),
         ),
-        "fingerprint": "3954a84a33bf1f3b",
+        "fingerprint": "684df17e43b23e9d",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -146,8 +149,9 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-15", True, "role headings the tools can read, bullet themes cued in your "
                                     "field's words, and STAR examples kept in your profile"),
+            (3, "2026-10-15", False, "asks whether you pay for LinkedIn Premium"),
         ),
-        "fingerprint": "ffe7edd2d018cd3d",
+        "fingerprint": "3c0025451dbe90f5",
     },
     # ---- what the build makes over time and keeps
     "prep-docs": {
@@ -186,8 +190,13 @@ METHODS: dict[str, dict] = {
                   ".claude/workflows/draft-applications.js", ".claude/agents/grounding-auditor.md",
                   "RUNBOOK.md", "texmf/*", "cv/main_example.tex", "cover_letters/cover.cls",
                   "cover_letters/cover_example.tex", "cover_letters/OpenFonts/*"),
-        "versions": (_first(),),
-        "fingerprint": "e858111f160f40a9",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "the outreach note checked by the networking tone rules, "
+                                    "with a connection-sized version and no referral ask to "
+                                    "someone who has not replied"),
+        ),
+        "fingerprint": "cadf79e9b0b7240f",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -217,8 +226,13 @@ METHODS: dict[str, dict] = {
                   "tools/network/discovery.py", "tools/network/schema.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
-        "versions": (_first(),),
-        "fingerprint": "eb43babee2a8a719",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "a no read as a no and 'not hiring, but happy to "
+                                    "chat' as a yes, never a second nudge, InMail with a "
+                                    "subject, limits from your LinkedIn plan"),
+        ),
+        "fingerprint": "c998dc34db91334d",
     },
     "screening": {
         "by": "round", "priority": 2,

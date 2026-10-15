@@ -169,6 +169,10 @@ _KIND_ALIASES = {
     "referral": "intro",
     "reply": "reply",
     "referral_ask": "referral_ask",
+    "nudge": "nudge",
+    "follow_up": "nudge",
+    "intro_connection": "intro_connection",
+    "warm_intro_connection": "intro_connection",
 }
 
 KIND_LIMITS = {
@@ -183,6 +187,10 @@ KIND_LIMITS = {
     # Read in a message pane by someone who already knows the sender, so it has room,
     # but it is a favour being asked and a favour asked at length is a burden.
     "referral_ask": {"words": (None, 90)},
+    # Below the note it chases; only compose.nudge() enforced it.
+    "nudge": {"chars": schema.LIMITS["nudge_chars"]},
+    # A warm intro whose instruction was "connect with X" is the request itself.
+    "intro_connection": {"chars": schema.LIMITS["connection_note_chars"]},
 }
 
 # There is no default close and no default opener any more, and the reason
@@ -222,7 +230,23 @@ def _sentence(text) -> str:
     # so "iOS", "dbt" and a lowercase product name mid-sentence are unaffected.
     if s[0].islower():
         s = s[0].upper() + s[1:]
+    # The person's own ASK ("Would you have 15 minutes for a few questions
+    # sometime") ended every first note on a question with a full stop.
+    if _QUESTION_OPENER.match(s):
+        return s.rstrip(".!") + "?" if s[-1] != "?" else s
     return s if s[-1] in ".!?" else s + "."
+
+
+# How a question opens, narrowly: "Would love to hear" and "Do let me know" are
+# not questions, so the auxiliaries count only before a pronoun or "there".
+_QUESTION_OPENER = re.compile(
+    r"^(?:(?:would|could|can|will|do|did|are|were)\s+(?:you|we|there|they)"
+    r"|does\s+\w+|is\s+(?:there|it|that|this|your|the)"
+    # A question word only before its verb: "What you wrote about forecasting
+    # stuck with me" is common ground, not a question.
+    r"|(?:how|what|why|when|where|who|which)\s+(?:do|does|did|is|are|was|were|would|could|"
+    r"can|should|has|have|had|will)"
+    r"|how (?:many|much|long|often|big)|any chance)\b", re.I)
 
 
 def work_auth_line(seniority="peer") -> str:
@@ -348,6 +372,9 @@ def _greeting(name) -> str:
     given = tone.first_name(name)
     if not given:
         raise ValueError("a message needs the recipient's name; an unaddressed note reads as a batch")
+    # Directories and some exports write names in capitals: "Hi JANE," shouts.
+    if given.isupper() and len(given) > 1:
+        given = "-".join(p.capitalize() for p in given.split("-"))
     return f"Hi {given},"
 
 
@@ -581,7 +608,32 @@ JOB_ASK = re.compile(
     r"|\bwhere I want (?:my next role|to go(?: next)?|to take (?:it|that))\b"
     r"|\bis where I want\b"
     r"|\bwhat I want next\b"
-    r"|\bthe direction I am aiming\b", re.I)
+    r"|\bthe direction I am aiming\b"
+    # The plain forms, all of which passed: "Do you have any openings on your
+    # team?", "Could you refer me", "I'd like to be considered for".
+    r"|\b(?:any|have|has|got)\b[^.?!]{0,25}\b(?:openings?|vacanc\w+|open (?:roles?|positions?|reqs?))\b"
+    r"|\brefer me\b"
+    r"|\b(?:be )?considered for (?:the|a|an|your|this|that)\b"
+    r"|\b(?:I am|I'm|I've been|I have been|I just)\s+appl(?:ying|ied)\b"
+    r"|\b(?:are|is) (?:you|your team|the team) (?:recruiting|looking to (?:hire|add|grow))\b"
+    r"|\bis (?:your|the) team growing\b", re.I)
+
+# Common ground that is their hiring: a post, an open role. Beside it the
+# default ABOUT_ME's looking clause turns the note back into a job ask, which
+# the skill has always said to drop and nothing dropped.
+HIRING_GROUND = re.compile(
+    r"\b(?:hiring|recruiting|open (?:role|position|req)s?|vacanc\w+|job (?:post|ad|opening)s?)\b",
+    re.I)
+_LOOKING = re.compile(
+    r"(?:,\s*|\s+)(?:and\s+)?(?:I'?m|I am|currently)\s+(?:looking|searching|open)\s+(?:for|to)\b.*$",
+    re.I)
+
+
+def _about_me_for(common_ground, about_me):
+    """The person's ABOUT_ME, without its looking clause where the ground is their hiring."""
+    if about_me == ABOUT_ME and about_me and HIRING_GROUND.search(str(common_ground or "")):
+        return _LOOKING.sub("", about_me).strip(" ,")
+    return about_me
 
 # Work authorization in any of the shapes a draft arrives in: networking.py's
 # WORK_AUTH_ANY.
@@ -657,10 +709,12 @@ def first_note(name, common_ground, question, about_me=ABOUT_ME, ask=ASK,
         raise ValueError(
             "a first note needs a question about them, answerable in a line: it is "
             "what gets the reply")
+    q = q.rstrip(".!")
     if not q.endswith("?"):
         q += "?"
     if q[0].islower():
         q = q[0].upper() + q[1:]
+    about_me = _about_me_for(common_ground, about_me)
     parts = [f"{_greeting(name)} {opener}." if opener else _greeting(name),
              _sentence(common_ground), _sentence(about_me) if about_me else "",
              work_auth_line(seniority) if recruiter else "",
@@ -683,7 +737,8 @@ def first_note(name, common_ground, question, about_me=ABOUT_ME, ask=ASK,
     return _first_note_voice(note)
 
 
-def referral_ask(name, context, role, link, close=None) -> str:
+def referral_ask(name, context, role, link, close=None, work_auth=None,
+                 seniority="peer") -> str:
     """The ask the first note exists to earn, sent once they have engaged.
 
     Only inside a live thread: after a reply, a call or an offer of help. Asked
@@ -706,9 +761,13 @@ def referral_ask(name, context, role, link, close=None) -> str:
                       "all if not.")
     # The link goes on its own line at the end: a URL closing a sentence picks
     # up the full stop, and LinkedIn then links to a page that does not exist.
+    # Work authorization belongs here, not in a first note: the referrer
+    # forwards this message, and the hiring side's first question is whether
+    # the candidate can work there.
+    auth = _checked_claim(work_auth, seniority) if work_auth else ""
     text = " ".join(p for p in (f"{_greeting(name)} {_after_greeting(context)}",
                                 _sentence(f"The {role} looks like a strong fit for what we talked about"),
-                                _sentence(close)) if p)
+                                auth, _sentence(close)) if p)
     text = f"{text}\n\n{link.strip()}"
     words = len(text.split())
     high = KIND_LIMITS["referral_ask"]["words"][1]
@@ -757,31 +816,99 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
     return text
 
 
-def inmail(name, hook, who_line, evidence, close=DEFAULT_CLOSE, work_auth=None,
-           sign_off=None, seniority="peer") -> str:
-    """The brief 4.2 shape: the connection note plus one paragraph of evidence.
+# The subjects every mass InMail carries. A subject is the one line read before
+# deciding to open the message, so it names the common ground or the question.
+_GENERIC_SUBJECT = re.compile(
+    r"^\s*(?:re:\s*)?(?:hi|hello|hey|quick question|a question|question|introduction|intro|"
+    r"networking|connecting|let'?s connect|job (?:inquiry|enquiry|application)|"
+    r"opportunit\w*|career\w*(?: advice)?|role|position|following up|touching base)\W*$", re.I)
 
-    The evidence paragraph is what the credit buys. A named piece of work, its
-    scale, a specific outcome. An InMail without it is a connection note that
-    cost a scarce credit, which is the one way to waste this channel.
+
+def inmail_subject(subject, recruiter=False) -> str:
+    """The InMail's subject line: a few words naming why them, never the job.
+
+    LinkedIn shows the subject before the message, and nothing ever wrote one.
+    Held to the first note's rules: it is the first thing they read.
     """
-    if not str(evidence or "").strip():
+    s = " ".join(str(subject or "").split()).rstrip(".")
+    if not s:
         raise ValueError(
-            "an InMail without a concrete evidence paragraph (a named piece of work, its "
-            "scale, a specific outcome) spends a scarce credit on a connection note")
-    auth = _checked_claim(work_auth, seniority) if work_auth else ""
+            "an InMail needs a subject: it is read before the message is opened. Name the "
+            "common ground or the question in a few words")
+    if _GENERIC_SUBJECT.match(s):
+        raise ValueError(
+            f"{s!r} is the subject of every mass InMail; name the common ground or the "
+            "question instead")
+    words, limit = len(s.split()), schema.LIMITS["inmail_subject_words"]
+    if words > limit:
+        raise TooLong("InMail subject", words, limit, unit="words")
+    if len(s) > schema.LIMITS["inmail_subject_chars"]:
+        raise TooLong("InMail subject", len(s), schema.LIMITS["inmail_subject_chars"])
+    findings = first_note_findings(s, recruiter=recruiter)
+    if findings:
+        raise AsksForTheJob("this InMail subject asks for the job: %s"
+                            % "; ".join(sorted({v.text for v in findings})))
+    return s
+
+
+def inmail(name, subject, common_ground, question, evidence, about_me=ABOUT_ME, ask=ASK,
+           opener=OPENER, recruiter=False, seniority="peer", their=(), sign_off=None) -> str:
+    """The first note with room in it, and a subject line.
+
+        Subject: <subject>
+
+        Hi Sasha, hope you're well. <common ground>.
+
+        <about me>.
+
+        <evidence>.
+
+        <question>? <ask>.
+
+    The same moves as `first_note()` and the same rules (never a job ask, no work
+    authorization except to a recruiter, it has to reach them), plus one
+    paragraph of evidence: a named piece of work, its scale, an outcome. That
+    paragraph is what the credit buys; without it this is a connection note that
+    cost a scarce credit. The word limit is a ceiling, not a target.
+    """
+    for what, value in (("common_ground", common_ground), ("question", question),
+                        ("evidence", evidence)):
+        if not str(value or "").strip():
+            raise ValueError(
+                f"an InMail needs {what}: the common ground and a question about them, as "
+                "in a first note, and one paragraph of concrete evidence (a named piece of "
+                "work, its scale, an outcome), which is what the credit buys")
+    subj = inmail_subject(subject, recruiter=recruiter)
+    q = " ".join(str(question).split()).rstrip(".!")
+    q = (q[0].upper() + q[1:]) if q[0].islower() else q
+    q = q if q.endswith("?") else q + "?"
+    about_me = _about_me_for(common_ground, about_me)
     paragraphs = [
-        f"{_greeting(name)} {_after_greeting(hook)}".strip(),
-        " ".join(p for p in (_sentence(who_line), auth) if p),
+        " ".join(p for p in (f"{_greeting(name)} {opener}." if opener else _greeting(name),
+                             _sentence(common_ground)) if p),
+        " ".join(p for p in (_sentence(about_me) if about_me else "",
+                             work_auth_line(seniority) if recruiter else "") if p),
         _sentence(evidence),
-        _sentence(close),
+        " ".join(p for p in (q, _sentence(ask) if ask else "") if p),
+        " ".join(str(sign_off or "").split()),
     ]
-    if sign_off:
-        paragraphs.append(" ".join(str(sign_off).split()))
-    text = "\n\n".join(p for p in paragraphs if p)
-    if len(text) > INMAIL_CHAR_LIMIT:
-        raise TooLong("InMail", len(text), INMAIL_CHAR_LIMIT)
-    return text
+    body = "\n\n".join(p for p in paragraphs if p)
+    findings = first_note_findings(body, recruiter=recruiter)
+    if findings:
+        raise AsksForTheJob(
+            "this InMail asks for the job: %s. It asks for a conversation; the role belongs "
+            "in compose.referral_ask() once they have replied."
+            % "; ".join(sorted({v.text for v in findings})))
+    if not tone.reaches_them(body, their):
+        raise NoteIsAllAboutTheSender(
+            "nothing in this InMail reaches %s. Put what links you to them in common_ground, "
+            "or pass their= with the employer or event it names." % (tone.first_name(name) or "them"))
+    if len(body) > INMAIL_CHAR_LIMIT:
+        raise TooLong("InMail", len(body), INMAIL_CHAR_LIMIT)
+    high = schema.LIMITS["inmail_words"][1]
+    if high and len(body.split()) > high:
+        raise TooLong("InMail", len(body.split()), high, unit="words")
+    return f"Subject: {subj}\n\n{_first_note_voice(body)}"
 
 
 def email(name, subject, context, body, ask, sign_off=None, attachment=True,
@@ -859,7 +986,7 @@ def warm_intro(referrer_name, name, body, close=None, work_auth=None,
     if not str(body or "").strip():
         raise ValueError("warm_intro needs a body naming the referrer in its first sentence")
     auth = _checked_claim(work_auth, seniority) if work_auth else ""
-    text = " ".join(p for p in (f"{_greeting(name)} {_sentence(body)}".strip(),
+    text = " ".join(p for p in (f"{_greeting(name)} {_after_greeting(body, keep=(referrer_name,))}".strip(),
                                 auth,
                                 _sentence(close) if close else "") if p)
     if not referrer_in_lead(text, referrer_name):
@@ -872,6 +999,10 @@ def warm_intro(referrer_name, name, body, close=None, work_auth=None,
         limit = schema.LIMITS["connection_note_chars"]
         if len(text) > limit:
             raise TooLong("warm intro sent as a connection request", len(text), limit)
+    else:
+        high = INTRO_WORDS[1]
+        if high and len(text.split()) > high:
+            raise TooLong("warm intro", len(text.split()), high, unit="words")
     return text
 
 
@@ -923,8 +1054,14 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     # Riley" fails on the one rule that is scoped to cold messages.
     out = list(tone.check(text, recipient_seniority=seniority, name=name,
                           live_thread=(k in ("reply", "referral_ask"))))
-    if k == "connection":
+    if k in ("connection", "inmail"):
         out += first_note_findings(text, recruiter=recruiter)
+    if k == "inmail":
+        first = text.lstrip().split("\n", 1)[0]
+        if not _SUBJECT_LINE.match(first):
+            out.append(tone.Violation("no_subject", "an InMail with no 'Subject:' line"))
+        elif _GENERIC_SUBJECT.match(_SUBJECT_LINE.sub("", first)):
+            out.append(tone.Violation("generic_subject", first.strip()))
     limits = KIND_LIMITS[k]
     chars, words = len(text), len(text.split())
     if "chars" in limits and chars > limits["chars"]:
@@ -981,7 +1118,7 @@ def _voice_findings(text: str, kind: str | None = None) -> list:
     except ImportError:
         return []
     hard = [f for f in voice_check.check(text) if f["severity"] == "hard"]
-    if kind == "connection":
+    if kind in ("connection", "inmail"):
         hard = [f for f in hard
                 if not (f["rule"] == "house-style" and _OWN_VOICE.match(f["match"]))]
     if kind in ("reply", "referral_ask"):

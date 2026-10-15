@@ -239,6 +239,30 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **Networking messages you could not send, and replies read the wrong way round.**
+  - Connection notes were capped at 300 characters and InMail drafted for everyone, which is
+    a Premium account's limits: a free account (a 200-character note, a handful of
+    personalised notes a month, no InMail except to an Open Profile) was handed drafts it
+    could not send. The limits now follow your LinkedIn plan (`profile/networking.py`
+    `LINKEDIN_PLAN`), the free ones until you say, and the weekly budget counts drafts
+    already queued. Profile upgrade: linkedin-plan.
+  - An InMail had no subject line and none of the first note's rules. It now has a
+    subject of a few words naming the common ground (never "Quick question" or a job),
+    the first note's shape and one paragraph of evidence.
+  - "Not interested, thanks." and "Please stop messaging me." read as friendly short
+    replies and drew a call invitation; "not hiring, but happy to chat" read as a no, so
+    two of them closed a booked call. Both now read right, "talk to <a colleague>" reads as
+    a referral, and a thread at `call_booked` or `referral_in_progress` is never stopped.
+  - An empty `/reply` on a thread we had already answered re-read their old message and
+    drafted a CV already sent; it is now a quiet thread, and `/reply` drafts no second
+    nudge.
+  - "Do you have any openings on your team?", "could you refer me" and five other plain
+    job asks passed the first-note check; a note whose common ground is their hiring
+    drops the "looking for my next role" clause; a question ends in a question mark.
+  - The per-application outreach note is checked by the same tone rules, says its
+    character count, comes with a version that fits a connection request, and no longer
+    tells you to ask someone who never replied for a referral. `/apply` now checks who is
+    already talking to the employer before drafting, and writes the note.
 - **A job board built for you searched your home city and nothing else.** A round sent a
   person's own board one place, the first in `SCRAPE_LOCATIONS`, unless someone had listed
   its places by hand, so the towns around it, the region and the country went unsearched
