@@ -1091,7 +1091,7 @@ def _rows_for(contact, threads):
 # chat" counted as a decline, so two such messages on a booked call read as two
 # nos and /reply recommended closing it.
 ACCEPTS = re.compile(
-    r"\b(?:happy|glad|keen) to (?:chat|talk|help|meet|speak|have a call)\b"
+    r"\b(?:happy|glad|keen) to (?:chat|talk|meet|speak|have a call)\b"
     r"|\b(?:works|suits) (?:for )?(?:me|us)\b"
     r"|\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b[^.!?\n]{0,25}\b(?:works|suits|is (?:fine|good|free))\b"
     r"|\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b[^.!?\n]{0,20}\b(?:works|suits)\b"
@@ -1112,8 +1112,10 @@ def declines_in(threads) -> list:
         hits = _hits(text, REJECTION)
         if not hits:
             continue
-        if (ACCEPTS.search(text) or _hits(text, GENEROUS) or extract_scheduling_link(text)
-                or extract_email(text)):
+        # GENEROUS is too wide to excuse a no: it holds "my team" and "let me
+        # know", so "We are not hiring on my team right now" stopped counting
+        # and the stop-after-two-nos rule never fired.
+        if ACCEPTS.search(text) or extract_scheduling_link(text) or extract_email(text):
             continue
         found.append({"date": row.get("date", ""), "evidence": hits[0][1]})
     return found

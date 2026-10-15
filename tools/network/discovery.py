@@ -576,6 +576,25 @@ def _city_tokens(s):
 
 _COUNTRY = tuple(w for w in (_NET_GET("HOME_COUNTRY", "") or "",) if w)
 _HOME_TOKENS = [t for t in _norm_place(_HOME).split(" ") if t]
+# REGION_WORDS is read two ways: as the region part of a location ("Bury,
+# England") and as a word in a post ("remote across the UK"). A postal
+# abbreviation belongs to the first only: "on" or "in" as a word in free text
+# matches nearly every post. Free text skips the short words English uses for
+# something else.
+_COMMON_WORDS = {"on", "in", "at", "or", "an", "as", "is", "it", "to", "of", "by", "me",
+                 "we", "us", "be", "do", "go", "no", "so", "up", "hi", "ok", "la", "de"}
+def _free_text(words):
+    return tuple(w for w in words if _norm_place(w) and _norm_place(w) not in _COMMON_WORDS)
+
+
+_FREE_TEXT_PLACES = _free_text(_REGIONS + _COUNTRY)
+# The countries a location may name that are not home: the profile's location
+# gate list (search.py LOCATION other_countries), which the prefilter reads too.
+try:
+    _OTHER_COUNTRIES = tuple(
+        _norm_place(c) for c in (_person.module("search").LOCATION.get("other_countries") or ()))
+except Exception:                       # no profile, or no LOCATION
+    _OTHER_COUNTRIES = ()
 
 
 def _has_words(text, phrase):
@@ -594,18 +613,15 @@ def _is_home(tokens):
 
 
 def _abroad(location):
-    """A location whose region or country parts name none of the home ones.
+    """A location that names another country after the city.
 
-    "Manchester, New Hampshire, United States" carries the city and is not it.
-    Decided only when the profile names its regions, and only from the parts
-    after the city.
+    "Manchester, <region>, United States" carries the city and is not it. Only
+    a country the profile names as not home counts: reading every region part
+    the profile did not list as abroad put "<City>, ON", the ordinary Canadian
+    form, in another country and ranked the person last.
     """
     parts = [_norm_place(p) for p in str(location or "").split(",")[1:]]
-    parts = [p for p in parts if p]
-    if not parts or not (_REGIONS or _COUNTRY):
-        return False
-    home = tuple(_norm_place(w) for w in _REGIONS + _COUNTRY)
-    return not any(p in home or any(_has_words(p, h) for h in home) for p in parts)
+    return any(p in _OTHER_COUNTRIES for p in parts if p)
 
 
 def _same_market(location, target_location):
@@ -633,7 +649,7 @@ def _same_market(location, target_location):
         return True
     if loc in BROAD_PLACES:
         target = _norm_place(target_location)
-        return (any(_has_words(target, w) for w in _REGIONS)
+        return (any(_has_words(target, w) for w in _FREE_TEXT_PLACES)
                 or _is_home(tokens) or _in_metro(target))
     return False
 
@@ -651,12 +667,16 @@ def _signal_reaches_market(signal, target_location, in_market=False):
     if not text:
         return False
     words = set(text.split())
-    if "remote" in words:
-        return in_market or any(_has_words(text, w) for w in _REGIONS + _COUNTRY)
+    # The places the post names come first: "<City>, <Other City> or remote"
+    # names this city, and reading "remote" first returned before it looked.
     tokens = _city_tokens(target_location)
     if tokens and all(t in words for t in tokens):
         return True
-    return _is_home(tokens) and _in_metro(text)
+    if _is_home(tokens) and _in_metro(text):
+        return True
+    if "remote" in words:
+        return in_market or any(_has_words(text, w) for w in _FREE_TEXT_PLACES)
+    return False
 
 
 # A place named inside the post. The preposition is required because a bare
@@ -839,8 +859,10 @@ DISQUALIFIERS = (
         # "joined a new team" is an internal move, and "after 8 years at Acme I
         # lead data" is tenure: only a leaving verb makes the years a departure.
         r"|(?:i(?:['\u2019]|\s+ha)?ve\s+)?joined\s+a\s+new\s+(?:company|chapter)"
-        r"|after\s+\d+\+?\s+(?:great\s+)?years?\s+at\b[^.!?\n]{0,40}\b(?:left|leaving|moved on|"
-        r"moving on|said goodbye|farewell|it'?s time)"
+        r"|after\s+\d+\+?\s+(?:great\s+|wonderful\s+|amazing\s+)?years?\s+at\b[^.!?\n]{0,40}"
+        r"\b(?:left|leaving|moved on|moving on|on to (?:the )?next|onto (?:the )?next|"
+        r"next chapter|new chapter|new adventure|said goodbye|saying goodbye|farewell|"
+        r"it'?s time|stepped away|stepping away|departed|departing|last day|signing off)"
         r"|wrapped up my time at)\b", re.I),
         "has moved on, past-tense departure with no destination named"),
 

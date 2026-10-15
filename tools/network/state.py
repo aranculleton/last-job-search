@@ -190,12 +190,20 @@ def _write_csv(path: str, rows, columns) -> None:
     fields = list(columns)
     seen = set(fields)
     # Columns somebody added by hand keep their place after the schema ones.
-    # Dropping them here is how a spreadsheet edit gets silently reverted.
-    for row in rows:
-        for k in row:
-            if k and k not in seen:
-                seen.add(k)
-                fields.append(k)
+    # Dropping them here is how a spreadsheet edit gets silently reverted. Only
+    # columns already in the file's header count: a key a tool put on a row in
+    # memory (triage's `undated_signal`, `location_unverified`, a search
+    # snippet) is not a column, and taking every key as one wrote them into the
+    # contact book.
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            header = next(csv.reader(f), [])
+    except OSError:
+        header = []
+    for k in header:
+        if k and k not in seen:
+            seen.add(k)
+            fields.append(k)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, restval="", extrasaction="ignore",
                            lineterminator="\n")

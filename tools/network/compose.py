@@ -715,8 +715,12 @@ def first_note(name, common_ground, question, about_me=ABOUT_ME, ask=ASK,
     if q[0].islower():
         q = q[0].upper() + q[1:]
     about_me = _about_me_for(common_ground, about_me)
-    parts = [f"{_greeting(name)} {opener}." if opener else _greeting(name),
-             _sentence(common_ground), _sentence(about_me) if about_me else "",
+    # With no opener the common ground runs straight on from "Hi Robin," and
+    # takes the case a clause after a comma takes: "Hi Robin, Saw your post"
+    # is the capital the other composers already fixed.
+    lead = (f"{_greeting(name)} {opener}. {_sentence(common_ground)}" if opener
+            else f"{_greeting(name)} {_after_greeting(common_ground, keep=their)}")
+    parts = [lead, _sentence(about_me) if about_me else "",
              work_auth_line(seniority) if recruiter else "",
              q, _sentence(ask) if ask else ""]
     note = " ".join(p for p in parts if p)
@@ -884,8 +888,8 @@ def inmail(name, subject, common_ground, question, evidence, about_me=ABOUT_ME, 
     q = q if q.endswith("?") else q + "?"
     about_me = _about_me_for(common_ground, about_me)
     paragraphs = [
-        " ".join(p for p in (f"{_greeting(name)} {opener}." if opener else _greeting(name),
-                             _sentence(common_ground)) if p),
+        (f"{_greeting(name)} {opener}. {_sentence(common_ground)}" if opener
+         else f"{_greeting(name)} {_after_greeting(common_ground, keep=their)}"),
         " ".join(p for p in (_sentence(about_me) if about_me else "",
                              work_auth_line(seniority) if recruiter else "") if p),
         _sentence(evidence),

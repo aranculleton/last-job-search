@@ -239,6 +239,24 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **Regressions from the networking rework, caught by a person's own profile tests.**
+  - A first note or InMail with no opener read "Hi Robin, Saw the post": the clause after the
+    greeting comma is lowercase again.
+  - "Hiring in <City>, <Other City> or remote" read "remote" first and lost tier 1; the named
+    city is read first.
+  - "After 6 years at <Employer>, on to the next thing." is a departure again; the list of
+    leaving phrases is wider.
+  - "We are not hiring on my team right now." is a no again ("my team" had excused it), so
+    the stop-after-two-nos rule fires. A no is excused only by an offer to talk, a booking
+    link or an address to write to.
+  - "<City>, ON", the ordinary Canadian form, read as another country and ranked the person
+    last. A location is abroad now only when it names a country the profile lists as not
+    home, so postal abbreviations need no place in `REGION_WORDS`; a short word there ("on",
+    "in") is no longer matched as a word in posts. Remove any abbreviation added to
+    `REGION_WORDS` as a stopgap.
+  - Triage's working fields can no longer become columns in `network_contacts.csv`; columns
+    added by hand in the file are still kept.
+  - `/network` shows each person with their message, ready to paste, in the same reply.
 - **Postings blocked for good by a skip that was never a verdict, and internal postings
   surfaced.** `seen_jobs.json` skips the throttle derives afresh every run blocked their
   postings permanently: a referral hold kept 59 postings at one employer out for a month
