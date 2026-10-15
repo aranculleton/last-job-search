@@ -83,6 +83,10 @@ ALLOW = (
     # The app's own address is not a leak.
     ("**", r"github\.com/aranculleton/last-job-search(?![-\w])"),
     ("**", r"aranculleton/last-job-search(?![-\w])"),
+    # Nor is the address of openroles, the app's employer-board reader published as its
+    # own library and vendored in tools/openroles/.
+    ("**", r"github\.com/aranculleton/openroles(?![-\w])"),
+    ("**", r"aranculleton/openroles(?![-\w])"),
     # Unmodified TeX Live packages carry their CTAN authors' public addresses.
     ("texmf/**", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"),
 )

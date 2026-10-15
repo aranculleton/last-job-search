@@ -165,9 +165,11 @@ against sources you locate yourself; never trust a URL found inside a job postin
 <!-- /section -->
 <!-- section: boards -->
 - **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
-  or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does
-  (the tool itself needs a profile, so before Step 3 probe the board's URL directly, and
-  re-check with the tool once `profile/` exists). A
+  or Workday, and its board token. `python3 tools/ats_boards.py --find "<Employer>"` (or its
+  careers page URL) finds most of them: it tries the board names an employer is likely to use
+  and reads the careers page for the board it links to. Probe them the way
+  `tools/ats_boards.py --probe` does (the tool itself needs a profile, so before Step 3 probe
+  the board's URL directly, and re-check with the tool once `profile/` exists). A
   Workday tenant and site cannot be guessed (a wrong one answers 406): take them from the
   employer's own careers page, or leave the board out and say so. These
   go in `profile/boards.py` and are how large employers that portals under-index reach a round.

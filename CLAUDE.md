@@ -310,7 +310,9 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 - **Portals and employer boards.** The app ships `linkedin-search` and `freehire-search`; a
   person turns either off in `profile/search.py` `PORTALS`, never in its `SKILL.md`. Every
   other board is the person's, built by `/add-portal` into their repo. Employer ATS boards
-  (`tools/ats_boards.py`, named in `profile/boards.py`) are a third source. `python3
+  (`tools/ats_boards.py`, named in `profile/boards.py`) are a third source, read through the
+  vendored [openroles](https://github.com/aranculleton/openroles) library in `tools/openroles/`
+  (never edited here); `ats_boards.py --find "<Employer>"` finds a board. `python3
   tools/portals.py` prints what the next round searches; the rest is in the job-scraper skill.
 
 **Tools run directly, not through a slash command**: `run_round.py`, `job_alerts.py`,
