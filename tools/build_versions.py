@@ -192,6 +192,7 @@ METHODS: dict[str, dict] = {
                   ".claude/skills/job-application-assistant/05-cv-templates.md",
                   ".claude/skills/job-application-assistant/06-cover-letter-templates.md",
                   ".claude/skills/job-application-assistant/08-application-forms.md",
+                  ".claude/skills/job-application-assistant/verification-checklist.md",
                   ".claude/workflows/draft-applications.js", ".claude/agents/grounding-auditor.md",
                   "RUNBOOK.md", "texmf/*", "cv/main_example.tex", "cover_letters/cover.cls",
                   "cover_letters/cover_example.tex", "cover_letters/OpenFonts/*"),
@@ -208,8 +209,9 @@ METHODS: dict[str, dict] = {
                                     "same pipeline as a batch, keeps its draft.json, and asks "
                                     "first whether you have already applied"),
             (6, "2026-10-15", False, "a refused outreach note no longer stops the batch, '8+ years' and 'per cent' are checked, a draft with no posting is said, the deadline reaches the tracker, and the bullet split no longer swings on a fraction of a point"),
+            (7, "2026-10-15", False, "the verification checklist and the tools table moved out of CLAUDE.md into files read when they are needed, so every session starts lighter"),
         ),
-        "fingerprint": "6d6013d471203080",
+        "fingerprint": "9b186af939ce5bbb",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -362,6 +364,7 @@ KEEPS_NOTHING: dict[str, str] = {
     ".claude/commands/reset.md": "removes state on request",
     "tools/sync_app.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/merge_state.py": "a git merge driver; it changes only what a merge writes",
+    "tools/model_guide.py": "says which model suits a piece of work; it keeps nothing",
     ".gitattributes": "configuration, read on every merge",
     "tools/profile_upgrades.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/build_versions.py": "the machinery that carries changes; it keeps nothing itself",

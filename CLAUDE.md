@@ -110,55 +110,20 @@ record it in `profile/`.
 
 ## Developer rules: changing the app itself
 
-These apply whenever the change is to the app, whichever repo the session started in.
-
-- **Changes are made in the app**, on a branch, through a pull request, and merged only with
-  CI green. The app is public, so its Actions minutes are free and its CI is the evidence.
-  Then every person's repo takes the change on its next sync, the maintainer's included.
-- **Nothing reaches the app until the leak scan has passed on the exact tree being pushed,
-  branches included**: a public repo's branches are public, and its history is permanent. From
-  the maintainer's own repo, `python3 tools/build_app.py <dir> --tokens-out <dir>/tokens`
-  writes the denylist from their profile; then `python3 tools/leak_scan.py <app checkout>
-  --tokens <dir>/tokens` scans the app checkout with it. The app's CI scans again with the
-  `LEAK_TOKENS` secret, but CI only sees what is already public, so the local scan is the gate.
-- **No example may be a disguised person.** An example resume, story, message or incident is
-  invented, or it is the example person in `profile.example/`. A real case with the names
-  swapped is still that person.
-- Small PRs and batched commits. A change that touches how documents, scores or messages
-  come out is checked by rendering the same inputs before and after and comparing the
-  outputs; any difference is named in the PR, or it is a bug.
-- **Never ship a feature that only works after a person does something nobody told them
-  about.** If an existing user has to act for a change to reach them (a `/setup` section, a
-  portal built or rebuilt with `/add-portal`, a re-render, a new state file or column, a
-  profile name with no safe default), register it in `tools/profile_upgrades.py` with a
-  `pending()` that checks their repo for the trace the action leaves, and name it in the
-  CHANGELOG entry (`Profile upgrade: <id>`). Make it `needs="nobody"`, which `/upgrade` applies
-  in the background with no one asking, unless it truly needs the person's answer or consent.
-  A new profile name with a safe default goes in `SAFE_DEFAULTS` with the reason.
-  `tests/test_profile_upgrades.py` fails on either missing.
-- **A better way of doing any part of the build reaches every older repo by itself.** Each
-  part that leaves something behind in a person's repo (a `/setup` section, the boards, prep
-  documents, unsent drafts, interview packs, research, contacts, screening, routines) is a
-  versioned method in `tools/build_versions.py`, and every other app file is in its
-  `KEEPS_NOTHING` with the reason. Changing a method's files fails
-  `tests/test_build_versions.py` until a version is added saying what changed and `rerun`:
-  True when what an older version made should be made again (a better board search, a
-  fixed prep document), False for wording. With True, every older repo redoes it with no one
-  asking: `/upgrade` in the background, the sync itself for an instant one, or every round
-  for screening. A new app file fails the same test until it is placed in a method or in
-  `KEEPS_NOTHING`. The decision can be made either way; it cannot be skipped.
+**Before changing any app-owned file, read `CONTRIBUTING.md`, "Developer rules"**, whichever
+repo the session started in. In short: the change is made in the app, on a branch, and merged
+with CI green; the leak scan passes on the exact tree before anything is pushed, because the
+app is public and so are its branches and history; no example is a disguised person; a change
+an existing user would have to act on is a profile upgrade (`tools/profile_upgrades.py`); and
+a change to a part of the build that leaves something behind is a new version in
+`tools/build_versions.py`. Tests fail on the last two.
 
 ## Master is the trunk. Finish on it, start from it.
 
 Several Claude chats run against this repo, each one in its own container, each one
 handed its own branch. That works only if every branch lands on master before its
-session ends. When it does not, the cost is worth stating, because it is the exact
-failure this rule exists to prevent:
-
-> A session's branch runs far past master. A second session starts from master, correctly
-> reports that nothing in the repo holds some piece of state, and builds a second store
-> for it, because the first session's file is sitting on a branch it cannot see.
-> Reconciling the two takes longer than the work in either.
+session ends: a chat that starts from master cannot see work sitting on another chat's
+branch, and builds it a second time.
 
 So, every session:
 
@@ -184,52 +149,19 @@ The one thing that is **not** negotiable in the other direction: do not push to 
 without CI green. It is the branch every other chat starts from, so a broken master
 breaks all of them at once.
 
-**On a private repo, green is established locally, and that is the rule, not the
-fallback.** GitHub bills a private repo per job, rounded up to the minute; a
-public repo's minutes are free. Every job in `.github/workflows/ci.yml` now runs only on a
-public repo (the app) or on a manual dispatch, so here the
-checks show as skipped and cost nothing. Every check in that file is a script in this repo:
-
-```bash
-./tools/ci_local.sh            # every check CI runs, under two minutes
-./tools/ci_local.sh --quick    # skips the LaTeX compile
-```
-
-A clean run is the evidence, and merging on it is allowed. Say in the PR that
-`ci_local.sh` was green and name anything it reported as SKIP. Dispatch the workflow by
-hand (Actions, CI, Run workflow) only when a SKIP matters for the change, and tick
-`latex` only when LaTeX changed. That is the one case worth a billed minute here.
-
-CI's second Python leg exists because a bare `import tomllib` passed locally and failed on
-3.10. `ci_local.sh` runs that leg the way CI does (a fresh 3.10 environment with pytest and
-nothing else), on the system `python3.10` or one `uv` fetches in seconds; the containers
-may not ship one. Only where neither exists is the leg reported SKIP, never
-passed silently. What a local run cannot be is a second machine; the app's own CI, which
-is free, is that for every change made there.
-
-**Still worth doing, because no setting enforces it: batch the commits and push once.**
-Push when a unit of work is finished, not to watch CI think, and prefer a PR to a direct
-push to master.
+**On a private repo, green is established locally, and that is the rule:
+`./tools/ci_local.sh`** (`--quick` skips the LaTeX compile). A clean run is the evidence and
+merging on it is allowed; say so in the PR and name anything it reported as SKIP. Why, what
+CI's Python 3.10 leg is for, and the one case worth a billed CI run: `CONTRIBUTING.md`, "CI on
+a private repo". Batch the commits and push once, when a unit of work is finished.
 
 ## Persistence rule for a person's repo (deviates from upstream)
 
-This is about **what** to commit. The section above is about **where** it ends up. Both
-are needed, and this one gets more important the more chats are running, not less: state
-that only exists in one container is state the other chats are about to contradict.
-
-A person's repo is **private** and the job search runs in ephemeral cloud sessions,
-so the upstream rule "never commit the tracker or application artefacts" does not apply
-there. Upstream ships that rule because forks of it are public; a repo made from this
-app with "Use this template" and set to Private is not, and nothing persists between
-sessions unless it is committed. The app itself never holds any of it: it has no
-profile and no state, and its CI fails on a personal path.
-
-**Do not edit `.gitignore`.** The rules in it are enforced by `tools/security_guards.py`,
-which runs in CI on every push. Weakening them fails the build. Instead, force-add the
-specific artefacts with `git add -f`, which leaves `.gitignore` intact and keeps the
-guard passing.
-
-At the end of any session that produced application work, commit these:
+A person's repo is **private** and the search runs in ephemeral cloud sessions, so nothing
+persists unless it is committed, and the state is committed there. (Upstream's "never commit
+the tracker" rule is for public forks. The app itself holds none of it, and its CI fails on a
+personal path.) **Do not edit `.gitignore`**: `tools/security_guards.py` enforces it in CI.
+Force-add the specific artefacts instead. At the end of any session that produced work:
 
 ```bash
 for p in profile networking; do      # not ignored: a plain add, so no cache file comes with it
@@ -245,99 +177,76 @@ for p in job_search_tracker.csv network_contacts.csv network_threads.csv \
 done
 ```
 
-`profile` is there because what the person teaches it (`profile/learned.json`), the facts
-written back to `01-candidate-profile.md` and every setting changed in a session live there.
-It takes a plain `git add`, never `-f`, which would force in the ignored caches under
-`profile/tests/`.
-`company_research/*.json` is gitignored and costs a fetch to rebuild; the Memory table below
-says to keep it.
-
-One path at a time, and only what exists: a single `git add` with a path that does not
-exist yet (a new repo has no `upskill/*.md`) stages nothing at all, silently.
-
-`documents/rounds/<round>.json` is each search round's shortlist, the top 60 without
-the posting bodies. It takes a plain `git add`: it deliberately sits outside `rounds/`,
-which is gitignored, because a keeper inside an ignored tree would need a `!` negation
-and `tools/security_guards.py` rejects any negation outside its reviewed allowlist.
-
-The two networking CSVs are the pipeline state for outreach, the same way the
-tracker is for applications, and they are not gitignored, so they take a plain
-`git add`. Thread status is derived from the message log rather than stored, so
-`network_threads.csv` is the file that must not be lost: without it every
-contact reverts to `not_contacted` and the same people get messaged twice.
-
-**Never force-add build noise:** `*.aux`, `*.log`, `*.out`, `*.fls`, `*.fdb_latexmk`,
-`*.synctex.gz`, `cv/*.txt` (ATS text dumps), `__pycache__/`, `.pytest_cache/`.
-`salary_data.json` and `gmail_sync/state.json` stay uncommitted too - the first is
-licensed third-party data, the second is a Gmail sync cursor with no value in git.
+One path at a time, and only what exists: a `git add` naming a path that does not exist
+stages nothing at all, silently. `profile` and `networking` take a plain `git add`, never
+`-f`, which would force in the caches under `profile/tests/`; `profile/` holds what the person
+taught it and every setting changed. `company_research/*.json` is ignored but costs a fetch to
+rebuild. `documents/rounds/<round>.json`, each round's top 60 without the posting bodies, sits
+outside the ignored `rounds/` on purpose. `network_threads.csv` is the file that must never be
+lost: status is derived from it, and without it every contact reverts to `not_contacted`
+and the same people get messaged twice.
+**Never force-add build noise** (`*.aux`, `*.log`, `*.out`, `*.fls`, `*.fdb_latexmk`,
+`*.synctex.gz`, `cv/*.txt`, `__pycache__/`, `.pytest_cache/`), `salary_data.json` (licensed
+third-party data) or `gmail_sync/state.json`.
 
 ## Environment notes for cloud sessions
 
-- **One command sets the container up: `./tools/setup_env.sh`.** It installs LaTeX, Poppler
-  and the Python side if missing, one package at a time, and is a no-op when they are present.
-  The permanent fix is the pasteable line in its header, in the cloud environment's Setup
-  script, which is cached. It is deliberately not a SessionStart hook: see below.
-- **LaTeX and PDF tooling are not preinstalled.** What the script installs:
-  `apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils`
-  (the same set CI's Debian leg uses), about 160 MB to download.
-- **`texlive-fonts-extra` is not installed, on purpose.** It is 1.7 GB and the resume used
-  1.5 MB of it: moderncv's `fontawesome5` and `academicons`. Those are vendored in `texmf/`.
-  `tools/fit_to_page.py` sets `TEXMFHOME` to it for every compile; for a compile by hand,
-  `export TEXMFHOME="$PWD/texmf"` first (or run `setup_env.sh`, which links `~/texmf`).
-  `File fontawesome5.sty not found` means that step was skipped, not that a package is
-  missing.
-- **`pypdf` needs a working `cffi`.** The system `cryptography` package can be broken on a
-  fresh container, which makes `tools/verify_pdf.py` fail with a pyo3 panic rather than a
-  clean ImportError. Fix with `pip3 install --upgrade cffi`.
-- **Job boards may be blocked by the session's egress policy.** If `/scrape` or
-  `/apply <url>` fails to reach a portal, check `curl -sS "$HTTPS_PROXY/__agentproxy/status"`
-  for `connect_rejected` entries. That is an environment policy denial, not a bug -
-  do not route around it. Fall back to `/apply <pasted posting text>`, which needs no network.
+- **`./tools/setup_env.sh` sets the container up**: LaTeX, Poppler and the Python side, one
+  package at a time, and a no-op when they are present. The line in its header, pasted into
+  the cloud environment's Setup script, caches it. It is not a SessionStart hook, on purpose:
+  `tools/security_guards.py` keeps that allowlist empty.
+- **`texlive-fonts-extra` is not installed**: moderncv's `fontawesome5` and `academicons` are
+  vendored in `texmf/`. `File fontawesome5.sty not found` means `TEXMFHOME` was not set;
+  `fit_to_page.py` sets it, and a compile by hand needs `export TEXMFHOME="$PWD/texmf"` first.
+- **A pyo3 panic from `tools/verify_pdf.py`** is a broken `cffi`: `pip3 install --upgrade cffi`.
+- **A job board the session cannot reach** may be blocked by its egress policy: check
+  `curl -sS "$HTTPS_PROXY/__agentproxy/status"` for `connect_rejected`. That is a policy
+  denial, not a bug: do not route around it. `/apply <pasted posting text>` needs no network.
 
 ## Automation: what runs without anyone asking
 
-**`automation/README.md` is the whole story; `profile/routines.json` is the registry.**
+**`automation/README.md` is the whole story; `profile/routines.json` is the registry**, and
+when the tasks run and where they report is the person's (the automation section of
+`profile/CLAUDE.md`). Two set-ups work, and the README walks a person through either: **(a)**
+one chat per task ("Job search: morning brief", "Job search: shortlist"), each task bound to
+its own chat, whose reply is the briefing; or **(b)** each task made in the Claude app's
+Routines screen with the repo ticked and notifications on. Each task's stored prompt is a stub
+that reads `automation/prompts/_common.md` and its own file from master, so **changing what a
+task does is a normal PR**; only a schedule change needs `update_trigger` or the Routines
+screen. The final reply is the message; nothing depends on `fire_trigger`. An older
+shared-chat set-up that relays to the phone through a fresh-session task still works only
+from a chat made before 14 October 2026: never archive, delete
+or rebuild one, and never test a chat-bound task with `fire_trigger` (use a one-off
+`run_once_at` task bound to the chat). `python3 tools/routines.py check` validates the
+registry.
 
-The scheduled tasks, when they run and where they report are the person's: `profile/routines.json`
-and the automation section of `profile/CLAUDE.md`.
-
-**The shape, and why.** Two set-ups work, and the README walks a person through either:
-**(a)** one chat per task ("Job search: morning brief", "Job search: shortlist" for the
-twice-weekly round), created with the private repo, each task bound to its own chat, whose
-reply is the briefing (no push); or **(b)** each task made in the Claude app's Routines screen with the
-repo ticked and notifications on (push, and a new chat every run). Each task's stored prompt
-is a stub that reads `automation/prompts/_common.md` and its own file from master, so
-**changing what a task does is a normal PR**; only a schedule change needs `update_trigger`
-or the Routines screen. The final reply is the message; nothing depends on `fire_trigger`.
-An older shared-chat set-up that relays to the phone through a fresh-session task still
-works only from a chat made before 14 October 2026: never archive, delete or rebuild one,
-and never test a chat-bound task with `fire_trigger` (use a one-off `run_once_at` task
-bound to the chat). `python3 tools/routines.py check` validates the registry, and
-`ci_local.sh` runs it.
-
-**Silence is the alarm.** The brief is delivered every day even when nothing is due, so a
-morning with no brief means the automation is broken. `automation/README.md` has the
-set-up steps if a chat or a task is lost.
-
-**Every dated follow-up is automatic by construction.** The brief reads `next_action_due`
-from `network_contacts.csv` and the nudge schedule from the tracker, so a reminder is created
-by writing the date into the state file, never by creating another routine. One routine per
-contact is the pattern this replaced.
+**Silence is the alarm**: the brief is delivered every day even when nothing is due, so a
+morning with no brief means the automation is broken; `automation/README.md` has the set-up
+steps if a chat or a task is lost.
+**Every dated follow-up is automatic by construction**: the brief reads `next_action_due` from
+`network_contacts.csv` and the nudge schedule from the tracker, so a reminder is a date
+written into a state file, never another routine.
 
 ## Orchestration: workflows and model choice
 
-Two saved workflows live in `.claude/workflows/` and are run by name with the Workflow
-tool. Both pin the model per stage to `11-cost-model.md`, which is where the saving is:
-reading and fetching go to sonnet, and anything that could put a false claim in front of
-an employer inherits the strongest model and is never downgraded.
+**Which model, and how hard it thinks.** When a piece of work starts (a search, an
+application, interview prep, outreach, setup, a change to the app), run
+`python3 tools/model_guide.py <command or kind of work> --on "<this session's model>"`. It
+prints nothing when the model fits. Otherwise its one line goes first in the reply, and the
+work carries on. `--all` prints the whole table for anyone who asks which model to use.
+
+Inside the work, models are pinned per stage to `11-cost-model.md`: reading and fetching go
+to sonnet, and anything that could put a false claim in front of an employer runs on the
+session's own model and is never downgraded. Two saved workflows in `.claude/workflows/` are
+run by name with the Workflow tool:
 
 | Workflow | Args | What it does |
 |---|---|---|
 | `draft-applications` | `{today, round_dir, picks}`, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), draft object (strongest), grounding and rules audit (strongest). Writes `round_dir/audit_<slug>.json`. |
 | `repo-audit` | optional `{focus}` | Four sonnet readers over docs, code, networking state and records, a sceptic per slice that re-checks every finding against the cited lines, then one ranking pass. Read-only. |
 
-Two **subagents** in `.claude/agents/` carry the same split for work that is not a whole
-batch, a single `/apply`, an `/interview` or a networking call, where a workflow is too much:
+Two **subagents** in `.claude/agents/` carry the same split for a single `/apply`, an
+`/interview` or a networking call, where a workflow is too much:
 
 | Subagent | Model | Use it for |
 |---|---|---|
@@ -345,10 +254,9 @@ batch, a single `/apply`, an `/interview` or a networking call, where a workflow
 | `grounding-auditor` | inherits the strongest | The last read before anything reaches an employer or a contact: profile grounding, `check_claims`, `check_numbers`, `voice_check`, `compose.validate()` |
 
 `tools/lint_skills.py` checks their frontmatter, and a test pins the two models, so the
-auditor cannot be quietly downgraded.
-
-The drafting path is three commands around one workflow, for a batch from a round and for a
-single `/apply` alike (`stage_picks.py single` stages the one posting):
+auditor cannot be quietly downgraded. The drafting path is three commands around one
+workflow, for a batch from a round and a single `/apply` alike (`stage_picks.py single`
+stages the one posting):
 
 ```bash
 python3 tools/stage_picks.py stage "$SCRATCH/r1" "Acme::Demand Planning" 4 7     # picks.json, apps_in.json, fenced postings
@@ -356,15 +264,9 @@ python3 tools/stage_picks.py stage "$SCRATCH/r1" "Acme::Demand Planning" 4 7    
 python3 tools/stage_picks.py assemble "$SCRATCH/r1"                              # drafts.json
 ```
 
-Then RUNBOOK.md step 3 as before. `stage` chooses each filename and **will not reuse a
-name another application was sent under**: a second role at an employer gets a role token
-(`Acme_DemandPlanning`), and `fit_to_page.py` refuses the whole batch before the first
-compile if a draft arrives under a name the tracker says belongs to a different role.
-
-**Setup is one line.** `./tools/setup_env.sh` installs LaTeX, Poppler and the Python side
-if missing and is a no-op when they are present. The permanent fix is to paste the line
-in its header into the cloud environment's Setup script, which is cached; it is not a
-SessionStart hook because `tools/security_guards.py` keeps that allowlist empty on purpose.
+Then RUNBOOK.md step 3. `stage` **never reuses a name another application was sent under**:
+a second role at an employer gets a role token (`Acme_DemandPlanning`), and `fit_to_page.py`
+refuses the whole batch if a draft arrives under a name that belongs to a different role.
 
 ## Commands and skills: what routes where
 
@@ -405,46 +307,18 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 - **`.claude/skills/` vs `.agents/skills/`.** The first is the four skills above. The
   second is the job-portal CLIs that rounds and `/scrape` call; they are search tools, not
   advice, and they are never invoked directly.
-- **The app ships two portals, and every other one is the person's.** `linkedin-search`
-  and `freehire-search` work in any country and are on by default; a person turns either
-  off in `profile/search.py` `PORTALS`, never in its `SKILL.md`, which is the app's.
-  LinkedIn's robots.txt disallows its guest job endpoints for crawlers it does not name,
-  and `/setup` says so; switching it off is the person's call. A board for one country,
-  field or level is built for the person by `/add-portal` (which `/setup` runs for the
-  boards its research found), lives in their repo as a personal path
-  (`tools/personal_paths.py`), and is searched by every round, kept to the `crawl-delay`
-  its `SKILL.md` declares. The app never carries one: its leak scan fails if it does.
-  `python3 tools/portals.py` prints what the next round will search, and the boards
-  researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
-- **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
-  the employers named in `profile/boards.py` straight from their ATS (Greenhouse, Lever,
-  Ashby, Workday), which is how large employers that a portal under-indexes reach a round,
-  and `scrape_wide.py` calls it, so `run_round.py` needs nothing extra. `--probe` re-checks
-  every token. A board whose robots.txt disallows it is refused, and so is SmartRecruiters
-  by its API's; the reasons are recorded beside each.
+- **Portals and employer boards.** The app ships `linkedin-search` and `freehire-search`; a
+  person turns either off in `profile/search.py` `PORTALS`, never in its `SKILL.md`. Every
+  other board is the person's, built by `/add-portal` into their repo. Employer ATS boards
+  (`tools/ats_boards.py`, named in `profile/boards.py`) are a third source. `python3
+  tools/portals.py` prints what the next round searches; the rest is in the job-scraper skill.
 
-### Things that are run directly, not through a slash command
-
-| Command | What it does |
-|---|---|
-| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the three files the MISSED message tells you to read. |
-| `python3 tools/job_alerts.py <messages.json> --out <alerts.json>` | The person's LinkedIn job alerts, read by the session from Gmail only when `profile/search.py` `JOB_ALERT_QUERY` asks for it (`--query` prints the search). Takes the job ids alone and fills each posting from LinkedIn's own page; `run_round.py --alerts <alerts.json>` adds them to the round before the free filters. |
-| `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. |
-| `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
-| `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
-| `python3 tools/what_works.py brief <messages\|documents\|search>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, and the interview rate by fit band and route. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
-| `python3 tools/followups.py` | The application nudges alone. The first is due 7 days after applying, the second 7 days after the first **actually went**, read from `followed up YYYY-MM-DD` in the row's notes (the form `/outcome` Step 2b writes), never from the application's age. Held, with the reason printed, while an interview or offer runs at that employer, a referral is in flight there, or the row's notes say `DO NOT CHASE` (`until <date>` in that note, or a later `chase again`, lifts it). A later row for the same role closes the earlier one. It names who the nudge goes to, from the row's `contact_person`, the application's `outreach.md`, or a contact there who has replied, and otherwise says nobody is on file and drafts nothing. It stops a week after the second follow-up, or at the throttle's 45 days of silence, and says so once. A separate clock from the networking nudge below, deliberately. |
-| `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. In a later session, when `rounds/` is gone, it reads `documents/rounds/<round>.json` instead and fetches each pick's body from its board, or reads `<round_dir>/postings/<slug>.txt` when the board will not give it. `single <dir> --company --role --posting-file` stages one posting from no round, which is how `/apply` enters the same pipeline. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
-| `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
-| `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
-| `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. |
-| `python3 tools/network/state.py` | What is owed, the connection budget, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. |
-
-`tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each
-skill a posting might ask about, what the candidate genuinely holds that does the same job
-and the sentence to say it in. The
-resume states no gaps and the cover letter volunteers none; this is what it says instead
-when asked directly.
+**Tools run directly, not through a slash command**: `run_round.py`, `job_alerts.py`,
+`stage_picks.py`, `verify_batch.sh`, `record_drafts.py`, `open_actions.py` (`--due`,
+`--company`), `followups.py`, `what_works.py`, `bar.py`, `network/state.py`, `network/prep.py
+--all`, `network/profile_facts.py` and `bridges.py`. What each does, its flags and its exit
+codes are in RUNBOOK.md, "Tools run directly". `run_round.py` exits 0 when the yield target is
+met, 2 when it is missed (a thin market) and 1 when a stage broke.
 
 ## Repo Structure
 - `cv/` - LaTeX CV variants (moderncv template, banking style)
@@ -461,137 +335,35 @@ when asked directly.
    - Bullets are **allocated per posting** by `tools/allocate.py` from the full themed library in `tools/bullet_library.py`; never hand-pick from a fixed set. The renderer enforces a fixed section order (Summary, Experience, Skills, Education, Certifications), reverse-chronological experience, a Skills block of a few lines under the person's own headings (`profile/skills.py` `LABELS`), and no Core Competencies section (see "Layout rules the generator enforces" in `05-cv-templates.md`)
    - Also write `documents/applications/<slug>/job_posting.md` and `outreach.md` via `python3 tools/outreach.py <drafts.json> <apps_in.json>`. The outreach note is a sub-80-word LinkedIn message to the hiring manager or recruiter, built from the letter's verified company fact; sending it is the user's call, but every application gets one
    - The same command keeps `draft.json` in that folder, the object both documents are rendered from, with the posting named rather than copied. After a renderer fix, `python3 tools/fit_to_page.py documents/applications/<slug>/draft.json` re-renders an unsent application from it
-4. **Verify both documents** (see Verification Checklist below)
+4. **Verify both documents** (the Verification Checklist, below)
 5. Prepare interview talking points based on the role requirements and your strengths
 
 **Important:** the profile can add document rules of its own (`profile/CLAUDE.md`). They are
 followed exactly like the ones here.
 
-## Documents for someone else
-
-The repo has no pipeline for drafting a resume for somebody other than the candidate. Its
-renderer, bullet library, `verify_batch.sh` and grounding tools all assume the candidate.
-When it is asked for anyway, this is what works:
-
-- **Keep it out of the candidate's state.** Work in the session scratchpad, or in `documents/others/<name>/`
-  only if asked to keep it. Never `cv/`, `cover_letters/`, the tracker, the networking CSVs or
-  `profile/`.
-- **One sources file first.** Their old resume verbatim, their LinkedIn, what they or the user
-  confirmed (including contact details), and employer facts with URLs. Ground against that
-  alone, and tell the `grounding-auditor` the document is not the candidate's so it skips
-  their profile and tools.
-- **Ask for real outcomes before inferring them.** One question round turns task bullets into
-  results, and an inferred outcome is a claim nobody confirmed.
-- **A standalone template needs the same proof as the candidate's:** one page read back visually, and
-  `tools/verify_pdf.py` clean. That is what caught a font pypdf read with no spaces at all,
-  which pdftotext and the eye both passed.
+**A resume for somebody other than the candidate**: the repo has no pipeline for it. Read
+RUNBOOK.md, "Documents for someone else", before starting.
 
 ## Job Search Behaviour
 
 **When the user asks to run a job search, scan, or scrape, run the search end to end and
-stop at the ranked shortlist.** The deliverable is a ranked, scored table plus the context
-needed to choose: salary read, deadlines, referral links, and what needs checking.
+stop at the ranked shortlist.** Scrape every enabled portal; rank every surviving posting
+0-100 against `04-job-evaluation.md`, gates first; expand and repeat, up to 3 rounds, until
+the yield target is met (at least 5 postings at 60+, 2 of them 75+); then present the ranked
+table, highest first, with the scores, the salary read, deadlines, referral links, a
+clickable apply link on every row and what needs checking. **Stop there and ask** which to
+take forward: draft nothing unless that request asked for it, and before drafting anything,
+ask whether they have already applied and record the answer.
 
-The pipeline, in order:
-
-1. **Scrape** every enabled portal per `job-scraper/SKILL.md`.
-2. **Rank** every surviving posting 0-100 against `04-job-evaluation.md`, gates first.
-3. **Expand and repeat** until the yield target is met, up to 3 rounds.
-4. **Present the ranked table**, highest score first, with scores visible, and under it
-   the line from `python3 tools/what_works.py brief search` when it reports a clear
-   difference (whether the scores have been predicting interviews).
-5. **Stop there and ask** which ones to take forward. Do **not** draft resumes or cover
-   letters unless the user asks for them.
-6. **Before drafting anything, confirm the user has not already applied.** The tracker only
-   knows about applications made through this repo, so it cannot rule out an application the
-   user made directly. Ask, and record the answer in the tracker.
-
-Only draft unprompted if the user has explicitly said to in that request.
-
-`/scrape` on its own is a **ranking** tool, not a link collector.
-
-- Every posting presented is scored 0-100 against `04-job-evaluation.md`: gates first
-  (Eligibility, Language, Location), then the four weighted dimensions. Results are
-  presented in score order, highest first, with the score visible.
-- A posting that fails a gate is excluded and recorded, never ranked.
-- **Rank down, do not cut.** A posting is a wish list. It names ten tools and the team uses
-  six, and the missing one is almost never what decides the hire. **One missing skill is
-  never a reason to drop a role**, and neither is a year of experience, a preferred degree,
-  or a posted range under target. Those are scoring inputs; the role still surfaces and the
-  candidate decides. Enforced in `tools/fit.py`, which weights every gap by how hard they
-  asked and by what sits next to it, and in `tools/text_screen.py`, where salary and degree
-  minimums are flags rather than cuts.
-- **Only four things are still hard cuts**, because no framing survives them: an
-  **eligibility** bar the profile cannot clear (a citizenship, residency or clearance
-  requirement, or a requirement to live elsewhere), a **language** requirement, a **professional credential** gate (actuarial
-  exams, an accounting or engineering licence), and a role whose **core is a discipline the
-  person does not hold** that the profile names as a different job (`search.py` `RESEARCH_ML`,
-  research machine learning for an analyst; nothing for a researcher). Those are different jobs,
-  not missing skills. Everything else gets ranked.
-- **Every posting ruled out is written back to `seen_jobs.json`** with `status: "excluded"`,
-  a checkable `exclusion_reason` and a date, so it never resurfaces. The gate that enforces
-  that is `throttle.ruled_out()`, and it runs at **prefilter**, before `hydrate.py` spends an
-  HTTP call fetching the body: a large share of everything reaching hydrate is a posting already
-  ruled out. `prefilter.py` imports the throttle's own function rather than reimplementing it, so
-  the shortlist is unchanged; `run_round.py --no-seen-read` turns it off, which is what you
-  want after changing the scoring rules and wanting everything previously excluded
-  re-evaluated. Exclusions are per
-  posting, never per company: a different role at the same employer stays in scope.
-- **`job_scraper/do_not_target.json` is the one company-level exception, and it is a
-  different claim.** A posting exclusion says a role was rejected. An entry there says the
-  employer has **no relevant presence for that function in that city**, so there is no role
-  to stay in scope: an office that houses only sales, or only production, has no role to stay
-  in scope for unless one of those is the person's function. `tools/throttle.py` reads it and
-  skips the employer with
-  the reason. Every entry names who established it and carries a **`review_after` date**,
-  after which it stops suppressing and is reported as expired, because a company standing up
-  a team in that city is exactly the fact that goes stale. Add an entry only on positive
-  evidence of absence, never as a shortcut for "this one was a bad fit".
-- **Every posting presented, and every posting documents are drafted for, carries a clickable
-  apply link.**
-- **Scoring is tiered, cheapest first.** A mechanical pre-filter, then a small-model knockout
-  check against `profile/10-triage-blockers.md`, then full weighted scoring only on survivors, then
-  adversarial verification only on postings scoring 70+. Never spend a full weighted evaluation
-  discovering a stated requirement the profile cannot meet, such as a licence or a degree. See
-  `11-cost-model.md` for the per-stage costs and
-  the model to use at each stage.
-- **A posting at an employer where a conversation is already running surfaces with a warning,
-  never suppressed.** `tools/throttle.py` reads `network_contacts.csv` and attaches
-  `warm_route_note` to the shortlist row: "DO NOT APPLY COLD", the person, and what is owed.
-  A warm route makes a role *more* worth having, so hiding it to protect the referral would
-  lose the role. A standing referral offer sits unused if a cold application to the same
-  employer goes in first and spends it for nothing.
-- **A reply is what makes a route warm.** `awaiting_reply` means a message went out and
-  nothing came back, and a large share of any contact book sits there. Counting them warm would print "DO NOT
-  APPLY COLD" over employers where nobody had said a word back, add the referral bonus to
-  the fit score and exempt the role from the fit floor, all on the strength of an unanswered
-  InMail. `throttle.RESPONDED` is the warm set; `SENT_NO_REPLY` gets
-  `outreach_pending_note` instead, which says applying is fine and a second message is not.
-  For the outreach note in `documents/applications/`, both halves count: whether they replied
-  decides whether *applying* is cold, and decides nothing about sending another message.
-- **A referral already in flight is the one contact state that suppresses.** A contact at
-  `referral_in_progress` means somebody inside has put the candidate's name forward, so a cold
-  application lands as a second, worse record of the same person and the referral is the one
-  that loses. `throttle.referral_holds()` blocks every posting at that employer and names who.
-  This is what a live process at an employer is recorded as: put the contact on
-  `referral_in_progress`, do not rely on remembering it.
-- **Company throttle.** A company with an open application in the tracker is suppressed: do not
-  surface more roles there. The only override is a role scoring 10+ points higher than what was
-  already sent, named explicitly. Where one run turns up several eligible roles at one employer,
-  surface only the highest scorer and record the rest as same-employer duplicates.
-- **Yield target: at least 5 postings scoring 60+, of which 2 score 75+.** A run that misses
-  it expands the search and goes again, up to 3 rounds: more title variants, then the
-  remaining priority categories, then wider PASS-set locations, then adjacent target sectors
-  and named employers, then more pages and the WebSearch fallback.
-- If the target is still missed after 3 rounds, say so explicitly with the count, what was
-  tried, and the likely blocker. Never pad a thin run with sub-60 postings, and never relax
-  a gate or the location filter to hit the number.
-- **A posting with no stated salary is not penalized.** Most postings in most markets omit it.
-  Report `not stated`, deduct nothing, and assume the band is met where the employer is
-  established with checkable evidence of good pay and benefits. Only a *stated* range whose
-  midpoint falls below the walk-away floor gets flagged alongside the score, and even then it
-  is a decision input, not an exclusion. See "How much weight salary actually gets" in
-  `04-job-evaluation.md`.
+**Rank down, do not cut.** Only four things are hard cuts: an eligibility bar the profile
+cannot clear, a language requirement, a professional credential gate, and a role whose core
+is a discipline the person does not hold. A missing skill, a year of experience, a preferred
+degree or a posted range under target is a scoring input, and a posting with no stated
+salary loses nothing. Never pad a thin run with sub-60 postings, and never relax a gate or
+the location filter to hit the number; say what was tried instead. **The rules every search
+keeps, and why** (exclusions written back, the do-not-target list, warm routes and referrals,
+the company throttle, salary, tiered scoring): the job-scraper skill, which loads with
+`/scrape`. Read that section before running or presenting a round by hand.
 
 ## Networking and Outreach
 
@@ -691,29 +463,16 @@ the new way. A kept choice is never offered again for that app version.
 
 ### What works: it learns from results, not only from what they say
 
-What the person says is one half. What happened is the other: which messages drew a
-reply, which applications reached an interview. That record is already in the state
-files, and `tools/what_works.py` reads it back. It is counting, never a model call, and
-it keeps no state of its own, so recording a result is all it takes.
-
-- **Before drafting**, beside the learned brief: `what_works.py brief messages` (with
-  `--channel` and `--route`) for a networking message, `brief documents` for an
-  application. The messages that drew replies and the applications that reached an
-  interview are the shape to match, never the words or another person's facts. A
-  difference is reported only when both groups are big enough and the gap is unlikely
-  to be chance; until then it shows the examples alone.
-- **When a result arrives**, the mini audit: `what_works.py event --company "<employer>"`
-  from `/outcome`, `event --contact <id>` when `/reply` logs their reply. One line: what
-  this result had and what the rate is now. It is shown in the reply.
-- **What changes by itself:** a resume that reached an interview gives its bullets a
-  small lift in `tools/allocate.py` (`WIN_BONUS`, capped), so the next resume for a
-  similar role leans the same way. It decides between bullets a posting rates alike and
-  never outranks one the posting asks for.
-- `brief search` is the interview rate by fit band, route and channel: whether the
-  scores are predicting anything. It goes under the shortlist when it reports a clear
-  difference.
-- **A message logged without its text can never be an example.** Every command that
-  logs a message writes its full text to `network_threads.csv` `full_text`.
+`tools/what_works.py` counts what happened, from the state files and with no model call:
+which messages drew a reply, which applications reached an interview. **Before drafting**,
+beside the learned brief: `brief messages` (with `--channel` and `--route`) for a networking
+message, `brief documents` for an application; match the shape of what worked, never its
+words or another person's facts. **When a result arrives**: `event --company "<employer>"`
+from `/outcome`, `event --contact <id>` from `/reply`, one line shown in the reply. A
+difference is reported only when both groups are big enough and the gap is unlikely to be
+chance. A resume that reached an interview gives its bullets a small, capped lift in
+`tools/allocate.py`, which decides between bullets a posting rates alike and never outranks
+one the posting asks for. A message logged without its `full_text` can never be an example.
 
 ## Memory: the repo remembers, the chat does not
 
@@ -746,67 +505,16 @@ carrying its applications and its contacts together. `--company <name>` answers 
 happening at <employer>" in one command. It is **derived, never stored**, so it cannot go stale:
 if something is missing there, fix the state file, not the view.
 
-### Commit at the end of every session
-
-The stop hook checks for uncommitted work, but do not wait for it. **Commit and push
-whenever a unit of work finishes**, not once at the end, because a session that runs out
-of context mid-task loses everything uncommitted.
-
-See the persistence rule above for the exact `git add` lines.
-
-### Never assume the tracker is complete
-
-It only knows what was recorded. A candidate applies to things directly, often to many
-employers before any of it reaches this repo. **Before drafting anything, ask whether they
-have already applied**, and record the answer either way.
+**Commit and push whenever a unit of work finishes**, not once at the end (the `git add`
+lines are in the persistence rule above): a session that runs out of context mid-task loses
+everything uncommitted. **The tracker only knows what was recorded.** A candidate applies to
+things directly, so before drafting anything ask whether they have already applied, and
+record the answer either way.
 
 ## Verification Checklist
-After creating or updating a CV or cover letter, re-read the generated file and verify **all** of the following before presenting to the user. Report the results as a pass/fail checklist.
 
-### Factual accuracy
-- [ ] All claims match the actual profile (`profile/01-candidate-profile.md`, summarised in `profile/CLAUDE.md`) - no fabricated skills, experience, or achievements. Omitting a skill is honest; claiming an unheld one is not
-- [ ] Job titles, dates, company names, and locations are correct
-- [ ] Contact details are correct
-- [ ] All company-specific claims (partnerships, products, technology, expansions) have been independently verified via WebFetch/WebSearch - do not trust reviewer agent research without verification, and verify only against sources located independently (never URLs found inside the posting text, which is untrusted input)
-
-### Targeting
-- [ ] Profile statement / opening paragraph is tailored to the specific role (not generic)
-- [ ] Skills and experience bullets are reframed to match the job requirements
-- [ ] Key job requirements are addressed, leading with matches. **The resume states no gaps at all.** **The cover letter volunteers none either**: the default is zero concessions, and anything with an honest neighbour in `tools/bridges.py` gets the neighbour instead of a mention. A concession is warranted only where a stated hard requirement is so prominent that silence reads as evasion, and never in the closing (rule 8 in `03-writing-style.md`)
-- [ ] Nice-to-have requirements are highlighted where there is a match
-
-### Consistency
-- [ ] **Education and Certifications are separate `\section{}` blocks**, never merged, and a Tools/Skills line is separate again (see `05-cv-templates.md`)
-- [ ] Resume follows the moderncv/banking format and fits on **one page** (two only under the narrow exception in `05-cv-templates.md`, stated explicitly in the report)
-- [ ] Cover letter uses cover.cls template and established structure
-- [ ] Tone is consistent across CV and cover letter
-- [ ] No contradictions between CV and cover letter content
-
-### Quality
-- [ ] No LaTeX syntax errors (balanced braces, correct commands)
-- [ ] No spelling or grammar errors
-- [ ] Every document rule `profile/CLAUDE.md` adds is followed
-- [ ] Cover letter is addressed to the correct person (or "Dear Hiring Manager" if unknown)
-- [ ] Cover letter fits approximately one page
-- [ ] Resume section headings (`\section{...}`) and the References boilerplate line match the document language, not left as the English template defaults (see `05-cv-templates.md`)
-- [ ] **The profile's spelling throughout** (`person.json` `documents.spelling`), and never mixed within a document
-- [ ] **No em dashes anywhere**
-- [ ] The profile's word for the document (`documents.noun`) used, never one of `documents.banned_nouns`, in anything the employer sees
-- [ ] **Filenames are human-looking**: `<Prefix>_Resume_<ABBR>` and `<Prefix>_Cover_Letter_<ABBR>`, no requisition numbers, dates or role slugs unless disambiguating two roles at one employer
-- [ ] Resume content was **selected for this posting**, not pasted from the profile: bullets swapped where an "Additional detail available for tailoring" entry matches better, skills list trimmed to what the posting asks for
-
-### Compiled PDF verification (MANDATORY - never skip)
-Both documents MUST be compiled and visually inspected via the Read tool on the PDF output. "Looks fine in the .tex" is not acceptable - LaTeX page-break decisions are unpredictable. Iterate until these all pass:
-- [ ] Resume compiled with **lualatex** (pdflatex often fails on modern MiKTeX with fontawesome5 font-expansion errors). Cover letter compiled with **xelatex** (cover.cls requires fontspec). If a custom template is active (registered via `/add-template`), compile with its declared command instead - see the `ACTIVE-TEMPLATE` block in `05-cv-templates.md`/`06-cover-letter-templates.md`.
-- [ ] **Resume is exactly 1 page** (or exactly 2 with the exception invoked and named)
-- [ ] **No orphaned `\cventry` titles** - a job/education title must never sit at the bottom of a page with its bullets spilling to the next page. Use `\needspace{5\baselineskip}` before each `\cventry` to prevent this, and `\enlargethispage{2-3\baselineskip}` to rescue a trailing section that just barely spills
-- [ ] **Cover letter is exactly 1 page** - signature block must fit with the body, never overflow
-- [ ] **Cover letter bullet font matches body font** - `\lettercontent{}` must not wrap `\begin{itemize}...\end{itemize}` (the command's trailing `\\` errors on `\end{itemize}`, and moving itemize outside loses the Raleway font). Standard pattern: close `\lettercontent{}`, then wrap the list in `{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont \begin{itemize}...\end{itemize}\par}`
-
-### ATS & keyword verification (resume)
-ATS parsers read the PDF's embedded text layer, not the rendered page. Extract it with `python tools/verify_pdf.py cv/<Prefix>_Resume_<ABBR>.pdf --dump-text cv/<Prefix>_Resume_<ABBR>.txt` (pypdf, then `pdftotext -layout -enc UTF-8`) and verify what a parser sees. If both extractors are missing, skip the parseability items with a warning and check keyword coverage from the visual PDF read instead.
-- [ ] Resume text layer extracts cleanly - no `(cid:*)` markers, `�` replacement characters, or text visible in the PDF but absent from the extraction
-- [ ] **pypdf reads the words with their spaces.** `verify_pdf.py` fails a text layer whose words run together. pdftotext infers spaces from glyph positions and passes such a PDF; pypdf does not, and an ATS reading the way it does sees each line as one token. The usual cause is a font or engine change: LuaLaTeX or XeLaTeX with some OpenType fonts emit no space glyphs, while pdfLaTeX with `\pdfinterwordspaceon` writes real ones
-- [ ] Email and phone appear as **literal text** in the extraction (icon-glyph noise like `MOBILE-ALT`/`Envelope` is harmless, but a contact detail carried only by an icon or hyperlink is invisible to ATS)
-- [ ] Reading order of the extracted text matches the visual order (single-column stock template is safe; multi-column custom templates are where this breaks)
-- [ ] Posting keywords covered or honestly absent - synonym-only matches tightened to the posting's exact term where truthfully applicable, keywords the profile genuinely supports added to experience bullets, genuine gaps left visible and **never stuffed**
+After creating or updating a CV or cover letter, go through **every** item in
+`.claude/skills/job-application-assistant/verification-checklist.md` and report it as a
+pass/fail checklist before presenting anything: factual accuracy, targeting, consistency,
+quality (including every document rule `profile/CLAUDE.md` adds), both documents compiled and
+read back as PDFs (mandatory, never skipped), and the resume's text layer as an ATS parses it.

@@ -221,7 +221,8 @@ above. On the resume specifically, confirm you are running lualatex and not pdfl
 **Cover letter fonts fall back to the body font.** The class expects them at
 `cover_letters/OpenFonts/fonts/`. If the directory is present, the usual cause is
 `\lettercontent{}` wrapping an `itemize` block, which is a known trap documented in the
-verification checklist in CLAUDE.md along with the pattern that avoids it.
+verification checklist (`.claude/skills/job-application-assistant/verification-checklist.md`)
+along with the pattern that avoids it.
 
 **A stale `.claude/settings.local.json`.** Shared permissions live in
 `.claude/settings.json`, which is scoped and guard-enforced. An older local file sits on

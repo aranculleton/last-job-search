@@ -194,3 +194,45 @@ session cannot see and will duplicate.
 At least 5 postings scoring 60+, of which 2 at 75+, all under 14 days old. Every drafted
 application has two verified one-page PDFs, a persisted posting, an outreach note, a
 tracker row, and 0 claim errors. All of it committed, and on master.
+
+## Tools run directly, not through a slash command
+
+| Command | What it does |
+|---|---|
+| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the three files the MISSED message tells you to read. |
+| `python3 tools/job_alerts.py <messages.json> --out <alerts.json>` | The person's LinkedIn job alerts, read by the session from Gmail only when `profile/search.py` `JOB_ALERT_QUERY` asks for it (`--query` prints the search). Takes the job ids alone and fills each posting from LinkedIn's own page; `run_round.py --alerts <alerts.json>` adds them to the round before the free filters. |
+| `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. |
+| `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
+| `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
+| `python3 tools/what_works.py brief <messages\|documents\|search>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, and the interview rate by fit band and route. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
+| `python3 tools/followups.py` | The application nudges alone. The first is due 7 days after applying, the second 7 days after the first **actually went**, read from `followed up YYYY-MM-DD` in the row's notes (the form `/outcome` Step 2b writes), never from the application's age. Held, with the reason printed, while an interview or offer runs at that employer, a referral is in flight there, or the row's notes say `DO NOT CHASE` (`until <date>` in that note, or a later `chase again`, lifts it). A later row for the same role closes the earlier one. It names who the nudge goes to, from the row's `contact_person`, the application's `outreach.md`, or a contact there who has replied, and otherwise says nobody is on file and drafts nothing. It stops a week after the second follow-up, or at the throttle's 45 days of silence, and says so once. A separate clock from the networking nudge below, deliberately. |
+| `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. In a later session, when `rounds/` is gone, it reads `documents/rounds/<round>.json` instead and fetches each pick's body from its board, or reads `<round_dir>/postings/<slug>.txt` when the board will not give it. `single <dir> --company --role --posting-file` stages one posting from no round, which is how `/apply` enters the same pipeline. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
+| `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
+| `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
+| `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. |
+| `python3 tools/network/state.py` | What is owed, the connection budget, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. |
+
+`tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each
+skill a posting might ask about, what the candidate genuinely holds that does the same job
+and the sentence to say it in. The
+resume states no gaps and the cover letter volunteers none; this is what it says instead
+when asked directly.
+
+## Documents for someone else
+
+The repo has no pipeline for drafting a resume for somebody other than the candidate. Its
+renderer, bullet library, `verify_batch.sh` and grounding tools all assume the candidate.
+When it is asked for anyway, this is what works:
+
+- **Keep it out of the candidate's state.** Work in the session scratchpad, or in `documents/others/<name>/`
+  only if asked to keep it. Never `cv/`, `cover_letters/`, the tracker, the networking CSVs or
+  `profile/`.
+- **One sources file first.** Their old resume verbatim, their LinkedIn, what they or the user
+  confirmed (including contact details), and employer facts with URLs. Ground against that
+  alone, and tell the `grounding-auditor` the document is not the candidate's so it skips
+  their profile and tools.
+- **Ask for real outcomes before inferring them.** One question round turns task bullets into
+  results, and an inferred outcome is a claim nobody confirmed.
+- **A standalone template needs the same proof as the candidate's:** one page read back visually, and
+  `tools/verify_pdf.py` clean. That is what caught a font pypdf read with no spaces at all,
+  which pdftotext and the eye both passed.

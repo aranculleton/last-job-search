@@ -20,6 +20,24 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Every session starts lighter, and says which model suits the work.**
+  - *CLAUDE.md is about half its old length* (from roughly 9,800 words to 5,400). Every
+    session and every compaction loads it. Sections only one kind of work needs moved, word
+    for word, to the files that work reads:
+    - the verification checklist to
+      `.claude/skills/job-application-assistant/verification-checklist.md`;
+    - the developer rules and private-repo CI to `CONTRIBUTING.md`;
+    - the tools table and "documents for someone else" to `RUNBOOK.md`;
+    - the full search rules to the job-scraper skill.
+
+    CLAUDE.md keeps a short summary of each, and says when to read the full version.
+  - *Which model:* `python3 tools/model_guide.py <work> --on <model>` says in one line when
+    the session's model is more than a piece of work needs, or less. It says nothing when
+    the model fits. `--all` prints the table. It names tiers, not versions, so a new version
+    changes nothing. It never guesses at a model family it does not know.
+
 ### Fixed
 
 - **Several chats open on one repo no longer trip over each other.**
