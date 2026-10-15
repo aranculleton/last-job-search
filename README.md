@@ -17,7 +17,7 @@ charge of what goes out.
   computer, Anthropic API credits (pay as you go, often cheaper if you only use it now and then).
 - About fifteen minutes. No coding.
 
-Using a different agent tool (Codex, Gemini CLI, Cursor, Antigravity)? Start at
+Using a different agent tool (ChatGPT Codex, Gemini CLI, Cursor, Antigravity)? Start at
 [AGENTS.md](AGENTS.md). It is built for Claude Code, but the search, scoring, documents,
 checks and tracking are plain Python and written procedures that any agent which can read
 files and run commands can follow. A few extras, such as the scheduled daily brief, are
