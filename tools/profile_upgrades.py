@@ -590,6 +590,12 @@ REGISTRY = REGISTRY + _method_upgrades()
 SAFE_DEFAULTS: dict[str, str] = {
     "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "
                                "only when a board cannot read those names",
+    "networking.AUTHORITY_TITLE": "English management titles; a market in another language "
+                                  "writes its own",
+    "networking.SENIOR_IC_TITLE": "English seniority words; a market in another language, or a "
+                                  "field where 'staff' is not senior, writes its own",
+    "networking.HOME_COUNTRY": "discovery adds it to REGION_WORDS when present; the region "
+                               "words alone decide without it",
     "networking.LINKEDIN_LIMITS": "the plan's own limits apply; set only for a plan with more "
                                   "InMail credits than Premium's",
     "search.OPP_SCALE": "computed from the profile's own opportunity weights when absent",
