@@ -104,6 +104,13 @@ NO_NUDGE = frozenset(schema.TERMINAL | {"call_booked", "not_contacted"})
 
 # The brief's instruction for a hit connection cap, kept here so every caller
 # gives the same advice.
+# What a free account does when its personalised notes for the month are spent,
+# and why it has no InMail. LinkedIn lets a request go without a note, and a
+# 1st-degree connection can be messaged without limit.
+NO_NOTES_LEFT = ("This month's personalised notes are used up: send the connection request "
+                 "without a note, and send the drafted note as a message once they accept.")
+NO_INMAIL = ("No InMail on a free account, except to an Open Profile (their profile shows a "
+             "Message button). Use a connection request instead.")
 CAPPED_NOTE = ("Connection cap reached for this week. Following a target costs nothing "
                "and lets the request go out warm when the cap resets.")
 
@@ -1025,14 +1032,35 @@ def platform_budget(contacts, threads, today) -> dict:
         if day and channel:
             sends.add((str(contact.get("contact_id") or "").strip(), channel, day))
 
-    connections = sum(1 for _, d in connection_requests(contacts, threads)
-                      if week_start <= d <= week_end)
+    requests = connection_requests(contacts, threads)
+    connections = sum(1 for _, d in requests if week_start <= d <= week_end)
     inmails = sum(1 for _, ch, d in sends
                   if ch == "inmail" and month_start <= d <= month_end)
     conn_limit = schema.LIMITS["connections_per_week"]
     inmail_limit = schema.LIMITS["inmail_credits_per_month"]
     conn_left = max(conn_limit - connections, 0)
+    # Drafts queued and not yet sent spend the same budget the moment they go,
+    # and a second /network in the same week sized itself as though they did not
+    # exist. Reported beside the budget rather than taken off it: a row queued
+    # months ago and never sent should not hold the budget down for ever.
+    queued = {"connection": 0, "inmail": 0}
+    for contact in contacts:
+        if (str(contact.get("status") or "").strip() == "not_contacted"
+                and channel_of(contact) in queued):
+            queued[channel_of(contact)] += 1
+    # A free account's personalised notes run out within the month; after that a
+    # request goes without a note and the message follows the acceptance.
+    notes_limit = schema.LIMITS.get("personal_notes_per_month")
+    notes_sent = sum(1 for _, d in requests if month_start <= d <= month_end)
+    notes_left = None if notes_limit is None else max(notes_limit - notes_sent, 0)
+    note = CAPPED_NOTE if conn_left == 0 else ""
+    if notes_left == 0 and conn_left:
+        note = NO_NOTES_LEFT
     return {
+        "plan": schema.PLAN,
+        "queued_unsent": queued,
+        "personal_notes_limit": notes_limit,
+        "personal_notes_left": notes_left,
         "week_start": week_start.isoformat(),
         "week_end": week_end.isoformat(),
         "month_start": month_start.isoformat(),
@@ -1045,7 +1073,8 @@ def platform_budget(contacts, threads, today) -> dict:
         "inmails_left": max(inmail_limit - inmails, 0),
         "connection_note_chars": schema.LIMITS["connection_note_chars"],
         "inmail_words": schema.LIMITS["inmail_words"],
-        "note": CAPPED_NOTE if conn_left == 0 else "",
+        "note": note,
+        "inmail_note": "" if inmail_limit else NO_INMAIL,
     }
 
 

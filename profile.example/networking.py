@@ -8,6 +8,11 @@ reply.py (time zone, "no presence here", the eligibility bar) and discovery.py
 
 import re
 
+# Their LinkedIn account: "free" or "premium". It sets how long a connection
+# note can be (200 or 300 characters), how many personalised notes a month a
+# free account gets, and whether InMail is there at all (tools/network/schema.py).
+LINKEDIN_PLAN = "premium"
+
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}
 OPENER = "hope you're well"

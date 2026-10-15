@@ -11,10 +11,15 @@ untouched employers from the latest round's shortlist.
    and `company_research/`. Anyone already contacted is out. Any company already
    recorded as having no relevant presence is out.
 
-2. **Check the budget before searching.** `state.platform_budget()` returns the
-   connection requests and InMail credits left. There is no point producing
-   fifteen drafts against five remaining slots. Size the run to the budget and
-   say what the budget is.
+2. **Check the budget before searching.** `state.platform_budget(contacts, threads,
+   today)` returns the connection requests and InMail credits left on the person's
+   LinkedIn plan (`plan`), the personalised notes left this month on a free account,
+   and the drafts already queued and unsent (`queued_unsent`), which spend the same
+   budget the moment they go. There is no point producing fifteen drafts against five
+   remaining slots. Size the run to the budget, net of the queue, and say what it is.
+   `note` and `inmail_note` say what to do when a limit is reached: a request with no
+   note and the draft sent as a message after they accept, and no InMail on a free
+   account except to an Open Profile.
 
 3. **Per company, cheapest route first** (see `01-discovery-playbook.md`):
    alumni, then hiring team from a live posting, then school, then cold. Build
@@ -42,6 +47,13 @@ untouched employers from the latest round's shortlist.
      and a **question** about them, answerable in a line. The opener, the
      one-line "about me" and the 15-minute ask default to the candidate's own
      words in `profile/networking.py`.
+   - The note fits the person's plan: `schema.LIMITS["connection_note_chars"]`, 200
+     characters on a free account and 300 on Premium. `TooLong` means cut and
+     recompose; a shorter `about_me` is usually the cut.
+   - An InMail, where the plan has credits and the target is worth one, is
+     `compose.inmail()`: a **subject** of a few words naming the common ground or the
+     question (never "Quick question" or a job), the same moves as the note, and one
+     paragraph of evidence. Validate with `kind="inmail"`.
    - The referral ask is a different message, `compose.referral_ask()`, sent
      only after they have engaged.
 
@@ -60,7 +72,8 @@ company with no relevant presence in the target city is a real finding and saves
 run two searches.
 
 Say which targets justify a scarce InMail and which should take a free
-connection request. If the connection cap is hit, say so and note that following
+connection request; on a free account there is no InMail, so say so once rather
+than recommending one. If the connection cap is hit, say so and note that following
 costs nothing and lets the request go out warm when the cap resets.
 
 ## Do not

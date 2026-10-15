@@ -114,6 +114,8 @@ NUDGE_WINDOW = (5, 7)
 # is deliberately absent: a thread that produced an application is the most alive
 # thread in the book, and refusing to reply inside it would be the wrong advice.
 STOP_STATUSES = frozenset({"closed", "gone_cold"})
+# Statuses where they have already said yes to something: never read as stopped.
+LIVE_STATUSES = frozenset({"call_booked", "referral_in_progress"})
 
 
 # ---------------------------------------------------------------- text measures
@@ -347,7 +349,11 @@ SPEAK_TO = re.compile(
     r"\b(you should (speak|talk|reach out)|worth (speaking|talking|reaching out)|"
     r"(?<!wanted to )(?<!want to )(?<!like to )(?<!love to )(?<!would )"
     r"(?<!I'd )(?<!I’d )(?<!\bI )"
-    r"(?:reach out|speak) to(?!\s+you\b))\b[^.!?\n]{0,40}", re.I)
+    r"(?:reach out|speak) to(?!\s+you\b))\b[^.!?\n]{0,40}"
+    # "talk to Wren Halloway", "try Sam on the data team": a named person, so a
+    # capital after the verb, which is why this branch is case-sensitive.
+    r"|(?-i:\b(?:[Tt]alk|[Ss]peak|[Tt]ry|[Aa]sk|[Pp]ing|[Mm]essage)(?: to| with)? "
+    r"(?!You\b|Me\b|Us\b|Them\b|It\b|Him\b|Her\b)[A-Z][a-z]+(?: [A-Z][a-z'-]+)?\b)", re.I)
 
 REFERRAL = _rx(
     (0.94, "told to name them as the referrer", REFERRAL_FIELD),
@@ -417,6 +423,19 @@ REJECTION = _rx(
      r"|\bthe\s+(?:role|position|req)\s+(?:has|is)\s+(?:been\s+)?(?:filled|closed|gone)\b"),
     (0.94, "eligibility, not the role", ELIGIBILITY_NO),
 
+    # A no to the conversation itself, not to a role. These classified as
+    # low_effort ("Not interested, thanks." is four words), whose guidance is to
+    # propose two times: a call invitation to somebody who had said stop.
+    (0.95, "asked not to be contacted",
+     r"\b(?:please\s+)?(?:stop|don'?t|do not)\s+(?:messag|contact|email|writ|reach)\w*"
+     r"|\bremove me\b|\bnot interested\b|\bno,? thanks?\b(?! (?:needed|necessary))"
+     r"|\bno thank you\b"),
+    (0.88, "declined the conversation",
+     r"\b(?:can'?t|cannot|won'?t be able to|unable to|don'?t have)\s+(?:make\s+|find\s+)?"
+     r"(?:the\s+)?time\b(?![^.!?\n]{0,40}\bbut\b)"
+     r"|\b(?:going to|gonna|I'?ll|will have to|have to|need to)\s+pass\b"
+     r"|\bnot (?:the right|a good) (?:person|fit|contact)\b|\bwrong person\b"
+     r"|\bdon'?t think I'?m the right (?:person|contact)\b"),
     (0.8, "brush-off to the careers page",
      r"\b(keep an eye on|watch|check|apply (through|via|on))\s+(our|the)\s+"
      r"(careers|jobs)\s+(page|site|board)\b"),
@@ -498,9 +517,14 @@ GENEROUS = _rx(
 
 
 def _match_gone_quiet(text, ctx):
-    if text.strip() or ctx["has_inbound"]:
+    if text.strip():
         return []
-    return [(0.9, "nothing inbound in this thread: a nudge, not a reply")]
+    if not ctx["has_inbound"]:
+        return [(0.9, "nothing inbound in this thread: a nudge, not a reply")]
+    if ctx.get("we_spoke_last"):
+        return [(0.9, "they have not answered our last message: a nudge (if one is due), "
+                      "not a reply")]
+    return []
 
 
 def _match_calendar_link(text, ctx):
@@ -555,6 +579,10 @@ def _match_mismatch(text, ctx):
 
 
 def _match_rejection(text, ctx):
+    # "Not hiring right now, but happy to chat" is a yes to the conversation:
+    # read as a rejection, the guidance closed a door they had just opened.
+    if ACCEPTS.search(text):
+        return []
     return _hits(text, REJECTION)
 
 
@@ -902,7 +930,11 @@ def classify(inbound_text, thread_history=(), today=None) -> dict:
     history = [r for r in _ordered(rows) if _direction(r)]
     inbound_rows = [r for r in history if _inbound(r)]
     text = str(inbound_text or "").strip()
-    if not text and inbound_rows:
+    # Their last message is the one to read only while it is still the last
+    # word. Once we have answered it, an empty paste is a quiet thread: reading
+    # the old message again re-drafted a CV already sent, or a second nudge.
+    we_spoke_last = bool(history) and not _they_spoke_last(history)
+    if not text and inbound_rows and not we_spoke_last:
         text = _row_text(inbound_rows[-1]).strip()
 
     ctx = {
@@ -911,6 +943,7 @@ def classify(inbound_text, thread_history=(), today=None) -> dict:
         "words": word_count(text),
         "sentences": sentence_count(text),
         "has_inbound": bool(inbound_rows),
+        "we_spoke_last": we_spoke_last,
         "late_business_days": _late_business_days(history, today),
     }
 
@@ -1053,15 +1086,36 @@ def _rows_for(contact, threads):
     return _ordered(rows)
 
 
+# What turns a "not hiring" into a yes to the conversation: they offered time,
+# help or a slot in the same message. "We're not hiring right now but happy to
+# chat" counted as a decline, so two such messages on a booked call read as two
+# nos and /reply recommended closing it.
+ACCEPTS = re.compile(
+    r"\b(?:happy|glad|keen) to (?:chat|talk|help|meet|speak|have a call)\b"
+    r"|\b(?:works|suits) (?:for )?(?:me|us)\b"
+    r"|\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b[^.!?\n]{0,25}\b(?:works|suits|is (?:fine|good|free))\b"
+    r"|\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b[^.!?\n]{0,20}\b(?:works|suits)\b"
+    r"|\blet'?s (?:chat|talk|speak|meet|find a time|grab)\b", re.I)
+
+
 def declines_in(threads) -> list:
-    """Their messages that say no, with the phrase each was read from."""
+    """Their messages that say no, with the phrase each was read from.
+
+    A message that says no to a role and yes to the conversation in the same
+    breath ("not hiring, but happy to chat") is not a decline.
+    """
     found = []
     for row in threads:
         if not _inbound(row):
             continue
-        hits = _hits(_row_text(row), REJECTION)
-        if hits:
-            found.append({"date": row.get("date", ""), "evidence": hits[0][1]})
+        text = _row_text(row)
+        hits = _hits(text, REJECTION)
+        if not hits:
+            continue
+        if (ACCEPTS.search(text) or _hits(text, GENEROUS) or extract_scheduling_link(text)
+                or extract_email(text)):
+            continue
+        found.append({"date": row.get("date", ""), "evidence": hits[0][1]})
     return found
 
 
@@ -1078,6 +1132,9 @@ def should_continue(contact, threads=()) -> tuple:
     stored = str(contact.get("status") or "").strip()
     if stored in STOP_STATUSES:
         return False, "the thread is already %s; reopening it needs a new reason, not a nudge" % stored
+    if stored in LIVE_STATUSES:
+        return True, ("the thread is at %s: a 'not hiring' inside it is information, not a no; "
+                      "keep going" % stored)
 
     nos = declines_in(rows)
     if len(nos) >= MAX_DECLINES:

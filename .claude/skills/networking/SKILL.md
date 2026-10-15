@@ -171,7 +171,7 @@ into one:
 
 | Stage | Message | Composer | Asks for |
 |---|---|---|---|
-| 1. First note | connection request, 300 chars | `compose.first_note()` | 15 minutes, a question about them |
+| 1. First note | connection request, 200 chars free / 300 Premium | `compose.first_note()` | 15 minutes, a question about them |
 | 2. Conversation | replies, call prep | `/reply`, `/prep` | whatever the conversation needs |
 | 3. Referral ask | message pane, under 90 words | `compose.referral_ask()` | a referral for one named, linked role |
 
@@ -243,9 +243,24 @@ to stop sending.
 If they have already offered to refer the candidate, in whatever words, the ask
 is answered: do what they said, then thank them.
 
-**InMail, 150 to 200 words.** Same shape as the first note, never a job ask, plus one paragraph of concrete evidence:
-a named model, a dataset size, a specific outcome. Credits are scarce; reserve
-them for tier 1 at top-priority companies, or people unreachable otherwise.
+**InMail, under 200 words, with a subject.** `compose.inmail()`. Same shape as the first note,
+never a job ask, plus one paragraph of concrete evidence: a named model, a dataset size, a
+specific outcome. The 200 words are a ceiling, not a target. LinkedIn shows the **subject**
+before the message, so every InMail has one: a few words naming the common ground or the
+question ("Your forecasting talk at Northern Data Week"), never "Quick question", "Job
+enquiry" or anything that asks for the job; `inmail_subject()` refuses those.
+Credits are scarce; reserve them for tier 1 at top-priority companies, or people
+unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
+Open Profile (their profile shows a Message button), and everything else is a connection
+request.
+
+**The person's LinkedIn plan sets the limits.** `profile/networking.py` `LINKEDIN_PLAN`,
+"free" or "premium" (`tools/network/schema.py`): a free account's connection note is 200
+characters and a handful of personalised notes a month, Premium's is 300 with InMail
+credits. With no plan recorded the free limits apply, because a note short enough for free
+is short enough for Premium. When the month's notes are spent, the request goes with no
+note and the drafted note follows as a message once they accept (`platform_budget()` says
+so).
 
 **Email, when they give an address.** A strong signal, and it happens often.
 Resume attached, a short context paragraph so they do not have to find the

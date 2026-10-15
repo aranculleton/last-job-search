@@ -249,7 +249,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     """A list a person has to read and act on is a list nobody acts on. Adding to
     this set is a decision: the upgrade cannot be done from the profile and research."""
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts",
-                                                                 "method-routines"}
+                                                                 "method-routines", "linkedin-plan"}
     assert "inbox" in U.by_id("job-alerts").ask
 
 

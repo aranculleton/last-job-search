@@ -175,6 +175,14 @@ def _alerts() -> str:
     return ""
 
 
+def _linkedin_plan() -> str:
+    if _missing("networking", "LINKEDIN_PLAN"):
+        return ("nobody has asked whether you pay for LinkedIn Premium (profile/networking.py "
+                "has no LINKEDIN_PLAN), so notes are kept to a free account's 200 characters "
+                "and no InMail is drafted")
+    return ""
+
+
 def _contract() -> str:
     try:
         import portals
@@ -446,6 +454,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             needs="you",
             ask="Do you get LinkedIn job alerts by email, and should every round read them? It re"
                 "ads only those emails, nothing else in your inbox."),
+    Upgrade("linkedin-plan", "2026-10-15",
+            "connection notes and InMail sized to the LinkedIn account you actually have",
+            _linkedin_plan, "write LINKEDIN_PLAN = \"free\" or \"premium\" in profile/networking.py "
+            "from their answer", "question", "~1 min",
+            names=("networking.LINKEDIN_PLAN",),
+            priority=2,
+            needs="you",
+            ask="Do you pay for LinkedIn Premium? It decides how long a connection note can be "
+                "and whether InMail is there at all."),
     Upgrade("screen-flags", "2026-10-15",
             "postings from the wrong job family for you flagged, in your field's terms",
             _screen_flags, "/setup --section search", "question", "~5 min",
@@ -571,8 +588,10 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
-    "search.PORTAL_LOCATIONS": "defaults to the first SCRAPE_LOCATION; /add-portal writes it "
-                               "when a board writes places differently",
+    "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "
+                               "only when a board cannot read those names",
+    "networking.LINKEDIN_LIMITS": "the plan's own limits apply; set only for a plan with more "
+                                  "InMail credits than Premium's",
     "search.OPP_SCALE": "computed from the profile's own opportunity weights when absent",
     "skills.MAX_PER_LINE": "six items a line unless the person wants another number",
     "skills.MIN_PER_CATEGORY": "one item makes a line worth printing; rarely changed",
