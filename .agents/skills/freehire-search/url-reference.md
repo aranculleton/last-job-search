@@ -42,7 +42,7 @@ Two extra parameters control it:
 
 | Param | Maps to CLI flag | Notes |
 |-------|------------------|-------|
-| `include_description` | (always `true`) | Without it the endpoint serves the index preview, same as the web search. |
+| `include_description` | `true` unless `--no-description` is passed | Without it (`false`) the endpoint serves the index preview, same as the web search. The CLI sends `true` by default and `false` for `--no-description`. |
 | `description_format` | `--description-format` | `markdown` (the skill's default), `text`, or `html`. **An unrecognized value is not an error** - the API falls back to `html`, so the CLI validates the flag itself. |
 
 Hydration is best-effort per hit: a result whose row has vanished from the database

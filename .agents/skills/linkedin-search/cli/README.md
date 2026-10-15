@@ -55,6 +55,7 @@ See `../SKILL.md` for the full flag reference and the Terms-of-Service note.
 | `--location` | `-l` | **Required.** Place string, e.g. `"Mumbai, Maharashtra, India"`, `"Berlin, Germany"`, `"Remote"`. |
 | `--query` | `-q` | Keywords (title / skill / role). Recommended. |
 | `--jobage` | | Posted within N days: `1`, `7`, `14`, `30`. |
+| `--jobage-minutes` | | Posted within N minutes (sub-day precision, e.g. `30`). Conflicts with `--jobage`: pass only one. |
 | `--remote` | | `remote` \| `hybrid` \| `onsite`. |
 | `--page` | | 1-indexed page (10 results/page). |
 | `--limit` | `-n` | Cap results emitted. |
