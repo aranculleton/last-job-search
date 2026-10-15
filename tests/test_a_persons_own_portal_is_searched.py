@@ -2,7 +2,7 @@
 
 The app used to ship four Danish boards and call none of them: scrape_wide.py
 had adapters for LinkedIn and freehire only, and any other portal ran only when
-somebody typed /scrape. A person in Toronto or Lagos who built a portal for
+somebody typed /scrape. A person in Leeds or Lagos who built a portal for
 their national board with /add-portal got nothing from it in a scheduled round.
 
 Now any portal that is on and follows the portal contract is searched,

@@ -186,7 +186,7 @@ def message_cases(contacts: list[dict], threads: list[dict], today=None) -> list
             # A bare connection request says nothing, so it neither wins nor
             # loses: on a free account the message follows the acceptance, and
             # that message is the opener.
-            if state._direction(r) == "out" and not (
+            if state._direction(r) == "out" and not state.is_call(r) and not (
                     state.channel_of(r) == "connection"
                     and not str(r.get("full_text") or "").strip()
                     and not str(r.get("summary") or "").strip()):

@@ -447,12 +447,25 @@ def first_name(name) -> str:
     if (comma and len(head_tokens) == 1 and 1 <= len(tail_tokens) <= 2
             and all(t.lower().strip(".") not in _CREDENTIALS
                     and t.lower().strip(".") not in _HONORIFICS for t in tail_tokens)):
-        cleaned = tail
-    for token in _NAME_TOKEN.findall(cleaned):
-        if token.lower().strip(".") in _HONORIFICS:
-            continue
-        return token
-    return ""
+        cleaned = tail + " " + head_tokens[0]
+    else:
+        cleaned = head
+    # A credential is never a given name, wherever it sits: "Ph.D. Jane Doe" was
+    # greeted "Hi Ph,". An initial is not one either: "J. Smith" was "Hi J,".
+    # With nothing but an initial, the name goes in whole ("Hi J. Smith,"); with
+    # nothing but a surname after a title, the title stays ("Hi Dr Smith,").
+    words = [w for w in cleaned.split()
+             if re.sub(r"[^\w]", "", w).lower() not in _CREDENTIALS]
+    titles = [w for w in words if w.lower().strip(".") in _HONORIFICS]
+    names = [w for w in words if w.lower().strip(".") not in _HONORIFICS]
+    tokens = [t for w in names for t in _NAME_TOKEN.findall(w)]
+    if not tokens:
+        return ""
+    if len(tokens[0]) == 1:
+        return " ".join(names).strip(" ,")
+    if titles and len(tokens) == 1:
+        return f"{titles[0]} {tokens[0]}"
+    return tokens[0]
 
 
 # Whose message is this? A connection note has four moves and three of them are
@@ -814,6 +827,11 @@ def _british(text) -> list:
 # is scoped to cold messages because enforcing it there produces a formality
 # the register does not want.
 COLD_ONLY_RULES = frozenset({"sentence_starts_with_contraction"})
+
+# Rules that fire only on the person's own data, never on fixed text: a test
+# that gives every rule in RULES a firing case subtracts these. Adding a rule
+# here, not only to RULES, keeps a person's own completeness tests passing.
+DATA_DRIVEN_RULES = frozenset({"person_dislikes"})
 
 
 def _person_dislikes(text) -> list:

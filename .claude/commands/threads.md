@@ -19,8 +19,16 @@ What is owed, what is due, what has gone cold.
 **Owed a reply** first, oldest first. These are live conversations going stale
 and they are the highest-value thing in the pipeline.
 
-**Nudge due** second: past 5 to 7 business days, no nudge sent yet. One nudge
-only, ever.
+**First message owed** next (`first_message`): they accepted a request that
+carried no note and nothing has been sent. Draft it with `compose.first_note()`; it is
+not a nudge.
+
+**Nudge due** then: past 5 to 7 business days, no nudge sent yet. One nudge
+only, ever. `compose.validate()` refuses check-in wording ("just checking in",
+"bumping this", "did you get a chance"): a nudge carries something new to answer.
+
+**Requests to withdraw** (`request_pending`): a connection request nobody accepted in
+21 days. Nothing can be sent; say so and suggest withdrawing it.
 
 **Gone cold** third, as a list to close out rather than chase.
 

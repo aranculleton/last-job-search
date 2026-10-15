@@ -22,6 +22,39 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Networking: nothing it suggests sending is something that cannot be sent.** From an
+  audit of a real contact book:
+  - A connection request nobody has accepted is no longer listed as a nudge: there is
+    nowhere to write. After 21 days it is listed as one to withdraw.
+  - Someone who accepted a request that carried no note is owed a first message, not a
+    nudge on a note that was never sent.
+  - A call or meeting in the log is not a message. A held one counts as a conversation, so
+    the thread no longer "goes silent" the day after you spoke.
+  - A nudge opening on a one-word name keeps its capital ("Hi Robin, Larkspur opened...",
+    not "larkspur"). The check knows your employers, skills and every company in your
+    contact book and tracker, and `validate()` flags a name it lowercased.
+  - `validate()` refuses check-ins ("just checking in", "bumping this", "did you get a
+    chance"). "Any update on the timing?" in a reply is still fine.
+  - Tier 1 means a hiring post about your own work. "Our marketing team is hiring a
+    content writer" from a data director no longer counts.
+  - The question at the end of a first note is optional. A true line and a plain ask for
+    a conversation make a complete note; a question made up to fill the slot is what
+    read as artificial. A test of your own that requires the question needs updating to
+    match.
+  - Saving the contact book or the message log keeps the file's own line endings. A file
+    saved from a spreadsheet used to be rewritten in full on every save, which is how
+    two chats each logging a message collided on every line.
+  - Greetings: "J. Smith" is "Hi J. Smith," and "Dr Smith" is "Hi Dr Smith,". A
+    credential is never read as a first name.
+  - A close you chose, written "closed on purpose: <reason>", is no longer reported as
+    reopened on every run. A close without those words that is followed by a reply still
+    is, because that catches a chat that closed someone by mistake.
+  - `tools/network/state.py` lists employer names that are probably one employer and do
+    not join ("Fernhill" and "Fernhill Freight"), never merging them, so you can add the pair
+    to `COMPANY_ALIASES`.
+  - `tone.DATA_DRIVEN_RULES` names the rules that fire only on your own data, so a test
+    of your own that gives every rule a case can leave them out.
+
 - **"Draft 1 and 3" works after every round, and in a later session too.** Each round's
   clean-up deleted the shortlist file drafting is staged from, so picking from a shortlist
   that had just been sent failed. The round now keeps it (the top 60, in the gitignored round

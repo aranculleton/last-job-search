@@ -140,6 +140,29 @@ def _strip_trailing(s: str) -> str:
         s = head
 
 
+def near_misses(left, right) -> list[tuple[str, str]]:
+    """Employer names on the two sides that are probably one employer and do not join.
+
+    "Fernhill" and "Fernhill Freight", "Larkspur" and "Larkspur Retail Bank": one
+    key is the start of the other, word for word, so a contact and an
+    application there never link and nothing says so. Reported, never merged:
+    a bank's custody arm can be a different firm from the bank, which only the
+    person knows.
+    The fix is a line in profile/employers.py COMPANY_ALIASES.
+    """
+    lk = {key(n): n for n in left if key(n)}
+    rk = {key(n): n for n in right if key(n)}
+    out = []
+    for a, an in sorted(lk.items()):
+        for b, bn in sorted(rk.items()):
+            if a == b:
+                continue
+            short, long_ = (a, b) if len(a) < len(b) else (b, a)
+            if long_.split()[:len(short.split())] == short.split():
+                out.append((an, bn))
+    return out
+
+
 def key(name: str | None) -> str:
     """A stable comparison key for an employer name."""
     if not name:

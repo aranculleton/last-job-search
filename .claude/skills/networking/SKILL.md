@@ -176,7 +176,7 @@ into one:
 
 | Stage | Message | Composer | Asks for |
 |---|---|---|---|
-| 1. First note | connection request, 200 chars free / 300 Premium | `compose.first_note()` | 15 minutes, a question about them |
+| 1. First note | connection request, 200 chars free / 300 Premium | `compose.first_note()` | 15 minutes; a question about them only when there is a real one |
 | 2. Conversation | replies, call prep | `/reply`, `/prep` | whatever the conversation needs |
 | 3. Referral ask | message pane, under 90 words | `compose.referral_ask()` | a referral for one named, linked role |
 
@@ -196,7 +196,7 @@ something real and asks about them gets answered. For example:
 
 That is the shape, and `first_note()` assembles it:
 
-    Hi Sasha, hope you're well. <common ground>. <about me>. <question>? <ask>.
+    Hi Sasha, hope you're well. <common ground>. <about me>. [<question>?] <ask>.
 
 - **Common ground** (required): the one true thing linking the candidate to
   them. A shared employer or school first; otherwise the one specific
@@ -210,8 +210,11 @@ That is the shape, and `first_note()` assembles it:
   those employers. **Drop the looking clause when the common ground is their
   hiring** (a recruiting post, an open req): beside a hiring signal it turns
   the note back into a job ask.
-- **Question** (required): about them, answerable in a line. How they got into
-  the field, how the team is set up, what the work is like.
+- **Question** (optional): about them, answerable in a line, and only when there
+  is a real one: how they got into the field, how the team is set up. Never one
+  made up to fill the slot. A person called "How has data science changed
+  pricing there?" "so artificial", and the same note read better as the true line
+  and a plain ask for a conversation, which is a complete note on its own.
 - **Ask** defaults to `ASK` in `profile/networking.py`: a small ask for a few
   questions and fifteen minutes.
   Pass `ask=None` when the question carries it.
@@ -291,6 +294,23 @@ It reads as machine-generated. `tone.restate_ratio()` measures it. Show you
 understood the shape of what they said; do not summarise it at them.
 
 See `02-reply-playbook.md` for the full scenario table.
+
+### A request that is still pending is not a thread
+
+Until a connection request is accepted there is nowhere to write, so it is never
+nudged. `state.owed()` lists it as `request_pending` once it has waited
+`state.REQUEST_WITHDRAW_DAYS` (21 days): withdraw it, because LinkedIn caps how many
+can be outstanding and one nobody accepted in three weeks rarely is. Someone who
+accepted a request that carried **no note** has been told nothing, so what is owed is
+a first message (`first_message`), written with `compose.first_note()`, never a nudge.
+A call or meeting logged in the thread (`channel` call, phone, teams..., or
+`scenario` call_held / call_missed) is never a message: a held one counts as a
+conversation, and what follows it lives in `next_action`.
+
+A close the person chose is written into the row as "closed on purpose: <their
+reason>" (or "do not reopen"), so a later reply does not reopen it on every run. A
+close without those words that is followed by a reply is reported as `reopened`,
+because a session that closed somebody by mistake is exactly what that catches.
 
 ### Accepting is not replying, and it is not nothing either
 

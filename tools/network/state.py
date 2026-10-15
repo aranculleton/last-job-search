@@ -197,16 +197,23 @@ def _write_csv(path: str, rows, columns) -> None:
     # contact book.
     try:
         with open(path, newline="", encoding="utf-8") as f:
+            first = f.readline()
+            f.seek(0)
             header = next(csv.reader(f), [])
     except OSError:
-        header = []
+        first, header = "", []
     for k in header:
         if k and k not in seen:
             seen.add(k)
             fields.append(k)
+    # Keep the file's own line ending. A book saved from a spreadsheet ends its
+    # lines "\r\n"; rewriting every one as "\n" made one logged message a
+    # whole-file change, and two chats that each logged a message collided on
+    # every line when their work met on master.
+    ending = "\r\n" if first.endswith("\r\n") else "\n"
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fields, restval="", extrasaction="ignore",
-                           lineterminator="\n")
+                           lineterminator=ending)
         w.writeheader()
         for row in rows:
             w.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in fields})
@@ -603,15 +610,96 @@ def channel_of(row) -> str:
 ACCEPTED_SCENARIOS = frozenset({"accepted_no_reply", "connected_no_reply", "connection_accepted"})
 
 
+def _scenario(row) -> str:
+    return re.sub(r"[\s-]+", "_", str(row.get("scenario") or "").strip().lower())
+
+
 def is_acceptance(row) -> bool:
     """Is this row an accepted connection request rather than a message?"""
-    scenario = re.sub(r"[\s-]+", "_", str(row.get("scenario") or "").strip().lower())
-    return _direction(row) == "in" and scenario in ACCEPTED_SCENARIOS
+    return _direction(row) == "in" and _scenario(row) in ACCEPTED_SCENARIOS
+
+
+# A connection request is not a message that can be followed up. Until it is
+# accepted there is no channel to write in: ten contacts with one unaccepted
+# request each showed "[nudge] 21bd" in a real contact book, a message nobody
+# could send. Read from the scenario, or from a channel typed as a request.
+REQUEST_SCENARIOS = frozenset({"connection_request", "connection_requested", "invite",
+                               "invitation", "connect_request"})
+# A pending request is worth withdrawing after this long: LinkedIn caps how many
+# can be outstanding, and one nobody accepted in three weeks rarely is.
+REQUEST_WITHDRAW_DAYS = 21
+
+
+def is_request(row) -> bool:
+    """An outbound connection request, with or without a note."""
+    if _direction(row) != "out":
+        return False
+    raw = str(row.get("channel") or "").lower()
+    return _scenario(row) in REQUEST_SCENARIOS or "request" in raw or "invit" in raw
+
+
+def is_bare_request(row) -> bool:
+    """A connection request that carried no note: it said nothing."""
+    return is_request(row) and not str(row.get("full_text") or "").strip()
+
+
+# A call is not a message either. Logged as `channel=call` with `scenario=call_held`
+# after a reply, it read as our message last, so the thread came out
+# `awaiting_reply` and the nudge clock said "30 business days of silence" about a
+# conversation that had just happened. A held call is an exchange; a missed or
+# cancelled one is nothing.
+CALL_CHANNELS = frozenset({"call", "phone", "video", "teams", "zoom", "meet", "calendly",
+                           "meeting", "coffee", "in_person", "in person"})
+CALL_EVENTS = frozenset({"call_held", "call_completed", "call_missed", "call_cancelled",
+                         "meeting_held", "met"})
+CALL_NOT_HELD = frozenset({"call_missed", "call_cancelled"})
+
+
+def is_call(row) -> bool:
+    """A call or meeting logged in the thread, held or not: never a message."""
+    return channel_of(row) in CALL_CHANNELS or _scenario(row) in CALL_EVENTS
+
+
+def call_held(row) -> bool:
+    return is_call(row) and _scenario(row) not in CALL_NOT_HELD
 
 
 def said_something(row) -> bool:
     """An inbound row that is a message: the only kind that makes a route warm."""
-    return _direction(row) == "in" and not is_acceptance(row)
+    return _direction(row) == "in" and not is_acceptance(row) and not is_call(row)
+
+
+def request_pending(rows) -> datetime.date | None:
+    """The date of a connection request still waiting to be accepted, or None.
+
+    The latest thing on the thread decides: an acceptance, anything they said,
+    a call, or a message sent after the request (an InMail or an email reaches
+    them without one) all mean the request is no longer what is waiting.
+    """
+    for row in reversed(_ordered([r for r in rows if _direction(r)])):
+        if is_request(row):
+            return as_date(row.get("date")) or datetime.date.min
+        return None
+    return None
+
+
+def accepted_never_messaged(rows) -> datetime.date | None:
+    """The acceptance date when only bare requests went before it and nothing after.
+
+    Somebody who accepted a request that carried no note has been told nothing,
+    so what is owed is a first message, written as one, not a nudge on a note
+    that was never sent.
+    """
+    ordered = _ordered([r for r in rows if _direction(r) and not is_call(r)])
+    if not ordered or not is_acceptance(ordered[-1]):
+        return None
+    before = ordered[:-1]
+    if any(_direction(r) == "in" and not is_acceptance(r) for r in before):
+        return None
+    sent = [r for r in before if _direction(r) == "out"]
+    if sent and all(is_bare_request(r) for r in sent):
+        return as_date(ordered[-1].get("date")) or datetime.date.min
+    return None
 
 
 def threads_for(threads, contact_id_value) -> list[dict]:
@@ -648,6 +736,10 @@ def derive_status(threads_for_contact) -> str:
     status = "not_contacted"
     for row in _ordered(threads_for_contact):
         if not _direction(row):
+            continue
+        if is_call(row):
+            if call_held(row):
+                status = "in_conversation"
             continue
         if is_acceptance(row):
             if status != "replied_needs_response":
@@ -695,6 +787,13 @@ def effective_status(contact, thread_rows) -> str:
 # notes can arrive with a great many of them; reporting those as errors puts
 # dozens of rows in front of a reader and buries the few that need answering.
 NOTE_ONLY = frozenset({"history_not_logged"})
+
+
+# A close the person chose, written into the row. Without it, a thread closed
+# after reading their last reply was reported as "reopened" on every run. A close
+# a session made by mistake carries no such words, so it is still reported.
+CLOSED_ON_PURPOSE = re.compile(r"\b(?:closed on purpose|closed deliberately|deliberately "
+                               r"closed|do not reopen|don'?t reopen)\b", re.I)
 
 
 def reconcile(contacts, threads) -> list[dict]:
@@ -748,7 +847,9 @@ def reconcile(contacts, threads) -> list[dict]:
         elif stored in DERIVABLE and stored != derived:
             flag(cid, name, stored, derived, "contradicts_log",
                  "the log says the status is " + derived)
-        elif stored in schema.TERMINAL and derived == "replied_needs_response":
+        elif (stored in schema.TERMINAL and derived == "replied_needs_response"
+              and not CLOSED_ON_PURPOSE.search(" ".join(
+                  str(contact.get(k) or "") for k in ("next_action", "notes")))):
             flag(cid, name, stored, derived, "reopened",
                  "thread was closed and they have since replied")
 
@@ -799,9 +900,9 @@ def _trailing_outbound(msgs) -> int:
     second nudge."""
     n = 0
     for row in reversed(msgs):
-        if is_acceptance(row):
+        if is_acceptance(row) or is_bare_request(row) or (is_call(row) and not call_held(row)):
             continue
-        if _direction(row) != "out":
+        if _direction(row) != "out" or call_held(row):
             break
         n += 1
     return n
@@ -901,6 +1002,33 @@ def owed(contacts, threads, today) -> list[dict]:
         if status in NO_NUDGE:
             _action_row()
             continue
+        # A request nobody has accepted cannot be nudged: there is nowhere to
+        # write. It is worth withdrawing once it has sat REQUEST_WITHDRAW_DAYS.
+        pending = request_pending(msgs)
+        if pending is not None:
+            if (today - pending).days < REQUEST_WITHDRAW_DAYS:
+                _action_row()
+                continue
+            items.append(dict(base, kind="request_pending", channel="connection",
+                              since=pending.isoformat(),
+                              business_days=business_days_between(pending, today),
+                              due=(pending + datetime.timedelta(days=REQUEST_WITHDRAW_DAYS)).isoformat(),
+                              nudges_sent=0))
+            continue
+        # Accepted a request that said nothing, and has heard nothing since: a
+        # first message is owed, written as one (compose.first_note), never a nudge.
+        accepted = accepted_never_messaged(msgs)
+        if accepted is not None:
+            items.append(dict(base, kind="first_message", channel="message",
+                              since=accepted.isoformat(),
+                              business_days=business_days_between(accepted, today),
+                              due=accepted.isoformat(), nudges_sent=0))
+            continue
+        # A held call is the last thing that happened: what follows it (the
+        # thank-you, the referral ask) is in next_action, never a nudge.
+        if msgs and call_held(msgs[-1]):
+            _action_row()
+            continue
         # Everything left here is waiting on them, not only `awaiting_reply`.
         # Reading that one status left `/threads` silent on a referral that had
         # sat for weeks while `reply.nudge_due` on the same rows reported
@@ -934,7 +1062,7 @@ def owed(contacts, threads, today) -> list[dict]:
     # Replies first, then anything the user put a date on, then nudges. A
     # self-imposed date outranks a nudge because the user chose it; it does not
     # outrank somebody sitting waiting for an answer.
-    order = {"reply": 0, "action_due": 1, "nudge": 2}
+    order = {"reply": 0, "action_due": 1, "first_message": 2, "nudge": 3, "request_pending": 4}
     items.sort(key=lambda i: (order.get(i["kind"], 9), -i["business_days"],
                               i["contact_id"]))
     return items
@@ -1181,8 +1309,12 @@ def main() -> int:
     items = owed(contacts, threads, a.today)
     print("OWED" if items else "OWED: nothing due")
     for i in items:
-        print(f"  [{i['kind']:5}] {i['name'] or i['contact_id']} ({i['company']}) "
-              f"{i['business_days']}bd since {i['since'] or 'unknown'}")
+        where = f" ({i['company']})" if i["company"] else ""
+        print(f"  [{i['kind']:5}] {i['name'] or i['contact_id']}{where} "
+              f"{i['business_days']}bd since {i['since'] or 'unknown'}"
+              + {"request_pending": "; not accepted, so nothing can be sent: withdraw it",
+                 "first_message": "; accepted, nothing said yet: a first message, not a nudge",
+                 }.get(i["kind"], ""))
 
     b = platform_budget(contacts, threads, a.today)
     print(f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "
@@ -1195,6 +1327,15 @@ def main() -> int:
         print(f"\nLINKED  {len(links)} contacts sit at a company already in the tracker")
         for link in links:
             print(f"  {link['name'] or link['contact_id']} -> {', '.join(link['roles'])}")
+        import company_key
+        tracked = load_tracker(a.tracker)
+        misses = company_key.near_misses({c.get("company") for c in contacts if c.get("company")},
+                                         {r.get("company") for r in tracked if r.get("company")})
+        if misses:
+            print(f"\nJOINS  {len(misses)} contact employer(s) may be an application's under "
+                  "another name; if so, add the pair to COMPANY_ALIASES in profile/employers.py")
+            for contact_side, tracker_side in misses[:15]:
+                print(f"  {contact_side}  /  {tracker_side}")
 
     # `reconcile` already separates a contradiction from a note, and a printer
     # that threw that away would put every finding in one flat list, most of them

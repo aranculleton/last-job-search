@@ -42,6 +42,8 @@ import tone  # noqa: E402
 
 # The person's voice, work authorization and places: profile/networking.py.
 _NET = person.module("networking")
+_ROLES = person.module("roles") if person.exists("roles.py") else None
+_SKILLS = person.module("skills") if person.exists("skills.py") else None
 # The person's word for the document ("resume", "CV"): person.json
 # documents.noun. Every message says it the way their market does; a CV market
 # reading "My resume is attached" sees a template from somewhere else.
@@ -419,6 +421,55 @@ june july august september october november december
 """.split()) | frozenset(w.lower() for w in getattr(_NET, "PLACE_WORDS", ()))
 
 
+# Names a nudge or a note opens on that are one capitalized word: an employer, a
+# tool. "Hi Robin, Acme opened a data role" came out "Hi Robin, acme opened...",
+# because one word with a capital looks the same as a sentence-starting "Saw".
+# The common tools are here; the person's own names come from the profile and
+# the state files (`_known_names`).
+_TOOL_NAMES = frozenset("""
+python excel tableau looker snowflake databricks azure google microsoft amazon apple meta
+salesforce jira slack spark airflow kubernetes docker terraform claude anthropic linux
+oracle sap workday hubspot stripe figma notion github gitlab redshift bigquery
+""".split())
+
+
+def _first_word(name) -> str:
+    words = re.findall(r"[A-Za-z][\w&'.-]*", str(name or ""))
+    return words[0].lower().rstrip(".'") if words and words[0][:1].isupper() else ""
+
+
+_KNOWN: set | None = None
+
+
+def _known_names() -> frozenset:
+    """One-word names this person's messages may open on, lowercased.
+
+    The tools list above, the profile's employers and skills, and every company
+    in the contact book and the tracker. Read once per process.
+    """
+    global _KNOWN
+    if _KNOWN is None:
+        names = set(_TOOL_NAMES)
+        for role in getattr(_ROLES, "ROLES", ()) or ():
+            for n in [role.get("employer")] + list(
+                    [role.get("known_as")] if isinstance(role.get("known_as"), str)
+                    else role.get("known_as") or []):
+                names.add(_first_word(n))
+        for item in getattr(_SKILLS, "ITEMS", ()) or ():
+            names.add(_first_word(item[1] if len(item) > 1 else ""))
+        try:
+            import csv
+            for f in ("network_contacts.csv", "job_search_tracker.csv"):
+                with open(person.state(f), newline="", encoding="utf-8") as fh:
+                    for r in csv.DictReader(fh):
+                        names.add(_first_word(r.get("company")))
+        except (OSError, ValueError):
+            pass
+        names.discard("")
+        _KNOWN = names - _PLAIN
+    return frozenset(_KNOWN)
+
+
 def _names_something(sentence, first, keep=()) -> bool:
     """Does the clause open on a name, so its capital is spelling rather than position?
 
@@ -435,7 +486,7 @@ def _names_something(sentence, first, keep=()) -> bool:
             return True
     if stem.lower() in _PLAIN:
         return False
-    if stem != first or stem.lower() in _PROPER:
+    if stem != first or stem.lower() in _PROPER or stem.lower() in _known_names():
         return True
     rest = sentence.split()[1:2]
     return bool(rest) and rest[0][:1].isupper() and rest[0][1:2].islower()
@@ -693,7 +744,16 @@ def _first_note_voice(text) -> str:
     return text
 
 
-def first_note(name, common_ground, question, about_me=ABOUT_ME, ask=ASK,
+def _question(question) -> str:
+    """A question as it is sent: one line, a capital, a question mark. "" for none."""
+    q = " ".join(str(question or "").split()).rstrip(".!")
+    if not q:
+        return ""
+    q = q if q.endswith("?") else q + "?"
+    return q[0].upper() + q[1:] if q[0].islower() else q
+
+
+def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
                opener=OPENER, recruiter=False, seniority="peer", their=()) -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
@@ -704,10 +764,13 @@ def first_note(name, common_ground, question, about_me=ABOUT_ME, ask=ASK,
     school, a team, a talk, a post. Required, because without it the note is a
     sweep.
 
-    `question` is about THEM and answerable in a line: how they got into the field,
-    how the team is set up, what the work is like. Never whether they are
-    hiring, and never about a role the sender wants: that is the referral ask, later,
-    once there is a conversation to ask inside.
+    `question` is optional. When there is a real one, it is about THEM and
+    answerable in a line: how they got into the field, how the team is set up,
+    what the work is like. Never whether they are hiring, and never about a role
+    the sender wants: that is the referral ask, later. A question made up to fill
+    the slot ("How has data science changed pricing there?") is what a person
+    called "so artificial" and "stupid", so with no real one the note is the true
+    line and a plain ask for a conversation, which is a complete note.
 
     `about_me` and `ask` default to the person's own words (their networking.py). Pass `ask=None` when the
     question already carries the ask. `recruiter=True` is for a recruiter, whose
@@ -717,16 +780,11 @@ def first_note(name, common_ground, question, about_me=ABOUT_ME, ask=ASK,
         raise ValueError(
             "a first note needs the common ground: the shared employer, school or "
             "move, or the one thing about their work that prompted the note")
-    q = " ".join(str(question or "").split())
-    if not q:
+    q = _question(question)
+    if not q and not str(ask or "").strip():
         raise ValueError(
-            "a first note needs a question about them, answerable in a line: it is "
-            "what gets the reply")
-    q = q.rstrip(".!")
-    if not q.endswith("?"):
-        q += "?"
-    if q[0].islower():
-        q = q[0].upper() + q[1:]
+            "a first note needs something to answer: a real question about them, or "
+            "the plain ask for a conversation (ask=)")
     about_me = _about_me_for(common_ground, about_me)
     # With no opener the common ground runs straight on from "Hi Robin," and
     # takes the case a clause after a comma takes: "Hi Robin, Saw your post"
@@ -886,17 +944,17 @@ def inmail(name, subject, common_ground, question, evidence, about_me=ABOUT_ME, 
     paragraph is what the credit buys; without it this is a connection note that
     cost a scarce credit. The word limit is a ceiling, not a target.
     """
-    for what, value in (("common_ground", common_ground), ("question", question),
-                        ("evidence", evidence)):
+    for what, value in (("common_ground", common_ground), ("evidence", evidence)):
         if not str(value or "").strip():
             raise ValueError(
-                f"an InMail needs {what}: the common ground and a question about them, as "
-                "in a first note, and one paragraph of concrete evidence (a named piece of "
-                "work, its scale, an outcome), which is what the credit buys")
+                f"an InMail needs {what}: the common ground, as in a first note, and one "
+                "paragraph of concrete evidence (a named piece of work, its scale, an "
+                "outcome), which is what the credit buys")
+    q = _question(question)
+    if not q and not str(ask or "").strip():
+        raise ValueError("an InMail needs something to answer: a real question about them, "
+                         "or the plain ask for a conversation (ask=)")
     subj = inmail_subject(subject, recruiter=recruiter)
-    q = " ".join(str(question).split()).rstrip(".!")
-    q = (q[0].upper() + q[1:]) if q[0].islower() else q
-    q = q if q.endswith("?") else q + "?"
     about_me = _about_me_for(common_ground, about_me)
     paragraphs = [
         (f"{_greeting(name)} {opener}. {_sentence(common_ground)}" if opener
@@ -1049,6 +1107,27 @@ def register(text, seniority) -> str:
     return s
 
 
+# A check-in gives them nothing to answer, which is why the first message went
+# unanswered. `nudge()` refuses an empty reason; a hand-written draft reached
+# validate() with "just checking in to see if you had a chance to look at my note"
+# and came back clean.
+CHECK_IN = re.compile(
+    r"\b(?:just\s+)?checking\s+in\b|\bjust\s+check\s+in\b|\bcircl(?:e|ing)\s+back\b"
+    r"|\bbump(?:ing)?\s+(?:this|my|it)\b|\btop\s+of\s+(?:your|the)\s+inbox\b"
+    r"|\b(?:did|have)\s+you\s+(?:get|had|have)\s+(?:a\s+)?chance\s+to\b"
+    r"|\bhad\s+a\s+chance\s+to\s+(?:look|read|see|review)\b|\bjust\s+following\s+up\b"
+    r"|\bfollowing\s+up\s+on\s+my\s+(?:last|previous|earlier)\s+(?:message|note|email)\b",
+    re.I)
+
+
+def lowered_names(text) -> list[str]:
+    """A known one-word name written in lower case right after the greeting comma."""
+    m = re.match(r"\s*\w+\s+[^,\n]{1,40},\s+([a-z][\w&'-]*)", str(text or ""))
+    if m and m.group(1).islower() and re.sub(r"['’]s$", "", m.group(1)) in _known_names():
+        return [m.group(1)]
+    return []
+
+
 def validate(message, kind, name=None, seniority="peer", employers=(),
              referrer=None, their_message=None, recruiter=False) -> list:
     """Every reason this draft should not be sent, as (rule, offending_text).
@@ -1087,6 +1166,10 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
             out.append(tone.Violation("too_long", f"{words} words, limit {high}"))
         elif low and words < low:
             out.append(tone.Violation("too_short", f"{words} words, at least {low}"))
+    for word in lowered_names(text):
+        out.append(tone.Violation("lowercase_name", word))
+    for found in CHECK_IN.findall(text):
+        out.append(tone.Violation("check_in", found if isinstance(found, str) else found[0]))
     for buried in employers_early(text, employers):
         out.append(tone.Violation("employers_buried", str(buried)))
     if referrer and not referrer_in_lead(text, referrer):

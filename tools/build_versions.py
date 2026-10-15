@@ -82,8 +82,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", True, "every board you have searches all your places, not just your "
                                     "home city, covers the towns around each, and searches remote "
                                     "roles where the board can filter for them"),
+            (4, "2026-10-15", False, "an invented example in place of a real city"),
         ),
-        "fingerprint": "167f4200e7a13381",
+        "fingerprint": "008c2a03005b4d62",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -256,8 +257,12 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-15", False, "drafts against the messages that drew replies, and says "
                                     "which message drew one when a reply is logged "
                                     "(tools/what_works.py)"),
+            (7, "2026-10-15", False, "a pending request is never nudged, a bare acceptance gets "
+                                    "a first message, calls are not messages, names keep their "
+                                    "capital, check-ins are refused, tier 1 needs a post about "
+                                    "your work, and the question in a first note is optional"),
         ),
-        "fingerprint": "d5e1d3ce44c27b36",
+        "fingerprint": "0bd960ce95f525c2",
     },
     "screening": {
         "by": "round", "priority": 2,
