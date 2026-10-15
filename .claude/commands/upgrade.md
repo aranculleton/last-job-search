@@ -18,7 +18,9 @@ python3 tools/profile_upgrades.py --plan
 ```
 
 A JSON list, most urgent first: `id`, `needs`, `why` (what is missing), `run` (what does
-it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 5.
+it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 5. An empty list while
+the sync said upgrades are pending means another chat brought the update in and is
+applying them: stop here, with nothing to report.
 
 ## Step 2: Each upgrade, alone, in order
 

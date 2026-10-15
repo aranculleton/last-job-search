@@ -726,6 +726,59 @@ def _changed() -> set[str]:
     return {ln[3:].split(" -> ")[-1].strip('"') for ln in out if ln.strip()}
 
 
+# ------------------------------------------------------------------ which chat
+
+# Several chats run against one repo at once, each in its own container, and each one
+# syncs when it starts work. Every one of them used to find the same new upgrades, start
+# the same background /upgrade and ask the same questions. The chat whose own sync
+# brought the update in owns it. A chat that got the update by merging master, where
+# that chat landed it, stays quiet until the owner has had OWNER_HOURS to finish, then
+# takes over whatever is still pending.
+OWNER_HOURS = 2
+SYNC_SUBJECT = "^Sync from the app: "
+
+
+def _marker() -> str:
+    d = _git("rev-parse", "--git-common-dir").stdout.strip()
+    return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), "ljs-upgrade-owner")
+
+
+def owner_elsewhere(now: float | None = None) -> str:
+    """"" when this chat owns the pending upgrades, else the time another chat's turn ends."""
+    import time
+    r = _git("log", "-1", "--format=%H %ct", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.split()
+    if len(r) != 2:
+        return ""
+    sha, when = r[0], int(r[1])
+    try:
+        with open(_marker(), encoding="utf-8") as f:
+            if f.read().strip() == sha:
+                return ""                           # this chat claimed it earlier
+    except OSError:
+        pass
+    master = "refs/remotes/origin/master"
+    if _git("rev-parse", "-q", "--verify", master).returncode != 0:
+        return ""
+    if _git("merge-base", "--is-ancestor", sha, master).returncode != 0:
+        return ""                                   # this chat's own sync, not landed yet
+    ends = when + OWNER_HOURS * 3600
+    if (now if now is not None else time.time()) >= ends:
+        return ""
+    return time.strftime("%H:%M UTC", time.gmtime(ends))
+
+
+def claim() -> None:
+    """Mark the update this chat's sync brought in as this chat's, for its background
+    /upgrade too: worktrees share the git directory the marker lives in."""
+    r = _git("log", "-1", "--format=%H", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.strip()
+    if r:
+        try:
+            with open(_marker(), "w", encoding="utf-8") as f:
+                f.write(r + "\n")
+        except OSError:
+            pass
+
+
 def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     """Run each pending instant upgrade and commit it on its own. An upgrade that
     touches anything outside its own personal paths is undone, never committed."""
@@ -781,6 +834,32 @@ def main(argv: list[str] | None = None) -> int:
         print(why or "done")
         return 1 if why else 0
     rows = pending()
+    if a.after:
+        import merge_state
+        merge_state.install(ROOT)
+    elsewhere = owner_elsewhere() if rows and (a.after or a.plan or a.line) else ""
+    if elsewhere:
+        # Another chat brought this update in and is applying it: say so once, start
+        # nothing and ask nothing. The instant ones still run below; they are the same
+        # commit everywhere, so they merge cleanly.
+        if a.plan:
+            print("[]")
+            return 0
+        if a.after:
+            for note in run_instant(rows):
+                print(f"profile upgrades: {note}")
+            rows = pending()
+        if rows and a.line:
+            print(f"Profile upgrades: {len(rows)} pending, being applied by another chat.")
+        elif rows:
+            print(f"Profile upgrades: {len(rows)} pending, being applied by the chat that "
+                  f"brought this update in. Claude: start nothing and ask nothing about them; "
+                  f"if they are still pending after {elsewhere}, the next sync hands them here.")
+        else:
+            print("Profile upgrades: none pending.")
+        return 0
+    if a.after:
+        claim()
     if a.plan:
         import json
         print(json.dumps(plan(rows), indent=1))

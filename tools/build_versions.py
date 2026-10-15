@@ -361,6 +361,8 @@ KEEPS_NOTHING: dict[str, str] = {
     ".claude/commands/threads.md": "a view derived from the message log on every run",
     ".claude/commands/reset.md": "removes state on request",
     "tools/sync_app.py": "the machinery that carries changes; it keeps nothing itself",
+    "tools/merge_state.py": "a git merge driver; it changes only what a merge writes",
+    ".gitattributes": "configuration, read on every merge",
     "tools/profile_upgrades.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/build_versions.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/learned.py": "the machinery that keeps what the person said; what it keeps is theirs",
