@@ -13,6 +13,136 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run 
 
 ---
 
+## The rules every search keeps
+
+These are the rules CLAUDE.md summarises, in full. Most are enforced in code; this is what
+the code is doing and why.
+
+**When the user asks to run a job search, scan, or scrape, run the search end to end and
+stop at the ranked shortlist.** The deliverable is a ranked, scored table plus the context
+needed to choose: salary read, deadlines, referral links, and what needs checking.
+
+The pipeline, in order:
+
+1. **Scrape** every enabled portal per `job-scraper/SKILL.md`.
+2. **Rank** every surviving posting 0-100 against `04-job-evaluation.md`, gates first.
+3. **Expand and repeat** until the yield target is met, up to 3 rounds.
+4. **Present the ranked table**, highest score first, with scores visible, and under it
+   the line from `python3 tools/what_works.py brief search` when it reports a clear
+   difference (whether the scores have been predicting interviews).
+5. **Stop there and ask** which ones to take forward. Do **not** draft resumes or cover
+   letters unless the user asks for them.
+6. **Before drafting anything, confirm the user has not already applied.** The tracker only
+   knows about applications made through this repo, so it cannot rule out an application the
+   user made directly. Ask, and record the answer in the tracker.
+
+Only draft unprompted if the user has explicitly said to in that request.
+
+`/scrape` on its own is a **ranking** tool, not a link collector.
+
+- Every posting presented is scored 0-100 against `04-job-evaluation.md`: gates first
+  (Eligibility, Language, Location), then the four weighted dimensions. Results are
+  presented in score order, highest first, with the score visible.
+- A posting that fails a gate is excluded and recorded, never ranked.
+- **Rank down, do not cut.** A posting is a wish list. It names ten tools and the team uses
+  six, and the missing one is almost never what decides the hire. **One missing skill is
+  never a reason to drop a role**, and neither is a year of experience, a preferred degree,
+  or a posted range under target. Those are scoring inputs; the role still surfaces and the
+  candidate decides. Enforced in `tools/fit.py`, which weights every gap by how hard they
+  asked and by what sits next to it, and in `tools/text_screen.py`, where salary and degree
+  minimums are flags rather than cuts.
+- **Only four things are still hard cuts**, because no framing survives them: an
+  **eligibility** bar the profile cannot clear (a citizenship, residency or clearance
+  requirement, or a requirement to live elsewhere), a **language** requirement, a **professional credential** gate (actuarial
+  exams, an accounting or engineering licence), and a role whose **core is a discipline the
+  person does not hold** that the profile names as a different job (`search.py` `RESEARCH_ML`,
+  research machine learning for an analyst; nothing for a researcher). Those are different jobs,
+  not missing skills. Everything else gets ranked.
+- **Every posting ruled out is written back to `seen_jobs.json`** with `status: "excluded"`,
+  a checkable `exclusion_reason` and a date, so it never resurfaces. The gate that enforces
+  that is `throttle.ruled_out()`, and it runs at **prefilter**, before `hydrate.py` spends an
+  HTTP call fetching the body: a large share of everything reaching hydrate is a posting already
+  ruled out. `prefilter.py` imports the throttle's own function rather than reimplementing it, so
+  the shortlist is unchanged; `run_round.py --no-seen-read` turns it off, which is what you
+  want after changing the scoring rules and wanting everything previously excluded
+  re-evaluated. Exclusions are per
+  posting, never per company: a different role at the same employer stays in scope.
+- **`job_scraper/do_not_target.json` is the one company-level exception, and it is a
+  different claim.** A posting exclusion says a role was rejected. An entry there says the
+  employer has **no relevant presence for that function in that city**, so there is no role
+  to stay in scope: an office that houses only sales, or only production, has no role to stay
+  in scope for unless one of those is the person's function. `tools/throttle.py` reads it and
+  skips the employer with
+  the reason. Every entry names who established it and carries a **`review_after` date**,
+  after which it stops suppressing and is reported as expired, because a company standing up
+  a team in that city is exactly the fact that goes stale. Add an entry only on positive
+  evidence of absence, never as a shortcut for "this one was a bad fit".
+- **Every posting presented, and every posting documents are drafted for, carries a clickable
+  apply link.**
+- **Scoring is tiered, cheapest first.** A mechanical pre-filter, then a small-model knockout
+  check against `profile/10-triage-blockers.md`, then full weighted scoring only on survivors, then
+  adversarial verification only on postings scoring 70+. Never spend a full weighted evaluation
+  discovering a stated requirement the profile cannot meet, such as a licence or a degree. See
+  `11-cost-model.md` for the per-stage costs and
+  the model to use at each stage.
+- **A posting at an employer where a conversation is already running surfaces with a warning,
+  never suppressed.** `tools/throttle.py` reads `network_contacts.csv` and attaches
+  `warm_route_note` to the shortlist row: "DO NOT APPLY COLD", the person, and what is owed.
+  A warm route makes a role *more* worth having, so hiding it to protect the referral would
+  lose the role. A standing referral offer sits unused if a cold application to the same
+  employer goes in first and spends it for nothing.
+- **A reply is what makes a route warm.** `awaiting_reply` means a message went out and
+  nothing came back, and a large share of any contact book sits there. Counting them warm would print "DO NOT
+  APPLY COLD" over employers where nobody had said a word back, add the referral bonus to
+  the fit score and exempt the role from the fit floor, all on the strength of an unanswered
+  InMail. `throttle.RESPONDED` is the warm set; `SENT_NO_REPLY` gets
+  `outreach_pending_note` instead, which says applying is fine and a second message is not.
+  For the outreach note in `documents/applications/`, both halves count: whether they replied
+  decides whether *applying* is cold, and decides nothing about sending another message.
+- **A referral already in flight is the one contact state that suppresses.** A contact at
+  `referral_in_progress` means somebody inside has put the candidate's name forward, so a cold
+  application lands as a second, worse record of the same person and the referral is the one
+  that loses. `throttle.referral_holds()` blocks every posting at that employer and names who.
+  This is what a live process at an employer is recorded as: put the contact on
+  `referral_in_progress`, do not rely on remembering it.
+- **Company throttle.** A company with an open application in the tracker is suppressed: do not
+  surface more roles there. The only override is a role scoring 10+ points higher than what was
+  already sent, named explicitly. Where one run turns up several eligible roles at one employer,
+  surface only the highest scorer and record the rest as same-employer duplicates.
+- **Yield target: at least 5 postings scoring 60+, of which 2 score 75+.** A run that misses
+  it expands the search and goes again, up to 3 rounds: more title variants, then the
+  remaining priority categories, then wider PASS-set locations, then adjacent target sectors
+  and named employers, then more pages and the WebSearch fallback.
+- If the target is still missed after 3 rounds, say so explicitly with the count, what was
+  tried, and the likely blocker. Never pad a thin run with sub-60 postings, and never relax
+  a gate or the location filter to hit the number.
+- **A posting with no stated salary is not penalized.** Most postings in most markets omit it.
+  Report `not stated`, deduct nothing, and assume the band is met where the employer is
+  established with checkable evidence of good pay and benefits. Only a *stated* range whose
+  midpoint falls below the walk-away floor gets flagged alongside the score, and even then it
+  is a decision input, not an exclusion. See "How much weight salary actually gets" in
+  `04-job-evaluation.md`.
+
+### Portals and employer boards
+
+- **The app ships two portals, and every other one is the person's.** `linkedin-search`
+  and `freehire-search` work in any country and are on by default; a person turns either
+  off in `profile/search.py` `PORTALS`, never in its `SKILL.md`, which is the app's.
+  LinkedIn's robots.txt disallows its guest job endpoints for crawlers it does not name,
+  and `/setup` says so; switching it off is the person's call. A board for one country,
+  field or level is built for the person by `/add-portal` (which `/setup` runs for the
+  boards its research found), lives in their repo as a personal path
+  (`tools/personal_paths.py`), and is searched by every round, kept to the `crawl-delay`
+  its `SKILL.md` declares. The app never carries one: its leak scan fails if it does.
+  `python3 tools/portals.py` prints what the next round will search, and the boards
+  researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
+- **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
+  the employers named in `profile/boards.py` straight from their ATS (Greenhouse, Lever,
+  Ashby, Workday), which is how large employers that a portal under-indexes reach a round,
+  and `scrape_wide.py` calls it, so `run_round.py` needs nothing extra. `--probe` re-checks
+  every token. A board whose robots.txt disallows it is refused, and so is SmartRecruiters
+  by its API's; the reasons are recorded beside each.
+
 ## One command
 
 `python3 tools/run_round.py --out rounds/<name> --jobage 14` runs every stage below in order and stops at the ranked shortlist. See `RUNBOOK.md`. The sections below explain each stage.

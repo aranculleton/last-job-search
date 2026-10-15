@@ -10,6 +10,46 @@ Upstream's contributor policy, which this replaced, is at
 [MadsLorentzen/ai-job-search/CONTRIBUTING.md](https://github.com/MadsLorentzen/ai-job-search/blob/master/CONTRIBUTING.md)
 and still applies to anything sent back there.
 
+## Developer rules: changing the app itself
+
+These apply whenever the change is to the app, whichever repo the session started in.
+
+- **Changes are made in the app**, on a branch, through a pull request, and merged only with
+  CI green. The app is public, so its Actions minutes are free and its CI is the evidence.
+  Then every person's repo takes the change on its next sync, the maintainer's included.
+- **Nothing reaches the app until the leak scan has passed on the exact tree being pushed,
+  branches included**: a public repo's branches are public, and its history is permanent. From
+  the maintainer's own repo, `python3 tools/build_app.py <dir> --tokens-out <dir>/tokens`
+  writes the denylist from their profile; then `python3 tools/leak_scan.py <app checkout>
+  --tokens <dir>/tokens` scans the app checkout with it. The app's CI scans again with the
+  `LEAK_TOKENS` secret, but CI only sees what is already public, so the local scan is the gate.
+- **No example may be a disguised person.** An example resume, story, message or incident is
+  invented, or it is the example person in `profile.example/`. A real case with the names
+  swapped is still that person.
+- Small PRs and batched commits. A change that touches how documents, scores or messages
+  come out is checked by rendering the same inputs before and after and comparing the
+  outputs; any difference is named in the PR, or it is a bug.
+- **Never ship a feature that only works after a person does something nobody told them
+  about.** If an existing user has to act for a change to reach them (a `/setup` section, a
+  portal built or rebuilt with `/add-portal`, a re-render, a new state file or column, a
+  profile name with no safe default), register it in `tools/profile_upgrades.py` with a
+  `pending()` that checks their repo for the trace the action leaves, and name it in the
+  CHANGELOG entry (`Profile upgrade: <id>`). Make it `needs="nobody"`, which `/upgrade` applies
+  in the background with no one asking, unless it truly needs the person's answer or consent.
+  A new profile name with a safe default goes in `SAFE_DEFAULTS` with the reason.
+  `tests/test_profile_upgrades.py` fails on either missing.
+- **A better way of doing any part of the build reaches every older repo by itself.** Each
+  part that leaves something behind in a person's repo (a `/setup` section, the boards, prep
+  documents, unsent drafts, interview packs, research, contacts, screening, routines) is a
+  versioned method in `tools/build_versions.py`, and every other app file is in its
+  `KEEPS_NOTHING` with the reason. Changing a method's files fails
+  `tests/test_build_versions.py` until a version is added saying what changed and `rerun`:
+  True when what an older version made should be made again (a better board search, a
+  fixed prep document), False for wording. With True, every older repo redoes it with no one
+  asking: `/upgrade` in the background, the sync itself for an instant one, or every round
+  for screening. A new app file fails the same test until it is placed in a method or in
+  `KEEPS_NOTHING`. The decision can be made either way; it cannot be skipped.
+
 ## The failure this is all defending against
 
 > A session's branch runs far past master. A second session starts from master, correctly
@@ -132,3 +172,32 @@ merges or pushes.
 Port by hand, and read the diff rather than trusting a clean cherry-pick. On a fork,
 "applies cleanly" is not "correct": a commit fixing a portal this app no longer ships (the
 upstream's Danish boards, deleted here in 2026-10) means nothing here.
+
+## CI on a private repo
+
+**On a private repo, green is established locally, and that is the rule, not the
+fallback.** GitHub bills a private repo per job, rounded up to the minute; a
+public repo's minutes are free. Every job in `.github/workflows/ci.yml` now runs only on a
+public repo (the app) or on a manual dispatch, so here the
+checks show as skipped and cost nothing. Every check in that file is a script in this repo:
+
+```bash
+./tools/ci_local.sh            # every check CI runs, under two minutes
+./tools/ci_local.sh --quick    # skips the LaTeX compile
+```
+
+A clean run is the evidence, and merging on it is allowed. Say in the PR that
+`ci_local.sh` was green and name anything it reported as SKIP. Dispatch the workflow by
+hand (Actions, CI, Run workflow) only when a SKIP matters for the change, and tick
+`latex` only when LaTeX changed. That is the one case worth a billed minute here.
+
+CI's second Python leg exists because a bare `import tomllib` passed locally and failed on
+3.10. `ci_local.sh` runs that leg the way CI does (a fresh 3.10 environment with pytest and
+nothing else), on the system `python3.10` or one `uv` fetches in seconds; the containers
+may not ship one. Only where neither exists is the leg reported SKIP, never
+passed silently. What a local run cannot be is a second machine; the app's own CI, which
+is free, is that for every change made there.
+
+**Still worth doing, because no setting enforces it: batch the commits and push once.**
+Push when a unit of work is finished, not to watch CI think, and prefer a PR to a direct
+push to master.

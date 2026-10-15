@@ -490,7 +490,7 @@ After the final clean compile, delete intermediate build files the compile comma
 
 ## Step 6: Present Final Output
 
-Run the full verification checklist from `CLAUDE.md` now - this is the **only** verification pass in the workflow. Re-read both files once here to verify final state on disk matches your mental model after the Step 4 and Step 5 edits.
+Run the full verification checklist (`.claude/skills/job-application-assistant/verification-checklist.md`) now - this is the **only** verification pass in the workflow. Re-read both files once here to verify final state on disk matches your mental model after the Step 4 and Step 5 edits.
 
 ### 6.0 Mechanical checks first (run these, do not eyeball them)
 
@@ -521,7 +521,7 @@ opening and closing sentences must not be on that list. If the corpus report sho
 phrasing you just wrote, rewrite it now, before Step 6b records the application.
 
 ### Verification Checklist
-Report pass/fail for each item in the CLAUDE.md verification checklist (factual accuracy, targeting, consistency, quality).
+Report pass/fail for each item in the verification checklist (`.claude/skills/job-application-assistant/verification-checklist.md`): factual accuracy, targeting, consistency, quality, the compiled PDFs and the text layer.
 
 ### Key Tailoring Decisions
 Summarize 3-5 key decisions made to tailor the application:
