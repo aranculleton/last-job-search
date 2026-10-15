@@ -234,8 +234,12 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "people matched by profile URL and in any script, tier 1 "
                                     "only for a dated post about your own work, nobody ruled "
                                     "out for a missing location, and your own connections used"),
+            (4, "2026-10-15", False, "fixes to version 3: a lowercase clause after the "
+                                    "greeting, a named city read before 'remote', a "
+                                    "plain no counted, '<City>, ON' at home, and the "
+                                    "messages shown with the people"),
         ),
-        "fingerprint": "3287af6cf56a2ef1",
+        "fingerprint": "47baff2b33521eb2",
     },
     "screening": {
         "by": "round", "priority": 2,

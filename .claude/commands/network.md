@@ -94,9 +94,13 @@ untouched employers from the latest round's shortlist.
 
 ## Present
 
-Ranked by tier, then by route strength (referral > alumni > cold). For each:
-name, title, company, location, tier with the **quoted signal** if tier 1, the
-route, the recommended channel, and the draft.
+**People and their messages in one reply.** Finding someone and drafting the note
+to them are one step: never list the people and wait to be asked for the drafts.
+Ranked by tier, then by route strength (referral > alumni > cold). For each, as one
+block: name, title, company, location, profile link, tier with the **quoted
+signal** if tier 1, the route, the recommended channel, and **the message itself,
+ready to paste**, with its character count against the plan's limit (and the
+subject line for an InMail).
 
 Then, separately and honestly: **the dead ends**, with the reason for each. A
 company with no relevant presence in the target city is a real finding and saves the next
@@ -109,6 +113,7 @@ costs nothing and lets the request go out warm when the cap resets.
 
 ## Do not
 
+- Stop after finding people to ask whether to draft their messages
 - Exceed three searches for one company
 - Fetch a LinkedIn profile URL, a careers page or a blog index
 - Surface anyone already in `network_contacts.csv`
