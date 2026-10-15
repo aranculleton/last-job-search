@@ -6,7 +6,6 @@ Generate a self-contained HTML dashboard from `job_search_tracker.csv` and the a
 
 - No argument → output to `reports/application-dashboard.html`
 - A path argument (e.g. `/html-report ~/Desktop/report.html`) → use that path
-- `--open` flag → after writing, tell the user to open the file (cannot open a browser directly)
 
 Create `reports/` if it does not exist.
 
@@ -105,7 +104,7 @@ Write a single self-contained HTML file. All CSS is inline in a `<style>` block.
 
 1. **Status doughnut** - slices for each status bucket, colours from the palette above
 2. **By sector bar** (horizontal) - company count per sector, sorted descending
-3. **By channel bar** - online / referral / other
+3. **By channel bar** - portal / online / referral / other, the same four groups as Step 2 (`/apply` writes `portal` for a posting from a job portal)
 4. **Application funnel** (horizontal bar) - Applied → Interview → Offer → Hired, each bar = count reaching that stage, derived per Step 2's funnel rule (current status **plus** the merged `outcome.md` stage checkboxes), so a candidate who interviewed and was later rejected still counts in the Interview bar
 
 Build each chart as a hand-written `<svg>` element: compute bar lengths/doughnut arc angles from the stats in Step 2 and emit the `<rect>`/`<path>`/`<circle>` and `<text>` elements directly - no charting library, no `<canvas>`. Each `<svg>` has `role="img"` and an `aria-label` summarizing the chart (e.g. "Status breakdown: 3 Active, 2 Interview, 1 Offer"). Wrap each in a `<div class="chart-card">` with an `<h3>` title above. Remember to escape any label/value text drawn into `<text>` nodes per the escaping rule above.
@@ -122,11 +121,9 @@ Columns with only empty values across all rows may be omitted.
 
 Write the complete HTML to the output path using the Write tool.
 
-Then present:
+Then **send the file into the conversation** with the session's file-sending tool (SendUserFile or its equivalent), so it opens in one tap: in a cloud session the person has no browser pointed at this container, and a path is not something they can open. Where no such tool exists, say so in one line and give the path. Then present:
 
-> **Dashboard generated:** `<output path>`
->
-> Open it in any browser - no server needed.
+> **Dashboard:** sent above, and kept at `<output path>`
 >
 > **Summary:**
 > - Applications sent: N · drafted, not yet sent: N
