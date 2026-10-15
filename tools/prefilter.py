@@ -255,8 +255,42 @@ def age_days(job: dict, today: _dt.date | None = None) -> int | None:
 LIVE_BOARDS = {"greenhouse", "lever", "workday", "ashby"}
 
 
+# Workday serves an employer's internal job site from the same host as its
+# public one, and portals index both. A requisition on the internal site cannot
+# be applied to from outside: one surfaced at fit 98 from a "/Privileged/" URL
+# and was absent from the employer's "/External/" site. Only site names seen on
+# real scrapes go here; a profile adds its employers' own (search.py
+# WORKDAY_INTERNAL_SITES) once a round has shown one.
+WORKDAY_INTERNAL_SITES = {"privileged"} | {
+    str(x).lower() for x in getattr(_S, "WORKDAY_INTERNAL_SITES", ())}
+_LOCALE = re.compile(r"^[a-z]{2}(?:-[A-Za-z]{2})?$")
+
+
+def workday_internal_site(url: str) -> str:
+    """The internal Workday site a posting URL sits on, or "".
+
+    https://<tenant>.wd3.myworkdayjobs.com/[<locale>/]<site>/job/... names the
+    site in its first path segment after an optional locale.
+    """
+    try:
+        from urllib.parse import urlsplit
+        parts = urlsplit(str(url or ""))
+    except ValueError:
+        return ""
+    if not parts.hostname or not parts.hostname.lower().endswith("myworkdayjobs.com"):
+        return ""
+    segs = [p for p in parts.path.split("/") if p]
+    if segs and _LOCALE.match(segs[0]):
+        segs = segs[1:]
+    site = segs[0] if segs else ""
+    return site if site.lower() in WORKDAY_INTERNAL_SITES else ""
+
+
 def decide(job: dict, today: _dt.date | None = None,
            max_age: int = MAX_AGE_DAYS) -> tuple[bool, str]:
+    site = workday_internal_site(job.get("url"))
+    if site:
+        return False, f"eligibility: internal Workday site ({site})"
     age = age_days(job, today)
     live = (job.get("portal") or "") in LIVE_BOARDS
     if age is not None and age > max_age and not live:
@@ -305,20 +339,32 @@ def already_ruled_out(seen_path: str):
         entries = data if isinstance(data, dict) else {}
     try:
         from throttle import ruled_out
+        from throttle import load_do_not_target, referral_holds
         from company_key import key as company_key
         from lookup_score import norm
     except ImportError:
         return lambda job: ""
     urls, pairs = ruled_out(entries)
-    if not urls and not pairs:
+    # The employer-level holds the throttle applies live: a referral in flight,
+    # and an employer recorded as having no relevant presence until its review
+    # date. ruled_out() no longer reads their old copies in seen_jobs.json,
+    # because those outlived the hold; checked live here, they still cost
+    # hydrate nothing, and they lift the day the hold does.
+    try:
+        live = {**referral_holds(), **load_do_not_target()}
+    except Exception:                    # no contact book or do_not_target yet
+        live = {}
+    if not urls and not pairs and not live:
         return lambda job: ""
 
     def check(job) -> str:
+        k = company_key(job.get("company"))
+        if k and k in live:
+            return live[k]
         n = norm(job.get("url") or "")
         if n and n in urls:
             return urls[n]
         t = (job.get("title") or "").strip().lower()
-        k = company_key(job.get("company"))
         if t and k and (t, k) in pairs:
             return pairs[(t, k)]
         return ""
