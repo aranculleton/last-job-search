@@ -31,3 +31,6 @@ specific person.
 
 The fit assessment is the part that matters. Name the gap the person will probe,
 and the strongest honest framing for it.
+
+**Show the whole document in the reply**, ready to read before the call. The file is the
+record; its path alone is never the answer.

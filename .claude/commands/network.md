@@ -60,7 +60,9 @@ untouched employers from the latest round's shortlist.
    If their connections were loaded, `discovery.mark_first_degree(kept, conns)` marks
    the people they already know: a message, not a connection request.
 
-5. **Compose in one batch with `compose.first_note()`.** One model call
+5. **Read what they have taught it**: `python3 tools/learned.py brief messages` and
+   `brief people`. Every rule there outranks the defaults below.
+   **Compose in one batch with `compose.first_note()`.** One model call
    producing every draft, not one per person, then `compose.validate(kind=
    "connection")` on each. A draft that fails is rewritten, never shown with a
    warning attached. The rules are in "Composition" in `networking/SKILL.md`;

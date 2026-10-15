@@ -228,6 +228,17 @@ def check(text: str, *, source: str = "") -> list[dict]:
                 "context": body[start:m.end() + 40].strip()[:160],
                 "fix": fix,
             })
+    # The person's own: a phrase they have said never to use is a hard finding
+    # in a letter or a CV as much as in a message (tools/learned.py).
+    try:
+        import learned
+        for hit in learned.dislikes(body):
+            out.append({"source": source, "rule": "person-dislikes", "severity": "hard",
+                        "match": hit[:80], "context": "",
+                        "fix": "they have said never to use this; say it their way "
+                               "(python3 tools/learned.py brief)"})
+    except ImportError:
+        pass
     sd, n = uniformity(body)
     if sd is not None and sd < UNIFORMITY_STDEV:
         out.append({

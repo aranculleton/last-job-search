@@ -148,8 +148,21 @@ _WORK_AUTH_CLAUSE = _NET.WORK_AUTH_CLAUSE
 # an email subject line. None of them is a sentence the reader takes content
 # from, so none of them counts against the "employers in the first two
 # sentences" rule.
+# The words the person greets and asks with. Defaults are how anyone starts;
+# once the person says how they would put it, their words go in
+# profile/networking.py and every message uses them (tools/learned.py records
+# why). GREETING opens every message; REFERRAL_LINE ({role} filled in) and
+# REFERRAL_CLOSE ({noun} filled in) are the two sentences of a referral ask.
+GREETING = str(getattr(_NET, "GREETING", "") or "Hi").strip()
+REFERRAL_LINE = str(getattr(_NET, "REFERRAL_LINE", "") or
+                    "The {role} looks like a strong fit for what we talked about")
+REFERRAL_CLOSE = str(getattr(_NET, "REFERRAL_CLOSE", "") or
+                     "Would you be comfortable referring me for it? Happy to send my {noun} "
+                     "and a couple of lines you can forward, and no problem at all if not.")
+
 _SALUTATION = re.compile(
-    r"^(?:hi|hey|hello|dear|good (?:morning|afternoon|evening))\b[^,\n]{0,40},\s*", re.I)
+    r"^(?:hi|hey|hello|dear|good (?:morning|afternoon|evening)|" + re.escape(GREETING) +
+    r")\b[^,\n]{0,40},\s*", re.I)
 _COURTESY = re.compile(
     r"^(?:hope|trust)\b[^.!?]{0,40}\b(?:well|finds you|good|going well)\b[.!?]?$", re.I)
 _SUBJECT_LINE = re.compile(r"^subject\s*:", re.I)
@@ -375,7 +388,7 @@ def _greeting(name) -> str:
     # Directories and some exports write names in capitals: "Hi JANE," shouts.
     if given.isupper() and len(given) > 1:
         given = "-".join(p.capitalize() for p in given.split("-"))
-    return f"Hi {given},"
+    return f"{GREETING} {given},"
 
 
 # Words that open a clause with a capital only because they open it. Checked
@@ -760,9 +773,7 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
             raise ValueError(f"referral_ask needs {what}")
     if not re.match(r"https?://", str(link).strip()):
         raise ValueError("link must be the posting's URL, so they can act from the message")
-    close = close or ("Would you be comfortable referring me for it? Happy to send my "
-                      f"{NOUN} and a couple of lines you can forward, and no problem at "
-                      "all if not.")
+    close = close or REFERRAL_CLOSE.replace("{noun}", NOUN)
     # The link goes on its own line at the end: a URL closing a sentence picks
     # up the full stop, and LinkedIn then links to a page that does not exist.
     # Work authorization belongs here, not in a first note: the referrer
@@ -770,7 +781,7 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     # the candidate can work there.
     auth = _checked_claim(work_auth, seniority) if work_auth else ""
     text = " ".join(p for p in (f"{_greeting(name)} {_after_greeting(context)}",
-                                _sentence(f"The {role} looks like a strong fit for what we talked about"),
+                                _sentence(REFERRAL_LINE.replace("{role}", str(role))),
                                 auth, _sentence(close)) if p)
     text = f"{text}\n\n{link.strip()}"
     words = len(text.split())

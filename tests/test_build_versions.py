@@ -199,7 +199,8 @@ def test_a_wording_change_costs_nobody_a_rerun(profile, monkeypatch):
 
 def test_a_method_with_nothing_made_has_nothing_to_redo(profile, monkeypatch):
     m = dict(B.METHODS["interview"])
-    m["versions"] = m["versions"] + ((2, "2026-11-01", True, "a better pack"),)
+    m["versions"] = m["versions"] + ((B.current("interview") + 1, "2026-11-01", True,
+                                      "a better pack"),)
     monkeypatch.setitem(B.METHODS, "interview", m)
     tracker = person.state("job_search_tracker.csv")
     rows = list(csv.DictReader(open(tracker, encoding="utf-8", newline="")))

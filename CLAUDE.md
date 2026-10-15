@@ -608,6 +608,59 @@ Commit these alongside application artefacts:
 git add -f network_contacts.csv network_threads.csv documents/network/
 ```
 
+## Every output is shown, never only filed
+
+Whatever the person asked for arrives **in the reply**. That covers a message to send,
+a draft, a resume, a cover letter, an outreach note, an interview pack, a prep doc and
+a shortlist. Nobody should have to go looking in the repo. Text they will read or send
+(messages, notes, questions, a pack) is pasted in full, ready to copy. A document (a
+PDF, a long file) is sent with the session's file-sending tool (SendUserFile or its
+equivalent) so it opens in one tap, with the part they need to judge it pasted beside
+it. The file path is the record, written underneath, and never the answer on its own:
+"I've put it in documents/..." is not done. The same goes for anything updated: show
+the new version, not where it went.
+
+## Learning the person: it grows with them
+
+The app's defaults (the voice of a first note, the questions an interview pack asks,
+who is worth contacting, how roles rank) are where everyone starts, and they stay. But
+the person's own reactions outrank every default, and **they are kept for good in
+`profile/learned.json`** through `tools/learned.py`. No sync touches it, and no upgrade
+changes a setting it records.
+
+**Whenever the person reacts to anything**: a message, a draft, a person or a job that
+was surfaced, the voice, the questions, a word choice, how much detail. Phrases like
+"I don't like this", "too formal", "not this kind of company", "stop suggesting
+recruiters", or an edit they make to a draft before sending it all count. Then, in the
+same turn:
+
+1. Apply it now: redraft, drop the person or the job, change the setting.
+2. Make it stick where it governs. That means the profile setting: `networking.py`
+   (`OPENER`, `ABOUT_ME`, `ASK`, `GREETING`, `REFERRAL_LINE`, `REFERRAL_CLOSE`,
+   `TITLE_SETS`), `search.py` (the bar, the scoring words), `profile/CLAUDE.md` (how they
+   want to come across, document rules), `07-interview-prep.md`. A job they dislike is a
+   `seen_jobs.json` exclusion with their words as the reason. A person they do not want
+   contacted is a `closed` contact with their reason. A *kind* of job or person becomes
+   the rule that covers all of them.
+3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted.
+4. Say in one line what will be different from now on.
+
+**Read before drafting.** Every step that writes something the person will read or
+send (`/apply`, `/network`, `/reply`, `/interview`, `/prep`, a shortlist, outreach) first
+runs `python3 tools/learned.py brief <area>` and follows every rule it lists over any
+default in the app.
+
+**Ask, lightly.** After output whose taste is theirs, end with one short line inviting
+change: a batch of messages, a draft, a shortlist, a set of questions. For example:
+"Anything about the tone, the people or the questions you'd have different? It sticks
+from now on." Once per kind of output per session, and never in place of the work.
+
+**Updates and what they have taught it.** A sync's genuine fixes apply: they change
+code, not their settings. When an update would change a setting `learned.py locked`
+lists, `/upgrade` changes nothing. It records `learned.py offer` instead, and the
+person is asked once, with the session's other questions, whether to keep theirs or try
+the new way. A kept choice is never offered again for that app version.
+
 ## Memory: the repo remembers, the chat does not
 
 Sessions here are **ephemeral cloud containers**. The conversation is gone when the
@@ -631,6 +684,7 @@ chat has lost it.
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
 | A posting was ruled out | `job_scraper/seen_jobs.json`, with `status: excluded` and a reason |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `CLAUDE.md` if it belongs in the summary |
+| A reaction or preference: a message, a person, a job, the voice, the questions | the setting it governs, and `profile/learned.json` via `tools/learned.py record` |
 | Company research that cost a fetch | `company_research/<key>.json` |
 
 `python3 tools/open_actions.py` renders all of it as one view, employers first, each
