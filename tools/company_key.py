@@ -27,6 +27,7 @@ Usage:
 from __future__ import annotations
 
 import re
+import unicodedata
 
 import os  # noqa: E402
 import sys  # noqa: E402
@@ -79,8 +80,25 @@ DIVISION = re.compile(
 SEPARATE = re.compile(
     r"^(" + "|".join(re.escape(p) for p in _SEPARATE) + r")\b" if _SEPARATE else _NEVER, re.I)
 LEADING_THE = re.compile(r"^the\s+")
-PUNCT = re.compile(r"[^a-z0-9 ]+")
+# Any letter in any script survives, accents folded first: "[^a-z0-9 ]" turned
+# "Nestl\u00e9" into "nestl" and a Cyrillic or Chinese name into "", which is no
+# employer at all, so nothing at it could ever match.
+PUNCT = re.compile(r"[^\w ]+|_")
 SPACE = re.compile(r"\s+")
+# "Brindle & Hart" and "Brindle and Hart" are one employer. The ampersand was
+# dropped as punctuation and the word was not, so the two keyed apart.
+_AND = re.compile(r"\band\b")
+# Letters NFKD does not decompose: "S\u00f8ren", "\u0141\u00f3d\u017a", "Stra\u00dfe".
+_FOLD = str.maketrans({"\u00f8": "o", "\u00d8": "O", "\u0142": "l", "\u0141": "L", "\u00df": "ss",
+                       "\u0111": "d", "\u0110": "D", "\u00e6": "ae", "\u00c6": "AE",
+                       "\u0153": "oe", "\u0152": "OE", "\u00fe": "th", "\u00de": "Th",
+                       "\u0131": "i"})
+
+
+def fold(s: str) -> str:
+    """The text with its accents dropped, every script's letters kept."""
+    return "".join(c for c in unicodedata.normalize("NFKD", str(s or "").translate(_FOLD))
+                   if not unicodedata.combining(c))
 
 
 # Bilingual dual names ("Acme Investments | Investissements Acme") are one
@@ -89,17 +107,25 @@ DUAL = re.compile(r"\s*[|/]\s*")
 
 
 def _norm(s: str) -> str:
-    s = PAREN.sub(" ", s.strip().lower())
+    s = PAREN.sub(" ", fold(s).strip().lower())
     halves = [h for h in DUAL.split(s) if h.strip()]
     if len(halves) > 1:
         s = halves[0]
     s = LEADING_THE.sub("", s)
-    return SPACE.sub(" ", PUNCT.sub(" ", s)).strip()
+    return SPACE.sub(" ", _AND.sub(" ", PUNCT.sub(" ", s))).strip()
 
 
 # Alias keys go through the same normalization as the input, or a hyphenated
-# entry ("acme-dominion bank") can never match its own normalized form.
-ALIASES = {_norm(k): v for k, v in ALIASES.items()}
+# entry ("acme-dominion bank") can never match its own normalized form. The
+# values are keys, so they lose "and" the same way.
+ALIASES = {_norm(k): SPACE.sub(" ", _AND.sub(" ", str(v))).strip() for k, v in ALIASES.items()}
+# The parents and look-alikes are matched against a normalised name, so they are
+# normalised too: "Procter & Gamble" written in the profile never matched the
+# "procter gamble" it was compared against.
+DIVISION = re.compile(
+    r"^(" + "|".join(re.escape(_norm(p)) for p in _PARENTS) + r")\b.*" if _PARENTS else _NEVER, re.I)
+SEPARATE = re.compile(
+    r"^(" + "|".join(re.escape(_norm(p)) for p in _SEPARATE) + r")\b" if _SEPARATE else _NEVER, re.I)
 
 
 def _strip_trailing(s: str) -> str:

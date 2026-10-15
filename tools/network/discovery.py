@@ -211,7 +211,7 @@ def is_person_url(url):
 # hiring post from 2023 reads identically to one from last week.
 _POST_URL = re.compile(
     r"linkedin\.com/posts/(?P<handle>[^/_?#]+)[^/?#]*?"
-    r"activity-(?P<activity>\d{15,25})", re.I)
+    r"(?:activity|share|ugcPost)-(?P<activity>\d{15,25})", re.I)
 
 # LinkedIn activity IDs are Snowflake-style: the high bits are milliseconds
 # since the Unix epoch, so the timestamp comes out of the URL with no call.
@@ -234,7 +234,7 @@ def post_date(url):
     return dt.datetime.fromtimestamp(ms / 1000, dt.timezone.utc).date()
 
 
-def resolve_result(url):
+def resolve_result(url, company=None):
     """Turn one search result into (profile_url, post_date) or None.
 
     A discovery search returns three kinds of URL mixed together: profiles,
@@ -251,6 +251,11 @@ def resolve_result(url):
     if not m:
         return None
     handle = m.group("handle")
+    # A company page's post carries the company's handle, not a person's, and
+    # turning it into /in/<company> invented a profile that does not exist.
+    if company and _norm_place(handle.replace("-", " ")) in (
+            _norm_place(company), company_key(company)):
+        return {"profile_url": None, "post_date": post_date(url), "kind": "company_post"}
     return {"profile_url": "https://www.linkedin.com/in/%s" % handle,
             "post_date": post_date(url),
             "kind": "post"}
@@ -349,6 +354,28 @@ def _title_groups(titles, mode):
     return [TITLE_SETS[g][:MAX_TITLES_PER_QUERY] for g in MODE_TITLE_GROUPS[mode]]
 
 
+_LEGAL_TAIL = re.compile(
+    r"[\s,.]+(?:limited|ltd|plc|llc|llp|lp|inc|incorporated|corp|corporation|company|co|"
+    r"gmbh|ag|s\.?a\.?|s\.?p\.?a\.?|b\.?v\.?|n\.?v\.?|pty|pte|oy|ab|as|a/s|sas|srl|kk)\.?$",
+    re.I)
+
+
+def search_name(company):
+    """The employer as people write it on their profiles.
+
+    A shortlist carries the legal name, "Fernhill Freight Services Limited
+    (UK)", and quoted whole that phrase is on almost no profile. The legal form
+    and a bracketed qualifier come off; the case and the rest of the name stay.
+    """
+    s = re.sub(r"\([^)]*\)", " ", str(company or ""))
+    s = " ".join(s.split())
+    while True:
+        cut = _LEGAL_TAIL.sub("", s).strip(" ,.")
+        if cut == s or not cut:
+            return s
+        s = cut
+
+
 def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
     """Build the people-search queries for one company, brief 3.1.
 
@@ -361,7 +388,7 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
     """
     if mode not in MODE_TITLE_GROUPS:
         raise ValueError("unknown mode %r; expected one of %s" % (mode, ", ".join(MODES)))
-    anchor = _clean(company)
+    anchor = _clean(company if mode in QUOTED_ANCHOR_MODES else search_name(company))
     if not anchor:
         raise ValueError(
             "queries_for needs a company; in the alumni modes that is the past "
@@ -417,9 +444,13 @@ _ROLE_NOUNS = _NET_GET("HIRING_ROLE_NOUNS", None) or _nouns_from_titles()
 _HEADLINE_NOUNS = _NET_GET("HIRING_HEADLINE_NOUNS", None) or _ROLE_NOUNS
 
 HIRING_SIGNAL = re.compile(
-    r"(we[’']?re hiring|we are hiring|i[’']?m looking for|i am looking for|"
-    r"dm me|join my team|open roles?|we are seeking|we[’']?re seeking|"
-    r"reach out if|"
+    # "I'm looking for", "dm me" and "reach out if" are how a job seeker writes
+    # too: "I'm looking for my next opportunity in data" made another candidate
+    # tier 1 with that line as the hook. They count only with a role after them.
+    r"(we[’']?re hiring|we are hiring|"
+    r"(?:i[’']?m|i am|we[’']?re|we are) looking for (?:a |an |two |three |several |\d+ )?"
+    r"(?:(?:senior|staff|lead|principal|junior)\s+)?(?:" + _ROLE_NOUNS + r")\b|"
+    r"join my team|open roles?|we are seeking|we[’']?re seeking|"
     # "recruiting <anything> <role>". The gap is bounded and the role noun is
     # required, so "recruiting is hard for our teams right now" stays out while
     # "recruiting talented and passionate <role>s" comes in.
@@ -502,11 +533,16 @@ def quote_signal(snippet):
 # Scientist" is an IC far more often than it is a people manager, and the cost
 # of reading a manager as an IC is a slightly under-pitched message, while the
 # reverse writes to somebody about headcount they do not own.
-AUTHORITY_TITLE = re.compile(
+# English, and the person's to replace (networking.py AUTHORITY_TITLE and
+# SENIOR_IC_TITLE): "Leiter Datenanalyse" or "Directora de Anal\u00edtica" matched
+# neither, so in another language everybody read as tier 4, and "Staff Nurse"
+# read as a senior IC.
+AUTHORITY_TITLE = _NET_GET("AUTHORITY_TITLE", None) or re.compile(
     r"\b(head of|director|dir\.|vp|vice president|svp|evp|chief|"
     r"manager|managing director)\b", re.I)
 
-SENIOR_IC_TITLE = re.compile(r"\b(principal|staff|lead|senior|sr\.?)\b", re.I)
+SENIOR_IC_TITLE = _NET_GET("SENIOR_IC_TITLE", None) or re.compile(
+    r"\b(principal|staff|lead|senior|sr\.?)\b", re.I)
 
 # Tier 2 is authority "on a team matching the user's function", so authority
 # alone is not enough: a Director of Marketing is tier 4 to a data analyst and
@@ -538,6 +574,40 @@ def _city_tokens(s):
     return [t for t in city.split(" ") if t and t not in _GENERIC_PLACE_WORDS]
 
 
+_COUNTRY = tuple(w for w in (_NET_GET("HOME_COUNTRY", "") or "",) if w)
+_HOME_TOKENS = [t for t in _norm_place(_HOME).split(" ") if t]
+
+
+def _has_words(text, phrase):
+    """`phrase` as whole words in `text`: "bury" is not in "aylesbury"."""
+    p = _norm_place(phrase)
+    return bool(p) and re.search(r"(?<!\w)" + re.escape(p) + r"(?!\w)", text) is not None
+
+
+def _in_metro(text):
+    return any(_has_words(text, g) for g in METRO)
+
+
+def _is_home(tokens):
+    """Is the target the home city? Every word of it, so "New York" works."""
+    return bool(_HOME_TOKENS) and all(t in tokens for t in _HOME_TOKENS)
+
+
+def _abroad(location):
+    """A location whose region or country parts name none of the home ones.
+
+    "Manchester, New Hampshire, United States" carries the city and is not it.
+    Decided only when the profile names its regions, and only from the parts
+    after the city.
+    """
+    parts = [_norm_place(p) for p in str(location or "").split(",")[1:]]
+    parts = [p for p in parts if p]
+    if not parts or not (_REGIONS or _COUNTRY):
+        return False
+    home = tuple(_norm_place(w) for w in _REGIONS + _COUNTRY)
+    return not any(p in home or any(_has_words(p, h) for h in home) for p in parts)
+
+
 def _same_market(location, target_location):
     """Is this person in the market being hired into?
 
@@ -554,40 +624,46 @@ def _same_market(location, target_location):
         return True
     if not loc:
         return False
-    if all(t in loc for t in tokens):
+    if _abroad(location):
+        return False
+    words = set(loc.split())
+    if all(t in words for t in tokens):
         return True
-    if _HOME and _HOME in tokens and any(g in loc for g in METRO):
+    if _is_home(tokens) and _in_metro(loc):
         return True
     if loc in BROAD_PLACES:
         target = _norm_place(target_location)
-        return (any(w in target for w in _REGIONS)
-                or (bool(_HOME) and _HOME in tokens) or any(g in target for g in METRO))
+        return (any(_has_words(target, w) for w in _REGIONS)
+                or _is_home(tokens) or _in_metro(target))
     return False
 
 
-def _signal_reaches_market(signal, target_location):
+def _signal_reaches_market(signal, target_location, in_market=False):
     """A hiring post counts as tier 1 only if the hiring is here.
 
     The brief's own example is why this reads the post and not just the
     poster: the lead is hiring for "<City>, <Other City> or remote" and may
-    sit in any of them.
+    sit in any of them. "Remote" reaches here only from somebody here or with
+    the country or region named: "hiring remote data scientists, US time zones
+    only" from Austin was tier 1 for Manchester.
     """
     text = _norm_place(signal)
     if not text:
         return False
-    if "remote" in text:
-        return True
+    words = set(text.split())
+    if "remote" in words:
+        return in_market or any(_has_words(text, w) for w in _REGIONS + _COUNTRY)
     tokens = _city_tokens(target_location)
-    if tokens and all(t in text for t in tokens):
+    if tokens and all(t in words for t in tokens):
         return True
-    return bool(_HOME) and _HOME in tokens and any(g in text for g in METRO)
+    return _is_home(tokens) and _in_metro(text)
 
 
 # A place named inside the post. The preposition is required because a bare
 # capitalized word in a post is a team or a product far more often than a city.
 _SIGNAL_PLACE = re.compile(
     r"\b(?:based in|located in|hiring in|roles? in|opening in|in|out of|across)"
-    r"\s+([A-Z][a-z]+(?:[\s-][A-Z][a-z]+){0,2})")
+    r"\s+([A-Z\u00c0-\u00de][a-z\u00df-\u00ff]+(?:[\s-][A-Z\u00c0-\u00de][a-z\u00df-\u00ff]+){0,2})")
 
 # Captures that follow a preposition and are not markets. "Start in January"
 # and "hiring in Data Science" would otherwise read as somewhere else and cost
@@ -612,9 +688,9 @@ def _place_is_target(place, target_location):
     tokens = _city_tokens(target_location)
     if not tokens:
         return True
-    if all(t in loc for t in tokens):
+    if all(t in set(loc.split()) for t in tokens):
         return True
-    return bool(_HOME) and _HOME in tokens and any(g in loc for g in METRO)
+    return _is_home(tokens) and _in_metro(loc)
 
 
 def _names_other_market(signal, target_location):
@@ -646,12 +722,20 @@ def classify_tier(snippet, title, location, target_location=HOME_CITY):
     """
     title = _clean(title)
     signal = quote_signal(snippet)
-    in_market = _same_market(location, target_location)
+    # No location in the result is not evidence of elsewhere: a roster row or a
+    # snippet carries none, and the search itself named the city. Read as
+    # unverified, it tiers like somebody here; triage marks it so.
+    in_market = _same_market(location, target_location) if _clean(location) else True
 
     # Two ways to earn tier 1: the post names this market, or the poster is in
-    # it and the post does not name a different one.
-    if signal and (_signal_reaches_market(signal, target_location)
-                   or (in_market and not _names_other_market(signal, target_location))):
+    # it and the post does not name a different one. Either way it has to be
+    # hiring for the person's own work: a Director of Marketing posting "we're
+    # hiring" is not a live signal for an analyst.
+    for_them = bool(FUNCTION_TITLE.search(title)) or bool(
+        re.search(r"\b(?:" + _ROLE_NOUNS + r")\b", signal or "", re.I))
+    if signal and for_them and (
+            _signal_reaches_market(signal, target_location, in_market)
+            or (in_market and not _names_other_market(signal, target_location))):
         return 1, signal
 
     if in_market and FUNCTION_TITLE.search(title):
@@ -752,8 +836,11 @@ DISQUALIFIERS = (
     # for. Past-tense exit language needs no destination to be disqualifying.
     Rule("moved_on_past_tense", "text", re.compile(
         r"\b(left (?:as|after|in)\b"
-        r"|(?:i(?:['\u2019]|\s+ha)?ve\s+)?joined\s+a\s+new\s+(?:team|company|role|chapter)"
-        r"|after\s+\d+\+?\s+(?:great\s+)?years?\s+at\b"
+        # "joined a new team" is an internal move, and "after 8 years at Acme I
+        # lead data" is tenure: only a leaving verb makes the years a departure.
+        r"|(?:i(?:['\u2019]|\s+ha)?ve\s+)?joined\s+a\s+new\s+(?:company|chapter)"
+        r"|after\s+\d+\+?\s+(?:great\s+)?years?\s+at\b[^.!?\n]{0,40}\b(?:left|leaving|moved on|"
+        r"moving on|said goodbye|farewell|it'?s time)"
         r"|wrapped up my time at)\b", re.I),
         "has moved on, past-tense departure with no destination named"),
 
@@ -780,6 +867,11 @@ DISQUALIFIERS = (
         r"([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,2})"),
         "has moved on, left the company this search matched"),
 )
+
+_EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]")
+# Distinct emoji in one post before it reads as a harvest rather than a hiring post.
+SPAM_EMOJI_MIN = 5
+
 
 def _haystack(person):
     return " ".join(str(person.get(f) or "") for f in
@@ -817,9 +909,20 @@ def disqualify(person, target_company=None):
             continue
 
         if rule.name == "recruiter_no_company":
-            if not _clean(person.get("company")):
+            # Search results rarely carry the employer, so the company the
+            # search ran against is theirs: an in-house Talent Acquisition
+            # Partner found by the recruiting query was dropped as spam.
+            if not _clean(person.get("company")) and not _clean(target):
                 return "%s: %s" % (rule.reason, _matched(m))
             continue
+
+        if rule.name == "spam_emoji":
+            # Counted on distinct emoji, without the variation selector and
+            # joiners that made "\u27a1\ufe0f" two: a real hiring post with three
+            # arrows and a tick is not a staffing harvest.
+            bare = re.sub("[\ufe0f\u200d\U0001F3FB-\U0001F3FF]", "", text)
+            if len(set(_EMOJI.findall(bare))) < SPAM_EMOJI_MIN:
+                continue
 
         if rule.name == "moved_on_joined":
             joined = company_key(_matched(m))
@@ -1018,21 +1121,31 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
 
         # A hiring post from last year is not live hiring intent. Drop the
         # signal and re-tier on the title alone, rather than dropping someone
-        # who is demonstrably still in the seat.
+        # who is demonstrably still in the seat. Tier 1 needs a live signal, so
+        # an undated one does not earn it either: the signal date used to be
+        # back-filled from the person's last activity, which dated a 2021
+        # headline "We're hiring planners" to last week. A post permalink dates
+        # itself (resolve_result), and that is the date that counts.
         signal_date = _person_date(person, SIGNAL_DATE_FIELDS)
-        if signal and is_stale(signal_date, today):
+        undated = bool(signal) and tier == 1 and signal_date is None
+        if signal and (is_stale(signal_date, today) or undated):
+            kept_line = signal if undated else None
             signal = None
             tier, _ = classify_tier(None,
                                     person.get("title") or person.get("headline"),
                                     person.get("location"),
                                     target_location)
+        else:
+            kept_line = None
 
         d = _person_date(person)
         enriched = dict(person)
         enriched["tier"] = tier
         enriched["signal"] = signal
-        if signal and not enriched.get("signal_date") and d is not None:
-            enriched["signal_date"] = d.isoformat()
+        if kept_line:
+            enriched["undated_signal"] = kept_line
+        if not _clean(person.get("location")):
+            enriched["location_unverified"] = True
         # Tier 4 is a flat bucket, but it is not a uniform one: a Data Engineer
         # at the target company and an Events Coordinator are both tier 4, and
         # when tier 4 becomes the fallback list the first name in it is the one
@@ -1046,7 +1159,15 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
         (keep if tier in RELEVANT_TIERS else adjacent).append(
             (enriched, d, relevant))
 
-    verdict = "has_presence" if keep else "no_relevant_presence"
+    # Three answers, not two. Nothing back from the search is no evidence about
+    # the employer at all, and recording it as "no relevant presence" wrote a
+    # company off on an empty result.
+    if keep:
+        verdict = "has_presence"
+    elif adjacent or dropped:
+        verdict = "no_relevant_presence"
+    else:
+        verdict = "no_results"
     if not keep:
         keep = adjacent
     else:
@@ -1059,6 +1180,78 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
                                -(row[1].toordinal() if row[1] else 0)))
     return {"keep": [row[0] for row in keep], "dropped": dropped,
             "verdict": verdict}
+
+
+# ---------------------------------------------------------------------------
+# What a run leaves for the next one
+# ---------------------------------------------------------------------------
+
+# "No relevant presence" is a dated claim, like every other ruling-out here: a
+# company stands up a team in a city, and the finding goes stale. It was written
+# to company_research/ with no date and no reader, so it neither held nor
+# expired. Kept there, beside the employer's research, and read by /network
+# step 1 until the review date. Never written to do_not_target.json: two people
+# searches are not the evidence that file needs, and the throttle reads it to
+# skip the employer's job postings too.
+PRESENCE_REVIEW_DAYS = 90
+
+
+def presence_record(verdict, today):
+    """The record /network writes for an employer with no relevant presence, or None."""
+    if verdict != "no_relevant_presence":
+        return None
+    day = _as_date(today)
+    return {"verdict": verdict, "date": day.isoformat(),
+            "review_after": (day + dt.timedelta(days=PRESENCE_REVIEW_DAYS)).isoformat()}
+
+
+def presence_blocks(record, today):
+    """Whether an earlier run's finding still rules this employer out today."""
+    if not isinstance(record, dict) or record.get("verdict") != "no_relevant_presence":
+        return False
+    until = _as_date(record.get("review_after"))
+    return until is not None and _as_date(today) < until
+
+
+def alumni_at(people, targets):
+    """The alumni from one city-wide pass who now work at one of the targets.
+
+    An alumni search names the shared history, never the target, so it is run
+    once per /network rather than once per company, and each hit is sorted to
+    the target it works at. Run through triage with no target_company first.
+    """
+    want = {company_key(t): t for t in targets or () if company_key(t)}
+    out = {}
+    for p in people or ():
+        k = company_key(p.get("company") or "")
+        if k in want:
+            out.setdefault(want[k], []).append(p)
+    return out
+
+
+def mark_first_degree(people, connections):
+    """Flag the people the person is already connected with, from their own export.
+
+    A 1st-degree connection takes a message, not a connection request: no note
+    limit, no budget, and it was being drafted as a 300-character request
+    LinkedIn would not let them send.
+    """
+    import state
+    by_url = {state.profile_handle(c.get("linkedin_url")): c for c in connections or ()
+              if state.profile_handle(c.get("linkedin_url"))}
+    by_name = {(state._match_name(c.get("name")), company_key(c.get("company") or "")): c
+               for c in connections or ()}
+    out = []
+    for p in people or ():
+        q = dict(p)
+        hit = (by_url.get(state.profile_handle(p.get("linkedin_url") or p.get("url")))
+               or by_name.get((state._match_name(p.get("name")),
+                               company_key(p.get("company") or ""))))
+        if hit:
+            q["first_degree"] = True
+            q["channel"] = "message"
+        out.append(q)
+    return out
 
 
 if __name__ == "__main__":

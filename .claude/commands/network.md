@@ -8,8 +8,18 @@ untouched employers from the latest round's shortlist.
 ## Run it
 
 1. **Load state.** `state.load_contacts()`, `state.load_threads()`, the tracker,
-   and `company_research/`. Anyone already contacted is out. Any company already
-   recorded as having no relevant presence is out.
+   and `company_research/`. Anyone already contacted is out:
+   `state.already_contacted(contacts, name, company, linkedin_url=...)` checks the
+   profile URL first, which finds the same person under a nickname or a new employer.
+   A company whose `company_research/<key>.json` `network_presence` record
+   `discovery.presence_blocks(record, today)` is out until its review date.
+   **Drafts queued by an earlier run come first**: contacts at `not_contacted` with a
+   `documents/network/<contact_id>/draft.md`. Show them before any new search: send
+   them or drop them.
+   **Their own connections, if exported.** `state.first_degree()` reads
+   `documents/linkedin/Connections.csv` (LinkedIn's data export). For each company,
+   `state.connections_at(conns, company)` lists the people they already know there:
+   the first to message, as a message, at no cost to the budget, before any search.
 
 2. **Check the budget before searching.** `state.platform_budget(contacts, threads,
    today)` returns the connection requests and InMail credits left on the person's
@@ -21,17 +31,34 @@ untouched employers from the latest round's shortlist.
    note and the draft sent as a message after they accept, and no InMail on a free
    account except to an Open Profile.
 
-3. **Per company, cheapest route first** (see `01-discovery-playbook.md`):
-   alumni, then hiring team from a live posting, then school, then cold. Build
-   queries with `discovery.queries_for()`, which caps at three and enforces the
-   profile-path pattern. Run them with WebSearch, passing
-   `allowed_domains=discovery.SEARCH_DOMAINS`, then drop every result that
-   fails `discovery.is_person_url()` (about two in ten are job-board pages).
+3. **Cheapest route first** (see `01-discovery-playbook.md`). The **alumni**
+   searches name the shared history (a past employer, a school) and never the
+   target, so run them **once per /network**, not once per company: triage them with
+   no `target_company`, then `discovery.alumni_at(kept, targets)` sorts each hit to
+   the target they work at. Then, per company: the hiring team from a live posting,
+   then cold. Build queries with `discovery.queries_for()`, which uses the employer's
+   everyday name (`search_name()`: no "Limited", no "(UK)") and caps the queries. Pass
+   `titles=` from the posting's own role family when it differs from the person's
+   usual titles, and `location=` the posting's city when it is not the home city (and
+   the same city to `triage`). Run them with WebSearch, passing
+   `allowed_domains=discovery.SEARCH_DOMAINS`, then put every result through
+   `discovery.resolve_result(url, company)`: it drops listings, turns a post permalink
+   into the author's profile plus the post's exact date (carry it as `signal_date`;
+   a tier-1 signal needs one), and drops a company page's own posts. At most three
+   searches for one company, the alumni pass apart.
 
 4. **Triage with `discovery.triage()`.** It applies the disqualifiers, the
-   staleness check and the tier classification. When everything drops, the
-   verdict is `no_relevant_presence`: write that to `company_research/<key>.json`
-   so the company is not re-targeted.
+   staleness check and the tier classification. A result with no location is kept
+   and marked `location_unverified`, never read as somewhere else; a hiring line with
+   no date is kept as `undated_signal` but does not earn tier 1. Three verdicts:
+   `has_presence`; `no_results` (nothing came back, which proves nothing: try the
+   second query or a roster, record nothing); and `no_relevant_presence` (people came
+   back and none fits). Only the last is recorded: merge
+   `{"network_presence": discovery.presence_record(verdict, today)}` into
+   `company_research/<key>.json`, which holds it for 90 days. Never into
+   `job_scraper/do_not_target.json`, which also stops the employer's postings.
+   If their connections were loaded, `discovery.mark_first_degree(kept, conns)` marks
+   the people they already know: a message, not a connection request.
 
 5. **Compose in one batch with `compose.first_note()`.** One model call
    producing every draft, not one per person, then `compose.validate(kind=
@@ -58,8 +85,12 @@ untouched employers from the latest round's shortlist.
      only after they have engaged.
 
 6. **Write state.** New contacts at `not_contacted`, with tier, route,
-   route_detail, the quoted signal for tier 1, and `linked_application` where
-   `state.link_to_applications()` finds one.
+   route_detail, the quoted signal for tier 1, `linkedin_url`, the channel, and
+   `linked_application` where `state.link_to_applications()` finds one. Each id from
+   `state.unique_contact_id(name, company, contacts, linkedin_url=...)`. **Write each
+   draft to `documents/network/<contact_id>/draft.md`** and commit it with the
+   contacts: a draft that lives only in the chat is gone when the session ends, and the
+   next run would skip the contact as already queued.
 
 ## Present
 

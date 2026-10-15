@@ -231,8 +231,11 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", False, "a no read as a no and 'not hiring, but happy to "
                                     "chat' as a yes, never a second nudge, InMail with a "
                                     "subject, limits from your LinkedIn plan"),
+            (3, "2026-10-15", False, "people matched by profile URL and in any script, tier 1 "
+                                    "only for a dated post about your own work, nobody ruled "
+                                    "out for a missing location, and your own connections used"),
         ),
-        "fingerprint": "c998dc34db91334d",
+        "fingerprint": "3287af6cf56a2ef1",
     },
     "screening": {
         "by": "round", "priority": 2,

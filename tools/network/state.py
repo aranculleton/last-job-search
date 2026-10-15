@@ -47,7 +47,6 @@ import datetime
 import os
 import re
 import sys
-import unicodedata
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 for _p in (_HERE, os.path.dirname(_HERE)):
@@ -55,7 +54,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
         sys.path.insert(0, _p)
 
 import schema  # noqa: E402
-from company_key import key as company_key  # noqa: E402
+from company_key import key as company_key, fold as _ck_fold  # noqa: E402
 from throttle import FINAL as _THROTTLE_FINAL  # noqa: E402
 import person  # noqa: E402
 
@@ -273,8 +272,9 @@ def _fold(s: str) -> str:
     person, `already_contacted` misses the row that is already there, and the
     user can send a second cold message to someone already written to.
     """
-    return "".join(c for c in unicodedata.normalize("NFKD", s)
-                   if not unicodedata.combining(c))
+    # company_key.fold also folds the letters NFKD leaves alone: "S\u00f8ren
+    # M\u00f8ller" slugged to "s_ren_m_ller" and "\u0141ukasz" to "ukasz".
+    return _ck_fold(s)
 
 # A name harvested from a search snippet carries whatever the person appended to
 # it: "Wren Halloway, MSc", "Daniel Lee (He/Him)", "Wren Halloway | Acme". Taking the
@@ -328,8 +328,37 @@ def first_initial(name: str | None) -> str:
     return ""
 
 
+# Letters of any script are kept. "[^a-z0-9]" emptied a Cyrillic, Greek, Arabic
+# or Chinese name, and an empty name skipped the name test: already_contacted()
+# matched the first person at that employer, so a stranger read as somebody
+# already messaged, and contact_id() refused the name outright.
+_NON_WORD = re.compile(r"[\W_]+")
+
+
 def _slug(s: str | None) -> str:
-    return _NON_ALNUM.sub("_", _fold(str(s or "")).lower()).strip("_")
+    return _NON_WORD.sub("_", _fold(str(s or "")).lower()).strip("_")
+
+
+# A LinkedIn profile URL is the one identifier that survives a nickname, a
+# married name, a reversed "Halloway, Wren" and a change of employer.
+_PROFILE_HANDLE = re.compile(r"linkedin\.com/in/([^/?#\s]+)", re.I)
+
+
+def profile_handle(url: str | None) -> str:
+    """The /in/<handle> of a LinkedIn profile URL, lowercased and decoded, or ""."""
+    from urllib.parse import unquote
+    m = _PROFILE_HANDLE.search(str(url or ""))
+    return unquote(m.group(1)).strip().lower() if m else ""
+
+
+def _by_handle(rows, url):
+    want = profile_handle(url)
+    if not want:
+        return None
+    for row in rows or ():
+        if isinstance(row, dict) and profile_handle(row.get("linkedin_url")) == want:
+            return row
+    return None
 
 
 def contact_id(name: str | None, company: str | None) -> str:
@@ -370,7 +399,8 @@ def _id_set(existing) -> set:
     return out
 
 
-def unique_contact_id(name: str | None, company: str | None, existing=()) -> str:
+def unique_contact_id(name: str | None, company: str | None, existing=(),
+                      linkedin_url: str | None = None) -> str:
     """`contact_id`, with a first-initial suffix when the slug is already taken.
 
     Deterministic for a given set of existing ids: the same person added against
@@ -384,6 +414,9 @@ def unique_contact_id(name: str | None, company: str | None, existing=()) -> str
     went out. Only contact rows can answer this; a bare id string does not say
     whose it is.
     """
+    same = _by_handle(existing, linkedin_url)
+    if same and str(same.get("contact_id") or "").strip():
+        return str(same["contact_id"]).strip()
     want_name = _match_name(name)
     if want_name:
         want_key = company_key(company)
@@ -432,7 +465,41 @@ def _match_name(name: str | None) -> str:
     return _slug(person_name(name))
 
 
-def already_contacted(contacts, name=None, company=None, contact_id=None):
+def first_degree(path=None) -> list:
+    """The person's own LinkedIn connections, from LinkedIn's data export, or [].
+
+    LinkedIn (Settings, Data privacy, Get a copy of your data, Connections)
+    writes Connections.csv with a few lines of notes above the header. Dropped
+    into documents/linkedin/, it is the one source of who the person is already
+    connected with, which no search can see.
+    """
+    path = path or person.state("documents", "linkedin", "Connections.csv")
+    try:
+        with open(path, encoding="utf-8-sig", newline="") as fh:
+            lines = fh.read().splitlines()
+    except OSError:
+        return []
+    start = next((i for i, ln in enumerate(lines) if ln.lower().startswith("first name")), None)
+    if start is None:
+        return []
+    out = []
+    for row in csv.DictReader(lines[start:]):
+        name = " ".join(x for x in (row.get("First Name"), row.get("Last Name")) if x).strip()
+        if not name:
+            continue
+        out.append({"name": name, "linkedin_url": row.get("URL") or "",
+                    "company": row.get("Company") or "", "title": row.get("Position") or "",
+                    "connected_on": row.get("Connected On") or ""})
+    return out
+
+
+def connections_at(connections, company) -> list:
+    """The person's 1st-degree connections at one employer: the first people to message."""
+    k = company_key(company)
+    return [c for c in connections or () if k and company_key(c.get("company")) == k]
+
+
+def already_contacted(contacts, name=None, company=None, contact_id=None, linkedin_url=None):
     """The existing row for this person, or None.
 
     The brief's rule is that discovery never surfaces someone who is already in
@@ -452,9 +519,19 @@ def already_contacted(contacts, name=None, company=None, contact_id=None):
             if str(row.get("contact_id") or "").strip() == want:
                 return row
         return None
+    # The profile URL first: it finds the same person under a nickname, a new
+    # employer or a reordered name, none of which the name test can.
+    same = _by_handle(contacts, linkedin_url)
+    if same is not None:
+        return same
     if not name and not company:
-        raise ValueError("already_contacted needs a name, a company or a contact_id")
+        if linkedin_url:
+            return None
+        raise ValueError("already_contacted needs a name, a company, a contact_id or a URL")
     want_name = _match_name(name) if name else ""
+    if name and not want_name:
+        # A name that reduces to nothing matches nobody; it never means "anyone".
+        return None
     want_key = company_key(company) if company else ""
     for row in contacts:
         if want_key and row_company_key(row) != want_key:

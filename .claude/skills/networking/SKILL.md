@@ -83,8 +83,11 @@ same intent as a quoted phrase with the domains constrained returned mostly real
 profiles. Do not re-introduce `site:`; a test asserts its absence.
 
 Even then, roughly two results in ten are LinkedIn's own job-board pages.
-**Filter every URL through `discovery.is_person_url()`** before triage: it
-requires `/in/` and rejects `/jobs/` and the aggregators.
+**Put every URL through `discovery.resolve_result(url, company)`** before triage: it
+rejects `/jobs/` and the aggregators, keeps profiles, and turns a post permalink
+(`/posts/...-activity-`, `-share-` or `-ugcPost-`) into the author's profile and the
+post's exact date. Those posts are where tier-1 signals live, and `is_person_url()`
+alone threw them away.
 
 Public LinkedIn profiles carry JSON-LD, so snippets return job titles, employer
 with location, and recent post content. One query returns roughly ten results.
@@ -98,8 +101,10 @@ individual profile URL (login-walled, returns nothing).
 ### Budget
 
 One search per company. Two if the first returns nothing usable or the company
-has several relevant sub-teams. **Never three.** If two well-formed queries return
-nothing, record the company as having no relevant presence and move on. That
+has several relevant sub-teams. **Never three.** Two well-formed queries that return
+nothing at all are `no_results`, which proves nothing: try a roster, record nothing.
+Queries that return people of whom none fits are `no_relevant_presence`: record it
+with `discovery.presence_record()`, which holds for 90 days, and move on. That
 verdict is a real output, not a failure: it stops the company being re-targeted
 next month.
 

@@ -11,8 +11,10 @@ Three checks, in order. Each one that fails saves two searches.
 2. **Is the name ambiguous?** `discovery.COLLISIONS` holds the known ones (read
    from `NAME_COLLISIONS` in `profile/employers.py`). Acme the AI lab is not
    Acme Health. Verify entity, industry and headquarters.
-3. **Has it been searched already?** `company_research/<key>.json` caches the
-   verdict. A company recorded as having no relevant presence is not re-searched.
+3. **Has it been searched already?** `company_research/<key>.json` holds the
+   verdict as `network_presence`, dated. A company recorded as having no relevant
+   presence is not re-searched until its `review_after` date
+   (`discovery.presence_blocks()`), because teams get stood up.
 
 ## Search order per company
 

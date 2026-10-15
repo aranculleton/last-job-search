@@ -239,6 +239,27 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **Finding people: the same person twice, the wrong people as tier 1, employers written off
+  on nothing.**
+  - "Already contacted" matched on names alone. A name in another script reduced to
+    nothing and matched the first person at that employer; "Søren Møller" and "Łukasz"
+    lost letters; the profile URL every result carries was never compared. It now
+    matches on the URL first, keeps every script's letters, and folds ø, ł, ß and the rest.
+    Employers key alike written with "&" or "and", with accents or without.
+  - Tier 1 is a live hiring post about your own work: another job seeker's "I'm looking
+    for my next opportunity", a marketing director's "we're hiring", a remote role in
+    another country and an undated headline no longer count. Post permalinks, where those
+    posts live, are kept with their exact date instead of being filtered out.
+  - A result with no location is kept as unverified, not read as somebody elsewhere; an
+    empty search records nothing; "no relevant presence" holds for 90 days, not for ever.
+  - Places match on whole words: Aylesbury is not Bury, Manchester, New Hampshire is not
+    Manchester, and a home city of two words gets its metro.
+  - A hiring post with a few emoji and an in-house recruiter are no longer dropped as
+    spam, and "after 8 years at Acme I lead data" is tenure, not a departure.
+  - Searches use the employer's everyday name, alumni are searched once per run, drafts
+    are kept in `documents/network/<id>/draft.md`, and LinkedIn's connections export in
+    `documents/linkedin/Connections.csv`, if you add it, puts the people you already know
+    first. No profile upgrade: the new title settings default to the English ones.
 - **Networking messages you could not send, and replies read the wrong way round.**
   - Connection notes were capped at 300 characters and InMail drafted for everyone, which is
     a Premium account's limits: a free account (a 200-character note, a handful of
