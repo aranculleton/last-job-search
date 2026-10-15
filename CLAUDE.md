@@ -51,14 +51,22 @@ Every session in a person's repo starts with the same four steps, before anythin
 3. **No `profile/`?** Then nothing here can run yet. Start with `/setup`, before anything else.
 4. **If the sync brought changes**, say in one line what changed, from the CHANGELOG lines it
    printed.
-5. **Profile upgrades.** The sync ends by listing the profile upgrades this repo still needs
-   (`tools/profile_upgrades.py`): a part of the app that switched on after this person set up
-   and needs something done on their side (a `/setup` section, a portal built or rebuilt, a
-   question answered). The instant ones it has already run and committed. If any are listed,
-   say so in one line and offer to run them; never run one in the middle of an unrelated task
-   without a yes. A search request goes ahead on what is there, and repeats the pending line
-   once at the end. If the sync printed nothing about upgrades (its first run after this
-   arrived is the old copy), run `python3 tools/profile_upgrades.py` once yourself.
+5. **Profile upgrades apply themselves; nobody has to ask.** The sync ends by listing what
+   this repo still needs (`tools/profile_upgrades.py`): parts of the app that switched on
+   after this person set up (their job boards researched and built, a setting written for
+   their field, a portal rebuilt), and facts in the profile still marked `[CONFIRM: ...]`.
+   The person will not know which ones matter, so never offer them a list or wait for a yes:
+   - **What Claude can do alone** ("Claude applies these itself"): start a background agent
+     at once (Agent tool, `run_in_background: true`, `isolation: "worktree"`) running
+     `/upgrade`, and go on with what the person asked. Their request never waits for it.
+     When it reports, merge its branch into this session's work.
+   - **At the end of your reply**, one line per upgrade it applied: what changed and
+     `git revert <sha>` to undo it.
+   - **What needs the person** ("These need you", unconfirmed facts): ask at most three,
+     plainly, at the end of the session, never at the start; write each answer where its
+     marker was and commit it. The rest wait for the next session.
+   If the sync printed nothing about upgrades (its first run after this arrived is the old
+   copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
 
 In the app itself, step 2 is a no-op and step 3 does not apply: the app has no profile and
 must never get one.
@@ -119,8 +127,10 @@ These apply whenever the change is to the app, whichever repo the session starte
   portal built or rebuilt with `/add-portal`, a re-render, a new state file or column, a
   profile name with no safe default), register it in `tools/profile_upgrades.py` with a
   `pending()` that checks their repo for the trace the action leaves, and name it in the
-  CHANGELOG entry (`Profile upgrade: <id>`). A new profile name with a safe default goes in
-  `SAFE_DEFAULTS` with the reason. `tests/test_profile_upgrades.py` fails on either missing.
+  CHANGELOG entry (`Profile upgrade: <id>`). Make it `needs="nobody"`, which `/upgrade` applies
+  in the background with no one asking, unless it truly needs the person's answer or consent.
+  A new profile name with a safe default goes in `SAFE_DEFAULTS` with the reason.
+  `tests/test_profile_upgrades.py` fails on either missing.
 
 ## Master is the trunk. Finish on it, start from it.
 
@@ -333,7 +343,8 @@ slash. A command and a skill can share a stem; they are not alternatives to each
 | `networking` | `/network` `/reply` `/threads` `/prep` |
 | `upskill` | (none) |
 
-Also `/gmail-sync`, `/notion-sync`, `/html-report`, which belong to no skill.
+Also `/gmail-sync`, `/notion-sync`, `/html-report` and `/upgrade` (which a session starts
+itself, CLAUDE.md step 5), which belong to no skill.
 
 **Two things are typed with a slash.** A file in `.claude/commands/` is one. A skill's
 own declared `name:` is the other, which is why **`/scrape` and `/upskill` work with no

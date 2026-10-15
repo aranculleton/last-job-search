@@ -231,10 +231,85 @@ def test_a_field_the_scoring_vocabulary_was_not_written_for(profile):
     assert "registered nurse" in U.by_id("scoring-vocabulary").pending()
 
 
-def test_the_round_line_names_what_to_run(profile):
+def test_the_round_line_says_what_claude_applies_and_what_needs_you(profile):
+    _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
+    assert U.line() == ("Profile upgrades: 1 Claude applies itself (boards); "
+                        "1 needs you (job-alerts).")
+
+
+# ------------------------------------------------------------------ nobody has to ask
+
+def test_every_upgrade_says_how_urgent_it_is_and_who_it_needs():
+    for u in U.REGISTRY:
+        assert u.priority in (1, 2, 3, 4), u.id
+        assert u.needs in ("nobody", "you"), u.id
+
+
+def test_only_what_truly_needs_the_person_waits_for_them():
+    """A list a person has to read and act on is a list nobody acts on. Adding to
+    this set is a decision: the upgrade cannot be done from the profile and research."""
+    assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts"}
+    assert "inbox" in U.by_id("job-alerts").ask
+
+
+def test_the_plan_is_most_urgent_first(profile):
     _drop(profile, "search", "PORTAL_RESEARCH")
-    line = U.line()
-    assert line.startswith("Profile upgrades pending (1): boards (/setup --section boards)")
+    _drop(profile, "skills", "LABELS")
+    ids = [p["id"] for p in U.plan()]
+    assert ids == ["skills-headings", "boards"]
+    assert U.plan()[0]["needs"] == "nobody" and U.plan()[0]["why"]
+
+
+def test_check_answers_for_one_upgrade(profile, capsys):
+    assert U.main(["--check", "boards"]) == 0 and capsys.readouterr().out.strip() == "done"
+    _drop(profile, "search", "PORTAL_RESEARCH")
+    assert U.main(["--check", "boards"]) == 1 and "PORTAL_RESEARCH" in capsys.readouterr().out
+
+
+def test_an_unconfirmed_fact_is_asked_until_it_is_answered(profile):
+    assert U.by_id("unconfirmed-facts").pending() == ""
+    cp = profile / "01-candidate-profile.md"
+    cp.write_text(cp.read_text(encoding="utf-8")
+                  + "\n- Settled status expires: [CONFIRM: the expiry date on the share code]\n",
+                  encoding="utf-8")
+    (profile / "tests").mkdir(exist_ok=True)
+    (profile / "tests" / "test_x.py").write_text('MARK = "[CONFIRM: not a fact]"\n')
+    why = U.by_id("unconfirmed-facts").pending()
+    assert why.startswith("1 fact in your profile only you can confirm: the expiry date")
+    block = U.block(U.pending())
+    assert "These need you" in block and "the expiry date on the share code" in block
+
+
+def test_the_sync_block_splits_what_claude_does_from_what_needs_you(profile):
+    _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
+    block = U.block(U.pending())
+    alone, yours = block.split("These need you")
+    assert "boards" in alone and "Claude applies these itself" in alone
+    assert "job-alerts" in yours and "inbox" in yours
+
+
+def _read(*parts):
+    return open(os.path.join(ROOT, *parts), encoding="utf-8").read()
+
+
+def test_a_session_applies_them_without_being_asked():
+    claude = _read("CLAUDE.md")
+    step = claude[claude.index("5. **Profile upgrades"):claude.index("In the app itself")]
+    for must in ("run_in_background: true", 'isolation: "worktree"', "/upgrade",
+                 "never offer them a list or wait for a yes", "at most three",
+                 "git revert <sha>"):
+        assert must in step, must
+    cmd = _read(".claude", "commands", "upgrade.md")
+    for must in ("Never ask the person", "[CONFIRM:", "--check <id>", "Profile upgrade: <id>",
+                 "git revert <sha>", "Never switch off a portal"):
+        assert must in cmd, must
+
+
+def test_the_shortlist_takes_updates_and_upgrades_and_the_brief_is_untouched():
+    rnd = _read("automation", "prompts", "job_round.md")
+    assert "python3 tools/sync_app.py" in rnd and "/upgrade 20" in rnd
+    brief = _read("automation", "prompts", "morning_brief.md")
+    assert "upgrade" not in brief.lower() and "sync_app" not in brief
 
 
 # ------------------------------------------------------------------ the lints

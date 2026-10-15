@@ -16,6 +16,18 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Profile upgrades apply themselves.** Listing what a profile was missing and waiting for a
+  yes meant nothing happened: nobody knows which of nineteen upgrades matter, so nobody asked.
+  Now, when the sync lists any, Claude starts `/upgrade` in a background agent and gets on with
+  what you asked; it researches and builds your job boards, writes the settings your field needs
+  and the rest, from your profile, one commit each. At the end of its reply it tells you what
+  changed and how to undo each (`git revert`). Only what needs you is asked, at most three
+  questions at the end of a session: whether to read your LinkedIn job alerts, and every fact
+  in your profile still marked `[CONFIRM: ...]`, which is now asked until it is answered instead
+  of waiting for someone to run `/setup` again. The twice-weekly shortlist takes the app's
+  updates and applies the upgrades before its round, so a board it builds is searched that
+  round. The morning brief is unchanged.
+  No profile upgrade: this is what applies them.
 - **Profile upgrades: what the app added since you set up, and what it needs from you.** `/setup`
   runs once, so a part of the app that needs something on your side (your job boards researched,
   a setting with no safe default, a portal rebuilt) never reached a profile written before it.
