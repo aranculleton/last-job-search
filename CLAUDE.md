@@ -131,6 +131,17 @@ These apply whenever the change is to the app, whichever repo the session starte
   in the background with no one asking, unless it truly needs the person's answer or consent.
   A new profile name with a safe default goes in `SAFE_DEFAULTS` with the reason.
   `tests/test_profile_upgrades.py` fails on either missing.
+- **A better way of doing any part of the build reaches every older repo by itself.** Each
+  part that leaves something behind in a person's repo (a `/setup` section, the boards, prep
+  documents, unsent drafts, interview packs, research, contacts, screening, routines) is a
+  versioned method in `tools/build_versions.py`, and every other app file is in its
+  `KEEPS_NOTHING` with the reason. Changing a method's files fails
+  `tests/test_build_versions.py` until a version is added saying what changed and `rerun`:
+  True when what an older version made should be made again (a better board search, a
+  fixed prep document), False for wording. With True, every older repo redoes it with no one
+  asking: `/upgrade` in the background, the sync itself for an instant one, or every round
+  for screening. A new app file fails the same test until it is placed in a method or in
+  `KEEPS_NOTHING`. The decision can be made either way; it cannot be skipped.
 
 ## Master is the trunk. Finish on it, start from it.
 
