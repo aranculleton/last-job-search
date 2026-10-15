@@ -24,7 +24,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
    to answer, and `reply.following_up_is_honest(rows, today)` says whether an apology
    for the gap is owed.
 
-4. **Get the guidance.** `reply.guidance()` gives the move, the target length
+4. **Read what they have taught it**: `python3 tools/learned.py brief messages`; its rules
+   outrank the guidance's defaults.
+   **Get the guidance.** `reply.guidance()` gives the move, the target length
    derived from their message, what not to do, and any action owed outside the
    thread (send an email, book a slot).
 
@@ -37,7 +39,8 @@ Usage: `/reply <contact name or company>`, then paste their message.
 
 ## Present
 
-The scenario and the evidence for it. The draft. The recommendation on whether
+The scenario and the evidence for it. The draft, in full and ready to paste: never only
+where it was saved. The recommendation on whether
 the thread is worth continuing at all. Any action owed outside the thread, with
 a date.
 

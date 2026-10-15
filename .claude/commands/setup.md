@@ -67,7 +67,9 @@ writes what was looked at and why not. What the profile cannot answer is written
 `[CONFIRM: ...]`, which a later session asks. Redoing a section on a filled profile adds
 what the current method adds and keeps every value already there: where the current
 method shows a value is wrong, the better one goes beside it as `[CONFIRM: ...]`, never
-swapped in silently, and nothing is switched off or narrowed. Then run the check again,
+swapped in silently, and nothing is switched off or narrowed. A setting
+`python3 tools/learned.py locked` lists is the person's own and is never changed: record
+`learned.py offer` for it instead. Then run the check again,
 and `python3 tools/build_versions.py record <section>`.
 
 **Every part of this command that writes the profile is a versioned section**, marked

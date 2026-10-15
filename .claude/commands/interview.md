@@ -56,6 +56,8 @@ Additions for interview purposes:
 
 ## Step 3: Build the Prep Pack
 
+First `python3 tools/learned.py brief interview` (and `brief questions`): the questions, depth and tone they have asked for outrank the defaults below.
+
 Assemble a stage-appropriate prep document with these sections:
 
 ### 1. Likely questions
@@ -82,7 +84,7 @@ Pick 4-6 from `07`'s categories, customized to the research and the stage: role 
 ### 6. Logistics
 The phone/video tips from `07` when the format calls for them, plus date and interviewer names as a header.
 
-Save the pack in the archive folder derived in Step 1 as `interview_prep_<stage>.md` (create the folder if this application predates `/outcome`). The folder is gitignored, so the pack stays personal; one file per stage, so earlier packs remain as history. Present the pack in chat as well - the file is the artifact, the conversation is the delivery.
+Save the pack in the archive folder derived in Step 1 as `interview_prep_<stage>.md` (create the folder if this application predates `/outcome`). The folder is gitignored, so the pack stays personal; one file per stage, so earlier packs remain as history. Present the whole pack in chat, in full - the file is the record, the conversation is the delivery; never only its path.
 
 ---
 

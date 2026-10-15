@@ -18,7 +18,7 @@ python3 tools/profile_upgrades.py --plan
 ```
 
 A JSON list, most urgent first: `id`, `needs`, `why` (what is missing), `run` (what does
-it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 4.
+it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 5.
 
 ## Step 2: Each upgrade, alone, in order
 
@@ -50,7 +50,16 @@ For each `needs: "nobody"` entry, until the budget is spent:
 Stop at the budget even mid-list: the rest are picked up next session. An upgrade cut off
 part way is undone, never committed half done.
 
-## Step 3: Never
+## Step 3: What the person taught it
+
+Before changing any setting, `python3 tools/learned.py locked`. A setting it lists is the
+person's: never change it, whatever the upgrade says. If the upgrade would have changed
+it, record the offer instead and move on:
+`python3 tools/learned.py offer --setting "<file SETTING>" --new "<what the app now does>" --why "<why it may be better>" --version "<upgrade id>"`.
+The session asks it with its other questions. A redo also follows every rule
+`python3 tools/learned.py brief` lists.
+
+## Step 4: Never
 
 - Never edit an app-owned file, the tracker, the contact book or the threads, and nothing
   in `documents/` except what a `method-*` upgrade's `run` names (an unsent draft
@@ -60,7 +69,7 @@ part way is undone, never committed half done.
 - Never switch off a portal or narrow the search on your own: an upgrade adds what is
   missing; a change of the person's mind is theirs to make.
 
-## Step 4: Report
+## Step 5: Report
 
 Return, in this order and nothing else:
 

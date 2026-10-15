@@ -76,6 +76,7 @@ RULES = (
     "document_noun",
     "unsupported_claim",
     "sentence_starts_with_contraction",
+    "person_dislikes",
 )
 
 # Written as code points so the one file that bans these characters does not
@@ -815,6 +816,15 @@ def _british(text) -> list:
 COLD_ONLY_RULES = frozenset({"sentence_starts_with_contraction"})
 
 
+def _person_dislikes(text) -> list:
+    """A phrase the person has said never to use (profile/learned.json, tools/learned.py)."""
+    try:
+        import learned
+    except ImportError:
+        return []
+    return [Violation("person_dislikes", m) for m in learned.dislikes(text)]
+
+
 def check(text, recipient_seniority="peer", name=None, live_thread=False) -> list:
     """Every tone violation in `text`, as (rule, offending_text) pairs.
 
@@ -840,7 +850,8 @@ def check(text, recipient_seniority="peer", name=None, live_thread=False) -> lis
             + _lowercase_sentence_start(plain)
             + _sentence_starts_with_contraction(plain)
             + _british(plain)
-            + _unsupported_claim(plain))
+            + _unsupported_claim(plain)
+            + _person_dislikes(plain))
     if live_thread:
         found = [v for v in found if v.rule not in COLD_ONLY_RULES]
     return found

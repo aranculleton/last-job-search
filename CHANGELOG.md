@@ -22,6 +22,22 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **It learns you, and keeps what it learns.** The defaults (the voice of a first note, the
+  interview questions, who is worth contacting, how roles rank) are still where you start.
+  Now every reaction you give outranks them and is kept for good in `profile/learned.json`
+  (`tools/learned.py`). That covers "too formal", "not this kind of company", "stop
+  suggesting recruiters", or an edit you make to a draft. Each reaction is applied at once,
+  written into the setting it governs, and read before anything is drafted. Phrases you
+  never want are flagged in every message and document. After drafts, messages, shortlists
+  and questions, you are asked in one line whether you'd like anything different. No sync
+  touches `learned.json`, and no upgrade changes a setting it records. When the app
+  improves something you have shaped, you are offered the new way once (keep yours, or
+  switch), never switched over. The greeting and the referral-ask wording are now settings
+  (`GREETING`, `REFERRAL_LINE`, `REFERRAL_CLOSE` in `networking.py`), defaulting to today's
+  words. Profile upgrade: learned-choices.
+- **Every output is shown in the reply.** Messages, drafts, notes, interview packs and prep
+  documents are pasted ready to use, and resumes and letters are sent into the
+  conversation as files. A path in the repo is the record, never the answer.
 - **Every improvement to the app reaches what you already have, by itself.** A sync always
   brought the app's new code, but not what the old code had already made: the profile your
   `/setup` wrote, the job boards it built, your call-prep documents, drafts not yet sent,

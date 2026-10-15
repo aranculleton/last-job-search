@@ -166,8 +166,10 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-14", True, "role headings that end in a city are read, so your roles and "
                                     "their evidence appear in every prep document"),
+            (3, "2026-10-15", False, "the prep document is shown in full in the reply, "
+                                    "never only its path"),
         ),
-        "fingerprint": "549683e809806577",
+        "fingerprint": "336b619000d30ec3",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -195,8 +197,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", False, "the outreach note checked by the networking tone rules, "
                                     "with a connection-sized version and no referral ask to "
                                     "someone who has not replied"),
+            (3, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
         ),
-        "fingerprint": "cadf79e9b0b7240f",
+        "fingerprint": "af2998f6abc8363f",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -204,8 +207,11 @@ METHODS: dict[str, dict] = {
         "run": "for each tracker row at `interview`, /interview <company> again, its pack "
                "written beside the old one",
         "files": (".claude/commands/interview.md",),
-        "versions": (_first(),),
-        "fingerprint": "117162a1e3a581fd",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
+        ),
+        "fingerprint": "b8430ea70546009e",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -238,8 +244,9 @@ METHODS: dict[str, dict] = {
                                     "greeting, a named city read before 'remote', a "
                                     "plain no counted, '<City>, ON' at home, and the "
                                     "messages shown with the people"),
+            (5, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
         ),
-        "fingerprint": "47baff2b33521eb2",
+        "fingerprint": "42088b94fe3fafc2",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -331,6 +338,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/sync_app.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/profile_upgrades.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/build_versions.py": "the machinery that carries changes; it keeps nothing itself",
+    "tools/learned.py": "the machinery that keeps what the person said; what it keeps is theirs",
     "tools/profile_names.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/profile_names_baseline.txt": "the machinery that carries changes",
     "tools/personal_paths.py": "the machinery that carries changes; it keeps nothing itself",

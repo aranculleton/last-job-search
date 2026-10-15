@@ -175,6 +175,18 @@ def _alerts() -> str:
     return ""
 
 
+def _learned_choices() -> str:
+    try:
+        import learned
+    except ImportError:
+        return ""
+    waiting = learned.offers()
+    if not waiting:
+        return ""
+    return "%d app improvement(s) would change something you chose: %s" % (
+        len(waiting), "; ".join(learned.question(o) for _, o in waiting[:3]))
+
+
 def _linkedin_plan() -> str:
     if _missing("networking", "LINKEDIN_PLAN"):
         return ("nobody has asked whether you pay for LinkedIn Premium (profile/networking.py "
@@ -454,6 +466,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             needs="you",
             ask="Do you get LinkedIn job alerts by email, and should every round read them? It re"
                 "ads only those emails, nothing else in your inbox."),
+    Upgrade("learned-choices", "2026-10-15",
+            "app improvements to things you chose, offered rather than imposed",
+            _learned_choices, "ask each `python3 tools/learned.py offers` question; record the "
+            "answer with `python3 tools/learned.py decide <n> keep|switch` and apply a switch",
+            "question", "~1 min",
+            priority=3,
+            needs="you",
+            ask="An app update would change something you set yourself. Keep yours, or try the "
+                "new way? (python3 tools/learned.py offers lists each one.)"),
     Upgrade("linkedin-plan", "2026-10-15",
             "connection notes and InMail sized to the LinkedIn account you actually have",
             _linkedin_plan, "write LINKEDIN_PLAN = \"free\" or \"premium\" in profile/networking.py "
@@ -593,6 +614,9 @@ SAFE_DEFAULTS: dict[str, str] = {
     "search.WORKDAY_INTERNAL_SITES": "the app drops Workday's 'Privileged' site already; a "
                                      "profile adds an employer's own internal site names "
                                      "once a round has shown one",
+    "networking.GREETING": "'Hi' until the person says how they greet people",
+    "networking.REFERRAL_LINE": "the app's sentence until the person says how they would ask",
+    "networking.REFERRAL_CLOSE": "the app's sentence until the person says how they would ask",
     "networking.AUTHORITY_TITLE": "English management titles; a market in another language "
                                   "writes its own",
     "networking.SENIOR_IC_TITLE": "English seniority words; a market in another language, or a "
