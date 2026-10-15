@@ -2,6 +2,14 @@
 
 You are batch-scoring the jobs that `/scrape` has collected, so the user can decide where to spend `/apply` effort. `/scrape` finds and dedupes postings; `/apply` evaluates one at a time in depth. `/rank` is the bridge: it scores every new posting against the fit framework and returns a ranked shortlist.
 
+**Where the postings are.** A round (`tools/run_round.py`, which `/scrape` runs) scores every
+posting it keeps mechanically and writes its shortlist, the top 60 without posting bodies, to
+`documents/rounds/<round>.json`: each row's `fit` is its 0-100 score and `priority` its order
+(it can exceed 100, so it is never a score). A round writes only `skipped` rows to
+`job_scraper/seen_jobs.json` (`tools/throttle.py`), never `new` or `ranked` ones. So `/rank`'s postings come from the
+round summaries, and the scores it writes go to `seen_jobs.json`, where `tools/lookup_score.py`
+and `/apply` read them.
+
 `/rank` produces **triage scores**, not final evaluations. It scores from the posting text and the candidate profile only - no company research, no reviewer agent. `/apply`'s Step 1 evaluation (which adds company research) remains authoritative and always re-runs when the user applies.
 
 Follow these steps **in order**.
@@ -12,8 +20,9 @@ Follow these steps **in order**.
 
 `$ARGUMENTS` may contain:
 
-- Nothing → rank all jobs with status `new` in `job_scraper/seen_jobs.json`
+- Nothing → rank the rows of the newest `documents/rounds/<round>.json` that have no `ranked` entry in `job_scraper/seen_jobs.json`, plus any `seen_jobs.json` entry still at `new` (a backlog added by hand)
 - A focus area (e.g. `/rank data science`) → rank only jobs whose title or stored fit-notes match the focus
+- A round name (e.g. `/rank r12`) → take the rows of `documents/rounds/r12.json` instead of the newest round
 - `--all` → re-rank every job that has not been applied to, including previously ranked ones (useful after the profile changes)
 - `--top <N>` → shortlist size (default 5)
 
@@ -21,10 +30,11 @@ Follow these steps **in order**.
 
 ## Step 1: Load State
 
-1. Read `job_scraper/seen_jobs.json`. If the file is missing or has no entries, tell the user to run `/scrape` first and stop.
+1. Read the round summary Step 0 names (newest `documents/rounds/*.json` by default) and `job_scraper/seen_jobs.json`. If there is no round summary and no `seen_jobs.json` entry at `new`, tell the user to run `/scrape` first and stop. A round row is matched to a `seen_jobs.json` entry with `tools/lookup_score.py`'s `norm()` on its `url`, never on the raw string; a row with no entry gets one in Step 4, keyed by its `url`.
 2. Read `job_search_tracker.csv`. Build the exclusion set: any company+role already in the tracker is out of scope regardless of flags - it has been applied to or consciously tracked.
-3. Select candidates: entries with status `new` (or, with `--all`, entries of any status), minus
-   the exclusion set, filtered by the focus area if one was given.
+3. Select candidates: the round rows with no `ranked` entry and the entries with status `new`
+   (or, with `--all`, entries of any status as well), minus the exclusion set, filtered by the
+   focus area if one was given.
 
    **`--all` never re-scores a permanent exclusion.** An entry is permanently excluded, and stays
    out of `--all`, when its stored verdict rests on a fact about the **posting** rather than on
@@ -59,7 +69,10 @@ Follow these steps **in order**.
    backlog of a couple of hundred entries this is the difference between a run that finishes and
    one that is not worth starting.
 4. If no candidates remain, say so ("Nothing new to rank - run /scrape to find fresh postings") and stop.
-5. Read the compact scoring brief **once**:
+5. **Read what they have taught it**: `python3 tools/learned.py brief jobs` (and `brief search`).
+   A job or a kind of job they have turned down outranks any score: pass the rules to every
+   scoring agent in Step 2, and leave out what they rule out, saying so in the Step 5 summary.
+6. Read the compact scoring brief **once**:
    - `profile/12-scoring-brief.md`
 
    That file is the rubric and the candidate facts, distilled for exactly this purpose. Read
@@ -83,7 +96,7 @@ Each agent returns a JSON array, one object per job:
 
 ```json
 {
-  "key": "<the job's key in seen_jobs.json>",
+  "key": "<the job's key in seen_jobs.json, or its url for a round row not there yet>",
   "status": "scored" | "expired",
   "scores": { "technical": 0-100, "experience": 0-100, "behavioral": 0-100, "career": 0-100 },
   "location_verdict": "PASS" | "FAIL" | "FLAG",
@@ -121,7 +134,8 @@ Sort by overall score (descending), urgency as tiebreaker.
 
 Update `job_scraper/seen_jobs.json` in place - these fields are additive to the scraper's schema:
 
-- Ranked jobs: set `"status": "ranked"` and add `"rank_score": <overall>`, `"rank_verdict": "<band>"`, `"rank_date": "YYYY-MM-DD"`, `"location_verdict": "PASS"/"FAIL"/"FLAG"` (never the bare `location` key - that is the scraper's place field, e.g. "Aarhus, Denmark", and overwriting it with a verdict destroys the commute-filter data; an entry ranked before this rename may carry a legacy PASS/FAIL/FLAG string in `location` - read that as the verdict when `location_verdict` is absent, and move it to `location_verdict` when re-writing the entry), `"language_gate": "PASS"/"FAIL"/"FLAG"`, `"language_note"` (omit or `null` when `language_gate` is `PASS`), `"deadline": "YYYY-MM-DD" | null` from the same Step 2 JSON (replace the stored value when the agent returned a different one - a fresh fetch is the freshest source; leave it alone when the agent returned `null`, absence is not a correction - a fetch that degraded to a listing page returns no deadline, and taking that as "the posting dropped its deadline" would erase a real date and, because rule 6 leaves an entry with no stored `deadline` alone, quietly make that job immortal to the sweep), plus `"strengths": [...]` and `"gaps": [...]` copied from the scoring agent's Step 2 JSON for that job. These veto fields are as important to persist as the score itself - without them, nothing later (a re-read of `seen_jobs.json`, a debugging session, the user asking "why was this excluded") can recover why a job did or didn't make the shortlist.
+- A round row with no `seen_jobs.json` entry gets one, keyed by its `url`, with the scraper's base fields from the row (`title`, `company`, `url`, `location`, `portal`, `posted_date` from its `date`, `first_seen` today, `source: "round"`), then the fields below.
+- Ranked jobs: set `"status": "ranked"` and add `"rank_score": <overall>`, `"rank_verdict": "<band>"`, `"rank_date": "YYYY-MM-DD"`, `"location_verdict": "PASS"/"FAIL"/"FLAG"` (never the bare `location` key - that is the scraper's place field, e.g. "Manchester, UK", and overwriting it with a verdict destroys the commute-filter data; an entry ranked before this rename may carry a legacy PASS/FAIL/FLAG string in `location` - read that as the verdict when `location_verdict` is absent, and move it to `location_verdict` when re-writing the entry), `"language_gate": "PASS"/"FAIL"/"FLAG"`, `"language_note"` (omit or `null` when `language_gate` is `PASS`), `"deadline": "YYYY-MM-DD" | null` from the same Step 2 JSON (replace the stored value when the agent returned a different one - a fresh fetch is the freshest source; leave it alone when the agent returned `null`, absence is not a correction - a fetch that degraded to a listing page returns no deadline, and taking that as "the posting dropped its deadline" would erase a real date and, because rule 6 leaves an entry with no stored `deadline` alone, quietly make that job immortal to the sweep), plus `"strengths": [...]` and `"gaps": [...]` copied from the scoring agent's Step 2 JSON for that job. These veto fields are as important to persist as the score itself - without them, nothing later (a re-read of `seen_jobs.json`, a debugging session, the user asking "why was this excluded") can recover why a job did or didn't make the shortlist.
 - Dead or past-deadline jobs: set `"status": "expired"`
 - Entries retired by Step 3's rule 6 sweep: set `"status": "expired"` for those too, and leave every other field on them untouched. The sweep reasons over entries this run never scored, so without this line its conclusion would live only in the report and the same expiry would be re-derived from the same stored date on every future run.
 
@@ -169,7 +183,8 @@ Rules for the presentation:
 - A shortlisted job with `language_gate: FLAG` gets a ⚠ marker next to its Title (same treatment as a location FLAG) and its `language_note` quoted in that job's "Why these ranked highest" writeup, so the language-level gap is visible without digging into the raw JSON.
 - Every claim traces to fetched posting text or the profile - no invented details.
 - Say explicitly that these are **triage scores from the posting text only**, and that `/apply` will re-evaluate with company research before anything is drafted.
-- Then ask: "Want to apply to any of these? Give me the number(s) and I'll start with the full `/apply` workflow."
+- Then ask: "Want to apply to any of these? Give me the number(s), and say if you have already applied to any of them anywhere, so I can record it rather than draft it." The tracker knows only what was recorded here; a yes is recorded through `/outcome <company>` (its Step 1.2 adds the row for an application made elsewhere), and nothing is drafted for it.
+- End with one short line inviting change, once per session for shortlists: "Anything about the kind of roles or employers here you'd have different? It sticks from now on." What they say goes through CLAUDE.md, "Learning the person".
 - If the user picks one, run the `/apply` workflow on that job's URL, passing the triage verdict as prior context but **re-running the full Step 1 evaluation** - triage never substitutes for it.
 
 ---

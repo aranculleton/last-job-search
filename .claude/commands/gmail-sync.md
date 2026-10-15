@@ -2,7 +2,7 @@
 
 You are scanning the user's Gmail for status signals on tracked job applications (interview invites, assessment links, offers, rejections) and, once approved, writing the detected changes into `job_search_tracker.csv` and `documents/applications/<company>_<role>/outcome.md` - the same two places `/outcome` writes to, in the same schema.
 
-Unlike `/outcome` (which asks the user what happened), `/gmail-sync` classifies real emails on its own - but it never writes on its own. Every classified change is presented as a batch **before** anything touches the tracker or `outcome.md`, and only proceeds once the user approves it (approving the whole batch at once is fine; writing first and flagging it after is not). Because a wrong write silently corrupts application history that `/setup` later calibrates from, every proposed change must cite its source email and every uncertain case must be surfaced instead of guessed. Never treat this command's job as "notice something in an inbox" - it is "propose a correct, sourced line for a permanent record, and write it only once the user says yes."
+Unlike `/outcome` (which asks the user what happened), `/gmail-sync` classifies real emails on its own - but it never writes on its own. Every classified change is presented as a batch **before** anything touches the tracker or `outcome.md`, and only proceeds once the user approves it (approving the whole batch at once is fine; writing first and flagging it after is not). Because a wrong write silently corrupts application history that `/interview`, `/html-report` and `tools/what_works.py` later read, every proposed change must cite its source email and every uncertain case must be surfaced instead of guessed. Never treat this command's job as "notice something in an inbox" - it is "propose a correct, sourced line for a permanent record, and write it only once the user says yes."
 
 Follow these steps **in order**.
 
@@ -56,7 +56,9 @@ Example: `newer_than:30d -in:sent -in:drafts ({"Acme Corp" "BigCo"} OR {from:gre
 
 ## Step 4: Filter to New Messages
 
-For each returned thread, inspect its messages' IDs against `state.processed_message_ids`. Skip a thread entirely if every message in it is already processed. For threads with unprocessed messages, call `get_thread` with `messageFormat: FULL_CONTENT` to get full bodies - **classification in Step 5 must never be based on the snippet/subject alone**, since snippets truncate the exact phrase that distinguishes "we'd like to schedule a call" from "thanks for applying."
+For each returned thread, inspect its messages' IDs against `state.processed_message_ids`. Skip a thread entirely if every message in it is already processed.
+
+`gmail_sync/state.json` is never committed, so a new session starts with an empty list. What a session carries is what earlier runs wrote: also treat a message as processed when the matched application's records already cite it, either an `outcome.md` Notes line `Source: "<subject>" from <sender>, <email date>` with the same subject, sender and date, or a tracker note `gmail-sync: <signal> ("<subject>")` with the same subject, dated on or after the email. Add such a message's ID to the list in Step 8 like any other. For threads with unprocessed messages, call `get_thread` with `messageFormat: FULL_CONTENT` to get full bodies - **classification in Step 5 must never be based on the snippet/subject alone**, since snippets truncate the exact phrase that distinguishes "we'd like to schedule a call" from "thanks for applying."
 
 ---
 
@@ -139,7 +141,7 @@ Rows the user skipped are left untouched - no tracker write, no `outcome.md` wri
 
 ## Step 8: Update State
 
-Add every message ID processed this run - approved, skipped, unmatched, or filtered as noise - to `gmail_sync/state.json`'s `processed_message_ids`, and set `last_sync` to today's date. This makes re-running idempotent - the same email never produces a duplicate proposal, tracker note, or Notes entry.
+Add every message ID processed this run - approved, skipped, unmatched, or filtered as noise - to `gmail_sync/state.json`'s `processed_message_ids`, and set `last_sync` to today's date. With the written markers Step 4 checks, this makes re-running idempotent, in this session and the next - the same email never produces a duplicate proposal, tracker note, or Notes entry.
 
 ---
 
@@ -175,7 +177,7 @@ Confirm what actually happened, distinct from the Step 6 proposal:
 
 If nothing was proposed this run, a brief note is enough instead of an empty summary.
 
-If this run pushed the count of applications with a **final** `outcome.md` status to 3+ (or resolved a second application sharing a pattern), suggest the same `/setup` Path A calibration handoff `/outcome` suggests - do not duplicate that logic, just point the user there.
+If this run pushed the count of applications with a **final** `outcome.md` status to 3+ (or resolved a second application sharing a pattern), suggest the same check `/outcome` Step 5 makes (`python3 tools/what_works.py brief search`) - do not duplicate that logic, just point the user there.
 
 ---
 
@@ -186,7 +188,7 @@ If this run pushed the count of applications with a **final** `outcome.md` statu
 3. **Never propose `hired` or `offer_declined`.** Those require the user's real-world decision; `/gmail-sync` stops at proposing `offer` and flags it.
 4. **A conflicting signal against an already-final or already-written status is a manual-review flag, not a proposed overwrite.** When in doubt, don't propose it - surface it.
 5. **Append-only to `outcome.md` Notes**, same as `/outcome`. Never rewrite or delete existing history.
-6. **Idempotent by message ID.** Re-running must never re-propose, or duplicate a tracker note or Notes entry for, the same email.
+6. **Idempotent by message ID and by what was written.** Re-running must never re-propose, or duplicate a tracker note or Notes entry for, the same email, including in a new session whose `state.json` is empty (Step 4).
 7. **Never fabricate a match.** If the company can't be confidently identified from the email, it goes in "Unmatched," not a guess.
 8. **Read-only against Gmail itself.** This command reads and classifies; it does not label, archive, or delete anything in the user's mailbox.
-9. **All state is personal data.** `gmail_sync/state.json`, `job_search_tracker.csv`, and `documents/applications/**` are gitignored - never suggest committing them.
+9. **`gmail_sync/state.json` is never committed**: it is a sync cursor with no value in git (CLAUDE.md, "Persistence rule"). The tracker and `documents/applications/**` are different: in a person's private repo they are committed like every other state file, by the session, under that same rule.

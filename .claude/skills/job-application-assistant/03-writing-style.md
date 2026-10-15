@@ -1,5 +1,5 @@
 ---
-framework_version: 1.12.5
+framework_version: 1.12.6
 ---
 
 # Writing Style Guide
@@ -127,7 +127,9 @@ framework_version: 1.12.5
 ## Connection notes (LinkedIn invitations)
 
 A connection note is not a cover letter and not a resume bullet. It is a short message
-from one person to another, capped at **300 characters**, whose only job is to get a reply.
+from one person to another, capped at the person's plan limit (**200 characters** on a free
+LinkedIn account, **300** on Premium: `LINKEDIN_PLAN` in `profile/networking.py`), whose only
+job is to get a reply.
 These rules are separate from everything above and override the document conventions where
 they conflict.
 
@@ -137,17 +139,20 @@ wherever this section differs:
 
 1. `Hi <First>,` then who the candidate is, in the standard who-line: "I am an operations
    analyst in Manchester, seven years in logistics and food supply chains, now building
-   demand forecasts." It repeats across notes on purpose. **No "hope you're well" in a first
-   message to a stranger**: `compose.validate()` refuses it for every cold kind, because an
-   opener every cold note shares carries nothing and spends the line a stranger reads first.
-   Inside a live thread it is ordinary warmth and allowed.
+   demand forecasts." It repeats across notes on purpose. **Use the person's own opener and
+   no other** (`OPENER` and `OWN_VOICE` in `profile/networking.py`): `compose.validate()`
+   accepts the phrases `OWN_VOICE` names in a connection note or InMail and flags any other
+   stock opener ("I hope this message finds you well"), because an opener every cold note shares
+   carries nothing and spends the line a stranger reads first.
 2. **A specific, stated reason for writing to this person**, from something researched:
-   the team is hiring, the named thing the team built, the practice they lead. A fact
+   a shared employer or school, the named thing the team built, the practice they lead. A fact
    about them, never a verdict on their work.
-3. **What the candidate is looking for**, said outright: a role, in what, where. Say where
-   they are based exactly as `profile/CLAUDE.md` words it. Where the profile says no
-   sponsorship is needed, add **"no sponsorship needed"** for a recruiter or anyone whose
-   reply could be about a role; leave it out for a peer. It has to be true (see the Work
+3. **What the candidate is looking for**, said as context and not as a demand: the person's
+   `ABOUT_ME` line does it without naming a job. Say where they are based exactly as
+   `profile/CLAUDE.md` words it. Name no role, and never ask whether the team is hiring
+   (`compose.validate()` flags both). Leave work authorization out too: it goes in a first note
+   only to a recruiter (`recruiter=True`), and otherwise belongs in the referral ask or in
+   the reply to "are you able to work here?". Whatever is said has to be true (see the Work
    authorization line in `profile/01-candidate-profile.md`).
 4. A soft close that asks something only this person can answer.
 
@@ -175,7 +180,7 @@ sent to any of ten people has not been written, it has been filled in. Vary it b
 | "I'm passionate about", "excited by the opportunity" | Rule 2 applies here too |
 
 **Never open a sentence on a contraction.** "I've spent years in planning...", "I'm based
-in Manchester" read as sloppy, and in a 300-character note the
+in Manchester" read as sloppy, and in a character-capped note the
 contraction is usually there to save two characters rather than because it sounds
 better. Write "I have spent", "I am based". The same goes for a possessive in the
 opening position ("Acme's revenue work..." becomes "The revenue work at Acme...").
@@ -200,8 +205,8 @@ What works instead, in rough order of strength:
 3. **Plain curiosity about how they do it.** "Forecast accuracy is most of my week, so
    I am curious how Harbour Freight plans depot capacity."
 
-Then let the close carry the ask: hear about the team, hear how they approach it,
-hear if they are hiring. The wanting is implied by the fact that the candidate wrote at all.
+Then let the close carry the ask: hear about the team, hear how they approach it. The
+wanting is implied by the fact that the candidate wrote at all.
 
 **A general truth about the field is a pitch, not a hook.** "Logistics data
 is where a model actually changes a delivery plan" is a line from a conference
@@ -218,8 +223,8 @@ candidate to the work, not what they already know about themselves.
 between a manager and a C-level. "Would love to hear how your team is set up" is a fine
 thing to ask a senior manager and a slightly presumptuous thing to ask a chief
 operating officer, because it asks a busy executive to explain their own org to a stranger. At
-that level, ask something answerable in one line ("is the team hiring?") or ask nothing
-and let the connection stand on its own.
+that level, ask something answerable in one line ("how did the team settle on building
+the forecasts in-house?") or ask nothing and let the connection stand on its own.
 
 **Do not pander.** No praise of the person's career, no telling them their company is
 impressive. State what the candidate does, state why they are writing, stop.
@@ -288,7 +293,7 @@ it in a subject line or the second clause, not as the first sentence.
 - Lead with the most relevant experience for this specific role
 - Frame content around **which of their tasks you can solve and how**
 - Describe your approach: methods, tools, and knowledge you'll bring
-- Use bullet lists for concrete skills/achievements when appropriate (3-5 bullets)
+- Use a bullet list for concrete skills/achievements: three bullets, as in `06-cover-letter-templates.md`
 - Each bullet should be specific and outcome-oriented
 - Include at least one example that shows initiative
 - Include 1-2 brief examples of past success, but keep the focus forward-looking

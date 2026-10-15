@@ -86,6 +86,7 @@ See `../SKILL.md` for the full flag reference and the hosted-dependency note.
 | `--facet` | | Any other facet as `key=value` (repeatable). |
 | `--format` | | `json` \| `table` \| `plain`. |
 | `--description-format` | | `markdown` (default) \| `text` \| `html` - how each result's full description is rendered (`json` output only). |
+| `--no-description` | | Skip description hydration for a cheap discovery pass: results keep every other field and drop the body (`detail` fetches it). |
 
 Facet values come from freehire's controlled vocabularies. Discover the live
 values (with counts) for a market at

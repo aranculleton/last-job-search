@@ -3,11 +3,11 @@
 You are recording what happened to a job application: progress updates (interview invitations, stages completed, offers) and final resolutions (hired, rejected, no response). The data lands in two places the framework already reads but nothing systematically writes:
 
 - `job_search_tracker.csv` - the status column that `/scrape` and `/rank` use for dedup and exclusion
-- `documents/applications/<company>_<role>/` - the per-application archive (posting, submitted drafts, `outcome.md`) that `/setup` Path A mines to calibrate `profile/04-job-evaluation.md` and surface STAR candidates
+- `documents/applications/<company>_<role>/` - the per-application archive (posting, submitted drafts, `outcome.md`) that `/interview` preps the next stage from and `/html-report` counts its funnel from
 
-`/outcome` writes the data; `/setup` interprets it. This command never edits the evaluation framework or profile files itself.
+`/outcome` writes the data; `tools/what_works.py` reads the results back (Step 5). This command never edits the evaluation framework or profile files itself.
 
-The command also owns the stretch *before* there is an outcome to record: the **follow-up branch** (Step 2b) surfaces open applications that have gone quiet, drafts a brief follow-up note in the user's voice, and logs it - so the chase and the resolution it eventually leads to live in one flow.
+The command also owns the stretch *before* there is an outcome to record: the **follow-up branch** (Step 2b) surfaces the applications `tools/followups.py` says are due a nudge, drafts a brief follow-up note in the user's voice, and logs it - so the chase and the resolution it eventually leads to live in one flow.
 
 Follow these steps **in order**.
 
@@ -19,9 +19,8 @@ Follow these steps **in order**.
 
 - Nothing → list open applications and ask which one to update
 - A company name (optionally with a role), e.g. `/outcome acme` or `/outcome acme ml engineer` → target that application
-- `followup` → enter the follow-up branch (Step 2b) over every quiet open application, using the default threshold of **10 days**
-- `followup <N>`, e.g. `/outcome followup 14` → follow-up branch with an N-day threshold
-- `followup <company>`, e.g. `/outcome followup acme` → draft a follow-up for that application now, regardless of threshold
+- `followup` → enter the follow-up branch (Step 2b) over every application `python3 tools/followups.py` lists as due
+- `followup <company>`, e.g. `/outcome followup acme` → draft a follow-up for that application now, even before it is due, showing any hold `followups.py` prints for it
 
 ---
 
@@ -33,7 +32,7 @@ Follow these steps **in order**.
    ```
    **If the file exists and its header does not end in `,deadline`, append `,deadline` to the header line only** - no data row is touched. Legacy rows then read as an empty deadline. This is the one edit to an existing tracker this command may make outside a matched row, and Step 4's "never restructure the CSV" governs that row, not this header line.
 2. **With an argument:** match rows case-insensitively on company (and role, if given). One match → proceed. Several → list them and ask. None → the application was made outside the workflow; collect company, role, date applied, channel, and posting URL from the user and add a tracker row.
-3. **Without an argument:** list all rows whose status is not final (see **Tracker status vocabulary** below) as a numbered table (company, role, date applied, current status, deadline, days quiet, follow-ups sent) and ask which to update. The two derived columns come straight from existing data: **days quiet** counts from the row's `date` or the latest dated entry in `notes`, whichever is more recent; **follow-ups sent** counts the `followed up YYYY-MM-DD` markers in `notes`. If any open row is 10+ days quiet with fewer than two follow-ups sent, add one line under the table: "Some of these have gone quiet - want a follow-up draft? (Step 2b)". If every row is resolved, say so and stop.
+3. **Without an argument:** list all rows whose status is not final (see **Tracker status vocabulary** below) as a numbered table (company, role, date applied, current status, deadline, days quiet, follow-ups sent) and ask which to update. The two derived columns come straight from existing data: **days quiet** counts from the row's `date` or the latest dated entry in `notes`, whichever is more recent; **follow-ups sent** counts the `followed up YYYY-MM-DD` markers in `notes`. If `python3 tools/followups.py` lists any application as due, add one line under the table: "Some of these have gone quiet - want a follow-up draft? (Step 2b)". If every row is resolved, say so and stop.
 
    **`drafted` rows are listed but never counted as quiet** - nothing was sent, so nobody is late replying. List them under their own heading ("Drafted, not yet submitted"), leave **days quiet** and **follow-ups sent** blank, and keep them out of the follow-up offer above.
 
@@ -69,7 +68,7 @@ Ask the user what happened, then classify:
 - Interview invitation / stage scheduled or completed (phone screen, technical, case, final round)
 - Offer received (not yet accepted or declined)
 
-**Resolutions** (application closed) - these map to the archive `Status:` enum in `documents/README.md` that `/setup` parses (distinct from the tracker CSV column; see **Tracker status vocabulary** above):
+**Resolutions** (application closed) - these map to the archive `Status:` enum in `documents/README.md` that `/html-report` and `/interview` read (distinct from the tracker CSV column; see **Tracker status vocabulary** above):
 - `hired` - accepted an offer
 - `offer_declined` - received an offer, turned it down
 - `rejected` - explicit rejection at any stage
@@ -79,30 +78,30 @@ Ask the user what happened, then classify:
 Also collect, without interrogating - one or two open questions are enough:
 - Dates for the stages reached
 - Any feedback received, verbatim where the user remembers it
-- What they'd do differently, and any signal about what the company valued (these feed `/setup`'s calibration and STAR-candidate mining, so concrete beats polished)
+- What they'd do differently, and any signal about what the company valued (the next stage's `/interview` pack is built from them, so concrete beats polished)
 
 ---
 
 ## Step 2b: Follow-Up Branch (chase a quiet application)
 
-Enter this branch from the `followup` argument (Step 0) or from the offer under the open-pipeline table (Step 1.3). Standard practice is a brief, polite follow-up one to two weeks after applying, at most twice; this branch operationalizes that.
+Enter this branch from the `followup` argument (Step 0) or from the offer under the open-pipeline table (Step 1.3).
 
-**Candidates.** An application qualifies when its status is neither final nor `drafted`, the threshold has passed since its `date` (or since the last `followed up` marker in `notes`, if any), and it has fewer than **two** logged follow-ups. Parse dates defensively - skip rows whose dates do not parse and say so rather than guessing. Present qualifying applications as a table (company, role, days quiet, follow-ups sent, channel, contact person) and draft only for the ones the user picks.
+**Candidates come from `python3 tools/followups.py`, never from a clock of this command's own.** It is the one the morning brief and `tools/open_actions.py --due` read, so the three never disagree: the first nudge is due 7 days after the application went, the second 7 days after the first was logged as sent (the `followed up YYYY-MM-DD` marker below), at most two, and the chase stops after a week of silence following the second. It holds a nudge, and prints why, while an interview, an offer or a referral runs at that employer, or while the row's notes say `DO NOT CHASE`. It names who each nudge goes to, or says nobody is on file. Only an application whose status is neither final nor `drafted` can be due, and it narrows that to `applied`: a `drafted` row was never sent, and one at `interview` or `offer` is a live process, not a quiet one. Present the applications it lists as due as a table (company, role, nudge number, due date, who it goes to) and draft only for the ones the user picks; show the held ones with their reason and draft nothing for them.
 
-**Threshold.** The 10-day default is deliberately earlier than `/gmail-sync`'s 30-day staleness flag (its Step 9): that check is a read-only alarm that a row has been forgotten entirely; this branch is the proactive nudge while a reply is still plausible. The two numbers serve different moments, which is why they differ.
+`/gmail-sync`'s 30-day staleness flag (its Step 9) is a different thing: a read-only alarm that a row has been forgotten entirely, not a nudge.
 
-**Drafting.** For each selected application:
+**Drafting.** First `python3 tools/learned.py brief messages` (and `brief voice`): the rules there are the person's own and outrank the defaults below. Then, for each selected application:
 
 1. Read the archive folder's `job_posting.md`, and the submitted documents at the paths the tracker row names. Together they are the source of **every claim** the note may make - this is Rule 3 (never fabricate) widened to "no new claims": a follow-up that introduces skills or experience the submitted materials don't contain is a fabrication vector.
 2. Apply the writing style rules from `03-writing-style.md` (no cliches, no em-dashes, warm but direct), and match the application's language - draw the register from the archived cover letter.
 3. Write roughly **60 to 120 words**: address the `contact_person` from the tracker if present (otherwise the team, in the application's language); one sentence restating interest in the specific role; one concrete value-reminder drawn from the submitted materials; one polite question about the timeline. No pressure, no "just checking in" filler.
 4. Shape it for the `channel` column: email (with a subject line reusing the application's headline), LinkedIn message (shorter, no subject), or portal message (plain text).
-5. Present the draft and iterate until the user is happy.
+5. Present the draft and iterate until the user is happy. End with one short line inviting change, once per session for follow-up and thank-you notes: "Anything about the tone or the wording you'd have different? It sticks from now on." What they say goes through CLAUDE.md, "Learning the person".
 
 **Logging.** Once the user confirms they will send it (or have sent it), log it in the same turn - an unlogged follow-up breaks the next run's quiet-days math:
 
 - Append `followed up YYYY-MM-DD` to the row's `notes` column (Step 4's rule applies: append a dated note, never restructure the CSV).
-- Save the final note as `followup_YYYY-MM-DD.md` in the application's archive folder. Safe by documented convention: `/setup` reads only the four named archive files and ignores extras (the same rule that covers `/interview`'s prep files), and `documents/applications/**` is gitignored personal data.
+- Save the final note as `followup_YYYY-MM-DD.md` in the application's archive folder. An extra file there is safe: every reader opens the files it needs by name, the same as with `/interview`'s prep files.
 
 If the user decides not to send, log nothing.
 
@@ -116,7 +115,7 @@ Create or update `documents/applications/<company>_<role>/`. All content here is
 
 1. **The submitted documents** - do **not** copy them here. They live once, at the repo root, and the tracker row's `cv_file`/`cover_letter_file` columns name the path. Confirm those columns point at files that exist; if they are empty, fill them from `cv/<Prefix>_Resume_<ABBR>*.tex` and `cover_letters/<Prefix>_Cover_Letter_<ABBR>*.tex` (`<Prefix>` is `identity.file_prefix` in `profile/person.json`; or the legacy `cv/main_<company>*.tex` / `cover_letters/cover_<company>_*.tex` for applications drafted before the rename). If no draft files exist (application made outside `/apply`), leave the columns empty and note it. One file per artifact, named by path, is the rule in `documents/README.md`, and a second copy is how a folder ends up with two versions and nothing to say which was sent.
 2. **`job_posting.md`** - if it already exists, leave it. Otherwise try WebFetch on the tracker row's `source` URL and save the posting text, retrying a 403 with browser headers per `.claude/skills/job-application-assistant/09-web-research.md`. If the URL is dead (postings expire fast - this is exactly why the archive matters), ask the user to paste the posting, or write a stub noting the posting is unavailable. **Never reconstruct a posting from memory.**
-3. **`outcome.md`** - write or update it in exactly the format documented in `documents/README.md`, so `/setup` Path A parses it without special cases:
+3. **`outcome.md`** - write or update it in exactly the format documented in `documents/README.md`, so `/html-report` and `/interview` read it without special cases:
 
 ```markdown
 # Outcome: <Company> - <Role>
@@ -151,15 +150,14 @@ Update the matched row's `status` column using the canonical spellings from **Tr
 
 ---
 
-## Step 5: Calibration Handoff
+## Step 5: What It Learned
 
 **First, the mini audit, every time, at no model cost:** `python3 tools/what_works.py event --company "<Company>" --role "<Role>"`. It is counting, not a model call: what this result had (fit, route, the resume and letter it went with) and the interview rate now. An interview or an offer makes that application's resume and letter examples `/apply` reads before drafting a similar role, and gives the bullets it used a small lift in `tools/allocate.py`, without anybody asking. Paste its line into Step 6. Nothing else needs writing: it reads the tracker row this command just updated.
 
 Then count the `outcome.md` files under `documents/applications/` with a **final** status (not `in_progress`).
 
-- If 3 or more are resolved (or 2+ share a pattern - same role type rejected twice, same sector going silent), suggest:
-  > "You now have <N> resolved applications on record. Run `/setup` (Path A) to fold them into your evaluation framework - it calibrates fit scoring from what actually got interviews, and mines your interview feedback for STAR examples."
-- Do **not** write anything into `04-job-evaluation.md` or other skill files yourself. `/setup` Path A owns that merge - it is read-before-write and idempotent, and duplicating its logic here would race it.
+- If 3 or more are resolved (or 2+ share a pattern - same role type rejected twice, same sector going silent), run `python3 tools/what_works.py brief search`: the interview rate by fit band, route and channel, which says whether the scores are predicting anything. When it reports a clear difference, put its lines in Step 6.
+- Do **not** write anything into `04-job-evaluation.md`, `profile/search.py` or other framework files yourself. Changing how roles score is the person's call, made with them and recorded through `tools/learned.py` (CLAUDE.md, "Learning the person").
 
 ---
 
@@ -174,7 +172,7 @@ Summarize what was recorded:
 > - Tracker: status → <new status>
 > - What it learned: <the `what_works.py event` line from Step 5>
 >
-> [Calibration suggestion from Step 5, if triggered]
+> [The `what_works.py brief search` lines from Step 5, when it reported a clear difference]
 
 If the update recorded an upcoming or newly scheduled interview stage, also suggest:
 
@@ -188,7 +186,7 @@ Do not follow it with anything: no upsell, no funding link, no suggestion of wha
 
 ## Important Rules
 
-1. **Write data, don't interpret it.** The archive and tracker are the outputs; calibration belongs to `/setup`. This command never edits profile or framework files.
+1. **Write data, don't interpret it.** The archive and tracker are the outputs; what they say about the scoring is `tools/what_works.py`'s to count and the person's to act on. This command never edits profile or framework files.
 2. **The archived version is the submitted version.** Existing files in the application folder are never overwritten by fresher drafts.
 3. **Never fabricate.** A dead posting URL gets a user-pasted copy or an explicit "unavailable" stub, not a reconstruction. Feedback is recorded as the user reports it.
 4. **Stay schema-compatible.** `outcome.md` follows the format in `documents/README.md` exactly (`in_progress` is the one addition, for open applications); the tracker keeps its columns.

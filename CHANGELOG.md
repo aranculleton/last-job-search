@@ -20,6 +20,39 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The docs now say what the build does, and newcomers get a plain-English start.**
+  - *README and START_HERE* are rewritten for someone who has never met the maintainer:
+    what you need, three steps, what to say to it, and which model suits what.
+  - *Person-facing guides* (SETUP, RUNBOOK, SECURITY, ARCHITECTURE, CONTRIBUTING,
+    documents/README, automation/README) are corrected where they disagreed with the
+    code. Fixes include:
+    - installing from `requirements.txt`;
+    - what a round keeps, and that `--from-scraped` needs `--keep-intermediates`;
+    - `CV` filenames, the chase rule, what `/notion-sync` sends, and where portals are
+      switched;
+    - note limits by LinkedIn plan, and the full cut list;
+    - an automation set-up with no schedule to type. Personal changes to a routine now
+      go in `profile/CLAUDE.md`, because a sync puts the app's prompt files back.
+  - *Commands:*
+    - `/add-template` keeps templates under `profile/`;
+    - `/reply` logs only what went and sets the statuses the log cannot know;
+    - `/outcome` uses `followups.py`'s clock;
+    - `/rank`, `/notion-sync` and `/apply` read scores from `documents/rounds/`;
+    - every command that writes reads the learned brief first;
+    - `/apply` and `/interview` use the research and grounding agents by name;
+    - `/html-report` sends the file;
+    - `/network` records a sent note;
+    - a lost "/setup Path A" hand-off is gone.
+  - *Skills:*
+    - connection-note limits (200 free, 300 Premium);
+    - the cut list and the salary flag on the top of the range;
+    - suppression by sent rows only;
+    - years bands measured against years held;
+    - consistent summary, bullet and letter rules;
+    - real-search examples replaced with invented ones.
+
 ### Changed
 
 - **Every session starts lighter, and says which model suits the work.**
@@ -234,7 +267,8 @@ make sense to somebody whose repo just received it.
   what is pending, with what runs it and how long it takes; the twice-weekly shortlist carries
   the same line. **If you set up before 15 October 2026,** your next sync lists the upgrades
   waiting for you. This sync is the old copy of the sync and cannot, so the session runs
-  `python3 tools/profile_upgrades.py` once to see them now. Nothing runs without a yes.
+  `python3 tools/profile_upgrades.py` once to see them now. Nothing runs without a yes
+  (superseded: upgrades Claude can do alone now apply themselves; see the later entry).
   No profile upgrade: this is what lists them.
 - **Your LinkedIn job alerts can feed every round.** LinkedIn's alert emails are its own match
   for you, and they carry roles a keyword search ranks out of reach. Set `JOB_ALERT_QUERY` in

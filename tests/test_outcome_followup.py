@@ -5,8 +5,9 @@ implementation), so these tests pin the invariants that would break
 silently: the draft-only rule (the branch must never send anything on the
 user's behalf), the no-new-claims rule that keeps follow-ups inside the
 framework's never-fabricate boundary, the two-follow-up cap that terminates
-into /outcome's own no_response flow, and the deliberate contrast with
-/gmail-sync's 30-day staleness flag.
+into /outcome's own no_response flow, the one clock (tools/followups.py, which
+the daily brief reads too), and the deliberate contrast with /gmail-sync's
+30-day staleness flag.
 """
 import subprocess
 import sys
@@ -35,10 +36,25 @@ class OutcomeFollowupBranchSpec(unittest.TestCase):
     def test_followup_argument_documented(self):
         text = COMMAND.read_text(encoding="utf-8")
         self.assertIn(
-            "`followup <N>`",
+            "`followup <company>`",
             text,
             "spec lost the /outcome followup argument forms",
         )
+
+    def test_followup_candidates_come_from_followups_py(self):
+        """One clock: the brief, open_actions --due and /outcome read tools/followups.py.
+
+        /outcome once ran its own 10-day threshold, with none of the holds
+        (an interview, an offer, a referral, DO NOT CHASE), so it chased an
+        application the daily brief was deliberately holding.
+        """
+        text = COMMAND.read_text(encoding="utf-8")
+        self.assertIn("python3 tools/followups.py", text,
+                      "the follow-up branch must take its candidates from tools/followups.py")
+        self.assertNotIn("`followup <N>`", text,
+                         "an N-day threshold is a second clock beside followups.py's")
+        self.assertNotRegex(text, r"\b10[- ]days?\b|10\+ days",
+                            "a 10-day clock is back beside followups.py's 7 days")
 
     def test_draft_only_rule_present(self):
         text = COMMAND.read_text(encoding="utf-8")
@@ -69,7 +85,7 @@ class OutcomeFollowupBranchSpec(unittest.TestCase):
         self.assertIn(
             "30-day staleness flag",
             text,
-            "spec lost the rationale for the 10-day nudge vs /gmail-sync's 30-day alarm",
+            "spec lost the contrast between followups.py's nudge and /gmail-sync's 30-day alarm",
         )
 
     @unittest.skipUnless(

@@ -8,10 +8,11 @@ Follow these steps **exactly in order**. Do not skip steps.
 
 ## Step 0: Read Existing Profile Files
 
-Read these two files in parallel before doing anything else. You must know what is already there so you do not propose duplicates.
+Read these files in parallel before doing anything else. You must know what is already there so you do not propose duplicates.
 
 - `profile/01-candidate-profile.md`
 - `profile/02-behavioral-profile.md`
+- `profile/skills.py` (its `ITEMS` are the skills a resume may claim, and `NOT_HELD` the ones it never may)
 
 Hold this content in context throughout the command. Do not re-read these files later.
 
@@ -105,7 +106,7 @@ After enriching all items, build a deduplicated competency map. Group findings i
 
 **Technical Skills - Primary** (core languages, frameworks, methods you use regularly)  
 **Technical Skills - Secondary** (tools you have used but are not primary)  
-**Domain Knowledge** (subject matter expertise: geophysics, ML, NLP, etc.)  
+**Domain Knowledge** (subject matter expertise: supply chain, forecasting, ML, etc.)  
 **Methods and Practices** (agile, version control, reproducibility, testing, etc.)  
 **Soft / Behavioral** (leadership, communication, collaboration signals from references and project descriptions)  
 
@@ -114,7 +115,7 @@ For each competency, record:
 - The source item it came from (e.g. "Coursera - Deep Learning Specialisation", "GitHub - repo-name", "Reference letter - Jens Jensen")
 - Whether it came from direct lookup (A), inference (B), or both
 
-Remove anything already present in `01-candidate-profile.md` or `02-behavioral-profile.md`.
+Remove anything already present in `01-candidate-profile.md`, `02-behavioral-profile.md` or `skills.py` `ITEMS`, and never propose a skill `NOT_HELD` names.
 
 ---
 
@@ -169,14 +170,22 @@ Wait for the user's response before writing anything.
 Apply only the confirmed items. Use the Edit tool to add to the relevant sections of each file - do not rewrite entire files.
 
 ### Additions to `01-candidate-profile.md`
-- Technical skills (primary and secondary) → append to the Technical Skills section
-- Domain knowledge → append to the Domain Knowledge or Technical Skills section (match the existing structure)
-- Methods and practices → append appropriately
+Put each item under the heading its evidence belongs to, using the headings the profile already has. `profile.example/01-candidate-profile.md` shows the shape every profile starts from:
+- A tool, method or piece of domain knowledge used in a role → that role's `### Title - Employer (dates), City` block, as an "Additional detail available for tailoring" line
+- A course, module, thesis or specialisation → `## Education`
+- A certification → `## Certifications`, saying whether it is held or in progress; one in progress is never written as held
+- A side project, a repository or a publication → the profile's projects section, or a `## Projects` section added at the end of the file when it has none (the example person's has none)
 
 For each addition, add a brief source annotation in a comment or parenthetical: *(Coursera - Deep Learning Specialisation)*, *(GitHub - project-name)*, etc. This makes future `/expand` runs idempotent.
 
+### Additions to `profile/skills.py`
+A skill written only into `01` never reaches a resume: `tools/skills_block.py` prints only what `ITEMS` in `profile/skills.py` lists. So for each technical skill confirmed above:
+- **Evidenced as used** (in a role, a project or a held certification): add an `ITEMS` row, `(category, "canonical name", r"regex")`, in a category the file already uses (its `LABELS` and `MERGE` say which line prints it), and add the name to `SECONDARY` when it is a minor one. No regex may match a `NOT_HELD` pattern; a test fails if one does.
+- **Not clearly held** (a syllabus topic, or a skill inferred rather than shown): a comment beside `ITEMS`, `# [CONFIRM: <skill>, from <source>: held well enough to claim on a resume?]`, never a row. A later session asks the person, a few at a time.
+- If `profile/CLAUDE.md`'s summary lists skills, add the held ones there too, so the two do not disagree.
+
 ### Additions to `02-behavioral-profile.md`
-- Soft/behavioral signals → append to the "Strongest Behavioral Traits" or "How I Work Best" section (match existing structure)
+- Soft/behavioral signals → the profile's strengths and how-they-work-best entries. In the example person's file (`profile.example/02-behavioral-profile.md`) those are the `**Strengths:**` and `**Works best:**` lines; a profile with headings for them uses its headings. Match the existing structure.
 - Always label inferred behavioral additions: *[Inferred from reference letter - Name / review before relying on this]*
 
 ---
@@ -190,6 +199,9 @@ After writing, present:
 
 ### Added to 01-candidate-profile.md
 [List each competency added, with source]
+
+### Added to profile/skills.py
+[Each ITEMS row added, and each skill left as a CONFIRM comment, with source]
 
 ### Added to 02-behavioral-profile.md
 [List each behavioral signal added, with source]

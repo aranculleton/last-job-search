@@ -22,7 +22,8 @@ Alumni first, cold last. The response rate difference is large enough that
 running them in the wrong order wastes the good hooks.
 
 Every query below runs with `allowed_domains=["linkedin.com", "<country>.linkedin.com"]`,
-and every returned URL goes through `discovery.is_person_url()` first. The `site:`
+and every returned URL goes through `discovery.resolve_result()` first (`is_person_url()`
+alone would discard the post permalinks where tier-1 signals live). The `site:`
 operator is not used: see "The one search pattern that works" in `SKILL.md` for
 what happened when it was.
 

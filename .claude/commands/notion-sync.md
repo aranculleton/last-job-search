@@ -1,6 +1,6 @@
 # /notion-sync - Push Ranked Jobs and Applications to a Notion Database
 
-You are publishing a **read-only view** of the job search into the user's Notion workspace: one database row per job, with a detailed page per shortlisted match. The repo files stay the system of record - `job_scraper/seen_jobs.json` owns scraped/ranked jobs and `job_search_tracker.csv` owns applications. Notion is a disposable presentation layer on top of them; nothing ever syncs back.
+You are publishing a **read-only view** of the job search into the user's Notion workspace: one database row per job, with a detailed page per shortlisted match. The repo files stay the system of record - `documents/rounds/<round>.json` holds each round's scored shortlist, `job_scraper/seen_jobs.json` holds the scores `/rank` wrote and every posting ruled out, and `job_search_tracker.csv` owns applications. Notion is a disposable presentation layer on top of them; nothing ever syncs back.
 
 This command requires the **Notion MCP server** (OAuth). It reads state, upserts pages, and stops - it never ranks, applies, or edits repo files. Notion is the in-tree reference binding; the sync contract itself is tool-agnostic (see "Adapting to Another Tool" at the end - only the two sections marked *(Notion binding)* are tool-specific).
 
@@ -38,11 +38,11 @@ The command is **silently optional**: when the destination is not reachable, the
 
 Validate the cheap, local precondition before creating anything external. A run with nothing to sync must exit with **zero side effects** - no database created, no state file written.
 
-1. Read `job_scraper/seen_jobs.json` and `job_search_tracker.csv` (either may be missing).
-2. Select `seen_jobs.json` entries with status `ranked` whose `rank_score` meets the threshold from Step 0. `--all` lifts the threshold entirely.
-3. Every tracker row joins the sync set (an applied-to job always syncs, ranked or not), matched to `seen_jobs.json` entries case-insensitively on company + role where possible. Tracker rows with no `seen_jobs.json` entry sync too - build their Key as `<company>_<role>` lowercased with underscores.
-4. **Status precedence:** the tracker wins. A job that is `ranked` in `seen_jobs.json` but `interview` in the tracker syncs as `interview`. Jobs only in `seen_jobs.json` keep their stored status. **Deadline precedence: the tracker wins too** - the tracker's `deadline` (written by `/apply` from the posting the application was actually built on) overrides the `seen_jobs.json` value; jobs only in `seen_jobs.json` keep the scraper's stored deadline. Omit the property when neither states one, and **never reconcile the two by picking the earlier or later date** - both were read from the posting at different times, and the safe-looking `min()` substitutes a date the user never applied against.
-5. **If the sync set is empty** (no ranked entries meet the threshold and there are no tracker rows), say "Nothing to sync - run `/scrape` and `/rank` first" (or, when jobs exist but all score below the threshold, say so and suggest `--min-score`/`--all`) and **stop**.
+1. Read every `documents/rounds/*.json`, `job_scraper/seen_jobs.json` and `job_search_tracker.csv` (any may be missing).
+2. Select the scored jobs whose score meets the threshold from Step 0; `--all` lifts the threshold entirely. A round row's score is its `fit` (0-100); its `priority` is only the shortlist order and can exceed 100, so it is never the score. A `seen_jobs.json` entry with status `ranked` carries `rank_score`, and where both exist for one posting (matched with `tools/lookup_score.py`'s `norm()` on the URL) the `rank_score` wins, being the deeper read. Where a posting is in several rounds, the newest round's row is the one used. A `seen_jobs.json` entry that is `excluded` or `skipped` never syncs as a job, even when a round listed it.
+3. Every tracker row joins the sync set (an applied-to job always syncs, ranked or not), matched to the scored jobs (round rows and `seen_jobs.json` entries) case-insensitively on company + role where possible. Tracker rows with no round row or `seen_jobs.json` entry sync too - build their Key as `<company>_<role>` lowercased with underscores.
+4. **Status precedence:** the tracker wins. A job that is scored but `interview` in the tracker syncs as `interview`. A scored job not in the tracker syncs as `ranked`, or `expired` when `seen_jobs.json` says so. **Deadline precedence: the tracker wins too** - the tracker's `deadline` (written by `/apply` from the posting the application was actually built on) overrides the `seen_jobs.json` value; jobs only in `seen_jobs.json` keep the scraper's stored deadline. Omit the property when neither states one, and **never reconcile the two by picking the earlier or later date** - both were read from the posting at different times, and the safe-looking `min()` substitutes a date the user never applied against.
+5. **If the sync set is empty** (no scored job meets the threshold and there are no tracker rows), say "Nothing to sync - run `/scrape` first" (or, when jobs exist but all score below the threshold, say so and suggest `--min-score`/`--all`) and **stop**.
 6. State the counts before touching the destination: how many rows will be created or checked, and the threshold in effect.
 
 ---
@@ -60,19 +60,19 @@ Validate the cheap, local precondition before creating anything external. A run 
    |----------|------|----------------|
    | Name | title | `<Role> - <Company>` |
    | Company | rich text | |
-   | Score | number | 0-100 from `rank_score` |
-   | Verdict | select | Strong Fit / Good Fit / Moderate Fit / Weak Fit / Poor Fit |
+   | Score | number | 0-100: `rank_score` from `/rank`, else the round row's `fit`; never `priority` |
+   | Verdict | select | Strong Fit / Good Fit / Moderate Fit / Weak Fit / Poor Fit: `rank_verdict`, else the band the Score falls in (75+, 60-74, 45-59, 30-44, under 30) |
    | Status | select | `ranked` / `drafted` / `applied` / `interview` / `offer` / `hired` / `rejected` / `no_response` / `offer_declined` / `withdrawn` / `expired` - canonical tracker spellings per **Tracker status vocabulary** in `/outcome`; Notion options grow to match as values appear |
    | Fit | select | high / medium / low (scraper quick-fit) |
    | Deadline | date | tracker `deadline` column, falling back to `seen_jobs.json`'s `deadline` when the row has none; omit when neither states one |
    | First seen | date | |
-   | Ranked | date | `rank_date` from `seen_jobs.json`; omit when not ranked |
+   | Ranked | date | `rank_date` from `seen_jobs.json`; omit when `/rank` has not scored it |
    | Applied on | date | tracker `date` column; omit when not in the tracker, and omit when the status is `drafted` |
    | Channel | select | tracker `channel` column (e.g. portal / email / referral); options grow as values appear |
    | CV file | rich text | tracker `cv_file` column - the filename only, never document content |
    | Cover letter | rich text | tracker `cover_letter_file` column - the filename only, never document content |
    | URL | url | posting URL |
-   | Key | rich text | the job's key in `seen_jobs.json` - dedup anchor, never edited by hand |
+   | Key | rich text | the job's key in `seen_jobs.json`, or the round row's `url` when it has none - dedup anchor, never edited by hand |
 
    The tracker-sourced properties (Applied on, Channel, CV file, Cover letter) stay empty for jobs that have no tracker row. CV file and Cover letter fill in once `/apply` records the draft; Applied on stays empty until `/outcome` records the submission. Only filenames ever sync; document contents stay local.
 
@@ -100,7 +100,7 @@ Batch politely: if the MCP server rate-limits, back off and continue; report any
 
 The page body is what makes a row worth clicking. Build it **only from stored data and actually fetched content**:
 
-1. **Fit summary** - a short section from `seen_jobs.json` fields: score, verdict, quick-fit level, first-seen and ranked dates. If the job is in the tracker, add the application timeline (date applied, channel, current status, dated notes from the `notes` column) and name the submitted documents from `cv_file`/`cover_letter_file` (filenames only - the documents themselves never sync). **When the status is `drafted`, write "drafted YYYY-MM-DD, not yet submitted" instead of a date applied, and call the files drafts rather than submitted documents** (page bodies are write-once - Step 4.3).
+1. **Fit summary** - a short section from the stored fields: score, verdict, quick-fit level, first-seen and ranked dates, and from a round row its `bar` verdict and any `warm_route_note` or `outreach_pending_note`. If the job is in the tracker, add the application timeline (date applied, channel, current status, dated notes from the `notes` column) and name the submitted documents from `cv_file`/`cover_letter_file` (filenames only - the documents themselves never sync). **When the status is `drafted`, write "drafted YYYY-MM-DD, not yet submitted" instead of a date applied, and call the files drafts rather than submitted documents** (page bodies are write-once - Step 4.3).
 2. **The posting** - WebFetch the job URL and write a readable digest: what the role is, key requirements, practical details (location, deadline, salary if stated). Retry a 403 with browser headers per `.claude/skills/job-application-assistant/09-web-research.md` first. If the fetch still fails or redirects to a listing page, write "Posting no longer available (checked YYYY-MM-DD)" - **never reconstruct a posting from memory**.
 3. **Links** - the posting URL; find the archive with `python3 tools/outreach.py --folder "<Company>" "<Role>"` (the folder on disk, or the name given by the **Subfolder naming** rule in `documents/README.md`), and if it exists locally, name its path (plain text - the destination cannot link into the filesystem).
 

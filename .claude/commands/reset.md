@@ -131,6 +131,9 @@ documents/shortlists/
 documents/others/
   - [subfolder/filename] or "(empty)"
 
+documents/ (anything else: a file at its top level, a folder not listed above)
+  - [path] or "(none)"
+
 documents/README.md - NOT deleted (instructions file)
 ```
 
@@ -212,7 +215,19 @@ rm -rf documents/others/
 
 `documents/network/` holds a folder per contact (prep documents, drafts), so the files
 directly inside it are not all of it. `tools/personal_paths.py` is the list these commands
-must match: a personal path missing here survives a reset.
+must match: a personal path missing here survives a reset. So finish with everything else
+under `documents/` it calls personal, which keeps `README.md` and the `.gitkeep` files:
+
+```bash
+python3 - <<'EOF'
+import glob, os, sys
+sys.path.insert(0, "tools")
+from personal_paths import is_personal
+for p in glob.glob("documents/**", recursive=True):
+    if os.path.isfile(p) and is_personal(p):
+        os.remove(p)
+EOF
+```
 
 Then the rendered documents, never the app's templates and fonts:
 

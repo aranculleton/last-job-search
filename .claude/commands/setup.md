@@ -57,7 +57,8 @@ that the job search and the test resume need them, in a new session. If LaTeX is
 
 Then look for an existing `profile/`. If there is one, this is an update, not a setup: ask what
 they want to change and go to that part of Step 1 (`--section <name>` does this directly:
-`identity`, `history`, `search`, `market`, `voice`, `documents`, `boards`). Never overwrite a
+`history`, `search`, `market`, `voice`, `documents`, `boards`, the names marked below;
+who they are and what they did is `history`). Never overwrite a
 filled profile wholesale, and never put placeholders back into one.
 
 **Run for a profile upgrade** (`/upgrade` names the section; it runs in the background

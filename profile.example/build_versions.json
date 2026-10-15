@@ -8,11 +8,11 @@
     "date": "2026-10-15"
   },
   "drafts": {
-    "version": 7,
+    "version": 8,
     "date": "2026-10-15"
   },
   "expand": {
-    "version": 1,
+    "version": 2,
     "date": "2026-10-15"
   },
   "history": {
@@ -20,19 +20,19 @@
     "date": "2026-10-15"
   },
   "interview": {
-    "version": 3,
+    "version": 4,
     "date": "2026-10-15"
   },
   "market": {
-    "version": 3,
+    "version": 4,
     "date": "2026-10-15"
   },
   "networking": {
-    "version": 8,
+    "version": 9,
     "date": "2026-10-15"
   },
   "prep-docs": {
-    "version": 4,
+    "version": 5,
     "date": "2026-10-15"
   },
   "research": {
@@ -40,11 +40,11 @@
     "date": "2026-10-15"
   },
   "routines": {
-    "version": 1,
+    "version": 2,
     "date": "2026-10-15"
   },
   "screening": {
-    "version": 3,
+    "version": 4,
     "date": "2026-10-15"
   },
   "search": {
@@ -52,7 +52,7 @@
     "date": "2026-10-15"
   },
   "upskill": {
-    "version": 2,
+    "version": 3,
     "date": "2026-10-15"
   },
   "voice": {

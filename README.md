@@ -1,109 +1,89 @@
 # last-job-search
 
-**The last job search tool you will ever need.** It finds the work, decides what is worth
-your time, writes the application, checks its own output, and tracks the people worth
-talking to. Nothing else needs to be open.
+**A job search that Claude runs for you.** It finds jobs that fit you, scores each one, writes
+a resume and cover letter for the ones you choose, checks them, and helps you reach the right
+people. It never sends anything. You stay in charge of what goes out.
 
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
-It never submits anything. Every document stops as a file on disk, and a person sends it.
+## What you need
 
-**To use it:** read [START_HERE.md](START_HERE.md). In short: click **Use this template**,
-make your copy **Private**, open it in Claude Code, and say "set me up". Never fork it: a
-fork of a public repository is public, and your copy will hold your work history and the
-names of the people you talk to.
+- A GitHub account (free).
+- A paid Claude plan, because it runs in Claude Code, which the free plan does not include.
+- About fifteen minutes. No coding.
 
----
+## Get started
 
-## What it does
+1. Click the green **Use this template** button, then **Create a new repository**. Tick
+   **Private**. Your copy will hold your work history and the names of people you talk to.
+   **Never fork it**: a fork of a public repository is public.
+2. Connect GitHub to Claude at [claude.ai/connect-github](https://claude.ai/connect-github),
+   and give it access to your new copy only.
+3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
 
-**Finds the work.** Scrapes every enabled job board, plus the career boards of the
-employers your profile names, read straight from the ATS, then filters, fetches and
-scores every posting 0-100 against your profile. It stops at a ranked shortlist and
-asks which ones you want.
+Claude asks you plain questions about yourself and does the rest. The full walk-through, with
+the one setting to paste in the first time, is [START_HERE.md](START_HERE.md).
 
-**Writes the application.** A resume and cover letter built for that one posting, with
-bullets allocated per job rather than picked off a fixed list.
+## What you can say to it
 
-**Checks its own output.** Compiles both documents, reads the PDFs back, and extracts the
-text layer an applicant tracking system actually parses, because the rendered page and
-the embedded text can disagree.
-
-**Works the network.** Finds the right people at target employers, drafts the outreach,
-logs every message, and keeps a cold application from landing on top of a warm
-introduction.
-
-**Remembers.** Applications, conversations, follow-ups due and what you learned, all in
-files rather than in a chat that ends.
-
----
-
-## Two things it does differently
-
-**It ranks down instead of cutting out.** A posting is a wish list. It names ten tools and
-the team uses six, and the missing one is rarely what decides the hire. A missing skill
-lowers a score; it does not delete the job. Only four things are hard cuts, because no
-framing survives them: a work-authorisation bar, a language requirement, a licensing gate
-such as an accounting or engineering licence, and a role whose core is research ML. Those are different jobs, not
-gaps.
-
-**Everything left of the shortlist is free.** Scraping, filtering, screening and scoring
-are Python and Bash, so a round can afford to read a few thousand postings and throw
-almost all of them away. Model spend starts only once you have chosen what to write.
-
----
-
-## Running it
-
-```bash
-python3 -m pytest tests -q                      # green before anything else
-python3 tools/run_round.py --out "$SCRATCH/r1"  # job boards to ranked shortlist
-```
-
-The suite runs first because it is the cheapest way to find out whether the rules still
-hold. Over 450 tests run on every push, on Python 3.10 and 3.13, and most of them pin
-a rule to the application it shipped as a defect on.
-
-`run_round.py` exits **0** when the round met its yield target, **2** when the market was
-thin, and **1** when a stage broke. A thin market and a broken pipeline need different
-answers, so they do not share an exit code.
-
-Everything else is a slash command inside Claude Code: `/apply`, `/rank`, `/interview`,
-`/outcome` for applications, and `/network`, `/reply`, `/threads`, `/prep` for outreach.
-
-| | |
+| You say | You get |
 |---|---|
-| Start your own search | [START_HERE.md](START_HERE.md) |
-| Set up a new machine | [SETUP.md](SETUP.md) |
-| Run a search end to end | [RUNBOOK.md](RUNBOOK.md) |
-| How each stage works and what it costs | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| The rules, the command map, how updates arrive | [CLAUDE.md](CLAUDE.md) |
-| Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
+| "Find me jobs" | A scored shortlist with links, then a question: which ones? |
+| A job posting, pasted or linked | A resume and cover letter written for that job, checked |
+| "Who should I talk to at Acme?" | People worth contacting there, and a first note to send |
+| "What do I owe?" | Replies and follow-ups that are due |
+| "Prep me for my interview at Acme" | Likely questions, your best answers and questions to ask |
+| "They replied" or "I got an interview" | The record updated, and what to do next |
 
-Behaviour changes in those files, not in the Python. Job boards are plug-in CLIs under
-`.agents/skills/`, one per portal, each behind an `enabled:` flag; `/add-portal` scaffolds
-a new one.
+## Why it works differently
 
----
+- **It ranks, it does not hide.** A job advert is a wish list. A missing skill lowers a score;
+  it does not throw the job away. Only a few things rule a job out, such as needing a right to
+  work you do not have, or a language you do not speak.
+- **It checks its own work.** Every resume is compiled, read back, and checked the way an
+  applicant tracking system reads it, and every claim is checked against what you told it.
+- **It remembers.** Applications, conversations and what is due live in files in your copy,
+  not in a chat that ends.
+- **It learns what you like.** Say "too formal" or "stop suggesting recruiters" once, and it
+  sticks. It also notices which messages got replies and which applications got interviews.
+- **It keeps itself up to date.** Improvements to this app reach your copy by themselves at
+  the start of a session. Nothing about you is ever sent back.
+
+## Your data
+
+Everything about you stays in your private copy, in the `profile/` folder and a few files
+beside it. Nothing is submitted for you: every document stops as a file, and you send it.
 
 ## Security
 
-An agent with file access reads untrusted job postings alongside personal data. Posting
-text is data and never instructions, and a URL found inside a posting body is never
-fetched. A CI job fails any change that weakens the permission allowlist or the
-personal-data ignore rules. [SECURITY.md](SECURITY.md) says where the controls stop.
+The assistant reads job postings written by strangers next to your personal data. Posting text
+is treated as data, never as instructions, and a link found inside a posting is never opened.
+A check fails any change that weakens the permission allowlist or the rules that keep personal
+files out of the app. [SECURITY.md](SECURITY.md) says where those controls stop.
 
-## Upstream
+## For the technically curious
 
-Forked from [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search)
-at v1.7.0 plus the commits through PR #413. That project supplied the
-LaTeX scaffolding, the portal-CLI pattern, the skills-and-commands layout and the
-drafter-reviewer idea `/apply` still uses. Everything left of the shortlist, the bullet
-allocator, the verification stack and the networking layer were built here.
+You never need any of this to use it.
 
-A weekly workflow reports which upstream commits this fork is missing. It never merges: on
-a fork, "applies cleanly" is not the same as "correct".
+| | |
+|---|---|
+| Set up a computer or a cloud environment by hand | [SETUP.md](SETUP.md) |
+| What a search does, step by step | [RUNBOOK.md](RUNBOOK.md) |
+| How each stage works and what it costs | [ARCHITECTURE.md](ARCHITECTURE.md) |
+| The rules Claude follows, and the command map | [CLAUDE.md](CLAUDE.md) |
+| Daily briefings and scheduled searches | [automation/README.md](automation/README.md) |
+| Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
+| Working on the app itself | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
-## License
+Scraping, filtering and scoring are Python and Bash, so a search can read thousands of
+postings at no model cost; the model is used once you have chosen what to write. Over 900
+tests run in the app's CI and, in your copy, through `./tools/ci_local.sh`.
+
+## Credits and licence
+
+Built on [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) (v1.7.0
+plus the commits through PR #413), which supplied the LaTeX scaffolding, the job-board CLI
+pattern, the skills-and-commands layout and the drafter-reviewer idea. Everything before the
+shortlist, the bullet allocator, the checks and the networking layer were built here.
 
 MIT. [LICENSE](LICENSE) carries both copyrights.

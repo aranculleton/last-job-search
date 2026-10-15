@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.3
+framework_version: 2.1.4
 ---
 
 # Cover Letter Templates and Tailoring Guide
@@ -83,12 +83,14 @@ The font wrapper is mandatory - if you just move `\begin{itemize}` outside `\let
 %     MAIN COVER LETTER CONTENT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\currentdate{\today}
+\currentdate{[the date, written out: March 4, 2026]}
 \lettercontent{Dear [Name/Team],}
 
-\lettercontent{[Opening paragraph - role, connection to background, 2-3 sentences]}
+\lettercontent{[Opening paragraph - the strongest match to the posting, 2-3 sentences]}
 
-\lettercontent{[Body paragraph - most relevant experience, introducing the bullet list]}
+\lettercontent{[Company paragraph - why this role, why this company specifically, one verified fact]}
+
+\lettercontent{[Lead-in sentence introducing the bullet list]}
 
 {\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont
 \begin{itemize}
@@ -97,11 +99,7 @@ The font wrapper is mandatory - if you just move `\begin{itemize}` outside `\let
     \item {[Concrete achievement/skill 3]}
 \end{itemize}\par}
 
-\lettercontent{[Connection to company - why this role, why this company specifically]}
-
-\lettercontent{[Personal fit paragraph - behavioral strengths, team contribution, 2-3 sentences]}
-
-\lettercontent{I look forward to hearing from you.}
+\lettercontent{[Closing paragraph - a sentence specific to this role, then the call to action]}
 
 \begin{flushright}
 % No trailing \\ inside \closing{} - cover.cls appends its own \\, and a
@@ -118,7 +116,7 @@ The font wrapper is mandatory - if you just move `\begin{itemize}` outside `\let
 | Command | Purpose |
 |---------|---------|
 | `\namesection{}{Name}{contact info}` | Header with name and contact |
-| `\currentdate{date}` | Date field (use `\today` or explicit date) |
+| `\currentdate{date}` | Date field. Write the date out: `\today` is evaluated at compile time and re-dates the letter on every recompile |
 | `\lettercontent{text}` | Body paragraph (adds spacing after) |
 | `\closing{text}` | Closing line |
 | `\signature{name}` | Printed name below signature |
@@ -151,7 +149,7 @@ the reader skims; a letter they finish is worth more than one that says more.
   the one where every line has to earn its place.
 
 **How to cut, in order:** the sentence restating the posting; the second sentence of any
-bullet; any bullet duplicating the resume; adjectives and scene-setting; a fourth bullet.
+bullet; any bullet duplicating the resume; adjectives and scene-setting; the third bullet, if the first two carry the case.
 Never cut the company-specific paragraph to make room, and never cut a concession you have
 decided is warranted, since a half-made concession is worse than none.
 - When adding company-specific content, trim other content to compensate rather than adding net length
@@ -162,7 +160,7 @@ decided is warranted, since a half-made concession is worse than none.
 
 ### Bullet Lists
 - Place `\begin{itemize}...\end{itemize}` **outside** a `\lettercontent{}` block (see "Known template pitfall" above), wrapped in the matching Raleway-Medium `\fontspec` so the bullet font matches the body
-- 3-5 bullets is ideal
+- Three bullets, each profile evidence tied to a stated requirement
 - **No bold, no italics, anywhere in a cover letter.** No `\textbf`, no `\textit`, no
   `\emph`, no `\bfseries`, no `\underline`. A letter is prose a person reads top to
   bottom, and typographic emphasis in it reads as a deck or a marketing email rather than

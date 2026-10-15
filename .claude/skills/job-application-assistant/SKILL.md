@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.2
+framework_version: 1.5.3
 ---
 
 # Job Application Assistant
@@ -32,7 +32,7 @@ When the user provides a job posting (URL or text), follow this workflow:
 - Read the most relevant existing CV variant from `cv/` as a starting point
 - Follow the guidelines in `05-cv-templates.md`
 - Create `cv/<Prefix>_Resume_<ABBR>.tex` with tailored content (`<Prefix>` is `profile/person.json` `identity.file_prefix`)
-- Adjust: profile statement, skills section, experience bullet emphasis, section order
+- Adjust: profile statement, skills section, experience bullet emphasis (the section order is the profile's and never varies per posting)
 
 ### Step 3: Write Cover Letter
 - Follow the writing style rules in `03-writing-style.md` (critical: no em-dashes, no cliches)

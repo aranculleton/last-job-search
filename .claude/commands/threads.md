@@ -36,3 +36,8 @@ only, ever. `compose.validate()` refuses check-in wording ("just checking in",
 progress can be pointed at a live application.
 
 Finish with the platform budget and the single highest-value next action.
+
+A message the person says went, a first note or a nudge, is recorded the way `/network`
+says under "When they say a note went": the outbound row with its full text, then the
+contact's `status`, `next_action` and `next_action_due`. After a nudge, which is the only
+one, `next_action` is to close the thread out if they stay silent, not another nudge.
