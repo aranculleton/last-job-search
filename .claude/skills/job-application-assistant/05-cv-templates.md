@@ -239,7 +239,7 @@ structure of claims for a real person.
 **For Transport Planning / Logistics Network roles:**
 > Operations analyst with direct transport-planning experience: a route-consolidation model that removed 9% of weekly van miles, the demand forecasts behind 2,400 SKUs, and the Power BI service-level reporting used by 30+ operations managers. A mathematics graduate who builds the model and the reporting that carries it to the planners. `[Tailor: name their network and the constraint they plan against.]`
 
-Statements labeled *[Used for: <company>_<role>]* were extracted from archived application drafts by `/setup` Path A. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `profile/01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
+Statements labeled *[Used for: <company>_<role>]* were taken from archived application drafts. They are **phrasing references, never fact sources**: when drafting from one, every factual claim still comes from `profile/01-candidate-profile.md` - a past tailored draft does not vouch for its own accuracy.
 
 ### Skills section (generator-enforced)
 

@@ -98,8 +98,9 @@ there costs one cheap pass. A false positive is permanent and nobody sees it.
 ### The screen cuts on quoted facts only
 
 `text_screen.py` cuts when the posting says something that settles it: a licensing
-requirement, a language requirement, a citizenship bar. Every cut carries the sentence
-it cut on, so the decision is checkable afterwards.
+requirement, a language requirement, a citizenship or residence bar, a vacancy open to
+existing staff only, or a stated pay range whose top is below the person's cut line.
+Every cut carries the sentence it cut on, so the decision is checkable afterwards.
 
 Salary and degree minimums are flags, not cuts. A posted range below target is
 information for the person choosing, not grounds for removal.

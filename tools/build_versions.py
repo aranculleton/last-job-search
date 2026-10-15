@@ -115,8 +115,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", True, "the places a round searches cover your whole metro area and "
                                     "your country, and remote roles filed under the wider regions "
                                     "an employer abroad hiring where you live posts them in"),
+            (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "2de063127f699daf",
+        "fingerprint": "bb890cc34c5857cd",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -171,8 +172,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "the prep document is shown in full in the reply, "
                                     "never only its path"),
             (4, "2026-10-15", False, "a gap asked only as a preference is never a reason not to apply"),
+            (5, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "dc3a423c4aad48e5",
+        "fingerprint": "e19dab928a4ecc74",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -210,8 +212,9 @@ METHODS: dict[str, dict] = {
                                     "first whether you have already applied"),
             (6, "2026-10-15", False, "a refused outreach note no longer stops the batch, '8+ years' and 'per cent' are checked, a draft with no posting is said, the deadline reaches the tracker, and the bullet split no longer swings on a fraction of a point"),
             (7, "2026-10-15", False, "the verification checklist and the tools table moved out of CLAUDE.md into files read when they are needed, so every session starts lighter"),
+            (8, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "9b186af939ce5bbb",
+        "fingerprint": "c2c58621d06bf5d0",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -224,8 +227,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
             (3, "2026-10-15", False, "finds the application's folder under whichever name it "
                                     "was written, instead of starting a second one"),
+            (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "d0e4a6c327709741",
+        "fingerprint": "7c5df40cee9c4d9b",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -267,8 +271,9 @@ METHODS: dict[str, dict] = {
                                     "capital, check-ins are refused, tier 1 needs a post about "
                                     "your work, and the question in a first note is optional"),
             (8, "2026-10-15", False, "a reply after 'no action unless they reply' is owed, nobody is nudged against it, a dated close is not reopened, a catch-up message is not a connection request, and plain job asks are caught"),
+            (9, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "cfaf31995a01f133",
+        "fingerprint": "2204cb881b002a8f",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -285,8 +290,9 @@ METHODS: dict[str, dict] = {
                                     "and a round's queue decision never block a posting for "
                                     "good; postings on a Workday internal site are dropped"),
             (3, "2026-10-15", False, "exclusions the current rules only rank (a years bar, or a reason naming only the stage that wrote it) are screened again, while a range or degree knockout stands; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
+            (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "45a7da0a26dba591",
+        "fingerprint": "bf6bb0bc30877e67",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -294,16 +300,22 @@ METHODS: dict[str, dict] = {
         "run": "automation/README.md, for the tasks a newer version adds or changes",
         "ask": "The app's scheduled tasks have changed. Shall I set yours up the new way?",
         "files": ("automation/README.md", "tools/routines.py"),
-        "versions": (_first(),),
-        "fingerprint": "389893ed4d04dc5b",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+        ),
+        "fingerprint": "924dedb8fd21439b",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
         "gives": "competencies hidden in your documents found the current way",
         "run": "/expand, with each new item written as [CONFIRM: ...] rather than asked",
         "files": (".claude/commands/expand.md",),
-        "versions": (_first(),),
-        "fingerprint": "fa290e71bf18dc65",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+        ),
+        "fingerprint": "7fe28c77d24d08c2",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -314,8 +326,9 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-15", False, "no em dashes in the report it writes, and an invented "
                                     "example in place of a real one"),
+            (3, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
-        "fingerprint": "37ab76a4ab683c57",
+        "fingerprint": "5a83d707fcbda92d",
     },
 }
 

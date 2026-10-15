@@ -106,7 +106,7 @@ After enriching all items, build a deduplicated competency map. Group findings i
 
 **Technical Skills - Primary** (core languages, frameworks, methods you use regularly)  
 **Technical Skills - Secondary** (tools you have used but are not primary)  
-**Domain Knowledge** (subject matter expertise: geophysics, ML, NLP, etc.)  
+**Domain Knowledge** (subject matter expertise: supply chain, forecasting, ML, etc.)  
 **Methods and Practices** (agile, version control, reproducibility, testing, etc.)  
 **Soft / Behavioral** (leadership, communication, collaboration signals from references and project descriptions)  
 
