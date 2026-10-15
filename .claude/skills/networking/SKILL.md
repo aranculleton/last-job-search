@@ -18,9 +18,11 @@ are worth applying to and what documents do they need". This answers "which peop
 are worth talking to and what should be said to them".
 
 They are one pipeline, not two. The same employer, the same profile, the same
-tracker. `tools/company_key.py` is the join: a contact at "Acme" and an application
-to "Acme Analytics Inc." resolve to the same key, so a referral thread and an
-application record find each other automatically.
+tracker. `tools/company_key.py` is the join: a contact at "Acme Corp" and an application
+to "Acme Inc." resolve to the same key (`acme`), so a referral thread and an
+application record find each other automatically. An initialism and the full name
+(the contact's profile says "ABC", the application says "Acme Bank of Commerce") join
+only through the person's `COMPANY_ALIASES` in `profile/employers.py`.
 
 **The highest-value output is judgment, not volume.** Twenty mediocre names is a
 failure. Every message spends a scarce platform slot and a piece of the user's
@@ -40,7 +42,7 @@ done correctly*.
 | `tone.py` | Every tone rule as an enforceable check |
 | `compose.py` | Message assembly with hard length limits |
 | `reply.py` | Scenario classification and reply guidance |
-| `prep.py` | Call and interview prep documents |
+| `prep.py` | Call prep documents, for a call that came out of a thread |
 
 **Never hand-write a message without running `compose.validate()` on it.** The
 tone rules exist because each one was a correction made in practice; the checker
@@ -190,11 +192,13 @@ sponsorship") draws almost no replies, while a short note that starts from
 something real and asks about them gets answered. For example:
 
 > Hi Sasha, hope you're well. Your talk on forecasting stock levels stuck with
-> me. I work in data and I'm looking for my next role here. How did your team
-> settle on building the forecasts in-house rather than buying a tool? Would you
-> have fifteen minutes for a call one week?
+> me. I work in data and I'm looking for my next role here. Would you have
+> fifteen minutes for a call one week?
 
-That is the shape, and `first_note()` assembles it:
+That note is 186 characters, so it fits a free account's 200. Adding a question
+("How did your team settle on building the forecasts in-house rather than buying
+a tool?") takes it to 273, which `first_note()` refuses on a free plan and accepts
+on Premium. That is the shape, and `first_note()` assembles it:
 
     Hi Sasha, hope you're well. <common ground>. <about me>. [<question>?] <ask>.
 
@@ -231,14 +235,16 @@ That is the shape, and `first_note()` assembles it:
   who hires for it
 - say where the candidate wants their next role to be ("Acme is where I want my
   next role")
-- state work authorization. It costs a large part of the 300 characters and it is the
+- state work authorization. It costs a large part of the note's character limit and it is the
   sentence that turns a conversation into an application. **Recruiters are the
   one exception** (`recruiter=True`), because roles are their job.
 
-"Hope you're well" and "I'd love to" are allowed in a first note. They were
-banned on a frequency count, but frequency was never the problem: the notes
-that were answered carried both phrases, and so did the ones that were not.
-The body was the difference. They stay flagged in letters.
+"Hope you're well" and "I'd love to" are allowed in a first note when the person's
+`OWN_VOICE` in `profile/networking.py` names them. They were banned on a frequency
+count, but frequency was never the problem: the notes that were answered carried both
+phrases, and so did the ones that were not. The body was the difference. A person whose
+`OWN_VOICE` does not list them gets `ReadsAsGenerated` for them, and they stay flagged in
+letters either way.
 
 ### The referral ask: `compose.referral_ask()`
 
@@ -321,7 +327,7 @@ counted as ignored, which is wrong in both directions: it hid the people most
 worth a second message inside the bucket of people not worth one.
 
 Treat it as the best non-reply there is. They took an action, and the acceptance
-converted a 300-character invitation into a permanent 1st-degree DM channel with
+converted a short, character-capped invitation into a permanent 1st-degree DM channel with
 no character limit and no InMail credit. That is a materially better position
 than the day before, and it deserves a materially better message than the nudge
 an ignored invitation would get.
@@ -366,8 +372,13 @@ changes the channel, the length and the content of what gets sent.
 ## Pipeline state
 
 `network_contacts.csv` and `network_threads.csv`, beside the application tracker.
-Status is *derived from the messages*, never stored independently, so it cannot
-drift from the evidence.
+Status is *derived from the messages* wherever the log can know it (who spoke last,
+whether a request was accepted), so it cannot drift from the evidence. The statuses a
+message log cannot carry are stored on the contact row: `call_booked`,
+`in_conversation`, `referral_in_progress`, and the terminal `gone_cold`, `closed` and
+`converted_to_application`. A terminal row always wins, and a reply in the log outranks
+any other stored status, because a reply is owed whatever the row says
+(`state.effective_status()`).
 
 **Never surface someone already contacted.** If the user asks for a second contact
 at a company, pick a different person and change the angle so it does not read as
@@ -438,8 +449,8 @@ again for coldness before sending it, because the pass that removes the padding
 is the pass most likely to remove the warmth with it.
 
 **The cold rules do not all survive the switch to a live thread.** `tone.check(..., live_thread=True)`
-drops `COLD_ONLY_RULES`. The no-opening-contraction rule is there because a 300
-character note uses a contraction to save two characters, and that reasoning
+drops `COLD_ONLY_RULES`. The no-opening-contraction rule is there because a
+character-capped note uses a contraction to save two characters, and that reasoning
 dies in a warm reply: answering "That's great, thank you Riley" to someone who
 wrote "Hi Sasha - ... :)" is how people speak, and "That is great" is the stilted
 version. Everything register-independent still fires.
@@ -495,19 +506,20 @@ same manufactured line.
 
 ### A nudge is shorter than the thing that was ignored
 
-Someone who ignored a 300-character message is not going to answer an even
+Someone who ignored a short, capped invitation is not going to answer an even
 longer one, least of all if they are senior. The failure mode is a long DM
 written by hand instead of through the module, which says `sentences=(2, 2)`
 under `gone_quiet`.
 
-The asymmetry is the point. A first message is an introduction and earns its 300
-characters. A nudge has already been declined once, so every extra word is spent
+The asymmetry is the point. A first message is an introduction and earns the full
+note limit. A nudge has already been declined once, so every extra word is spent
 arguing with someone who has not engaged, and seniority makes that worse rather
 than better: the more senior the reader, the more a long second message reads as
 someone who cannot take a hint.
 
-`compose.nudge()` enforces it at `schema.LIMITS["nudge_chars"]`, currently 280,
-deliberately *below* the 300 of the note it chases. It raises rather than trims,
+`compose.nudge()` enforces it at `schema.LIMITS["nudge_chars"]`: 280 at most, and always
+20 below the connection note limit, so 180 on a free account (note 200) and 280 on
+Premium (note 300). It is deliberately *below* the note it chases. It raises rather than trims,
 and it refuses a nudge with no new reason, because a nudge with no new reason is
 a check-in and a check-in is why the first message went unanswered.
 
@@ -567,7 +579,7 @@ arrived). Causation needs no claim, and the note is true whichever way it went.
 `warm_intro()` takes `channel`. The default, `"message"`, allows up to
 `INTRO_WORDS` because a message pane has room. **"Please connect with X" does not
 mean a message pane.** It means the warm intro *is* the connection request, and
-LinkedIn truncates it at 300 characters exactly like a cold one. Pass
+LinkedIn truncates it at the connection note limit (200 free, 300 Premium) exactly like a cold one. Pass
 `channel="connection"` and the composer refuses anything longer, because the one
 thing that must survive is the referrer's name, and a truncator cuts from the
 end. The referrer still has to lead on either channel.
