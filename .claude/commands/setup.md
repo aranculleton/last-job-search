@@ -60,10 +60,11 @@ they want to change and go to that part of Step 1 (`--section <name>` does this 
 `identity`, `history`, `search`, `market`, `voice`, `documents`, `boards`). Never overwrite a
 filled profile wholesale, and never put placeholders back into one.
 
-**Run for a profile upgrade** (`python3 tools/profile_upgrades.py` names the section), do that
-section alone on the existing profile, and leave the trace its upgrade checks for, dated: a
-look that finds nothing worth building still writes what was looked at and why not. Then run
-the check again and say what is still pending.
+**Run for a profile upgrade** (`/upgrade` names the section; it runs in the background
+without the person), do that section alone on the existing profile, ask nothing, and leave
+the trace its upgrade checks for, dated: a look that finds nothing worth building still
+writes what was looked at and why not. What the profile cannot answer is written
+`[CONFIRM: ...]`, which a later session asks. Then run the check again.
 
 **`--section boards`** is Step 2's "Job boards" research and Step 3.9's build, on their own:
 the boards for their country, field and level, each recorded in `profile/search.py`
@@ -192,7 +193,9 @@ The source of truth for every fact about them. Everything Step 1 established, wi
 that will not fit on one page kept under each role's "Additional detail available for
 tailoring". Each role's heading is `### Title - Employer (dates), City`, the dash
 separating title from employer, because the tools read the roles off those headings. Anything
-not yet confirmed is written `[CONFIRM: ...]`, never guessed.
+not yet confirmed is written `[CONFIRM: ...]`, never guessed. Every one left is asked again,
+a few at a time at the end of later sessions, until it is answered (the `unconfirmed-facts`
+profile upgrade): nobody has to remember them.
 
 ### 3. Write `profile/02-behavioral-profile.md`
 How they work, from an assessment if they have one, or from their answers and references.

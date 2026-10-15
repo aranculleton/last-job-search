@@ -6,6 +6,11 @@ nothing until the candidate picks. `_common.md` first.
 1. No LaTeX is needed for this step. Pick `rN` as the next round number after the highest
    file in `documents/rounds/`. `$SCRATCH` is a scratch directory outside the repo.
 
+   **The app's updates and the profile's upgrades, first.** `python3 tools/sync_app.py`
+   (exit 1 or 2: one line in the message, carry on). If it lists upgrades Claude applies
+   itself, run `/upgrade 20` now, before the round: a job board it builds is searched this
+   round. Never put a question to the person mid-run; the "need you" ones go in the message.
+
    **Job alerts, if the person reads theirs here.** `python3 tools/job_alerts.py --query --days 8`
    prints a Gmail search, or exits 1 when they have not asked for alerts to be read: then
    skip to the run. With a query and the Gmail tools in this chat, `search_threads` with it
@@ -47,8 +52,9 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
 "draft 1, 3", and say if you have already applied to any.
 ```
 
-   If the round printed a "Profile upgrades pending" line, end the message with it as it
-   stands (it names what to run); never run an upgrade from this task.
+   After the list: one line per upgrade `/upgrade` applied (what changed, `git revert <sha>`
+   to undo), and at most three questions from what needs the person, each on its own line
+   (the round's "Profile upgrades" line names them).
 
    When the round missed its yield target, add one line under the list: the counts, and
    the boards the MISSED message names as researched with no portal yet, with "say 'build
