@@ -250,4 +250,4 @@ produces the same report locally, and `python3 tools/check_upstream_updates.py` 
 which methodology files an update would touch, by `framework_version` marker.
 
 Port by hand. A clean cherry-pick is not a correct one: see
-[CONTRIBUTING.md](CONTRIBUTING.md#upstream).
+[MAINTAINING.md](MAINTAINING.md#upstream).

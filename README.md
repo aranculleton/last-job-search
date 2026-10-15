@@ -88,7 +88,8 @@ You never need any of this to use it.
 | The rules Claude follows, and the command map | [CLAUDE.md](CLAUDE.md) |
 | Daily briefings and scheduled searches | [automation/README.md](automation/README.md) |
 | Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
-| Working on the app itself | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Reporting a bug or suggesting something | [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Working on the app itself | [MAINTAINING.md](MAINTAINING.md) |
 
 The employer-board reader is also published on its own, as the open-source library
 [openroles](https://github.com/aranculleton/openroles). Scraping, filtering and scoring are Python and Bash, so a search can read thousands of

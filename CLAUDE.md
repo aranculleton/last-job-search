@@ -110,7 +110,7 @@ record it in `profile/`.
 
 ## Developer rules: changing the app itself
 
-**Before changing any app-owned file, read `CONTRIBUTING.md`, "Developer rules"**, whichever
+**Before changing any app-owned file, read `MAINTAINING.md`, "Developer rules"**, whichever
 repo the session started in. In short: the change is made in the app, on a branch, and merged
 with CI green; the leak scan passes on the exact tree before anything is pushed, because the
 app is public and so are its branches and history; no example is a disguised person; a change
@@ -152,7 +152,7 @@ breaks all of them at once.
 **On a private repo, green is established locally, and that is the rule:
 `./tools/ci_local.sh`** (`--quick` skips the LaTeX compile). A clean run is the evidence and
 merging on it is allowed; say so in the PR and name anything it reported as SKIP. Why, what
-CI's Python 3.10 leg is for, and the one case worth a billed CI run: `CONTRIBUTING.md`, "CI on
+CI's Python 3.10 leg is for, and the one case worth a billed CI run: `MAINTAINING.md`, "CI on
 a private repo". Batch the commits and push once, when a unit of work is finished.
 
 ## Persistence rule for a person's repo (deviates from upstream)

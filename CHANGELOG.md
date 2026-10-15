@@ -28,6 +28,11 @@ make sense to somebody whose repo just received it.
   A new `GEMINI.md` points Gemini CLI to it. The README and START_HERE say plainly that the
   requirement is Claude Code, which has no free tier, and point anyone on another tool to
   `AGENTS.md`.
+- **CONTRIBUTING.md is for visitors now.** It says what to send (issues with a bug or an idea,
+  fixes as a diff in an issue, links to ports for other agent tools) and why outside pull
+  requests are not merged. The maintainer's guide that used to be there is `MAINTAINING.md`,
+  unchanged, and CLAUDE.md points to it. The issue form no longer calls the tracker private or
+  sends people to the upstream project.
 - **Finding an employer's board, and Lever's full postings.**
   - `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL) finds an
     employer's Greenhouse, Lever or Ashby board and counts what a round would get from it.

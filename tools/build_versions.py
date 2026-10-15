@@ -347,6 +347,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "README.md": "documentation, read when needed",
     "ARCHITECTURE.md": "documentation, read when needed",
     "CONTRIBUTING.md": "documentation, read when needed",
+    "MAINTAINING.md": "documentation, read when needed",
     "SECURITY.md": "documentation, read when needed",
     "SETUP.md": "documentation, read when needed",
     "START_HERE.md": "documentation, read when needed",
