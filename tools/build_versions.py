@@ -86,7 +86,7 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-15", False, "employer boards date a posting by when it was first published, not last edited"),
             (6, "2026-10-15", False, "employer boards are read through openroles, the open-source library this reader became; Lever postings now include their requirement lists"),
         ),
-        "fingerprint": "3ade81ac3ace1fd7",
+        "fingerprint": "7270a3afd1bdeefa",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
