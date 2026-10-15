@@ -84,7 +84,8 @@ def _read(text: str) -> tuple[list[str], list[dict]]:
     if not rows:
         return [], []
     head = rows[0]
-    return head, [dict(zip(head, r + [""] * (len(head) - len(r)))) for r in rows[1:] if r]
+    return head, [dict(zip(head, (r + [""] * len(head))[:len(head)], strict=True))
+                  for r in rows[1:] if r]
 
 
 def _keyed(rows: list[dict], fields) -> dict:
