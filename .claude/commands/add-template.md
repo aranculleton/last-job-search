@@ -1,6 +1,10 @@
 # /add-template - Register a Custom CV or Cover Letter Template
 
-You are helping the user register their own resume or cover letter template with last-job-search - LaTeX, Typst, or any other toolchain that compiles to PDF from the command line. The repo ships with moderncv (banking style) for resumes and a custom `cover.cls` for cover letters. This command lets the user swap in their own template: store the template files, capture usage instructions (source extension, compile command, fonts, style rules, page limits), verify the template compiles, and wire it into the `/apply` workflow so every future application uses it.
+You are helping the user register their own resume or cover letter template with last-job-search - LaTeX, Typst, or any other toolchain that compiles to PDF from the command line. The repo ships with moderncv (banking style) for resumes and a custom `cover.cls` for cover letters. This command lets the user swap in their own template: store the template files, capture usage instructions (source extension, compile command, fonts, style rules, page limits), verify the template compiles, and tell `/apply` to draft from it.
+
+**Everything this command writes goes under `profile/templates/`**, which is the person's (`tools/personal_paths.py`). The app's own files, `templates/` and the skill's `05-cv-templates.md` and `06-cover-letter-templates.md` among them, are put back by the next sync (`tools/sync_app.py`), so a template stored there, or a note written into them, would be gone after the next session started. Never write to either.
+
+**What a custom template reaches.** `/apply` drafts by hand from it (its Step 2H). The batch path does not: `tools/stage_picks.py`, the `draft-applications` workflow and `tools/fit_to_page.py` render the stock template every time, and a batch from a round comes out in the stock template whatever is active here. Say this to the person when a template is activated.
 
 `$ARGUMENTS` may contain a subcommand, a file path, or nothing.
 
@@ -17,7 +21,7 @@ Follow these steps **in order**.
 
 ### List Mode
 
-Use Glob with `templates/**/TEMPLATE.md` to find registered templates. For each, read the manifest and print a table:
+Use Glob with `profile/templates/**/TEMPLATE.md` to find registered templates. For each, read the manifest and print a table:
 
 ```
 ## Registered Templates
@@ -27,14 +31,14 @@ Use Glob with `templates/**/TEMPLATE.md` to find registered templates. For each,
 | <name> | CV / Cover letter | .tex/.typ/... | lualatex/typst/... | <main font> | yes/no |
 ```
 
-A template is **active** if `05-cv-templates.md` (CV) or `06-cover-letter-templates.md` (cover letter) contains an `ACTIVE-TEMPLATE` managed block naming it. If no custom templates exist, say so and explain that `/add-template` registers one. Stop here.
+A template is **active** if `profile/templates/ACTIVE.md` holds an `ACTIVE-TEMPLATE` block of its type naming it. If no custom templates exist, say so and explain that `/add-template` registers one. Stop here.
 
 ### Switch Mode
 
 If `$ARGUMENTS` contains `--use <name>`:
 
-1. If `<name>` is `default`, skip template resolution and continue to Step 5 with `default` as the activation target.
-2. Use Glob with `templates/**/TEMPLATE.md` and find manifests whose parent folder name exactly matches `<name>`.
+1. If `<name>` is `default`, skip template resolution and continue to Step 5 with `default` as the activation target, for the type that has a block in `profile/templates/ACTIVE.md` (ask which when both do).
+2. Use Glob with `profile/templates/**/TEMPLATE.md` and find manifests whose parent folder name exactly matches `<name>`.
 3. If no manifest matches, stop and say the template is not registered. Suggest `/add-template --list` to see available names.
 4. If more than one manifest matches, stop and list the matching manifest paths. Ask the user to rename one of the templates; activation must be unambiguous.
 5. Read the matching `TEMPLATE.md` and extract:
@@ -46,8 +50,8 @@ If `$ARGUMENTS` contains `--use <name>`:
    - **Fonts:** the full font summary line
 6. Derive the template folder from the manifest path and verify `template<source-extension>` exists in the same folder. If it is missing, stop with an error; the template registration is incomplete.
 7. Derive `<type>` for Step 5 from the manifest path:
-   - `templates/cv/<name>/TEMPLATE.md` -> `cv`
-   - `templates/cover_letters/<name>/TEMPLATE.md` -> `cover_letters`
+   - `profile/templates/cv/<name>/TEMPLATE.md` -> `cv`
+   - `profile/templates/cover_letters/<name>/TEMPLATE.md` -> `cover_letters`
 8. Continue to Step 5 using the resolved `<name>`, `<type>`, `<source-extension>`, `<compile-command>`, engine/toolchain label, font summary, page limit, template skeleton path, and manifest path. Do not re-run Steps 1-4; `--use` switches an already-registered template.
 
 ---
@@ -72,7 +76,7 @@ Interview the user for the metadata that `/apply` needs to use the template corr
 
 Collect:
 
-1. **Name** - short kebab-case identifier (e.g. `awesome-cv`, `classic-serif`). Must not collide with an existing folder in `templates/`.
+1. **Name** - short kebab-case identifier (e.g. `awesome-cv`, `classic-serif`). Must not collide with an existing folder in `profile/templates/<type>/`.
 2. **Source extension** - the main file's extension (`.tex`, `.typ`, ...), inferred from the provided source file.
 3. **Compile command** - the full command `/apply` and Step 4's test compile will run, using `<file>` (no extension) as the placeholder for the output basename:
    - **`.tex` source**: infer the engine the same way as before - if the source uses `fontspec` or loads font files by path, it requires `xelatex` or `lualatex`; tell the user this rather than letting them pick `pdflatex`. Render as `lualatex -interaction=nonstopmode <file>.tex` (or the appropriate engine).
@@ -91,8 +95,10 @@ Collect:
 
 Create the template folder:
 
-- CV: `templates/cv/<name>/`
-- Cover letter: `templates/cover_letters/<name>/`
+- CV: `profile/templates/cv/<name>/`
+- Cover letter: `profile/templates/cover_letters/<name>/`
+
+It is committed with the rest of `profile/`, so it survives the session.
 
 Write into it:
 
@@ -134,7 +140,7 @@ Never register a template without a successful test compile. Templates that "loo
 1. Copy `template<source-extension>` to a scratch file in the same folder (e.g. `_compile_test.tex` or `_compile_test.typ`) and fill every `[PLACEHOLDER]` with realistic dummy data (name, contact line, one education entry, one job entry with 3 bullets - enough content to exercise the layout).
 2. Compile with the declared compile command, substituting `_compile_test` for `<file>`:
    ```bash
-   cd templates/<type>/<name> && <declared compile command with <file> -> _compile_test>
+   cd profile/templates/<type>/<name> && <declared compile command with <file> -> _compile_test>
    ```
 3. If the compile fails: show the user the relevant error lines, diagnose (missing font file, wrong engine/command, missing class or package), fix what you can (e.g. font path values), and re-compile. If the fix needs input only the user has (a missing font file, a license-restricted class), ask for it and wait.
 4. On success, confirm a PDF was produced and Read it to check the layout renders sensibly (no overlapping text, fonts loaded, page count matches the declared page limit for the dummy content). Record any surprises in the manifest's "Known pitfalls".
@@ -146,33 +152,33 @@ Do not proceed to Step 5 until the test compile passes.
 
 ## Step 5: Activate the Template
 
-Activation wires the template into `/apply` by adding a **managed block** to the top of the relevant guidance file - `05-cv-templates.md` for CVs, `06-cover-letter-templates.md` for cover letters. `/apply` reads these files in both its drafting step and its compile step, so the block is all it takes.
+Activation writes a **managed block** for the template's type into `profile/templates/ACTIVE.md`, creating the file if it is missing. `/apply` reads that file to choose its path (Step 2) and again for the source extension and compile command (Step 2H), so the block is all it takes. Never write the block into `05-cv-templates.md` or `06-cover-letter-templates.md`: they are the app's, and the next sync would remove it.
 
 If Step 5 was reached from Switch Mode, use the template metadata resolved from `TEMPLATE.md`. If Step 5 was reached after registering a new template, use the metadata collected and verified in Steps 2-4.
 
-Insert (or replace, if one exists) this block immediately after the file's H1 title:
+Insert (or replace, if one exists) this block, with `<type>` as `cv` or `cover_letters`:
 
 ```markdown
-<!-- BEGIN ACTIVE-TEMPLATE (managed by /add-template - do not edit by hand) -->
+<!-- BEGIN ACTIVE-TEMPLATE <type> (managed by /add-template - do not edit by hand) -->
 > **Active template override: `<name>`**
 >
-> A custom template is active. Where this block conflicts with the stock guidance below, this block wins. Structural advice below (tailoring, page-budget, cutting rules) still applies.
+> A custom template is active for `/apply`'s hand path (Step 2H). Where this block conflicts with the stock guidance in `05-cv-templates.md` or `06-cover-letter-templates.md`, this block wins. Their structural advice (tailoring, page budget, cutting rules) still applies. The batch renderer ignores this block.
 >
-> - **Template skeleton:** `templates/<type>/<name>/template<source-extension>` - use this as the structural reference instead of the stock template
-> - **Manifest:** `templates/<type>/<name>/TEMPLATE.md` - read this for style rules and known pitfalls before drafting
+> - **Template skeleton:** `profile/templates/<type>/<name>/template<source-extension>` - use this as the structural reference instead of the stock template
+> - **Manifest:** `profile/templates/<type>/<name>/TEMPLATE.md` - read this for style rules and known pitfalls before drafting
 > - **Source extension:** `<source-extension>` (not `.tex` unless the template's own toolchain is LaTeX)
-> - **Compile command:** `<the full declared command>` (not the command named in the stock guidance below - `/apply`'s compile step must use this instead)
+> - **Compile command:** `<the full declared command>` (not the command named in the stock guidance - `/apply`'s compile step must use this instead)
 > - **Fonts:** <font summary, including any path note for bundled fonts>
 > - **Page limit:** exactly <N> page(s)
 > - **Output file:** `cv/<Prefix>_Resume_<ABBR><source-extension>` / `cover_letters/<Prefix>_Cover_Letter_<ABBR><source-extension>` (`<Prefix>` is `identity.file_prefix` in `profile/person.json`); copy any class/package/font files the template needs into the output directory, or reference them by relative path
-<!-- END ACTIVE-TEMPLATE -->
+<!-- END ACTIVE-TEMPLATE <type> -->
 ```
 
 Rules:
 
-- Exactly **one** managed block per guidance file. Replace the whole block between the `BEGIN`/`END` markers when switching templates; never stack blocks.
-- **`--use default`**: remove the managed block entirely. The stock moderncv / cover.cls guidance below it is untouched and takes over again.
-- Do not modify anything outside the markers.
+- At most **one** block per type in `profile/templates/ACTIVE.md`. Replace the whole block between that type's `BEGIN`/`END` markers when switching templates; never stack blocks.
+- **`--use default`**: remove that type's block, and the file when it holds no block. The stock moderncv / cover.cls templates take over again.
+- Do not modify anything outside the markers, and never touch an app-owned file.
 
 ---
 
@@ -182,9 +188,10 @@ Present a summary:
 
 > **Template `<name>` registered and activated.**
 >
-> - Files: `templates/<type>/<name>/` (skeleton, manifest<, class/package files><, fonts>)
+> - Files: `profile/templates/<type>/<name>/` (skeleton, manifest<, class/package files><, fonts>)
 > - Test compile: passed with `<compile command>` (<N> page(s))
-> - `/apply` will now draft <CVs | cover letters> from this template.
+> - `/apply` will now draft <CVs | cover letters> from this template, by hand.
+> - A batch from a round (`stage_picks.py`, the `draft-applications` workflow, `fit_to_page.py`) still renders the stock template. Take a posting from a round through `/apply` to get this one.
 >
 > Useful follow-ups:
 > - `/add-template --list` - see all registered templates
@@ -196,6 +203,6 @@ Present a summary:
 ## Design Principles
 
 - Registration is idempotent: re-running with the same name offers to update the existing template rather than duplicating it.
-- Templates are stored profile-agnostic (`[PLACEHOLDER]` tokens) so they can be shared or committed without leaking personal data.
+- Templates are stored profile-agnostic (`[PLACEHOLDER]` tokens) so they can be shared without leaking personal data. They live under `profile/templates/`, the person's, because a sync puts every app-owned file back.
 - The compile check in Step 4 is non-negotiable - a template that has never compiled will fail mid-`/apply`, which is the worst place to discover it.
-- Activation is a small managed block, not a rewrite of the guidance files: `/setup` and manual edits to `05`/`06` survive template switches, and `--use default` is a clean revert.
+- Activation is one managed block in `profile/templates/ACTIVE.md`, never an edit to the app's guidance files, and `--use default` is a clean revert.
