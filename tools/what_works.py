@@ -186,7 +186,8 @@ def message_cases(contacts: list[dict], threads: list[dict], today=None) -> list
             # A bare connection request says nothing, so it neither wins nor
             # loses: on a free account the message follows the acceptance, and
             # that message is the opener.
-            if state._direction(r) == "out" and not state.is_call(r) and not (
+            if state._direction(r) == "out" and not state.is_call(r) \
+                    and state._scenario(r) not in state.MID_CONVERSATION and not (
                     state.channel_of(r) == "connection"
                     and not str(r.get("full_text") or "").strip()
                     and not str(r.get("summary") or "").strip()):
@@ -314,13 +315,22 @@ def drafts(root: str | None = None) -> list[dict]:
 
 
 def draft_for(row: dict, kept: list[dict]) -> dict | None:
-    """The draft a tracker row was sent with: same employer, then the same role."""
+    """The draft a tracker row was sent with: its file's abbreviation, else the same role.
+
+    Never another role's draft. With one draft at an employer it used to be
+    taken whatever its role, so a later, never-sent draft for a different role
+    was credited with the interview the earlier application won, and the
+    allocator lifted bullets that employer never saw.
+    """
     k = company_key(row.get("company"))
     at = [d for d in kept if company_key(d.get("company")) == k]
+    m = re.search(r"_([A-Za-z0-9_]+)\.(?:tex|pdf)$", str(row.get("cv_file") or ""))
+    if m:
+        by_abbr = [d for d in at if str(d.get("abbr") or "").lower() == m.group(1).lower()]
+        if by_abbr:
+            return by_abbr[-1]
     same = [d for d in at if _norm(d.get("role")) == _norm(row.get("role"))]
-    if same:
-        return same[-1]
-    return at[0] if len(at) == 1 else None
+    return same[-1] if same else None
 
 
 def _fit_band(value) -> str:
@@ -331,6 +341,36 @@ def _fit_band(value) -> str:
     return "fit 75+" if n >= 75 else "fit 60-74" if n >= 60 else "fit under 60"
 
 
+# An interview is a fact about the past: a row that reached one and was later
+# rejected reached it all the same. /outcome updates the status in place, so a
+# rejection after the interview read as "did not reach an interview" and every
+# interview that ended in a no vanished from what this learns from. The notes
+# (/outcome appends a dated note) or the application's outcome.md say it happened.
+# An interview as an event, never the bare word: "do not claim it in interview"
+# and "two days onsite" are advice and a work pattern, and both read as one.
+_REACHED = re.compile(
+    r"(?<!no )(?<!not )\b(?:interviewed|invited to (?:an? )?interview|interview "
+    r"(?:invite|invitation|scheduled|booked|held|done|completed|stage|round|with|on \d)"
+    r"|(?:phone|recruiter|hiring manager|technical|first|second|final) (?:screen|interview)"
+    r"|screening call|(?:first|second|third|final) round)\b", re.I)
+
+
+def reached_interview(row: dict, root: str | None = None) -> bool:
+    status = str(row.get("status") or "").strip().lower()
+    if status in WIN:
+        return True
+    if _REACHED.search(str(row.get("notes") or "")):
+        return True
+    try:
+        import outreach
+        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
+            text = fh.read()
+    except Exception:
+        return False
+    return "- [x]" in text.lower() or "interview_only" in text
+
+
 def application_cases(tracker: list[dict], today=None) -> list[dict]:
     """Every sent application with a result: reached an interview or did not."""
     today = _today(today)
@@ -338,7 +378,7 @@ def application_cases(tracker: list[dict], today=None) -> list[dict]:
     for r in tracker:
         status = str(r.get("status") or "").strip().lower()
         applied = _date(r.get("date"))
-        if status in WIN:
+        if status in WIN or (status in LOSS and reached_interview(r)):
             won = True
         elif status in LOSS or (status == "applied" and applied
                                 and (today - applied).days >= SILENT_DAYS):
@@ -404,17 +444,27 @@ def brief_search(tracker, today=None) -> str:
     return "\n".join([head] + ["- " + d for d in found])
 
 
-def event_company(tracker, kept, company: str, today=None) -> str:
+def event_company(tracker, kept, company: str, today=None, role: str = "") -> str:
+    """The audit line for the result /outcome just recorded at this employer.
+
+    The row is the one named by `role`, else the employer's latest row that
+    reached an interview, else its latest row. Taking the last row alone said
+    nothing at an employer with two applications when the earlier one won.
+    """
     k = company_key(company)
     rows = [r for r in tracker if company_key(r.get("company")) == k]
     if not rows:
         return ""
     cases = application_cases(tracker, today)
-    row = rows[-1]
+    named = [r for r in rows if role and _norm(r.get("role")) == _norm(role)]
+    won = [r for r in rows if reached_interview(r)]
+    row = (named or won or rows)[-1]
     status = str(row.get("status") or "").strip().lower()
     rate = "Interviews so far: %s." % _rate(sum(c["won"] for c in cases), len(cases))
-    if status not in WIN:
+    if not reached_interview(row):
         return rate
+    if status not in WIN:
+        status = "interview"
     d = draft_for(row, kept)
     how = ", ".join(x for x in (_fit_band(row.get("fit_rating")),
                                 " ".join(str(row.get("channel") or "").split())) if x)
@@ -469,6 +519,7 @@ def main(argv=None) -> int:
     g = e.add_mutually_exclusive_group(required=True)
     g.add_argument("--contact", help="contact_id whose reply was just logged")
     g.add_argument("--company", help="employer whose application result was just recorded")
+    e.add_argument("--role", default="", help="with --company: the role whose result it was")
     for p in (b, e):
         p.add_argument("--today")
     a = ap.parse_args(argv)
@@ -484,7 +535,7 @@ def main(argv=None) -> int:
     elif a.contact:
         out = event_contact(state.load_contacts(), state.load_threads(), a.contact, a.today)
     else:
-        out = event_company(tracker, drafts(), a.company, a.today)
+        out = event_company(tracker, drafts(), a.company, a.today, a.role)
     print(out or "(nothing on record yet: the defaults apply)")
     return 0
 

@@ -79,13 +79,18 @@ def suffix(company: str, role_token: str = "") -> str:
         # Truncate on a word boundary. Cutting mid-word gave a brand plus three
         # letters of the next word, which reads as a typo rather than as a
         # shortening.
-        out = ""
+        taken = []
         for w in kept:
             w = w.replace("-", "")
-            if out and len(out) + len(w) > MAX_CHARS:
+            if taken and len("".join(taken)) + len(w) > MAX_CHARS:
                 break
-            out += w
-        known = out or kept[0].replace("-", "")[:MAX_CHARS]
+            taken.append(w)
+        # A cut that ends on "of" or "and" ("NationalBankof") is the
+        # machine-made name this module exists to prevent.
+        while len(taken) > 1 and taken[-1].lower() in ("of", "and", "the", "for", "de", "du",
+                                                      "la", "le", "et", "&"):
+            taken.pop()
+        known = "".join(taken) or kept[0].replace("-", "")[:MAX_CHARS]
     token = re.sub(r"[^A-Za-z0-9]", "", role_token)
     return known + ("_" + token if token else "")
 

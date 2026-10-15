@@ -163,10 +163,55 @@ def near_misses(left, right) -> list[tuple[str, str]]:
     return out
 
 
+_INITIALISM = re.compile(r"\(\s*([A-Z][A-Z&.]{1,9})\s*\)")
+_MINOR = {"of", "the", "and", "for", "de", "du", "la", "le", "et"}
+
+
+def _own_initialism(name: str) -> str:
+    """The short name a posting gives in brackets, when it is the name's own initials.
+
+    "Northgate Pension Investment Board (NPIB)": the bracket is the one token that
+    joins the posting to a tracker row or a listing under the short name, and every
+    bracket was stripped as a listing detail like "(UK)", so the same role came in
+    twice and an application under the short name did not hold the long one. Only
+    an initialism that IS the name's initials counts; "(UK)" and "(Remote)" are not.
+    """
+    m = _INITIALISM.search(str(name or ""))
+    if not m:
+        return ""
+    short = re.sub(r"[^A-Za-z]", "", m.group(1)).lower()
+    words = [w for w in re.findall(r"[A-Za-z]+", str(name)[:m.start()]) if w.lower() not in _MINOR]
+    initials = "".join(w[0] for w in words).lower()
+    return short if len(short) >= 2 and initials == short else ""
+
+
+# Short name -> the long name's key, learned from every "Long Name (LN)" seen:
+# the state files at import, and a round's postings before the throttle runs
+# (`learn`). The long name stays the key, so nothing joined before is split.
+_SHORT: dict[str, str] = {}
+
+
+def learn(names) -> None:
+    """Teach the join from every name that gives its own initialism in brackets."""
+    for n in names or ():
+        short = _own_initialism(n)
+        if short:
+            _SHORT.setdefault(short, _key(n))
+
+
 def key(name: str | None) -> str:
     """A stable comparison key for an employer name."""
     if not name:
         return ""
+    short = _own_initialism(name)
+    k = _key(name)
+    if short:
+        _SHORT.setdefault(short, k)
+        return k
+    return _SHORT.get(k, k)
+
+
+def _key(name: str) -> str:
     s = _norm(name)
     if s in ALIASES:
         return ALIASES[s]
@@ -194,3 +239,16 @@ if __name__ == "__main__":
     import sys
     for n in sys.argv[1:]:
         print(f"{n!r} -> {key(n)!r}")
+
+
+def _learn_from_state() -> None:
+    import csv
+    for f in ("job_search_tracker.csv", "network_contacts.csv"):
+        try:
+            with open(person.state(f), newline="", encoding="utf-8") as fh:
+                learn(r.get("company") for r in csv.DictReader(fh))
+        except (OSError, ValueError, csv.Error):
+            pass
+
+
+_learn_from_state()

@@ -76,21 +76,24 @@ _RESIDUE = re.compile(r"\d[\d.]*\s*" + _UNIT_NOISE + r"\b", re.I)
 _NUM = re.compile(
     r"(?<![\w.])"
     r"(\d[\d,]*(?:\.\d+)?)"
-    r"\s*"
-    r"(%|(?:k|m|bn|b|million|billion|thousand|hours?|hrs?|days?|weeks?|"
+    # "8+ years" and "9 per cent" carried no unit: the "+" sat between the number
+    # and its unit, and "per cent" was not a unit, so a bare number under 10 was
+    # thrown away and an invented "8+ years of experience" passed.
+    r"\s*\+?\s*"
+    r"(%|(?:per\s?cent|percent|k|m|bn|b|million|billion|thousand|hours?|hrs?|days?|weeks?|"
     r"months?|years?|x)\b)?",
     re.I)
 
 _MAGNITUDE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6,
               "b": 1e9, "bn": 1e9, "billion": 1e9}
-_UNIT_ALIAS = {"hrs": "hour", "hr": "hour"}
+_UNIT_ALIAS = {"hrs": "hour", "hr": "hour", "percent": "%", "per cent": "%"}
 # A four-digit number in this range is a year, and a year is structure.
 _YEAR = re.compile(r"^(19|20)\d{2}$")
 
 
 def claim_key(value: str, unit: str) -> tuple[float, str] | None:
     """(magnitude, unit) for one number, or None when it is not a claim."""
-    unit = (unit or "").lower().rstrip("s")
+    unit = re.sub(r"\s+", " ", (unit or "").lower()).rstrip("s")
     unit = _UNIT_ALIAS.get(unit, unit)
     raw = value.replace(",", "")
     if _YEAR.match(raw) and not unit:

@@ -680,7 +680,13 @@ JOB_ASK = re.compile(
     r"|\b(?:be )?considered for (?:the|a|an|your|this|that)\b"
     r"|\b(?:I am|I'm|I've been|I have been|I just)\s+appl(?:ying|ied)\b"
     r"|\b(?:are|is) (?:you|your team|the team) (?:recruiting|looking to (?:hire|add|grow))\b"
-    r"|\bis (?:your|the) team growing\b", re.I)
+    r"|\bis (?:your|the) team growing\b"
+    # Plain asks that passed: "Is the <role> still open?", "I'd love to apply",
+    # "Would you consider me for the role?", "I'm interested in the <role> opening".
+    r"|\b(?:role|position|opening|job|req)\b[^.?!]{0,30}\bstill open\b"
+    r"|\b(?:love|like|keen|want|hoping) to apply\b|\bconsider me\b"
+    r"|\binterested in (?:the|your|this|that|an?)\b[^.?!]{0,60}\b(?:role|position|opening|vacancy|job)\b",
+    re.I)
 
 # Common ground that is their hiring: a post, an open role. Beside it the
 # default ABOUT_ME's looking clause turns the note back into a job ask, which
@@ -706,8 +712,19 @@ _WORK_AUTH_ANY = _NET.WORK_AUTH_ANY
 
 # Who counts as a recruiter for the one exception: their job is roles, so a
 # role question and work authorization are what they need to hear.
+# A recruiter by job, not anyone whose snippet says "recruiting": a hiring
+# manager described as "recruiting Senior Data Scientists" lifted the first-note
+# rules for a note to them, and an agency recruiter whose title read "Connecting
+# Data & AI Talent" kept them.
 RECRUITER_TITLE = re.compile(
-    r"\b(?:recruit\w*|talent acquisition|talent partner|sourcer)\b|\btalent\s*@", re.I)
+    r"\brecruit(?:er|ers|ment)\b|\brecruiting (?:coordinator|manager|lead|partner|specialist|"
+    r"director|consultant|team|operations)\b|\btalent (?:acquisition|partner|scout|sourcer|"
+    r"lead|manager|director|advisor)\b|\bsourcer\b|\bheadhunter\b|\bexecutive search\b"
+    r"|\b(?:connecting|placing)\b[^,;]{0,40}\btalent\b|\btalent\s*@"
+    # The department as the title: "Recruiting, <Company>", "Recruitment | <Company>",
+    # "Recruiting at <Company>". The verb with a role after it is a hiring manager.
+    r"|^\W*recruit(?:ing|ment)\b(?!\s+(?:senior|junior|lead|staff|principal|data|"
+    r"talented|great|engineers?|analysts?|scientists?|developers?|designers?|managers?)\b)", re.I)
 
 
 def is_recruiter(title) -> bool:

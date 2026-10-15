@@ -153,7 +153,7 @@ Update the matched row's `status` column using the canonical spellings from **Tr
 
 ## Step 5: Calibration Handoff
 
-**First, the mini audit, every time, at no model cost:** `python3 tools/what_works.py event --company "<Company>"`. It is counting, not a model call: what this result had (fit, route, the resume and letter it went with) and the interview rate now. An interview or an offer makes that application's resume and letter examples `/apply` reads before drafting a similar role, and gives the bullets it used a small lift in `tools/allocate.py`, without anybody asking. Paste its line into Step 6. Nothing else needs writing: it reads the tracker row this command just updated.
+**First, the mini audit, every time, at no model cost:** `python3 tools/what_works.py event --company "<Company>" --role "<Role>"`. It is counting, not a model call: what this result had (fit, route, the resume and letter it went with) and the interview rate now. An interview or an offer makes that application's resume and letter examples `/apply` reads before drafting a similar role, and gives the bullets it used a small lift in `tools/allocate.py`, without anybody asking. Paste its line into Step 6. Nothing else needs writing: it reads the tracker row this command just updated.
 
 Then count the `outcome.md` files under `documents/applications/` with a **final** status (not `in_progress`).
 

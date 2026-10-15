@@ -22,6 +22,61 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **What a line-by-line audit of a real repo found, fixed.** Each was reproduced on real
+  input first.
+  - *Search:*
+    - "<City>, ON, CA", the way Dayforce, SmartRecruiters and Workday write a Canadian
+      location, was failed as "US on-site" ("CA" read as California). A country code beside
+      a home region or city is now the country.
+    - The home region written twice ("<Region>, <code>, <Country>") passes as home.
+    - A list naming home and another country is flagged for the posting body to decide.
+    - US-remote rows from a remote search are marked remote, so they are no longer failed
+      as on-site.
+  - *Old exclusions:* those citing a years bar, or only the name of the stage that wrote
+    them, stopped blocking roles the current rules merely rank lower. A stated range or a
+    required degree the person's own triage card knocks out still stands.
+  - *Eligibility:* the gate now cuts "not open to work permit holders", "unable to sponsor
+    a work visa", a requirement in a sentence that mentions "private equity", and a
+    requirement to live in another country ("must be based in the US or Spain"). A list
+    that includes your country passes.
+  - *Reading postings:*
+    - "asset" and "bonus" count as preference only as "is an asset" or "would be a bonus",
+      so "required for our asset management team" is read as written.
+    - A loan size or portfolio value is no longer read as the pay band.
+    - "Long Name (LN)" joins "LN".
+    - A preferred degree is never "do not apply".
+  - *Employers and relisted roles:*
+    - An employer where you are mid-interview keeps holding off new roles there, however
+      long the process runs.
+    - A role already applied to does not come back once its application closes.
+    - Greenhouse rows are dated by first publication, not last edit, and Lever rows now
+      carry a date.
+    - A live contact softens the gap penalty in a round, as documented.
+    - On a slow board, the named-employer searches run before the outlying places.
+  - *Documents:*
+    - One refused outreach note no longer stops the batch or leaves a half-written file;
+      its `outreach.md` says it is not ready.
+    - "8+ years" and "9 per cent" are checked against the profile.
+    - A draft with no posting text says so instead of rendering untailored, and a kept
+      draft renders through the same loader everywhere.
+    - The deadline reaches the tracker.
+    - The spelling check catches "-ises", "-isations" and plural American forms.
+    - A rejected draft is never rendered.
+    - A third letter paragraph the template cannot place is refused rather than silently
+      dropped.
+    - A letter that already fits the page keeps its opening paragraph whole.
+    - The bullet split no longer swings on a fraction of a point, and filenames no longer
+      end on "of".
+  - *Networking and learning:*
+    - "No action unless they reply" now does what it says.
+    - A thread closed after the last reply (a dated close in `outcome`) is not reported as
+      reopened.
+    - A catch-up message is not counted as a connection request.
+    - A hiring manager whose snippet says "recruiting" is not a recruiter, and plain job
+      asks ("I'd love to apply", "consider me") are caught in a first note.
+    - An interview stays an interview after a later rejection, a draft is credited only to
+      its own role, and `/outcome`'s audit line reports the row it recorded.
+
 - **Networking: nothing it suggests sending is something that cannot be sent.** From an
   audit of a real contact book:
   - A connection request nobody has accepted is no longer listed as a nudge: there is

@@ -322,7 +322,11 @@ def allocate(posting, budget=11):
         top = sorted((scores[b] for b in LIB[e]), reverse=True)[:3]
         rel[e] = sum(top) / len(top)
     lo, hi = min(rel.values()), max(rel.values())
-    span = (hi - lo) or 1.0
+    # Stretched over the real spread, a third of a point between employers (an
+    # eighth of one theme match) moved the split by the whole RELEVANCE_PULL: a
+    # six-month contract outweighed the current role on a posting about that
+    # role's own subject. A spread under one theme match moves it by that much.
+    span = max(hi - lo, THEME_BONUS)
 
     weight = {}
     for e in LIB:

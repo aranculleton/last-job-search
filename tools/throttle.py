@@ -147,7 +147,8 @@ _STALE_EXCLUSION = re.compile(
     r"|\bbelow the \d{1,3} pass bar\b"
     r"|\b(?:weak|moderate|poor) fit\b"
     r"|\bstated salary\b|\bsalary (?:range|band) below\b|\bbelow (?:the )?(?:walk-away )?floor\b"
-    r"|\bprefer(?:red|s)?\s+(?:a\s+)?(?:master|phd|doctora)", re.I)
+    r"|\bprefer(?:red|s)?\s+(?:a\s+)?(?:master|phd|doctora)"
+    r"|\b\d{1,2}\+?\s*(?:or more\s+)?years\b|\byears? bar\b", re.I)
 
 # What still cuts, whatever else the reason says. Read first, because a reason
 # routinely carries both: "scored 40. Core function is dashboard maintenance"
@@ -163,23 +164,20 @@ _STILL_CUTS_CORE = (
     r"|\bresearch (?:ml|scientist|role)\b|\bml engineering or research\b"
     r"|\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b"
     r"|\brelocation\b|\bon-?site in\b|\blocation gate\b"
-    # Blocker 10 in 10-triage-blockers.md, which is narrower than "the salary is
-    # low" and is a real standing exclusion: a stated range whose *maximum* is
-    # below the floor is the employer saying it will not pay the minimum. A
-    # midpoint below the floor is the flag CLAUDE.md describes, and that one is
-    # released above.
-    r"|\bblocker 10\b|\brange tops out\b|\bwhole (?:stated )?range\b"
-    r"|\bmaximum (?:is |sits )?below\b|\bentire range\b"
-    # Blocker 1: a graduate degree stated as required with no equivalence route.
-    r"|\bmaster'?s?\s+(?:degree\s+)?(?:is\s+)?(?:a\s+)?(?:must|required)\b"
-    r"|\bstates a master'?s?\b|\brequires? a master'?s?\b|\bPhD required\b"
-    # A reason that names a numbered blocker or the triage stage is citing
-    # 10-triage-blockers.md, which is the current rule set and not an old one.
-    # Those knockouts stand; what this releases is the weighted score that came
-    # after them.
-    r"|\btriage knockout\b|\bknockout at triage\b|\bblocker \d+\b"
-    r"|\btier 1 pre-?filter\b|\bmechanical (?:screen|pre-?filter)\b"
-    r"|\bfree.?text screen\b")
+    # The triage card's own knockouts (10-triage-blockers.md): a stated range
+    # whose maximum is below the floor, and a graduate degree stated as required
+    # where the person's card says so. The person's rules, so they stand.
+    r"|\brange tops out\b|\bwhole (?:stated )?range\b|\bmaximum (?:is |sits )?below\b"
+    r"|\bentire range\b|\brange max\b"
+    r"|\bmaster'?s?\s+(?:degree\s+)?(?:is\s+)?(?:explicitly\s+)?(?:a\s+)?(?:must|required)\b"
+    r"|\bstates a master'?s?\b|\brequires? a master'?s?\b|\bPhD required\b")
+# What is NOT here, deliberately: the name of the stage that wrote the reason
+# ("knockout at triage", "blocker 2", "free text screen") and a years bar. A
+# stage name is not a fact about the posting, and a years bar is a flag under
+# the current rules: 83 years-bar exclusions in one real file, written when the
+# card cut at 5+ years, kept blocking roles the current card and screen only
+# rank lower. Released, such a posting goes through the current screen again,
+# which cuts it again if it still cuts.
 _STILL_CUTS = re.compile(
     "|".join([_STILL_CUTS_CORE, *getattr(person.module("search"), "STILL_CUTS", ())]),
     re.I)
@@ -255,6 +253,9 @@ def _row_age_days(row: dict, today: "dt.date | None" = None) -> int | None:
     return ((today or dt.date.today()) - then).days
 
 
+LIVE_PROCESS = frozenset({"interview", "offer"})
+
+
 def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     """A sent application with no reply recorded, old enough to presume dead.
 
@@ -263,6 +264,12 @@ def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     happens. This only stops the row SUPPRESSING, which is a claim about this
     repo's own behaviour and is ours to make.
     """
+    # A live process is not silence, however long it has run: an interview loop
+    # at a bank routinely passes six weeks, and a row at `interview` older than
+    # SILENCE_DAYS stopped holding its employer back and was described as "never
+    # heard back", inviting a cold application where the person was mid-interview.
+    if str(row.get("status") or "").strip().lower() in LIVE_PROCESS:
+        return False
     age = _row_age_days(row, today)
     return age is not None and age >= SILENCE_DAYS
 
@@ -312,6 +319,23 @@ def silent_applications(path: str = TRACKER,
         k = key(r.get("company"))
         if k:
             out.setdefault(k, []).append(r)
+    return out
+
+
+def closed_applications(path: str = TRACKER) -> dict[str, list[dict]]:
+    """Employer key -> every sent application there that has closed.
+
+    A closed application does not hold its employer (other roles there are fair
+    game), but the same role is the same job: a role applied to and closed as
+    `no_response` came back as the top pick of the next two rounds.
+    """
+    out: dict[str, list[dict]] = {}
+    for r in _tracker_rows(path):
+        status = (r.get("status") or "").strip().lower()
+        if status in FINAL and status not in UNSENT:
+            k = key(r.get("company"))
+            if k:
+                out.setdefault(k, []).append(r)
     return out
 
 
@@ -618,7 +642,8 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
              drafted: dict[str, dict] | None = None,
              pending: dict[str, list[dict]] | None = None,
              holds: dict[str, str] | None = None,
-             silent: dict[str, list[dict]] | None = None) -> tuple[list[dict], list[dict]]:
+             silent: dict[str, list[dict]] | None = None,
+             closed: dict[str, list[dict]] | None = None) -> tuple[list[dict], list[dict]]:
     """Split ranked rows into surfaced and skipped. Order by priority, highest first."""
     rows = sorted(rows, key=lambda r: -(r.get("priority") or 0))
     kept, skipped = [], []
@@ -646,6 +671,11 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             reason = f"already ruled out, {urls[n]}"
         elif pair in pairs:
             reason = f"already ruled out, {pairs[pair]}"
+        elif k and closed and any(_same_title(r.get("title"), c.get("role"))
+                                  for c in closed.get(k, [])):
+            c = next(c for c in closed[k] if _same_title(r.get("title"), c.get("role")))
+            reason = (f"already applied to this role on {c.get('date') or 'an unrecorded date'} "
+                      f"({c.get('status')}); a relisted posting is the same job")
         elif k and k in open_apps:
             opens = open_apps[k]
             if isinstance(opens, dict):      # one row, the shape this took before
@@ -677,7 +707,13 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
                 (o for o in opens if _same_title(r.get("title"), o.get("role"))), None)
             best = max(opens, key=lambda o: (_as_score(o.get("fit_rating")) or -1))
             sent = _as_score(best.get("fit_rating"))
-            if (same_role is None and sent is not None and here is not None
+            # An unscored open row, or a live process, holds the employer as the
+            # comment above says it does: the override is measured against what
+            # was sent, and nothing can clear an application with no score or
+            # an interview in progress.
+            unscored = any(_as_score(o.get("fit_rating")) is None
+                           or str(o.get("status") or "").lower() in LIVE_PROCESS for o in opens)
+            if (same_role is None and sent is not None and here is not None and not unscored
                     and here - sent >= OVERRIDE_POINTS):
                 r = {**r, "throttle_override_note": (
                     "OVERRIDE: fit %d against %d for %s, already %s at this employer. "
@@ -808,6 +844,11 @@ def main() -> int:
 
     data = json.load(open(a.infile))
     rows = list(data.values()) if isinstance(data, dict) else list(data)
+    # A posting that gives its employer's short name in brackets teaches the
+    # join before any row is keyed, so "Long Name (LN)" and "LN" are one employer
+    # for the one-role-per-employer rule, whichever comes first.
+    import company_key
+    company_key.learn(r.get("company") for r in rows)
     open_apps = open_applications(a.tracker)
     seen = load_seen(a.seen)
     urls, pairs = ruled_out(seen["seen"])
@@ -816,7 +857,7 @@ def main() -> int:
     kept, skipped = throttle(rows, open_apps, urls, pairs, a.today, blocked, warm,
                              drafted_applications(a.tracker),
                              pending_outreach(a.contacts), referral_holds(a.contacts),
-                             silent_applications(a.tracker))
+                             silent_applications(a.tracker), closed_applications(a.tracker))
 
     stale = expired_do_not_target(a.do_not_target, a.today)
     if stale:

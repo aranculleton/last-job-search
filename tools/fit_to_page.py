@@ -72,6 +72,7 @@ MAX_LINES = 50
 # Measure the body from the application object, which is exact, rather than
 # from the rendered page, which is not.
 MAX_BODY_WORDS = 250
+RENDERED_PROSE = ("p1", "p2", "lead", "p4")
 
 
 def _pages(pdf):
@@ -198,9 +199,11 @@ def body_words(a):
     # `concession` is not counted: build() never renders it (it is the
     # drafter's note about where a concession sits), and counting it made the
     # trimmer cut real sentences to pay for words no reader sees.
-    keys = sorted(k for k in a
-                  if re.fullmatch(r"p\d+|lead|intro|opening|closing", k)
-                  and isinstance(a.get(k), str))
+    # Only what the letter renders. The template places p1, p2, lead and p4; a
+    # p3 counted here was never on the page, and the trimmer cut real sentences
+    # from p1 to pay for it. render_application.check_batch refuses a draft
+    # carrying a prose field the template cannot place.
+    keys = [k for k in RENDERED_PROSE if isinstance(a.get(k), str)]
     parts = [a.get(k, "") for k in keys]
     parts += [f"{b.get('label','')} {b.get('text','')}" for b in a.get("cl_bullets", [])]
     txt = " ".join(parts)
@@ -296,7 +299,7 @@ def _try(a, key, budget):
     return True
 
 
-def trim_letter(a, over):
+def trim_letter(a, over, page_over=True):
     """Cut in the order 06-cover-letter-templates.md gives, which ends at p2.
 
     That file's "How to cut, in order" is: the second sentence of any bullet,
@@ -329,6 +332,13 @@ def trim_letter(a, over):
     for k in extras:
         if len(a[k].split()) > 40 and _try(a, k, max(35, len(a[k].split()) - over)):
             return True
+    # p1 and p2 are cut only to get the letter onto one page. Over the word cap
+    # on a letter that already fits, cutting p1 removed its last sentence (who
+    # the candidate is and what they want, the point of the paragraph) from a
+    # letter with a third of the page empty. Over the cap and on the page, the
+    # report flags it instead.
+    if not page_over:
+        return False
     if len(a["p1"].split()) > 45 and _try(a, "p1", 42):
         return True
     # Last. See above: losing the researched paragraph beats losing the page.
@@ -391,7 +401,7 @@ def fit(a):
         words = body_words(a)
         if lpages <= 1 and words <= MAX_BODY_WORDS:
             break
-        if not trim_letter(a, max(8, words - MAX_BODY_WORDS)):
+        if not trim_letter(a, max(8, words - MAX_BODY_WORDS), page_over=lpages > 1):
             break
         lpages = _render_letter(a)
     # Settle the page reference in the footer now that the layout is final.

@@ -70,6 +70,10 @@ LEGITIMATE_ISE = [
     "despising", "advertising", "franchising", "merchandising", "uprising",
     "enterprising", "unsurprising", "unpromising", "poised", "advertised",
 ]
+# Every -ise word above in its -ises form too, now that -ises is read: "supervises"
+# and "advises" are spelled that way in every variety.
+LEGITIMATE_ISE += sorted({w + "s" for w in LEGITIMATE_ISE if w.endswith("ise")}
+                         - set(LEGITIMATE_ISE))
 
 # The app's own rules, which apply to everyone. The locale rules follow the
 # profile's documents settings: the document noun the market does NOT use, and
@@ -81,12 +85,12 @@ if person.exists("claims.py"):
     LEGITIMATE_ISE = LEGITIMATE_ISE + list(getattr(person.module("claims"), "LEGITIMATE_ISE", []))
 _VARIANT_WORDS = {
     # spelling -> (forms that are wrong in it, why)
-    "canadian": (r"\b(behavior|behavioral|modeling|modeler|center)\b",
+    "canadian": (r"\b(behaviors?|behavioral|modeling|modelers?|centers?)\b",
                  "Canadian English keeps modelling, behaviour and centre. Use American "
                  "spelling only for a US posting, and then consistently throughout."),
-    "american": (r"\b(behaviour|behavioural|modelling|modeller|centre|colour|favour|analyse)\b",
+    "american": (r"\b(behaviours?|behavioural|modelling|modellers?|centres?|colours?|favours?|analyses?)\b",
                  "American English: behavior, modeling, center, color, favor, analyze."),
-    "british": (r"\b(behavior|behavioral|modeling|modeler|center|color|favor|analyze)\b",
+    "british": (r"\b(behaviors?|behavioral|modeling|modelers?|centers?|colors?|favors?|analyzes?)\b",
                 "British English: behaviour, modelling, centre, colour, favour, analyse."),
     "australian": (r"\b(behavior|behavioral|modeling|modeler|center|color|favor|analyze)\b",
                    "Australian English: behaviour, modelling, centre, colour, favour, analyse."),
@@ -115,7 +119,7 @@ def app_rules() -> dict:
                if spelling == "canadian" else "American English uses -ize/-ization.")
         r["british-ise-spelling"] = (
             "ERROR", "british-ise-spelling",
-            r"\b(?!(?:" + "|".join(LEGITIMATE_ISE) + r")\b)\w{4,}(?:ise|ised|ising|isation)\b",
+            r"\b(?!(?:" + "|".join(LEGITIMATE_ISE) + r")\b)\w{4,}(?:ise|ises|ised|ising|isation|isations)\b",
             why)
     if spelling in _VARIANT_WORDS:
         pat, why = _VARIANT_WORDS[spelling]
