@@ -1,8 +1,10 @@
 # last-job-search
 
 **A job search that Claude runs for you.** It finds jobs that fit you, scores each one, writes
-a resume and cover letter for the ones you choose, checks them, and helps you reach the right
-people. It never sends anything. You stay in charge of what goes out.
+and checks a resume and cover letter for the ones you choose, finds the people worth talking to
+and drafts what to say, keeps track of every application and conversation, reminds you when to
+follow up, and gets you ready for interviews. It never sends anything. You stay in charge of
+what goes out.
 
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
@@ -40,6 +42,12 @@ the one setting to paste in the first time, is [START_HERE.md](START_HERE.md).
 - **It ranks, it does not hide.** A job advert is a wish list. A missing skill lowers a score;
   it does not throw the job away. Only a few things rule a job out, such as needing a right to
   work you do not have, or a language you do not speak.
+- **It works your network, not just the job boards.** It finds former colleagues, fellow
+  alumni and the right people at each employer, and writes every message: the first note
+  (which asks for a conversation, not a job), the replies and the referral ask. It tracks every
+  thread and warns you before a cold application lands on top of a warm introduction.
+- **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
+  and drafts the nudge. Set up a daily brief and what you owe arrives on your phone each morning.
 - **It checks its own work.** Every resume is compiled, read back, and checked the way an
   applicant tracking system reads it, and every claim is checked against what you told it.
 - **It remembers.** Applications, conversations and what is due live in files in your copy,
