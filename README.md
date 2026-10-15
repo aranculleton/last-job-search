@@ -21,7 +21,7 @@ Using a different agent tool (Codex, Gemini CLI, Cursor, Antigravity)? Start at
 [AGENTS.md](AGENTS.md). It is built for Claude Code, but the search, scoring, documents,
 checks and tracking are plain Python and written procedures that any agent which can read
 files and run commands can follow. A few extras, such as the scheduled daily brief, are
-Claude-only.
+Claude-only. Ports to other tools are listed in [Discussions](https://github.com/aranculleton/last-job-search/discussions/41).
 
 ## Get started
 
