@@ -19,7 +19,18 @@ it against the tracker, and appends a PascalCase role token whenever the name
 belongs to a different application.
 
     python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...]
+    python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N]
     python3 tools/stage_picks.py assemble <round_dir>
+
+`single` is /apply's way in: one posting that came from no round, staged exactly
+as a round's pick is, so a single application is drafted, rendered and verified by
+the same tools as a batch.
+
+A round's own `06_shortlist.json` is read when it is there; in a later session,
+when the gitignored round directory is gone, the committed
+`documents/rounds/<round>.json` is read instead, and each pick's body is fetched
+from its board, or read from `<round_dir>/postings/<slug>.txt` when the board
+will not give it.
 
 A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
 
@@ -178,10 +189,54 @@ def _find(shortlist: list[dict], pick: str) -> dict:
     return hits[0]
 
 
+def load_shortlist(round_dir: str) -> list[dict]:
+    """The round's shortlist: its own file, or the committed summary of it.
+
+    `06_shortlist.json` lives in the gitignored round directory, so a later
+    session (the person answering a shortlist hours after it was sent, in a new
+    container) has only `documents/rounds/<round>.json`, which keeps the same
+    rows in the same order without their bodies. `posting_text` fills those in.
+    """
+    path = os.path.join(round_dir, "06_shortlist.json")
+    kept = person.state("documents", "rounds",
+                        os.path.basename(os.path.normpath(round_dir)) + ".json")
+    for p in (path, kept):
+        if os.path.exists(p):
+            with open(p, encoding="utf-8") as fh:
+                data = json.load(fh)
+            return data if isinstance(data, list) else list(data.values())
+    raise SystemExit(f"stage: neither {path} nor {kept} exists. Pass the round directory the "
+                     "shortlist came from (rounds/<name>), or stage a single posting with "
+                     "`single`.")
+
+
+def _hydrate(row: dict) -> dict:
+    import hydrate
+    return hydrate.fetch(row)
+
+
+def posting_text(row: dict, round_dir: str, s: str, fetch=_hydrate) -> str:
+    """The posting body: the shortlist's, a saved copy, or fetched from the board."""
+    if (row.get("desc") or "").strip():
+        return row["desc"]
+    saved = os.path.join(round_dir, "postings", f"{s}.txt")
+    if os.path.exists(saved):
+        with open(saved, encoding="utf-8") as fh:
+            return fh.read()
+    got = fetch(row) or {}
+    if (got.get("desc") or "").strip():
+        return got["desc"]
+    raise SystemExit(
+        f"stage: no posting text for {row.get('company')} | {row.get('title')} "
+        f"({got.get('hydrate_error') or 'nothing came back'}). Save the posting to {saved} "
+        f"(WebFetch {row.get('url') or 'its link'}, or ask the person to paste it) and run "
+        "stage again.")
+
+
 def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
-          root: str = ROOT) -> list[dict]:
-    with open(os.path.join(round_dir, "06_shortlist.json"), encoding="utf-8") as fh:
-        shortlist = json.load(fh)
+          root: str = ROOT, shortlist: list[dict] | None = None,
+          fetch=_hydrate) -> list[dict]:
+    shortlist = load_shortlist(round_dir) if shortlist is None else shortlist
     rows = _tracker_rows() if rows is None else rows
     os.makedirs(os.path.join(round_dir, "picks"), exist_ok=True)
     staged, apps_in, claimed, seen_slugs = [], [], set(), set()
@@ -193,6 +248,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         if s in seen_slugs:
             s = f"{s}_{n}"
         seen_slugs.add(s)
+        r = dict(r, desc=posting_text(r, round_dir, s, fetch))
         path = os.path.join(round_dir, "picks", f"{n:02d}_{s}.md")
         head = [
             f"# {r['company']} | {r['title']}", "",
@@ -259,9 +315,32 @@ def main() -> int:
     s = sub.add_parser("stage")
     s.add_argument("round_dir")
     s.add_argument("picks", nargs="+")
+    one = sub.add_parser("single", help="one posting that came from no round: /apply")
+    one.add_argument("round_dir", help="a scratch directory for this application")
+    one.add_argument("--company", required=True)
+    one.add_argument("--role", required=True)
+    one.add_argument("--posting-file", required=True,
+                     help="the posting text, verbatim, as fetched or pasted")
+    one.add_argument("--url", default="")
+    one.add_argument("--location", default="")
+    one.add_argument("--fit", type=int, help="the 0-100 fit /apply Step 1 scored")
+    one.add_argument("--deadline", default="")
     a = sub.add_parser("assemble")
     a.add_argument("round_dir")
     args = ap.parse_args()
+    if args.cmd == "single":
+        with open(args.posting_file, encoding="utf-8") as fh:
+            body = fh.read()
+        row = {"company": args.company, "title": args.role, "url": args.url,
+               "location": args.location, "portal": "pasted", "desc": body}
+        if args.fit is not None:
+            row["fit"] = args.fit
+        if args.deadline:
+            row["deadline"] = args.deadline
+        for p in stage(args.round_dir, ["1"], shortlist=[row]):
+            print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
+        print(f"\nargs for the draft-applications workflow: {os.path.join(args.round_dir, 'picks.json')}")
+        return 0
     if args.cmd == "stage":
         for p in stage(args.round_dir, args.picks):
             print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")

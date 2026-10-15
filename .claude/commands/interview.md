@@ -24,7 +24,7 @@ v1 preps for a **specific application**. Generic no-target practice is out of sc
 
 ## Step 1: Load the Application Context
 
-1. **The archive** (started by `/apply`, maintained by `/outcome`): derive `<company>_<role>` by the **Subfolder naming** rule in `documents/README.md`, then use `documents/applications/<company>_<role>/`.
+1. **The archive** (started by `/apply`, maintained by `/outcome`): the folder `python3 tools/outreach.py --folder "<Company>" "<Role>"` prints: the one already on disk, whichever name it was written under, or the one given by the **Subfolder naming** rule in `documents/README.md`. Below, `documents/applications/<company>_<role>/` means that folder.
    - `job_posting.md` - the exact posting the user applied to
    - the resume and cover letter actually submitted, at the paths named in the tracker row's `cv_file` and `cover_letter_file` columns (`cv/<Prefix>_Resume_<ABBR>.tex` and `cover_letters/<Prefix>_Cover_Letter_<ABBR>.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json`, per `documents/README.md` - no copy lives in this folder). **These are what the interviewer read**; every talking point must be consistent with their claims.
    - `outcome.md` - the stage reached so far and any recorded feedback from earlier stages. Feedback from stage N is the highest-value input for stage N+1 prep.

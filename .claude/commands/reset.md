@@ -55,7 +55,14 @@ List every file under `profile/` (Glob `profile/**/*`), including the person's o
 
 profile/
   - [each file] or "(no profile)"
+
+.agents/skills/ (the job boards built for you)
+  - [each folder that is not linkedin-search or freehire-search] or "(none)"
 ```
+
+The job boards `/add-portal` built are the person's, for their city and field
+(`tools/personal_paths.py`), so they go with the profile: a new person in this repo would
+otherwise have every round search the last person's boards.
 
 If there is no `profile/`, say so and skip this scope.
 
@@ -73,12 +80,17 @@ Report which of these exist, with the row count of each CSV:
 - job_scraper/do_not_target.json
 - company_research/*.json      [n files]
 - upskill/*.md                 [n files]
+- networking/                  [n files: research notes]
+- handoff/                     [n files]
+- job_scraper/notion_sync.json
+- gmail_sync/                  (the Gmail sync cursor)
+- salary_data.json             (salary data you added, if any)
 - rounds/                      (local working files, never committed)
 ```
 
 ### If scope includes `documents`:
 
-Use Glob to list all files present in `documents/cv/`, `documents/linkedin/`, `documents/diplomas/`, `documents/references/`, `documents/postings/`, `documents/applications/`, `documents/interview/`, `documents/network/`, `documents/rounds/`, `documents/briefs/`, and `documents/shortlists/`. Present as:
+Use Glob to list all files present in `documents/cv/`, `documents/linkedin/`, `documents/diplomas/`, `documents/references/`, `documents/postings/`, `documents/applications/`, `documents/interview/`, `documents/network/`, `documents/rounds/`, `documents/briefs/`, `documents/shortlists/` and `documents/others/`, including the subfolders `documents/applications/` and `documents/network/` keep one per application and per contact. Present as:
 
 ```
 ## Documents reset will delete:
@@ -105,7 +117,7 @@ documents/interview/
   - [filename] or "(empty)"
 
 documents/network/
-  - [filename] or "(empty)"
+  - [subfolder/filename] or "(empty)"
 
 documents/rounds/
   - [filename] or "(empty)"
@@ -115,6 +127,9 @@ documents/briefs/
 
 documents/shortlists/
   - [filename] or "(empty)"
+
+documents/others/
+  - [subfolder/filename] or "(empty)"
 
 documents/README.md - NOT deleted (instructions file)
 ```
@@ -150,6 +165,15 @@ Wait for the response.
 ```bash
 git rm -r -q --ignore-unmatch profile/
 rm -rf profile/
+python3 - <<'EOF'
+import glob, os, shutil, subprocess, sys
+sys.path.insert(0, "tools")
+from personal_paths import is_personal
+for d in glob.glob(".agents/skills/*/"):
+    if is_personal(os.path.join(d, "SKILL.md")):
+        subprocess.run(["git", "rm", "-r", "-q", "--ignore-unmatch", d])
+        shutil.rmtree(d, ignore_errors=True)
+EOF
 ```
 
 ### State reset
@@ -161,7 +185,9 @@ rm -f job_search_tracker.csv network_contacts.csv network_threads.csv
 rm -f job_scraper/seen_jobs.json job_scraper/do_not_target.json
 git rm -q --ignore-unmatch 'company_research/*.json' 'upskill/*.md'
 rm -f company_research/*.json upskill/*.md
-rm -rf rounds/
+git rm -r -q --ignore-unmatch networking/ handoff/ job_scraper/notion_sync.json
+rm -rf networking/ handoff/ gmail_sync/ rounds/
+rm -f job_scraper/notion_sync.json salary_data.json
 ```
 
 ### Documents reset
@@ -176,11 +202,17 @@ rm -f documents/references/*
 rm -f documents/postings/*
 rm -rf documents/applications/*/
 rm -f documents/interview/*
+rm -rf documents/network/*/
 rm -f documents/network/*
 rm -f documents/rounds/*
 rm -f documents/briefs/*
 rm -f documents/shortlists/*
+rm -rf documents/others/
 ```
+
+`documents/network/` holds a folder per contact (prep documents, drafts), so the files
+directly inside it are not all of it. `tools/personal_paths.py` is the list these commands
+must match: a personal path missing here survives a reset.
 
 Then the rendered documents, never the app's templates and fonts:
 

@@ -219,14 +219,25 @@ guard passing.
 At the end of any session that produced application work, commit these:
 
 ```bash
+for p in profile networking; do      # not ignored: a plain add, so no cache file comes with it
+  [ -e "$p" ] && git add -- "$p"
+done
 for p in job_search_tracker.csv network_contacts.csv network_threads.csv \
          job_scraper/seen_jobs.json job_scraper/do_not_target.json \
          documents/cv documents/applications documents/network documents/rounds \
          cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
-         cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf upskill/*.md; do
+         cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf \
+         company_research/*.json upskill/*.md; do
   [ -e "$p" ] && git add -f -- "$p"
 done
 ```
+
+`profile` is there because what the person teaches it (`profile/learned.json`), the facts
+written back to `01-candidate-profile.md` and every setting changed in a session live there.
+It takes a plain `git add`, never `-f`, which would force in the ignored caches under
+`profile/tests/`.
+`company_research/*.json` is gitignored and costs a fetch to rebuild; the Memory table below
+says to keep it.
 
 One path at a time, and only what exists: a single `git add` with a path that does not
 exist yet (a new repo has no `upskill/*.md`) stages nothing at all, silently.
@@ -309,7 +320,7 @@ an employer inherits the strongest model and is never downgraded.
 
 | Workflow | Args | What it does |
 |---|---|---|
-| `draft-applications` | `{today, round_dir, picks}` | Per posting, pipelined: company research (sonnet), draft object (strongest), grounding and rules audit (strongest). Writes `round_dir/audit_<slug>.json`. |
+| `draft-applications` | `{today, round_dir, picks}`, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), draft object (strongest), grounding and rules audit (strongest). Writes `round_dir/audit_<slug>.json`. |
 | `repo-audit` | optional `{focus}` | Four sonnet readers over docs, code, networking state and records, a sceptic per slice that re-checks every finding against the cited lines, then one ranking pass. Read-only. |
 
 Two **subagents** in `.claude/agents/` carry the same split for work that is not a whole
@@ -323,7 +334,8 @@ batch, a single `/apply`, an `/interview` or a networking call, where a workflow
 `tools/lint_skills.py` checks their frontmatter, and a test pins the two models, so the
 auditor cannot be quietly downgraded.
 
-The drafting path is now three commands around one workflow:
+The drafting path is three commands around one workflow, for a batch from a round and for a
+single `/apply` alike (`stage_picks.py single` stages the one posting):
 
 ```bash
 python3 tools/stage_picks.py stage "$SCRATCH/r1" "Acme::Demand Planning" 4 7     # picks.json, apps_in.json, fenced postings
@@ -402,14 +414,14 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 
 | Command | What it does |
 |---|---|
-| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, while the top 60 of the shortlist, minus the posting bodies, is written to `documents/rounds/<round>.json` and **is** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the three files the MISSED message tells you to read. |
+| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the three files the MISSED message tells you to read. |
 | `python3 tools/job_alerts.py <messages.json> --out <alerts.json>` | The person's LinkedIn job alerts, read by the session from Gmail only when `profile/search.py` `JOB_ALERT_QUERY` asks for it (`--query` prints the search). Takes the job ids alone and fills each posting from LinkedIn's own page; `run_round.py --alerts <alerts.json>` adds them to the round before the free filters. |
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. |
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
 | `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
 | `python3 tools/what_works.py brief <messages\|documents\|search>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, and the interview rate by fit band and route. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
 | `python3 tools/followups.py` | The application nudges alone. The first is due 7 days after applying, the second 7 days after the first **actually went**, read from `followed up YYYY-MM-DD` in the row's notes (the form `/outcome` Step 2b writes), never from the application's age. Held, with the reason printed, while an interview or offer runs at that employer, a referral is in flight there, or the row's notes say `DO NOT CHASE` (`until <date>` in that note, or a later `chase again`, lifts it). A later row for the same role closes the earlier one. It names who the nudge goes to, from the row's `contact_person`, the application's `outreach.md`, or a contact there who has replied, and otherwise says nobody is on file and drafts nothing. It stops a week after the second follow-up, or at the throttle's 45 days of silence, and says so once. A separate clock from the networking nudge below, deliberately. |
-| `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
+| `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. In a later session, when `rounds/` is gone, it reads `documents/rounds/<round>.json` instead and fetches each pick's body from its board, or reads `<round_dir>/postings/<slug>.txt` when the board will not give it. `single <dir> --company --role --posting-file` stages one posting from no round, which is how `/apply` enters the same pipeline. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
 | `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
 | `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. |

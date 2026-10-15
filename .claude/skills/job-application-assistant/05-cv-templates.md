@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.6
+framework_version: 2.1.7
 ---
 
 # Resume Templates and Tailoring Guide
@@ -217,7 +217,7 @@ This is the most important section to customize. It appears right after `\makecv
 
 Write 5-7 lines that function as an "elevator pitch": a concise, compelling introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
 
-When the role sits outside your home domain, **lead with the domain-transfer argument** - the one or two sentences connecting your background to their problem (e.g. wave physics to radar signal processing) belong in the profile statement's opening, not buried in the cover letter. It is the strongest card a domain-changer holds; play it first.
+When the role sits outside your home domain, **lead with the domain-transfer argument** - the one or two sentences connecting your background to their problem (e.g. retail demand forecasting to freight capacity planning) belong in the profile statement's opening, not buried in the cover letter. It is the strongest card a domain-changer holds; play it first.
 
 **The person's 2-3 profile statement templates, one per main role type, are in
 `profile/CLAUDE.md`** (/setup writes them there). Draft from those. The four below are the

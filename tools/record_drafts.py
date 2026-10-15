@@ -63,8 +63,11 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
     notes = " ".join(x for x in (
         f"{round_name}." if round_name else "",
         body,
-        (f"Scores: fit {fit}, opportunity {meta.get('opportunity')}, "
-         f"priority {meta.get('priority')}." if fit is not None else ""),
+        # A posting /apply staged on its own has a fit and nothing else; "opportunity
+        # None, priority None" in the notes reads as a fault.
+        ("Scores: " + ", ".join("%s %s" % (k, meta[k]) for k in ("fit", "opportunity", "priority")
+                                if meta.get(k) is not None) + "."
+         if fit is not None else ""),
         (f"Bar: {meta['bar']} ({meta.get('bar_reason', '')})." if meta.get("bar") else ""),
         # CLAUDE.md: the company-throttle override is "named explicitly". A
         # second application at an employer is a decision, and the row is
@@ -77,13 +80,16 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
     return {
         "date": today, "company": draft["company"], "sector": draft.get("sector", ""),
         "role": draft["role"], "role_type": draft.get("role_type", ""),
-        "channel": "portal" if meta.get("portal") else "", "status": "drafted",
+        # "pasted" is /apply's posting from no board: how it is sent is the person's call.
+        "channel": "portal" if meta.get("portal") not in (None, "", "pasted") else "",
+        "status": "drafted",
         "contact_person": "",
         "fit_rating": "" if fit is None else str(int(round(float(fit)))),
         "notes": notes,
         "cv_file": docpaths.resume_rel(abbr),
         "cover_letter_file": docpaths.letter_rel(abbr),
-        "source": meta.get("url", ""), "deadline": draft.get("deadline", "") or "",
+        "source": meta.get("url", ""),
+        "deadline": draft.get("deadline", "") or meta.get("deadline", "") or "",
     }
 
 

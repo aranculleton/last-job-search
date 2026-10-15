@@ -20,6 +20,36 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Draft 1 and 3" works after every round, and in a later session too.** Each round's
+  clean-up deleted the shortlist file drafting is staged from, so picking from a shortlist
+  that had just been sent failed. The round now keeps it (the top 60, in the gitignored round
+  folder), and in a later session, when that folder is gone, staging reads the committed
+  `documents/rounds/<round>.json` and fetches each pick's posting from its board.
+- **A single /apply now goes through the same pipeline as a batch.** It wrote the resume and
+  letter by hand, so it skipped the bullet allocator, the layout the renderer enforces,
+  `verify_batch.sh` and the kept `draft.json` (which is also what lets a result teach the
+  next draft). It now stages the one posting (`tools/stage_picks.py single`), drafts with the
+  same research, draft and grounding-audit stages, renders with `fit_to_page.py` and records
+  the row with `record_drafts.py`. Its plan also asks whether you have already applied. Hand
+  drafting remains only for a custom template from /add-template.
+- **One folder per application.** The commands looked for `<company>_<role>/` while the
+  tools wrote `<company>_<role>_<abbr>/`, so /outcome and /interview could start a second
+  folder beside the real one. Every command now asks `tools/outreach.py --folder`, which
+  finds the folder already on disk under either name.
+- **The drafting workflow works in your repo, wherever it sits.** It sent every agent to a
+  fixed path that only existed in the app's own container.
+- `tools/fleet.py` counted only squash-merged pull requests, so a repo that merges the usual
+  way was told nothing had come through a pull request.
+- `/reset` now removes everything that is yours: each contact's folder under
+  `documents/network/`, `documents/others/`, your own job boards, `networking/`,
+  `gmail_sync/`, and the Notion sync record.
+- The end-of-session commit now includes `profile/` (what you have taught it, and facts
+  written back) and `company_research/`.
+- No em dashes left in the skill documents, including the report /upskill writes, and two
+  examples left over from the original project's own search are replaced with invented ones.
+
 ### Added
 
 - **It learns what works from your results, with nobody having to say so.** Which messages

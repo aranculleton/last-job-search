@@ -201,8 +201,11 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-15", False, "learns from results: a resume that reached an interview "
                                     "lifts the bullets it used, and drafting reads it first "
                                     "(tools/what_works.py)"),
+            (5, "2026-10-15", False, "a single /apply drafts, renders and verifies through the "
+                                    "same pipeline as a batch, keeps its draft.json, and asks "
+                                    "first whether you have already applied"),
         ),
-        "fingerprint": "ece5b3f708fcd4f4",
+        "fingerprint": "6cca9152c386b904",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -213,8 +216,10 @@ METHODS: dict[str, dict] = {
         "versions": (
             _first(),
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
+            (3, "2026-10-15", False, "finds the application's folder under whichever name it "
+                                    "was written, instead of starting a second one"),
         ),
-        "fingerprint": "b8430ea70546009e",
+        "fingerprint": "d0e4a6c327709741",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -293,8 +298,12 @@ METHODS: dict[str, dict] = {
         "gives": "your upskilling plans redone the current way",
         "run": "/upskill again for each plan in upskill/",
         "files": (".claude/skills/upskill/SKILL.md",),
-        "versions": (_first(),),
-        "fingerprint": "baccf7b5955a4df0",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "no em dashes in the report it writes, and an invented "
+                                    "example in place of a real one"),
+        ),
+        "fingerprint": "37ab76a4ab683c57",
     },
 }
 

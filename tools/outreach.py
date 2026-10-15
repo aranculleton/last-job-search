@@ -75,6 +75,51 @@ def slug(company, role, abbr=""):
     return s
 
 
+def _abbr_on_file(company, role):
+    """The abbreviation the tracker's row for this application was written under."""
+    import csv
+    try:
+        with open(person.state("job_search_tracker.csv"), newline="", encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
+    except OSError:
+        return ""
+    want = (_company_key(company) if _company_key else company.lower(), slug("x", role))
+    rx = docpaths.resume_name_rx()
+    for r in reversed(rows):
+        got = (_company_key(r.get("company")) if _company_key else str(r.get("company")).lower(),
+               slug("x", r.get("role") or "x"))
+        m = rx.search(r.get("cv_file") or "")
+        if got == want and m:
+            return m.group(1)
+    return ""
+
+
+def app_folder(company, role, abbr=""):
+    """The folder one application lives in (documents/README.md, Subfolder naming).
+
+    The commands wrote `<company>_<role>/` while the tools wrote
+    `<company>_<role>_<abbr>/`, so /outcome and /interview missed the folder a
+    batch had written and started a second one beside it. The folder already
+    there wins: the full name, then the name without the abbreviation, then the
+    one folder for this company and role under any abbreviation. Otherwise the
+    full name, which is the rule.
+    """
+    base = person.state("documents", "applications")
+    abbr = abbr or _abbr_on_file(company, role)
+    stem = slug(company, role)
+    full = slug(company, role, abbr) if abbr else stem
+    for name in (full, stem):
+        if os.path.isdir(os.path.join(base, name)):
+            return os.path.join(base, name)
+    try:
+        hits = [d for d in sorted(os.listdir(base))
+                if d.startswith(stem + "_") and "_" not in d[len(stem) + 1:]
+                and os.path.isdir(os.path.join(base, d))]
+    except OSError:
+        hits = []
+    return os.path.join(base, hits[0] if len(hits) == 1 else full)
+
+
 def _plain(s):
     """Strip the LaTeX the drafts carry so the note reads as plain text."""
     s = re.sub(r"\\textasciitilde\{\}", "~", s or "")
@@ -352,6 +397,13 @@ SENT_NO_REPLY = {"awaiting_reply", "connected_no_reply"}
 
 if __name__ == "__main__":
     import datetime
+    if sys.argv[1:2] == ["--folder"]:
+        # Every command that reads or writes an application's archive asks here,
+        # so there is one answer to "which folder is this application's".
+        if len(sys.argv) not in (4, 5):
+            raise SystemExit('usage: outreach.py --folder "<Company>" "<Role>" [ABBR]')
+        print(os.path.relpath(app_folder(*sys.argv[2:]), person.state()))
+        sys.exit(0)
     if sys.argv[1:2] == ["--check-note"]:
         # /apply writes its note by hand: the same checks the assembled note meets.
         found = check_note(" ".join(sys.argv[2:]))

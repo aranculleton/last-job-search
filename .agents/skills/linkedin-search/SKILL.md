@@ -3,7 +3,7 @@ name: linkedin-search
 version: 1.0.0
 description: >
   Use this skill whenever the user wants to search for jobs in any location or
-  market, find job listings, or look up a specific job posting — in any country,
+  market, find job listings, or look up a specific job posting - in any country,
   city, or remotely. Invoke for open positions, vacancies, and hiring across any
   sector or role (software, data, design, marketing, finance, legal, operations,
   etc.). The location is always supplied explicitly by the user. Trigger phrases:
@@ -18,7 +18,7 @@ allowed-tools: Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts *)
 # LinkedIn Search Skill
 
 Search live job listings from LinkedIn's public job board for **any country/region**
-(and remote). No authentication, no API key, and **zero runtime dependencies** — it runs
+(and remote). No authentication, no API key, and **zero runtime dependencies** - it runs
 with just `bun`. The location is always passed explicitly, so the same skill works for a
 forker in any market out of the box.
 
@@ -53,14 +53,14 @@ bun run .agents/skills/linkedin-search/cli/src/cli.ts search --location "<place>
 ```
 
 Key flags:
-- `--location <text>` / `-l <text>` — **required.** A LinkedIn place string, e.g. `"Mumbai, Maharashtra, India"`, `"Berlin, Germany"`, `"London, United Kingdom"`, or `"Remote"`.
-- `--query <text>` / `-q <text>` — keyword search (title, skill, role). Recommended.
-- `--jobage <days>` — posted within N days: `1`, `7`, `14`, `30`. Omit for all postings.
-- `--jobage-minutes <n>` — posted within N minutes (sub-day precision, e.g. `30`). Conflicts with `--jobage` — pass only one.
-- `--remote <mode>` — `remote`, `hybrid`, or `onsite` (workplace-type filter).
-- `--page <n>` — page number (1-indexed, 10 results per page).
-- `--limit <n>` / `-n <n>` — cap total results emitted (client-side).
-- `--format json|table|plain` — default `json`.
+- `--location <text>` / `-l <text>` - **required.** A LinkedIn place string, e.g. `"Mumbai, Maharashtra, India"`, `"Berlin, Germany"`, `"London, United Kingdom"`, or `"Remote"`.
+- `--query <text>` / `-q <text>` - keyword search (title, skill, role). Recommended.
+- `--jobage <days>` - posted within N days: `1`, `7`, `14`, `30`. Omit for all postings.
+- `--jobage-minutes <n>` - posted within N minutes (sub-day precision, e.g. `30`). Conflicts with `--jobage` - pass only one.
+- `--remote <mode>` - `remote`, `hybrid`, or `onsite` (workplace-type filter).
+- `--page <n>` - page number (1-indexed, 10 results per page).
+- `--limit <n>` / `-n <n>` - cap total results emitted (client-side).
+- `--format json|table|plain` - default `json`.
 
 ### Fetch full job detail
 
@@ -95,7 +95,7 @@ bun run .agents/skills/linkedin-search/cli/src/cli.ts detail 4426311357 --format
 
 | Format | Best for |
 |--------|----------|
-| `json` | Default — programmatic use, passing IDs to `detail` |
+| `json` | Default - programmatic use, passing IDs to `detail` |
 | `table` | Quick human-readable scanning |
 | `plain` | Reading a single job's full detail (`detail` command) |
 
@@ -103,7 +103,7 @@ All errors are written to **stderr** as `{ "error": "...", "code": "..." }` and 
 
 ## Notes
 
-- Data is from LinkedIn's public `jobs-guest` endpoints — no credentials required.
+- Data is from LinkedIn's public `jobs-guest` endpoints - no credentials required.
 - Page size is fixed at 10 results per page.
 - LinkedIn may rate-limit; the CLI retries 429/5xx with exponential backoff. Keep volume low (see ToS note above).
-- Job IDs are numeric (e.g. `4426311357`) — pass them as-is to `detail`.
+- Job IDs are numeric (e.g. `4426311357`) - pass them as-is to `detail`.
