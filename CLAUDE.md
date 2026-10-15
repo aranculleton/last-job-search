@@ -245,7 +245,7 @@ run by name with the Workflow tool:
 | `draft-applications` | `{today, round_dir, picks}`, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), draft object (strongest), grounding and rules audit (strongest). Writes `round_dir/audit_<slug>.json`. |
 | `repo-audit` | optional `{focus}` | Four sonnet readers over docs, code, networking state and records, a sceptic per slice that re-checks every finding against the cited lines, then one ranking pass. Read-only. |
 
-Two **subagents** in `.claude/agents/` carry the same split for a single `/apply`, an
+Two of the **subagents** in `.claude/agents/` carry the same split for a single `/apply`, an
 `/interview` or a networking call, where a workflow is too much:
 
 | Subagent | Model | Use it for |
@@ -355,10 +355,12 @@ clickable apply link on every row and what needs checking. **Stop there and ask*
 take forward: draft nothing unless that request asked for it, and before drafting anything,
 ask whether they have already applied and record the answer.
 
-**Rank down, do not cut.** Only four things are hard cuts: an eligibility bar the profile
-cannot clear, a language requirement, a professional credential gate, and a role whose core
-is a discipline the person does not hold. A missing skill, a year of experience, a preferred
-degree or a posted range under target is a scoring input, and a posting with no stated
+**Rank down, do not cut.** The hard cuts are only the ones no framing survives: an
+eligibility bar the profile cannot clear, a language requirement, a professional credential
+gate, a role whose core is a discipline the person does not hold, a posting open to existing
+staff only, and a stated pay range whose top is below the person's cut line (or a knockout
+on their own triage card). A missing skill, a year of experience, a preferred degree or a
+posted range under target is a scoring input, and a posting with no stated
 salary loses nothing. Never pad a thin run with sub-60 postings, and never relax a gate or
 the location filter to hit the number; say what was tried instead. **The rules every search
 keeps, and why** (exclusions written back, the do-not-target list, warm routes and referrals,
@@ -378,15 +380,17 @@ resolve to one key, so threads and applications at the same employer link
 automatically. Company findings cache in the existing `company_research/`.
 
 State lives in `network_contacts.csv` and `network_threads.csv` beside the
-tracker. **Status is derived from the messages, never stored independently**, so
-it cannot drift from the evidence.
+tracker. **Status is derived from the messages wherever the log can know it**, so
+it cannot drift from the evidence. What the log cannot know (a call booked, a referral in
+flight, a conversation gone cold, a close) is stored on the contact row by whoever learns
+it, and wins over the log.
 
 Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
 (what is owed), `/prep` (call prep).
 
 **The rules that matter most**, all enforced in code rather than remembered:
 
-- One search per company, two only if the first is empty or the company has several relevant teams; three is a hard ceiling never meant to be reached. `discovery.queries_for()` caps it.
+- At most two searches per company (`discovery.queries_for()` builds them), and three is a hard ceiling never meant to be reached.
 - Alumni and referral routes before cold. The response-rate gap is large.
 - Tier 1 requires a **quoted** live hiring signal, shown as evidence.
 - **Outreach is for referrals, in three stages that are never compressed into one:** a
@@ -395,7 +399,8 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
   the role the candidate wants, never asks if they are hiring and never states work authorization
   unless the reader is a recruiter. A cold note in the application shape draws almost no
   replies; see "Composition" in the networking skill.
-- Connection notes are 300 characters hard. `compose.py` raises, never truncates.
+- Connection notes are 200 characters on a free LinkedIn plan and 300 on Premium
+  (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard. `compose.py` raises, never truncates.
 - A warm intro leads with the referrer's name in the first sentence.
 - Follow up after 5 to 7 **business** days, one nudge only.
 - After two nos, stop.

@@ -34,10 +34,11 @@ repositories** and pick the copy you just made.
 Go to [claude.ai/code](https://claude.ai/code), start a new session, and choose your copy as
 the repository.
 
-The first time, set up the session's environment. Open the cloud environment menu in the
-session's title bar and click **Edit**:
+The first time only, change two settings so it can make PDFs and reach job boards. Open the
+cloud environment menu in the session's title bar and click **Edit**:
 
-- **Setup script:** paste this line, so every session starts with the tools for making PDFs:
+- **Setup script:** copy and paste this line exactly. You do not need to understand it: it
+  installs the tools that turn your resume into a PDF, once, and they are kept for next time.
 
   ```
   apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
@@ -50,7 +51,8 @@ session's title bar and click **Edit**:
   ticked. The details are in
   [the cloud environment docs](https://code.claude.com/docs/en/cloud-environments#network-access).
 
-Save, and start a new session so the settings apply.
+Save, and start a new session so the settings apply. If you skip this, Claude can still
+help, but it will stop and say what is missing the first time it needs it.
 
 ## 4. Say "set me up"
 
@@ -73,11 +75,22 @@ Just talk to it. For example:
   them.
 - **"Who should I talk to at Acme?"** finds people worth contacting and drafts a first note.
 - **"What do I owe?"** lists replies and follow-ups that are due.
+- **"Prep me for my interview at Acme"** gives you likely questions and your best answers.
+- **"I got an interview"** or **"they replied"** updates the record and says what is next.
+
+You do not need to remember any commands. If you react to something ("too formal", "not this
+kind of company"), it remembers for next time.
+
+**Which model to pick.** In the model menu, the strongest model (Opus today) is worth it for
+writing applications, interview prep and setting up; the balanced one (Sonnet) is enough for
+searching and keeping track. You do not have to remember this: Claude says so in one line
+when the model you are on is more, or less, than a task needs.
 
 Updates to the app reach your copy on their own, at the start of each session. Everything
 about you stays in your copy, in the `profile/` folder, and is never sent back.
 
-A short daily brief on your phone is optional; `automation/README.md` sets it up.
+A short daily brief is optional, in a chat or as a phone notification;
+[automation/README.md](automation/README.md) sets it up, and Claude can do most of it for you.
 
 ---
 

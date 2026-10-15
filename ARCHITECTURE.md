@@ -104,8 +104,9 @@ it cut on, so the decision is checkable afterwards.
 Salary and degree minimums are flags, not cuts. A posted range below target is
 information for the person choosing, not grounds for removal.
 
-`tests/fixtures/screened_postings/` holds postings named for what must happen to
-them. A `pass__*` file is a role that was wrongly cut at some point and must keep
+`profile/tests/fixtures/screened_postings/`, in a person's own repo, holds postings named
+for what must happen to them (the app has none: a real posting is part of somebody's
+search, and `tools/score_eval.py` reads the person's). A `pass__*` file is a role that was wrongly cut at some point and must keep
 passing. A `cut__*` file must keep being cut. The screen is the one place where a
 regression is silent, so the corpus is the regression test.
 
@@ -213,7 +214,8 @@ somebody who was written to that week.
 ### Composing
 
 Four message types, one shape each, and the limits the platform enforces are enforced
-here. A connection note is 300 characters, and `compose.py` raises with the count rather
+here. A connection note is 200 characters on a free LinkedIn plan and 300 on Premium
+(`tools/network/schema.py` `LIMITS`, set by `LINKEDIN_PLAN`), and `compose.py` raises with the count rather
 than truncating, because what to cut is a judgement about which detail matters least and
 a truncator always takes the close. A warm intro that does not name the referrer in its
 first sentence is refused outright: being recognised before the reader decides whether to
@@ -221,7 +223,7 @@ keep reading is the whole reason that message converts.
 
 The channel carries as much as the length does. A 135-word warm intro for somebody a
 contact said to connect with is wrong where the message is the connection request, which
-LinkedIn cuts at 300 characters like any other. Sent that way, it spends the strongest
+LinkedIn cuts at the plan's note limit like any other. Sent that way, it spends the strongest
 asset in the book on half a sentence.
 
 Nothing composed here may claim a status the profile does not hold, citizenship or
@@ -343,7 +345,7 @@ templates/        resume_gen.py, the LaTeX every document is filled into
 cv/               rendered resumes, one per application
 cover_letters/    rendered cover letters, same
 documents/        source material in, application records out, see documents/README.md
-tests/            the app's suite, over 40 files and 450 tests, run against profile.example/
+tests/            the app's suite, over 40 files and 900 tests, run against profile.example/
 profile/tests/    a person's own tests, against their profile (not in the app)
 ```
 

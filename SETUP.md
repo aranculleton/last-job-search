@@ -17,17 +17,24 @@ about and never overwrites the rest; see [Resetting](#resetting) before starting
 
 ## A. Fresh cloud container
 
+Nobody using the app needs this section: the line START_HERE.md has you paste into the cloud
+environment's Setup script does all of it, and `./tools/setup_env.sh` repeats it in a session
+if that was skipped. By hand, it is:
+
 ```bash
 apt-get install -y --no-install-recommends \
   texlive-luatex texlive-latex-extra texlive-xetex \
   texlive-fonts-recommended poppler-utils
 
-pip3 install --upgrade cffi pytest pypdf
+pip3 install --upgrade cffi
+pip3 install -r requirements.txt
 
-python3 -m pytest tests -q          # over 450 green before anything else
+bun --version || curl -fsSL https://bun.sh/install | bash   # the job-board CLIs; preinstalled in Claude's cloud containers
+
+python3 -m pytest tests -q          # over 900 green before anything else
 ```
 
-That is the whole of it. Three notes on why each piece is there:
+Three notes on why each piece is there:
 
 **`texlive-fonts-recommended` is named explicitly** because `--no-install-recommends`
 will not pull it, and hyperref's xetex driver probes its `pzdr` metrics: the cover letter
@@ -77,7 +84,8 @@ curl -sS "$HTTPS_PROXY/__agentproxy/status"
 That is an environment policy denial, not a bug, and it is not something to route around.
 The fallback is `/apply <pasted posting text>`, which needs no network at all, and
 `run_round.py --from-scraped <earlier kept.json>`, which re-runs every free stage on a
-scrape that already succeeded.
+scrape that already succeeded (the earlier round must have run with `--keep-intermediates`,
+or its `00_scrape/` is already deleted).
 
 ### Disk
 
@@ -173,8 +181,9 @@ The default extractor is **pypdf** (`pip install pypdf`, BSD, no Poppler needed)
 - Debian/Ubuntu: `apt install poppler-utils`
 - Windows: `choco install poppler`
 
-`pdftotext -layout` must also pass `-enc UTF-8`. If neither extractor is present the
-check degrades to a visual keyword review with a warning, and everything else works.
+`pdftotext -layout` must also pass `-enc UTF-8`. Without Poppler, `tools/verify_pdf.py` and
+`tools/verify_batch.sh` stop with an error naming `pdftotext`: install it. Only when a session
+truly cannot is the keyword check done by reading the PDF, and the report says so.
 
 ---
 
@@ -211,9 +220,9 @@ summary.
 **`tools/verify_pdf.py` panics instead of erroring.** A broken system `cryptography`
 package under `pypdf`. `pip3 install --upgrade cffi`.
 
-**Portal CLI does nothing.** Check Bun is installed and the portal is enabled: the
-`enabled:` key at the top of `.agents/skills/<name>/SKILL.md`. Four of the six ship
-`enabled: false` on purpose.
+**Portal CLI does nothing.** Check Bun is installed (`bun --version`) and that the portal is
+on: `python3 tools/portals.py` prints what the next round searches. The app's two portals are
+switched in `profile/search.py` `PORTALS`, never in their `SKILL.md`, which a sync puts back.
 
 **LaTeX cannot find `moderncv`.** The distribution is minimal; see the package list
 above. On the resume specifically, confirm you are running lualatex and not pdflatex.
@@ -233,7 +242,8 @@ personal overrides.
 
 ## Upstream
 
-This repo is a fork. `.github/workflows/upstream-watch.yml` runs weekly and writes a
+For the app's maintainer only: a person's copy, made with "Use this template", has no
+`upstream` remote, and the workflow runs only in the app. The app is a fork. `.github/workflows/upstream-watch.yml` runs weekly and writes a
 rolling issue listing the upstream commits this fork lacks, sorted into worth-reviewing
 versus probably-skip. `python3 tools/upstream_triage.py --remote upstream --branch master`
 produces the same report locally, and `python3 tools/check_upstream_updates.py` reports
