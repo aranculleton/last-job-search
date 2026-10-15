@@ -18,7 +18,7 @@ Verified against the live API:
 | `GET /api/v1/jobs/search` | 200 (the web variant; not used by this skill) |
 | `GET /api/v1/jobs/facets` | 200 |
 | `GET /api/v1/jobs/{slug}` | 200 |
-| `GET /api/v1/auth/me` | 401 (auth required — not used here) |
+| `GET /api/v1/auth/me` | 401 (auth required - not used here) |
 
 ## Envelope
 
@@ -32,8 +32,8 @@ status (e.g. 404 → `{ "error": "not found" }`).
 The endpoint the skill's `search` command uses. Full-text + facet search over open
 jobs, returning `data: [job, …]` with `meta.total` = the estimated match count.
 
-It runs the **same query** as the web-facing `/api/v1/jobs/search` — same `q`, same
-facets, same ranking, same pagination guard (`offset + limit ≤ 10000`) — and differs
+It runs the **same query** as the web-facing `/api/v1/jobs/search` - same `q`, same
+facets, same ranking, same pagination guard (`offset + limit ≤ 10000`) - and differs
 in one respect: asked to, it replaces the search index's truncated `description`
 preview with the posting's **full** description read from the database. That is what
 lets a search of N roles stay one request instead of N + 1.
@@ -43,7 +43,7 @@ Two extra parameters control it:
 | Param | Maps to CLI flag | Notes |
 |-------|------------------|-------|
 | `include_description` | (always `true`) | Without it the endpoint serves the index preview, same as the web search. |
-| `description_format` | `--description-format` | `markdown` (the skill's default), `text`, or `html`. **An unrecognized value is not an error** — the API falls back to `html`, so the CLI validates the flag itself. |
+| `description_format` | `--description-format` | `markdown` (the skill's default), `text`, or `html`. **An unrecognized value is not an error** - the API falls back to `html`, so the CLI validates the flag itself. |
 
 Hydration is best-effort per hit: a result whose row has vanished from the database
 (the index lagging a just-removed job) keeps the preview rather than being dropped,
@@ -55,7 +55,7 @@ error naming the path rather than as an empty result set.
 
 ## `GET /api/v1/jobs/search`
 
-The web variant of the same search — identical query surface, but `description` is
+The web variant of the same search - identical query surface, but `description` is
 always the index's truncated preview. The skill does not call it; it is listed here
 because the shared parameters below are documented against both.
 
@@ -125,7 +125,7 @@ posting is still served here (with a non-null `closed_at`); a missing slug is 40
 
 ## `GET /api/v1/jobs/facets`
 
-The market's facet-value distributions under an optional filter — each facet's live
+The market's facet-value distributions under an optional filter - each facet's live
 values with counts. `data.facets` is `{ <facet>: { <value>: <count> } }`. This skill
 does not call it programmatically, but it is the vocabulary source the SKILL.md
 points users to (`?q=<role>` scopes the counts). Example:
@@ -137,9 +137,9 @@ points users to (`?q=<role>` scopes the counts). Example:
   portals). The only markup handling left client-side is `detail`'s: `/jobs/{slug}`
   serves HTML, which `cleanHtml` (`cli/src/helpers.ts`) strips into readable text.
   Search descriptions arrive already rendered by the API and are passed through
-  verbatim — stripping them again would undo the Markdown structure.
+  verbatim - stripping them again would undo the Markdown structure.
 - Fetch uses a browser-ish User-Agent, `Accept: application/json`, and exponential
   backoff with jitter on 429/5xx (max 6 retries). A connection error (API
-  unreachable) fails fast with a clear message — no retry, since it is not
-  transient server load — which is the graceful-degradation contract: an outage
+  unreachable) fails fast with a clear message - no retry, since it is not
+  transient server load - which is the graceful-degradation contract: an outage
   degrades this source quickly instead of hanging the caller.

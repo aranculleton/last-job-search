@@ -177,18 +177,52 @@ def slim(path):
     return max(0, before - os.path.getsize(path))
 
 
+# The file drafting starts from. `tools/stage_picks.py` reads each picked
+# posting's body out of it, and the prune deleted it on every round that met its
+# target, so "draft 1 and 3" from the shortlist that had just been presented
+# failed on a missing file. It stays, cut to the KEEP_TOP rows anybody is shown,
+# with their bodies: rounds/ is gitignored, so the bodies never reach a commit.
+SHORTLIST = "06_shortlist.json"
+
+
+def trim(path, top=KEEP_TOP):
+    """Keep the first `top` rows of a shortlist, bodies and all. Returns bytes saved.
+
+    A shortlist that will not parse is no use to stage from, and staging falls
+    back to `documents/rounds/<round>.json` when it is absent, so it is deleted.
+    """
+    try:
+        before = os.path.getsize(path)
+        rows = json.load(open(path))
+    except Exception:
+        try:
+            size = os.path.getsize(path)
+            os.remove(path)
+            return size
+        except OSError:
+            return 0
+    rows = rows if isinstance(rows, list) else list(rows.values())
+    with open(path, "w") as fh:
+        json.dump(rows[:top], fh, indent=1)
+        fh.write("\n")
+    return max(0, before - os.path.getsize(path))
+
+
 def prune(out_dir, keep=()):
-    """Delete the stage files, keeping the round directory, its log, and `keep`.
+    """Delete the stage files, keeping the round directory, its log, the shortlist and `keep`.
 
     The log is small, is already gitignored as `*.log`, and is the funnel
-    record somebody reads when a round looks wrong. Anything named in `keep` is
-    slimmed rather than deleted.
+    record somebody reads when a round looks wrong. The shortlist is what a
+    draft is staged from. Anything named in `keep` is slimmed rather than deleted.
     """
     freed = 0
     for name in os.listdir(out_dir):
         if name == "round.log":
             continue
         path = os.path.join(out_dir, name)
+        if name == SHORTLIST:
+            freed += trim(path)
+            continue
         if name in keep:
             freed += slim(path)
             continue
@@ -394,9 +428,9 @@ def main():
     if down:
         print(f"portal health: {', '.join(down)} DOWN (0 results to a deliberately broad probe)")
     if not a.keep:
-        # A round that met its target is never re-read; one that missed is read
-        # for exactly the three files the MISSED message below names, so those
-        # survive the prune with their posting bodies stripped.
+        # The shortlist survives every prune, for drafting. A round that missed
+        # is also read for exactly the three files the MISSED message below
+        # names, so those survive with their posting bodies stripped.
         freed = prune(a.out, keep=() if met else DIAGNOSTICS)
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"

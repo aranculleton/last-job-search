@@ -73,6 +73,18 @@ def branches() -> list[dict]:
     return sorted(out, key=lambda b: b["date"], reverse=True)
 
 
+def via_pull_request(subject: str) -> bool:
+    """Did this commit land through a pull request?
+
+    A merge commit reads "Merge pull request #12 from owner/branch"; a squash or
+    rebase merge ends "(#12)". Only the second was counted, so a repo that merges
+    the ordinary way reported every pull request as a direct push and printed a
+    false alarm on every run.
+    """
+    s = subject.strip()
+    return s.startswith("Merge pull request #") or (s.endswith(")") and "(#" in s)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--days", type=int, default=2,
@@ -129,15 +141,14 @@ def main() -> int:
         for day in sorted(by_day, reverse=True):
             print(f"    {day}  {by_day[day]:3d} commit(s)")
         merges = sum(1 for p in lines if len(p) > 3 and p[3].startswith("Merge "))
-        prs = sum(1 for p in lines if len(p) > 3 and p[3].rstrip().endswith(")")
-                  and "(#" in p[3])
+        prs = sum(1 for p in lines if len(p) > 3 and via_pull_request(p[3]))
         print(f"    of those: {prs} via a pull request, {merges} merge commit(s)")
         if lines and prs == 0:
             findings.append(
-                "nothing reached master through a pull request in this window. "
-                "Every direct push fires a full CI run, and that is what spends a "
-                "monthly Actions allowance. Branch protection requiring a PR is the "
-                "only thing that enforces it.")
+                "nothing reached master through a pull request in this window. A pull "
+                "request is where a change is checked before every other session starts "
+                "from it; branch protection requiring one is the only thing that "
+                "enforces it.")
 
     # --- was master rewritten under anyone ---------------------------------
     reflog = [ln.split()[0] for ln in git("reflog", "show", "origin/master").splitlines()]

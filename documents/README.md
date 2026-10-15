@@ -51,7 +51,10 @@ result is therefore a single path component whatever the posting contains.
 
 **This block is the only home for that rule.** `/apply`, `/outcome`, `/interview` and
 `tools/outreach.py` all cite it instead of restating it, because a second copy is how the
-first two drifted apart. `slug()` in `tools/outreach.py` is the implementation.
+first two drifted apart. `slug()` in `tools/outreach.py` is the implementation, and
+`python3 tools/outreach.py --folder "<Company>" "<Role>"` is how every command finds an
+application's folder: the one already on disk, under whichever name it was written, or the
+name this rule gives.
 
 The `_<abbr>` suffix is load-bearing. Without it, two roles at one employer with the same
 title overwrite each other, and so do two titles long enough to agree for eighty

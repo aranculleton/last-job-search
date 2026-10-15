@@ -1,9 +1,9 @@
 # LinkedIn Jobs URL Reference
 
-Public, unauthenticated `jobs-guest` endpoints used by this skill. Global — the same
+Public, unauthenticated `jobs-guest` endpoints used by this skill. Global - the same
 endpoints serve every market; only the `location` value changes.
 
-> Personal use only — automated access is against LinkedIn's Terms of Service; keep volume low.
+> Personal use only - automated access is against LinkedIn's Terms of Service; keep volume low.
 
 ## Search
 
@@ -38,5 +38,5 @@ Returns a single job's HTML: title (`top-card-layout__title`), company
 ## Notes
 
 - No authentication required.
-- Respect rate limits — the CLI backs off on 429/5xx.
+- Respect rate limits - the CLI backs off on 429/5xx.
 - Country-agnostic: pass any `--location` (city, region, country, or "Remote").

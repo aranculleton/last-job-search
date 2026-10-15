@@ -67,7 +67,7 @@ class UpskillSkillSpec(unittest.TestCase):
 
     def test_step3_documents_dedupe_and_gap_precedence(self):
         sections = _sections(SKILL.read_text(encoding="utf-8"))
-        step3 = sections.get("Step 3: Pass 1 — Hard Skill Diff", "")
+        step3 = sections.get("Step 3: Pass 1 - Hard Skill Diff", "")
         self.assertIn("case-insensitive company + role", step3, "Step 3 must specify the dedupe key")
         self.assertIn(
             "/notion-sync",
@@ -90,7 +90,7 @@ class UpskillSkillSpec(unittest.TestCase):
         dominate the heatmap. The skill already handles missing gaps with
         skip+count+report; the same pattern must cover fit_rating."""
         sections = _sections(SKILL.read_text(encoding="utf-8"))
-        step3 = sections.get("Step 3: Pass 1 — Hard Skill Diff", "")
+        step3 = sections.get("Step 3: Pass 1 - Hard Skill Diff", "")
         self.assertIn(
             "blank or non-numeric `fit_rating`",
             step3,

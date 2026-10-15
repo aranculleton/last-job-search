@@ -262,7 +262,7 @@ class ApplyArchivesThePosting(unittest.TestCase):
          "by Step 6b the model may hold only a summary, so the archive gets a "
          "paraphrase - what /outcome Step 3.2 forbids"),
         (APPLY, "### Step 6b: Record the Application",
-         "`documents/applications/<company>_<role>/job_posting.md`",
+         "to `job_posting.md` in the folder",
          "the one moment /apply provably holds the posting is spent again, and "
          "a pasted posting has no recovery path at all"),
         (APPLY, "### Step 6b: Record the Application",
@@ -270,13 +270,13 @@ class ApplyArchivesThePosting(unittest.TestCase):
          "a model that no longer holds the text would re-fetch to comply, the "
          "dead-URL path this whole item exists to avoid"),
         (APPLY, "### Step 6b: Record the Application",
-         "`/outcome` Step 1.4",
-         "the derivation is no longer pinned to /outcome's, so a later edit to "
-         "either can silently orphan the archive"),
+         'python3 tools/outreach.py --folder "<Company>" "<Role>"',
+         "the folder is derived by hand again, and a batch's `<company>_<role>_<abbr>/` "
+         "folder is missed and a second one written beside it"),
         (OUTCOME, "## Step 1: Load State and Identify the Application",
-         "4. Derive the archive folder name",
-         "apply.md item 7 defers its folder derivation to /outcome Step 1.4 by "
-         "number; renumbering Step 1 leaves that citation dangling"),
+         'python3 tools/outreach.py --folder "<Company>" "<Role>"',
+         "/outcome derives its own folder name, and an archive written under the "
+         "abbreviation is orphaned"),
         (APPLY, "### Step 6b: Record the Application",
          "**If the file already exists, leave it**",
          "re-running /apply to refresh a CV would overwrite the posting that "
