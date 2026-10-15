@@ -24,6 +24,9 @@ it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 4.
 
 For each `needs: "nobody"` entry, until the budget is spent:
 
+0. `python3 tools/profile_upgrades.py --check <id>` first: an upgrade done earlier in this
+   list can have done this one too (`boards` and `method-boards` both run the boards
+   section). If it prints `done`, skip it.
 1. Do its `run` on its own: the `/setup` section it names, run alone on the existing
    profile (setup.md, "Run for a profile upgrade"); `/add-portal`; or the edit it
    describes. Touch nothing else in the profile.
@@ -34,8 +37,11 @@ For each `needs: "nobody"` entry, until the budget is spent:
    (the `unconfirmed-facts` upgrade), so nothing is ever guessed.
 3. Keep to every rule `/setup` and `/add-portal` keep: robots.txt decides which boards
    are built, nothing personal goes into an app-owned file, research is cited.
-4. Check it: `python3 tools/profile_upgrades.py --check <id>` must print `done`. If it
-   does not, undo what you changed for it and record why.
+4. If its `run` ends with `python3 tools/build_versions.py record <name>` (the
+   `method-*` upgrades: a part of the build the app now does better), run that once it is
+   redone. A redo keeps what is there and adds what the current method adds; a value it
+   would change goes beside the old one as `[CONFIRM: ...]`. Then check it: `python3 tools/profile_upgrades.py --check <id>` must
+   print `done`. If it does not, undo what you changed for it and record why.
 5. Commit only what this upgrade changed, on its own:
    `Profile upgrade: <id>` as the subject, one line saying what was written as the body.
    Profile files take a plain `git add`; force-add only what CLAUDE.md's persistence rule
@@ -46,8 +52,10 @@ part way is undone, never committed half done.
 
 ## Step 3: Never
 
-- Never edit an app-owned file, the tracker, the contact book, the threads or anything in
-  `documents/`.
+- Never edit an app-owned file, the tracker, the contact book or the threads, and nothing
+  in `documents/` except what a `method-*` upgrade's `run` names (an unsent draft
+  re-rendered, a live interview's pack written beside the old one). Nothing sent is ever
+  touched.
 - Never send, submit or post anything.
 - Never switch off a portal or narrow the search on your own: an upgrade adds what is
   missing; a change of the person's mind is theirs to make.

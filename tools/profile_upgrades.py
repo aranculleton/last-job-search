@@ -523,6 +523,50 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=4),
 )
 
+# One upgrade per versioned method of the build (tools/build_versions.py): pending while
+# a version this repo predates says what it made should be made again, and the repo
+# holds something that method made. This is what carries a quiet improvement to
+# everyone who set up before it: a better board search, a fixed prep document, a
+# sharper eligibility question. Nobody has to know it happened. Methods a round
+# applies by itself (`by: "round"`) are not listed: there is nothing to run.
+def _method_check(name: str):
+    def check() -> str:
+        import build_versions as B
+        late = B.behind(name)
+        if not late or not B.applies(name):
+            return ""
+        have = B.recorded().get(name, 1)
+        return (f"your {name} was made by version {have}; version "
+                f"{late[-1][0]} does it better: {late[-1][3]}")
+    return check
+
+
+def _method_upgrades() -> tuple:
+    import build_versions as B
+    out = []
+    for name, m in B.METHODS.items():
+        if m["by"] == "round":
+            continue
+        rerun = [v for v in m["versions"] if v[2]]
+        instant = m["by"] == "instant"
+        run = m["run"] if instant else (
+            f"{m['run']}, alone, on what is already there; then "
+            f"python3 tools/build_versions.py record {name}")
+        out.append(Upgrade(
+            f"method-{name}", (rerun[-1][1] if rerun else B.FIRST_RELEASE), m["gives"],
+            _method_check(name), run,
+            "instant" if instant else "question" if m["by"] == "you" else "research",
+            m.get("time", ""),
+            command=("python3", "tools/build_versions.py", "redo", name) if instant else (),
+            paths=(*m.get("paths", ()), f"profile/{B.RECORD}") if instant else (),
+            priority=m["priority"],
+            needs="you" if m["by"] == "you" else "nobody",
+            ask=m.get("ask", "")))
+    return tuple(out)
+
+
+REGISTRY = REGISTRY + _method_upgrades()
+
 # Profile names added since the first release that need no upgrade, and why. A
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
@@ -586,6 +630,14 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
         lines.append("  These need you (asked at the end of a session, a few at a time):")
         for u, why in yours:
             lines.append(f"    {u.id:20} {u.ask or why}")
+    # Said here as well as in CLAUDE.md: the session that runs the sync which brings
+    # this in is still reading the CLAUDE.md from before it.
+    lines.append("  Claude: "
+                 + ("start a background agent now that follows .claude/commands/upgrade.md, "
+                    "and carry on with the person's request. " if alone else "")
+                 + "At the end of your reply, give the person "
+                 + ("its one line per change and " if alone else "")
+                 + "at most three of the questions" + (" it returns." if alone else " above."))
     return "\n".join(lines)
 
 

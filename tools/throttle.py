@@ -167,6 +167,33 @@ _STILL_CUTS = re.compile(
     re.I)
 
 
+# Facts about a posting, not verdicts of a method: a better screen does not reopen them.
+_NOT_A_VERDICT = re.compile(
+    r"\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b"
+    r"|\balready applied\b", re.I)
+
+
+def rescreen_since() -> str:
+    """The day screening last got better in a way that asks for a second look, or "".
+
+    tools/build_versions.py versions the screening method. An exclusion written before
+    a re-run version was decided by the older screen, so it stops blocking and the
+    posting is screened again by the current one, in every repo, with nobody asking.
+    """
+    import build_versions
+    return build_versions.last_rerun("screening")
+
+
+def screened_before(entry: dict, since: str) -> bool:
+    """Was this exclusion decided before `since`? Undated ones are older than any rule."""
+    day = ""
+    for k in ("excluded_date", "excluded_on", "date", "first_seen"):
+        day = str(entry.get(k) or "")[:10]
+        if day:
+            break
+    return not day or day < since
+
+
 def is_stale_exclusion(reason: str) -> bool:
     """Was this ruled out for something the current rules rank rather than cut?
 
@@ -304,6 +331,7 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
     """URL key -> reason and (title, employer key) -> reason for everything already ruled out."""
     urls: dict[str, str] = {}
     pairs: dict[tuple[str, str], str] = {}
+    since = rescreen_since()
     for u, e in entries.items():
         if not isinstance(e, dict):
             continue
@@ -324,6 +352,9 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         # stays as the record; it just stops blocking, and the posting is ranked
         # again against the current scoring.
         if status == "excluded" and is_stale_exclusion(reason):
+            continue
+        if (status == "excluded" and since and screened_before(e, since)
+                and not _NOT_A_VERDICT.search(reason)):
             continue
         why = f"{status} in seen_jobs.json: {reason[:120] or 'no reason recorded'}"
         n = norm(e.get("url") or u)

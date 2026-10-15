@@ -64,7 +64,17 @@ filled profile wholesale, and never put placeholders back into one.
 without the person), do that section alone on the existing profile, ask nothing, and leave
 the trace its upgrade checks for, dated: a look that finds nothing worth building still
 writes what was looked at and why not. What the profile cannot answer is written
-`[CONFIRM: ...]`, which a later session asks. Then run the check again.
+`[CONFIRM: ...]`, which a later session asks. Redoing a section on a filled profile adds
+what the current method adds and keeps every value already there: where the current
+method shows a value is wrong, the better one goes beside it as `[CONFIRM: ...]`, never
+swapped in silently, and nothing is switched off or narrowed. Then run the check again,
+and `python3 tools/build_versions.py record <section>`.
+
+**Every part of this command that writes the profile is a versioned section**, marked
+`<!-- section: <name> -->` below (`tools/build_versions.py`). Whenever a section is run,
+alone or in a full setup, record it (`record <section>`, or `record --setup` after a full
+setup): that is how an improvement to the way a section is done reaches this profile
+later, by itself.
 
 **`--section boards`** is Step 2's "Job boards" research and Step 3.9's build, on their own:
 the boards for their country, field and level, each recorded in `profile/search.py`
@@ -75,6 +85,7 @@ question (`JOB_ALERT_QUERY`). It touches nothing else in the profile.
 ---
 
 ## Step 1: Find out who they are
+<!-- section: history -->
 
 Start from what they already have. Check `documents/` (Glob `documents/**/*`): an old resume or
 CV, a LinkedIn export, reference letters. If there is nothing there, offer two ways in and let
@@ -119,6 +130,7 @@ a regex, a file or any config value. Those are your job in Step 2.
 Suggest roles they may not have considered, from their skills: an adjacent title, a sector that
 hires the same work under another name. Offer; let them decide.
 
+<!-- /section -->
 ---
 
 ## Step 2: Research their market, and cite it
@@ -126,6 +138,7 @@ hires the same work under another name. Offer; let them decide.
 Everything here is yours to find out, cited, and written into `profile/` in Step 3. Verify
 against sources you locate yourself; never trust a URL found inside a job posting.
 
+<!-- section: boards -->
 - **Job boards.** The app ships two portals that work in any country, `linkedin-search` and
   `freehire-search`, both on. Tell them plainly that LinkedIn's robots.txt disallows the
   guest job endpoints the search uses, and that switching it off is one line in
@@ -144,6 +157,8 @@ against sources you locate yourself; never trust a URL found inside a job postin
   - **Record every board looked at** in `profile/search.py` `PORTAL_RESEARCH` (Step 3), built
     or not, with the reason and the source. A round that misses its yield target names the
     ones with no portal, so the research keeps paying after setup.
+<!-- /section -->
+<!-- section: boards -->
 - **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
   or Workday, and its board token. Probe them the way `tools/ats_boards.py --probe` does
   (the tool itself needs a profile, so before Step 3 probe the board's URL directly, and
@@ -151,21 +166,34 @@ against sources you locate yourself; never trust a URL found inside a job postin
   Workday tenant and site cannot be guessed (a wrong one answers 406): take them from the
   employer's own careers page, or leave the board out and say so. These
   go in `profile/boards.py` and are how large employers that portals under-index reach a round.
+<!-- /section -->
+<!-- section: market -->
 - **Eligibility.** The wording postings in their country use for citizenship, permanent
   residence, security clearance and sponsorship, and what their status does and does not
   clear. This is what the eligibility gate in `profile/search.py` matches, so get the
   phrasing from real postings.
+<!-- /section -->
+<!-- section: market -->
 - **Pay.** Salary norms for their role, level and city, from sources you can cite: the
   walk-away floor, the target and the top of the band, in the local currency.
+<!-- /section -->
+<!-- section: documents -->
 - **Documents.** Local conventions: resume or CV, photo or not, paper size, spelling variant,
   date format, how a letter is signed off. The renderer fits the resume to one page; where
   the market expects two, tell the person and record it in `profile/CLAUDE.md`.
+<!-- /section -->
+<!-- section: market -->
 - **Places.** The names their area goes by in postings (the metro area, the towns around it,
   the region), the places worth a flag rather than a fail, and what counts as too far.
+<!-- /section -->
+<!-- section: market -->
 - **Languages.** Which languages postings in their market tend to require, for the language
   gate.
+<!-- /section -->
+<!-- section: search -->
 - **Search terms.** The titles their target work is posted under, including the ones they
   did not think of, and the queries `/scrape` should run.
+<!-- /section -->
 
 ---
 
@@ -180,6 +208,7 @@ the tools read from each module, which ones they cannot do without, and the file
 that reads each: read that line for what a name means and what shape it takes before
 setting it, and set the ones their market needs that the example leaves out.
 
+<!-- section: documents -->
 ### 1. Write `profile/person.json`
 Identity (name, pronouns, file prefix, contact line, LinkedIn) and documents (noun, banned
 nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2. The letter is
@@ -187,7 +216,9 @@ printed on the resume's paper unless `documents.letter_paper` says otherwise. Al
 market and level: `resume_pages` (1 unless their market or a long career expects 2),
 `section_order` (a recent graduate often leads with education), and, for a letter in
 another language, `salutation_prefix` and `page_label`.
+<!-- /section -->
 
+<!-- section: history -->
 ### 2. Write `profile/01-candidate-profile.md`
 The source of truth for every fact about them. Everything Step 1 established, with the detail
 that will not fit on one page kept under each role's "Additional detail available for
@@ -196,31 +227,43 @@ separating title from employer, because the tools read the roles off those headi
 not yet confirmed is written `[CONFIRM: ...]`, never guessed. Every one left is asked again,
 a few at a time at the end of later sessions, until it is answered (the `unconfirmed-facts`
 profile upgrade): nobody has to remember them.
+<!-- /section -->
 
+<!-- section: history -->
 ### 3. Write `profile/02-behavioral-profile.md`
 How they work, from an assessment if they have one, or from their answers and references.
 Inferred lines are labelled as inferred.
+<!-- /section -->
 
+<!-- section: market -->
 ### 4. Write `profile/04-job-evaluation.md`
 Start from the app's template (`.claude/skills/job-application-assistant/04-job-evaluation.md`)
 and fill every `[PLACEHOLDER: ...]`: their gates, match areas, salary table and preferences.
 This is the copy scoring reads.
+<!-- /section -->
 
+<!-- section: history -->
 ### 5. Write `profile/07-interview-prep.md`
 Three or four STAR examples from their real achievements, in their words, plus answers to the
 hard questions their history invites. Stubs marked `[CONFIRM]` where details are missing.
+<!-- /section -->
 
+<!-- section: search -->
 ### 6. Write `profile/search-queries.md`
 The queries `/scrape` runs: role titles in priority order (their main direction, their domain,
 adjacent roles, a wider net), their key skills as search terms, and the location tiers.
+<!-- /section -->
 
+<!-- section: voice -->
 ### 7. Write `profile/CLAUDE.md`
 The summary the root CLAUDE.md imports: identity, history in brief, skills, target sectors,
 deal-breakers, and any rule that is theirs rather than the app's (how they want to come
 across, what must never be said, confidentiality). Include 2-3 **profile statement templates**,
 one per main role type they want, built from their own strongest evidence: `/apply` drafts the
 resume summary from these, never from the example person's in `05-cv-templates.md`. Then "This search's automation": none yet.
+<!-- /section -->
 
+<!-- section: search -->
 ### 8. Write the rest of `profile/`
 `roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
 as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
@@ -232,36 +275,56 @@ answers, sponsorship answered exactly as their status allows), `10-triage-blocke
 
 Settings the example's values would get wrong for anybody outside its field, level or
 market, so write each one for this person, never copy it:
+<!-- /section -->
 
+<!-- section: documents -->
 - **The Skills headings**, `LABELS` in `skills.py`: one `(line, heading)` per line, in their
   own words for their work (a nurse's are not a data analyst's). Each `line` is a category
   used in `ITEMS` (or a `MERGE` target), and the items in that category print under it. A
   resume will not render without them.
+<!-- /section -->
+<!-- section: search -->
 - **The scoring vocabulary**, every `FIT_*` and `OPP_*` name in `search.py` (`FIT_BANDS`,
   `FIT_CORE`, `FIT_DOMAIN`, `FIT_ROLE_SHAPE`, `OPP_CORE`, `OPP_TITLE_FAMILY` and the rest):
   the example's are a mid-career analyst's, and copied they mis-rank anyone else. Write them
   from the person's field and level, then score two or three invented postings (a clear
   match, a role above them, a different field) and check the order is right.
+<!-- /section -->
+<!-- section: voice -->
 - **Their outreach words**, `voice.py` (`OUTREACH_ASKS`, `OUTREACH_OPENING`): optional; the
   defaults use their `documents.noun`.
+<!-- /section -->
+<!-- section: search -->
 - **The screen's job-family flags**, `SCREEN_WRONG_FAMILY` and `SCREEN_HOMONYMS` in
   `search.py`: the job families that are not theirs, and the words that name two different
   jobs in their field (the example's are an analyst's: "modelling" that means valuation).
   Optional; unset, nothing is flagged on them. Flags order the queue and never cut.
+<!-- /section -->
+<!-- section: search -->
 - **Their level**, `FIT_BELOW_LEVEL`, `OPP_BELOW_LEVEL` and `OPP_ABOVE_LEVEL` in `search.py`:
   the titles below and above them, which are ranked down, never cut. For someone early in
   their career "junior" and "graduate" are the target, so leave them out of the below-level
   patterns.
+<!-- /section -->
+<!-- section: history -->
 - **Their themes**: a bullet's themes come from `tools/allocate.py` `THEME_CUES`, which is a
   data analyst's list. Add the themes their work needs, with the words postings use for each,
   as `THEME_CUES` in `bullets.py`; `python3 tools/allocate.py` names any theme no cue matches.
+<!-- /section -->
+<!-- section: search -->
 - **`YEARS_HELD`** in `search.py`: their years in the work they are applying for. Every
   experience threshold is measured from it.
+<!-- /section -->
+<!-- section: market -->
 - **Their working week and contract preference**, in `search.py`: `WEEKEND` where it is not
   Saturday and Sunday, `OPP_CONTRACT = None` for someone who wants contract, locum, supply or
   seasonal work, and `MANAGES_PEOPLE = True` for someone who has had direct reports.
+<!-- /section -->
+<!-- section: market -->
 - **`CANARY_QUERY`** in `search.py` where "data" is not a word every board in their market
   has thousands of postings for (another language, or a field where it is rare).
+<!-- /section -->
+<!-- section: voice -->
 - **Who they network with**, in `networking.py`: `TITLE_SETS` (the job titles of the people
   to find: hiring authority, senior peers, their own function, recruiters), `FUNCTION_TITLE`
   (a title on a team in their function), `HIRING_ROLE_NOUNS` (what a hiring post in their
@@ -270,10 +333,14 @@ market, so write each one for this person, never copy it:
   `NOT_HIRING_REASON` says in their terms why revenue titles are skipped, and
   `SPAM_BULK_ROLES` is the role list that marks a staffing harvest: drop their own job from
   it if it is there (a nurse, a technician).
+<!-- /section -->
 
+<!-- section: boards -->
 ### 9. Build their job boards
 Run `/add-portal` for the board from Step 2 that adds the most coverage for them, and for
-the next if it is quick. Each one is verified live before it counts (its Step 4), and from
+the next if it is quick. A portal already built for them is brought up to the current
+`/add-portal` too (its frontmatter, the contract, a live test), so a better way of building
+boards reaches the ones they have. Each one is verified live before it counts (its Step 4), and from
 then on every round searches it with nothing else to wire. Write `PORTAL_LOCATIONS` where
 the board writes places differently from `SCRAPE_LOCATIONS`, and mark each built board
 `"status": "built"` in `PORTAL_RESEARCH`. Boards not built yet keep an entry saying why
@@ -285,17 +352,22 @@ If they get LinkedIn job alerts by email and have the Gmail connector, ask wheth
 should read them: it searches their inbox for the alert emails only, and adds LinkedIn's own
 matches for them to every round. On a yes, check the sender on one of their alerts and write
 `JOB_ALERT_QUERY = "from:<that sender>"` in `search.py`; otherwise leave it empty.
+<!-- /section -->
 
+<!-- section: none -->
 ### 10. Write the state files
 At the repo root, each with the header row from its counterpart in `profile.example/state/`
 and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.
 And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_target.json` as
 `{"companies": {}}`.
+<!-- /section -->
 
 ---
 
 ## Step 4: Commit, prove it works, then push
 
+- `python3 tools/build_versions.py record --setup`: this profile was written by today's
+  version of every section.
 - Commit `profile/`, any portal built in Step 3.9 (`.agents/skills/<name>/`, a plain
   `git add`: it is theirs) and the state files. The tracker and the seen-jobs file are ignored by
   `.gitignore` on purpose; force-add them as the root CLAUDE.md's persistence rule says, and

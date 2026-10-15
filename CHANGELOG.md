@@ -1,5 +1,11 @@
 # Changelog
 
+> **Claude, if a sync just printed this line and nothing about profile upgrades:** this repo's
+> `tools/sync_app.py` was older than the one it brought in, so it could not apply the app's
+> improvements itself. Run
+> `python3 tools/profile_upgrades.py --after-sync` now and do what it prints. From the next
+> sync on, the sync does this by itself.
+
 The app's history starts here. It began as a fork of
 [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search) at v1.7.0; that
 project's history is archived, unmaintained, in [CHANGELOG-upstream.md](CHANGELOG-upstream.md).
@@ -16,6 +22,22 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Every improvement to the app reaches what you already have, by itself.** A sync always
+  brought the app's new code, but not what the old code had already made: the profile your
+  `/setup` wrote, the job boards it built, your call-prep documents, drafts not yet sent,
+  postings ruled out under older rules. Those stayed as they were, and nothing told you the
+  app now did them better. Every part of the app that leaves something in your repo is now
+  versioned, and your repo records which version made what it has
+  (`profile/build_versions.json`). When a part gets better in a way worth redoing, it is
+  redone with no one asking: `/upgrade` in the background for a part of setup, the boards,
+  drafts, interview packs, research, contacts or upskilling plans; the sync itself for
+  prep documents; every round for postings ruled out by an older screen. A profile with no
+  record is dated from when it was made, so one set up on the first release redoes every
+  part of setup improved since, starting with your job boards. A redo adds and corrects but
+  never removes: a value it would change goes beside yours as a question. Anything that
+  needs your consent (your scheduled tasks) is asked, a few at a time. Changing how any part
+  is done, or adding any file to the app, now fails the app's CI until that decision is made.
+  No profile upgrade: this is what lists them.
 - **Profile upgrades apply themselves.** Listing what a profile was missing and waiting for a
   yes meant nothing happened: nobody knows which of nineteen upgrades matter, so nobody asked.
   Now, when the sync lists any, Claude starts `/upgrade` in a background agent and gets on with
