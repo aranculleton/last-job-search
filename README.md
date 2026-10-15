@@ -11,8 +11,15 @@ charge of what goes out.
 ## What you need
 
 - A GitHub account (free).
-- A paid Claude plan, because it runs in Claude Code, which the free plan does not include.
+- Claude Code. It has no free tier: you need a Claude subscription or, running it on your own
+  computer, Anthropic API credits (pay as you go, often cheaper if you only use it now and then).
 - About fifteen minutes. No coding.
+
+Using a different agent tool (Codex, Gemini CLI, Cursor, Antigravity)? Start at
+[AGENTS.md](AGENTS.md). It is built for Claude Code, but the search, scoring, documents,
+checks and tracking are plain Python and written procedures that any agent which can read
+files and run commands can follow. A few extras, such as the scheduled daily brief, are
+Claude-only.
 
 ## Get started
 
@@ -95,4 +102,4 @@ plus the commits through PR #413), which supplied the LaTeX scaffolding, the job
 pattern, the skills-and-commands layout and the drafter-reviewer idea. Everything before the
 shortlist, the bullet allocator, the checks and the networking layer were built here.
 
-MIT. [LICENSE](LICENSE) carries both copyrights.
+MIT. [LICENSE](LICENSE) carries both copyrights. Not affiliated with Anthropic.

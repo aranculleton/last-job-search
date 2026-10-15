@@ -4,8 +4,9 @@ This is a job search that Claude runs for you, end to end: it finds postings, sc
 against you, writes a resume and cover letter for the ones you pick, checks them, and helps
 you reach the right people. It never sends anything. You do that.
 
-You need a GitHub account and a paid Claude plan (Claude Code is not on the free plan). Five
-steps, about fifteen minutes, and no coding.
+You need a GitHub account and Claude Code, which has no free tier: these steps use it through
+a Claude subscription. Five steps, about fifteen minutes, and no coding. Using a different agent
+tool instead? Start at [AGENTS.md](AGENTS.md).
 
 ---
 

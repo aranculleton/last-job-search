@@ -22,6 +22,12 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Other agent tools have a way in.** `AGENTS.md` now says how to run each part in Codex,
+  Gemini CLI, Cursor or Antigravity: which files to read, the slash commands as procedures,
+  the subagents and the drafting workflow done by hand, and the scheduled brief run yourself.
+  A new `GEMINI.md` points Gemini CLI to it. The README and START_HERE say plainly that the
+  requirement is Claude Code, which has no free tier, and point anyone on another tool to
+  `AGENTS.md`.
 - **Finding an employer's board, and Lever's full postings.**
   - `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL) finds an
     employer's Greenhouse, Lever or Ashby board and counts what a round would get from it.
