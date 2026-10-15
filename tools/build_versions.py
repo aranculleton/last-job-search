@@ -84,9 +84,9 @@ METHODS: dict[str, dict] = {
                                     "roles where the board can filter for them"),
             (4, "2026-10-15", False, "an invented example in place of a real city"),
             (5, "2026-10-15", False, "employer boards date a posting by when it was first published, not last edited"),
-            (6, "2026-10-15", False, "employer boards are read through openroles, the open-source library this reader became; Lever postings now include their requirement lists, and --find locates a board from a name or careers page"),
+            (6, "2026-10-15", False, "--find locates an employer's board from its name or careers page (through the vendored openroles), and Lever postings include their requirement lists"),
         ),
-        "fingerprint": "7fc384123c8455c8",
+        "fingerprint": "0e21172321250ad4",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",

@@ -22,17 +22,14 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
-- **Employer boards are read through openroles.** The Greenhouse, Lever, Ashby and Workday
-  reader in `tools/ats_boards.py` is now [openroles](https://github.com/aranculleton/openroles),
-  an open-source library, vendored in `tools/openroles/` so nothing new needs installing.
-  `ats_boards.py` keeps the search's own rules: where you can work, which titles, which
-  Workday bodies are worth a request, and the probe.
-  - It was checked against a real search's 90 boards: the same 3,595 roles, at the same
-    speed.
-  - Lever postings now include their requirement lists. Before, only the intro was read.
-  - Titles and descriptions have their whitespace tidied.
-  - New: `python3 tools/ats_boards.py --find "<Employer>"` finds an employer's board from
-    its name or its careers page.
+- **Finding an employer's board, and Lever's full postings.**
+  - `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL) finds an
+    employer's Greenhouse, Lever or Ashby board and counts what a round would get from it.
+    The finding is [openroles](https://github.com/aranculleton/openroles), the open-source
+    library this reader grew into, vendored in `tools/openroles/`, so nothing new needs
+    installing. A round still reads boards with `ats_boards.py` itself.
+  - Lever postings now include their requirement lists. Before, only the intro was read, so
+    a Lever role was scored without its requirements.
 
 ### Fixed
 
