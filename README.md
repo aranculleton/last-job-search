@@ -6,6 +6,8 @@ talking to and drafts what to say, keeps track of every application and conversa
 you when to follow up, and gets you ready for interviews. It never sends anything. You stay in
 charge of what goes out.
 
+> **Find jobs** → **score each one** → **you choose** → **write and check** → **find the people** → **follow up**
+
 [![CI](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml/badge.svg)](https://github.com/aranculleton/last-job-search/actions/workflows/ci.yml)
 
 ## What you need

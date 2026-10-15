@@ -5,8 +5,10 @@ with "Use this template" and kept **private**, because it holds their history, t
 expectations and every contact they message. This file is a statement of the threat model
 and the controls, not a vulnerability intake process.
 
-If you find something, open an issue on the app without personal details, or say so to the
-maintainer directly. If the finding is in
+If you find something, report it privately: the **Security** tab has a **Report a
+vulnerability** button
+([direct link](https://github.com/aranculleton/last-job-search/security/advisories/new)).
+Something minor with no personal details in it can be an ordinary issue. If the finding is in
 code inherited from [MadsLorentzen/ai-job-search](https://github.com/MadsLorentzen/ai-job-search),
 it likely affects every fork of that template, and the responsible path is their
 [private vulnerability reporting](https://github.com/MadsLorentzen/ai-job-search/security/advisories/new)

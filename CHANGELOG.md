@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-10-15
+
 ### Changed
 
 - **Other agent tools have a way in.** `AGENTS.md` now says how to run each part in Codex,

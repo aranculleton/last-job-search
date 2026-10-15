@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: A security problem
-    url: https://github.com/aranculleton/last-job-search/blob/master/SECURITY.md
-    about: Read SECURITY.md first; it says how to report one.
+  - name: Report a security problem privately
+    url: https://github.com/aranculleton/last-job-search/security/advisories/new
+    about: Private vulnerability reporting, so the details are not public.
