@@ -407,6 +407,7 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. |
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
 | `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
+| `python3 tools/what_works.py brief <messages\|documents\|search>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, and the interview rate by fit band and route. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
 | `python3 tools/followups.py` | The application nudges alone. The first is due 7 days after applying, the second 7 days after the first **actually went**, read from `followed up YYYY-MM-DD` in the row's notes (the form `/outcome` Step 2b writes), never from the application's age. Held, with the reason printed, while an interview or offer runs at that employer, a referral is in flight there, or the row's notes say `DO NOT CHASE` (`until <date>` in that note, or a later `chase again`, lifts it). A later row for the same role closes the earlier one. It names who the nudge goes to, from the row's `contact_person`, the application's `outreach.md`, or a contact there who has replied, and otherwise says nobody is on file and drafts nothing. It stops a week after the second follow-up, or at the throttle's 45 days of silence, and says so once. A separate clock from the networking nudge below, deliberately. |
 | `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
@@ -471,7 +472,9 @@ The pipeline, in order:
 1. **Scrape** every enabled portal per `job-scraper/SKILL.md`.
 2. **Rank** every surviving posting 0-100 against `04-job-evaluation.md`, gates first.
 3. **Expand and repeat** until the yield target is met, up to 3 rounds.
-4. **Present the ranked table**, highest score first, with scores visible.
+4. **Present the ranked table**, highest score first, with scores visible, and under it
+   the line from `python3 tools/what_works.py brief search` when it reports a clear
+   difference (whether the scores have been predicting interviews).
 5. **Stop there and ask** which ones to take forward. Do **not** draft resumes or cover
    letters unless the user asks for them.
 6. **Before drafting anything, confirm the user has not already applied.** The tracker only
@@ -660,6 +663,32 @@ code, not their settings. When an update would change a setting `learned.py lock
 lists, `/upgrade` changes nothing. It records `learned.py offer` instead, and the
 person is asked once, with the session's other questions, whether to keep theirs or try
 the new way. A kept choice is never offered again for that app version.
+
+### What works: it learns from results, not only from what they say
+
+What the person says is one half. What happened is the other: which messages drew a
+reply, which applications reached an interview. That record is already in the state
+files, and `tools/what_works.py` reads it back. It is counting, never a model call, and
+it keeps no state of its own, so recording a result is all it takes.
+
+- **Before drafting**, beside the learned brief: `what_works.py brief messages` (with
+  `--channel` and `--route`) for a networking message, `brief documents` for an
+  application. The messages that drew replies and the applications that reached an
+  interview are the shape to match, never the words or another person's facts. A
+  difference is reported only when both groups are big enough and the gap is unlikely
+  to be chance; until then it shows the examples alone.
+- **When a result arrives**, the mini audit: `what_works.py event --company "<employer>"`
+  from `/outcome`, `event --contact <id>` when `/reply` logs their reply. One line: what
+  this result had and what the rate is now. It is shown in the reply.
+- **What changes by itself:** a resume that reached an interview gives its bullets a
+  small lift in `tools/allocate.py` (`WIN_BONUS`, capped), so the next resume for a
+  similar role leans the same way. It decides between bullets a posting rates alike and
+  never outranks one the posting asks for.
+- `brief search` is the interview rate by fit band, route and channel: whether the
+  scores are predicting anything. It goes under the shortlist when it reports a clear
+  difference.
+- **A message logged without its text can never be an example.** Every command that
+  logs a message writes its full text to `network_threads.csv` `full_text`.
 
 ## Memory: the repo remembers, the chat does not
 

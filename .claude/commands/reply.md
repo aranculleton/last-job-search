@@ -25,7 +25,8 @@ Usage: `/reply <contact name or company>`, then paste their message.
    for the gap is owed.
 
 4. **Read what they have taught it**: `python3 tools/learned.py brief messages`; its rules
-   outrank the guidance's defaults.
+   outrank the guidance's defaults. For a nudge, also `python3 tools/what_works.py brief
+   messages --channel <channel>`: the follow-ups that drew replies are the shape to match.
    **Get the guidance.** `reply.guidance()` gives the move, the target length
    derived from their message, what not to do, and any action owed outside the
    thread (send an email, book a slot).
@@ -34,13 +35,18 @@ Usage: `/reply <contact name or company>`, then paste their message.
    against their message. A high ratio means the draft is parroting them back,
    which is the most common tell of a machine-written reply. Rewrite it.
 
-6. **Record.** Append both messages to `network_threads.csv`. Status derives from
-   the messages, so it updates itself.
+6. **Record.** Append both messages to `network_threads.csv`, each with its full text
+   in `full_text`: a message logged without its text can never become an example of what
+   works. Status derives from the messages, so it updates itself.
+
+7. **When this was their reply**, run `python3 tools/what_works.py event --contact <contact_id>`
+   and add its line to what you present: which message drew the reply, and that it is now
+   an example the next message like it is drafted against. It is counting, not a model call.
 
 ## Present
 
 The scenario and the evidence for it. The draft, in full and ready to paste: never only
-where it was saved. The recommendation on whether
+where it was saved. The `what_works.py event` line from step 7, when there is one. The recommendation on whether
 the thread is worth continuing at all. Any action owed outside the thread, with
 a date.
 

@@ -218,9 +218,29 @@ def theme_scores(posting):
     return dict(_theme_scores_cached(posting))
 
 
+# A bullet that was on the resume of an application that reached an interview
+# gets this much per such application, up to WIN_CAP of them: one step of
+# WEIGHT each, less than half a theme match. It decides between bullets the
+# posting rates alike and never outranks one the posting plainly asks for. The
+# record is `tools/what_works.py`, read from the tracker and each kept draft,
+# so it costs nothing until a result is recorded and needs nobody to ask.
+WIN_BONUS = 1.0
+WIN_CAP = 2
+
+
+def _wins():
+    try:
+        import what_works
+        return what_works.bullet_wins()
+    except Exception:              # a lift is never a reason a resume fails to render
+        return {}
+
+
 def bullet_scores(posting):
     ts = theme_scores(posting)
+    wins = _wins()
     return {b: WEIGHT[b] + THEME_BONUS * sum(ts.get(t, 0.0) for t in THEMES[b])
+            + WIN_BONUS * min(wins.get(b, 0), WIN_CAP)
             for b in THEMES}
 
 
