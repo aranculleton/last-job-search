@@ -188,12 +188,13 @@ def test_recording_settles_it(profile):
 
 
 def test_a_wording_change_costs_nobody_a_rerun(profile, monkeypatch):
+    n = B.current("boards")
     m = dict(B.METHODS["boards"])
-    m["versions"] = m["versions"] + ((3, "2026-11-01", False, "wording"),)
+    m["versions"] = m["versions"] + ((n + 1, "2026-11-01", False, "wording"),)
     monkeypatch.setitem(B.METHODS, "boards", m)
-    assert B.behind("boards") == []                          # at v2, v3 asks nothing
-    m["versions"] = m["versions"] + ((4, "2026-12-01", True, "a better board search"),)
-    assert [v[0] for v in B.behind("boards")] == [4]
+    assert B.behind("boards") == []                          # a wording version asks nothing
+    m["versions"] = m["versions"] + ((n + 2, "2026-12-01", True, "a better board search"),)
+    assert [v[0] for v in B.behind("boards")] == [n + 2]
     assert "a better board search" in U.by_id("method-boards").pending()
 
 

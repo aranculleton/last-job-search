@@ -94,7 +94,10 @@ HEAT = {
 # somebody who answered and is waiting, then a date the candidate set, then a
 # nudge. Application follow-ups come after all three, because a person is not
 # waiting on one.
-KIND_ORDER = {"reply": 0, "action_due": 1, "nudge": 2}
+KIND_ORDER = {"reply": 0, "action_due": 1, "nudge": 2,
+              # A request still pending and a first message owed after an
+              # acceptance used to be listed as nudges; they keep a nudge's place.
+              "first_message": 2, "request_pending": 2}
 
 
 def _tracker(path=TRACKER):

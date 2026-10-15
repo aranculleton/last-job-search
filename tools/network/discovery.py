@@ -733,6 +733,59 @@ def _names_other_market(signal, target_location):
     return not any(_place_is_target(p, target_location) for p in places)
 
 
+# Other functions a hiring line can name. Tier 1 is a live hiring post about the
+# person's own work, and a Director of Data Science posting "our marketing team
+# is hiring a content writer" passed on the poster's title alone, quoted as the
+# evidence. A word the person's own titles use is never "other": an operations
+# analyst's "operations team" is their own.
+_OTHER_FUNCTION_WORDS = (
+    "marketing", "sales", "content", "brand", "social media", "copywriter", "writer",
+    "editor", "designer", "design", "ux", "ui", "legal", "lawyer", "counsel", "hr",
+    "human resources", "people partner", "recruiter", "finance", "financial",
+    "accounting", "accountant", "payroll", "customer success", "customer support",
+    "support", "account executive", "account manager", "business development", "bdr",
+    "sdr", "communications", "pr", "crm", "procurement", "facilities", "office manager",
+    "administrator", "administrative", "assistant", "receptionist", "nurse", "teacher",
+    "chef", "driver", "warehouse", "store", "retail associate", "business", "operations",
+    "product", "engineering", "engineer", "developer", "data", "analytics")
+
+
+def _own_words() -> set:
+    text = " ".join([_ROLE_NOUNS, " ".join(TITLE_SETS.get("function") or []),
+                     getattr(FUNCTION_TITLE, "pattern", "")]).lower()
+    return set(re.findall(r"[a-z]+", text))
+
+
+def _other_function_rx():
+    own = _own_words()
+    words = [w for w in _OTHER_FUNCTION_WORDS if not set(w.split()) & own]
+    return re.compile(r"\b(?:" + "|".join(re.escape(w) for w in words) + r")\b", re.I) \
+        if words else None
+
+
+_OTHER_FUNCTION = _other_function_rx()
+
+
+def about_their_function(signal) -> bool | None:
+    """Is this hiring line about the person's own work? None when it names no role.
+
+    A role of theirs that no other function qualifies ("a data analyst") says yes;
+    one that does ("a sales analyst") does not count, and a line naming only
+    another function says no. A bare "we're hiring" says nothing either way, and
+    the poster's title decides.
+    """
+    text = str(signal or "")
+    if not text:
+        return None
+    for m in re.finditer(r"\b(?:" + _ROLE_NOUNS + r")\b", text, re.I):
+        before = text[max(0, m.start() - 25):m.start()]
+        if not (_OTHER_FUNCTION and _OTHER_FUNCTION.search(before)):
+            return True
+    if _OTHER_FUNCTION and _OTHER_FUNCTION.search(text):
+        return False
+    return None
+
+
 def classify_tier(snippet, title, location, target_location=HOME_CITY):
     """Score one person 1 to 4 (brief 3.3) and return the evidence with it.
 
@@ -751,8 +804,8 @@ def classify_tier(snippet, title, location, target_location=HOME_CITY):
     # it and the post does not name a different one. Either way it has to be
     # hiring for the person's own work: a Director of Marketing posting "we're
     # hiring" is not a live signal for an analyst.
-    for_them = bool(FUNCTION_TITLE.search(title)) or bool(
-        re.search(r"\b(?:" + _ROLE_NOUNS + r")\b", signal or "", re.I))
+    about = about_their_function(signal)
+    for_them = about if about is not None else bool(FUNCTION_TITLE.search(title))
     if signal and for_them and (
             _signal_reaches_market(signal, target_location, in_market)
             or (in_market and not _names_other_market(signal, target_location))):

@@ -1255,6 +1255,17 @@ def nudge_due(threads, today, new_development="") -> dict:
 
     if not rows:
         return dict(base, reason="nothing has been sent on this thread yet")
+    if state.request_pending(rows) is not None:
+        return dict(base, reason=("the connection request has not been accepted, so there is "
+                                  "nowhere to send a nudge: wait, or withdraw it after %d days"
+                                  % state.REQUEST_WITHDRAW_DAYS))
+    if state.accepted_never_messaged(rows) is not None:
+        return dict(base, reason=("they accepted a request that carried no note and nothing has "
+                                  "been sent since: a first message is owed "
+                                  "(compose.first_note), not a nudge"))
+    if state.call_held(rows[-1]):
+        return dict(base, reason=("the last thing on this thread is a call, not a message: what "
+                                  "follows it (a thank-you, the referral ask) is in next_action"))
     if _they_spoke_last(rows):
         return dict(base, reason="they answered; a reply is owed, not a nudge")
 

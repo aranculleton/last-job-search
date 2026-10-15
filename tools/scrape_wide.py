@@ -87,7 +87,7 @@ QUERIES = list(getattr(_S, "SCRAPE_QUERIES", ()))
 DEEP = getattr(_S, "SCRAPE_DEEP", LOCATIONS[0] if LOCATIONS else "")
 PORTAL_COUNTRY = getattr(_S, "PORTAL_COUNTRY", "")
 # The places passed to a person's own portal, as that board writes them
-# ("Toronto, ON" where LinkedIn wants "Toronto, Ontario, Canada"). A portal not
+# ("Austin, TX" where LinkedIn wants "Austin, Texas, United States"). A portal not
 # named searches the first of SCRAPE_LOCATIONS.
 PORTAL_LOCATIONS = {str(k): list(v) for k, v in
                     dict(getattr(_S, "PORTAL_LOCATIONS", {}) or {}).items()}

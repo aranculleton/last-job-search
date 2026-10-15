@@ -46,10 +46,10 @@ OPS_RELAY = {
     ],
 }
 SCREEN = {
-    "setup": "routines_screen", "timezone": "America/Toronto",
+    "setup": "routines_screen", "timezone": "America/Chicago",
     "routines": [
         {"key": "morning_brief", "name": "Job search: morning brief", "trigger_id": None,
-         "cron": "CRON_TZ=America/Toronto 56 7 * * *", "notifications": {"push": True},
+         "cron": "CRON_TZ=America/Chicago 56 7 * * *", "notifications": {"push": True},
          "prompt_file": "automation/prompts/morning_brief.md"},
     ],
 }
@@ -75,7 +75,7 @@ def _broken(reg, **change):
     ({"trigger_id": "trig-bad id"}, "not well formed"),
     ({"trigger_id": "trig_EXAMPLEROUND"}, "share a trigger id"),
     ({"cron": "56 7 * * *"}, "CRON_TZ"),
-    ({"cron": "CRON_TZ=America/Toronto 56 7 * * *"}, "CRON_TZ=Europe/London"),
+    ({"cron": "CRON_TZ=America/Chicago 56 7 * * *"}, "CRON_TZ=Europe/London"),
     ({"chat": {"title": "x", "session_id": "sess 1"}}, "not well formed"),
     ({"key": "job_round"}, "unique `key`"),
 ])
