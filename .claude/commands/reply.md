@@ -35,9 +35,23 @@ Usage: `/reply <contact name or company>`, then paste their message.
    against their message. A high ratio means the draft is parroting them back,
    which is the most common tell of a machine-written reply. Rewrite it.
 
-6. **Record.** Append both messages to `network_threads.csv`, each with its full text
-   in `full_text`: a message logged without its text can never become an example of what
-   works. Status derives from the messages, so it updates itself.
+6. **Record.** Their message goes into `network_threads.csv` now. Ours goes in only when
+   they say it went, dated the day it went: a draft is not a message, and logging it early
+   makes the thread read as waiting on them before anything was sent (the same rule
+   `/network` keeps for a first note). Every row carries its full text in `full_text`: a
+   message logged without its text can never become an example of what works.
+
+   The log decides three statuses by itself (`state.DERIVABLE`: `not_contacted`,
+   `awaiting_reply`, `replied_needs_response`). Everything else is stored on the contact
+   row, and this step is what sets it: when the exchange makes it so, set `status` to
+   `in_conversation`, `call_booked`, `referral_in_progress` (somebody inside has put the
+   candidate's name forward; `throttle.referral_holds()` reads it to hold every cold
+   application there) or a terminal one (`gone_cold`, `closed`,
+   `converted_to_application`). Then set `next_action` and `next_action_due` to what is owed
+   now: the call and its date, the action owed outside the thread from step 4, or, once our
+   message has gone and nothing else is owed, the nudge on
+   `state.add_business_days(<the day it went>, schema.FOLLOWUP_BUSINESS_DAYS)`. The morning
+   brief reads `next_action_due`, so a date written here is a reminder nobody has to set.
 
 7. **When this was their reply**, run `python3 tools/what_works.py event --contact <contact_id>`
    and add its line to what you present: which message drew the reply, and that it is now
@@ -52,3 +66,7 @@ a date.
 
 If the person is a genuine mismatch, say so instead of drafting something
 optimistic. A polite two-line exit preserves the relationship at zero cost.
+
+Once per session for messages, end with one short line inviting change: "Anything about
+the tone or the wording you'd have different? It sticks from now on." What they say goes
+through CLAUDE.md, "Learning the person".

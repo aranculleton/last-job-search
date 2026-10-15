@@ -17,7 +17,10 @@ Generates `documents/network/<contact_id>/prep.md` via `prep.write_prep()`.
 3. Every fact carries its source. `prep.sourced()` enforces this and the renderer
    refuses to print an unattributed number, because a prep doc that quotes an
    invented salary band is worse than one that says "not researched".
-4. Draft likely questions with answers in the user's voice, from
+4. **Read what they have taught it**: `python3 tools/learned.py brief questions` (and
+   `brief people`). The questions, depth and tone they have asked for outrank the defaults
+   here.
+5. Draft likely questions with answers in the user's voice, from
    `profile/01-candidate-profile.md`. Never invent an experience to answer a question.
 
 ## The document
@@ -34,3 +37,7 @@ and the strongest honest framing for it.
 
 **Show the whole document in the reply**, ready to read before the call. The file is the
 record; its path alone is never the answer.
+
+Once per session for prep documents, end with one short line inviting change: "Anything
+about the questions or the depth you'd have different? It sticks from now on." What they
+say goes through CLAUDE.md, "Learning the person".

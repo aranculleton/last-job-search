@@ -41,9 +41,7 @@ v1 preps for a **specific application**. Generic no-target practice is out of sc
 
 ## Step 2: Research the Company (Interview-Focused)
 
-**First, check the cache**: read `company_research/<normalized-company-name>.json` per the Company Research Cache section in `04-job-evaluation.md` (normalize the company name the same way). If it exists and is within the documented TTL, start from it instead of researching from scratch - `/apply` may already have populated it for this same application. The verification rule below still applies regardless of source.
-
-If the cache is missing or stale, execute the Company Research Checklist that `04-job-evaluation.md` defines: company website (mission, values, recent news), review sites, LinkedIn (team size, recent hires), and media coverage (growth, restructuring, workplace issues). Afterward, write (or overwrite) the cache file with the fresh findings per the schema in `04-job-evaluation.md`, so a later `/apply` or `/interview` run for the same company can reuse them.
+**Hand the research to the `employer-researcher` subagent** (Agent tool; it runs on sonnet and brings its own rules from `.claude/agents/employer-researcher.md`). Its first move is to check the cache, `company_research/<key>.json`, and start from it inside its TTL (`/apply` may already have filled it for this same application); the verification rule below still applies to a cache hit as much as to fresh research. It locates every source independently of the posting, quotes each fact with its URL, and writes the cache back so a later `/apply` or `/interview` run reuses it. Its brief from here: the employer, the role and team, the stage, the interviewers' names if known, and the Company Research Checklist in `04-job-evaluation.md` (company website for mission, values and recent news; review sites; team size and recent hires; media coverage of growth, restructuring or workplace issues), plus the two additions below. Where the Agent tool is not available, do the same yourself under the same rules.
 
 Additions for interview purposes:
 
@@ -98,9 +96,11 @@ Calibrate feedback against `02-behavioral-profile.md`: coach toward the user's n
 
 ## Step 5: Close the Loop
 
-End with:
+Once per session for interview packs, one short line inviting change: "Anything about the questions, the depth or the tone you'd have different? It sticks from now on." What they say goes through CLAUDE.md, "Learning the person".
 
-> Good luck. After the interview, run `/outcome <company>` to log the stage and any feedback - it sharpens the prep for the next round, and once the process resolves it feeds your fit-framework calibration via `/setup`.
+Then end with:
+
+> Good luck. After the interview, run `/outcome <company>` to log the stage and any feedback - it sharpens the prep for the next round, and once the process resolves `tools/what_works.py` counts it towards whether the fit scores are predicting interviews.
 
 If Step 3 drafted new STAR answers the user approved for keeps, remind them those were appended to `profile/07-interview-prep.md` (or offer again if they deferred).
 
@@ -112,6 +112,6 @@ If Step 3 drafted new STAR answers the user approved for keeps, remind them thos
 2. **Honesty on gaps.** Weak matches get bridge answers (acknowledge → adjacent experience → learning path), never invented experience. Same rule as everywhere else in this repo.
 3. **Verified research only.** Company specifics go in the pack only after independent confirmation. Interviewer notes stick to public professional information.
 4. **Stage-appropriate prep.** A phone screen pack and a final-round pack are different documents; recorded feedback from earlier stages takes priority over generic question lists.
-5. **Write only to the application archive** - with one exception. The prep pack lands in the archive folder derived in Step 1; framework files are not edited, except appending user-approved STAR examples to `profile/07-interview-prep.md` on explicit request. The app's own `07-interview-prep.md` is never edited.
+5. **Where it writes, and nowhere else.** The prep pack lands in the archive folder derived in Step 1. Three other files take a write, each for one reason: `company_research/<key>.json`, the employer research (Step 2); `profile/07-interview-prep.md`, user-approved STAR examples appended on explicit request only; and `01-candidate-profile.md`, when a fact surfaces (below). Framework files are not edited, and the app's own `07-interview-prep.md` never is.
 
-   **The exception is `01-candidate-profile.md`.** Interview prep is where new facts surface most often: the user recalls a metric, corrects a scope, or fills in a STAR stub. When that happens, write the fact into the profile, as well as putting it in the prep pack. A fact recorded only in prep material reads as unsupported to a later drafting session and gets stripped from CVs as a fabrication. Prep files are not a substitute for the profile.
+   **Why `01-candidate-profile.md`.** Interview prep is where new facts surface most often: the user recalls a metric, corrects a scope, or fills in a STAR stub. When that happens, write the fact into the profile, as well as putting it in the prep pack. A fact recorded only in prep material reads as unsupported to a later drafting session and gets stripped from CVs as a fabrication. Prep files are not a substitute for the profile.

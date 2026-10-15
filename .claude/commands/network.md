@@ -117,6 +117,34 @@ connection request; on a free account there is no InMail, so say so once rather
 than recommending one. If the connection cap is hit, say so and note that following
 costs nothing and lets the request go out warm when the cap resets.
 
+Once per session for messages, end with one short line inviting change: "Anything about
+the people or the wording you'd have different? It sticks from now on." What they say goes
+through CLAUDE.md, "Learning the person".
+
+## When they say a note went
+
+A draft stays at `not_contacted` until the person says it went: a draft is not a message.
+When they say it did, record it in the same turn, per contact:
+
+1. **The message**, appended to `network_threads.csv` (`state.load_threads()`, then
+   `state.save_threads()`): `contact_id`, `date` the day it went, `direction` `out`,
+   `channel` as sent (`connection`, `inmail`, `email` or `intro`), `scenario`
+   `connection_note` for a connection request with a note (`connection_request` for one
+   without), a one-line `summary`, and `full_text`: the message as sent, with their edits,
+   never the draft.
+2. **The contact row** (`state.load_contacts()`, then `state.save_contacts()`):
+   `first_contacted` that day when it is empty, `channel`, `status` `awaiting_reply`,
+   `next_action` (one nudge if no reply; for a connection request, a nudge once they accept,
+   and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days), and
+   `next_action_due` `state.add_business_days(<the day it went>, schema.FOLLOWUP_BUSINESS_DAYS)`.
+   The morning brief reads that date, so the nudge needs no reminder of its own.
+3. **The draft file**, `documents/network/<contact_id>/draft.md`, is deleted: it was the
+   unsent copy. Commit the two CSVs.
+
+An edit they made before sending is a reaction to the draft (CLAUDE.md, "Learning the
+person"). A note they decide not to send leaves the contact at `not_contacted`, or closed
+with their reason if they do not want that person contacted.
+
 ## Do not
 
 - Stop after finding people to ask whether to draft their messages
