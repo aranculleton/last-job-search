@@ -343,6 +343,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "*/.gitkeep": "an empty folder's marker",
     "CLAUDE.md": "read afresh by every session",
     "AGENTS.md": "read afresh by every session",
+    "GEMINI.md": "read afresh by every session; it only points to AGENTS.md",
     "README.md": "documentation, read when needed",
     "ARCHITECTURE.md": "documentation, read when needed",
     "CONTRIBUTING.md": "documentation, read when needed",

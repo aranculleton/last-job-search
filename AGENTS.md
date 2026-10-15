@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.1
+framework_version: 2.2.0
 ---
 
 # Agent guidelines
@@ -19,7 +19,9 @@ It is a pointer, not a second copy. Nothing here is the source of truth for anyt
 
 1. **[`CLAUDE.md`](CLAUDE.md)** is the real entry point. Candidate profile, operating
    rules, what routes to which command, the persistence rule, and the verification
-   checklist. If you read one file, read that one.
+   checklist. If you read one file, read that one. Then read `profile/CLAUDE.md`, the
+   person: `CLAUDE.md` pulls it in with an `@profile/CLAUDE.md` line that only Claude Code
+   follows.
 2. **[`RUNBOOK.md`](RUNBOOK.md)** is one round end to end, portals to sent applications,
    as a sequence of commands.
 3. **[`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/)**
@@ -64,6 +66,26 @@ Codex and Antigravity discover them without help. `/scrape` in
 [`.claude/skills/job-scraper/`](.claude/skills/job-scraper/) orchestrates them; a runtime
 without that skill can call `tools/run_round.py`, which does the same thing with no model
 in the loop at all.
+
+## Running it in another agent
+
+It is built for Claude Code, and the core runs in any agent that can read files and run
+shell commands: the pipeline, the checks and the state are Python and plain files, and the
+portal CLIs are in the portable Agent Skills format. Six things are Claude Code features.
+Each has a way through:
+
+| In Claude Code | Where it lives | In another agent |
+|---|---|---|
+| `CLAUDE.md` loads itself, with the person imported | `CLAUDE.md`, `profile/CLAUDE.md` | Read both at the start of every session, `CLAUDE.md` first, and do its "Start of every session" steps |
+| Slash commands (`/setup`, `/apply`, `/network`, ...) | `.claude/commands/<name>.md` | Each file is a procedure. When the person asks for what a command does ("set me up", "find me jobs", a pasted posting, "they replied"), open that file and follow it step by step. The command map in `CLAUDE.md` says which is which |
+| Skills that load by topic | `.claude/skills/*/SKILL.md` | Before acting on a topic, read the matching skill: applications, the scraper, networking, upskilling |
+| Subagents | `.claude/agents/*.md` | Give the file to your runtime's own subagent as its brief, or do the job yourself by following it. The grounding audit is never skipped: it is the last read before anything reaches an employer or a contact |
+| The `draft-applications` workflow | `.claude/workflows/draft-applications.js` | Run its three stages yourself, one posting at a time, with the prompts written in the file: research, draft, audit. Each audit writes `<round_dir>/audit_<slug>.json`; then `python3 tools/stage_picks.py assemble <round_dir>` as usual |
+| Scheduled brief and rounds | `automation/` | Run `python3 tools/open_actions.py --due` and `python3 tools/run_round.py` yourself, or schedule them in your own tool with the prompts in `automation/prompts/` |
+
+`tools/model_guide.py` names Claude models only. Elsewhere the rule it applies still holds:
+the strongest model you have for drafting and the audit, a cheaper one for reading and
+fetching. Gemini CLI reads `GEMINI.md`, which points here.
 
 ## State lives in files, not in the conversation
 
