@@ -136,6 +136,15 @@ _TAG = re.compile(r"<[^>]+>")
 BODY_CAP = 20_000
 
 
+
+def _epoch_ms_date(ms) -> str:
+    """Lever's createdAt (milliseconds since 1970) as YYYY-MM-DD, or "" when absent."""
+    try:
+        import datetime as _d
+        return _d.datetime.fromtimestamp(int(ms) / 1000, _d.timezone.utc).date().isoformat()
+    except (TypeError, ValueError, OverflowError, OSError):
+        return ""
+
 def _text(content: str) -> str:
     """Greenhouse hands back HTML, entity-encoded, sometimes twice.
 
@@ -375,7 +384,10 @@ def greenhouse(employer: str, token: str) -> tuple[list[dict], str | None]:
             "company": employer,
             "url": j.get("absolute_url"),
             "location": loc,
-            "date": (j.get("updated_at") or j.get("first_published") or "")[:10],
+            # First published, not updated: Greenhouse bumps updated_at on every
+            # edit, so a role first posted months ago read as new to a 7-day
+            # round. updated_at only when the board gives nothing else.
+            "date": (j.get("first_published") or j.get("updated_at") or "")[:10],
             "portal": "greenhouse",
             "desc": _text(j.get("content") or "") or None,
             "deadline": (j.get("application_deadline") or "")[:10] or None,
@@ -400,7 +412,7 @@ def lever(employer: str, token: str) -> tuple[list[dict], str | None]:
             "company": employer,
             "url": j.get("hostedUrl"),
             "location": loc,
-            "date": "",
+            "date": _epoch_ms_date(j.get("createdAt")),
             "portal": "lever",
             "desc": j.get("descriptionPlain") or None,
         })

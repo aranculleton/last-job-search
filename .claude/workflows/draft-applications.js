@@ -67,6 +67,7 @@ const DRAFT_PROPS = {
     requirement: { type: 'string' }, evidence: { type: 'string' } }, required: ['requirement', 'evidence'] } },
   notes_for_tracker: { type: 'string' },
   outreach_body: { type: 'string' },
+  deadline: { type: 'string' },
 }
 const DRAFT_REQ = ['company', 'role', 'summary', 'tools', 'p1', 'p2', 'lead', 'cl_bullets', 'p4', 'angle', 'requirement_map', 'notes_for_tracker', 'outreach_body']
 const DRAFT_SCHEMA = { type: 'object', properties: DRAFT_PROPS, required: DRAFT_REQ }
@@ -130,9 +131,10 @@ Return these fields:
 - requirement_map: every stated requirement, each with the matching evidence or the honest bridge from tools/bridges.py.
 - notes_for_tracker: 2 to 3 sentences in the style of the tracker notes column: the angle, the company fact used with its source domain, stated salary, and anything the candidate must check before sending. Do not start it with the round name; the tracker writer adds that.
 - outreach_body: the LinkedIn note to the hiring manager, after its fixed opening line "Hi [name], I've just applied for the <role> role at <company>." Two sentences: the employer's problem, then the candidate's evidence naming one of their employers. Then a one-line ask worded for this note. Under 80 words including the opening line. tools/outreach.py refuses a body that is longer, names none of the candidate's employers, or trips voice_check.
+- deadline: the application deadline from the research above (its deadline field), as YYYY-MM-DD, or empty when none is stated. Never guess one.
 Body words across p1 + p2 + lead + p4 + the three bullet texts: 200 to 250.
 ${HARD_RULES}
-Before returning, write your fields as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json . Fix every finding. Touch no repository file.`,
+Before returning, write your fields as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json then python3 tools/outreach.py --check-note "<your outreach_body>" (it also applies the networking tone rules). Fix every finding. Touch no repository file.`,
     { label: `draft:${pick.company}`, phase: 'Draft', schema: DRAFT_SCHEMA }).then(d => ({ research, draft: d })),
 
   (prev, pick) => agent(
@@ -150,8 +152,8 @@ Audit, and fix what you find directly in the returned draft:
 3. The writing rules in 03-writing-style.md (especially rules 6, 7 and 8) and these hard rules: ${HARD_RULES}
 4. Targeting: each stated requirement is addressed by evidence or an honest bridge, using the posting's own terms where truthfully applicable. The hook in p1 is about the employer's problem.
 5. Budgets: summary 40 to 48 words; body (p1 + p2 + lead + p4 + bullet texts) 200 to 250 words; outreach_body under 80 words with its opening line, naming one of the candidate's employers.
-Then write the corrected draft as a one-element JSON list to ${scratch}/audit_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/audit_${pick.slug}.json . Fix every finding and re-run until clean; put its final output in voice_check.
-verdict: pass (no change needed), fixed (defects corrected), or reject (cannot be made truthful and targeted; explain in residual_risks). Touch no repository file.`,
+Then write the corrected draft as a one-element JSON list to ${scratch}/audit_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/audit_${pick.slug}.json then python3 tools/outreach.py --check-note "<the outreach_body>". Fix every finding and re-run until clean; put its final output in voice_check.
+verdict: pass (no change needed), fixed (defects corrected), or reject (cannot be made truthful and targeted; explain in residual_risks). On reject, delete ${scratch}/audit_${pick.slug}.json, so assemble reports the posting as having no draft instead of rendering one you rejected. Touch no repository file.`,
     { label: `audit:${pick.company}`, phase: 'Audit', schema: AUDIT_SCHEMA }).then(a => ({ pick, research: prev.research, first_draft: prev.draft, audit: a })),
 )
 

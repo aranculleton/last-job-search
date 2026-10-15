@@ -222,7 +222,9 @@ CONDITION = re.compile(
     r"is mandatory|mandatory|are subject to)\b", re.I)
 ENCOURAGE = re.compile(
     r"\b(encouraged?|welcome|preference|priority|equal opportunity|diversity|"
-    r"self[- ]identify|equity|inclusi\w+|regardless of|all qualified|"
+    # "private equity" is a line of business, not an equity statement: "due to
+    # our private equity mandates, this role requires citizenship" passed.
+    r"self[- ]identify|(?<!private )equity|inclusi\w+|regardless of|all qualified|"
     r"without regard|indigenous|accommodat\w+|do not require|not required|"
     r"no (?:citizenship|clearance|security clearance) (?:is )?required)\b", re.I)
 
@@ -311,7 +313,15 @@ NOT_A_DEGREE = re.compile(
     r"|\bmaster\s+(?:the|a|an|our|your|its|their|this|these|those|new)\b", re.I)
 ESCAPE = re.compile(r"or equivalent|or comparable|or relevant experience|equivalent experience|"
                     r"or an equivalent|equivalent practical|or related experience", re.I)
-PREFERRED = re.compile(r"preferred|asset|nice to have|ideally|a plus|bonus|desirable", re.I)
+# Preference in its own words. "asset" and "bonus" count only as "is an asset" or
+# "would be a bonus": anywhere in a sentence they read "the CFA is required for our
+# asset management team" and "a bonus-eligible role" as nice-to-haves, so a real
+# credential gate, a years bar and a required degree went unseen.
+PREFERRED = re.compile(
+    r"\bpreferred\b|\bpreferably\b|\bnice[- ]to[- ]have\b|\bideally\b|\ba plus\b|\bdesirable\b"
+    r"|\badvantageous\b|\bbonus points?\b"
+    r"|\b(?:is|are|be|considered|seen as|counts as)\s+(?:an?\s+)?(?:(?:strong|definite|real|big|"
+    r"great|added|additional)\s+)?(?:asset|bonus)\b", re.I)
 
 # A years figure only bars the candidate if the sentence is ABOUT the candidate.
 # "With more than 40 years of experience, we're the team behind <a lender>" must
@@ -566,6 +576,17 @@ def salary_max(text: str) -> tuple[int | None, str]:
     return hi, quote
 
 
+# A permit named only to be refused: "not open to work permit holders", "unable
+# to sponsor a work visa". Read as accepting the permit, such a sentence was a
+# list of routes in and passed, which is the opposite of what it says.
+_REFUSED = re.compile(r"\b(?:not|no|unable|cannot|can't|won't|will not|ineligible|excluding|"
+                      r"except|nor|without)\b[^.;:]{0,40}$", re.I)
+
+
+def _permit_accepted(s: str) -> bool:
+    return any(not _REFUSED.search(s[:m.start()]) for m in PERMIT_ACCEPTED.finditer(s))
+
+
 def eligibility_cut(text: str) -> str | None:
     """The sentence that states, as a condition, a status the candidate lacks."""
     for s in sentences(text):
@@ -579,7 +600,7 @@ def eligibility_cut(text: str) -> str | None:
         # The same sentence naming a work permit as an ACCEPTED status is a
         # list of routes in, and the candidate's own status may be one of them.
         # Some bars (a clearance) are never satisfied that way, so they still cut.
-        if PERMIT_ACCEPTED.search(s) and not _NOT_BY_PERMIT.search(s):
+        if _permit_accepted(s) and not _NOT_BY_PERMIT.search(s):
             continue
         if CONDITION.search(s) or _ALWAYS.search(s):
             return s[:220]
@@ -673,6 +694,36 @@ def _states_a_degree(sentence: str) -> bool:
 THIN = 400
 
 
+# A requirement to live somewhere else, one of the hard cuts CLAUDE.md names: "must
+# be based in one of our talent hub countries (US, UK, Spain, Kenya and Ghana)"
+# passed at fit 91 for somebody who lives in none of them. A sentence that also
+# names the home country is a list that includes them, and passes.
+_LOC_S = dict(getattr(_S, "LOCATION", {}) or {})
+_HOME_COUNTRY_RX = _LOC_S.get("home_country_rx")
+_OTHER_PLACES = [str(c).lower() for c in _LOC_S.get("other_countries", [])]
+RESIDE = re.compile(
+    r"\b(?:must|need to|needs to|required to|have to)\s+(?:be\s+)?(?:based|located|resid\w*|"
+    r"live|living)\s+(?:in|within)\b|\b(?:based|located|residing) in one of\b"
+    r"|\bopen (?:only )?to (?:candidates|applicants|people) (?:based|located|residing|living) in\b"
+    r"|\b(?:candidates|applicants) (?:must|should) (?:reside|be based|be located|live)\b", re.I)
+_ABROAD_SHORT = re.compile(r"\b(?:us|usa|u\.s\.|uk|eu|emea|apac|latam|united states|"
+                           r"united kingdom|europe)\b", re.I)
+
+
+def residence_cut(text: str) -> str | None:
+    """The sentence requiring the candidate to live in a country that is not theirs."""
+    for s in sentences(text):
+        if not RESIDE.search(s):
+            continue
+        low = s.lower()
+        if _HOME_COUNTRY_RX is not None and _HOME_COUNTRY_RX.search(low):
+            continue
+        if (any(re.search(r"\b" + re.escape(c) + r"\b", low) for c in _OTHER_PLACES)
+                or _ABROAD_SHORT.search(low)):
+            return s[:220]
+    return None
+
+
 def screen(job: dict) -> dict:
     text = (job.get("desc") or "")
     cuts, flags = [], []
@@ -687,6 +738,10 @@ def screen(job: dict) -> dict:
     e = eligibility_cut(text)
     if e:
         cuts.append(f'{ELIGIBILITY_CUT_REASON}: "{e}"')
+    else:
+        w = residence_cut(text)
+        if w:
+            cuts.append(f'eligibility gate: a requirement to live in another country: "{w}"')
 
     i = internal_only(job.get("title") or "", text)
     if i:

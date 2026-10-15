@@ -212,6 +212,11 @@ CALIBRATED_SCALE = 130
 SCALE = getattr(_S, "OPP_SCALE", None) or min(CALIBRATED_SCALE, ceiling())
 
 
+_PAY_CUE = re.compile(r"\b(?:salary|salaries|pay|paid|compensation|base|wage|remuneration|"
+                      r"per (?:year|annum|hour)|annual(?:ly)?|/\s*(?:yr|year|hr|hour)|ote|"
+                      r"package|earn\w*|range)\b", re.I)
+
+
 def score(job: dict, today: dt.date | None = None) -> dict:
     body = (job.get("desc") or "")[:20000]
     title = job.get("title") or ""
@@ -283,7 +288,12 @@ def score(job: dict, today: dt.date | None = None) -> dict:
     # is not a top and earns or costs nothing.
     lo, hi, _ = salary_range(body)
     if hi is None and lo is None:
-        sal = [v for v in money_values(body) if PLAUSIBLE[0] <= v <= PLAUSIBLE[1]]
+        # Only a figure in a sentence about pay. Credit and lending postings
+        # quote loan limits and portfolio sizes ("loans of up to $50,000"), and
+        # read as the pay band they swung opportunity by 30 points for a posting
+        # that states no salary at all, which is never penalised.
+        pay = " ".join(s for s in re.split(r"(?<=[.!?;])\s+|\n+", body) if _PAY_CUE.search(s))
+        sal = [v for v in money_values(pay) if PLAUSIBLE[0] <= v <= PLAUSIBLE[1]]
         hi = max(sal) if sal else None
     if hi is not None and not PLAUSIBLE[0] <= hi <= PLAUSIBLE[1]:
         hi = None

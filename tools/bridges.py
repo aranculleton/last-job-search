@@ -66,15 +66,32 @@ MAP = person.module("skills").BRIDGES
 _COMPILED = [(re.compile(e["pattern"], re.I), e) for e in MAP]
 
 
+# A gap asked for as a preference ranks the role down; it is never a reason not to
+# apply. "Preferred: a degree in statistics, mathematics or actuarial science"
+# came back as an actuarial credential gap, "do not apply", the same verdict as
+# "Required: ACAS or FCAS", and a drafter reading it literally dropped a role the
+# rules say to rank.
+_PREFERENCE = re.compile(r"\bpreferred\b|\bpreferably\b|\bnice[- ]to[- ]have\b|\ba plus\b|"
+                         r"\bideally\b|\bdesirable\b|\bbonus\b|\b(?:is|be) an? (?:\w+ )?asset\b|"
+                         r"\bdegree in\b[^.;]{0,80}\bor\b", re.I)
+_DO_NOT_APPLY = re.compile(r"\s*\b(?:so )?do not apply\b[^.]*\.?", re.I)
+
+
 def assess(text):
     """Every mapped capability the text mentions, with the honest verdict."""
     out, seen = [], set()
+    parts = [p for p in re.split(r"(?<=[.;!?])\s+|\n+", text or "") if p.strip()] or [text or ""]
     for rx, e in _COMPILED:
         if e["asked"] in seen or not rx.search(text or ""):
             continue
         seen.add(e["asked"])
+        note = e.get("note", "")
+        hits = [p for p in parts if rx.search(p)]
+        if e["verdict"] == GAP and hits and all(_PREFERENCE.search(p) for p in hits):
+            note = (_DO_NOT_APPLY.sub(" ", note).strip() + " Asked as a preference here: it "
+                    "ranks the role down, and is never a reason not to apply.").strip()
         out.append(Assessment(e["asked"], e["verdict"], tuple(e.get("have") or ()),
-                              e.get("line", ""), e.get("note", "")))
+                              e.get("line", ""), note))
     order = {HELD: 0, BRIDGE: 1, GAP: 2}
     return sorted(out, key=lambda a: order[a.verdict])
 

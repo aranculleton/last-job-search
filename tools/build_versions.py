@@ -83,8 +83,9 @@ METHODS: dict[str, dict] = {
                                     "home city, covers the towns around each, and searches remote "
                                     "roles where the board can filter for them"),
             (4, "2026-10-15", False, "an invented example in place of a real city"),
+            (5, "2026-10-15", False, "employer boards date a posting by when it was first published, not last edited"),
         ),
-        "fingerprint": "008c2a03005b4d62",
+        "fingerprint": "c657689745873532",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -169,8 +170,9 @@ METHODS: dict[str, dict] = {
                                     "their evidence appear in every prep document"),
             (3, "2026-10-15", False, "the prep document is shown in full in the reply, "
                                     "never only its path"),
+            (4, "2026-10-15", False, "a gap asked only as a preference is never a reason not to apply"),
         ),
-        "fingerprint": "336b619000d30ec3",
+        "fingerprint": "dc3a423c4aad48e5",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -205,8 +207,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-15", False, "a single /apply drafts, renders and verifies through the "
                                     "same pipeline as a batch, keeps its draft.json, and asks "
                                     "first whether you have already applied"),
+            (6, "2026-10-15", False, "a refused outreach note no longer stops the batch, '8+ years' and 'per cent' are checked, a draft with no posting is said, the deadline reaches the tracker, and the bullet split no longer swings on a fraction of a point"),
         ),
-        "fingerprint": "6cca9152c386b904",
+        "fingerprint": "6d6013d471203080",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -261,8 +264,9 @@ METHODS: dict[str, dict] = {
                                     "a first message, calls are not messages, names keep their "
                                     "capital, check-ins are refused, tier 1 needs a post about "
                                     "your work, and the question in a first note is optional"),
+            (8, "2026-10-15", False, "a reply after 'no action unless they reply' is owed, nobody is nudged against it, a dated close is not reopened, a catch-up message is not a connection request, and plain job asks are caught"),
         ),
-        "fingerprint": "0bd960ce95f525c2",
+        "fingerprint": "a7fde990b2881d01",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -278,8 +282,9 @@ METHODS: dict[str, dict] = {
                                     "hold, do-not-target, the company throttle, the bar) "
                                     "and a round's queue decision never block a posting for "
                                     "good; postings on a Workday internal site are dropped"),
+            (3, "2026-10-15", False, "exclusions the current rules only rank (years, a range, a degree, a stage name) are screened again; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
         ),
-        "fingerprint": "391da41a74d96e02",
+        "fingerprint": "f2fb10f01270d140",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

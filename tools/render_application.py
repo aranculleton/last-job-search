@@ -243,6 +243,12 @@ def jobs_for(a):
     tenure, recency and theme relevance decide who gets how many, and which.
     """
     posting = a.get("posting", "") or a.get("role", "")
+    if not str(a.get("posting") or "").strip():
+        # Rendered from the title alone, a resume passes every check and is
+        # tailored to nothing. Said loudly, every time.
+        print(f"WARNING: {a.get('company')}: no posting text in this draft, so the bullets and "
+              "skills are chosen for the job title alone. Stage it with tools/stage_picks.py, "
+              "or render a kept draft with tools/fit_to_page.py.", file=sys.stderr)
     if not (a.get("jobs") and any(j.get("bullets") for j in a["jobs"])):
         alloc = allocate.allocate(posting, budget=a.get("budget", 12))
         a["jobs"] = [dict(employer=e, bullets=list(b)) for e, b in alloc.items()]
@@ -407,6 +413,12 @@ def check_batch(apps, rows=None):
     rows = doc_name.tracker_rows() if rows is None else rows
     claimed = {}
     for a in apps:
+        stray = sorted(k for k in a if re.fullmatch(r"p\d+|intro|opening|closing", k)
+                       and k not in ("p1", "p2", "p4") and str(a.get(k) or "").strip())
+        if stray:
+            raise SystemExit(f"{a.get('company')}: the letter template places p1, p2, lead and "
+                             f"p4 only, and this draft carries {', '.join(stray)}, which would be "
+                             "dropped from the letter. Fold it into those four.")
         name = final_abbr(a)
         doc_name.check_free(name, a["company"], a["role"], rows)
         other = claimed.get(name)
@@ -419,7 +431,10 @@ def check_batch(apps, rows=None):
 
 
 if __name__ == "__main__":
-    apps = json.load(open(sys.argv[1]))
+    # Through the same loader fit_to_page uses, so a kept draft's posting_from is
+    # read in: a plain json.load rendered every kept draft untailored.
+    import fit_to_page
+    apps, _ = fit_to_page.load(sys.argv[1])
     check_batch(apps)
     for a in apps:
         d = build(a)

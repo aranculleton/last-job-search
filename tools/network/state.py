@@ -623,8 +623,8 @@ def is_acceptance(row) -> bool:
 # accepted there is no channel to write in: ten contacts with one unaccepted
 # request each showed "[nudge] 21bd" in a real contact book, a message nobody
 # could send. Read from the scenario, or from a channel typed as a request.
-REQUEST_SCENARIOS = frozenset({"connection_request", "connection_requested", "invite",
-                               "invitation", "connect_request"})
+REQUEST_SCENARIOS = frozenset({"connection_request", "connection_requested", "connection_note",
+                               "invite", "invitation", "connect_request"})
 # A pending request is worth withdrawing after this long: LinkedIn caps how many
 # can be outstanding, and one nobody accepted in three weeks rarely is.
 REQUEST_WITHDRAW_DAYS = 21
@@ -796,6 +796,35 @@ CLOSED_ON_PURPOSE = re.compile(r"\b(?:closed on purpose|closed deliberately|deli
                                r"closed|do not reopen|don'?t reopen)\b", re.I)
 
 
+_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+_NEAR_CLOSE = re.compile(r"(?:closed|deprioriti[sz]ed|not answered|dead end)[^\n|]{0,80}?"
+                         r"(\d{4}-\d{2}-\d{2})|(\d{4}-\d{2}-\d{2})[^\n|]{0,40}?"
+                         r"(?:closed|deprioriti[sz]ed|dead end)", re.I)
+
+
+def closed_on(contact) -> datetime.date | None:
+    """When the thread was closed, from the row: a date in `outcome`, or beside "closed"."""
+    dates = [as_date(d) for d in _DATE.findall(str(contact.get("outcome") or ""))]
+    for k in ("notes", "next_action"):
+        for m in _NEAR_CLOSE.finditer(str(contact.get(k) or "")):
+            dates.append(as_date(m.group(1) or m.group(2)))
+    dates = [d for d in dates if d]
+    return max(dates) if dates else None
+
+
+def _closed_after_last_reply(contact, rows) -> bool:
+    """Was the thread closed on or after their last message? Then nothing reopened it.
+
+    Every "reopened" finding on a real contact book was a thread the person closed
+    after reading the reply: the close is dated in `outcome` ("... by the candidate
+    2026-10-13") and the reply before it. Only a reply after the close reopens.
+    """
+    closed = closed_on(contact)
+    last_in = max((as_date(r.get("date")) for r in rows if said_something(r)
+                   and as_date(r.get("date"))), default=None)
+    return bool(closed and last_in and last_in <= closed)
+
+
 def reconcile(contacts, threads) -> list[dict]:
     """Every place the stored state and the message log disagree.
 
@@ -849,7 +878,8 @@ def reconcile(contacts, threads) -> list[dict]:
                  "the log says the status is " + derived)
         elif (stored in schema.TERMINAL and derived == "replied_needs_response"
               and not CLOSED_ON_PURPOSE.search(" ".join(
-                  str(contact.get(k) or "") for k in ("next_action", "notes")))):
+                  str(contact.get(k) or "") for k in ("next_action", "notes")))
+              and not _closed_after_last_reply(contact, rows)):
             flag(cid, name, stored, derived, "reopened",
                  "thread was closed and they have since replied")
 
@@ -911,7 +941,14 @@ def _trailing_outbound(msgs) -> int:
 # A next_action that opens by saying nothing is owed. Anchored to the start, the
 # way the rows are written, so "no action until they reply" in the middle of a
 # longer instruction is not read as one.
-NO_REPLY_OWED = re.compile(r"\s*(?:nothing owed|no action|keep warm,? no action)\b", re.I)
+NO_REPLY_OWED = re.compile(r"\s*(?:nothing owed|no action|keep warm,? no action)\b"
+                           r"(?![^.]*\b(?:unless|until|till|if)\b)", re.I)
+# A row that says leave them alone: no nudge, whatever the clock says. "No action
+# unless they reply" is the commonest, and it did the opposite twice over: once
+# they replied it hid the reply (the condition was met), and while they had not,
+# the nudge it was written to stop was offered anyway.
+LEAVE_ALONE = re.compile(r"\s*(?:nothing owed|no action|keep warm|background channel|do not "
+                         r"(?:chase|nudge|follow up)|don'?t (?:chase|nudge|follow up))\b", re.I)
 
 
 def owed(contacts, threads, today) -> list[dict]:
@@ -1027,6 +1064,9 @@ def owed(contacts, threads, today) -> list[dict]:
         # A held call is the last thing that happened: what follows it (the
         # thank-you, the referral ask) is in next_action, never a nudge.
         if msgs and call_held(msgs[-1]):
+            _action_row()
+            continue
+        if LEAVE_ALONE.match(action):
             _action_row()
             continue
         # Everything left here is waiting on them, not only `awaiting_reply`.
@@ -1168,6 +1208,13 @@ def _month_end(day: datetime.date) -> datetime.date:
 _REQUEST_SCENARIOS = frozenset({"connection_request", "connection_note", "invite", "invitation"})
 
 
+# Scenarios that only happen inside a conversation already under way. Such a
+# message is never a connection request and never an opener.
+MID_CONVERSATION = frozenset({"reply", "send_resume", "thank_you", "scheduling", "accept_call",
+                              "follow_up", "referral_ask", "ask_referral", "call_held",
+                              "call_missed", "intro_connection", "warm_intro_reply"})
+
+
 def connection_requests(contacts, threads) -> set:
     """(contact_id, date) for every message that spent a connection request.
 
@@ -1202,7 +1249,11 @@ def connection_requests(contacts, threads) -> set:
                 continue
             scenario = re.sub(r"[\s-]+", "_", str(row.get("scenario") or "").strip().lower())
             day = as_date(row.get("date"))
-            if day and (scenario in _REQUEST_SCENARIOS or not (connected or asked)):
+            # A reply, a thank-you or a scheduling note goes down a channel that
+            # is already open: a catch-up message to a relationship older than
+            # the log was counted as a request and spent the week's budget.
+            if day and (scenario in _REQUEST_SCENARIOS
+                        or not (connected or asked or scenario in MID_CONVERSATION)):
                 requests.add((cid, day))
             asked = True
 

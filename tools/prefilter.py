@@ -104,6 +104,7 @@ _HOME = _LOC.get("home_country", "")
 _HOME_RX = _LOC.get("home_country_rx", _NEVER)
 _HOME_ALONE = [x.lower() for x in _LOC.get("home_country_alone", [])]
 _HOME_REGION = _LOC.get("home_region")
+_CC = person.country().lower()
 _METRO = _LOC.get("metro_name", "home metro")
 _FLAG_PLACES = list(_LOC.get("flag_places", []))
 _FLAG_REGIONS = dict(_LOC.get("flag_regions", {}))
@@ -128,9 +129,16 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     tl = (title or "").lower()
     parts = _parts(low)
     prov = next((REGIONS[p] for p in parts if p in REGIONS), None)
-    abroad = (bool(NEIGHBOUR_WORDS.search(low)) or bool(NEIGHBOUR_METROS.search(low))
-              or any(p in NEIGHBOUR_STATES for p in parts))
     home = _HOME_RX.search(low) is not None or prov is not None
+    # A two-letter state that is also the home country's code is the country
+    # when a home region or city is beside it: Dayforce, SmartRecruiters and
+    # Workday write "Toronto, ON, CA", and "CA" read as California failed every
+    # such posting as on-site abroad. Alone ("San Diego, CA") it is still a state.
+    beside_home = home or any(re.search(r"\b" + re.escape(g) + r"\b", low) for g in METRO)
+    states = [p for p in parts if p in NEIGHBOUR_STATES
+              and not (p == _CC and beside_home)]
+    abroad = (bool(NEIGHBOUR_WORDS.search(low)) or bool(NEIGHBOUR_METROS.search(low))
+              or bool(states))
     # A word, not a substring, and in the title only as a work mode: "Remote
     # Sensing Analyst" is a geospatial job title, and the substring test sent
     # an on-site posting outside the home metro down the explicitly-remote branch.
@@ -162,6 +170,10 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
         if rx.search(low):
             return "FLAG", why
     if abroad:
+        # "United States, Canada": a list that names home as well is not a
+        # posting abroad. Tier 2 reads the body.
+        if home:
+            return "FLAG", f"lists {_HOME} and another country; Tier 2 decides"
         return "FAIL", _NB.get("onsite_reason", "on-site in another country")
     for c in OTHER_COUNTRIES:
         if c in parts:
@@ -180,6 +192,9 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     if parts in _LOC.get("home_region_alone", []):
         return "PASS", _LOC.get("home_region_reason", "home region, includes remote")
     if prov and all(p in REGIONS or p in _HOME_ALONE for p in parts):
+        # "Ontario, ON, Canada": the home region written twice is still home.
+        if prov == _HOME_REGION:
+            return "PASS", _LOC.get("home_region_reason", "home region, includes remote")
         if prov in _FLAG_REGIONS:
             return "FLAG", _FLAG_REGIONS[prov][0]
         return "FAIL", (f"{_LOC.get('region_word', 'region')}-wide outside "

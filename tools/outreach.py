@@ -372,7 +372,12 @@ def write(a, meta, today):
                 f.write(line + "\n")
             f.write("\nThe note below is the cold version. Keep it only if none of "
                     "the people above is the right route in.\n\n")
-        note = outreach_note(a)
+        try:
+            note = outreach_note(a)
+        except ValueError as e:
+            f.write(f"**Not ready to send.** The note was refused: {e}. Rewrite its body and run "
+                    "`python3 tools/outreach.py` again.\n")
+            return d
         limit = _schema.LIMITS["connection_note_chars"] if _schema else 200
         f.write("Send to the hiring manager or the recruiter named on the posting, the same "
                 "day as the application. Replace [name]. Do not attach anything.\n\n")
@@ -421,11 +426,25 @@ if __name__ == "__main__":
                                  "has no abbr, so no draft can be matched to it; stage it "
                                  "with tools/stage_picks.py")
             meta[m["abbr"].upper()] = m
+    refused = []
     for a in drafts:
         # Matched on the abbr the draft arrived with, then on the name its
         # files were written under (fit_to_page settles it), which is the
         # name every path below uses.
         supplied = (a.get("abbr") or "").upper()
         a["abbr"] = R.final_abbr(a)
+        # The note is built before anything is written. A refused body raised
+        # half way through writing outreach.md, which left a file holding only
+        # its heading, and stopped the batch: every later posting lost its
+        # archived text and its kept draft.
+        try:
+            words = len(outreach_note(a).split())
+        except ValueError as e:
+            refused.append(f"{a.get('company')}: {e}")
+            words = 0
         d = write(a, meta.get(supplied) or meta.get(a["abbr"].upper(), {}), today)
-        print("wrote", os.path.relpath(d, ROOT), "|", len(outreach_note(a).split()), "words")
+        print("wrote", os.path.relpath(d, ROOT), "|", words, "words")
+    if refused:
+        print("\nOUTREACH NOTE REFUSED (its outreach.md says so; every other file was written). "
+              "Rewrite the body and run this again:\n  " + "\n  ".join(refused))
+        sys.exit(1)

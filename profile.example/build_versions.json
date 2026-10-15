@@ -1,6 +1,6 @@
 {
   "boards": {
-    "version": 4,
+    "version": 5,
     "date": "2026-10-15"
   },
   "documents": {
@@ -8,7 +8,7 @@
     "date": "2026-10-15"
   },
   "drafts": {
-    "version": 5,
+    "version": 6,
     "date": "2026-10-15"
   },
   "expand": {
@@ -28,11 +28,11 @@
     "date": "2026-10-15"
   },
   "networking": {
-    "version": 7,
+    "version": 8,
     "date": "2026-10-15"
   },
   "prep-docs": {
-    "version": 3,
+    "version": 4,
     "date": "2026-10-15"
   },
   "research": {
@@ -44,7 +44,7 @@
     "date": "2026-10-15"
   },
   "screening": {
-    "version": 2,
+    "version": 3,
     "date": "2026-10-15"
   },
   "search": {

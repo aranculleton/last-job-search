@@ -586,8 +586,10 @@ def main() -> int:
 
     out = []
     for j in jobs:
-        f = fit(j)
         route = warm.get(_ckey(j.get("company")), []) if _ckey else []
+        # Known before scoring, so the gap-softening a live contact earns
+        # (W_WARM) applies; attached only afterwards, it never did in a round.
+        f = fit(dict(j, warm_route=route) if route else j)
         if route:
             f = dict(f)
             f["fit"] = min(100, f["fit"] + REFERRAL_BONUS)

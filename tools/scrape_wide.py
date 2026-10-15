@@ -144,6 +144,19 @@ def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
         return None, f"{type(e).__name__}: {str(e)[:120]}"
 
 
+def _remote_mark(location, remote: bool):
+    """A row from a remote-filtered search says so in its location.
+
+    The card carries only a city, so every US-remote row from a search for remote
+    roles read as on-site in that city and the location gate failed it, which
+    emptied the remote searches the boards were asked to run.
+    """
+    loc = str(location or "")
+    if remote and "remote" not in loc.lower():
+        return (loc + " (Remote)").strip()
+    return location
+
+
 def linkedin(q: str, loc: str, page: int, jobage: int,
              remote: bool = False) -> tuple[list[dict], str | None]:
     cmd = ["node", "--no-warnings", LINKEDIN(), "search", "-q", q, "-l", loc,
@@ -155,7 +168,8 @@ def linkedin(q: str, loc: str, page: int, jobage: int,
     for r in (d or {}).get("results", []):
         out.append({"id": r.get("id"), "title": r.get("title"),
                     "company": r.get("company"), "url": r.get("url"),
-                    "location": r.get("location"), "date": (r.get("date") or "")[:10],
+                    "location": _remote_mark(r.get("location"), remote),
+                    "date": (r.get("date") or "")[:10],
                     "portal": "linkedin", "desc": None})
     return out, err
 
@@ -193,7 +207,7 @@ def contract(skill: str, q: str, loc: str | None, page: int,
         text = r.get("description") or None
         out.append({"id": None if r.get("id") is None else str(r.get("id")),
                     "title": r.get("title"), "company": r.get("company"),
-                    "url": r.get("url"), "location": r.get("location"),
+                    "url": r.get("url"), "location": _remote_mark(r.get("location"), remote),
                     "date": (r.get("date") or "")[:10], "portal": portals.short(skill),
                     "desc": text if whole else None, "snippet": text})
     return out, err
@@ -426,18 +440,23 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
             if fh:
                 tasks.append(("fh", q, None, 1))
     # A person's own portals, the way LinkedIn is searched: every query at its
-    # first place as deep as it says (`pages:`, capped by --pages); then remote
-    # postings where the board can filter for them (`remote: true`, sent as
-    # `--remote` and a 5th element); then every other place, two pages; then the
-    # named employers on page one at its first place. In that order because a
-    # sweep that runs out of its budget stops, and what it drops should be the
-    # last town on the list, not the remote roles.
+    # first place as deep as it says (`pages:`, capped by --pages); then the
+    # named employers on page one there; then remote postings where the board can
+    # filter for them (`remote: true`, sent as `--remote` and a 5th element);
+    # then every other place, two pages. In that order because a sweep that runs
+    # out of its budget stops, and what it drops should be the last town on the
+    # list: on a board paced five seconds apart, a round asked for about 800
+    # requests against room for 170, and the named employers, queued last, never
+    # ran.
     for skill in contract_portals(on):
         places = portal_locations(skill)
         depth = min(pages, portals.pages(skill))
         for q in QUERIES:
             for pg in range(1, depth + 1):
                 tasks.append((skill, q, places[0], pg))
+        for emp in EMPLOYERS:
+            for t in EMPLOYER_QUERIES:
+                tasks.append((skill, f"{emp} {t}", places[0], 1))
         if portals.takes_remote(skill):
             for q in QUERIES:
                 for pg in range(1, min(depth, 2) + 1):
@@ -446,9 +465,6 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
             for loc in places[1:]:
                 for pg in range(1, min(depth, 2) + 1):
                     tasks.append((skill, q, loc, pg))
-        for emp in EMPLOYERS:
-            for t in EMPLOYER_QUERIES:
-                tasks.append((skill, f"{emp} {t}", places[0], 1))
     return tasks
 
 
