@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.7
+framework_version: 2.1.8
 ---
 
 # Resume Templates and Tailoring Guide
@@ -50,8 +50,7 @@ hand-naming a file.
 right for a company that writes itself that way and wrong for every company that does not.
 Applied to the rest it produces `<Prefix>_Resume_HARBOURFREIGHT.pdf` and `_QUAYSIDE.pdf`: not
 abbreviations, just the company name shouted. A shouted name looks machine-generated, which is
-the one thing a filename on an attachment must never do. `doc_name.is_shouty()` is the check, and
-`tests/test_document_filenames.py` fails any unsent document still doing it.
+the one thing a filename on an attachment must never do. `doc_name.is_shouty()` is the check.
 
 **A document already sent keeps the name the employer received.** Renaming it would decouple
 the record from what is in their ATS. Only unsent drafts are renamed.
@@ -60,10 +59,11 @@ Only when applying to two different roles at the same company, append a short ro
 PascalCase: `doc_name.suffix("Acme Bank", "ModelRisk")` gives `AcmeBank_ModelRisk`. Never put the
 requisition number, the date, the role slug, or the word "tailored" in the filename.
 
-**Collision check.** Before writing, glob `cv/<Prefix>_Resume_*` for the abbreviation. If
-it is already taken by a *different* employer, extend to three or four characters until it is
-unique (`Harbour Freight` and `Harlow Bank` both start `HA`, so `HARB` and `HARL`), and note the
-collision in the report so the user is not confused by two similar names.
+**Collision check.** Run `python3 tools/doc_name.py "<company>"` for the name, never extend
+one by hand. `doc_name.check_free()` reads the tracker and refuses to render a different role
+under a name another application was sent under, so a second role at the same employer takes a
+role token (`AcmeBank_ModelRisk`; `tools/stage_picks.py` picks one). Name any collision in the
+report so the user is not confused by two similar names.
 
 ## Length - one page is the default
 
@@ -164,13 +164,14 @@ Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. A
 \begin{document}
 \makecvtitle
 
-% 1. Summary: 40-48 words, three lines, identity first ("Operations analyst with...")
+% 1. Summary: 36-52 words, three lines, identity first ("Operations analyst with...")
 % 2. Professional Experience: reverse-chronological, 12-14 bullets, allocated
 %    per posting by tools/allocate.py (tenure x recency x relevance)
 % 3. Skills: a few labelled lines, headed by the profile's LABELS
 % 4. Education: one line
 % 5. Certifications: one line, separate section
-% This order never changes. It moved three times across delivered batches
+% This is the default order (documents.section_order in profile/person.json) and it
+% never varies per posting. It moved three times across delivered batches
 % and the reader should never have to hunt for a section.
 
 \end{document}
@@ -208,14 +209,14 @@ Two related patterns are fine and should be kept:
 
 ### Section headings must match the resume's language (important)
 
-Section headings such as `\section{Core Competencies}`, `Professional Experience`, `Education`, `Languages`, `Publications`, `Honors and Awards`, `References` (and any others your template defines), plus the `Available upon request.` line under References, are all **literal English text baked into the template** - they do not translate themselves. Whenever the document language (see `Document language` in the candidate profile) is not English, translate every one of these too, whatever they are, not just the body prose - a resume with a fully localized profile statement and bullets sitting under untouched English section headers reads as sloppy and inconsistent, and it's an easy thing to forget precisely because the prose translation is the obvious, visible part of the job. Worked example for Spanish: `Competencias Clave`, `Experiencia Profesional`, `Educaci\'on`, `Idiomas`, `Publicaciones`, `Distinciones y Premios`, `Referencias`, `Disponibles a solicitud.` The same rule applies for any other target language - check this explicitly during the verification pass.
+Section headings such as `\section{Skills}`, `Professional Experience`, `Education`, `Languages`, `Publications`, `Honors and Awards`, `References` (and any others your template defines), plus the `Available upon request.` line under References, are all **literal English text baked into the template** - they do not translate themselves. Whenever the document language (see `Document language` in the candidate profile) is not English, translate every one of these too, whatever they are, not just the body prose - a resume with a fully localized profile statement and bullets sitting under untouched English section headers reads as sloppy and inconsistent, and it's an easy thing to forget precisely because the prose translation is the obvious, visible part of the job. Worked example for Spanish: `Habilidades`, `Experiencia Profesional`, `Educaci\'on`, `Idiomas`, `Publicaciones`, `Distinciones y Premios`, `Referencias`, `Disponibles a solicitud.` The same rule applies for any other target language - check this explicitly during the verification pass.
 
 ## Section-by-Section Tailoring
 
 ### Profile Statement / Elevator Pitch (Best Practice)
 This is the most important section to customize. It appears right after `\makecvtitle`.
 
-Write 5-7 lines that function as an "elevator pitch": a concise, compelling introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
+Write three lines (36 to 52 words) that function as an "elevator pitch": a concise, compelling introduction explaining why you're qualified for *this specific role*. Focus on what the employer gains from hiring you.
 
 When the role sits outside your home domain, **lead with the domain-transfer argument** - the one or two sentences connecting your background to their problem (e.g. retail demand forecasting to freight capacity planning) belong in the profile statement's opening, not buried in the cover letter. It is the strongest card a domain-changer holds; play it first.
 
@@ -246,11 +247,14 @@ Statements labeled *[Used for: <company>_<role>]* were extracted from archived a
 experience bullets four lines below it, and on a one-page resume it cost an employer block two
 of its four bullets. The reader has the summary for positioning and the bullets for evidence.
 
-**Section order is fixed: Summary, Professional Experience, Skills, Education,
-Certifications.** That is the convention for a candidate with a few years' experience: the
-reader takes the summary and goes straight to what they did; the skills block is a keyword
-pass for the ATS and a stack check for the recruiter, and both read the whole page.
-Skills-first is a career-changer layout. The order is enforced by a test and never moves.
+**The default section order is Summary, Professional Experience, Skills, Education,
+Certifications, and it never varies per posting.** That is the convention for a candidate with
+a few years' experience: the reader takes the summary and goes straight to what they did; the
+skills block is a keyword pass for the ATS and a stack check for the recruiter, and both read
+the whole page. Skills-first is a career-changer layout. Only the person can change the order,
+once, with `documents.section_order` in `profile/person.json` (a recent graduate often leads with
+education); `templates/resume_gen.py` refuses an order that does not name each section exactly
+once, and a draft cannot reorder anything.
 
 The **Skills** section is a few labelled lines (three is the advice), left aligned, comma
 separated, no parentheses. The headings are the person's own words for their work,
@@ -270,17 +274,17 @@ more than a paraphrase.
 
 #### In-progress qualifications must say so explicitly
 
-**A bare year range is not enough.** An entry reading `2025–2026`, seen partway through 2026, looks like a *finished* degree, because a reader skimming a resume treats a closed range as closed. A profile statement that says "currently completing…" does not fix it: the education entry is where a reader checks the credential, so it has to stand on its own.
+**A bare year range is not enough.** An entry reading `2025-2026`, seen partway through 2026, looks like a *finished* degree, because a reader skimming a resume treats a closed range as closed. A profile statement that says "currently completing…" does not fix it: the education entry is where a reader checks the credential, so it has to stand on its own.
 
 State completion inside the entry itself:
 
 ```latex
-\item{\cventry{2025--2026}{[Degree], [Field]}{[Institution]}{[Location]}{}{\vspace{1pt}
+\item{\cventry{2025-2026}{[Degree], [Field]}{[Institution]}{[Location]}{}{\vspace{1pt}
 In progress, expected [Month Year]. [Relevant topics]
 }}
 ```
 
-Any consistent form works: `In progress, expected <Month Year>.` / `Expected completion <Month Year>.` / a date field of `2025–present`.
+Any consistent form works: `In progress, expected <Month Year>.` / `Expected completion <Month Year>.` / a date field of `2025-present`.
 
 Claiming a credential not yet held is a factual misstatement, and it is the kind discovered at transcript or reference check rather than at interview. It costs nothing to prevent. The same applies to in-progress certifications and courses.
 
@@ -288,7 +292,7 @@ Claiming a credential not yet held is a factual misstatement, and it is the kind
 
 ### Professional Experience
 - Rewrite bullet points to emphasize aspects most relevant to the target role
-- Use 4-6 bullets for most recent role, 3-4 for previous, 2-3 for older
+- Use 3-4 bullets for the most recent role, 2-3 for the previous, 1-2 for older ones (the Page Budget table below; the per-role floors and caps are the profile's, in `profile/roles.py`)
 - **Emphasize measurable results** where possible: "Reduced processing time by X%", "Model adopted by the team"
 
 #### Check tenure against visible output
@@ -365,7 +369,7 @@ After writing the resume and before presenting to the user, always compile and v
 Add `\needspace{5\baselineskip}` immediately before the problematic `\cventry`:
 ```latex
 \needspace{5\baselineskip}
-\item{\cventry{YEAR--YEAR}{Role Title}{Organization}{Location}{}{...}}
+\item{\cventry{YEAR-YEAR}{Role Title}{Organization}{Location}{}{...}}
 ```
 Include `\usepackage{needspace}` in the preamble.
 
@@ -375,7 +379,7 @@ Include `\usepackage{needspace}` in the preamble.
 Add `\enlargethispage{2-3\baselineskip}` before a late section to stretch the page by a few lines. This is the standard LaTeX rescue for near-miss overflows. If it does not close the gap, cut instead.
 
 **Problem: real content on a second page you did not intend**
-Cut content, do not compress geometry or `\vspace`. See "Relevance-weighted cutting" below. On a one-page resume the usual culprits are a skills list that was pasted rather than selected, a fourth role that the posting does not need, or a profile statement running past four lines.
+Cut content, do not compress geometry or `\vspace`. See "Relevance-weighted cutting" below. On a one-page resume the usual culprits are a skills list that was pasted rather than selected, a fourth role that the posting does not need, or a profile statement running past three lines.
 
 **Problem: the page finishes early and feels thin**
 Restore the highest-relevance item previously cut, or promote an "Additional detail available for tailoring" bullet from `profile/01-candidate-profile.md` that hits a posting requirement. Do not pad with generic tooling.
@@ -388,7 +392,7 @@ They exist because each one shipped as a defect first.
 **Experience is reverse-chronological, always.** Brindle & Hart Logistics, Oakmere Foods,
 Saltmarsh Analytics. The renderer sorts by `CHRONO` regardless of the order the tailor wrote,
 so a relevance-ordered draft cannot reach the page. Tailoring lives in the summary,
-the competencies, and bullet selection.
+the skills line, and bullet selection.
 
 **Bullets that say the same thing never both render.** `CONFLICTS` in the renderer
 holds the redundant pairs: `BH_FORECAST` and `BH_FORECAST_SHORT` state the same result at two
@@ -402,11 +406,12 @@ what made the block read as a wall.
 
 **The skills block is rebuilt, never printed.** `tools/skills_block.py` reads the
 tailor's free-form tools string as a set of *selections* against a fixed inventory and
-re-renders it in five labelled categories. The old free-form string mixed commas,
+re-renders it as the person's labelled lines (`LABELS` in `profile/skills.py`: three
+in the example, one per heading). The old free-form string mixed commas,
 semicolons and `\textbullet` separators, so parenthetical groups split apart and an
 ATS parser saw fragments like `Tableau)` and `Python (pandas` as separate skills.
-The block is also topped up from the rest of the page: anything the summary, a
-competency or a selected bullet already states may appear on the skills line, which
+The block is also topped up from the rest of the page: anything the summary or a
+selected bullet already states may appear on the skills line, which
 keeps a planning resume from omitting forecasting. Nothing is invented; the
 block can never claim more than the page does. The profile's `PINNED` item always prints.
 
@@ -449,9 +454,9 @@ printed 28 tokens over six lines. It now fits four rendered lines. Because `_ran
 posting's own vocabulary first, the cap only ever removes what this employer did not ask for.
 
 **A cover-letter bullet label is separated from its sentence by a colon.** Without it the page
-read "Forecasting models Weekly demand forecasts across 2,400 SKUs". Bold itself is
-safe: it is a font weight, and pypdf, pdftotext and pdfminer all extract it as plain text with
-no markup characters, so it costs nothing with an ATS and helps a human skim.
+read "Forecasting models Weekly demand forecasts across 2,400 SKUs". The generator writes a
+plain `\item label: text`, with no bold or italics: a letter carries none (see
+`06-cover-letter-templates.md`).
 
 **An employer block never opens with a reporting or upkeep bullet.** "Owned the Power BI
 service-level reporting..." and "Automated the weekly stock-cover report..." are true and
@@ -476,9 +481,9 @@ keyword is the one thing an ATS pass must find. The employer's own name is never
 Logistics, Oakmere Foods and Saltmarsh Analytics". Naming some and hiding others reads as
 evasive.
 
-**The summary is three lines.** 40-48 words, identity first: "Operations and planning
+**The summary is three lines.** 36 to 52 words, identity first: "Operations and planning
 analyst with a mathematics degree and seven years across...". Not "Data professional with a
-background in". The renderer caps at 48 words at the last sentence boundary.
+background in". The renderer caps it at 52 words at the last sentence boundary.
 
 **The fit loop grows as well as trims.** `tools/fit_to_page.py` used to only remove
 content, so a resume that overshot by one line and got trimmed stayed a bullet short
@@ -534,7 +539,7 @@ The resume **must** fit on exactly 1 page when compiled (see the two-page except
 
 | Section | Max budget on one page |
 |---------|-----------|
-| Profile statement | 3-4 lines |
+| Profile statement | 3 lines |
 | Skills | 3-4 grouped lines, selected per posting |
 | Most recent role | 3-4 bullets |
 | Previous role | 2-3 bullets |
@@ -557,17 +562,16 @@ Use two sections, in this order:
 ```latex
 \section{Education}
 \vspace{1pt}
-\begin{itemize}
-\item{\cventry{2016-2019}{BSc Mathematics}{University of Leeds}{Leeds}{}{}}
-\end{itemize}
+\par\noindent\hangindent=1.1em\hangafter=1\relax \textbf{BSc Mathematics}, University of Leeds, UK (2016-2019).\par
 
 \section{Certifications}
 \vspace{1pt}
-\begin{itemize}
-\item{Microsoft Certified: Power BI Data Analyst Associate (2024)}
-\item{[Certification in progress], scheduled [Month Year]}
-\end{itemize}
+\par\noindent\hangindent=1.1em\hangafter=1\relax Microsoft Certified: Power BI Data Analyst Associate (2024); [Certification in progress], scheduled [Month Year]\par
 ```
+
+Each is a left-aligned labelled line, not an `itemize` (see "Bullets are for achievements
+only" above), and the generator writes them from the profile's `EDUCATION` and
+`CERTIFICATIONS` strings in `profile/roles.py`.
 
 A **Tools** or **Skills** line is a third thing again and never belongs under either heading.
 If the page will not carry three separate headings, cut content per the relevance-weighted
@@ -592,7 +596,7 @@ Cut the lowest-total-score line first, regardless of which section it sits in.
 
 ### Practical order of cuts (easiest → last resort)
 
-1. **Redundancy.** If an achievement appears in both Core Competencies AND a role bullet, the Core Competencies version is usually the cleaner cut (the experience bullet is more concrete evidence).
+1. **Redundancy.** If an achievement appears in both the summary AND a role bullet, the summary version is usually the cleaner cut (the experience bullet is more concrete evidence).
 2. **Profile-statement fluff.** A sentence that just restates what Publications or Skills will show. ("Peer-reviewed publications on X..." is already a Publications entry - profile can claim it once and stop.)
 3. **Low-relevance experience bullets.** A bullet about work that does not touch posting keywords, wherever it sits. This cuts across sections before touching the structural list.
 4. **Low-relevance supporting content.** An older-role bullet that does not speak to the target role. A certification that does not touch the posting's stack. A language entry that can be condensed to one line.
@@ -607,6 +611,6 @@ Cut the lowest-total-score line first, regardless of which section it sits in.
 
 ## Recommended Section Order
 
-Superseded by "Section order is fixed" above: Summary, Professional Experience, Skills,
+See "The default section order" above: Summary, Professional Experience, Skills,
 Education, Certifications. It does not vary by role type, and there is no Core
 Competencies block.
