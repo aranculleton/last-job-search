@@ -47,17 +47,24 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Rank down, do not cut.** A posting is a wish list. It names ten tools and the team uses
   six, and the missing one is almost never what decides the hire. **One missing skill is
   never a reason to drop a role**, and neither is a year of experience, a preferred degree,
-  or a posted range under target. Those are scoring inputs; the role still surfaces and the
-  candidate decides. Enforced in `tools/fit.py`, which weights every gap by how hard they
-  asked and by what sits next to it, and in `tools/text_screen.py`, where salary and degree
-  minimums are flags rather than cuts.
-- **Only four things are still hard cuts**, because no framing survives them: an
-  **eligibility** bar the profile cannot clear (a citizenship, residency or clearance
-  requirement, or a requirement to live elsewhere), a **language** requirement, a **professional credential** gate (actuarial
-  exams, an accounting or engineering licence), and a role whose **core is a discipline the
-  person does not hold** that the profile names as a different job (`search.py` `RESEARCH_ML`,
-  research machine learning for an analyst; nothing for a researcher). Those are different jobs,
-  not missing skills. Everything else gets ranked.
+  or a posted range under target (bar the one salary cut below). Those are scoring inputs; the
+  role still surfaces and the candidate decides. Enforced in `tools/fit.py`, which weights every
+  gap by how hard they asked and by what sits next to it, and in `tools/text_screen.py`, where a
+  degree minimum and a range above the cut line are flags rather than cuts.
+- **Only these are hard cuts**, because no framing survives them, and each one carries the
+  quoted sentence it was cut on: an **eligibility** bar the profile cannot clear (a citizenship,
+  residency or clearance requirement, or a requirement to live elsewhere), a **language**
+  requirement (or a title written in another language), a **location** the Location table fails,
+  a **professional credential** gate (actuarial exams, an accounting or engineering licence), a
+  role whose **core is a discipline the person does not hold** that the profile names as a
+  different job (`search.py` `RESEARCH_ML`, research machine learning for an analyst; nothing for
+  a researcher), a vacancy **open to the employer's own staff only** ("internal applicants only",
+  an "Internal Mobility" title), and a stated salary range whose **top** sits below the person's
+  cut line (`SALARY_CUT_BELOW` in `profile/search.py`, well under the walk-away floor: a different
+  job level, not a negotiation). Those are different jobs, not missing skills. Everything else
+  gets ranked. A top between the cut line and the floor is a flag, never a cut, in
+  `tools/text_screen.py`; `tools/score_posting.py`, which reads extracted fields, applies the
+  floor itself as its salary cut.
 - **Every posting ruled out is written back to `seen_jobs.json`** with `status: "excluded"`,
   a checkable `exclusion_reason` and a date, so it never resurfaces. The gate that enforces
   that is `throttle.ruled_out()`, and it runs at **prefilter**, before `hydrate.py` spends an
@@ -119,9 +126,9 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **A posting with no stated salary is not penalized.** Most postings in most markets omit it.
   Report `not stated`, deduct nothing, and assume the band is met where the employer is
   established with checkable evidence of good pay and benefits. Only a *stated* range whose
-  midpoint falls below the walk-away floor gets flagged alongside the score, and even then it
-  is a decision input, not an exclusion. See "How much weight salary actually gets" in
-  `04-job-evaluation.md`.
+  top falls below the walk-away floor gets flagged alongside the score, and even then it
+  is a decision input, not an exclusion (the cut line above is the one exception). See "How much
+  weight salary actually gets" in `04-job-evaluation.md`.
 
 ### Portals and employer boards
 
@@ -316,11 +323,15 @@ In code it is `tools/throttle.py`, which `tools/run_round.py` runs after `fit.py
 normalizes employer names through `tools/company_key.py`, URLs through `lookup_score.norm`,
 and records every skip in `seen_jobs.json`.
 
-**Suppress companies already applied to.** Read `job_search_tracker.csv`. Any company with a row
-whose status is not final (`drafted`, `applied`, `interview`, `offer`) is **suppressed**: do not
-surface further roles there, and record them in `seen_jobs.json` with
+**Suppress companies already applied to.** Read `job_search_tracker.csv`. Any company with a
+row whose application was sent and is still live (`applied`, `interview`, `offer`) is
+**suppressed**: do not surface further roles there, and record them in `seen_jobs.json` with
 `status: "skipped"` and the reason `company throttle: an application is already open at this
-employer`. Applying to a third and fourth role at the same employer in the same fortnight reads
+employer`. A `drafted` row is not sent, so it does not suppress: the new role surfaces with a
+note that a draft exists. A sent row with no reply for 45 days (`throttle.SILENCE_DAYS`) stops
+suppressing too, unless it is at `interview` or `offer`, which are live however long they run;
+the tracker row itself is left alone, because marking silence as `no_response` is `/outcome`'s
+job. Applying to a third and fourth role at the same employer in the same fortnight reads
 as spray-and-pray to the recruiter reviewing them and it is not what the candidate wants.
 
 The one override: a suppressed company's posting may still be surfaced when it is **materially
@@ -427,16 +438,17 @@ separates a matching role from one that merely shares its nouns. A profile with 
 flags from them, and loses nothing else.
 
 **The screen cuts on facts and flags judgments.** `tools/score_posting.py` ends a posting only on
-a stated, quoted fact: a gate failure, a stated 6+ years, a stated Master's or PhD with no
-equivalent-experience clause, or a whole salary range below the floor. Everything else - job
-family, the homonym fields, direct reports, a fixed-term contract - becomes a **flag** that orders
-the scoring queue and never discards.
+a stated, quoted fact: a gate failure (eligibility, language, location) or a whole salary range
+below the floor. Everything else - a years bar, a stated Master's or PhD, job family, the homonym
+fields, direct reports, a fixed-term contract - becomes a **flag** that orders the scoring queue
+and never discards. The raw-text screen, `tools/text_screen.py`, cuts on the other facts listed
+under the hard cuts above.
 
 That split was learned the hard way. An earlier version also cut on the job-family label and
 discarded roles that a full evaluation scored as good fits. A cheap model's single classification is
 not reliable enough to end a posting's life; a quoted requirement is.
-`profile/tests/test_screen_never_discards_a_good_role.py` locks the property, and a cut
-posting must always carry its reason.
+`tests/test_only_a_verdict_blocks_a_posting.py` locks the property that only a stated verdict
+blocks a posting, and a cut posting must always carry its reason.
 
 **Score in queue order, fewest flags first, and stop at the yield target.** Do not full-score the
 whole screen output. Take the queue in order until 5 postings clear 60 with 2 at 75+, then stop
@@ -479,15 +491,15 @@ Read `04-job-evaluation.md` once at the start of this step, then for each candid
 
 1. **Run the gates first.** Eligibility Gate, then Language Gate, then the Location table
    (dimension 4). A gate failure is a hard exclusion: record it in `seen_jobs.json` with
-   `status: "skipped"` and the reason, and never present it. Gates are not scored and never
+   `status: "excluded"` and the reason (Step 4.4), and never present it. Gates are not scored and never
    averaged away by a strong score elsewhere.
 2. **Score the four weighted dimensions**: Technical Skills (30%), Experience Match (25%),
    Behavioral Fit (15%), Career Alignment (30%). Behavioral and cultural signal is thin from
    a search result alone, so score it from the posting text you have and mark it provisional
    rather than inventing a company-culture read.
-3. **Compute the overall score, 0-100**, and assign the band from the Thresholds in
-   `profile/12-scoring-brief.md`. Do not restate the numbers here: one home per number, so an edit to the
-   bands cannot leave two files disagreeing.
+3. **Compute the overall score, 0-100**, and assign the band from the Thresholds section of
+   `.claude/skills/job-application-assistant/04-job-evaluation.md`, the one home of the band
+   edges (the 60 and 75 used below are two of them).
 4. **Record 1-3 strengths and 1-3 gaps** in the candidate's own terms, for the Step 4 store.
 
 Scoring a full search pool at this depth is expensive. Keep it proportionate: pre-filter on
@@ -500,7 +512,7 @@ score Technical Skills honestly, so a candidate that reaches scoring gets its de
 nothing.** Many postings omit it, and silence is not a red flag. Report it as
 `not stated`, deduct nothing from the score, and assume the band is met where the employer
 is established and there is checkable evidence they pay and treat people well. Where a range
-*is* stated and its midpoint falls below the walk-away floor, report that next to the score
+*is* stated and its top falls below the walk-away floor, report that next to the score
 so the user does not have to discover it themselves. Salary never overrides a gate and never
 changes the score.
 
@@ -554,7 +566,7 @@ being auto-excluded.
 
 ### Step 4: Deduplicate & Store
 
-1. Add ALL fetched jobs (new and skipped) to `seen_jobs.json` with structure:
+1. Add ALL fetched jobs (new, skipped and excluded) to `seen_jobs.json` with structure:
 ```json
 {
   "seen": {
@@ -573,7 +585,7 @@ being auto-excluded.
       "language_gate": "PASS/FAIL/FLAG",
       "strengths": ["...", "..."],
       "gaps": ["...", "..."],
-      "status": "new/skipped/ranked/expired",
+      "status": "new/ranked/estimated/skipped/excluded/applied/expired",
       "portal": "<source portal skill, e.g. linkedin-search>",
       "source": "cli/websearch"
     }
@@ -589,9 +601,10 @@ The `source` field records which mechanism produced the entry: `cli` for Step 1b
 uses, so both commands produce interchangeable entries and nothing downstream needs to know
 which one scored a posting. A posting that reached Step 3 is stored with `status: "ranked"`,
 its `rank_score`, `rank_verdict`, `rank_date`, `location_verdict`, `language_gate` and its
-`strengths`/`gaps`. A posting excluded by a gate is stored with `status: "skipped"` and the
-failing gate recorded. Keep `fit` populated as the coarse high/medium/low band derived from
-the score (75+ high, 60-74 medium, below 60 low) so older readers keep working.
+`strengths`/`gaps`. A posting excluded by a gate is stored with `status: "excluded"`, an
+`exclusion_reason` naming the failing gate and an `excluded_date` (Step 4.4). Keep `fit`
+populated as the coarse high/medium/low band derived from the score (75+ high, 60-74 medium,
+below 60 low) so older readers keep working.
 
 `/rank` uses the same fields: ranked entries carry `rank_score` (0–100 overall score), `rank_verdict` (fit band, e.g. "strong fit"), `rank_date` (ISO date of ranking), the veto fields `location_verdict` and `language_gate` (both PASS/FAIL/FLAG) with `language_note` (the quoted requirement explaining a non-PASS), and `strengths`/`gaps` (1-3 verbatim bullets each, copied from the scoring agent's findings). The `status` field is set to `"ranked"`. Do not drop any of these fields when re-writing entries. Entries ranked before `strengths`/`gaps` existed simply lack them; readers tolerate their absence and never backfill by guessing. Entries ranked before the verdict rename may carry a legacy PASS/FAIL/FLAG string in `location` - read that as the verdict when `location_verdict` is absent; in fresh entries `location` is always a place, never a verdict.
 
@@ -614,7 +627,10 @@ This applies to every rejection route, not just gate failures:
 - a stated hard requirement the profile cannot meet (a Master's degree, a named mandatory
   tool, a clearance)
 - a specialism the role is built entirely around that the profile does not have
-- a stated salary whose midpoint sits below the walk-away floor **and** nothing else offsets it
+- a stated range whose top sits below the person's salary cut line (`SALARY_CUT_BELOW`): a
+  different job level, not a negotiation. A range above that line but under the walk-away floor
+  is a flag, never an exclusion
+- a vacancy open to the employer's own staff only
 - a posting the user looks at and declines
 
 Write the reason in enough detail that a later run can tell whether the exclusion still
@@ -674,7 +690,7 @@ Scraper-based portal CLIs rot silently: when a portal changes its markup, the pa
 ### Step 5: Present Results
 
 Present new jobs in a table **sorted by `rank_score`, highest first**, with the score shown. Never sort alphabetically, by portal, or by posting date, and never present an unscored posting. When Step 1b skipped
-portals (`enabled: false`), report them with the `skipped (disabled):` line below
+portals that are switched off (`python3 tools/portals.py` says which), report them with the `skipped (disabled):` line below
 so opting one out stays visible rather than silent; omit the line when nothing
 was skipped. When any portal's results came from the Step 1c fallback this run
 (bun unavailable, or its CLI failed at runtime), report it with the
@@ -682,10 +698,13 @@ was skipped. When any portal's results came from the Step 1c fallback this run
 can be stale, so the reader should know which rows carry that caveat; omit the
 line when every portal ran its CLI. When Step 4.75 found a portal degraded, broken, or inconclusive,
 add one `health:` line per suspect portal (healthy portals get no line); after
-the report, offer to set that portal's `enabled: false` so `/scrape` stops
-running it (and covers it via the Step 1c fallback) until it is fixed - only
-edit the toggle with the user's confirmation, and never edit anything else in
-the skill.
+the report, offer to switch that portal off so `/scrape` stops running it (and
+covers it via the Step 1c fallback) until it is fixed. For the app's two portals
+(`linkedin-search`, `freehire-search`) that is a `PORTALS` entry in `profile/search.py`
+(`{"freehire-search": False}`), never an edit to their `SKILL.md`, which a sync puts
+back; for a portal built for this person by `/add-portal` it is `enabled: false` in that
+portal's own `SKILL.md` frontmatter. Only switch with the user's confirmation, and never
+edit anything else in the skill.
 
 ```
 ## New Job Matches - YYYY-MM-DD
@@ -723,7 +742,7 @@ For each posting scoring 75+, add 2-3 bullet points drawn from the Step 3 `stren
 `gaps`:
 - The strongest specific match to the profile, named concretely
 - Key requirements to check before applying
-- Any red flags: mass-posting signals from Step 2.5, a **stated** salary midpoint below the
+- Any red flags: mass-posting signals from Step 2.5, a **stated** salary range whose top is below the
   walk-away floor, an unstated on-site expectation, a declared-language level below the
   posting's bar. An absent salary range is not a red flag and is not listed as one
 
@@ -771,7 +790,7 @@ If the user decides to apply to any job, the tracker row is written by **job-app
 5. **Be efficient with detail fetches.** Don't run `detail` or WebFetch on every search hit - pre-filter by title/snippet, then fetch only promising matches.
 6. **Parallel searches.** Run portal CLI searches in parallel; use WebSearch only for gaps the CLIs don't cover.
 7. **No automated people lookups.** Referral contacts (Step 4.5) are LinkedIn search links only - never fetch or scrape LinkedIn people-search result pages programmatically.
-8. **Health checks are bounded and honest.** Step 4.75 spends at most one probe, one retry, and (in `health` mode) one detail fetch per portal - a diagnosis, not a crawl. A rate-limit is never evidence of breakage. Health verdicts come only from observed CLI output; a portal that could not be tested is reported as inconclusive, never guessed. The `enabled` toggle is the only thing the health check may edit, and only with confirmation.
+8. **Health checks are bounded and honest.** Step 4.75 spends at most one probe, one retry, and (in `health` mode) one detail fetch per portal - a diagnosis, not a crawl. A rate-limit is never evidence of breakage. Health verdicts come only from observed CLI output; a portal that could not be tested is reported as inconclusive, never guessed. The on/off switch (`PORTALS` in `profile/search.py`, or `enabled:` in a person's own portal) is the only thing the health check may edit, and only with confirmation.
 9. **Score everything you present, and rank by that score.** No posting reaches the user unscored, and the table is ordered by score. A list of unranked links is a failed run.
 10. **An under-target run expands before it reports.** Steps 3.5's expansion ladder runs before the summary is written, up to 3 rounds. Never pad a thin result with sub-60 postings, and never relax a gate or the location filter to make the yield target.
 11. **Flag distribution patterns, never accuse.** The mass-posting signal (Step 2.5) describes how a listing is being distributed, not a claim that the employer is a scam. Never name a company as fraudulent or untrustworthy - present the observation and let the user decide.

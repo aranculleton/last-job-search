@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.2
+framework_version: 1.1.3
 ---
 
 # Cost Model for the Application Lifecycle
@@ -38,8 +38,9 @@ different inputs at different points, and confusing them wastes a round.
 | Costs | nothing, and nothing upstream of it either | nothing, but the extraction feeding it costs ~1k |
 | Catches | a gate, a salary range, a language requirement, a years bar | all of that plus the homonym fields, which no regex reads |
 
-The free round alone is what most runs need: `python3 tools/run_round.py` goes from portals to a
-ranked shortlist with no model call at all, and the yield target is usually met there. The tiered
+The free round alone is what most runs need: `python3 tools/run_round.py --out rounds/<name>`
+goes from portals to a ranked shortlist with no model call at all, and the yield target is
+usually met there. The tiered
 path exists for what the free round cannot decide, which is the judgment the homonym fields
 separate: whether "risk" here means account risk or derivatives pricing. Reach for it when a round
 misses its target or when a shortlist reads as though the words matched and the jobs did not.
