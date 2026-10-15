@@ -97,14 +97,15 @@ def test_a_hiring_manager_is_not_a_recruiter_and_plain_job_asks_are_caught():
 # ------------------------------------------------------------------ the search
 
 def test_a_country_code_beside_a_home_region_is_the_country(monkeypatch):
-    monkeypatch.setattr(prefilter, "REGIONS", {"on": "ON", "ontario": "ON"})
-    monkeypatch.setattr(prefilter, "_HOME_REGION", "ON")
+    monkeypatch.setattr(prefilter, "REGIONS", {"wx": "WX", "wexmoor": "WX"})
+    monkeypatch.setattr(prefilter, "_HOME_REGION", "WX")
     monkeypatch.setattr(prefilter, "METRO", ["northgate"])
     monkeypatch.setattr(prefilter, "NEIGHBOUR_STATES", {"ca", "tx"})
     monkeypatch.setattr(prefilter, "_CC", "ca")
-    assert prefilter.location_verdict("Northgate, ON, CA")[0] == "PASS"
+    assert prefilter.location_verdict("Northgate, WX, CA")[0] == "PASS"
     assert prefilter.location_verdict("Austin, TX")[0] == "FAIL"
-    assert prefilter.location_verdict("Ontario, ON")[0] == "PASS"
+    assert prefilter.location_verdict("Wexmoor, WX")[0] == "PASS"
+    assert prefilter.location_verdict("Northgate, CA")[0] == "FAIL"       # no region: a state
 
 
 def test_a_refused_permit_and_private_equity_still_cut(monkeypatch):
@@ -131,11 +132,11 @@ def test_asset_and_bonus_are_preference_only_in_their_preference_sense():
 
 
 def test_old_exclusions_the_rules_now_only_rank_are_released():
-    for reason in ("knockout at triage, blocker 2 (years bar above 5): 8+ years",
-                   "free text screen: stated range tops out at 52,000",
+    assert throttle.is_stale_exclusion("knockout at triage, blocker 2 (years bar above 5): 8+ years")
+    for reason in ("eligibility gate: citizenship stated as a condition",
+                   "knockout at triage, blocker 5: the whole stated range tops out at 38,000",
                    "blocker 1: Master's degree is explicitly required"):
-        assert throttle.is_stale_exclusion(reason), reason
-    assert not throttle.is_stale_exclusion("eligibility gate: citizenship stated as a condition")
+        assert not throttle.is_stale_exclusion(reason), reason
 
 
 def test_a_live_interview_keeps_holding_its_employer():

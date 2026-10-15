@@ -28,13 +28,13 @@ make sense to somebody whose repo just received it.
     - "<City>, ON, CA", the way Dayforce, SmartRecruiters and Workday write a Canadian
       location, was failed as "US on-site" ("CA" read as California). A country code beside
       a home region or city is now the country.
-    - "Ontario, ON, Canada" passes as home.
+    - The home region written twice ("<Region>, <code>, <Country>") passes as home.
     - A list naming home and another country is flagged for the posting body to decide.
     - US-remote rows from a remote search are marked remote, so they are no longer failed
       as on-site.
-  - *Old exclusions:* those citing a years bar, a stated range, a required degree or only
-    the name of the stage that wrote them stopped blocking roles the current rules merely
-    rank lower. About 190 such entries were found in one file.
+  - *Old exclusions:* those citing a years bar, or only the name of the stage that wrote
+    them, stopped blocking roles the current rules merely rank lower. A stated range or a
+    required degree the person's own triage card knocks out still stands.
   - *Eligibility:* the gate now cuts "not open to work permit holders", "unable to sponsor
     a work visa", a requirement in a sentence that mentions "private equity", and a
     requirement to live in another country ("must be based in the US or Spain"). A list

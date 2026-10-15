@@ -148,10 +148,7 @@ _STALE_EXCLUSION = re.compile(
     r"|\b(?:weak|moderate|poor) fit\b"
     r"|\bstated salary\b|\bsalary (?:range|band) below\b|\bbelow (?:the )?(?:walk-away )?floor\b"
     r"|\bprefer(?:red|s)?\s+(?:a\s+)?(?:master|phd|doctora)"
-    r"|\b\d{1,2}\+?\s*(?:or more\s+)?years\b|\byears? bar\b"
-    r"|\brange tops out\b|\bwhole (?:stated )?range\b|\bmaximum (?:is |sits )?below\b"
-    r"|\bentire range\b|\brange max\b|\bmaster'?s?\b[^.;]{0,30}\brequired\b|\brequires? a master'?s?\b"
-    r"|\b(?:master'?s|phd|graduate degree) (?:is )?(?:explicitly )?required\b", re.I)
+    r"|\b\d{1,2}\+?\s*(?:or more\s+)?years\b|\byears? bar\b", re.I)
 
 # What still cuts, whatever else the reason says. Read first, because a reason
 # routinely carries both: "scored 40. Core function is dashboard maintenance"
@@ -166,14 +163,21 @@ _STILL_CUTS_CORE = (
     r"|\blanguage gate\b|\bprofessional credential\b"
     r"|\bresearch (?:ml|scientist|role)\b|\bml engineering or research\b"
     r"|\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b"
-    r"|\brelocation\b|\bon-?site in\b|\blocation gate\b")
+    r"|\brelocation\b|\bon-?site in\b|\blocation gate\b"
+    # The triage card's own knockouts (10-triage-blockers.md): a stated range
+    # whose maximum is below the floor, and a graduate degree stated as required
+    # where the person's card says so. The person's rules, so they stand.
+    r"|\brange tops out\b|\bwhole (?:stated )?range\b|\bmaximum (?:is |sits )?below\b"
+    r"|\bentire range\b|\brange max\b"
+    r"|\bmaster'?s?\s+(?:degree\s+)?(?:is\s+)?(?:explicitly\s+)?(?:a\s+)?(?:must|required)\b"
+    r"|\bstates a master'?s?\b|\brequires? a master'?s?\b|\bPhD required\b")
 # What is NOT here, deliberately: the name of the stage that wrote the reason
-# ("knockout at triage", "blocker 2", "free text screen"), a years bar, a stated
-# range and a required degree. A stage name is not a fact about the posting, and
-# the other three are flags under the current rules ("rank down, do not cut"):
-# 83 years-bar, 86 range and 22 degree exclusions in one real file kept blocking
-# roles the current screen passes with a flag. Released, such a posting goes
-# through the current screen again, which cuts it again for free if it still cuts.
+# ("knockout at triage", "blocker 2", "free text screen") and a years bar. A
+# stage name is not a fact about the posting, and a years bar is a flag under
+# the current rules: 83 years-bar exclusions in one real file, written when the
+# card cut at 5+ years, kept blocking roles the current card and screen only
+# rank lower. Released, such a posting goes through the current screen again,
+# which cuts it again if it still cuts.
 _STILL_CUTS = re.compile(
     "|".join([_STILL_CUTS_CORE, *getattr(person.module("search"), "STILL_CUTS", ())]),
     re.I)

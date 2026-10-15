@@ -720,7 +720,11 @@ RECRUITER_TITLE = re.compile(
     r"\brecruit(?:er|ers|ment)\b|\brecruiting (?:coordinator|manager|lead|partner|specialist|"
     r"director|consultant|team|operations)\b|\btalent (?:acquisition|partner|scout|sourcer|"
     r"lead|manager|director|advisor)\b|\bsourcer\b|\bheadhunter\b|\bexecutive search\b"
-    r"|\b(?:connecting|placing)\b[^,;]{0,40}\btalent\b|\btalent\s*@", re.I)
+    r"|\b(?:connecting|placing)\b[^,;]{0,40}\btalent\b|\btalent\s*@"
+    # The department as the title: "Recruiting, <Company>", "Recruitment | <Company>",
+    # "Recruiting at <Company>". The verb with a role after it is a hiring manager.
+    r"|^\W*recruit(?:ing|ment)\b(?!\s+(?:senior|junior|lead|staff|principal|data|"
+    r"talented|great|engineers?|analysts?|scientists?|developers?|designers?|managers?)\b)", re.I)
 
 
 def is_recruiter(title) -> bool:

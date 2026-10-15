@@ -132,11 +132,13 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     home = _HOME_RX.search(low) is not None or prov is not None
     # A two-letter state that is also the home country's code is the country
     # when a home region or city is beside it: Dayforce, SmartRecruiters and
-    # Workday write "Toronto, ON, CA", and "CA" read as California failed every
+    # Workday write "<City>, ON, CA", and "CA" read as California failed every
     # such posting as on-site abroad. Alone ("San Diego, CA") it is still a state.
-    beside_home = home or any(re.search(r"\b" + re.escape(g) + r"\b", low) for g in METRO)
+    # A home-region token is the evidence, not a home city: a town name shared by
+    # both countries, alone with "CA", is California as often as not; with the
+    # home region beside it, it is not.
     states = [p for p in parts if p in NEIGHBOUR_STATES
-              and not (p == _CC and beside_home)]
+              and not (p == _CC and home)]
     abroad = (bool(NEIGHBOUR_WORDS.search(low)) or bool(NEIGHBOUR_METROS.search(low))
               or bool(states))
     # A word, not a substring, and in the title only as a work mode: "Remote
@@ -192,7 +194,7 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     if parts in _LOC.get("home_region_alone", []):
         return "PASS", _LOC.get("home_region_reason", "home region, includes remote")
     if prov and all(p in REGIONS or p in _HOME_ALONE for p in parts):
-        # "Ontario, ON, Canada": the home region written twice is still home.
+        # "<Region>, <REGION CODE>, <Country>": the home region written twice is still home.
         if prov == _HOME_REGION:
             return "PASS", _LOC.get("home_region_reason", "home region, includes remote")
         if prov in _FLAG_REGIONS:

@@ -266,7 +266,7 @@ METHODS: dict[str, dict] = {
                                     "your work, and the question in a first note is optional"),
             (8, "2026-10-15", False, "a reply after 'no action unless they reply' is owed, nobody is nudged against it, a dated close is not reopened, a catch-up message is not a connection request, and plain job asks are caught"),
         ),
-        "fingerprint": "a7fde990b2881d01",
+        "fingerprint": "cfaf31995a01f133",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -282,9 +282,9 @@ METHODS: dict[str, dict] = {
                                     "hold, do-not-target, the company throttle, the bar) "
                                     "and a round's queue decision never block a posting for "
                                     "good; postings on a Workday internal site are dropped"),
-            (3, "2026-10-15", False, "exclusions the current rules only rank (years, a range, a degree, a stage name) are screened again; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
+            (3, "2026-10-15", False, "exclusions the current rules only rank (a years bar, or a reason naming only the stage that wrote it) are screened again, while a range or degree knockout stands; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
         ),
-        "fingerprint": "f2fb10f01270d140",
+        "fingerprint": "45a7da0a26dba591",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
