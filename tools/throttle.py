@@ -105,7 +105,25 @@ UNSENT = {"drafted", "draft", "in_progress", "in progress", "not_sent", "not sen
 # months-old application scoring thirty points below it.
 OVERRIDE_POINTS = 10
 # Skips that are re-evaluated on every run rather than treated as already-seen.
-RE_EVALUATED = ("company throttle", "same-employer duplicate")
+# Every one is a reason throttle() derives afresh from live state each run (the
+# tracker, the contact book, do_not_target.json, the profile's bar), so the copy
+# written to seen_jobs.json is a record, never a verdict on the posting. Read as
+# permanent, a referral hold kept blocking every posting it had touched after the
+# referral had converted or lapsed: in one repo, 59 postings at one employer for a
+# month. A do-not-target entry stopped suppressing at its review date and its
+# skips went on suppressing for ever. Honoured for `excluded` entries too: a
+# hand-written exclusion citing the company throttle is the same claim.
+RE_EVALUATED = ("company throttle", "same-employer duplicate", "referral in progress",
+                "do not target", "candidate's bar")
+
+# A queue decision, not a verdict: the posting passed every gate and was never
+# read, because the round ran out of slots or ranked it below a cut. Older rounds
+# wrote these as skips, and each one blocked a posting nobody had judged.
+QUEUE_DECISION = re.compile(
+    r"\bnever (?:read|scored|evaluated)\b|\bnot (?:scored|read|ranked|evaluated)\b"
+    r"|\bsurvived the (?:screen|prefilter)\b|\bpassed the prefilter\b"
+    r"|\bqueue priority\b|\branked (?:below the [\w -]{0,20}cut|too low to (?:score|read))\b"
+    r"|\b(?:affinity|scoring|reading) cut\b", re.I)
 
 # Exclusion reasons that were true under an older set of rules and are not
 # reasons any more. CLAUDE.md now says rank down, do not cut, and names the only
@@ -339,7 +357,7 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         if status not in ("excluded", "skipped"):
             continue
         reason = (e.get("exclusion_reason") or e.get("skip_reason") or e.get("reason") or "")
-        if status == "skipped" and reason.lower().startswith(RE_EVALUATED):
+        if reason.lower().startswith(RE_EVALUATED) or QUEUE_DECISION.search(reason):
             continue
         # An entry with no reason recorded is not evidence of anything, and it
         # was blocking the posting forever AND blocking every future posting

@@ -590,6 +590,9 @@ REGISTRY = REGISTRY + _method_upgrades()
 SAFE_DEFAULTS: dict[str, str] = {
     "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "
                                "only when a board cannot read those names",
+    "search.WORKDAY_INTERNAL_SITES": "the app drops Workday's 'Privileged' site already; a "
+                                     "profile adds an employer's own internal site names "
+                                     "once a round has shown one",
     "networking.AUTHORITY_TITLE": "English management titles; a market in another language "
                                   "writes its own",
     "networking.SENIOR_IC_TITLE": "English seniority words; a market in another language, or a "

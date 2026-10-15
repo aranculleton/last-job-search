@@ -239,6 +239,19 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **Postings blocked for good by a skip that was never a verdict, and internal postings
+  surfaced.** `seen_jobs.json` skips the throttle derives afresh every run blocked their
+  postings permanently: a referral hold kept 59 postings at one employer out for a month
+  after the referral had converted, and a do-not-target entry's skips outlived its review
+  date. A referral hold, do-not-target, the company throttle, a same-employer duplicate
+  and the candidate's bar no longer block from the record (the live hold is applied at the
+  prefilter instead, so they still cost no fetch while it lasts), and neither do older
+  rounds' queue decisions ("not scored this round", "never read by a model"); an
+  `excluded` entry citing any of them is treated the same. A posting on a Workday
+  internal site (`/Privileged/`), which an outside applicant cannot use, is dropped at the
+  prefilter with the reason `eligibility: internal Workday site`; a profile can name its
+  employers' other internal sites in `search.py` `WORKDAY_INTERNAL_SITES`. No profile
+  upgrade: both take effect on the next round.
 - **Finding people: the same person twice, the wrong people as tier 1, employers written off
   on nothing.**
   - "Already contacted" matched on names alone. A name in another script reduced to

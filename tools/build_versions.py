@@ -245,8 +245,14 @@ METHODS: dict[str, dict] = {
         "files": ("tools/text_screen.py", "tools/prefilter.py", "tools/fit.py",
                   "tools/opportunity.py", "tools/score_posting.py", "tools/throttle.py",
                   "tools/bar.py", "tools/sector.py", ".claude/commands/rank.md"),
-        "versions": (_first(),),
-        "fingerprint": "9cd8cc27629c2f08",
+        "versions": (
+            _first(),
+            (2, "2026-10-15", False, "a skip the throttle re-derives every run (a referral "
+                                    "hold, do-not-target, the company throttle, the bar) "
+                                    "and a round's queue decision never block a posting for "
+                                    "good; postings on a Workday internal site are dropped"),
+        ),
+        "fingerprint": "391da41a74d96e02",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
