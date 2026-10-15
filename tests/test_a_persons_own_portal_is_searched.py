@@ -262,3 +262,43 @@ def test_a_persons_board_is_probed_with_its_own_word_over_a_month(skills, monkey
                         or ([{"url": "u"}], None))
     scrape_wide.canary(7, portals.enabled({}))
     assert ("cityboard-search", "nurse", scrape_wide.CANARY_JOBAGE) in calls
+
+
+def test_a_portal_with_no_places_of_its_own_searches_every_place(skills, monkeypatch):
+    """It searched the first of SCRAPE_LOCATIONS alone: the home city, and none of
+    the towns around it, the region or the country, which LinkedIn searched."""
+    monkeypatch.setattr(scrape_wide, "LOCATIONS", ["Home City, R, C", "Next Town, R, C", "C"])
+    monkeypatch.setattr(scrape_wide, "PORTAL_LOCATIONS", {})
+    city = [t for t in scrape_wide.build_tasks(portals.enabled({}), 5)
+            if t[0] == "cityboard-search"]
+    assert [t[2] for t in city if t[3] == 1][:1] == ["Home City, R, C"]
+    assert {t[2] for t in city} == {"Home City, R, C", "Next Town, R, C", "C"}
+    deep = max(t[3] for t in city if t[2] == "Home City, R, C")
+    wide = max(t[3] for t in city if t[2] == "C")
+    assert (deep, wide) == (3, 2)                               # home deep, the rest two pages
+
+
+def test_a_board_that_filters_remote_is_searched_for_remote_roles(skills, monkeypatch):
+    remote = [t for t in scrape_wide.build_tasks(portals.enabled({}), 5) if len(t) > 4]
+    assert remote == []                                         # nobody said remote: true
+    _portal(skills, "remoteboard-search", {"enabled": "true", "contract": "1", "remote": "true"})
+    tasks = [t for t in scrape_wide.build_tasks(portals.enabled({}), 5)
+             if t[0] == "remoteboard-search"]
+    remote = [t for t in tasks if len(t) > 4]
+    assert remote and all(t[2] is None and t[4] is True for t in remote)
+    first_town = next(i for i, t in enumerate(tasks) if len(t) == 4 and t[2] != tasks[0][2])
+    assert tasks.index(remote[0]) < first_town                  # a budget cut drops a town first
+
+    sent = []
+    monkeypatch.setattr(scrape_wide, "run", lambda cmd, timeout=90: (sent.append(cmd), ({}, None))[1])
+    monkeypatch.setattr(scrape_wide, "contract",
+                        lambda *a, **k: (sent.append((a, k)), ([], None))[1])
+    scrape_wide.sweep("remoteboard-search", remote[:1] + tasks[:1], 14, sleep=lambda s: None)
+    assert sent[0][1] == {"remote": True} and sent[1][1] == {}
+
+
+def test_a_remote_search_sends_the_flag(skills, monkeypatch):
+    sent = []
+    monkeypatch.setattr(scrape_wide, "run", lambda cmd, timeout=90: (sent.append(cmd), ({}, None))[1])
+    scrape_wide.contract("cityboard-search", "planner", None, 1, 14, remote=True)
+    assert "--remote" in sent[0] and "-l" not in sent[0]

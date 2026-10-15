@@ -32,13 +32,16 @@ call it politely. `/add-portal` writes these from what it found:
     url: https://www.example-board.test     # the board, for tools/env_check.py
     crawl-delay: 5        # seconds between requests: robots.txt's, else 1
     location: free-text   # takes -l <place>; `none` for a board with no location filter
+    remote: true          # takes --remote: remote postings only (absent: no such filter)
     detail: true          # false where the posting page may not be fetched (robots.txt)
     pages: 2              # how deep a query goes
     canary-query: nurse   # a word the board always has postings for (health probe)
 
 The places a round passes as `-l` are the person's: profile/search.py
 `PORTAL_LOCATIONS = {"<portal>": ["<place as the board writes it>"]}`, and
-otherwise the first of `SCRAPE_LOCATIONS`.
+otherwise every one of `SCRAPE_LOCATIONS` (the first deep, the rest two pages),
+the way LinkedIn is searched. A board that can filter for remote postings is
+also searched with `--remote` and no place.
 
 ## linkedin-search, and what its default means
 
@@ -143,6 +146,12 @@ def crawl_delay(name: str, root: str | None = None) -> float:
 
 def takes_location(name: str, root: str | None = None) -> bool:
     return meta(name, root).get("location", "free-text").lower() not in ("none", "no", "false")
+
+
+def takes_remote(name: str, root: str | None = None) -> bool:
+    """Whether its CLI takes `--remote` (remote postings only). A board with no
+    such filter still shows remote postings filed under a place it searches."""
+    return meta(name, root).get("remote", "false").lower() in ("true", "yes", "1")
 
 
 def has_detail(name: str, root: str | None = None) -> bool:
@@ -293,6 +302,7 @@ def main() -> int:
         if name not in APP_PORTALS:
             how = (f"  {crawl_delay(name):g}s apart, {pages(name)} page(s)"
                    f"{'' if takes_location(name) else ', no location filter'}"
+                   f"{', remote searched' if takes_remote(name) else ', no remote filter (/add-portal adds one where the board has it)'}"
                    f"{'' if has_detail(name) else ', search text only (no detail fetch)'}"
                    f"{'' if has_cli(name) else '; NO CLI, so rounds cannot call it'}"
                    f"{'' if follows_contract(name) else '; no `contract: 1`, so rounds skip it (/add-portal)'}")

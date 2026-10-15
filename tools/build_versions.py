@@ -79,8 +79,11 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", True, "the boards that serve your country, field and level researched "
                                     "and cited, the best one or two built and searched every round, "
                                     "employer boards probed, the LinkedIn notice, the job-alerts question"),
+            (3, "2026-10-15", True, "every board you have searches all your places, not just your "
+                                    "home city, covers the towns around each, and searches remote "
+                                    "roles where the board can filter for them"),
         ),
-        "fingerprint": "a2e155109ee38749",
+        "fingerprint": "167f4200e7a13381",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -104,8 +107,11 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", True, "eligibility written for any work status, your country, your "
                                     "working week, and the internal-only and probe words in your "
                                     "market's language"),
+            (3, "2026-10-15", True, "the places a round searches cover your whole metro area and "
+                                    "your country, and remote roles filed under the wider regions "
+                                    "an employer abroad hiring where you live posts them in"),
         ),
-        "fingerprint": "89d1b7012b918340",
+        "fingerprint": "2de063127f699daf",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
