@@ -239,6 +239,17 @@ this, three things to do after this sync**, all in `profile/`:
 
 ### Fixed
 
+- **A job board built for you searched your home city and nothing else.** A round sent a
+  person's own board one place, the first in `SCRAPE_LOCATIONS`, unless someone had listed
+  its places by hand, so the towns around it, the region and the country went unsearched
+  while LinkedIn searched all of them; and it never asked any board for remote roles. Every
+  board now searches every place in `SCRAPE_LOCATIONS`, home deep and the rest two pages, and
+  remote roles where it can filter for them (`remote: true`, `--remote`). `/add-portal` builds
+  CLIs that read places as LinkedIn writes them, cover a commute's radius around each, and
+  take `--remote`; `/setup` writes the whole metro area and the country as places, and the
+  wider regions an employer abroad files remote roles under. Boards you already have are
+  rebuilt this way in the background (boards version 3), and your places widened (market
+  version 3). No profile upgrade: build_versions carries it.
 - **A portal that went quiet is reported again.** `run_round.py` read the health probe's file
   after pruning had deleted it, so a portal returning nothing was never named and a MISSED
   round blamed the market. It is read first now, and a DOWN portal is named on every round,

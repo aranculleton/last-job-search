@@ -174,7 +174,7 @@ def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
 
 
 def contract(skill: str, q: str, loc: str | None, page: int,
-             jobage: int) -> tuple[list[dict], str | None]:
+             jobage: int, remote: bool = False) -> tuple[list[dict], str | None]:
     """One search on a portal that follows the portal contract (/add-portal).
 
     A search result's `description` is kept as `snippet`, not as the body:
@@ -184,6 +184,7 @@ def contract(skill: str, q: str, loc: str | None, page: int,
     """
     cmd = (["node", "--no-warnings", portal_cli(skill), "search", "-q", q]
            + (["-l", loc] if loc else [])
+           + (["--remote"] if remote else [])
            + ["--jobage", str(jobage), "--page", str(page), "--format", "json"])
     d, err = run(cmd)
     whole = not portals.has_detail(skill)
@@ -207,9 +208,16 @@ def contract_portals(on: dict[str, bool]) -> list[str]:
 
 
 def portal_locations(skill: str) -> list[str | None]:
+    """Every place the person searches, as this board writes them where it differs.
+
+    It used to be the first of SCRAPE_LOCATIONS alone, so a board built for a
+    person searched their home city and nothing else: not the towns around it,
+    not the region, not the country, while LinkedIn searched all of them.
+    """
     if not portals.takes_location(skill):
         return [None]
-    return PORTAL_LOCATIONS.get(skill) or LOCATIONS[:1]
+    places = PORTAL_LOCATIONS.get(skill) or LOCATIONS
+    return list(dict.fromkeys(places))
 
 
 # A person's portal gets this long in a round, and stops after this many
@@ -231,7 +239,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
     start, streak, sent = clock(), 0, 0
-    for _, q, loc, pg in tasks:
+    for task in tasks:
+        q, loc, pg = task[1:4]
+        remote = len(task) > 4 and task[4]
         if streak >= SWEEP_MAX_FAILS:
             failed.append(f"stopped after {streak} failures in a row; "
                           f"{len(tasks) - sent} requests not sent")
@@ -243,7 +253,8 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         if delay:
             sleep(delay)
         try:
-            got, err = contract(skill, q, loc, pg, jobage)
+            got, err = (contract(skill, q, loc, pg, jobage, remote=True) if remote
+                        else contract(skill, q, loc, pg, jobage))
         except Exception as e:
             got, err = [], f"{type(e).__name__}: {str(e)[:120]}"
         sent += 1
@@ -414,15 +425,26 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
                     tasks.append(("lir", q, loc, 1))
             if fh:
                 tasks.append(("fh", q, None, 1))
-    # A person's own portals: every query at each of its places, as deep as it
-    # says (`pages:`, capped by --pages), and the named employers on page one at
-    # its first place.
+    # A person's own portals, the way LinkedIn is searched: every query at its
+    # first place as deep as it says (`pages:`, capped by --pages); then remote
+    # postings where the board can filter for them (`remote: true`, sent as
+    # `--remote` and a 5th element); then every other place, two pages; then the
+    # named employers on page one at its first place. In that order because a
+    # sweep that runs out of its budget stops, and what it drops should be the
+    # last town on the list, not the remote roles.
     for skill in contract_portals(on):
         places = portal_locations(skill)
         depth = min(pages, portals.pages(skill))
         for q in QUERIES:
-            for loc in places:
-                for pg in range(1, depth + 1):
+            for pg in range(1, depth + 1):
+                tasks.append((skill, q, places[0], pg))
+        if portals.takes_remote(skill):
+            for q in QUERIES:
+                for pg in range(1, min(depth, 2) + 1):
+                    tasks.append((skill, q, None, pg, True))
+        for q in QUERIES:
+            for loc in places[1:]:
+                for pg in range(1, min(depth, 2) + 1):
                     tasks.append((skill, q, loc, pg))
         for emp in EMPLOYERS:
             for t in EMPLOYER_QUERIES:
@@ -492,7 +514,8 @@ def main() -> int:
               for skill, ts in mine.items()}
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
         futs = {}
-        for kind, q, loc, pg in tasks:
+        for task in tasks:
+            kind, q, loc, pg = task[:4]
             if kind in mine:
                 continue
             portal = "freehire" if kind == "fh" else "linkedin"

@@ -206,8 +206,8 @@ PORTAL_COUNTRY = "GB"
 # freehire-search on, and any portal built for this person on (tools/portals.py).
 PORTALS: dict[str, bool] = {}
 # The places a portal built for this person searches, as that board writes them,
-# when that differs from SCRAPE_LOCATIONS: {"<portal>-search": ["<place>"]}.
-# A portal not named searches the first of SCRAPE_LOCATIONS.
+# only where its CLI cannot read SCRAPE_LOCATIONS: {"<portal>-search": ["<place>"]},
+# home first. A portal not named searches every one of SCRAPE_LOCATIONS.
 PORTAL_LOCATIONS: dict[str, list[str]] = {}
 # The job boards researched for this person by /setup (or later, when a round
 # comes back thin): each one built as a portal or why not, with the source.
