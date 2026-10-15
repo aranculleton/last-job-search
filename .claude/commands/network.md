@@ -62,6 +62,10 @@ untouched employers from the latest round's shortlist.
 
 5. **Read what they have taught it**: `python3 tools/learned.py brief messages` and
    `brief people`. Every rule there outranks the defaults below.
+   **Read what has worked**: `python3 tools/what_works.py brief messages --channel <connection|inmail|email> --route <the route>`.
+   The messages that drew replies are the shape to match (length, opening move, the
+   question asked), never the words or another person's facts, and a difference it calls
+   clear (a route, a length, asking a question) is followed unless a learned rule says otherwise.
    **Compose in one batch with `compose.first_note()`.** One model call
    producing every draft, not one per person, then `compose.validate(kind=
    "connection")` on each. A draft that fails is rewritten, never shown with a

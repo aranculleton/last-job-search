@@ -198,8 +198,11 @@ METHODS: dict[str, dict] = {
                                     "with a connection-sized version and no referral ask to "
                                     "someone who has not replied"),
             (3, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
+            (4, "2026-10-15", False, "learns from results: a resume that reached an interview "
+                                    "lifts the bullets it used, and drafting reads it first "
+                                    "(tools/what_works.py)"),
         ),
-        "fingerprint": "af2998f6abc8363f",
+        "fingerprint": "ece5b3f708fcd4f4",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -245,8 +248,11 @@ METHODS: dict[str, dict] = {
                                     "plain no counted, '<City>, ON' at home, and the "
                                     "messages shown with the people"),
             (5, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
+            (6, "2026-10-15", False, "drafts against the messages that drew replies, and says "
+                                    "which message drew one when a reply is logged "
+                                    "(tools/what_works.py)"),
         ),
-        "fingerprint": "42088b94fe3fafc2",
+        "fingerprint": "d5e1d3ce44c27b36",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -339,6 +345,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/profile_upgrades.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/build_versions.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/learned.py": "the machinery that keeps what the person said; what it keeps is theirs",
+    "tools/what_works.py": "counts what already happened from the state files and keeps nothing",
     "tools/profile_names.py": "the machinery that carries changes; it keeps nothing itself",
     "tools/profile_names_baseline.txt": "the machinery that carries changes",
     "tools/personal_paths.py": "the machinery that carries changes; it keeps nothing itself",

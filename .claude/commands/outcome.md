@@ -153,7 +153,9 @@ Update the matched row's `status` column using the canonical spellings from **Tr
 
 ## Step 5: Calibration Handoff
 
-Count the `outcome.md` files under `documents/applications/` with a **final** status (not `in_progress`).
+**First, the mini audit, every time, at no model cost:** `python3 tools/what_works.py event --company "<Company>"`. It is counting, not a model call: what this result had (fit, route, the resume and letter it went with) and the interview rate now. An interview or an offer makes that application's resume and letter examples `/apply` reads before drafting a similar role, and gives the bullets it used a small lift in `tools/allocate.py`, without anybody asking. Paste its line into Step 6. Nothing else needs writing: it reads the tracker row this command just updated.
+
+Then count the `outcome.md` files under `documents/applications/` with a **final** status (not `in_progress`).
 
 - If 3 or more are resolved (or 2+ share a pattern - same role type rejected twice, same sector going silent), suggest:
   > "You now have <N> resolved applications on record. Run `/setup` (Path A) to fold them into your evaluation framework - it calibrates fit scoring from what actually got interviews, and mines your interview feedback for STAR examples."
@@ -170,6 +172,7 @@ Summarize what was recorded:
 > - `documents/applications/<company>_<role>/outcome.md` - status: <status>, <what changed>
 > - Archived: <whether job_posting.md was already present or freshly fetched, and whether the tracker's document paths were confirmed or filled>
 > - Tracker: status → <new status>
+> - What it learned: <the `what_works.py event` line from Step 5>
 >
 > [Calibration suggestion from Step 5, if triggered]
 

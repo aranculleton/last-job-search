@@ -22,6 +22,20 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **It learns what works from your results, with nobody having to say so.** Which messages
+  drew a reply and which applications reached an interview were already on record, and
+  nothing read them back. `tools/what_works.py` now does, by counting: no model call, and no
+  file of its own to fall out of step. Before a message is drafted, it shows the ones that
+  got answers, closest first, and drafting matches their shape (length, opening move, the
+  question asked), never their words. Before /apply drafts, it shows the applications that
+  reached an interview, with the summary and bullets their resume used, and those bullets get
+  a small, capped lift in the allocator so the next resume for a similar role leans the same
+  way. When a result arrives (/outcome, or /reply logging their reply) a one-line audit says
+  what that result had and what the rate is now. A difference (alumni against cold, short
+  against long) is reported only when both groups are big enough and the gap is unlikely to be
+  chance; until then you see the examples alone. Messages are now logged with their full
+  text, because one logged without it can never become an example. No profile upgrade: it
+  reads what is already there.
 - **It learns you, and keeps what it learns.** The defaults (the voice of a first note, the
   interview questions, who is worth contacting, how roles rank) are still where you start.
   Now every reaction you give outranks them and is kept for good in `profile/learned.json`
