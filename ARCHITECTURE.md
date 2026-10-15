@@ -352,6 +352,6 @@ profile/tests/    a person's own tests, against their profile (not in the app)
 
 ## Conventions
 
-Changing anything here: [CONTRIBUTING.md](CONTRIBUTING.md). The short version is that
+Changing anything here: [MAINTAINING.md](MAINTAINING.md). The short version is that
 almost every rule in `tools/` carries a comment naming the application it shipped as a
 defect on, and removing one needs an argument about that original failure.

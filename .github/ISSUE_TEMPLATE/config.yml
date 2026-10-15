@@ -1,10 +1,5 @@
 blank_issues_enabled: true
 contact_links:
-  - name: Is this actually an upstream bug?
-    url: https://github.com/MadsLorentzen/ai-job-search/issues
-    about: >-
-      This repo is a fork. If the problem is in code that came from upstream
-      (the portal CLIs, the LaTeX scaffolding, lint_skills, security_guards,
-      verify_pdf, robots_check, the salary tool), it affects every fork of that
-      template and belongs on their tracker. Anything in tools/, the networking
-      layer, the ranking pipeline or the methodology files is ours.
+  - name: A security problem
+    url: https://github.com/aranculleton/last-job-search/blob/master/SECURITY.md
+    about: Read SECURITY.md first; it says how to report one.
