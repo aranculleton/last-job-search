@@ -306,3 +306,89 @@ def test_a_broken_registry_never_changes_the_syncs_answer(repos):
     commit(app, "a broken registry")
     rc, out = run(me, app)
     assert rc == 0 and "profile upgrades: the check exited 3" in out, out
+
+
+# ------------------------------------------------------- a chat that runs for days
+
+def _with_local_origin(me, tmp_path):
+    """Point the person's origin at a local bare copy, so master can be fetched offline."""
+    origin = str(tmp_path / "origin.git")
+    sh(str(tmp_path), "git", "clone", "-q", "--bare", me, origin)
+    sh(me, "git", "remote", "set-url", "origin", origin)
+    return origin
+
+
+def _stamp(me):
+    p = os.path.join(me, ".git", "ljs-last-sync")
+    return read(me, ".git/ljs-last-sync").strip() if os.path.exists(p) else ""
+
+
+def test_if_stale_syncs_once_a_day_and_then_does_nothing(repos, tmp_path):
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    write(app, "README.md", "v2\n")
+    commit(app, "app v2")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0, out
+    assert read(me, "README.md") == "v2\n"
+    assert _stamp(me) != ""
+    before = head(me)
+    write(app, "README.md", "v3\n")
+    commit(app, "app v3")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0 and "already checked today" in out
+    assert head(me) == before and read(me, "README.md") == "v2\n"
+
+
+def test_a_check_from_an_earlier_day_runs_again(repos, tmp_path):
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    assert run(me, app)[0] == 0
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    write(app, "README.md", "v2\n")
+    commit(app, "app v2")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0, out
+    assert read(me, "README.md") == "v2\n"
+    assert _stamp(me) > "2000-01-01"
+
+
+def test_if_stale_brings_in_master_first(repos, tmp_path):
+    app, me = repos
+    origin = _with_local_origin(me, tmp_path)
+    other = str(tmp_path / "other-chat")
+    sh(str(tmp_path), "git", "clone", "-q", origin, other)
+    write(other, "job_search_tracker.csv", "date,company\n2026-10-15,Brindle & Hart Logistics\n")
+    commit(other, "another chat applied somewhere")
+    sh(other, "git", "push", "-q", "origin", "master")
+    sh(me, "git", "switch", "-q", "-c", "claude/this-chat")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0, out
+    assert "brought in master" in out
+    assert "Brindle & Hart Logistics" in read(me, "job_search_tracker.csv")
+
+
+def test_if_stale_with_uncommitted_work_stops_and_records_nothing(repos, tmp_path):
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    write(me, "job_search_tracker.csv", "date,company\nunsaved\n")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 1 and "Commit or stash" in out
+    assert _stamp(me) == ""
+
+
+def test_the_reminder_shows_only_when_todays_check_has_not_run(repos, tmp_path):
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    probe = [sys.executable, "-c",
+             "import sys; sys.path.insert(0, 'tools'); import sync_app; sync_app.nudge()"]
+    env = dict(ENV, LJS_APP_URL=app)
+    first = subprocess.run(probe, cwd=me, env=env, text=True, capture_output=True)
+    assert "has not been checked for updates today" in first.stderr
+    assert run(me, app)[0] == 0
+    after = subprocess.run(probe, cwd=me, env=env, text=True, capture_output=True)
+    assert after.stderr == ""
+    sh(app, "git", "remote", "add", "origin", app)  # the app is the repo whose origin is the app
+    in_app = subprocess.run(probe, cwd=app, env=dict(ENV, LJS_APP_URL=app),
+                            text=True, capture_output=True)
+    assert in_app.stderr == ""

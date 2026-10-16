@@ -7,6 +7,7 @@ files but not history. This fetches the app and merges its new commits:
     python3 tools/sync_app.py            # fetch the app, merge what is new
     python3 tools/sync_app.py --check    # how far behind, and any drift; changes nothing
     python3 tools/sync_app.py --adopt    # once, for the repo the app was first built from
+    python3 tools/sync_app.py --if-stale # the day's first check: master, then the app; else nothing
 
 The rules, enforced here rather than remembered:
 
@@ -30,6 +31,13 @@ The first sync of a template-made repo has no common commit, so it merges with
 --allow-unrelated-histories: identical files merge clean, and an app-owned file
 that differs takes the app's version.
 
+--if-stale is for a chat that carries on for days, which is how most people use it: the
+start-of-session steps never run again in one, so updates would wait for a new chat that
+never comes. It does what a session's first two steps do (bring master in, then sync)
+unless they already ran today, which a stamp in the git directory records, and otherwise
+prints one line and does nothing. Every successful sync writes that stamp.
+`run_round.py` and `stage_picks.py` print a reminder when today's check has not run.
+
 --adopt is for the one repo whose app-owned files ARE the app, the private repo
 the app's first commit was built from. It checks that every app-owned file is
 byte-identical to the app's, then records the app's history as merged without
@@ -47,6 +55,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import datetime
 import os
 import re
 import subprocess
@@ -290,6 +299,68 @@ def sync() -> int:
     return 0
 
 
+STAMP = "ljs-last-sync"
+
+
+def _stamp_path() -> str | None:
+    r = git("rev-parse", "--git-common-dir", check=False)
+    d = r.stdout.strip()
+    if r.returncode or not d:
+        return None
+    return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), STAMP)
+
+
+def last_checked() -> str:
+    """The date (YYYY-MM-DD) of the last successful sync here, or "" if none."""
+    p = _stamp_path()
+    try:
+        with open(p, encoding="utf-8") as fh:
+            return fh.read().strip()
+    except (OSError, TypeError):
+        return ""
+
+
+def _record_check() -> None:
+    p = _stamp_path()
+    if p:
+        try:
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(datetime.date.today().isoformat() + "\n")
+        except OSError:
+            pass
+
+
+def stale() -> bool:
+    """True in a person's repo whose check has not run today. Never raises."""
+    try:
+        return not is_the_app() and last_checked() < datetime.date.today().isoformat()
+    except Exception:  # a reminder must never break the tool that asked for it
+        return False
+
+
+def nudge() -> None:
+    """One line on stderr when today's check has not run; for the tools a day's work starts with."""
+    if stale():
+        print("note: the app has not been checked for updates today. Run "
+              "`python3 tools/sync_app.py --if-stale` first, then this again.", file=sys.stderr)
+
+
+def pull_master() -> int:
+    """A session's first step: bring in what other chats merged to master."""
+    if git("fetch", "-q", "origin", "master", check=False).returncode:
+        print("sync_app: master could not be fetched; carrying on with the app check.")
+        return 0
+    if git("merge-base", "--is-ancestor", "origin/master", "HEAD", check=False).returncode == 0:
+        return 0
+    if git("merge", "-q", "--no-edit", "origin/master", check=False).returncode:
+        git("merge", "--abort", check=False)
+        print("sync_app: stopped, nothing changed. master does not merge cleanly into this "
+              "branch: run `git merge origin/master` and settle it (CLAUDE.md says how).")
+        return 1
+    print("sync_app: brought in master (what other chats merged).")
+    return 0
+
+
 def check() -> int:
     base = merge_base()
     if git("merge-base", "--is-ancestor", APP, "HEAD", check=False).returncode == 0:
@@ -344,10 +415,21 @@ def main(argv: list[str]) -> int:
     mode.add_argument("--check", action="store_true", help="report only; change nothing")
     mode.add_argument("--adopt", action="store_true",
                       help="once, for the repo the app was built from")
+    mode.add_argument("--if-stale", action="store_true",
+                      help="master, then the app, unless today's check already ran")
     a = ap.parse_args(argv)
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
         return 0
+    if a.if_stale:
+        if not stale():
+            print("sync_app: already checked today.")
+            return 0
+        if _dirty():
+            return sync()  # prints what is uncommitted and stops, changing nothing
+        rc = pull_master()
+        if rc:
+            return rc
     err = fetch()
     if err:
         print(f"sync_app: {err}")
@@ -361,6 +443,7 @@ def main(argv: list[str]) -> int:
         return adopt()
     rc = sync()
     if rc == 0:
+        _record_check()
         upgrades("--after-sync")
     return rc
 

@@ -214,8 +214,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-15", False, "a refused outreach note no longer stops the batch, '8+ years' and 'per cent' are checked, a draft with no posting is said, the deadline reaches the tracker, and the bullet split no longer swings on a fraction of a point"),
             (7, "2026-10-15", False, "the verification checklist and the tools table moved out of CLAUDE.md into files read when they are needed, so every session starts lighter"),
             (8, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (9, "2026-10-15", False, "stage_picks.py reminds a chat that has not checked the app today; what it stages is unchanged"),
         ),
-        "fingerprint": "c2c58621d06bf5d0",
+        "fingerprint": "75b1f193b6724e0d",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
