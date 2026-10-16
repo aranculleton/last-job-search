@@ -20,6 +20,17 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **A chat kept open for days now gets the updates.** The sync ran only at the start of a
+  session, and most people never start a new one: a chat carried on for days pulled neither
+  master nor the app's updates after its first hour. `tools/sync_app.py --if-stale` does a
+  session's first two steps (master, then the app) once a day and is a no-op after that, and
+  CLAUDE.md asks for it before each piece of work. `run_round.py` and `stage_picks.py` print a
+  reminder when it has not run today, so even a chat whose instructions predate this is told.
+  No profile upgrade: nothing to do, the sync that brings this in is the last one a long chat
+  has to be asked for.
+
 ## [3.1.0] - 2026-10-15
 
 ### Changed

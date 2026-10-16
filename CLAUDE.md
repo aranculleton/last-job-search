@@ -73,6 +73,15 @@ Every session in a person's repo starts with the same five steps, before anythin
      are still pending two hours later, its next sync hands them over. So the chat that
      brought the update in lands that sync on master promptly, before its other work.
 
+**A chat that carries on for days does this every day, not once.** Most people keep one
+chat going, so "the start of a session" may be days ago. Before each new piece of work (a
+search, an application, outreach, a reply, interview prep), run
+`python3 tools/sync_app.py --if-stale`. When today's check has not run, it does steps 1 and
+2 (master, then the app) and the rest follows as above; otherwise it prints "already
+checked today" and changes nothing. `run_round.py` and `stage_picks.py` print a reminder
+when it was skipped, and that reminder is code, so it reaches a chat whose instructions
+were loaded before this rule existed.
+
 In the app itself, step 2 is a no-op and step 3 does not apply: the app has no profile and
 must never get one.
 

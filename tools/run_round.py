@@ -307,6 +307,11 @@ def _boards_not_built() -> list[str]:
 
 
 def main():
+    try:  # a chat that carried on into a new day has not checked the app since
+        import sync_app
+        sync_app.nudge()
+    except Exception:
+        pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="directory for this round's files")
     ap.add_argument("--pages", type=int, default=5)
