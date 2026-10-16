@@ -305,8 +305,9 @@ METHODS: dict[str, dict] = {
         "versions": (
             _first(),
             (2, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (3, "2026-10-15", False, "The default set-up is one task, a twice-weekly brief that takes the app's updates; the scheduled round is optional. Existing tasks keep their schedules"),
         ),
-        "fingerprint": "924dedb8fd21439b",
+        "fingerprint": "8f9d30868b929c1d",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

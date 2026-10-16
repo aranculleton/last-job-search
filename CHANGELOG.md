@@ -20,6 +20,20 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **One scheduled task by default: a brief, twice a week, that is about this person's search.**
+  A daily brief plus a twice-weekly round was two messages on round days and a message every
+  morning. The brief (`automation/prompts/morning_brief.md`) now covers everything since the
+  last one, and leads with where the search is: an interview to prep, replies owed,
+  applications waiting, or too little going out. Then come what is owed with the drafts, the
+  counts since the last brief, three things to do before the next one, and the news that
+  matters. It never searches; "find me jobs" in any chat does. Every scheduled run now takes
+  the app's updates first (`_common.md` step 2, `sync_app.py --if-stale`), so a copy stays
+  current when no chat is opened. The scheduled round stays in the app, optional and off by
+  default. No profile upgrade: a task keeps the schedule its person set, and the new brief
+  works on any schedule; to move to twice a week, ask any chat to change the brief's days.
+
 ### Fixed
 
 - **A chat kept open for days now gets the updates.** The sync ran only at the start of a

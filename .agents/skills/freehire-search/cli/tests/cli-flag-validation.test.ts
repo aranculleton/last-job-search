@@ -52,7 +52,12 @@ describe("freehire CLI flag validation", () => {
     });
 
     test("valid integers produce no BAD_ARG", async () => {
-      const result = await runCLI(["search", "--jobage", "7", "--page", "1", "--limit", "1"]);
+      // A closed local port, so the search that follows validation fails fast
+      // instead of reaching the live site (which timed this test out in CI).
+      const result = await runCLI(
+        ["search", "--jobage", "7", "--page", "1", "--limit", "1"],
+        { FREEHIRE_API_URL: "http://127.0.0.1:9" },
+      );
       expect(parsedStderr(result.stderr).code).not.toBe("BAD_ARG");
     });
   });

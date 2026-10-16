@@ -1,17 +1,20 @@
 # Automation: what runs on a clock
 
-Two scheduled tasks run the search without anyone asking. Their instructions live in
-`prompts/`, in git, so changing what a task does is a pull request and never an edit to
+One scheduled task keeps the search moving without anyone asking: **a brief, twice a
+week**. A scheduled job round is there too, for anyone who wants new postings found on a
+clock, but it is off by default: "find me jobs" in any chat runs one. The instructions live
+in `prompts/`, in git, so changing what a task does is a pull request and never an edit to
 the task. Which tasks exist, when they run and where they report is the person's own
 registry, `profile/routines.json` (`profile.example/routines.json` shows the shape).
 
 | Task | What it delivers |
 |---|---|
-| **Job search: morning brief**, every day | What is owed, then a TLDR: news at employers the candidate is in process with, their target employers, their market, their work authorisation. Weekdays include drafted replies and nudges; weekends only count them. |
-| **Job search: shortlist**, twice a week | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
+| **Job search: brief**, twice a week (Monday and Thursday suit most searches) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also takes the app's updates, so the copy stays current when no chat is opened (`prompts/morning_brief.md`). |
+| **Job search: shortlist**, optional and off by default | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
-**If no morning brief has arrived two hours after its time, the automation is broken.** The
-brief is sent every day even when nothing is due, so silence always means something failed.
+**If no brief has arrived two hours after its time on one of its days, the automation is
+broken.** The brief is sent on each of its days even when nothing is due, so silence always
+means something failed.
 Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 
 ## Set it up: pick one of two
@@ -53,17 +56,18 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
    long-lived chat small" below, and start the chat in it.)
 2. Paste this into it:
 
-   > Set up my morning brief in this chat. Ask me what time I want it and which city I am
-   > in, then create a scheduled task that fires into this chat, named Job search: morning
+   > Set up my brief in this chat. Ask me which two days and what time I want it and which
+   > city I am in, then create a scheduled task that fires into this chat, named Job search: morning
    > brief, with the morning brief stub in `automation/README.md` as its prompt. Record it
    > in `profile/routines.json` (`setup` `chat_per_briefing`, this chat's session id and
    > title under `chat`, the trigger id), run `python3 tools/routines.py check` and
    > `./tools/ci_local.sh --quick`, and land it on master through a PR.
 
    Claude asks two questions and writes the schedule itself; you never type one.
-3. Start a second new chat with the repo selected, named **Job search: shortlist**, and paste
-   the same with "shortlist" in place of "morning brief" (two mornings a week suits most
-   searches). Set up only the tasks you want; each one is independent.
+3. Only if you want new postings searched on a schedule as well: start a second new chat
+   with the repo selected, named **Job search: shortlist**, and paste the same with
+   "shortlist" in place of "brief". Most people do not need it: "find me jobs" in any chat
+   runs a round. Each task is independent.
 4. Test each one as below. Each briefing then arrives as a reply in its chat, with no push.
    If you would rather scroll one chat, bind both tasks to the same one.
 
@@ -71,9 +75,11 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
 
 1. In the Claude app, open **Routines** and create a new one for each task.
 2. **Name:** Job search: morning brief. **Repository:** tick your private repo.
-   **Schedule:** every day at your time, in your time zone. **Notifications:** on.
+   **Schedule:** two days a week (Monday and Thursday suit most searches) at your time, in
+   your time zone. **Notifications:** on.
    **Prompt:** the morning brief stub above, exactly.
-3. The same for **Job search: shortlist**, with its stub and its days.
+3. Only if you want a scheduled search too: the same for **Job search: shortlist**, with its
+   stub and its days.
 4. Ask any chat in your repo: "add my Routines-screen tasks to `profile/routines.json`, with
    `setup` set to `routines_screen`". It records each name, cron and prompt file, with
    `"notifications": {"push": true}` on each (`routines.py check` fails without it, because
