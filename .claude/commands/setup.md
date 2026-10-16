@@ -408,8 +408,8 @@ Then tell them, in a few lines:
 > - Paste a posting (or `/apply <link>`) for a tailored resume and cover letter.
 > - `/network` finds people worth talking to at the employers you want.
 > - Updates to the app arrive on their own at the start of each session.
-> - A daily brief and a twice-weekly job round are optional, as a chat you check or a push
->   to your phone: `automation/README.md` sets either up.
+> - A twice-weekly brief (what you owe, what changed, what to do next) is optional, as a
+>   chat you check or a push to your phone: `automation/README.md` sets it up.
 
 ---
 

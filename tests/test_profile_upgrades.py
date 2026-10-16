@@ -307,11 +307,18 @@ def test_a_session_applies_them_without_being_asked():
         assert must in cmd, must
 
 
-def test_the_shortlist_takes_updates_and_upgrades_and_the_brief_is_untouched():
+def test_every_scheduled_run_takes_the_apps_updates_first():
+    """A person may not open a chat for days; the brief is what keeps their copy current."""
+    common = _read("automation", "prompts", "_common.md")
+    assert "python3 tools/sync_app.py --if-stale" in common and "/upgrade 20" in common
+    assert common.index("sync_app.py --if-stale") < common.index("setup_env.sh")
     rnd = _read("automation", "prompts", "job_round.md")
-    assert "python3 tools/sync_app.py" in rnd and "/upgrade 20" in rnd
+    assert "_common.md` step 2" in rnd and "/upgrade 20" in rnd
+
+
+def test_the_brief_never_searches():
     brief = _read("automation", "prompts", "morning_brief.md")
-    assert "upgrade" not in brief.lower() and "sync_app" not in brief
+    assert "run_round" not in brief and "Never run a search here" in brief
 
 
 # ------------------------------------------------------------------ the lints

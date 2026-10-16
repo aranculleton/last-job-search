@@ -5,11 +5,12 @@
   "routines": [
     {"key": "morning_brief", "name": "Job search: morning brief",
      "chat": {"title": "Job search: morning brief", "session_id": "session_EXAMPLEBRIEF"},
-     "trigger_id": "trig_EXAMPLEBRIEF", "cron": "CRON_TZ=Europe/London 56 7 * * *",
-     "prompt_file": "automation/prompts/morning_brief.md", "what": "What is owed, then a short TLDR."},
+     "trigger_id": "trig_EXAMPLEBRIEF", "cron": "CRON_TZ=Europe/London 56 7 * * 1,4",
+     "prompt_file": "automation/prompts/morning_brief.md", "what": "Twice a week: what is owed, the counts since the last brief, three things to do, and the news that matters."},
     {"key": "job_round", "name": "Job search: shortlist",
      "chat": {"title": "Job search: shortlist", "session_id": "session_EXAMPLEROUND"},
      "trigger_id": "trig_EXAMPLEROUND", "cron": "CRON_TZ=Europe/London 52 6 * * 1,4",
-     "prompt_file": "automation/prompts/job_round.md", "what": "A scored round and the top 8."}
+     "prompt_file": "automation/prompts/job_round.md", "what": "A scored round and the top 8.",
+     "paused": "2026-10-16 off by default: the brief does not search, and \"find me jobs\" runs a round in any chat"}
   ]
 }

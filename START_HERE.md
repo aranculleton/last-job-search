@@ -91,7 +91,7 @@ Updates to the app reach your copy on their own, each day you use it, in a new c
 same one you have kept open. Everything about you stays in your copy, in the `profile/`
 folder, and is never sent back.
 
-A short daily brief is optional, in a chat or as a phone notification;
+A twice-weekly brief is optional, in a chat or as a phone notification;
 [automation/README.md](automation/README.md) sets it up, and Claude can do most of it for you.
 
 ---

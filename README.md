@@ -20,7 +20,7 @@ charge of what goes out.
 Using a different agent tool (ChatGPT Codex, Gemini CLI, Cursor, Antigravity)? Start at
 [AGENTS.md](AGENTS.md). It is built for Claude Code, but the search, scoring, documents,
 checks and tracking are plain Python and written procedures that any agent which can read
-files and run commands can follow. A few extras, such as the scheduled daily brief, are
+files and run commands can follow. A few extras, such as the scheduled twice-weekly brief, are
 Claude-only. Ports to other tools are listed in [Discussions](https://github.com/aranculleton/last-job-search/discussions/41).
 
 ## Get started
@@ -56,7 +56,8 @@ the one setting to paste in the first time, is [START_HERE.md](START_HERE.md).
   (which asks for a conversation, not a job), the replies and the referral ask. It tracks every
   thread and warns you before a cold application lands on top of a warm introduction.
 - **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
-  and drafts the nudge. Set up a daily brief and what you owe arrives on your phone each morning.
+  and drafts the nudge. Set up the twice-weekly brief and what you owe, what changed and the
+  next three things to do arrive in one message.
 - **It checks its own work.** Every resume is compiled, read back, and checked the way an
   applicant tracking system reads it, and every claim is checked against what you told it.
 - **It remembers.** Applications, conversations and what is due live in files in your copy,

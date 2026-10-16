@@ -1,15 +1,15 @@
-# Job round (schedule: `profile/routines.json`)
+# Job round (optional; schedule: `profile/routines.json`)
 
-Follow CLAUDE.md "Job Search Behaviour": score and rank, stop at the shortlist, draft
-nothing until the candidate picks. `_common.md` first.
+Off unless a person asks for a scheduled search: the twice-weekly brief does not search,
+and "find me jobs" in any chat runs one. Follow CLAUDE.md "Job Search Behaviour": score and
+rank, stop at the shortlist, draft nothing until the candidate picks. `_common.md` first.
 
 1. No LaTeX is needed for this step. Pick `rN` as the next round number after the highest
    file in `documents/rounds/`. `$SCRATCH` is a scratch directory outside the repo.
 
-   **The app's updates and the profile's upgrades, first.** `python3 tools/sync_app.py`
-   (exit 1 or 2: one line in the message, carry on). If it lists upgrades Claude applies
-   itself, run `/upgrade 20` now, before the round: a job board it builds is searched this
-   round. Never put a question to the person mid-run; the "need you" ones go in the message.
+   **The app's updates and the profile's upgrades came first**, in `_common.md` step 2
+   (`python3 tools/sync_app.py --if-stale`, then `/upgrade 20`): a job board an upgrade
+   builds is searched this round.
 
    **Job alerts, if the person reads theirs here.** `python3 tools/job_alerts.py --query --days 8`
    prints a Gmail search, or exits 1 when they have not asked for alerts to be read: then

@@ -216,10 +216,11 @@ third-party data) or `gmail_sync/state.json`.
 
 **`automation/README.md` is the whole story; `profile/routines.json` is the registry**, and
 when the tasks run and where they report is the person's (the automation section of
-`profile/CLAUDE.md`). Two set-ups work, and the README walks a person through either: **(a)**
-one chat per task ("Job search: morning brief", "Job search: shortlist"), each task bound to
-its own chat, whose reply is the briefing; or **(b)** each task made in the Claude app's
-Routines screen with the repo ticked and notifications on. Each task's stored prompt is a stub
+`profile/CLAUDE.md`). The default is one task, **a brief twice a week** that also takes the
+app's updates; a scheduled job round is optional and off by default, since "find me jobs"
+runs one in any chat. Two set-ups work, and the README walks a person through either: **(a)**
+one chat per task, each task bound to its own chat, whose reply is the briefing; or **(b)**
+each task made in the Claude app's Routines screen with the repo ticked and notifications on. Each task's stored prompt is a stub
 that reads `automation/prompts/_common.md` and its own file from master, so **changing what a
 task does is a normal PR**; only a schedule change needs `update_trigger` or the Routines
 screen. The final reply is the message; nothing depends on `fire_trigger`. An older
@@ -229,8 +230,8 @@ or rebuild one, and never test a chat-bound task with `fire_trigger` (use a one-
 `run_once_at` task bound to the chat). `python3 tools/routines.py check` validates the
 registry.
 
-**Silence is the alarm**: the brief is delivered every day even when nothing is due, so a
-morning with no brief means the automation is broken; `automation/README.md` has the set-up
+**Silence is the alarm**: the brief is delivered on each of its days even when nothing is
+due, so one of those mornings with no brief means the automation is broken; `automation/README.md` has the set-up
 steps if a chat or a task is lost.
 **Every dated follow-up is automatic by construction**: the brief reads `next_action_due` from
 `network_contacts.csv` and the nudge schedule from the tracker, so a reminder is a date

@@ -21,9 +21,15 @@ employer or a contact.
    (add `-2` if that name exists). Never reset, rebase or force anything: the session's
    permission checks block history-rewriting git commands, and they are right to. A new
    branch per run means there is never earlier work to overwrite.
-2. If an earlier `claude/ops-*` branch has an open, unmerged PR, it is an earlier run's
+2. **Take the app's updates**: `python3 tools/sync_app.py --if-stale`. A person may not open a
+   chat for days, so this run is what keeps their copy current. Exit 1 or 2: one line in the
+   message, and carry on with the run. If it lists upgrades Claude applies itself, run
+   `/upgrade 20` now; at the end of the message, one line per upgrade it applied (what
+   changed, `git revert <sha>` to undo it). Never put a question to the person mid-run: at
+   most three of the ones that need them go at the end of the message.
+3. If an earlier `claude/ops-*` branch has an open, unmerged PR, it is an earlier run's
    unfinished work: say so in one line of the message, with the PR link.
-3. `./tools/setup_env.sh --python` (seconds). Run it without `--python` only if this run
+4. `./tools/setup_env.sh --python` (seconds). Run it without `--python` only if this run
    compiles a document.
 
 ## Landing work
