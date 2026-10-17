@@ -346,7 +346,7 @@ templates/        resume_gen.py, the LaTeX every document is filled into
 cv/               rendered resumes, one per application
 cover_letters/    rendered cover letters, same
 documents/        source material in, application records out, see documents/README.md
-tests/            the app's suite, over 40 files and 900 tests, run against profile.example/
+tests/            the app's suite, over 80 files and 1,200 tests, run against profile.example/
 profile/tests/    a person's own tests, against their profile (not in the app)
 ```
 
