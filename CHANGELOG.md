@@ -22,6 +22,22 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Networking reads as many people as a batch needs, and moves on from the ones who no
+  longer fit.**
+  - **No fixed number.** `/network` reads the people a run surfaced, best first, until it
+    has as many worth writing to as the run can send, the way a round runs until its yield
+    target.
+  - **Skip and read on.** After each read, `reading.py verdict` skips someone the page shows
+    has moved on, is based elsewhere or holds a role the search filters out. The skip is
+    recorded as closed with the reason, and the next person is read instead.
+  - **Pace and ceiling.** Reads go at a person's pace (`PACE_SECONDS` between them). The
+    150 a day is only a ceiling against a runaway loop, and `PROFILE_READS_PER_DAY` sets
+    your own.
+  - **Cloud sessions.** A cloud session reads profiles in the Claude desktop app's
+    built-in browser while it is linked to your computer.
+
+  No profile upgrade: the ceiling has a safe default, and the browser question is the
+  existing `profile-reads`.
 - **Every note is written from what was read about the person, not from a search
   snippet.** Notes drafted from snippets came out alike: one background line with a
   different name on it. `/network` now reads each person before writing to them

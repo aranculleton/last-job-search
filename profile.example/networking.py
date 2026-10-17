@@ -18,6 +18,9 @@ LINKEDIN_PLAN = "premium"
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
 # where they copy the page when they open it to send the request.
 PROFILE_READS = "paste"
+# A ceiling on browser reads a day, against a runaway loop. A run reads as many
+# people as it takes to fill its batch; this only stops one that never ends.
+PROFILE_READS_PER_DAY = 150
 
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}

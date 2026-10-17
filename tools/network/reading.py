@@ -11,10 +11,11 @@ Where a reading comes from, best first:
 
   browser  their LinkedIn profile, read in the person's own signed-in browser
            (Claude in Chrome, or the desktop app's browser pane), when
-           profile/networking.py PROFILE_READS is "browser". Only the people about
-           to be messaged, one page at a time, at most READS_PER_DAY a day, and
-           nothing on the page is ever clicked. LinkedIn's terms forbid automated
-           access, which is why it is the person's own choice, asked once.
+           profile/networking.py PROFILE_READS is "browser". Only the people a
+           /network run surfaced, best first, one page at a time at a person's
+           pace, until the run has as many good fits as it can send (see
+           `verdict()`), and nothing on the page is ever clicked. LinkedIn's terms
+           forbid automated access, which is why it is the person's own choice.
   paste    the same page, copied by the person when they open it to send the
            request (select all, copy), or LinkedIn's own "Save to PDF" of the
            profile. The default: it needs no consent and costs them seconds.
@@ -64,8 +65,14 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
 # for their yes (the profile-reads upgrade asks).
 PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
-# Browser reads a day, all contacts together: a person reading profiles by hand.
-READS_PER_DAY = 15
+# A ceiling, not the limit. How many people are read is however many a run needs:
+# /network reads the people it surfaced, best first, until it has as many good
+# fits as its connection budget, the way a search round runs until its yield
+# target. This stops only a runaway loop; it sits far above what a run needs and
+# the person can set their own (profile/networking.py PROFILE_READS_PER_DAY).
+READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 150) or 150)
+# Seconds between two browser reads: a person's pace, never a burst.
+PACE_SECONDS = 8
 FRESH_DAYS = 30
 # A post is something to answer for this long; after that it is history.
 POST_DAYS = 180
@@ -292,6 +299,27 @@ def _shared(secs: dict) -> dict:
     return {"employers": employers, "schools": schools, "places": places}
 
 
+_EMPLOYMENT = re.compile(r"^(.+?)\s+·\s+(?:full-time|part-time|contract|internship|"
+                         r"self-employed|freelance|seasonal|apprenticeship|permanent|"
+                         r"temporary)\b", re.I)
+_TENURE = re.compile(r"^(?:(?:full-time|part-time|contract)\s+·\s+)?\d+\s+yrs?(?:\s+\d+\s+mos?)?$|"
+                     r"^\d+\s+mos?$", re.I)
+
+
+def _current(exp: list) -> str:
+    """The employer of their first, most recent Experience entry, or "" if unclear."""
+    lines = [x for x in exp[:10] if not _NOISE.match(x)]
+    for line in lines[:6]:
+        m = _EMPLOYMENT.match(line)
+        if m:
+            return m.group(1).strip()[:120]
+    if len(lines) >= 2 and _TENURE.match(lines[1]):
+        return lines[0][:120]                      # several roles grouped under one employer
+    if len(lines) >= 3 and any("present" in x.lower() for x in lines[1:4]):
+        return lines[0][:120]                      # a Save to PDF export: employer first
+    return ""
+
+
 def parse(text: str, *, name: str = "", company: str = "", source: str = "paste",
           url: str = "", today: datetime.date | None = None) -> dict:
     """A reading from a profile page's text: copied, read in a browser, or a Save-to-PDF.
@@ -314,6 +342,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
         "name": name, "company": company, "read_on": today.isoformat(),
         "sources": [{"kind": source, "url": url, "date": today.isoformat()}],
         "headline": headline, "location": location, "about": about,
+        "current": _current(secs.get("experience", [])),
         "shared": _shared(secs), "items": items,
     }
 
@@ -359,7 +388,7 @@ def merge(old: dict | None, new: dict) -> dict:
     if not old:
         return new
     out = dict(old)
-    for k in ("headline", "location", "about"):
+    for k in ("headline", "location", "about", "current"):
         out[k] = new.get(k) or old.get(k, "")
     if any(s.get("kind") in ("paste", "browser", "pdf") for s in new.get("sources", [])):
         out["shared"] = new.get("shared") or old.get("shared", {})
@@ -371,6 +400,37 @@ def merge(old: dict | None, new: dict) -> dict:
     out["name"] = new.get("name") or old.get("name", "")
     out["company"] = new.get("company") or old.get("company", "")
     return out
+
+
+# ------------------------------------------------------------------- verdict
+
+def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
+    """After the read: still worth writing to? (keep, why not).
+
+    A snippet can be months old. The page says whether they have moved on from
+    the employer they were found at, whether the role is one the search filters
+    out, and whether they are somewhere else entirely. A person dropped here is
+    the next one's turn, the way a posting that fails a gate makes room for the
+    next in a round. Keeps them when unsure: a wrong skip costs a good contact.
+    """
+    import discovery
+    from company_key import key as company_key
+    company = company or reading.get("company", "")
+    headline = reading.get("headline", "")
+    posts = " ".join(i.get("text", "") for i in reading.get("items", [])
+                     if i.get("kind") in ("post", "repost") and (_days(i.get("date", ""), datetime.date.today()) or 0) <= 90)
+    person_ = {"title": headline, "headline": headline, "about": reading.get("about", ""),
+               "activity": posts, "company": company, "location": reading.get("location", "")}
+    why = discovery.disqualify(person_, target_company=company)
+    if why:
+        return False, why
+    current = reading.get("current", "")
+    if company and current and company_key(current) != company_key(company) \
+            and not _has(company, headline) and not _has(company, current):
+        return False, f"has moved on: their current employer is {current}, not {company}"
+    if discovery._abroad(reading.get("location", "")) and "remote" not in fold(headline):
+        return False, f"based elsewhere: {reading.get('location')}"
+    return True, ""
 
 
 # --------------------------------------------------------------------- hooks
@@ -521,6 +581,24 @@ def fresh(reading: dict | None, today: datetime.date | None = None) -> bool:
         s.get("kind") in ("paste", "browser", "pdf") for s in (reading or {}).get("sources", []))
 
 
+def last_browser_read() -> datetime.datetime | None:
+    latest = None
+    for f in glob.glob(person.state(*DIR, "*", "reading.json")):
+        try:
+            with open(f, encoding="utf-8") as fh:
+                srcs = json.load(fh).get("sources", [])
+        except (OSError, ValueError):
+            continue
+        for src in srcs:
+            if src.get("kind") == "browser" and src.get("at"):
+                try:
+                    t = datetime.datetime.fromisoformat(src["at"])
+                except ValueError:
+                    continue
+                latest = t if latest is None or t > latest else latest
+    return latest
+
+
 def reads_today(today: datetime.date | None = None) -> int:
     day = (today or datetime.date.today()).isoformat()
     n = 0
@@ -550,12 +628,16 @@ def queue(contacts: list, today: datetime.date | None = None) -> list:
 
 # ----------------------------------------------------------------------- CLI
 
-def _contact(contact_id: str) -> dict:
+def _contact(contact_id: str, name: str = "", company: str = "") -> dict:
+    """The contact row, or the candidate a /network run is reading before it writes state."""
     import state
     for c in state.load_contacts():
         if c.get("contact_id") == contact_id:
             return c
-    raise SystemExit(f"reading: no contact {contact_id!r} in network_contacts.csv")
+    if name and company:
+        return {"contact_id": contact_id, "name": name, "company": company}
+    raise SystemExit(f"reading: no contact {contact_id!r} in network_contacts.csv "
+                     "(a candidate not written yet takes --name and --company)")
 
 
 def _show(reading: dict) -> None:
@@ -576,6 +658,11 @@ def main(argv: list | None = None) -> int:
     r.add_argument("file", help="a text file, a .pdf from LinkedIn's Save to PDF, or - for stdin")
     r.add_argument("--source", choices=("paste", "browser", "pdf"), default=None)
     r.add_argument("--url", default="")
+    r.add_argument("--name", default="", help="for a candidate not in the contact book yet")
+    r.add_argument("--company", default="")
+    v = sub.add_parser("verdict", help="after the read: KEEP, or SKIP and why (exit 3)")
+    v.add_argument("contact_id")
+    v.add_argument("--company", default="")
     a_ = sub.add_parser("add", help="one public finding: a talk, an article, a post")
     a_.add_argument("contact_id")
     a_.add_argument("--kind", required=True, choices=KINDS)
@@ -596,7 +683,15 @@ def main(argv: list | None = None) -> int:
         for c in waiting:
             print(f"  {c['contact_id']}: {c.get('name')} ({c.get('company')}) {c.get('linkedin_url') or ''}")
         return 0
-    contact = _contact(a.contact_id)
+    if a.cmd == "verdict":
+        found = load(a.contact_id)
+        if not found:
+            print(f"reading: nothing read about {a.contact_id} yet")
+            return 1
+        keep, why = verdict(found, a.company or found.get("company", ""))
+        print("KEEP" if keep else f"SKIP: {why}")
+        return 0 if keep else 3
+    contact = _contact(a.contact_id, getattr(a, "name", ""), getattr(a, "company", ""))
     old = load(a.contact_id)
     if a.cmd == "show":
         if not old:
@@ -620,8 +715,13 @@ def main(argv: list | None = None) -> int:
                                  "(profile/networking.py PROFILE_READS); ask the person to paste "
                                  "the page instead")
             if reads_today() >= READS_PER_DAY:
-                raise SystemExit(f"reading: {READS_PER_DAY} browser reads today already; "
-                                 "the rest wait for tomorrow or a paste")
+                raise SystemExit(f"reading: {READS_PER_DAY} browser reads today, the ceiling "
+                                 "(PROFILE_READS_PER_DAY); the rest wait for tomorrow or a paste")
+            last = last_browser_read()
+            gap = (datetime.datetime.now() - last).total_seconds() if last else None
+            if gap is not None and gap < PACE_SECONDS:
+                raise SystemExit(f"reading: {gap:.0f}s since the last profile; wait "
+                                 f"{PACE_SECONDS - gap:.0f}s more, at a person's pace")
         if source == "pdf":
             text = pdf_text(a.file)
         elif a.file == "-":
@@ -635,9 +735,14 @@ def main(argv: list | None = None) -> int:
                         url=a.url or contact.get("linkedin_url", ""))
         except ValueError as e:
             raise SystemExit(f"reading: {e}") from None
+        if source == "browser":
+            new["sources"][0]["at"] = datetime.datetime.now().isoformat(timespec="seconds")
         reading = merge(old, new)
     print(f"reading: saved {os.path.relpath(save(a.contact_id, reading), person.state())}")
     _show(reading)
+    if a.cmd == "read":
+        keep, why = verdict(reading, contact.get("company", ""))
+        print("verdict: KEEP" if keep else f"verdict: SKIP: {why} (read the next person instead)")
     return 0
 
 
