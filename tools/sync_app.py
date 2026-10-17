@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import ast
 import datetime
+import json
 import os
 import re
 import subprocess
@@ -70,6 +71,9 @@ APP_URL = "https://github.com/aranculleton/last-job-search"
 REMOTE = "app"
 BRANCH = "master"
 APP = f"{REMOTE}/{BRANCH}"
+MASTER = APP
+STABLE = f"{REMOTE}/stable"
+RELEASE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
 # The app's own portals, as the app lists them. Every other portal under
@@ -149,6 +153,74 @@ def fetch() -> str | None:
         last = (r.stderr.strip().splitlines() or ["no error text"])[-1]
         return f"the app could not be reached at {url}: {last}"
     return None
+
+
+# ------------------------------------------------------------------ channels
+#
+# Two channels. "master" takes every change the day it merges; it is for the
+# app's maintainer, whose own copy is where a change is tried first. "stable"
+# takes only what the maintainer has released (the newest vX.Y.Z tag), so one
+# bad merge does not reach everyone at once. A repo whose GitHub owner is the
+# app's is the maintainer's and follows master; everyone else follows stable.
+# `"app_channel"` in profile/person.json overrides either way.
+
+def _owner(url: str) -> str:
+    m = re.match(r"^https?://[^/]+/([^/]+)/", _norm(url) + "/")
+    return m.group(1) if m else ""
+
+
+def channel() -> str:
+    """"master" or "stable", for this repo."""
+    try:
+        with open(os.path.join(ROOT, "profile", "person.json"), encoding="utf-8") as fh:
+            chosen = str(json.load(fh).get("app_channel") or "").strip().lower()
+        if chosen in ("master", "stable"):
+            return chosen
+    except (OSError, ValueError, AttributeError):
+        pass
+    origin = git("remote", "get-url", "origin", check=False)
+    mine = _owner(origin.stdout) if origin.returncode == 0 else ""
+    return "master" if mine and mine == _owner(app_url()) else "stable"
+
+
+def newest_release() -> str | None:
+    """The app's newest vX.Y.Z tag, by version number, or None if it has none."""
+    r = git("ls-remote", "--tags", "--refs", REMOTE, "v*", check=False)
+    tags = []
+    for line in r.stdout.splitlines() if r.returncode == 0 else []:
+        name = line.split("refs/tags/", 1)[-1].strip()
+        m = RELEASE.match(name)
+        if m:
+            tags.append((tuple(int(x) for x in m.groups()), name))
+    return max(tags)[1] if tags else None
+
+
+def follow() -> str:
+    """Point APP at what this repo's channel takes, and say which.
+
+    stable takes the newest release, with two exceptions that both take master:
+    the app has no release yet, and a first sync, where the repo was made from
+    a snapshot of master and a release older than that snapshot would put
+    app-owned files back. Once synced, a release older than what this repo
+    already holds is an ancestor of it, so stable never goes backwards.
+    """
+    global APP
+    APP = MASTER
+    if channel() == "master":
+        return "following the app's master (every change, the day it merges)"
+    tag = newest_release()
+    if not tag:
+        return "following the app's master: it has no release yet"
+    if merge_base() is None:
+        return "following the app's master for this first sync; releases after this"
+    r = git("fetch", "--quiet", "--no-tags", REMOTE,
+            f"+refs/tags/{tag}:refs/remotes/{REMOTE}/release-tag", check=False)
+    sha = git("rev-parse", f"refs/remotes/{REMOTE}/release-tag^{{commit}}", check=False)
+    if r.returncode != 0 or sha.returncode != 0:
+        return f"following the app's master: release {tag} could not be fetched"
+    git("update-ref", f"refs/remotes/{STABLE}", sha.stdout.strip())
+    APP = STABLE
+    return f"following the app's releases, newest {tag}"
 
 
 def _shallow() -> bool:
@@ -440,6 +512,8 @@ def main(argv: list[str]) -> int:
     if err:
         print(f"sync_app: {err}")
         return 2
+    if not a.adopt:  # adopting compares against master, whatever the channel
+        print(f"sync_app: {follow()}.")
     _APP_PORTALS[:] = [_regex(g) for g in app_portals()]
     if a.check:
         rc = check()

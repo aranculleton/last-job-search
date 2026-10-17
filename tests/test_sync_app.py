@@ -412,3 +412,43 @@ def test_the_tools_a_day_without_a_search_starts_with_carry_the_reminder():
     for rel in ("tools/run_round.py", "tools/stage_picks.py", "tools/open_actions.py",
                 "tools/followups.py", "tools/network/state.py"):
         assert "sync_app.nudge()" in read(ROOT, rel), rel
+
+
+def test_stable_takes_releases_and_never_goes_backwards(repos):
+    app, me = repos
+    sh(app, "git", "tag", "v1.0.0")
+    rc, out = run(me, app)  # first sync: master, whatever the channel
+    assert rc == 0 and "first sync" in out
+    write(app, "README.md", "v2, not released\n")
+    commit(app, "after the release")
+    rc, out = run(me, app)
+    assert rc == 0 and "releases, newest v1.0.0" in out
+    assert read(me, "README.md") == "v1\n"  # what is not released does not arrive
+    sh(app, "git", "tag", "v1.1.0")
+    sh(app, "git", "tag", "v1.0.9", "HEAD~1")  # an older version number, tagged later
+    rc, out = run(me, app)
+    assert rc == 0 and "newest v1.1.0" in out and read(me, "README.md") == "v2, not released\n"
+
+
+def test_master_for_the_maintainer_or_when_chosen(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    sh(app, "git", "tag", "v1.0.0")
+    write(app, "README.md", "v2\n")
+    commit(app, "unreleased")
+    write(me, "profile/person.json", '{"app_channel": "master"}\n')
+    commit(me, "choose master")
+    rc, out = run(me, app)
+    assert rc == 0 and "app's master" in out and read(me, "README.md") == "v2\n"
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app as s
+    assert s._owner("https://github.com/Someone/my-job-search.git") == "someone"
+
+
+def test_no_release_yet_means_master(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    write(app, "README.md", "v2\n")
+    commit(app, "more")
+    rc, out = run(me, app)
+    assert rc == 0 and "no release yet" in out and read(me, "README.md") == "v2\n"

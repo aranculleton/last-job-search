@@ -87,8 +87,8 @@ writing applications, interview prep and setting up; the balanced one (Sonnet) i
 searching and keeping track. You do not have to remember this: Claude says so in one line
 when the model you are on is more, or less, than a task needs.
 
-Updates to the app reach your copy on their own, each day you use it, in a new chat or the
-same one you have kept open. Everything about you stays in your copy, in the `profile/`
+Each release of the app reaches your copy on its own, the first day you use it after the
+release, in a new chat or the same one you have kept open. Everything about you stays in your copy, in the `profile/`
 folder, and is never sent back.
 
 A twice-weekly brief is optional, in a chat or as a phone notification;
