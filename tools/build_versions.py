@@ -228,7 +228,7 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
             (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
         ),
-        "fingerprint": "d4b20679b540755d",
+        "fingerprint": "a601351121025a93",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
