@@ -42,10 +42,12 @@ Every session in a person's repo starts with the same five steps, before anythin
 
 1. **Pull master**: `git fetch origin master && git merge origin/master`. Another chat may have
    merged since this container was built.
-2. **Take the app's updates**: `python3 tools/sync_app.py`. It fetches the app and merges what is
-   new (the newest release; the maintainer's own copy takes master), and never sends anything
-   back. The app is public, so nothing needs attaching; if it still cannot reach it (exit 2),
-   attach it read-only with `add_repo` (owner and repo from the URL
+2. **Take the app's updates**: `python3 tools/sync_app.py --on "<this session's model>"`. It
+   fetches the app and merges what is new (the newest release; the maintainer's own copy takes
+   master), never sends anything back, and ends with the day's model check: what this model
+   suits and what wants another, which goes first in the reply when the person's request is
+   one of the latter. The app is public, so nothing needs attaching; if it still cannot reach
+   it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
    changed: show the person what it listed and ask before going further.
@@ -77,9 +79,9 @@ Every session in a person's repo starts with the same five steps, before anythin
 **A chat that carries on for days does this every day, not once.** Most people keep one
 chat going, so "the start of a session" may be days ago. Before each new piece of work (a
 search, an application, outreach, a reply, interview prep), run
-`python3 tools/sync_app.py --if-stale`. When today's check has not run, it does steps 1 and
-2 (master, then the app) and the rest follows as above; otherwise it prints "already
-checked today" and changes nothing. `run_round.py` and `stage_picks.py` print a reminder
+`python3 tools/sync_app.py --if-stale --on "<this session's model>"`. When today's check has
+not run, it does steps 1 and 2 (master, then the app) and the rest follows as above;
+otherwise it prints "already checked today" and changes nothing. `run_round.py` and `stage_picks.py` print a reminder
 when it was skipped, and that reminder is code, so it reaches a chat whose instructions
 were loaded before this rule existed.
 
@@ -247,11 +249,10 @@ written into a state file, never another routine.
 
 ## Orchestration: workflows and model choice
 
-**Which model, and how hard it thinks.** When a piece of work starts (a search, an
-application, interview prep, outreach, setup, a change to the app), run
-`python3 tools/model_guide.py <command or kind of work> --on "<this session's model>"`. It
-prints nothing when the model fits. Otherwise its one line goes first in the reply, and the
-work carries on. `--all` prints the whole table for anyone who asks which model to use.
+**Which model, and how hard it thinks.** The day's sync prints the check (step 2, `--on`).
+For one piece of work, `python3 tools/model_guide.py <command or kind of work> --on "<this
+session's model>"` prints nothing when the model fits; otherwise its one line goes first in
+the reply, and the work carries on. `--all` prints the whole table for anyone who asks.
 
 Inside the work, models are pinned per stage to `11-cost-model.md`: reading and fetching go
 to sonnet, and anything that could put a false claim in front of an employer runs on the
@@ -480,7 +481,9 @@ same turn:
    undo the ruling in the same turn (`exclude.py lift "<words of the reason>"`, the sector or
    employer out of `search.py` `BAR_EXCLUDED` or `BAR_DECLINED`, the entry out of
    `job_scraper/do_not_target.json`). A ruling made by their screening rules lapses by
-   itself when those rules change.
+   itself when the part of the rules it rests on changes (one blocker row, one gate setting);
+   when you change a screening rule, run `exclude.py lapsed` in the same turn and `restamp`
+   the groups that do not rest on what changed.
 3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted.
 4. Say in one line what will be different from now on.
 

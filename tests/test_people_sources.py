@@ -54,6 +54,58 @@ def test_the_budget_holds_and_every_kind_gets_a_turn():
             assert q.endswith("-site:linkedin.com")
 
 
+def _history(monkeypatch, roles):
+    import types
+    import reading
+    monkeypatch.setattr(reading, "_roles",
+                        lambda: types.SimpleNamespace(ROLES=roles, EDUCATION=""))
+
+
+def test_every_employer_they_left_gets_a_turn_and_the_current_one_none(monkeypatch):
+    # Four employers, listed out of order. The searches used to be the first
+    # employer's two and nothing else, so the current employer took both and the
+    # three they had left were never searched.
+    _history(monkeypatch, [
+        {"employer": "Harrow Point Media", "dates": "Jun 2019 - Feb 2022"},
+        {"employer": "Corrie Freight", "dates": "Jan 2025 - Present"},
+        {"employer": "Pellow Robotics", "dates": "Sep 2017 - May 2019"},
+        {"employer": "Fenwick Lane Insurance", "dates": "Mar 2022 - Dec 2024"},
+    ])
+    assert sources._past_employers() == ["Fenwick Lane Insurance", "Harrow Point Media",
+                                         "Pellow Robotics"]
+    qs = sources.searches("alumni_employer")
+    assert len(qs) == sources.ALUMNI_EMPLOYER_SEARCHES == 3
+    assert '"Fenwick Lane Insurance"' in qs[0]           # the one most recently left leads
+    assert {q.split('"')[-2] for q in qs} == {"Fenwick Lane Insurance", "Harrow Point Media",
+                                              "Pellow Robotics"}
+    assert not any("Corrie Freight" in q for q in qs)
+    # Inside the run's budget, the alumni searches still reach more than one employer,
+    # and the older ones take turns behind the first, so over two days every one is reached.
+    once = [q for k, _, q in sources.for_run() if k == "alumni_employer"]
+    assert len({q.split('"')[-2] for q in once}) == len(once) >= 2
+    reached = set()
+    for day in (TODAY, TODAY + datetime.timedelta(days=1)):
+        order = sources._alumni_order(day)
+        assert order[0] == "Fenwick Lane Insurance"
+        reached |= set(order[:2])
+    assert reached == {"Fenwick Lane Insurance", "Harrow Point Media", "Pellow Robotics"}
+
+
+def test_one_employer_left_gets_both_its_searches(monkeypatch):
+    _history(monkeypatch, [{"employer": "Corrie Freight", "dates": "2025-Present"},
+                           {"employer": "Harrow Point Media", "dates": "2019 to 2022"}])
+    qs = sources.searches("alumni_employer")
+    assert len(qs) == 2 and all('"Harrow Point Media"' in q for q in qs)
+
+
+def test_an_open_ended_role_is_current_in_any_language():
+    import reading
+    for open_ended in ("Mar 2023 - Present", "2025-Present", "Juni 2022 - heute", "2021 -"):
+        assert reading._ended(open_ended)[0], open_ended
+    for done in ("Sep 2020 - Feb 2023", "2018-2020", "2019", ""):
+        assert not reading._ended(done)[0], done
+
+
 def test_an_employer_the_search_ruled_out_costs_no_searches():
     # The example excludes gambling; the job search's verdict is read, not repeated.
     assert sources.ruled_out("Northgate Betting Group")

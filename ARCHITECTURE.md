@@ -207,7 +207,10 @@ people came back and none fits is recorded as having no relevant presence and sk
 90 days (`company_research.py` `PRESENCE_REVIEW_DAYS`).
 
 Alumni modes run before cold modes wherever both are possible: former
-colleagues of a past employer answer far more often than cold contacts. Those queries
+colleagues of a past employer answer far more often than cold contacts. Every employer
+they have left gets one search before any gets a second: the most recently left leads, the
+others take turns behind it a day at a time, and the current employer (a role whose dates
+run to "Present") gets none. Those queries
 never name the target company, because naming it collapses an alumni
 search back into a cold one with extra words in it.
 

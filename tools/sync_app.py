@@ -8,6 +8,7 @@ files but not history. This fetches the app and merges its new commits:
     python3 tools/sync_app.py --check    # how far behind, and any drift; changes nothing
     python3 tools/sync_app.py --adopt    # once, for the repo the app was first built from
     python3 tools/sync_app.py --if-stale # the day's first check: master, then the app; else nothing
+    ... --on "<model>"                   # with either: the day's model check after the sync
 
 The rules, enforced here rather than remembered:
 
@@ -420,7 +421,8 @@ def nudge() -> None:
     """One line on stderr when today's check has not run; for the tools a day's work starts with."""
     if stale():
         print("note: the app has not been checked for updates today. Run "
-              "`python3 tools/sync_app.py --if-stale` first, then this again.", file=sys.stderr)
+              "`python3 tools/sync_app.py --if-stale --on \"<this session's model>\"` first, then "
+              "this again.", file=sys.stderr)
 
 
 def pull_master() -> int:
@@ -495,6 +497,8 @@ def main(argv: list[str]) -> int:
                       help="once, for the repo the app was built from")
     mode.add_argument("--if-stale", action="store_true",
                       help="master, then the app, unless today's check already ran")
+    ap.add_argument("--on", default="", metavar="MODEL",
+                    help="the model this session runs on: the day's work is checked against it")
     a = ap.parse_args(argv)
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
@@ -525,7 +529,31 @@ def main(argv: list[str]) -> int:
     if rc == 0:
         _record_check()
         upgrades("--after-sync")
+        model_check(a.on)
     return rc
+
+
+def model_check(on: str) -> None:
+    """The day's model check (tools/model_guide.py), once a day with the day's sync.
+
+    A script cannot see which model a session runs on, and a line in CLAUDE.md asking
+    for the check was skipped, so it rides on the command every session runs. Run as
+    its own process, from the file the merge just brought in, like the upgrades.
+    """
+    script = os.path.join(ROOT, "tools", "model_guide.py")
+    if not os.path.isfile(script):
+        return
+    if not on.strip():
+        print('Model check: Claude, add --on "<the model this session runs on>" to this '
+              "command and the day's work is checked against it.")
+        return
+    try:
+        r = subprocess.run([sys.executable, script, "--on", on], cwd=ROOT, text=True,
+                           capture_output=True, timeout=60)
+        if (r.stdout or "").strip():
+            print(r.stdout.rstrip())
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def upgrades(mode: str) -> None:

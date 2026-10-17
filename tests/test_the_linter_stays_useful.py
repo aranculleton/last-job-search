@@ -28,6 +28,8 @@ import sys
 import unittest
 from pathlib import Path
 
+from tests import repo_files
+
 ROOT = Path(__file__).resolve().parent.parent
 BUG_RULES = {"E9", "F", "B"}
 
@@ -88,13 +90,13 @@ class TheDependenciesAreWrittenDown(unittest.TestCase):
         import ast
         manifest = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
         std = set(sys.stdlib_module_names)
-        local = {p.stem for p in (ROOT / "tools").rglob("*.py")}
-        local |= {p.stem for p in (ROOT / "templates").rglob("*.py")}
+        sources = repo_files.files("tools/**/*.py", "templates/**/*.py")
+        local = {p.stem for p in sources}
         local |= {"network"}
         # A package folder under tools/ is local too: the vendored openroles is one.
         local |= {p.parent.name for p in (ROOT / "tools").glob("*/__init__.py")}
         third = set()
-        for p in list((ROOT / "tools").rglob("*.py")) + list((ROOT / "templates").rglob("*.py")):
+        for p in sources:
             for n in ast.walk(ast.parse(p.read_text(encoding="utf-8"))):
                 if isinstance(n, ast.Import):
                     third.update(a.name.split(".")[0] for a in n.names)

@@ -227,8 +227,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-15", False, "stage_picks.py reminds a chat that has not checked the app today; what it stages is unchanged"),
             (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
             (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
+            (12, "2026-10-17", False, "rulings name the blocker or gate they rest on (rank, the scraper skill); the day's sync carries the model check"),
         ),
-        "fingerprint": "ced41318db708c64",
+        "fingerprint": "f46677cb58132963",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -300,8 +301,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
             (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
             (17, "2026-10-17", False, "shared definitions: dates, places, recruiter test, ruled-out employers, employer names without a legal suffix, an application there and a route's clear reply rate in why-them"),
+            (18, "2026-10-17", False, "alumni searches give every employer left a turn, the most recent leading and the rest taking turns a day at a time, and never search the current employer"),
         ),
-        "fingerprint": "1dbd7d5733aea5e8",
+        "fingerprint": "a3f8b3735b5a3d33",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -325,8 +327,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-17", False, "a reading keeps the connection degree and whether a request is pending, and the browser reads are paced and capped"),
             (7, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
             (8, "2026-10-17", False, "shared dates and employer names, so a shared employer is found without its legal suffix"),
+            (9, "2026-10-17", False, "the candidate's current employer is read from the role dates"),
         ),
-        "fingerprint": "7491520de0b35aed",
+        "fingerprint": "a3cf92b368655b4c",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -347,8 +350,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "one definition of a preference, an equivalence route and the years bar; rulings that lapse when the person's rules change (tools/exclude.py); places from one list"),
             (6, "2026-10-17", False, "a ruling in the person's own words is never lifted by a better screen or a scoring rule, only by them"),
+            (7, "2026-10-17", False, "a ruling lapses only when the part of the rules it rests on changes; restamp keeps the ones that still hold"),
         ),
-        "fingerprint": "e0438ba37b51e1cb",
+        "fingerprint": "f54863ef5c132769",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

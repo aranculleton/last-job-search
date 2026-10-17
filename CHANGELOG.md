@@ -20,6 +20,45 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Alumni searches reach every employer you have left.** They took the first employer in
+  your history twice and nothing else, and the first was usually the one you work at now:
+  colleagues rather than alumni, and the people a confidential search should not reach.
+  Now every employer you have left gets one search before any gets a second: the one most
+  recently left leads, the others take turns behind it a day at a time, and the current one
+  (a role whose dates run to "Present", in any language) gets none. No profile upgrade: it reads the role dates already there.
+- **Changing one rule puts back only the postings ruled out by that rule.** One number on
+  the pay blocker used to lapse every ruling, language and eligibility included, so they
+  were all screened again. A ruling now records the part of your rules it rests on (one
+  blocker row, the evaluation framework, or one gate setting), named by the reason itself
+  ("blocker 4", or the screen's own wording) or with `--rests-on`, and lapses only when that
+  part changes. After a change, `exclude.py lapsed` lists what lapsed and what changed, and
+  `restamp` keeps the ones that still hold. On a real copy, moving the pay threshold lapsed
+  166 of 318 rulings rather than all 318, 58 of them the pay rulings themselves.
+  Profile upgrade: ruling-parts (Claude names the part for your older rulings in the
+  background).
+- **A ruling rewrites only its own lines in `seen_jobs.json`.** `exclude.py` wrote the file
+  at a different indent from everything else that writes it, so one stamp rewrote the whole
+  file and two chats then had to merge all of it. `--url` picks one of several rulings whose
+  reasons are word for word the same, and `review --full` lists their addresses.
+- **The suite never reads a checkout nested inside the repo.** A background `/upgrade`
+  agent's worktree in `.claude/worktrees/` failed a test over its own copy of the
+  CHANGELOG. Every recursive glob in `tests/` now goes through `tests/repo_files.py`, a test
+  keeps it that way, and `.claude/worktrees/` is ignored so it is never committed.
+
+### Changed
+
+- **The model check comes with the day's sync.** A script cannot see which model a chat runs
+  on, and the line asking for the check was skipped, so `sync_app.py --on "<model>"` ends
+  the day's sync with what this model suits and what wants another, and a sync without
+  `--on` says to add it. The guide knows Fable: more than any of this needs, with Opus and
+  Sonnet named for the work each covers, for less of your allowance. No profile upgrade.
+- **The question about reading profiles in your browser says where that works:** a chat on
+  your computer in the Claude desktop app. No reminder is added for anyone who already
+  chose pasting: that choice was about the risk to their account, and it stands. No
+  profile upgrade.
+
 ## [3.2.0] - 2026-10-17
 
 ### Changed

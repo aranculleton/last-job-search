@@ -371,7 +371,7 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
     pairs: dict[tuple[str, str], str] = {}
     since = rescreen_since()
     import exclude
-    rules_now = exclude.rules_fingerprint()
+    rules_now, parts_now = exclude.rules_fingerprint(), exclude.rules_parts()
     for u, e in entries.items():
         if not isinstance(e, dict):
             continue
@@ -399,10 +399,11 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         if (status == "excluded" and not own_call and since and screened_before(e, since)
                 and not _NOT_A_VERDICT.search(reason)):
             continue
-        # Ruled out under the person's own screening rules, which have changed since
-        # (tools/exclude.py). The ruling stays as the record and stops blocking; the
-        # posting is screened again by the current rules the next time it is found.
-        if status == "excluded" and e.get("rules") and e["rules"] != rules_now:
+        # Ruled out under the person's own screening rules, and what it rests on has
+        # changed since: the one blocker or gate it names, or the whole rules when it
+        # names none (tools/exclude.py). The ruling stays as the record and stops
+        # blocking; the posting is screened again by the current rules when next found.
+        if status == "excluded" and not own_call and not exclude.holds(e, rules_now, parts_now):
             continue
         why = f"{status} in seen_jobs.json: {reason[:120] or 'no reason recorded'}"
         n = norm(e.get("url") or u)
