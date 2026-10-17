@@ -79,7 +79,7 @@ def probe(url: str) -> tuple[str, str]:
     verdict = classify(p.returncode, connect.strip(), code)
     detail = {"reachable": f"HTTP {code}",
               "blocked": f"the network policy refused it (proxy {connect}); add the host "
-                         f"under Allowed domains",
+                         f"under the cloud environment's Allowed domains",
               "unreachable": (p.stderr.strip().splitlines() or [f"curl exit {p.returncode}"])[-1]
               }[verdict]
     return verdict, detail
@@ -109,8 +109,29 @@ def pypdf_state() -> str:
     return "missing" if "No module named" in p.stderr else "broken"
 
 
+# A cloud session sets CLAUDE_CODE_REMOTE. Its fixes are the environment's Setup
+# script and network allowlist; on the person's own computer they are a one-time
+# install and there is no network policy at all.
+CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+
+
+def _install(what: str) -> str:
+    """The one command that installs `what` where this session runs."""
+    if CLOUD or shutil.which("apt-get"):
+        return {"latex": "./tools/setup_env.sh installs it" + (" for this session" if CLOUD else ""),
+                "poppler": "./tools/setup_env.sh installs it"}[what]
+    if sys.platform == "darwin":
+        return {"latex": "install it once: brew install --cask mactex-no-gui (SETUP.md, Local machine)",
+                "poppler": "./tools/setup_env.sh installs it (brew install poppler)"}[what]
+    if sys.platform.startswith("win"):
+        return {"latex": "install MiKTeX once (SETUP.md, Local machine)",
+                "poppler": "choco install poppler"}[what]
+    return "install it once (SETUP.md, Local machine)"
+
+
 def main() -> int:
     bad = 0
+    print("where: " + ("a cloud session" if CLOUD else "this computer"))
 
     def line(name, ok, detail=""):
         nonlocal bad
@@ -119,10 +140,9 @@ def main() -> int:
 
     print("tools")
     latex = [t for t in ("lualatex", "xelatex") if not shutil.which(t)]
-    line("LaTeX (lualatex, xelatex)", not latex,
-         "" if not latex else "missing; ./tools/setup_env.sh installs it for this session")
+    line("LaTeX (lualatex, xelatex)", not latex, "" if not latex else "missing; " + _install("latex"))
     line("pdftotext (Poppler)", bool(shutil.which("pdftotext")),
-         "" if shutil.which("pdftotext") else "missing; ./tools/setup_env.sh installs it")
+         "" if shutil.which("pdftotext") else "missing; " + _install("poppler"))
     state = pypdf_state()
     line("pypdf", state == "ok", {"ok": "", "missing": "missing; pip3 install pypdf",
                                   "broken": "installed but panics; pip3 install --upgrade cffi"}[state])

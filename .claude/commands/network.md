@@ -108,6 +108,10 @@ untouched employers from the latest round's shortlist.
       `python3 tools/network/reading.py read <contact_id> - --source browser`. One profile
       at a time at a person's pace (the tool refuses a read within `reading.PACE_SECONDS`
       of the last), and `reading.READS_PER_DAY` is only a ceiling against a runaway loop.
+      One at a time is deliberate, not a limit of the tool: it is the person's own
+      account doing the reading, and a burst of page loads is what LinkedIn's automation
+      checks look for. Never describe it to them as slow; vary the pause between profiles
+      rather than keeping it exact.
       Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
       scroll into other people's profiles. A login wall, a security check or a CAPTCHA
       stops the reads for the day: say so, and never try to get past one. With the setting
