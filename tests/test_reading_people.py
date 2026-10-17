@@ -247,3 +247,53 @@ def test_a_pdf_export_gives_the_current_employer_too():
 
 def test_the_ceiling_is_far_above_a_run_and_the_person_can_set_their_own():
     assert reading.READS_PER_DAY >= 100 and reading.PACE_SECONDS > 0
+
+
+def test_screenshots_from_the_phone_read_like_a_paste():
+    # What a transcription of LinkedIn app screenshots looks like: the same headings.
+    shots = """Tamsin Oyelaran
+Head of Demand Forecasting at Fernhill Freight
+Manchester, England, United Kingdom
+Contact info
+About
+I build forecasts that warehouse teams actually use.
+Activity
+Tamsin Oyelaran posted this • 3d
+Depot managers trust a forecast they can argue with.
+Experience
+Forecasting Lead
+Oakmere Foods · Full-time
+Mar 2019 - Dec 2023
+Leeds, England, United Kingdom
+"""
+    r = _read(shots, source="screenshot")
+    assert r["sources"][0]["kind"] == "screenshot" and reading.fresh(r, TODAY)
+    assert [e["name"] for e in r["shared"]["employers"]] == ["Oakmere Foods"]
+    assert r["items"][0]["date"] == "2026-10-14" and "argue with" in r["items"][0]["text"]
+    assert "screenshot" in reading.PAGE_SOURCES
+
+
+CLOUD_DESKTOP = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "remote_desktop"}
+CLOUD_PHONE = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "remote_mobile"}
+LOCAL = {"CLAUDECODE": "1"}
+
+
+def test_where_the_session_runs_is_read_from_its_environment():
+    assert reading.surface(CLOUD_DESKTOP) == "desktop-cloud"
+    assert reading.surface(CLOUD_PHONE) == "phone"
+    assert reading.surface({"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "remote_web"}) == "web"
+    assert reading.surface(LOCAL) == "local" and reading.surface({}) == "unknown"
+
+
+def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anything():
+    r = reading.route(["browser"], "browser", CLOUD_DESKTOP)
+    assert r["route"] == "browser" and r["say"] == ""          # automatic, nothing to say
+    assert reading.route(["enable"], "browser", CLOUD_DESKTOP)["route"] == "enable"
+    phone = reading.route([], "browser", CLOUD_PHONE)
+    assert phone["route"] == "hand" and "screenshots" in phone["say"] and "phone" in phone["say"]
+    desk = reading.route([], "browser", CLOUD_DESKTOP)
+    assert "desktop app has not given it a browser" in desk["say"]
+    assert reading.route([], "paste", CLOUD_PHONE)["say"].startswith("Send screenshots")
+    assert reading.route(["browser"], "off", LOCAL)["route"] == "public"
+    for r in (phone, desk, reading.route([], "paste", LOCAL)):
+        assert not any(w in r["say"].lower() for w in ("press", "shortcut", "cmd", "ctrl", "click"))

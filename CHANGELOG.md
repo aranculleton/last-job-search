@@ -22,6 +22,18 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Profiles read on a phone and in a web session too.** Screenshots of someone's profile
+  from the LinkedIn app, attached to the chat, are transcribed word for word and read like a
+  paste (`reading.py read <id> <file> --source screenshot`): shared history, posts and the
+  fit check, with nothing of the person's at risk. It is the route that works wherever a
+  session runs. The browser read needs the desktop app on a computer, and a cloud container
+  is never given a LinkedIn login. `reading.py route` picks the route by itself:
+  - **A browser is there:** read in it.
+  - **It can be switched on:** switch it on first.
+  - **Neither:** ask once for screenshots on a phone or a paste on a computer.
+
+  The person is never told to press a key or find a setting. No profile upgrade: it is a
+  new way to answer the same ask.
 - **Networking reads as many people as a batch needs, and moves on from the ones who no
   longer fit.**
   - **No fixed number.** `/network` reads the people a run surfaced, best first, until it

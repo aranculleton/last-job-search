@@ -8,10 +8,23 @@ export interface CLIResult {
   exitCode: number;
 }
 
-export async function runCLI(args: string[]): Promise<CLIResult> {
+// A closed local port as the proxy: a search that passes validation fails at
+// once on a refused connection (htmlFetch does not retry one) instead of
+// reaching linkedin.com, which timed these tests out in CI when it was slow.
+export const OFFLINE = {
+  HTTPS_PROXY: "http://127.0.0.1:9",
+  HTTP_PROXY: "http://127.0.0.1:9",
+  https_proxy: "http://127.0.0.1:9",
+  http_proxy: "http://127.0.0.1:9",
+  NO_PROXY: "",
+  no_proxy: "",
+};
+
+export async function runCLI(args: string[], env: Record<string, string> = {}): Promise<CLIResult> {
   const proc = Bun.spawn(["bun", "run", CLI_PATH, ...args], {
     stdout: "pipe",
     stderr: "pipe",
+    env: { ...process.env, ...env },
   });
 
   const [stdout, stderr, exitCode] = await Promise.all([
