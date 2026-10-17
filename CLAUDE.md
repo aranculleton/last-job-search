@@ -329,8 +329,8 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 
 **Tools run directly, not through a slash command**: `run_round.py`, `job_alerts.py`,
 `stage_picks.py`, `verify_batch.sh`, `record_drafts.py`, `open_actions.py` (`--due`,
-`--company`), `followups.py`, `what_works.py`, `bar.py`, `network/state.py`, `network/prep.py
---all`, `network/profile_facts.py` and `bridges.py`. What each does, its flags and its exit
+`--company`), `followups.py`, `what_works.py`, `bar.py`, `network/state.py`, `network/reading.py`,
+`network/prep.py --all`, `network/profile_facts.py` and `bridges.py`. What each does, its flags and its exit
 codes are in RUNBOOK.md, "Tools run directly". `run_round.py` exits 0 when the yield target is
 met, 2 when it is missed (a thin market) and 1 when a stage broke.
 
@@ -407,6 +407,11 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
 - At most two searches per company (`discovery.queries_for()` builds them), and three is a hard ceiling never meant to be reached.
 - Alumni and referral routes before cold. The response-rate gap is large.
 - Tier 1 requires a **quoted** live hiring signal, shown as evidence.
+- **Read each person before writing to them** (`tools/network/reading.py`, `/network` step 5):
+  their profile, in the person's own browser when `PROFILE_READS` is `"browser"` or pasted
+  by them, and their public work. A note's common ground rests on what was read
+  (`first_note(reading=)` refuses one that does not), and no two notes say the same thing.
+  LinkedIn is never fetched from a session.
 - **Outreach is for referrals, in three stages that are never compressed into one:** a
   first note that asks for a conversation (`compose.first_note()`), the conversation, then
   a referral ask for one linked role (`compose.referral_ask()`). A first note never names

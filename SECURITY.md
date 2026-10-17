@@ -56,6 +56,10 @@ Ranked roughly by how bad it would be:
   starts from the confirmed company identity and a source located independently, which
   is what closes threat 3 above. The verification checklist repeats it, so a
   claim sourced from inside a posting fails the check rather than shipping.
+  A LinkedIn profile read before a note is written is the same: `tools/network/reading.py`
+  keeps only what a note could rest on, strips fence markers from it, and a model sees it
+  only through `reading.fenced()`. LinkedIn itself is never fetched from a session; a
+  profile is read in the person's own browser only when they chose that, or from their paste.
 - **Permission allowlist, guard-enforced.** `.claude/settings.json` pre-approves only the
   specific commands the workflow needs. `tools/security_guards.py` runs in CI and fails
   any change that widens the allowlist, adds a package-manifest lifecycle script, or

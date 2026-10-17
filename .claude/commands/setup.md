@@ -284,7 +284,11 @@ not, and the honest bridges between), `search.py` (pay, gates, locations, titles
 scrape searches), `employers.py`, `boards.py`, `networking.py` (their voice: opener, a line
 about them, the ask, their home city and timezone, and `LINKEDIN_PLAN`, "free" or
 "premium", from their answer; on a free account the whole connection note is 200
-characters, so the opener, the line about them and the ask together stay near 120),
+characters, so the opener, the line about them and the ask together stay near 120; and
+`PROFILE_READS`, "browser" or "paste", from their answer to whether Claude may read the
+LinkedIn profile of each person about to be messaged in their own signed-in browser, said
+plainly: LinkedIn's terms forbid automated access, the risk is to their account, it reads a
+few a day and clicks nothing, and the alternative is pasting a profile when they open it),
 `claims.py`, `screening.py` (standard form
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
 `12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).

@@ -13,6 +13,12 @@ import re
 # free account gets, and whether InMail is there at all (tools/network/schema.py).
 LINKEDIN_PLAN = "premium"
 
+# How a person's LinkedIn profile is read before a note is written to them
+# (tools/network/reading.py): "browser" in Morgan's own signed-in browser, which
+# LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
+# where they copy the page when they open it to send the request.
+PROFILE_READS = "paste"
+
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}
 OPENER = "hope you're well"

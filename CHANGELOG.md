@@ -22,6 +22,28 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Every note is written from what was read about the person, not from a search
+  snippet.** Notes drafted from snippets came out alike: one background line with a
+  different name on it. `/network` now reads each person before writing to them
+  (`tools/network/reading.py`):
+  - **Their LinkedIn profile:** read in your own signed-in browser if you say yes
+    (`PROFILE_READS = "browser"`), or pasted by you when you open it to send the request
+    (select all and copy, or LinkedIn's Save to PDF).
+  - **Their public work:** talks, articles, podcasts, code, and their posts as a search
+    engine shows them.
+  - **What is kept:** only what a note could rest on (shared employers, schools and cities,
+    recent posts, public work), each with its source and date.
+  - **Checks on every note:** `compose.first_note(reading=)` refuses a common ground nothing
+    read supports, and their name or employer alone does not count. `reading.same_ground()`
+    catches two notes that say the same thing.
+  - **Prep documents** now say what was read.
+  - **Notes waiting to be sent are rewritten** this way by `/upgrade` (method
+    `network-notes`).
+  - A session still never fetches LinkedIn itself: its robots.txt disallows every crawler it
+    does not name and a profile request returns HTTP 999.
+
+  Profile upgrade: profile-reads (it asks once whether Claude may read profiles in your
+  browser, because LinkedIn's terms forbid automated access and the risk is to your account).
 - **Releases, not every merge.** A person's repo now follows the app's newest `vX.Y.Z`
   release, and the maintainer's own repo follows master, so a change runs in the
   maintainer's copy before it reaches anyone else. A repo whose GitHub owner is the app's is

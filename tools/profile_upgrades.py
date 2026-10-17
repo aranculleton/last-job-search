@@ -195,6 +195,14 @@ def _linkedin_plan() -> str:
     return ""
 
 
+def _profile_reads() -> str:
+    if _missing("networking", "PROFILE_READS"):
+        return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
+                "about to be messaged in your own browser (profile/networking.py has no "
+                "PROFILE_READS), so a note rests on what you paste and on their public work")
+    return ""
+
+
 def _contract() -> str:
     try:
         import portals
@@ -484,6 +492,18 @@ REGISTRY: tuple[Upgrade, ...] = (
             needs="you",
             ask="Do you pay for LinkedIn Premium? It decides how long a connection note can be "
                 "and whether InMail is there at all."),
+    Upgrade("profile-reads", "2026-10-17",
+            "a note to each person built from their own profile, not a search snippet",
+            _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "
+            "profile/networking.py from their answer", "question", "~1 min",
+            names=("networking.PROFILE_READS",),
+            priority=2,
+            needs="you",
+            ask="Before a note goes to someone, should Claude read their LinkedIn profile in "
+                "your own signed-in browser? It reads only the people about to be messaged, a "
+                "few a day, and clicks nothing, but LinkedIn's terms forbid automated access, so "
+                "the risk is to your account. The other way is pasting a profile when you open "
+                "it to send the request."),
     Upgrade("screen-flags", "2026-10-15",
             "postings from the wrong job family for you flagged, in your field's terms",
             _screen_flags, "/setup --section search", "question", "~5 min",

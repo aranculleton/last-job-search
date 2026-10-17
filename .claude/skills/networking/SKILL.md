@@ -42,6 +42,7 @@ done correctly*.
 | `tone.py` | Every tone rule as an enforceable check |
 | `compose.py` | Message assembly with hard length limits |
 | `reply.py` | Scenario classification and reply guidance |
+| `reading.py` | What was read about one person before writing: their page, their public work, what a note can rest on |
 | `prep.py` | Call prep documents, for a call that came out of a thread |
 
 **Never hand-write a message without running `compose.validate()` on it.** The
@@ -158,6 +159,36 @@ Run alumni modes before cold modes for any company where both are possible.
 - **The person has moved.** Watch for "my last day" and "excited to share I've
   joined" in the activity snippet.
 
+### Read each person before writing to them
+
+Finding someone gives a title and a line. That is enough to know they are worth
+writing to and never enough to write to them: notes drafted from snippets alone
+came out as one background line with a different name on it, which a person
+caught at once. So between finding and writing there is a read, and
+`tools/network/reading.py` holds it (`/network` step 5 says how):
+
+- **Their profile.** In the person's own signed-in browser when `PROFILE_READS` is
+  `"browser"` in `profile/networking.py`, otherwise pasted by them (select all, copy,
+  or LinkedIn's Save to PDF), which takes seconds because they open the profile anyway
+  to send the request. This session never fetches LinkedIn itself: its robots.txt
+  disallows every crawler it does not name and a profile request answers HTTP 999.
+- **Their public work.** A talk, an article, a podcast, code, a quote in the press,
+  and their posts as a search engine shows them. Never a people-search or data-broker
+  site.
+- **Why the browser read is the person's call.** LinkedIn's User Agreement forbids
+  automated access, browser extensions included. The risk is to their own account, the
+  one the whole of this skill runs on, so it is asked once, plainly (the `profile-reads`
+  upgrade, and `/setup`), and kept to what a person reading profiles by hand would do:
+  only the people about to be messaged, one at a time, `READS_PER_DAY` at most, nothing
+  clicked.
+
+What a reading keeps is what a note could rest on: their headline, a short excerpt of
+their About, the history they share with the candidate (an employer, a school, a city,
+each with the line that shows it), and their recent posts and public work, dated and
+sourced. Never their whole profile, and never anything from the "People also viewed"
+column, which is other people. A pasted page that does not carry the contact's name is
+refused, because a note built on the wrong person's profile is worse than a generic one.
+
 ## Composition
 
 **The document is the person's word for it.** "Resume" in this skill and its playbooks means
@@ -205,7 +236,10 @@ on Premium. That is the shape, and `first_note()` assembles it:
 - **Common ground** (required): the one true thing linking the candidate to
   them. A shared employer or school first; otherwise the one specific
   thing about their work that made the candidate write (a talk, a post, a
-  team). Researched, never invented.
+  team). Taken from their reading (`reading.py show`), never invented: given the
+  reading, `first_note()` raises `UngroundedNote` when the common ground rests on
+  nothing in it, and their name or employer alone does not count. No two notes in a
+  batch say the same thing (`reading.same_ground()`).
 - **About me** defaults to one modest line, `ABOUT_ME` in
   `profile/networking.py`, that also says the candidate is looking, as context
   rather than a demand, in the shape "I work in data science, ex-<Employer> and

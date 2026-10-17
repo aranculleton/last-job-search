@@ -250,8 +250,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     this set is a decision: the upgrade cannot be done from the profile and research."""
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
-                                                                 "learned-choices"}
+                                                                 "learned-choices", "profile-reads"}
     assert "inbox" in U.by_id("job-alerts").ask
+    # Consent to a risk to their own account names the risk.
+    assert "terms forbid" in U.by_id("profile-reads").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):
