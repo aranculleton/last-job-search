@@ -62,20 +62,22 @@ Write a single self-contained HTML file. All CSS is inline in a `<style>` block.
 ### Layout
 
 ```
-┌─────────────────────────────────────────────┐
-│  🔍 Job Search Dashboard    Generated: DATE  │
-├──────┬──────┬──────┬──────┬──────┬───────────┤
-│Sent  │Draft │Active│Inter-│Offer │Rejected/  │  ← stat cards
-│  N   │  N   │  N   │view N│  N   │Closed   N │
-├──────┴──────┴──────┴──────┴──────┴───────────┤
-│  Status breakdown (doughnut) │ By sector (bar)│  ← charts row
-├─────────────────────────────────────────────  ┤
-│  By channel (bar)  │  Funnel (horizontal bar) │  ← charts row
-├──────────────────────────────────────────────  ┤
-│  Applications  [Status ▾] [Sector ▾] [🔍 ...]│  ← table with filters
-│  date │ company │ sector │ role │ status │ ... │
-│  ...                                          │
-└───────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│  🔍 Job Search Dashboard           Generated: DATE │
+├──────┬──────┬──────┬──────┬──────┬──────┬──────────┤
+│Sent  │Draft │Active│Inter-│Offer │Hired │Rejected/ │  ← stat cards
+│  N   │  N   │  N   │view N│  N   │  N   │Closed  N │
+├──────┴──────┴──────┴──────┴──────┴──────┴──────────┤
+│  Status breakdown (doughnut)  │  By sector (bar)   │  ← charts row
+├────────────────────────────────────────────────────┤
+│  By channel (bar)  │  Funnel (horizontal bar)      │  ← charts row
+├────────────────────────────────────────────────────┤
+│  By year or season (bar)                           │  ← charts row
+├────────────────────────────────────────────────────┤
+│  Applications  [Status ▾] [Sector ▾] [🔍 ...]      │  ← table with filters
+│  date │ company │ sector │ role │ status │ ...     │
+│  ...                                               │
+└────────────────────────────────────────────────────┘
 ```
 
 ### Design spec
@@ -106,6 +108,7 @@ Write a single self-contained HTML file. All CSS is inline in a `<style>` block.
 2. **By sector bar** (horizontal) - company count per sector, sorted descending
 3. **By channel bar** - portal / online / referral / other, the same four groups as Step 2 (`/apply` writes `portal` for a posting from a job portal)
 4. **Application funnel** (horizontal bar) - Applied → Interview → Offer → Hired, each bar = count reaching that stage, derived per Step 2's funnel rule (current status **plus** the merged `outcome.md` stage checkboxes), so a candidate who interviewed and was later rejected still counts in the Interview bar
+5. **By year or season bar** - applications per group from Step 2's year/season grouping, oldest first
 
 Build each chart as a hand-written `<svg>` element: compute bar lengths/doughnut arc angles from the stats in Step 2 and emit the `<rect>`/`<path>`/`<circle>` and `<text>` elements directly - no charting library, no `<canvas>`. Each `<svg>` has `role="img"` and an `aria-label` summarizing the chart (e.g. "Status breakdown: 3 Active, 2 Interview, 1 Offer"). Wrap each in a `<div class="chart-card">` with an `<h3>` title above. Remember to escape any label/value text drawn into `<text>` nodes per the escaping rule above.
 

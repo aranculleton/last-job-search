@@ -70,7 +70,7 @@ make sense to somebody whose repo just received it.
 - **Networking finds people where your field names them, says why each one, and writes
   to each in the shape that suits them.**
   - **Where to look is yours.** A LinkedIn title search finds executives and misses most
-    of the people who reply. `tools/network/sources.py` holds 27 kinds of public place
+    of the people who reply. `tools/network/sources.py` holds 26 kinds of public place
     that name people at an employer (team pages, posting contacts for informal
     enquiries, graduate recruiters, alumni features, meetups and professional-body
     committees, speaker lists, trade press and appointments, award shortlists, blogs,
@@ -251,6 +251,7 @@ make sense to somebody whose repo just received it.
   The `boards` method is at version 7 with `rerun`, so every older repo re-checks its boards
   once: a board probed as "0 in range" for this reason now counts. No profile upgrade: a
   method version is redone by `/upgrade` in the background, with nobody asked.
+- **The documentation says what the code does**, from the search budget and the rulings to the connectors, the brief's set-up and the local install, where `./tools/setup_env.sh` now installs Bun too.
 
 ## [3.1.0] - 2026-10-15
 

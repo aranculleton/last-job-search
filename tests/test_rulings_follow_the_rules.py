@@ -80,3 +80,11 @@ def test_older_rulings_are_reviewed_once_then_stamped_or_lifted(tmp_path):
     assert exclude.review(path) == []
     entry = json.load(open(path))["seen"]["a"]
     assert entry["basis"] == "rules" and entry["rules"] == exclude.rules_fingerprint()
+
+
+def test_a_better_screen_never_lifts_the_persons_own_call(tmp_path, monkeypatch):
+    path = _seen(tmp_path)
+    exclude.add(URL, "Morgan: not a fit at 40/100, no more food manufacturers",
+                "Data Analyst", "Oakmere Foods", basis="person", today="2026-01-01", path=path)
+    monkeypatch.setattr(throttle, "rescreen_since", lambda: "2026-06-01")   # a re-run screen since
+    assert throttle.ruled_out(json.load(open(path))["seen"])[0]           # still holds

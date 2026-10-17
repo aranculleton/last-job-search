@@ -13,11 +13,11 @@ charge of what goes out.
 ## What you need
 
 - A GitHub account (free).
-- Claude Code, which comes with a paid Claude plan. On your own computer you can use an
-  Anthropic API key instead and pay only for what you use, often cheaper if you search now
-  and then.
-  - Another agent tool (Codex, Gemini CLI, Cursor)? [AGENTS.md](AGENTS.md): everything
-    but the scheduled brief works in any agent that can read files and run commands.
+- Claude Code, which comes with a paid Claude plan. On your own computer an Anthropic API
+  key works instead and you pay only for what you use, often cheaper if you search now and
+  then, but the scheduled brief and cloud chats need a plan.
+  - Another agent tool (Codex, Gemini CLI, Cursor)? The core works in any agent that can
+    read files and run commands; [AGENTS.md](AGENTS.md) covers the Claude Code parts.
 - About fifteen minutes. No coding.
 
 ## Get started
@@ -29,9 +29,8 @@ charge of what goes out.
    and give it access to your new copy only.
 3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
 
-Claude asks you plain questions about yourself and does the rest. The full walk-through, with
-the one setting to paste in the first time, and the steps for running it on your own computer
-instead, is [START_HERE.md](START_HERE.md).
+Claude asks you plain questions about yourself and does the rest. [START_HERE.md](START_HERE.md)
+has the full walk-through, and the steps for running it on your own computer instead.
 
 ## What you can say to it
 
@@ -43,21 +42,27 @@ instead, is [START_HERE.md](START_HERE.md).
 | "What do I owe?" | Replies and follow-ups that are due |
 | "Prep me for my interview at Acme" | Likely questions, your best answers and questions to ask |
 | "They replied" or "I got an interview" | The record updated, and what to do next |
+| "Check my email" | Interview invites, offers and rejections from Gmail, recorded once you say yes |
+| "Make me a dashboard" | One page showing every application and how far it got |
+
+It also says what to learn next, copies your pipeline into Notion, reads your LinkedIn job
+alerts and takes your own resume template. Gmail and Notion are connected once, at
+[claude.ai/customize/connectors](https://claude.ai/customize/connectors).
 
 ## Why it works differently
 
 - **It ranks, it does not hide.** A job advert is a wish list. A missing skill lowers a score;
   it does not throw the job away. Only a few things rule a job out, such as needing a right to
-  work you do not have, or a language you do not speak, and a ruling lapses when your rules
-  change.
+  work you do not have, or a language you do not speak. Rulings based on your rules are
+  re-checked when the rules change; ones in your own words stay until you change your mind.
 - **It works your network, not just the job boards.** It looks where people in your field
   are actually named (team pages, meetups, speaker lists, alumni), says in a line why each
   person is worth writing to, and writes every message in the shape that suits them: the first
   note (which asks for a conversation, not a job), the replies and the referral ask. It tracks
   every thread and warns you before a cold application lands on top of a warm introduction.
 - **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
-  and drafts the nudge. Set up the twice-weekly brief and what you owe, what changed and the
-  next three things to do arrive in one message.
+  and drafts the nudge. Say "set up my brief" and what you owe, what changed and the next
+  three things to do arrive in one message, twice a week.
 - **It checks its own work.** Every resume is compiled, read back and checked the way an
   applicant tracking system reads it, and every claim against what you told it.
 - **It remembers.** Applications, conversations and what is due live in files in your copy,
@@ -67,17 +72,13 @@ instead, is [START_HERE.md](START_HERE.md).
 - **It keeps itself up to date.** Each release reaches your copy by itself the next time you
   use it, even in a chat kept open for weeks. Nothing about you is ever sent back.
 
-## Your data
+## Your data and security
 
-Everything about you stays in your private copy, in the `profile/` folder and a few files
-beside it. Nothing is submitted for you: every document stops as a file, and you send it.
-
-## Security
-
-The assistant reads job postings written by strangers next to your personal data. Posting text
-is treated as data, never as instructions, and a link found inside a posting is never opened.
-A check fails any change that weakens the permission allowlist or the rules that keep personal
-files out of the app. [SECURITY.md](SECURITY.md) says where those controls stop.
+Everything about you stays in your private copy, and nothing is submitted for you: every
+document stops as a file, and you send it. Job postings are written by strangers, so their text
+is treated as data, never as instructions, and a link inside one is never opened. A check
+fails any change that weakens the permission allowlist or lets personal files into the app.
+[SECURITY.md](SECURITY.md) has the details.
 
 ## For the technically curious
 
@@ -94,10 +95,10 @@ You never need any of this to use it.
 | Reporting a bug or suggesting something | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Working on the app itself | [MAINTAINING.md](MAINTAINING.md) |
 
-The employer-board reader is also published on its own, as the open-source library
-[openroles](https://github.com/aranculleton/openroles). Scraping, filtering and scoring are Python and Bash, so a search can read thousands of
-postings at no model cost; the model is used once you have chosen what to write. Over 1,200
-tests run in the app's CI and, in your copy, through `./tools/ci_local.sh`.
+Searching, filtering and scoring are plain Python and Bash, so a search reads thousands of
+postings without using the model. The model starts only when you pick what to write. Over
+1,200 tests run in CI and through `./tools/ci_local.sh`. The employer-board reader is also
+published as [openroles](https://github.com/aranculleton/openroles).
 
 ## Credits and licence
 

@@ -5,8 +5,8 @@ Two paths. Most sessions take the first.
 - **[Fresh cloud container](#a-fresh-cloud-container)** is how this repo normally runs:
   an ephemeral container, cloned at session start, reclaimed at session end. Nothing is
   preinstalled beyond Python and the repo itself.
-- **[Local machine](#b-local-machine)** is for working on the pipeline itself, where a
-  persistent LaTeX install and a real browser are worth having.
+- **[Local machine](#b-local-machine)** is for running the search on your own computer, or
+  working on the pipeline itself, where a persistent LaTeX install is worth having.
 
 This file is about the machine. Starting your own search is [START_HERE.md](START_HERE.md):
 make a private copy with **Use this template**, then say "set me up" and `/setup` builds
@@ -29,7 +29,7 @@ apt-get install -y --no-install-recommends \
 pip3 install --upgrade cffi
 pip3 install -r requirements.txt
 
-bun --version || curl -fsSL https://bun.sh/install | bash   # the job-board CLIs; preinstalled in Claude's cloud containers
+bun --version || curl -fsSL https://bun.sh/install | bash   # the job-board CLIs; usually preinstalled in Claude's cloud containers
 
 python3 -m pytest tests -q          # over 1,200 green before anything else
 ```
@@ -109,14 +109,15 @@ section is what each tool is for and how to install it by hand.
 
 ```bash
 python3 --version
-pip3 install pytest pypdf
+pip3 install -r requirements.txt    # pytest, pyyaml, pypdf, openpyxl
 ```
 
 ### Bun
 
-For the portal search CLIs. [bun.sh](https://bun.sh) has the installer; on macOS
-`brew install oven-sh/bun/bun` works, and on Windows use the PowerShell one-liner from
-their site.
+For the portal search CLIs. `./tools/setup_env.sh` installs it when it is missing, with no
+password: `brew install oven-sh/bun/bun` on a Mac with Homebrew, otherwise the official
+`curl -fsSL https://bun.sh/install | bash`, into `~/.bun`. On Windows, the PowerShell
+one-liner from [bun.sh](https://bun.sh).
 
 ### LaTeX
 
@@ -181,7 +182,7 @@ markers or replacement characters.
 The default extractor is **pypdf** (`pip install pypdf`, BSD, no Poppler needed). Poppler
 `pdftotext` is the fallback, and `tools/verify_batch.sh` uses it directly:
 
-- macOS: `brew install poppler`
+- macOS: `brew install poppler` (`./tools/setup_env.sh` does it when Homebrew is there)
 - Debian/Ubuntu: `apt install poppler-utils`
 - Windows: `choco install poppler`
 
@@ -201,6 +202,18 @@ JSON shape if you have one. Details in
 
 This matters less than it sounds: most postings omit salary, and one with no stated range
 is not penalised in scoring.
+
+---
+
+## Research papers (OpenAlex)
+
+Only for a field whose people publish, where `/setup` sets `OPENALEX = True` in
+`profile/networking.py`. `tools/network/openalex.py` reads a free key from openalex.org out of
+the environment variable `OPENALEX_API_KEY` and never writes it down; without one, a cloud
+container's shared address has usually spent the keyless daily allowance. In a cloud
+environment, put it in the environment's variables, which anyone who uses that environment
+can read, or keep it out of sight as a network secret for `api.openalex.org` (Bearer), where
+your plan offers those. On your own computer, export it in your shell's profile.
 
 ---
 
@@ -246,12 +259,4 @@ personal overrides.
 
 ## Upstream
 
-For the app's maintainer only: a person's copy, made with "Use this template", has no
-`upstream` remote, and the workflow runs only in the app. The app is a fork. `.github/workflows/upstream-watch.yml` runs weekly and writes a
-rolling issue listing the upstream commits this fork lacks, sorted into worth-reviewing
-versus probably-skip. `python3 tools/upstream_triage.py --remote upstream --branch master`
-produces the same report locally, and `python3 tools/check_upstream_updates.py` reports
-which methodology files an update would touch, by `framework_version` marker.
-
-Port by hand. A clean cherry-pick is not a correct one: see
-[MAINTAINING.md](MAINTAINING.md#upstream).
+For the app's maintainer only: [MAINTAINING.md](MAINTAINING.md#upstream).

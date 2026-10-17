@@ -388,12 +388,15 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         # to be able to say why.
         if not reason.strip():
             continue
+        # The person's own call (tools/exclude.py --basis person) holds until they
+        # lift it: no better screen and no rule change speaks for them.
+        own_call = e.get("basis") == "person"
         # Scored out under rules that no longer say to cut on a score. The entry
         # stays as the record; it just stops blocking, and the posting is ranked
         # again against the current scoring.
-        if status == "excluded" and is_stale_exclusion(reason):
+        if status == "excluded" and not own_call and is_stale_exclusion(reason):
             continue
-        if (status == "excluded" and since and screened_before(e, since)
+        if (status == "excluded" and not own_call and since and screened_before(e, since)
                 and not _NOT_A_VERDICT.search(reason)):
             continue
         # Ruled out under the person's own screening rules, which have changed since

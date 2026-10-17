@@ -38,12 +38,16 @@ done correctly*.
 |---|---|
 | `schema.py` | The contract: contact and thread columns, statuses, platform limits |
 | `state.py` | The store, the application link, what is owed, platform budget |
+| `sources.py` | Where to look: the kinds of public place that name people, this person's plan of them, and the search budget |
 | `discovery.py` | Query construction, tier classification, the disqualifier filter |
+| `why.py` | Why this person: a score from 0 to 100 and one plain line, by counting |
+| `openalex.py` | Researchers who put an employer on a recent paper, when `OPENALEX` is on |
 | `tone.py` | Every tone rule as an enforceable check |
 | `compose.py` | Message assembly with hard length limits |
 | `reply.py` | Scenario classification and reply guidance |
 | `reading.py` | What was read about one person before writing: their page, their public work, what a note can rest on |
 | `prep.py` | Call prep documents, for a call that came out of a thread |
+| `profile_facts.py` | The candidate half of a prep document, read from the profile |
 
 **Never hand-write a message without running `compose.validate()` on it.** The
 tone rules exist because each one was a correction made in practice; the checker
@@ -66,7 +70,14 @@ They are not alternatives, and the names are close enough to pick wrongly.
 
 ## Discovery
 
-### The one search pattern that works
+Where to look is the person's own plan, `tools/network/sources.py`: the kinds of public
+place where people in their field, level and country are named (`sources.KINDS`: LinkedIn
+title searches and hiring posts, team pages, posting contacts, alumni features, speaker
+lists, meetups, trade press, code, official directories and more), chosen by `/setup`
+(`PEOPLE_SOURCES`) and ranked by what has drawn replies. `/network` step 3 runs it. The
+LinkedIn people searches inside it follow the rules below.
+
+### Searching LinkedIn for people
 
 ```
 WebSearch(
@@ -78,12 +89,14 @@ WebSearch(
 `discovery.queries_for()` builds the query string and `discovery.SEARCH_DOMAINS`
 holds the domain list. Pass both.
 
-**The `site:` operator does not work here.** The brief this skill was built from
+**The `site:` operator does not work for profile searches.** The brief this skill was built from
 prescribes `site:linkedin.com/in ...`, and three live runs proved it wrong for
 this toolchain: a company search returned Glassdoor and ZipRecruiter
 listings, and an alumni search returned nothing but LinkedIn `/jobs/` pages. The
 same intent as a quoted phrase with the domains constrained returned mostly real
-profiles. Do not re-introduce `site:`; a test asserts its absence.
+profiles. Do not re-introduce `site:` into a profile query; a test asserts its absence. The
+hiring-posts search is the deliberate exception: it asks for `site:linkedin.com/posts`, and
+its results are read, never fetched.
 
 Even then, roughly two results in ten are LinkedIn's own job-board pages.
 **Put every URL through `discovery.resolve_result(url, company)`** before triage: it
@@ -96,23 +109,31 @@ Public LinkedIn profiles carry JSON-LD, so snippets return job titles, employer
 with location, and recent post content. One query returns roughly ten results.
 It is the highest-yield call available.
 
-**Never spend a call on:** company-name searches with no domain constraint
-(returns job ads), engineering blog indexes (no author names, stale), careers
-pages (JavaScript), org charts (not public above ~50 staff), or fetching an
-individual profile URL (login-walled, returns nothing).
+**Never spend a call on:** a company-name search with no domain constraint
+(returns job ads), a careers page (JavaScript), a blog's index page (no author
+names, stale), or fetching an individual profile URL (login-walled, returns
+nothing). Team pages, blog posts, org charts and the other kinds are reached
+through the searches `sources.py` prints, and a page is fetched only where its
+robots.txt allows.
 
 ### Budget
 
-One search per company. Two if the first returns nothing usable or the company
-has several relevant sub-teams. **Never three.** Two well-formed queries that return
-nothing at all are `no_results`, which proves nothing: try a roster, record nothing.
+Each employer gets at most `sources.SEARCHES_PER_COMPANY` (four) searches across all
+its kinds, every kind taking a turn before any takes a second, and the kinds searched
+once for the whole run (alumni, rosters, meetups, awards) share `SEARCHES_PER_RUN`
+(five). The LinkedIn title search inside that is one query, two if the first returns
+nothing usable or the company has several relevant sub-teams: `discovery.queries_for()`
+returns at most two, and **never more than three** whatever the caller passes. Searches
+that return nothing at all are
+`no_results`, which proves nothing: try a roster, record nothing.
 Queries that return people of whom none fits are `no_relevant_presence`: record it
 with `discovery.record_presence()`, which holds for `PRESENCE_REVIEW_DAYS`
 (`tools/company_research.py`), and move on. That
 verdict is a real output, not a failure: it stops the company being re-targeted
 next month.
 
-`discovery.queries_for()` enforces the cap. Do not route around it.
+`sources.for_company()`, `sources.for_run()` and `discovery.queries_for()` enforce the
+caps. Do not route around them.
 
 ### Tiers
 

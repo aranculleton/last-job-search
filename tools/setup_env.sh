@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Everything a fresh cloud container needs, in one idempotent command.
 #
-#     ./tools/setup_env.sh           LaTeX, Poppler and the Python side
+#     ./tools/setup_env.sh           LaTeX, Poppler, Bun and the Python side
 #     ./tools/setup_env.sh --python  the Python side only (seconds, no apt)
 #
 # ## Why this exists
@@ -72,6 +72,26 @@ if [ "$PY_ONLY" = 0 ]; then
   elif [ "$(readlink -f "$HOME/texmf")" != "$(readlink -f "$PWD/texmf")" ]; then
     echo "setup_env: ~/texmf exists and is not the repo's; export TEXMFHOME=\"$PWD/texmf\" for hand compiles"
   fi
+  # Bun runs the job-board CLIs (.agents/skills/*/cli). Claude's cloud containers
+  # usually ship it; elsewhere both installs are per-user and ask for no password:
+  # Homebrew's tap on a Mac that has brew, otherwise the official script, into
+  # $BUN_INSTALL (~/.bun unless set), and adds that to the shell's profile where it can.
+  BUN_BIN="${BUN_INSTALL:-$HOME/.bun}/bin"
+  [ -x "$BUN_BIN/bun" ] && export PATH="$BUN_BIN:$PATH"
+  if have bun; then
+    :
+  elif [ "$(uname -s)" = Darwin ] && have brew; then
+    echo "setup_env: installing Bun"
+    brew install oven-sh/bun/bun >/dev/null 2>&1 \
+      || echo "setup_env: brew install oven-sh/bun/bun failed; see SETUP.md"
+  elif have curl; then
+    echo "setup_env: installing Bun"
+    curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1 \
+      || echo "setup_env: the Bun installer failed; see SETUP.md"
+    export PATH="$BUN_BIN:$PATH"
+  else
+    echo "setup_env: no curl here; install Bun by hand (SETUP.md)"
+  fi
 fi
 
 # One package at a time, and only what is missing. A single `pip install
@@ -90,7 +110,7 @@ python3 -m ruff --version >/dev/null 2>&1 || pip3 install --quiet ruff >/dev/nul
 
 missing=""
 if [ "$PY_ONLY" = 0 ]; then
-  for t in lualatex xelatex pdftotext; do have "$t" || missing="$missing $t"; done
+  for t in lualatex xelatex pdftotext bun; do have "$t" || missing="$missing $t"; done
 fi
 python3 -c "import pytest, pypdf, yaml, openpyxl" >/dev/null 2>&1 || missing="$missing python-packages"
 python3 -m ruff --version >/dev/null 2>&1 || missing="$missing ruff"

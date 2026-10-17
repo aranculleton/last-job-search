@@ -11,7 +11,7 @@
 #
 # The rule is right and the dependency on GitHub was never the point of it.
 # Every check in .github/workflows/ci.yml is a script in this repo; the runner
-# only provides the machine. So it runs here, in about thirty seconds, and a
+# only provides the machine. So it runs here, in under two minutes, and a
 # clean run is the same evidence.
 #
 # CI's second Python leg exists because a bare `import tomllib` passed locally

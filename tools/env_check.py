@@ -147,7 +147,7 @@ def main() -> int:
     line("pypdf", state == "ok", {"ok": "", "missing": "missing; pip3 install pypdf",
                                   "broken": "installed but panics; pip3 install --upgrade cffi"}[state])
     line("bun (portal searches)", bool(shutil.which("bun")),
-         "" if shutil.which("bun") else "missing; the portal CLIs need it (SETUP.md)")
+         "" if shutil.which("bun") else "missing; ./tools/setup_env.sh installs it (the portal CLIs need it)")
 
     print("job boards")
     for name, url in hosts():

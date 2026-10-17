@@ -10,7 +10,7 @@ apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra te
   texlive-fonts-recommended poppler-utils   # icon fonts are vendored in texmf/, see its README
 pip3 install --upgrade cffi && pip3 install -r requirements.txt
 python3 -m pytest tests -q          # over 1,200 tests; all green before anything else
-./tools/ci_local.sh                 # or this: every check CI runs, ~40s, no Actions minutes
+./tools/ci_local.sh                 # or this: every check CI runs, under two minutes, no Actions minutes
 ```
 
 Full detail, including why `cffi` comes first, is in [SETUP.md](SETUP.md).
@@ -43,15 +43,18 @@ with its reason.
 The `seen_jobs.json` dedupe runs at **prefilter**, not at the throttle, so a posting this
 search already ruled out never reaches `hydrate` and never costs an HTTP call. It is the
 throttle's own `ruled_out()` either way, imported rather than copied, so the shortlist is
-identical; a large share of everything reaching hydrate used to be in that state. `--no-seen-read`
-turns it off, which is what you want after changing the scoring rules and wanting
-everything previously excluded re-evaluated.
+identical; a large share of everything reaching hydrate used to be in that state. A ruling
+made under the person's screening rules lapses by itself when those rules change, and one
+in their own words holds until `tools/exclude.py lift` takes it off; a scoring setting
+lifts nothing. `--no-seen-read` skips the check at prefilter only: everything ruled out is
+fetched and scored again in the stage files, and the throttle still keeps it off the
+shortlist.
 
 **Read the exit code.** 0 means the yield target was met, 2 means it was missed, 1 means
 a stage actually broke. A thin market and a broken pipeline are different answers.
 
-**`--jobage` is the window in days.** The default, 14, is also the prefilter's hard cap, so
-nothing older is ever ranked; the twice-weekly round uses 7. If a portal is blocked by the
+**`--jobage` is the window in days**, 14 by default, and nothing older is ranked; the
+scheduled round uses 7. `--expand` widens it (below). If a portal is blocked by the
 session's egress policy the log says `connect_rejected`; that is environment policy, not a
 bug. To re-run every free stage on a scrape that already succeeded, without touching the
 portals, the first run must have kept its stage files (`--keep-intermediates`), because a
@@ -73,8 +76,10 @@ It exits 2 and keeps three files it otherwise deletes, with the posting bodies s
 | `06_skipped.json` | what the company throttle and the one-role-per-employer rule removed |
 
 Those are the three places a posting can vanish. `--expand` re-runs wider automatically,
-up to three rounds. If it still misses, say so with the count, what was tried and the
-likely blocker. **Never pad a thin run with sub-60 postings, and never relax a gate or
+up to three rounds in all, each with more pages per search and a longer window: from the
+defaults, 10 pages and 21 days, then 30 pages and 42 days. The other widenings (title
+variants, places, sectors, named employers) are printed as what to try next, not run. If it
+still misses, say so with the count, what was tried and the likely blocker. **Never pad a thin run with sub-60 postings, and never relax a gate or
 the location filter to hit the number.**
 
 ### Then stop
@@ -143,7 +148,7 @@ posting until one page, then grows back the strongest absent one that still fits
 `check_claims` must report **0 error-level findings**. `audit_letters`, which
 `verify_batch.sh` runs, must report every letter clean. `verify_batch.sh` exits non-zero
 on any finding and checks pages, chronology, section order, bullets per employer, contact
-details as literal text, duplicated phrasing, em dashes, the document nouns the profile
+details as literal text, duplicated phrasing, em and en dashes, the document nouns the profile
 bans (`person.json` `documents.banned_nouns`), and the ATS text layer. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
 `cv/<Prefix>_CV_<ABBR>`; the globs here cover both.
@@ -198,7 +203,7 @@ session cannot see and will duplicate.
 
 ## What "done" looks like for a round
 
-At least 5 postings scoring 60+, of which 2 at 75+, all under 14 days old. Every drafted
+At least 5 postings scoring 60+, of which 2 at 75+, all inside the round's age window. Every drafted
 application has two verified one-page PDFs, a persisted posting, an outreach note, a
 tracker row, and 0 claim errors. All of it committed, and on master.
 
@@ -217,7 +222,13 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
 | `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
 | `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. |
-| `python3 tools/network/reading.py` | What was read about one person before writing to them: `read <contact_id> <file\|->` takes their profile page (pasted, read in the person's own browser, or LinkedIn's Save to PDF), `add` one public finding (a talk, an article, a post), `show` what a note can rest on, best first, and `queue` the waiting drafts with no fresh reading. Keeps only what a note could rest on, never their whole profile. |
+| `python3 tools/network/reading.py` | What was read about one person before writing to them: `read <contact_id> <file\|->` takes their profile page (pasted, read in the person's own browser, LinkedIn's Save to PDF, or transcribed screenshots), `add` one public finding (a talk, an article, a post), `show` what a note can rest on, best first, and `queue` the waiting drafts with no fresh reading. `verdict <contact_id>` is KEEP or SKIP after a read, `route --tools <...>` says how this session reads profiles and the one line to tell the person, `gate` says whether a browser read may go now, and `stop "<what LinkedIn showed>"` halts browser reads for the day. Keeps only what a note could rest on, never their whole profile. |
+| `python3 tools/network/sources.py ["<employer>"...]` | Where to look for people. Alone, this person's plan of source kinds, ranked by what has drawn replies; with employers, the run's exact searches inside the budget (at most four per employer and five shared by the whole run), and none for an employer the job search ruled out. |
+| `python3 tools/network/why.py [<contact_id>...]` | Why each person: a score from 0 to 100 and one plain line, best first, by counting, with no model call. |
+| `python3 tools/network/openalex.py "<employer>"` | Researchers who put the employer on a recent paper, only when `profile/networking.py` sets `OPENALEX`. A cloud session needs `OPENALEX_API_KEY` (SETUP.md). |
+| `python3 tools/exclude.py` | Rulings in `seen_jobs.json`, each with what it rests on. `add <url> --reason "<why>" [--basis person]` rules a posting out, `lift "<words in the reason>"` takes rulings off when the person changes their mind, `review` groups older rulings that record no basis, `stamp "<words>" --basis rules\|person` records what a group rests on, and `rules` prints the rules fingerprint. |
+| `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--check` says how far behind, changing nothing. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
+| `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, Poppler, pypdf, Bun and every job board's host, with what to do about anything missing. |
 | `python3 tools/network/state.py` | What is owed, the connection budget, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. |
 
 `tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each

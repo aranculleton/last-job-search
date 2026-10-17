@@ -228,7 +228,7 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
             (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
         ),
-        "fingerprint": "a601351121025a93",
+        "fingerprint": "ced41318db708c64",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -301,7 +301,7 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
             (17, "2026-10-17", False, "shared definitions: dates, places, recruiter test, ruled-out employers, employer names without a legal suffix, an application there and a route's clear reply rate in why-them"),
         ),
-        "fingerprint": "070f9476ae1f9602",
+        "fingerprint": "1dbd7d5733aea5e8",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -346,8 +346,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "exclusions the current rules only rank (a years bar, or a reason naming only the stage that wrote it) are screened again, while a range or degree knockout stands; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "one definition of a preference, an equivalence route and the years bar; rulings that lapse when the person's rules change (tools/exclude.py); places from one list"),
+            (6, "2026-10-17", False, "a ruling in the person's own words is never lifted by a better screen or a scoring rule, only by them"),
         ),
-        "fingerprint": "805c5ca20f5cb0e1",
+        "fingerprint": "e0438ba37b51e1cb",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -361,7 +362,7 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "The default set-up is one task, a twice-weekly brief that takes the app's updates; the scheduled round is optional. Existing tasks keep their schedules"),
             (4, "2026-10-17", False, "how to set up the brief from a session on your own computer"),
         ),
-        "fingerprint": "a28754d6f5e10823",
+        "fingerprint": "2a9327d85038921d",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

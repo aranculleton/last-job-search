@@ -82,7 +82,8 @@ them. A board that answers 429 is left alone for the rest of the run, and a big 
 searched by title variant instead of paged whole.
 
 An employer's own board is a live board: a posting still listed is still open, so the
-fourteen-day limit, which exists for aggregator listings nobody took down, does not apply.
+age limit (14 days by default), which exists for aggregator listings nobody took down, does
+not apply.
 
 ### The filter is deliberately timid
 
@@ -156,7 +157,7 @@ weakest bullet for *this* posting and recompiles. Once it fits, it tries to add 
 strongest bullet that is still absent.
 
 The generator enforces what a person forgets: reverse-chronological order, a fixed
-section order, a three-line skills block, no repeated figures. Each of those is a defect
+section order, a short skills block under the person's own headings, no repeated figures. Each of those is a defect
 that reaches an application when nobody is checking, which is why it is a rule.
 
 ### Checking the result
@@ -166,7 +167,8 @@ that reaches an application when nobody is checking, which is why it is a rule.
 - page count, section order, chronology, bullets per employer
 - contact details present as literal text in the PDF's text layer
 - no duplicated phrasing across bullets
-- no em dashes, no "CV" where the market says resume
+- no em or en dashes, and none of the document nouns the profile bans (no "CV" where the
+  market says resume)
 - a clean text layer, with no `(cid:)` markers or replacement characters
 
 Then `check_claims.py` over every factual assertion and `audit_letters.py` over every
@@ -194,11 +196,24 @@ inbound message and prescribes what the reply has to do without ever writing one
 
 ### Finding people
 
-Two queries per company, and never more than three whatever the caller passes, in
-`queries_for()`. Alumni modes run before cold modes wherever both are possible: former
+Where to look is the person's own plan in `sources.py`: of the kinds of public place that
+name people at an employer (team pages, posting contacts, alumni features, speaker lists,
+trade press, code, official directories and more), the ones that pay for their field, level
+and country, reordered by reply rate once a kind has five decided first notes. Each employer
+gets at most four searches across its kinds, the kinds that serve every employer at once
+(alumni, rosters, meetups) share five for the whole run, and the LinkedIn title search
+inside that is two queries, never more than three, in `queries_for()`. An employer where
+people came back and none fits is recorded as having no relevant presence and skipped for
+90 days (`company_research.py` `PRESENCE_REVIEW_DAYS`).
+
+Alumni modes run before cold modes wherever both are possible: former
 colleagues of a past employer answer far more often than cold contacts. Those queries
 never name the target company, because naming it collapses an alumni
 search back into a cold one with extra words in it.
+
+`why.py` ranks everyone found: a score from 0 to 100 and one plain line saying why this
+person (a shared employer, a hiring post, a role open there that scored well), counted
+with no model call, so the batch is read and written best first.
 
 Tier 1 is live hiring intent, and it is the only tier that needs evidence rather than a
 title, so the evidence is the quoted sentence and it travels through to the message. It
@@ -214,8 +229,11 @@ somebody who was written to that week.
 
 ### Composing
 
-Four message types, one shape each, and the limits the platform enforces are enforced
-here. A connection note is 200 characters on a free LinkedIn plan and 300 on Premium
+Each message type has its own composer (the first note, an InMail, an email, a warm intro,
+a nudge, the referral ask), and the first note takes one of five shapes chosen from who
+the reader is and what was read about them: shared history first, their own work first,
+brief for a senior reader, a recruiter's, or a message to someone already connected
+(`compose.shape_for()`). The limits the platform enforces are enforced here. A connection note is 200 characters on a free LinkedIn plan and 300 on Premium
 (`tools/network/schema.py` `LIMITS`, set by `LINKEDIN_PLAN`), and `compose.py` raises with the count rather
 than truncating, because what to cut is a judgement about which detail matters least and
 a truncator always takes the close. A warm intro that does not name the referrer in its
@@ -250,7 +268,9 @@ Every fact in a prep document prints with its source or it does not print. `prep
 raises on a value that arrives with no attribution, and it cannot produce a compensation
 band at all: with nothing researched and passed in, it prints "not researched" rather
 than a number. The failure it prevents is a band or a headcount that sounded right, got
-written down, and then got said out loud to somebody who knows the real figure.
+written down, and then got said out loud to somebody who knows the real figure. Company
+research older than 30 days (`company_research.py` `RESEARCH_FRESH_DAYS`) is flagged as a
+lead to re-confirm, not a fact to repeat.
 
 ### Where it meets the shortlist
 
@@ -307,13 +327,15 @@ Full detail in
 Sessions run in containers that are destroyed when they end. Anything not committed did
 not happen, so state is written at the moment it changes.
 
-Three files:
+The three state files, and two more that hold what has been decided:
 
 | File | Holds |
 |---|---|
 | `job_search_tracker.csv` | every application, including ones made outside this repo |
 | `network_contacts.csv` | who, where, and what state the relationship is in |
 | `network_threads.csv` | one row per message, in or out |
+| `job_scraper/seen_jobs.json` | every posting seen, and every ruling with its reason and what it rests on: the person's screening rules (it lapses when they change) or their own words (it holds until lifted, `tools/exclude.py`) |
+| `profile/learned.json` | what the person has said they want different, kept for good and read before anything is drafted (`tools/learned.py`) |
 
 **Thread status is derived from the message log, never stored.** A stored status drifts
 the moment somebody replies and the row is not edited, and the row is edited by hand.
@@ -328,7 +350,7 @@ This section is only where it is kept.
 so a contact and an application at the same employer link without anyone maintaining a
 mapping.
 
-`python3 tools/open_actions.py` renders all three as one view, employers first. It is
+`python3 tools/open_actions.py` renders the three state files as one view, employers first. It is
 derived on every run and never stored, so it cannot go stale. If something is missing
 there, the state file is wrong, not the view.
 

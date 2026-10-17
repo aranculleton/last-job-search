@@ -6,7 +6,7 @@ send is an issue.
 **Found a bug, or have an idea?** [Open an issue](https://github.com/aranculleton/last-job-search/issues/new/choose).
 Say what you asked it to do, what you expected and what happened. For a posting that was
 scored or screened wrongly, the posting's link and the score it got are usually enough.
-Never paste anything personal: the app's tracker is public.
+Never paste anything personal: issues here are public.
 
 **Pull requests.** Outside pull requests are not merged, and the reason is not you: every
 change has to pass a scan against the maintainer's own private data before it can be made

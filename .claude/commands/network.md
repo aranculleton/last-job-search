@@ -175,7 +175,7 @@ untouched employers from the latest round's shortlist.
       the search filters out, or already has a request pending. A skip is recorded as a
       `closed` contact with that reason, so they never surface again, and the next person
       is read in their place. When the people kept run out before the batch is full, run
-      the next query `discovery.queries_for()` allows and read on.
+      the next search the budget from step 3 still allows and read on.
    4. **Their profile, from the person**: otherwise, the reply that presents the drafts
       asks for it, as a numbered list (`reading.py queue`), one line per person, in
       whichever way suits where they are:
@@ -311,7 +311,8 @@ with their reason if they do not want that person contacted.
 ## Do not
 
 - Stop after finding people to ask whether to draft their messages
-- Exceed three searches for one company
+- Search one employer past its budget: four searches across its kinds
+  (`sources.for_company()`), of which at most two are title searches (`discovery.queries_for()`)
 - Fetch a LinkedIn page, a careers page or a blog index from this session (a profile is
   read only in the person's own browser, when they chose it, or from their paste)
 - Click anything on LinkedIn, read faster than a person would, or read anyone this run did
