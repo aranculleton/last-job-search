@@ -108,6 +108,21 @@ make sense to somebody whose repo just received it.
 
   On one real profile this took Job Bank from 368 planned requests to 243. No profile
   upgrade: the next round does it by itself.
+- **Reading people: the gaps a first real run found.**
+  - **New candidates:** `reading.py add`, `show` and `verdict` now work for a candidate not
+    yet in the contact book (`--name`, `--company`); before, only `read` did.
+  - **Post dates in words:** a post dated "3 weeks ago" is kept, and so is a post with no
+    "posted this" line above it, as screenshots show them. A phrase such as "my 5 years" is
+    not read as an age.
+  - **Current employer:** found when a role has no employment type ("Title / Company /
+    dates").
+  - **Cut text:** the About excerpt is cut at a word, not mid-word.
+  - **Dates on public finds:** a reading made only from public finds carries the date they
+    were found, so prep documents no longer say "read undated".
+  - **When people search runs dry or the search tool declines:** `/network` goes to the
+    person's connections export, then rosters, then LinkedIn's People tab in their browser,
+    and never rephrases a declined query.
+  - **Read-only rule:** a test now fails if any flow that names a browser tool lacks it.
 - **A chat kept open for days now gets the updates.** The sync ran only at the start of a
   session, and most people never start a new one: a chat carried on for days pulled neither
   master nor the app's updates after its first hour. `tools/sync_app.py --if-stale` does a

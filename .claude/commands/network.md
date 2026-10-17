@@ -48,6 +48,20 @@ untouched employers from the latest round's shortlist.
    a tier-1 signal needs one), and drops a company page's own posts. At most three
    searches for one company, the alumni pass apart.
 
+   **When search runs dry.** A people search often returns little for a named employer, and
+   the search tool sometimes declines one outright. Never rephrase a declined query to get
+   round it. Go to the sources that name people in public instead, in this order, and send
+   everyone they surface through step 4 and the read in step 5 like any other result:
+   - **People they already know**: `state.connections_at()` on their LinkedIn connections
+     export, when it is there. When it is not, say once that the export would let every run
+     start from people they know, with LinkedIn's own help page for it.
+   - **Rosters**: `discovery.roster_first(company)`. Conference speaker lists, the
+     employer's own team and leadership pages, engineering-blog authors, podcast guests and
+     `theorg.com` org charts. Fetched like any page, robots.txt honoured.
+   - **LinkedIn's own People tab, in the person's browser**, when the route from step 5 is
+     `browser`: `https://www.linkedin.com/company/<company>/people/?keywords=<their function>`,
+     read like a profile, at a person's pace, nothing clicked.
+
 4. **Triage with `discovery.triage()`.** It applies the disqualifiers, the
    staleness check and the tier classification. A result with no location is kept
    and marked `location_unverified`, never read as somewhere else; a hiring line with
