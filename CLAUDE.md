@@ -43,8 +43,9 @@ Every session in a person's repo starts with the same five steps, before anythin
 1. **Pull master**: `git fetch origin master && git merge origin/master`. Another chat may have
    merged since this container was built.
 2. **Take the app's updates**: `python3 tools/sync_app.py`. It fetches the app and merges what is
-   new, and never sends anything back. The app is public, so nothing needs attaching; if it still
-   cannot reach it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
+   new (the newest release; the maintainer's own copy takes master), and never sends anything
+   back. The app is public, so nothing needs attaching; if it still cannot reach it (exit 2),
+   attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
    changed: show the person what it listed and ask before going further.

@@ -44,6 +44,13 @@ make sense to somebody whose repo just received it.
 
   Profile upgrade: profile-reads (it asks once whether Claude may read profiles in your
   browser, because LinkedIn's terms forbid automated access and the risk is to your account).
+- **Releases, not every merge.** A person's repo now follows the app's newest `vX.Y.Z`
+  release, and the maintainer's own repo follows master, so a change runs in the
+  maintainer's copy before it reaches anyone else. A repo whose GitHub owner is the app's is
+  the maintainer's; `"app_channel": "master"` or `"stable"` in `profile/person.json` overrides
+  it. A first sync still takes master, and stable never goes backwards. MAINTAINING.md,
+  "Releasing", says when and how to cut one. No profile upgrade: the sync chooses the channel
+  by itself.
 - **One scheduled task by default: a brief, twice a week, that is about this person's search.**
   A daily brief plus a twice-weekly round was two messages on round days and a message every
   morning. The brief (`automation/prompts/morning_brief.md`) now covers everything since the
