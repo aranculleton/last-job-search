@@ -176,14 +176,22 @@ _NOISE = re.compile(
     r"^[•·]?\s*(?:1st|2nd|3rd\+?)(?:\s+degree connection)?$", re.I)
 _POST_HEAD = re.compile(r"\b(posted this|reposted this|shared this|commented on (?:this|a post))\b",
                         re.I)
-_AGE = re.compile(r"(?<![\w-])(\d{1,3})\s*(mo|mos|yr|yrs|y|w|d|h|hr|hrs|m)\b(?!\w)", re.I)
-_AGE_ONLY = re.compile(r"^(?:\d{1,3}\s*(?:mo|mos|yr|yrs|y|w|d|h|hr|hrs|m)\b)?[\s•·]*"
-                       r"(?:edited)?[\s•·]*$", re.I)
+_AGE = re.compile(r"(?<![\w-])(\d{1,3})\s*(mo|mos|yr|yrs|y|w|d|h|hr|hrs|m|minutes?|hours?|days?|"
+                  r"weeks?|months?|years?)\b(?!\w)(?:\s+ago)?", re.I)
+# A line that is only a post's age, or ends with one: "2w", "2w • Edited", "3 weeks ago".
+_AGE_AT_END = re.compile(
+    r"(?:^|[•·])\s*(\d{1,3})\s*(mo|mos|yr|yrs|w|d|h)\b[\s•·]*(?:edited)?[\s•·]*$"   # "• 2w"
+    r"|\b(\d{1,3})\s+(minutes?|hours?|days?|weeks?|months?|years?)\s+ago[\s•·]*$", re.I)
+_AGE_ONLY = re.compile(r"^(?:\d{1,3}\s*(?:mo|mos|yr|yrs|y|w|d|h|hr|hrs|m|minutes?|hours?|days?|"
+                       r"weeks?|months?|years?)\b(?:\s+ago)?)?[\s•·]*(?:edited)?[\s•·]*$", re.I)
 _PAGE_ONE = re.compile(r"^page \d+ of \d+$", re.I)
 
 
 def _age_date(n: int, unit: str, today: datetime.date) -> str:
     u = unit.lower()
+    u = {"minute": "m", "minutes": "m", "hour": "h", "hours": "h", "day": "d", "days": "d",
+         "week": "w", "weeks": "w", "month": "mo", "months": "mo", "year": "y",
+         "years": "y"}.get(u, u)
     days = {"h": 0, "hr": 0, "hrs": 0, "m": 0, "d": 1, "w": 7, "mo": 30, "mos": 30,
             "y": 365, "yr": 365, "yrs": 365}[u] * n
     return (today - datetime.timedelta(days=days)).isoformat()
@@ -260,6 +268,16 @@ def _posts(lines: list, today: datetime.date, name: str = "") -> list:
             cur = {"kind": kind, "date": _age_date(int(age.group(1)), age.group(2), today)
                    if age else "", "url": "", "text": ""}
             continue
+        if cur is None and not _NOISE.match(line):
+            # No "posted this" line above it, as a phone screenshot or a short paste
+            # shows it: a line that ends with the post's age starts one ("3 weeks ago").
+            end = _AGE_AT_END.search(line)
+            if end:
+                n, unit = (end.group(1), end.group(2)) if end.group(1) else (end.group(3), end.group(4))
+                before = line[:end.start()].strip(" •·-")
+                cur = {"kind": "post", "date": _age_date(int(n), unit, today),
+                       "url": "", "text": before[:EXCERPT] if len(before) >= 12 else ""}
+                continue
         if cur is None or _NOISE.match(line) or _AGE_ONLY.match(line):
             continue
         if own and fold(line).strip() == own:
@@ -313,6 +331,12 @@ _TENURE = re.compile(r"^(?:(?:full-time|part-time|contract)\s+·\s+)?\d+\s+yrs?(
                      r"^\d+\s+mos?$", re.I)
 
 
+_DATES = re.compile(r"\b(?:19|20)\d{2}\b.*?(?:-|–|to)\s*(?:present|\w+\s+(?:19|20)\d{2}|(?:19|20)\d{2})|"
+                    r"(?:-|–)\s*present\b", re.I)
+# Save to PDF writes a role's dates as "January 2024 - Present (1 year 10 months)".
+_PDF_LIKE = re.compile(r"\(\s*\d+\s+(?:years?|months?)", re.I)
+
+
 def _current(exp: list) -> str:
     """The employer of their first, most recent Experience entry, or "" if unclear."""
     lines = [x for x in exp[:10] if not _NOISE.match(x)]
@@ -322,8 +346,13 @@ def _current(exp: list) -> str:
             return m.group(1).strip()[:120]
     if len(lines) >= 2 and _TENURE.match(lines[1]):
         return lines[0][:120]                      # several roles grouped under one employer
-    if len(lines) >= 3 and any("present" in x.lower() for x in lines[1:4]):
-        return lines[0][:120]                      # a Save to PDF export: employer first
+    if len(lines) >= 3 and any("present" in x.lower() for x in lines[1:4]) \
+            and not _DATES.search(lines[1]):
+        if _DATES.search(lines[2]) and not _DATES.search(lines[0]) and _PDF_LIKE.search(lines[2]):
+            return lines[0][:120]                  # a Save to PDF export: employer first
+    for i, line in enumerate(lines[:8]):
+        if _DATES.search(line) and "present" in line.lower() and i >= 1:
+            return lines[i - 1][:120]              # Title / Company / dates, no employment type
     return ""
 
 
@@ -471,7 +500,7 @@ def hooks(reading: dict, today: datetime.date | None = None) -> list:
     for p in shared.get("places", []):
         out.append((6, "same city before", f"you both worked in {p['name']}", p.get("evidence", "")))
     if reading.get("about"):
-        out.append((3, "about", "something specific in their About", reading["about"][:200]))
+        out.append((3, "about", "something specific in their About", _clip(reading["about"], 200)))
     return sorted(out, key=lambda h: -h[0])
 
 
@@ -714,7 +743,16 @@ def _show(reading: dict) -> None:
     if not hs:
         print("  nothing personal to rest a note on yet: paste their profile, or add a finding")
     for strength, kind, what, ev in hs[:6]:
-        print(f"  [{strength}] {kind}: {what}" + (f'\n        "{ev[:150]}"' if ev else ""))
+        print(f"  [{strength}] {kind}: {what}" + (f'\n        "{_clip(ev, 150)}"' if ev else ""))
+
+
+def _clip(text: str, n: int) -> str:
+    """At most n characters, cut at a word, with an ellipsis when cut."""
+    text = " ".join(str(text or "").split())
+    if len(text) <= n:
+        return text
+    cut = text[:n].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return (cut or text[:n]) + "…"
 
 
 def main(argv: list | None = None) -> int:
@@ -736,6 +774,8 @@ def main(argv: list | None = None) -> int:
     a_.add_argument("--url", required=True)
     a_.add_argument("--date", default="")
     a_.add_argument("--text", required=True)
+    a_.add_argument("--name", default="", help="for a candidate not in the contact book yet")
+    a_.add_argument("--company", default="")
     s = sub.add_parser("show")
     s.add_argument("contact_id")
     sub.add_parser("queue", help="drafts waiting with no fresh reading")
@@ -767,17 +807,19 @@ def main(argv: list | None = None) -> int:
         keep, why = verdict(found, a.company or found.get("company", ""))
         print("KEEP" if keep else f"SKIP: {why}")
         return 0 if keep else 3
-    contact = _contact(a.contact_id, getattr(a, "name", ""), getattr(a, "company", ""))
     old = load(a.contact_id)
-    if a.cmd == "show":
+    if a.cmd == "show":                 # a reading stands on its own: no contact row needed
         if not old:
-            print(f"reading: nothing read about {contact.get('name')} yet")
+            print(f"reading: nothing read about {a.contact_id} yet")
             return 1
         _show(old)
         return 0
+    known = old or {}
+    contact = _contact(a.contact_id, getattr(a, "name", "") or known.get("name", ""),
+                       getattr(a, "company", "") or known.get("company", ""))
     if a.cmd == "add":
         new = {"name": contact.get("name", ""), "company": contact.get("company", ""),
-               "read_on": (old or {}).get("read_on", ""),
+               "read_on": (old or {}).get("read_on", "") or datetime.date.today().isoformat(),
                "sources": [{"kind": "public", "url": a.url,
                             "date": datetime.date.today().isoformat()}],
                "items": [item(a.kind, a.url, a.text, a.date)]}

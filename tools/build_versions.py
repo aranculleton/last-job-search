@@ -283,8 +283,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-17", False, "a note is written from what was read about the person (their profile, posts and public work), refuses a common ground nothing read supports, and no two notes in a batch say the same thing"),
             (11, "2026-10-17", False, "reads the people a run surfaced until the batch is full, skips anyone the page shows has moved on or is based elsewhere and reads the next, and reaches the desktop app's browser from a cloud session"),
             (12, "2026-10-17", False, "screenshots from the LinkedIn app, read like a paste, so a profile is read on a phone or in a web session"),
+            (13, "2026-10-17", False, "a declined or thin people search goes to connections, rosters and the People tab, never a rephrased query"),
         ),
-        "fingerprint": "ec0d26659b9d40f4",
+        "fingerprint": "75e4b45887381922",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -304,8 +305,9 @@ METHODS: dict[str, dict] = {
                                     "and no two notes say the same thing"),
             (3, "2026-10-17", False, "a person the page shows has moved on is skipped, and the ceiling on reads is far above a run"),
             (4, "2026-10-17", False, "screenshots count as a read of the person's page"),
+            (5, "2026-10-17", False, "posts dated in words, current employers with no employment type, and new candidates read without a contact row"),
         ),
-        "fingerprint": "9343d73e73fdc1e3",
+        "fingerprint": "5100630e4b5daa34",
     },
     "screening": {
         "by": "round", "priority": 2,
