@@ -393,6 +393,27 @@ def _who_lines(contact) -> list:
     if referrer:
         out.append("- Referred by %s. Name them in the first minute, not the last. (source: %s)"
                    % (referrer, CONTACTS_SOURCE))
+    return out + _reading_lines(contact)
+
+
+def _reading_lines(contact) -> list:
+    """What was read about them before the first note (tools/network/reading.py)."""
+    cid = _contact_id(contact)
+    try:
+        import reading
+        found = reading.load(cid) if cid else None
+    except (ImportError, ValueError):
+        return []
+    if not found:
+        return []
+    src = "documents/network/%s/reading.json, read %s" % (cid, found.get("read_on") or "undated")
+    out = []
+    for _strength, kind, what, evidence in reading.hooks(found)[:4]:
+        if kind == "about":
+            continue
+        line = "- %s%s" % (what[:1].upper() + what[1:],
+                           ': "%s"' % evidence[:160] if evidence else "")
+        out.append("%s (source: %s)" % (line, src))
     return out
 
 

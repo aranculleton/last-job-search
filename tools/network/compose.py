@@ -82,6 +82,10 @@ class AsksForTheJob(ValueError):
     """
 
 
+class UngroundedNote(ValueError):
+    """The common ground rests on nothing that was read about them (reading.grounded)."""
+
+
 class NoteIsAllAboutTheSender(ValueError):
     """A connection note that never reaches the person it is addressed to.
 
@@ -771,7 +775,8 @@ def _question(question) -> str:
 
 
 def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
-               opener=OPENER, recruiter=False, seniority="peer", their=()) -> str:
+               opener=OPENER, recruiter=False, seniority="peer", their=(),
+               reading=None) -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
         Hi Robin, hope you're well. <common ground>. <about me>. <question>? <ask>.
@@ -792,11 +797,23 @@ def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
     `about_me` and `ask` default to the person's own words (their networking.py). Pass `ask=None` when the
     question already carries the ask. `recruiter=True` is for a recruiter, whose
     job is roles: the job-ask rules lift and work authorization is added.
+
+    `reading` is what was read about them (tools/network/reading.py). Given one,
+    the common ground must rest on it: history they share, or the words of
+    something they wrote or said. Their name and employer do not count, because
+    a search snippet already had them.
     """
     if not str(common_ground or "").strip():
         raise ValueError(
             "a first note needs the common ground: the shared employer, school or "
             "move, or the one thing about their work that prompted the note")
+    if reading is not None:
+        import reading as _reading
+        ok, why = _reading.grounded(common_ground, reading)
+        if not ok:
+            raise UngroundedNote(
+                f"{why}. Take the common ground from what was read "
+                f"(python3 tools/network/reading.py show <contact_id>), never from the snippet")
     q = _question(question)
     if not q and not str(ask or "").strip():
         raise ValueError(

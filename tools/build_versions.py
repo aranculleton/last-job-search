@@ -101,8 +101,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "asks for your LinkedIn plan with the rest of networking.py "
                                      "and keeps the note's pieces short enough for a free account; "
                                      "the plan reaches older profiles as its own question"),
+            (4, "2026-10-17", False, "asks whether Claude may read LinkedIn profiles in your own browser before writing to someone"),
         ),
-        "fingerprint": "684df17e43b23e9d",
+        "fingerprint": "76fa627d1e6e4f3c",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -175,8 +176,9 @@ METHODS: dict[str, dict] = {
                                     "never only its path"),
             (4, "2026-10-15", False, "a gap asked only as a preference is never a reason not to apply"),
             (5, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (6, "2026-10-17", True, "the prep document says what was read about them: the history you share and what they have posted"),
         ),
-        "fingerprint": "e19dab928a4ecc74",
+        "fingerprint": "4205ea59c85d17e3",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -216,8 +218,9 @@ METHODS: dict[str, dict] = {
             (7, "2026-10-15", False, "the verification checklist and the tools table moved out of CLAUDE.md into files read when they are needed, so every session starts lighter"),
             (8, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (9, "2026-10-15", False, "stage_picks.py reminds a chat that has not checked the app today; what it stages is unchanged"),
+            (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
         ),
-        "fingerprint": "75b1f193b6724e0d",
+        "fingerprint": "c4b29137c2dc9c11",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -275,8 +278,28 @@ METHODS: dict[str, dict] = {
                                     "your work, and the question in a first note is optional"),
             (8, "2026-10-15", False, "a reply after 'no action unless they reply' is owed, nobody is nudged against it, a dated close is not reopened, a catch-up message is not a connection request, and plain job asks are caught"),
             (9, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (10, "2026-10-17", False, "a note is written from what was read about the person (their profile, posts and public work), refuses a common ground nothing read supports, and no two notes in a batch say the same thing"),
         ),
-        "fingerprint": "2204cb881b002a8f",
+        "fingerprint": "d22060a84031c9f2",
+    },
+    "network-notes": {
+        "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
+        "gives": "every first note still waiting to be sent rewritten from what was read "
+                 "about the person, not from a search snippet",
+        "run": "python3 tools/network/reading.py queue; for each contact it lists, /network "
+               "step 5 (their public work, and their profile in the browser only if "
+               "PROFILE_READS is \"browser\"), then rewrite "
+               "documents/network/<contact_id>/draft.md with compose.first_note(..., reading=) "
+               "and reading.same_ground() across them; update any file of theirs that lists "
+               "the old notes (a send pack) to match, and show the new notes; nothing is sent",
+        "files": ("tools/network/reading.py",),
+        "versions": (
+            _first(),
+            (2, "2026-10-17", True, "each note rests on something read about the person: "
+                                    "history you share, a recent post, a talk or an article, "
+                                    "and no two notes say the same thing"),
+        ),
+        "fingerprint": "f80ef0bc4bb18c4f",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -586,6 +609,7 @@ def _has_rows(path: str) -> bool:
 
 APPLIES = {
     "prep_docs": lambda: bool(glob.glob(person.state("documents", "network", "*", "prep.md"))),
+    "queued_notes": lambda: bool(glob.glob(person.state("documents", "network", "*", "draft.md"))),
     "unsent_drafts": lambda: "drafted" in _tracker_statuses(),
     "live_interviews": lambda: "interview" in _tracker_statuses(),
     "live_applications": lambda: bool({"drafted", "interview"} & _tracker_statuses()),
