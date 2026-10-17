@@ -13,15 +13,12 @@ charge of what goes out.
 ## What you need
 
 - A GitHub account (free).
-- Claude Code. It has no free tier: you need a Claude subscription or, running it on your own
-  computer, Anthropic API credits (pay as you go, often cheaper if you only use it now and then).
+- Claude Code, which comes with a paid Claude plan. On your own computer you can use an
+  Anthropic API key instead and pay only for what you use, often cheaper if you search now
+  and then.
+  - Another agent tool (Codex, Gemini CLI, Cursor)? [AGENTS.md](AGENTS.md): everything
+    but the scheduled brief works in any agent that can read files and run commands.
 - About fifteen minutes. No coding.
-
-Using a different agent tool (ChatGPT Codex, Gemini CLI, Cursor, Antigravity)? Start at
-[AGENTS.md](AGENTS.md). It is built for Claude Code, but the search, scoring, documents,
-checks and tracking are plain Python and written procedures that any agent which can read
-files and run commands can follow. A few extras, such as the scheduled twice-weekly brief, are
-Claude-only. Ports to other tools are listed in [Discussions](https://github.com/aranculleton/last-job-search/discussions/41).
 
 ## Get started
 
@@ -33,7 +30,8 @@ Claude-only. Ports to other tools are listed in [Discussions](https://github.com
 3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
 
 Claude asks you plain questions about yourself and does the rest. The full walk-through, with
-the one setting to paste in the first time, is [START_HERE.md](START_HERE.md).
+the one setting to paste in the first time, and the steps for running it on your own computer
+instead, is [START_HERE.md](START_HERE.md).
 
 ## What you can say to it
 
@@ -50,23 +48,24 @@ the one setting to paste in the first time, is [START_HERE.md](START_HERE.md).
 
 - **It ranks, it does not hide.** A job advert is a wish list. A missing skill lowers a score;
   it does not throw the job away. Only a few things rule a job out, such as needing a right to
-  work you do not have, or a language you do not speak.
-- **It works your network, not just the job boards.** It finds former colleagues, fellow
-  alumni and the right people at each employer, and writes every message: the first note
-  (which asks for a conversation, not a job), the replies and the referral ask. It tracks every
-  thread and warns you before a cold application lands on top of a warm introduction.
+  work you do not have, or a language you do not speak, and a ruling lapses when your rules
+  change.
+- **It works your network, not just the job boards.** It looks where people in your field
+  are actually named (team pages, meetups, speaker lists, alumni), says in a line why each
+  person is worth writing to, and writes every message in the shape that suits them: the first
+  note (which asks for a conversation, not a job), the replies and the referral ask. It tracks
+  every thread and warns you before a cold application lands on top of a warm introduction.
 - **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
   and drafts the nudge. Set up the twice-weekly brief and what you owe, what changed and the
   next three things to do arrive in one message.
-- **It checks its own work.** Every resume is compiled, read back, and checked the way an
-  applicant tracking system reads it, and every claim is checked against what you told it.
+- **It checks its own work.** Every resume is compiled, read back and checked the way an
+  applicant tracking system reads it, and every claim against what you told it.
 - **It remembers.** Applications, conversations and what is due live in files in your copy,
   not in a chat that ends.
 - **It learns what you like.** Say "too formal" or "stop suggesting recruiters" once, and it
   sticks. It also notices which messages got replies and which applications got interviews.
-- **It keeps itself up to date.** Each release of this app reaches your copy by itself,
-  the first day you use it after the release, even if you keep the same chat open for weeks.
-  Nothing about you is ever sent back.
+- **It keeps itself up to date.** Each release reaches your copy by itself the next time you
+  use it, even in a chat kept open for weeks. Nothing about you is ever sent back.
 
 ## Your data
 
@@ -97,7 +96,7 @@ You never need any of this to use it.
 
 The employer-board reader is also published on its own, as the open-source library
 [openroles](https://github.com/aranculleton/openroles). Scraping, filtering and scoring are Python and Bash, so a search can read thousands of
-postings at no model cost; the model is used once you have chosen what to write. Over 900
+postings at no model cost; the model is used once you have chosen what to write. Over 1,200
 tests run in the app's CI and, in your copy, through `./tools/ci_local.sh`.
 
 ## Credits and licence
