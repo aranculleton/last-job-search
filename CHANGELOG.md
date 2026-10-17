@@ -44,6 +44,18 @@ make sense to somebody whose repo just received it.
   reminder when it has not run today, so even a chat whose instructions predate this is told.
   No profile upgrade: nothing to do, the sync that brings this in is the last one a long chat
   has to be asked for.
+- **The reminder reaches a day with no search in it, and new rules reach an open chat.**
+  `open_actions.py`, `followups.py` and `network/state.py` print the same once-a-day reminder
+  as a round, so someone who only networks or asks what they owe is told too. When a sync
+  changes CLAUDE.md or AGENTS.md, it says so and asks the chat to read it again: commands and
+  skills are read fresh each time, but those two are read once, when a chat starts.
+- **Workday boards that leave the location out of their listing.** Every posting came back
+  with a blank location, which the place filter reads as nowhere, so a large board narrowed to
+  one country returned 154 postings and kept none. The location is now read from each
+  posting's path (`/job/<place>/...`), in `ats_boards.py` and the vendored openroles (0.1.2).
+  The `boards` method is at version 7 with `rerun`, so every older repo re-checks its boards
+  once: a board probed as "0 in range" for this reason now counts. No profile upgrade: a
+  method version is redone by `/upgrade` in the background, with nobody asked.
 
 ## [3.1.0] - 2026-10-15
 
