@@ -68,8 +68,9 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Every posting ruled out is written back to `seen_jobs.json`** with `tools/exclude.py add`,
   which stores `status: "excluded"`, a checkable `exclusion_reason`, a date and what the ruling
   rests on, so it never resurfaces while that holds. A ruling under the person's screening
-  rules lapses when those rules change and the posting is screened again when next found; one
-  in the person's own words holds until `exclude.py lift`. The gate that enforces
+  rules lapses when the part it rests on changes (`--rests-on "triage #4"`, or a reason citing
+  "blocker 4"; with neither, any change to the rules) and the posting is screened again when
+  next found; one in the person's own words holds until `exclude.py lift`. The gate that enforces
   that is `throttle.ruled_out()`, and it runs at **prefilter**, before `hydrate.py` spends an
   HTTP call fetching the body: a large share of everything reaching hydrate is a posting already
   ruled out. `prefilter.py` imports the throttle's own function rather than reimplementing it, so
@@ -401,7 +402,8 @@ and at 85 candidates batching is the difference between 12 agents and 85. Tell t
 explicitly to judge each posting independently and to return one verdict per posting.
 
 A knockout is recorded straight to `seen_jobs.json` with `tools/exclude.py add`, the quoted
-trigger line as its reason, and never reaches Tier 3.
+trigger line as its reason and `--rests-on "triage #<n>"` for its blocker, and never reaches
+Tier 3.
 
 **Tier 2.5: fact extraction and mechanical screen. Small model (haiku), batched 8.**
 
@@ -620,8 +622,9 @@ below 60 low) so older readers keep working.
 ### Step 4.4: Record every posting you rule out
 
 **A posting rejected on inspection must be written back to `seen_jobs.json`** with
-`python3 tools/exclude.py add <url> --title ... --company ... --reason "..."` (`--basis person`
-when it is the person's own call), which writes `status: "excluded"`, the `exclusion_reason`,
+`python3 tools/exclude.py add <url> --title ... --company ... --reason "..."` (`--rests-on
+"<part>"` for the blocker row or gate setting it rests on, from `exclude.py parts`; `--basis
+person` when it is the person's own call), which writes `status: "excluded"`, the `exclusion_reason`,
 the `excluded_date` and what the ruling rests on. Otherwise the next run
 rediscovers it, re-fetches its detail, re-scores it and re-presents it, and the user has to
 rule it out again.

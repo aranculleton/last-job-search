@@ -8,7 +8,7 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    file in `documents/rounds/`. `$SCRATCH` is a scratch directory outside the repo.
 
    **The app's updates and the profile's upgrades came first**, in `_common.md` step 2
-   (`python3 tools/sync_app.py --if-stale`, then `/upgrade 20`): a job board an upgrade
+   (`python3 tools/sync_app.py --if-stale --on "<the model this run is on>"`, then `/upgrade 20`): a job board an upgrade
    builds is searched this round.
 
    **Job alerts, if the person reads theirs here.** `python3 tools/job_alerts.py --query --days 8`

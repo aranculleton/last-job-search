@@ -21,8 +21,9 @@ employer or a contact.
    (add `-2` if that name exists). Never reset, rebase or force anything: the session's
    permission checks block history-rewriting git commands, and they are right to. A new
    branch per run means there is never earlier work to overwrite.
-2. **Take the app's updates**: `python3 tools/sync_app.py --if-stale`. A person may not open a
-   chat for days, so this run is what keeps their copy current. Exit 1 or 2: one line in the
+2. **Take the app's updates**: `python3 tools/sync_app.py --if-stale --on "<the model this run
+   is on>"`. A person may not open a chat for days, so this run is what keeps their copy
+   current. Its model check is for a person's own chat: leave it out of the message. Exit 1 or 2: one line in the
    message, and carry on with the run. If it lists upgrades Claude applies itself, run
    `/upgrade 20` now; at the end of the message, one line per upgrade it applied (what
    changed, `git revert <sha>` to undo it). Never put a question to the person mid-run: at

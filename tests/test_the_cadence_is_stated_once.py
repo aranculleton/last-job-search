@@ -32,18 +32,15 @@ sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(ROOT / "tools" / "network"))
 
 import schema  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 # `.claude/worktrees/` is where Claude Code puts an agent's isolated checkout,
 # so a recursive glob over `.claude/` read whole second copies of the repo,
 # generated contact prep documents included, and failed 22 subtests on
 # 2026-09-24 over files that are not documentation and not in this tree.
-DOCS = sorted(
-    p for p in list(ROOT.glob("*.md"))
-    + list(ROOT.glob(".claude/**/*.md"))
-    + list(ROOT.glob("networking/*.md"))
-    if p.name != "CHANGELOG-upstream.md"
-    and "worktrees" not in p.relative_to(ROOT).parts
-)
+# tests/repo_files.py leaves every nested checkout out.
+DOCS = [p for p in repo_files.files("*.md", ".claude/**/*.md", "networking/*.md")
+        if p.name != "CHANGELOG-upstream.md"]
 
 # "5 to 7 business days", "5-7 business days"
 WINDOW = re.compile(r"\b(\d+)\s*(?:to|-|–)\s*(\d+)\s+business days\b", re.I)
@@ -163,7 +160,7 @@ class TestTheGuardItselfFires(unittest.TestCase):
 
 class TestTheStoreIsNamedOnce(unittest.TestCase):
     def test_nothing_in_code_reads_the_superseded_log(self):
-        for path in sorted(ROOT.glob("tools/**/*.py")):
+        for path in repo_files.files("tools/**/*.py"):
             with self.subTest(tool=path.name):
                 self.assertNotIn("outreach_log", path.read_text(encoding="utf-8"))
 

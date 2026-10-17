@@ -1,17 +1,22 @@
 {
- "seen": {
-  "https://example.com/jobs/9": {
-   "company": "Thornbury Bank",
-   "title": "Risk Analyst",
-   "url": "https://example.com/jobs/9",
-   "first_seen": "2026-09-01",
-   "status": "excluded",
-   "exclusion_reason": "eligibility gate: British nationality stated as a condition",
-   "location": "Manchester, England, United Kingdom",
-   "portal": "linkedin",
-   "basis": "rules",
-   "reviewed_date": "2026-10-17",
-   "rules": "398b7ad253b8"
+  "seen": {
+    "https://example.com/jobs/9": {
+      "company": "Thornbury Bank",
+      "title": "Risk Analyst",
+      "url": "https://example.com/jobs/9",
+      "first_seen": "2026-09-01",
+      "status": "excluded",
+      "exclusion_reason": "eligibility gate: British nationality stated as a condition",
+      "location": "Manchester, England, United Kingdom",
+      "portal": "linkedin",
+      "basis": "rules",
+      "reviewed_date": "2026-10-17",
+      "rules": "398b7ad253b8",
+      "rests_on": {
+        "triage #1": "b49a9e8a2be2",
+        "search.py ELIGIBILITY": "322a14aac49b"
+      },
+      "restamped_date": "2026-10-17"
+    }
   }
- }
 }

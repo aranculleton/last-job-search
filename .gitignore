@@ -134,3 +134,7 @@ company_research/*.json
 # swallowed documents/rounds/ as well, which is the one thing here that must
 # stay committable.
 /rounds/
+
+# Claude Code puts an agent's isolated checkout here (CLAUDE.md starts /upgrade in one).
+# It is a whole second copy of the repo with its own .git, never part of this one.
+.claude/worktrees/

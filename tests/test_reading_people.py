@@ -435,11 +435,10 @@ def test_a_profile_is_opened_in_the_browser_once(tmp_path, monkeypatch):
 def test_every_flow_that_can_drive_a_browser_says_it_never_clicks():
     # Browser tools act inside the person's real, signed-in accounts. A flow that
     # names one carries the read-only rule, or a session could follow it and act.
-    import glob as _glob
+    from tests import repo_files
     names = re.compile(r"Claude_Browser|claude-in-chrome|Claude in Chrome|built-in browser", re.I)
     guard = re.compile(r"never click|nothing clicked|nothing on the page is ever clicked", re.I)
-    files = [f for pat in (".claude/**/*.md", "tools/network/*.py")
-             for f in _glob.glob(os.path.join(ROOT, pat), recursive=True)]
+    files = [str(f) for f in repo_files.files(".claude/**/*.md", "tools/network/*.py")]
     missing = [os.path.relpath(f, ROOT) for f in files
                if names.search(open(f, encoding="utf-8").read())
                and not guard.search(open(f, encoding="utf-8").read())]

@@ -34,3 +34,31 @@ def test_every_command_has_an_entry():
         G.task_for(name)           # raises KeyError for a command the guide forgot
     for name in ("setup", "network", "interview", "apply", "scrape", "upskill"):
         G.task_for(name)
+
+
+def test_fable_is_known_and_never_told_it_falls_short():
+    assert G.tier_of("claude-fable-5-1") == G.tier_of("Fable 5.1") == "frontier"
+    for work in G.TASKS:
+        line = G.advise(work, "claude-fable-5-1")
+        assert line and "Switch up" not in line, work
+    # For the work that wants the strongest model, Opus is never sold as losing nothing.
+    assert "loses nothing" not in G.advise("apply", "claude-fable-5-1")
+    assert "allowance" in G.advise("apply", "claude-fable-5-1")
+
+
+def test_the_days_check_says_what_fits_and_what_wants_another():
+    sonnet = G.summary("claude-sonnet-5-5")
+    assert "right for searches" in sonnet and "applications" in sonnet and "(Opus)" in sonnet
+    assert "Sonnet covers searches" in G.summary("claude-opus-5-5")
+    assert "more than any of this needs" in G.summary("claude-fable-5-1")
+    assert "does not know" in G.summary("claude-newfamily-9")
+
+
+def test_the_days_sync_carries_the_check(capsys):
+    # A line in CLAUDE.md asking for the check was skipped, so the sync every session
+    # runs prints it, and says how to get it when it was not given the model.
+    import sync_app
+    sync_app.model_check("claude-sonnet-5-5")
+    assert "Model check (Sonnet)" in capsys.readouterr().out
+    sync_app.model_check("")
+    assert '--on "<the model' in capsys.readouterr().out

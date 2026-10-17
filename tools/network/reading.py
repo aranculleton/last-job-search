@@ -124,10 +124,39 @@ def _roles():
         return None
 
 
+# The separator in a role's dates, "Mar 2023 - Present", "2019 to 2020",
+# "2025-Present": a spaced hyphen, an en or em dash, "to", or a hyphen between a year and a word.
+_DATES_SEP = re.compile(r"\s[-\u2013\u2014](?:\s|$)|[\u2013\u2014]|\sto\s|(?<=\d)-(?=[^\W\d_])", re.I)
+_YEAR = re.compile(r"(?<!\d)(?:19|20)\d{2}(?!\d)")
+
+
+def _ended(dates_text) -> tuple:
+    """(still there, when it ended) from a role's dates.
+
+    A range whose end has no year ("Present", "now", "heute", "") is the job they
+    hold now, in any language. A single date says nothing about that, so it is
+    not taken for current.
+    """
+    text = " ".join(str(dates_text or "").split())
+    m = _DATES_SEP.search(text)
+    end = text[m.end():].strip() if m else text
+    if m and not _YEAR.search(end):
+        return True, None
+    when = dates.as_date(end)
+    if when is None:
+        years = _YEAR.findall(end)
+        when = datetime.date(int(years[-1]), 1, 1) if years else None
+    return False, when
+
+
 def history() -> dict:
-    """The candidate's employers (with the names people use), schools and past cities."""
+    """The candidate's employers (with the names people use), schools and past cities.
+
+    `current` names the employers they work at now, and `ended` says when each
+    other one ended (None when the profile does not say), keyed by its first name.
+    """
     roles = _roles()
-    employers, places = [], []
+    employers, places, current, ended = [], [], [], {}
     home = fold(str(getattr(_NET, "HOME_CITY", "") or ""))
     import company_key
     import discovery
@@ -144,6 +173,11 @@ def history() -> dict:
         names = list(dict.fromkeys(n for n in (x.strip() for x in names) if n))
         if names:
             employers.append(names)
+            now, when = _ended(r.get("dates"))
+            if now:
+                current.append(names[0])
+            else:
+                ended[names[0]] = when
         city = str(r.get("loc") or "").split(",")[0].strip()
         if city and fold(city) != home and city.lower() != "remote" and city not in places:
             places.append(city)
@@ -152,7 +186,8 @@ def history() -> dict:
         seg = " ".join(seg.split()).strip(" .")
         if _SCHOOL.search(seg) and seg not in schools:
             schools.append(seg)
-    return {"employers": employers, "schools": schools, "places": places}
+    return {"employers": employers, "schools": schools, "places": places,
+            "current": current, "ended": ended}
 
 
 def _has(name: str, text: str) -> bool:

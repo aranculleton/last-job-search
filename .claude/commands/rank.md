@@ -66,7 +66,8 @@ Follow these steps **in order**.
    `profile/10-triage-blockers.md` and the posting, at a few
    thousand tokens rather than the full weighted pass. Knockouts are written straight to
    `seen_jobs.json` with `python3 tools/exclude.py add <url> --title ... --company ... --reason
-   "<the quoted trigger line>"`, which records the rules the knockout rests on, and never reach
+   "<the quoted trigger line>" --rests-on "triage #<the blocker's number>"`, which records the
+   one blocker the knockout rests on, so changing another leaves it standing, and never reach
    Step 2. On a
    backlog of a couple of hundred entries this is the difference between a run that finishes and
    one that is not worth starting.

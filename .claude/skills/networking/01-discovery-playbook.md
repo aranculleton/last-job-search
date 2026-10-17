@@ -36,7 +36,11 @@ operator is not used in these profile queries: see "Searching LinkedIn for peopl
 
 The user's past employers and school, for alumni searches, are the ones in
 `profile/01-candidate-profile.md`. Search every name a former colleague's profile
-might show for each employer, not only the one on the resume.
+might show for each employer, not only the one on the resume. Every employer they have
+left gets a turn: the one most recently left leads every run, and the others take turns
+behind it a day at a time (`sources.py` `_alumni_order`), so an older employer's alumni are
+searched too. The one they work at now gets none: people there are colleagues, not alumni, and a job
+search is often kept from the current employer.
 
 **An employer's legal entity can differ from its brand, so search both.** Where a
 past employer trades under one name and employs people through another, searching the

@@ -222,6 +222,17 @@ def _rulings_review() -> str:
     return ""
 
 
+def _ruling_parts() -> str:
+    if _mod("search") is None:
+        return ""
+    n = _probe("import exclude; print(sum(len(es) for _, es in exclude.unnamed()))").strip()
+    if n.isdigit() and int(n):
+        return (f"{n} postings ruled out by your rules say nothing of which rule they rest on, "
+                "so changing any one rule, one number even, puts every one of them back to be "
+                "screened again")
+    return ""
+
+
 def _connections_export() -> str:
     if _mod("networking") is None:
         return ""
@@ -537,11 +548,23 @@ REGISTRY: tuple[Upgrade, ...] = (
             "against the four hard cuts (eligibility, language, a professional credential, a "
             "discipline the profile names as a different job) and the person's own "
             "deal-breakers in profile/CLAUDE.md. A group that is one of those: `exclude.py stamp "
-            "\"<words>\" --basis rules`, or `--basis person` where it is their own call. Any other "
+            "\"<words>\" --basis rules`, with `--rests-on \"<part>\"` when it plainly rests on "
+            "one part `exclude.py parts` lists, or `--basis person` where it is their own call. "
+            "Any other "
             "(a salary, years, seniority, a degree, a score): `exclude.py lift \"<words>\" --why "
             "\"the current rules rank this, never cut it\"`. Report the count per group, and list "
             "the person's own calls so they can say if one has changed", "research", "~5 min",
             priority=2),
+    Upgrade("ruling-parts", "2026-10-17",
+            "a change to one of your rules puts back only the postings ruled out by that rule",
+            _ruling_parts, "run `python3 tools/exclude.py cite`, then follow `python3 "
+            "tools/exclude.py unnamed`: for each group, `exclude.py restamp \"<words>\" "
+            "--rests-on \"<part>\"` where the reason plainly rests on one part `exclude.py parts` "
+            "lists (a blocker row, a gate setting), and `--rests-on all` where it rests on more "
+            "than one or it is not plain which. Never a part the reason does not plainly rest "
+            "on: a wrong part keeps a posting out after the rule it really rests on changes. "
+            "Report the count per part", "research", "~3 min",
+            priority=3),
     Upgrade("connections-export", "2026-10-17",
             "every networking run starting from the people you already know",
             _connections_export, "save the Connections.csv they attach to "
@@ -562,7 +585,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=2,
             needs="you",
             ask="Before a note goes to someone, should Claude read their LinkedIn profile in "
-                "your own signed-in browser? It reads only the people a search surfaced, one at "
+                "your own signed-in browser? That works in a chat on your computer in the Claude "
+                "desktop app, which lends Claude your browser; a chat on a phone or the web "
+                "uses the other way below. It reads only the people a search surfaced, one at "
                 "a time at a person's pace, and clicks nothing, but LinkedIn's terms forbid "
                 "automated access, so the risk is to your account. The other way, which works on "
                 "a phone too, is pasting the profile or sending screenshots of it from the "

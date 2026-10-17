@@ -182,6 +182,7 @@ DEFAULT_PLAN = ("connections", "alumni_employer", "alumni_school", "posting", "p
 
 SEARCHES_PER_COMPANY = 4
 SEARCHES_PER_RUN = 5          # the per_run kinds, together
+ALUMNI_EMPLOYER_SEARCHES = 3  # of those: one each for the three employers most recently left
 MIN_DECIDED = 5               # replies before a kind is moved by its results
 
 
@@ -274,8 +275,11 @@ def searches(kind: str, company: str = "", city: str | None = None) -> list:
     if kind == "title_search":
         return discovery.queries_for(company)
     if kind == "alumni_employer":
-        return [q for past in _past_employers() for q in
-                discovery.queries_for(past, mode="alumni_employer", location=city or discovery.HOME_CITY)][:2]
+        # A turn each: the first search of every past employer before the second of
+        # any, so no one employer takes the lot.
+        return _round_robin([discovery.queries_for(past, mode="alumni_employer",
+                                                   location=city or discovery.HOME_CITY)
+                             for past in _alumni_order()], ALUMNI_EMPLOYER_SEARCHES)
     if kind == "alumni_school":
         return [q for school in _schools() for q in
                 discovery.queries_for(school, mode="alumni_school", location=city or discovery.HOME_CITY)][:1]
@@ -357,8 +361,34 @@ def for_run(rows=None) -> list:
 
 
 def _past_employers() -> list:
+    """The employers they have left, most recently left first.
+
+    Never the one they work at now: people there are colleagues, not alumni, and
+    a job search is often kept from the current employer. A role whose end the
+    profile does not date keeps its place after the dated ones.
+    """
     import reading
-    return [names[0] for names in reading.history()["employers"]]
+    h = reading.history()
+    past = [names[0] for names in h["employers"] if names[0] not in h["current"]]
+    ended = h["ended"]
+    return sorted(past, key=lambda n: (ended.get(n) is None,
+                                       -(ended[n].toordinal() if ended.get(n) else 0)))
+
+
+def _alumni_order(today: datetime.date | None = None) -> list:
+    """The employers they have left, in the order a run searches them.
+
+    The one most recently left always goes first. The rest take turns behind it, one
+    place a day: an alumni search finds much the same people each time it runs, and
+    a run has room for only a few, so the same two searched every run would leave an
+    older employer's alumni never searched at all.
+    """
+    past = _past_employers()
+    if len(past) < 3:
+        return past
+    rest = past[1:]
+    turn = (today or datetime.date.today()).toordinal() % len(rest)
+    return [past[0]] + rest[turn:] + rest[:turn]
 
 
 def _schools() -> list:
