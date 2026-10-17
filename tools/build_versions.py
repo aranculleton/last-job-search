@@ -346,8 +346,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "exclusions the current rules only rank (a years bar, or a reason naming only the stage that wrote it) are screened again, while a range or degree knockout stands; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "one definition of a preference, an equivalence route and the years bar; rulings that lapse when the person's rules change (tools/exclude.py); places from one list"),
+            (6, "2026-10-17", False, "a ruling in the person's own words is never lifted by a better screen or a scoring rule, only by them"),
         ),
-        "fingerprint": "805c5ca20f5cb0e1",
+        "fingerprint": "e0438ba37b51e1cb",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

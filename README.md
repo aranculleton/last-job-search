@@ -29,9 +29,8 @@ charge of what goes out.
    and give it access to your new copy only.
 3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
 
-Claude asks you plain questions about yourself and does the rest. The full walk-through, with
-the one setting to paste in the first time, and the steps for running it on your own computer
-instead, is [START_HERE.md](START_HERE.md).
+Claude asks you plain questions about yourself and does the rest. [START_HERE.md](START_HERE.md)
+has the full walk-through, and the steps for running it on your own computer instead.
 
 ## What you can say to it
 
@@ -45,11 +44,10 @@ instead, is [START_HERE.md](START_HERE.md).
 | "They replied" or "I got an interview" | The record updated, and what to do next |
 | "Check my email" | Interview invites, offers and rejections from Gmail, recorded once you say yes |
 | "Make me a dashboard" | One page showing every application and how far it got |
-| "What should I learn?" | The skills your target jobs keep asking for, and a plan |
 
-It can also copy your pipeline into Notion, read your LinkedIn job alerts into each search,
-use your own resume template, or start your search over. You connect Gmail and Notion
-yourself, once, at [claude.ai/customize/connectors](https://claude.ai/customize/connectors).
+It also says what to learn next, copies your pipeline into Notion, reads your LinkedIn job
+alerts and takes your own resume template. Gmail and Notion are connected once, at
+[claude.ai/customize/connectors](https://claude.ai/customize/connectors).
 
 ## Why it works differently
 
@@ -74,17 +72,13 @@ yourself, once, at [claude.ai/customize/connectors](https://claude.ai/customize/
 - **It keeps itself up to date.** Each release reaches your copy by itself the next time you
   use it, even in a chat kept open for weeks. Nothing about you is ever sent back.
 
-## Your data
+## Your data and security
 
-Everything about you stays in your private copy, in the `profile/` folder and a few files
-beside it. Nothing is submitted for you: every document stops as a file, and you send it.
-
-## Security
-
-The assistant reads job postings written by strangers next to your personal data. Posting text
-is treated as data, never as instructions, and a link found inside a posting is never opened.
-A check fails any change that weakens the permission allowlist or the rules that keep personal
-files out of the app. [SECURITY.md](SECURITY.md) says where those controls stop.
+Everything about you stays in your private copy, and nothing is submitted for you: every
+document stops as a file, and you send it. Job postings are written by strangers, so their text
+is treated as data, never as instructions, and a link inside one is never opened. A check
+fails any change that weakens the permission allowlist or lets personal files into the app.
+[SECURITY.md](SECURITY.md) has the details.
 
 ## For the technically curious
 
