@@ -206,6 +206,7 @@ def message_cases(contacts: list[dict], threads: list[dict], today=None) -> list
                 "company": contact.get("company", ""), "date": sent.isoformat() if sent else "",
                 "attempt": "opener" if i == 0 else "follow-up",
                 "route": route_group(contact.get("route")),
+                "found_via": str(contact.get("found_via") or "").strip() or "not recorded",
                 "channel": state.channel_of(r) or "not recorded",
                 "tier": ("tier %s" % str(contact.get("tier")).strip())
                 if str(contact.get("tier") or "").strip() else "",
@@ -255,7 +256,8 @@ def brief_messages(contacts, threads, today=None, route=None, channel=None, tier
                  _rate(sum(c["won"] for c in openers), len(openers)),
                  "; follow-ups answered: " + _rate(sum(c["won"] for c in follow), len(follow))
                  if follow else "")]
-    found = differences(openers, ("route", "channel", "tier", "length", "question"), "answered")
+    found = differences(openers, ("route", "found_via", "channel", "tier", "length", "question"),
+                        "answered")
     lines += ["- " + d for d in found] or [
         "- No difference is clear yet (each group needs %d decided messages and a gap "
         "unlikely to be chance)." % MIN_GROUP]

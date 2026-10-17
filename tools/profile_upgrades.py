@@ -203,6 +203,27 @@ def _profile_reads() -> str:
     return ""
 
 
+def _people_sources() -> str:
+    if _mod("networking") is not None and _missing("networking", "PEOPLE_SOURCES"):
+        return ("/network searches the same default places for everyone (profile/networking.py "
+                "has no PEOPLE_SOURCES), not the places people in your field, level and country "
+                "are actually named")
+    return ""
+
+
+def _connections_export() -> str:
+    if _mod("networking") is None:
+        return ""
+    root = os.environ.get("LJS_STATE") or ROOT
+    root = root if os.path.isabs(root) else os.path.join(ROOT, root)
+    if os.path.exists(os.path.join(root, "documents", "linkedin", "Connections.csv")):
+        return ""
+    if getattr(_mod("networking"), "CONNECTIONS_EXPORT", None) == "declined":
+        return ""
+    return ("every networking run starts from strangers, because the people you already know "
+            "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
+
+
 def _contract() -> str:
     try:
         import portals
@@ -492,6 +513,25 @@ REGISTRY: tuple[Upgrade, ...] = (
             needs="you",
             ask="Do you pay for LinkedIn Premium? It decides how long a connection note can be "
                 "and whether InMail is there at all."),
+    Upgrade("people-sources", "2026-10-17",
+            "people found where people in your field are actually named, not only by job title",
+            _people_sources, "research and write PEOPLE_SOURCES in profile/networking.py as "
+            "/setup's voice section says (its 'Where their people are named' step), and only "
+            "that", "research", "~5 min",
+            names=("networking.PEOPLE_SOURCES",),
+            priority=2),
+    Upgrade("connections-export", "2026-10-17",
+            "every networking run starting from the people you already know",
+            _connections_export, "save the Connections.csv they attach to "
+            "documents/linkedin/Connections.csv, or write CONNECTIONS_EXPORT = \"declined\" in "
+            "profile/networking.py if they would rather not", "question", "~2 min",
+            names=("networking.CONNECTIONS_EXPORT",),
+            priority=3,
+            needs="you",
+            ask="Want every networking run to start from people you already know? LinkedIn lets "
+                "you download your own connections list (Settings, Data privacy, Get a copy of "
+                "your data, Connections). It arrives by email in about ten minutes; attach the "
+                "Connections.csv here. Claude only reads it, and contacts nobody."),
     Upgrade("profile-reads", "2026-10-17",
             "a note to each person built from their own profile, not a search snippet",
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "

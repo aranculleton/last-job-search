@@ -22,6 +22,35 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Networking finds people where your field names them, says why each one, and writes
+  to each in the shape that suits them.**
+  - **Where to look is yours.** A LinkedIn title search finds executives and misses most
+    of the people who reply. `tools/network/sources.py` holds 27 kinds of public place
+    that name people at an employer (team pages, posting contacts for informal
+    enquiries, graduate recruiters, alumni features, meetups and professional-body
+    committees, speaker lists, trade press and appointments, award shortlists, blogs,
+    code, portfolios, papers, patents, official staff directories and registers), each
+    checked against its robots.txt and terms. Your own plan picks the ones that pay for
+    your field, level and country (`PEOPLE_SOURCES`), and a run works down it inside a
+    fixed budget: a few searches per employer, the shared ones once per run, and it
+    stops when the batch is full. Everyone found is checked for a LinkedIn profile by
+    search, never by opening LinkedIn.
+  - **It learns which places pay.** Each contact records where they were found
+    (`found_via`, a new column filled in as people are added), and once a source has
+    five answered or unanswered first notes, the plan reorders by reply rate.
+  - **Why them, in plain words.** `tools/network/why.py` scores each person from 0 to
+    100 with one line: a shared employer or school, a hiring post, a role open at their
+    employer that you scored well, their function, recent activity, whether you are
+    already connected. Plain code, no model call. The batch is read and written in that
+    order, and the line sits beside each draft.
+  - **A note shaped to the person.** Shared history leads where there is some; their
+    talk, post, paper or code leads where there is not; a senior reader gets a shorter
+    note with no question; a recruiter gets what they need; someone already connected
+    gets a message. The default shape is unchanged, word for word.
+
+  Profile upgrade: people-sources (Claude researches your plan in the background).
+  Profile upgrade: connections-export (asked once: your LinkedIn connections, so runs
+  start from people you know).
 - **Networking limits that let it do real work.** The connection-request budget was 20 a
   week, which one evening used up. It is now 50 a week, half of the roughly 100 LinkedIn
   is reported to allow, and at most 25 sent in a day, because a week's requests in one day

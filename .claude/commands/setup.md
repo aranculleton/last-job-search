@@ -361,6 +361,21 @@ market, so write each one for this person, never copy it:
   `NOT_HIRING_REASON` says in their terms why revenue titles are skipped, and
   `SPAM_BULK_ROLES` is the role list that marks a staffing harvest: drop their own job from
   it if it is there (a nurse, a technician).
+- **Where their people are named**, in `networking.py` `PEOPLE_SOURCES`: research it, never
+  ask it. From their field, level and country, pick the 6 to 12 kinds in
+  `tools/network/sources.py` `KINDS` that name the people they should meet, best first, each
+  as `(kind, why it pays for them)` or `(kind, why, the exact search)` where their field has
+  its own place: the professional body whose branch committees name people, the country's
+  official staff directory for a public-sector search, the firm directories of their city
+  for a lawyer, the repositories for an engineer, the graduate recruiters for a student.
+  Search for each to check it names real people at employers like theirs before it goes in,
+  and cite what you found in a comment. `python3 tools/network/sources.py` prints the
+  result. A graduate's plan leads with alumni, school features and early-careers recruiters;
+  a senior person's with team pages, press and rosters; anyone's with their own connections.
+- **Their connections**: ask once, plainly, whether they will download their LinkedIn
+  connections (the `connections-export` upgrade's question), so every run starts from
+  people they know. Save the file they attach to `documents/linkedin/Connections.csv`, or
+  write `CONNECTIONS_EXPORT = "declined"`.
 <!-- /section -->
 
 <!-- section: boards -->
