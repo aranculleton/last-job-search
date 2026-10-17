@@ -296,6 +296,12 @@ def sync() -> int:
         print("What changed, from the app's CHANGELOG:")
         for ln in new[:12]:
             print(f"  {ln}")
+    # Commands and skills are read from disk each time they run; these are read once, when
+    # a chat starts, so a chat kept open for days would go on following the old copy.
+    for p in ("CLAUDE.md", "AGENTS.md"):
+        if git("diff", "--quiet", old, "HEAD", "--", p, check=False).returncode:
+            print(f"{p} changed. A chat that was already open is still following the copy it "
+                  f"read when it started: read {p} again now, before going on.")
     return 0
 
 

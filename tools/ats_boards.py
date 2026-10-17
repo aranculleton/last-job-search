@@ -601,6 +601,17 @@ def _valid_path(path) -> bool:
             and ".." not in path and "//" not in path)
 
 
+def _path_place(path) -> str:
+    """The primary location Workday writes into a posting's path, /job/<place>/<title>_<id>.
+
+    Some tenants leave `locationsText` out of the listing, and a blank location
+    is "nowhere" to `_wanted`, so a whole board came back with nothing in range.
+    "Toronto-40-King-St-W-Corp" reads "Toronto 40 King St W Corp".
+    """
+    parts = str(path or "").split("/")
+    return " ".join(urllib.parse.unquote(parts[2]).replace("-", " ").split()) if len(parts) > 3 else ""
+
+
 def _quote_path(path: str) -> str:
     return urllib.parse.quote(path, safe="/-_.~%")
 
@@ -759,7 +770,8 @@ def _wd_detail_row(employer: str, board: _Board, posting: dict, detail,
     title = " ".join(str(info.get("title") or posting.get("title") or "").split())
     place = info.get("country")
     country = str(place.get("descriptor") or "") if isinstance(place, dict) else ""
-    labels = [_with_country(info.get("location") or posting.get("locationsText"), country)]
+    labels = [_with_country(info.get("location") or posting.get("locationsText")
+                            or _path_place(posting.get("externalPath")), country)]
     labels += [_with_country(a, country) for a in info.get("additionalLocations") or []
                if isinstance(a, str)]
     remote = _remote(info.get("remoteType") or posting.get("remoteType"))
@@ -789,7 +801,7 @@ def _wd_rows(employer: str, board: _Board, listing, today: dt.date):
         if not title or not _valid_path(path) or path in seen:
             continue
         seen.add(path)
-        where = str(p.get("locationsText") or "")
+        where = str(p.get("locationsText") or "") or _path_place(path)
         title_ok = title_verdict(title)[0] != "FAIL"
         if MULTI.match(where):
             if title_ok:

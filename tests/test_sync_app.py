@@ -392,3 +392,23 @@ def test_the_reminder_shows_only_when_todays_check_has_not_run(repos, tmp_path):
     in_app = subprocess.run(probe, cwd=app, env=dict(ENV, LJS_APP_URL=app),
                             text=True, capture_output=True)
     assert in_app.stderr == ""
+
+
+def test_a_changed_claude_md_tells_an_open_chat_to_read_it_again(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    write(app, "tools/x.py", "a = 2\n")
+    commit(app, "code only")
+    rc, out = run(me, app)
+    assert rc == 0 and "read CLAUDE.md again" not in out
+    write(app, "CLAUDE.md", "# Rules, v2\n")
+    commit(app, "new rules")
+    rc, out = run(me, app)
+    assert rc == 0 and "CLAUDE.md changed" in out and "read CLAUDE.md again now" in out
+
+
+def test_the_tools_a_day_without_a_search_starts_with_carry_the_reminder():
+    # Someone who only networks, or only asks what they owe, never runs a round.
+    for rel in ("tools/run_round.py", "tools/stage_picks.py", "tools/open_actions.py",
+                "tools/followups.py", "tools/network/state.py"):
+        assert "sync_app.nudge()" in read(ROOT, rel), rel

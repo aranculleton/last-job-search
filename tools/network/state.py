@@ -1346,6 +1346,11 @@ def platform_budget(contacts, threads, today) -> dict:
 
 
 def main() -> int:
+    try:  # a chat that carried on into a new day has not checked the app since
+        import sync_app
+        sync_app.nudge()
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description="Networking pipeline state.")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)

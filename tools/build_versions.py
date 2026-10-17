@@ -85,8 +85,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-15", False, "an invented example in place of a real city"),
             (5, "2026-10-15", False, "employer boards date a posting by when it was first published, not last edited"),
             (6, "2026-10-15", False, "--find locates an employer's board from its name or careers page (through the vendored openroles), and Lever postings include their requirement lists"),
+            (7, "2026-10-15", True, "Workday boards whose listing leaves the location out are read again: the place comes from each posting's path, so a board probed as '0 in range' for that reason now counts"),
         ),
-        "fingerprint": "0e21172321250ad4",
+        "fingerprint": "45bd5c765f4f7afd",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
