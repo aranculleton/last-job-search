@@ -291,7 +291,7 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
             (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
         ),
-        "fingerprint": "9da0d39f40f5f537",
+        "fingerprint": "a1eab394cb851b54",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",

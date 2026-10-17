@@ -33,6 +33,15 @@ STRONG, GOOD = 75, 60
 ROLE_FIT_FLOOR = 60
 ACTIVE_DAYS = 90
 
+# The candidate's own core work, as the job scoring already weighs it (search.py
+# FIT_CORE): someone whose headline, About or posts name the same work is the person
+# a note can talk shop with, and the strongest reason a match reads as perfect.
+# Only the heavier entries: SQL on two profiles says nothing.
+_SEARCH = person.module("search") if person.exists("search.py") else None
+CORE_WEIGHT = 7
+CORE = [(rx, label) for rx, pts, label in (getattr(_SEARCH, "FIT_CORE", None) or ())
+        if pts >= CORE_WEIGHT and label]
+
 _EXEC = re.compile(r"\b(?:chief|c[a-z]o\b|vp\b|vice\s+president|president|partner|managing\s+director"
                    r"|head\s+of|director)\b", re.I)
 
@@ -105,6 +114,15 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((12, f"can hire: {title}" if title else "can hire"))
     elif tier == "3":
         reasons.append((8, "senior in your function"))
+
+    theirs = " ".join([title, contact.get("signal") or "", reading.get("headline", ""),
+                       reading.get("about", ""), reading.get("current", "")]
+                      + [i.get("text", "") for i in reading.get("items") or []])
+    same = [label for rx, label in CORE if rx.search(theirs)]
+    same = list(dict.fromkeys(same))
+    if same:
+        reasons.append((12 + 6 * (len(same) > 1),
+                        f"works on {' and '.join(same[:2])}, like you"))
 
     in_function = bool(title) and bool(discovery.FUNCTION_TITLE.search(title))
     roles = open_roles(company) if roles is None else roles

@@ -92,6 +92,17 @@ def test_why_them_says_why_in_plain_words():
     assert cold["score"] < w["score"]
 
 
+def test_someone_doing_the_same_work_says_so():
+    # The example's FIT_CORE weighs forecasting and supply chain at 8.
+    reading = {"about": "I lead demand forecasting for our supply chain team"}
+    w = why.why_them({"title": "Analytics Lead", "company": "Oakmere Foods"}, reading,
+                     roles=[], today=TODAY)
+    assert "works on forecasting and supply chain, like you" in w["line"]
+    plain = why.why_them({"title": "Analytics Lead", "company": "Oakmere Foods"}, {},
+                         roles=[], today=TODAY)
+    assert w["score"] - plain["score"] == 18
+
+
 def test_a_pending_request_is_never_ranked():
     w = why.why_them({"title": "Data Science Manager"}, {"reach": "pending"}, roles=[], today=TODAY)
     assert w["skip"] and w["score"] == 0
