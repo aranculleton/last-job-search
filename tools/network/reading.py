@@ -71,13 +71,15 @@ PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
 # How a browser read behaves: like a person prospecting, never a loop. It is the
 # person's own signed-in account loading these pages, and a steady machine rhythm
 # or a burst is what automation checks look for. LinkedIn publishes no thresholds,
-# so these are judgement, set well inside what a recruiter reading profiles by
-# hand does in a day, and the person can lower or raise them in
-# profile/networking.py (PROFILE_READS_PER_SITTING, PROFILE_READS_PER_DAY). No
+# so these are judgement. 30 an hour is about one profile every two minutes, the
+# pace of someone writing a note to each person by hand, and 80 a day is enough to
+# prepare a whole week's connection requests (schema.LIMITS connections_per_week)
+# in one run, whenever and however long it is. The person can lower or raise both in
+# profile/networking.py (PROFILE_READS_PER_HOUR, PROFILE_READS_PER_DAY). No
 # setting makes a browser read safe; these make it look like a person reading.
-READS_PER_SITTING = int(getattr(_NET, "PROFILE_READS_PER_SITTING", 15) or 15)
-READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 40) or 40)
-SITTING_MINUTES = 60                    # a sitting: the reads within this rolling window
+READS_PER_HOUR = int(getattr(_NET, "PROFILE_READS_PER_HOUR", 30) or 30)
+READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 80) or 80)
+HOUR_MINUTES = 60                       # the hourly cap counts reads in this rolling window
 GAP_SECONDS = (25, 75)                  # a varied pause between two profiles
 BREAK_EVERY, BREAK_SECONDS = 5, (120, 300)   # and a longer one every few
 PACE_SECONDS = GAP_SECONDS[0]           # the shortest gap ever allowed
@@ -780,11 +782,11 @@ def browser_gate(now: datetime.datetime | None = None) -> str:
     if len(today) >= READS_PER_DAY:
         return (f"{READS_PER_DAY} profiles read today (PROFILE_READS_PER_DAY); "
                 "the rest wait for tomorrow or a paste")
-    window = now - datetime.timedelta(minutes=SITTING_MINUTES)
-    sitting = [t for t, _ in reads if t > window]
-    if len(sitting) >= READS_PER_SITTING:
-        resume = min(sitting) + datetime.timedelta(minutes=SITTING_MINUTES)
-        return (f"{READS_PER_SITTING} profiles this sitting (PROFILE_READS_PER_SITTING); "
+    window = now - datetime.timedelta(minutes=HOUR_MINUTES)
+    last_hour = [t for t, _ in reads if t > window]
+    if len(last_hour) >= READS_PER_HOUR:
+        resume = min(last_hour) + datetime.timedelta(minutes=HOUR_MINUTES)
+        return (f"{READS_PER_HOUR} profiles in the last hour (PROFILE_READS_PER_HOUR); "
                 f"the next after {resume:%H:%M}")
     if reads:
         last, gap = reads[-1]
@@ -798,7 +800,7 @@ def next_gap(rng=None) -> int:
     """The pause to leave after this read: varied, and longer every few reads."""
     import random
     rng = rng or random
-    window = datetime.datetime.now() - datetime.timedelta(minutes=SITTING_MINUTES)
+    window = datetime.datetime.now() - datetime.timedelta(minutes=HOUR_MINUTES)
     n = sum(1 for t, _ in _browser_reads() if t > window) + 1
     lo, hi = BREAK_SECONDS if n % BREAK_EVERY == 0 else GAP_SECONDS
     return int(rng.uniform(lo, hi))

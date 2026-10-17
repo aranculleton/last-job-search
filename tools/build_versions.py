@@ -145,8 +145,9 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-15", True, "your statement templates in your profile, /network looking for "
                                     "your own function's people, outreach in your words"),
+            (3, "2026-10-17", False, "OPENALEX is turned on only for a field where people publish"),
         ),
-        "fingerprint": "a75fa5fa9543ee47",
+        "fingerprint": "b2e31fdbbb9b41cb",
     },
     "history": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -285,8 +286,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-17", False, "screenshots from the LinkedIn app, read like a paste, so a profile is read on a phone or in a web session"),
             (13, "2026-10-17", False, "a declined or thin people search goes to connections, rosters and the People tab, never a rephrased query"),
             (14, "2026-10-17", False, "profiles are read at a person's pace with sitting and day caps, each opened once, public sources first, and rosters read every run alongside the title queries"),
+            (15, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
         ),
-        "fingerprint": "39b8dd82333b102e",
+        "fingerprint": "695d0c1c08883dbc",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -308,8 +310,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-17", False, "screenshots count as a read of the person's page"),
             (5, "2026-10-17", False, "posts dated in words, current employers with no employment type, and new candidates read without a contact row"),
             (6, "2026-10-17", False, "a reading keeps the connection degree and whether a request is pending, and the browser reads are paced and capped"),
+            (7, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
         ),
-        "fingerprint": "93f59d1fe1b6ab56",
+        "fingerprint": "f34351b6ddd2cbec",
     },
     "screening": {
         "by": "round", "priority": 2,

@@ -630,10 +630,12 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
-    "networking.PROFILE_READS_PER_DAY": "40 browser reads a day, a person prospecting; raising "
-                                        "it raises the risk to their LinkedIn account",
-    "networking.PROFILE_READS_PER_SITTING": "15 browser reads an hour with varied pauses, so a "
-                                            "sitting reads like a person, not a loop",
+    "networking.PROFILE_READS_PER_DAY": "80 browser reads a day, enough to prepare a week's requests "
+                                        "in one run; raising it raises the risk to their LinkedIn account",
+    "networking.PROFILE_READS_PER_HOUR": "30 browser reads an hour with varied pauses, about "
+                                            "one every two minutes, the pace of writing to each",
+    "networking.OPENALEX": "off: research papers find people only in fields that publish, and "
+                           "/setup turns it on for one",
     "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "
                                "only when a board cannot read those names",
     "search.WORKDAY_INTERNAL_SITES": "the app drops Workday's 'Privileged' site already; a "

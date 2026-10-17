@@ -22,6 +22,21 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Networking limits that let it do real work.** The connection-request budget was 20 a
+  week, which one evening used up. It is now 50 a week, half of the roughly 100 LinkedIn
+  is reported to allow, and at most 25 sent in a day, because a week's requests in one day
+  is a burst. A long run drafts the whole week's budget and says how many can go today; the
+  rest stay queued. Drafts are shown five at a time as they are ready. Profile reads go up to
+  30 an hour and 80 a day, about one every two minutes, which is enough to prepare a whole
+  week's requests in one go. Set your own in `profile/networking.py` (`LINKEDIN_LIMITS`,
+  `PROFILE_READS_PER_HOUR`, `PROFILE_READS_PER_DAY`); a setting you already made is
+  kept. No profile upgrade: the new numbers are defaults.
+- **Research papers as an optional source.** For fields where the people worth meeting
+  publish (research science, pharma, academia, quantitative finance), `OPENALEX = True` in
+  `profile/networking.py` lets `/network` find who at an employer has put it on a recent
+  paper (`tools/network/openalex.py`). Off by default; it needs a free OpenAlex key in
+  `OPENALEX_API_KEY` in a cloud session. No profile upgrade: off is the safe default, and
+  `/setup` turns it on for a field like that.
 - **It runs on your own computer too.** START_HERE.md has the steps: the desktop app's Code
   tab or the `claude` terminal command, your copy cloned to your disk, and "set me up". The
   environment check now says where it runs and gives the install for that machine (Homebrew
@@ -51,7 +66,7 @@ make sense to somebody whose repo just received it.
     recorded as closed with the reason, and the next person is read instead.
   - **Paced like a person prospecting.** `reading.py gate` holds a varied gap of 25 to 75
     seconds between profiles and a break of two to five minutes every fifth, and caps
-    browser reads at 15 an hour and 40 a day (`PROFILE_READS_PER_SITTING`,
+    browser reads at 30 an hour and 80 a day (`PROFILE_READS_PER_HOUR`,
     `PROFILE_READS_PER_DAY` set your own; raising them raises the risk to your account).
     `reading.py stop` halts reads for the day on any LinkedIn warning, check or wall.
     A profile is opened once: a fresh reading is never read again in the browser.

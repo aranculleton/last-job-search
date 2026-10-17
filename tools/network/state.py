@@ -1298,11 +1298,15 @@ def platform_budget(contacts, threads, today) -> dict:
 
     requests = connection_requests(contacts, threads)
     connections = sum(1 for _, d in requests if week_start <= d <= week_end)
+    connections_today = sum(1 for _, d in requests if d == today)
     inmails = sum(1 for _, ch, d in sends
                   if ch == "inmail" and month_start <= d <= month_end)
     conn_limit = schema.LIMITS["connections_per_week"]
     inmail_limit = schema.LIMITS["inmail_credits_per_month"]
+    day_limit = schema.LIMITS.get("connections_per_day") or conn_limit
     conn_left = max(conn_limit - connections, 0)
+    # What one sitting can send today: the day's cap, never more than the week has left.
+    today_left = min(max(day_limit - connections_today, 0), conn_left)
     # Drafts queued and not yet sent spend the same budget the moment they go,
     # and a second /network in the same week sized itself as though they did not
     # exist. Reported beside the budget rather than taken off it: a row queued
@@ -1332,6 +1336,9 @@ def platform_budget(contacts, threads, today) -> dict:
         "connections_sent": connections,
         "connections_limit": conn_limit,
         "connections_left": conn_left,
+        "connections_today": connections_today,
+        "connections_per_day": day_limit,
+        "connections_left_today": today_left,
         "inmails_sent": inmails,
         "inmails_limit": inmail_limit,
         "inmails_left": max(inmail_limit - inmails, 0),
@@ -1374,7 +1381,8 @@ def main() -> int:
 
     b = platform_budget(contacts, threads, a.today)
     print(f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "
-          f"this week, InMail {b['inmails_left']}/{b['inmails_limit']} left this month")
+          f"this week ({b['connections_left_today']} of them today), "
+          f"InMail {b['inmails_left']}/{b['inmails_limit']} left this month")
     if b["note"]:
         print("  " + b["note"])
 

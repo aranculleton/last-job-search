@@ -356,6 +356,8 @@ market, so write each one for this person, never copy it:
   (a title on a team in their function), `HIRING_ROLE_NOUNS` (what a hiring post in their
   field calls the role), and for reading replies `OTHER_FUNCTIONS` and `OWN_FUNCTION_WORDS`.
   `/network` will not search without `TITLE_SETS`; the example's are a data team's.
+  `OPENALEX = True` only where the people worth meeting in their field publish papers
+  (research science, pharma, academia, quantitative finance); leave it off otherwise.
   `NOT_HIRING_REASON` says in their terms why revenue titles are skipped, and
   `SPAM_BULK_ROLES` is the role list that marks a staffing harvest: drop their own job from
   it if it is there (a nurse, a technician).

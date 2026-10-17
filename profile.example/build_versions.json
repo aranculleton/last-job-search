@@ -28,11 +28,11 @@
     "date": "2026-10-15"
   },
   "network-notes": {
-    "version": 6,
+    "version": 7,
     "date": "2026-10-17"
   },
   "networking": {
-    "version": 14,
+    "version": 15,
     "date": "2026-10-17"
   },
   "prep-docs": {
@@ -60,7 +60,7 @@
     "date": "2026-10-15"
   },
   "voice": {
-    "version": 2,
-    "date": "2026-10-15"
+    "version": 3,
+    "date": "2026-10-17"
   }
 }

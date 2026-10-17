@@ -78,6 +78,8 @@ to read them, and `discovery.roster_first()` returns them. The kinds of source t
 3. An industry data summit's speaker page
 4. `theorg.com/org/<company>/org-chart` - names below the executive line
 5. A named person's own blog post or conference bio
+6. In a field that publishes, the employer's recent papers (`tools/network/openalex.py`,
+   when `OPENALEX` is on) - the researchers no roster lists
 
 Ask a roster for **everyone**, not for the relevant ones. A fetch that says
 "list every speaker with title and company" returns thirty usable names; the
