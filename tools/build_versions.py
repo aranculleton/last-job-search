@@ -256,7 +256,7 @@ METHODS: dict[str, dict] = {
         "run": "/network again for each employer already in network_contacts.csv, adding only "
                "people not already in it; nothing is sent",
         "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
-                  "tools/network/discovery.py", "tools/network/schema.py",
+                  "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -288,7 +288,7 @@ METHODS: dict[str, dict] = {
             (14, "2026-10-17", False, "profiles are read at a person's pace with sitting and day caps, each opened once, public sources first, and rosters read every run alongside the title queries"),
             (15, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
         ),
-        "fingerprint": "695d0c1c08883dbc",
+        "fingerprint": "8fe0152269856cd8",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
