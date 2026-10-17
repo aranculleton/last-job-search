@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-17
+
 ### Changed
 
 - **What is ruled out follows your rules, as they are now.** Exclusions used to last for
