@@ -246,8 +246,65 @@ def test_a_pdf_export_gives_the_current_employer_too():
     assert _read(PDF, source="pdf")["current"] == "Fernhill Freight"
 
 
-def test_the_ceiling_is_far_above_a_run_and_the_person_can_set_their_own():
-    assert reading.READS_PER_DAY >= 100 and reading.PACE_SECONDS > 0
+def test_browser_reads_are_paced_like_a_person_prospecting():
+    # Well below the old 150 a day and an 8-second rhythm, which read as a loop.
+    assert reading.READS_PER_DAY <= 50 and 10 <= reading.READS_PER_SITTING <= 25
+    assert reading.GAP_SECONDS[0] >= 20 and reading.BREAK_SECONDS[0] >= 120
+
+
+def _browse(tmp_path, monkeypatch, times, gap=30):
+    monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath(*p)))
+    for i, t in enumerate(times):
+        reading.save(f"c{i}", {"sources": [{"kind": "browser", "at": t.isoformat(),
+                                            "next_gap": gap}]})
+
+
+def test_the_gate_holds_a_read_back_until_a_person_would_have_got_there(tmp_path, monkeypatch):
+    now = datetime.datetime(2026, 10, 17, 10, 0, 0)
+    _browse(tmp_path, monkeypatch, [now - datetime.timedelta(seconds=10)])
+    assert "wait 20s more" in reading.browser_gate(now)
+    assert reading.browser_gate(now + datetime.timedelta(seconds=25)) == ""
+
+
+def test_a_sitting_and_a_day_have_their_caps(tmp_path, monkeypatch):
+    now = datetime.datetime(2026, 10, 17, 10, 0, 0)
+    sitting = [now - datetime.timedelta(minutes=2 * i + 1) for i in range(reading.READS_PER_SITTING)]
+    _browse(tmp_path, monkeypatch, sitting)
+    assert "this sitting" in reading.browser_gate(now)
+    day = [now.replace(hour=0, minute=1) + datetime.timedelta(minutes=3 * i)
+           for i in range(reading.READS_PER_DAY)]
+    _browse(tmp_path, monkeypatch, day)
+    assert "today" in reading.browser_gate(now.replace(hour=23))
+
+
+def test_a_warning_from_linkedin_ends_the_days_reads(tmp_path, monkeypatch):
+    monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath(*p)))
+    reading.stop("a security check appeared", TODAY)
+    assert "security check" in reading.browser_gate(datetime.datetime(2026, 10, 17, 12))
+    assert reading.browser_gate(datetime.datetime(2026, 10, 18, 12)) == ""
+
+
+def test_the_pause_varies_and_every_few_reads_is_a_longer_break(tmp_path, monkeypatch):
+    import random
+    _browse(tmp_path, monkeypatch, [])
+    gaps = {reading.next_gap(random.Random(i)) for i in range(20)}
+    assert len(gaps) > 5 and all(reading.GAP_SECONDS[0] <= g <= reading.GAP_SECONDS[1] for g in gaps)
+    now = datetime.datetime.now()
+    _browse(tmp_path, monkeypatch, [now - datetime.timedelta(minutes=i + 1)
+                                    for i in range(reading.BREAK_EVERY - 1)])
+    assert reading.next_gap(random.Random(1)) >= reading.BREAK_SECONDS[0]
+
+
+def test_the_profile_says_whether_they_can_be_reached_without_clicking_anything():
+    page = PAGE.replace("· 2nd\n", "· 2nd\nConnect\n")
+    r = _read(page)
+    assert (r["degree"], r["reach"]) == ("2nd", "request")
+    pending = _read(PAGE.replace("Message\nMore\n", "Pending\nMore\n"))
+    assert pending["reach"] == "pending"
+    assert reading.verdict(pending, "Fernhill Freight") == (
+        False, "a connection request to them is already pending")
+    first = _read(PAGE.replace("· 2nd", "· 1st"))
+    assert first["reach"] == "message"
 
 
 def test_screenshots_from_the_phone_read_like_a_paste():
@@ -345,6 +402,21 @@ def test_a_candidate_not_in_the_contact_book_can_be_added_shown_and_judged(tmp_p
     assert reading.main(["show", cid]) == 0
     assert "Pricing models insurers can explain" in capsys.readouterr().out
     assert reading.main(["verdict", cid]) == 0
+
+
+def test_a_profile_is_opened_in_the_browser_once(tmp_path, monkeypatch):
+    # A fresh reading stands: a second browser visit to the same person adds a
+    # page load LinkedIn counts and nothing a note could use.
+    monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath(*p)))
+    monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    import state
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
+    cid = "kestrel_achterberg"
+    reading.save(cid, {"name": "Rosalind Achterberg", "company": "Kestrel Mutual",
+                       "read_on": datetime.date.today().isoformat(),
+                       "sources": [{"kind": "paste", "date": datetime.date.today().isoformat()}]})
+    with pytest.raises(SystemExit, match="opened once"):
+        reading.main(["read", cid, "-", "--source", "browser"])
 
 
 def test_every_flow_that_can_drive_a_browser_says_it_never_clicks():

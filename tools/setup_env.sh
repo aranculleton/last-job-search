@@ -51,8 +51,17 @@ if [ "$PY_ONLY" = 0 ]; then
       texlive-luatex texlive-latex-extra texlive-xetex \
       texlive-fonts-recommended poppler-utils >/dev/null 2>&1 \
       || echo "setup_env: apt-get install failed; see SETUP.md"
+  elif have brew; then
+    # macOS: Poppler is small and installs unattended; TeX is a one-time install of
+    # its own, too large to start without saying so.
+    have pdftotext || brew install poppler >/dev/null 2>&1 \
+      || echo "setup_env: brew install poppler failed; see SETUP.md"
+    if ! { have lualatex && have xelatex; }; then
+      echo "setup_env: TeX is not installed. Once, on this Mac:"
+      echo "  brew install --cask mactex-no-gui && eval \"\$(/usr/libexec/path_helper)\""
+    fi
   else
-    echo "setup_env: no apt-get here; install TeX Live and Poppler by hand (SETUP.md)"
+    echo "setup_env: no apt-get or brew here; install TeX Live and Poppler by hand (SETUP.md)"
   fi
   # texlive-fonts-extra is 1.7 GB and the resume used 1.5 MB of it, the two
   # icon packages moderncv loads. They are vendored in texmf/ instead

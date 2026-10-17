@@ -55,6 +55,9 @@ cloud environment menu in the session's title bar and click **Edit**:
 Save, and start a new session so the settings apply. If you skip this, Claude can still
 help, but it will stop and say what is missing the first time it needs it.
 
+Would rather run it on your own computer? Steps 1 and 2 are the same; then go to
+[On your own computer](#on-your-own-computer) below.
+
 ## 4. Say "set me up"
 
 Claude checks your copy is private, then asks you about yourself in plain words: where you
@@ -93,6 +96,38 @@ folder, and is never sent back.
 
 A twice-weekly brief is optional, in a chat or as a phone notification;
 [automation/README.md](automation/README.md) sets it up, and Claude can do most of it for you.
+
+## On your own computer
+
+Everything works the same in the Claude desktop app's Code tab or the `claude` command in a
+terminal, with your copy on your own disk. The brief still runs in the cloud, so it arrives
+when your computer is off.
+
+1. Steps 1 and 2 above. The brief runs on your copy on GitHub, so step 2 still matters.
+2. Install Claude Code, the desktop app or the terminal version:
+   [code.claude.com/docs](https://code.claude.com/docs/en/overview).
+3. Put your copy on your computer (on its GitHub page, **Code**, then **Open with GitHub
+   Desktop**, or `git clone` if you use git) and open that folder in Claude Code, as a local
+   session.
+4. Say "set me up". Claude checks the tools and installs what it can itself. Two installs
+   ask for your computer's password, so they are yours, once: on a Mac,
+   [Homebrew](https://brew.sh) and then the one MacTeX line Claude prints; on Windows,
+   [MiKTeX](https://miktex.org/download). Without them everything works except turning the
+   resume into a PDF.
+5. Say "set up my brief". Claude starts a cloud chat for it (`claude --cloud`), and that
+   chat creates the brief the same way a cloud session does
+   ([automation/README.md](automation/README.md), set-up (a)). The desktop app's Routines
+   screen works too: choose **Cloud**, because a local task runs only while the app is open
+   and the computer awake.
+
+**Already using it in the cloud?** Nothing moves. Open your copy locally as in step 3 and
+carry on: the first session there takes the app's updates the same way. Your brief keeps
+running in the cloud and reads `master`, so it sees local work once that is merged, which
+Claude does at the end of every session, locally too. Never archive the chats your brief is
+bound to. Cloud and local chats can be mixed; your copy on GitHub is what they share.
+
+**On a phone, or in a browser,** there is no local session: use claude.ai/code as in step 3.
+The brief is set up from a chat there, so a phone is enough for that too.
 
 ---
 

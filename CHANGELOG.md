@@ -22,6 +22,13 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **It runs on your own computer too.** START_HERE.md has the steps: the desktop app's Code
+  tab or the `claude` terminal command, your copy cloned to your disk, and "set me up". The
+  environment check now says where it runs and gives the install for that machine (Homebrew
+  and MacTeX on a Mac, MiKTeX on Windows), and `setup_env.sh` installs Poppler through
+  Homebrew by itself. The brief still runs in the cloud: a local session starts a cloud chat
+  to set it up. Nothing changes for a repo already running in the cloud. No profile upgrade:
+  it is a new place to run the same app.
 - **Profiles read on a phone and in a web session too.** Screenshots of someone's profile
   from the LinkedIn app, attached to the chat, are transcribed word for word and read like a
   paste (`reading.py read <id> <file> --source screenshot`): shared history, posts and the
@@ -42,13 +49,25 @@ make sense to somebody whose repo just received it.
   - **Skip and read on.** After each read, `reading.py verdict` skips someone the page shows
     has moved on, is based elsewhere or holds a role the search filters out. The skip is
     recorded as closed with the reason, and the next person is read instead.
-  - **Pace and ceiling.** Reads go at a person's pace (`PACE_SECONDS` between them). The
-    150 a day is only a ceiling against a runaway loop, and `PROFILE_READS_PER_DAY` sets
-    your own.
+  - **Paced like a person prospecting.** `reading.py gate` holds a varied gap of 25 to 75
+    seconds between profiles and a break of two to five minutes every fifth, and caps
+    browser reads at 15 an hour and 40 a day (`PROFILE_READS_PER_SITTING`,
+    `PROFILE_READS_PER_DAY` set your own; raising them raises the risk to your account).
+    `reading.py stop` halts reads for the day on any LinkedIn warning, check or wall.
+    A profile is opened once: a fresh reading is never read again in the browser.
+  - **Public sources before LinkedIn.** Each person's talks, articles and posts are
+    searched first, and someone they show has moved on is skipped without a LinkedIn
+    visit. The one browser read keeps the connection degree and whether Connect, Message
+    or Pending shows, so a pending request is skipped and a 1st-degree contact gets a
+    message rather than a request.
+  - **Rosters every run.** Conference speaker lists and the employers' own team pages are
+    read alongside the title queries, not only when search runs dry. Measured over five
+    employers in one city, title queries found mostly individual contributors and
+    managers, the rosters mostly directors and above; neither alone filled every batch.
   - **Cloud sessions.** A cloud session reads profiles in the Claude desktop app's
     built-in browser while it is linked to your computer.
 
-  No profile upgrade: the ceiling has a safe default, and the browser question is the
+  No profile upgrade: both caps have safe defaults, and the browser question is the
   existing `profile-reads`.
 - **Every note is written from what was read about the person, not from a search
   snippet.** Notes drafted from snippets came out alike: one background line with a

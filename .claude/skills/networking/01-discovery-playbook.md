@@ -61,14 +61,15 @@ Manager in retail risk modelling appears in none, and their LinkedIn profile is
 behind a login wall, so a query naming their exact title returns the CDAO of the
 same bank, a job-board page, or nothing.
 
-In practice **every mid-level name that survives comes from a roster or an org
-chart, and none comes from a title query.** The title queries produce chief data
-officers, chief AI scientists and global heads of data.
-
-**So mine rosters first, and treat a title query as the fallback, not the
-opener.** The rosters for the candidate's market are `ROSTERS` in
-`profile/networking.py`, in the order to read them, and `discovery.roster_first()`
-returns them. The kinds of source that paid, in order:
+**Run both, every time.** In an early run every mid-level name came from a roster or an
+org chart, and the title queries produced chief data officers and global heads of data. A
+later measurement over five employers in one city (2026-10-17, counts only) turned it
+round: the title queries found 26 people in 10 searches, mostly individual contributors
+and managers, and the rosters 33 in 16 calls, two thirds of them directors or above.
+Which source pays depends on the market and the week, so a run reads the rosters once
+(one page serves every employer in it) and runs the title queries per company. The
+rosters for the candidate's market are `ROSTERS` in `profile/networking.py`, in the order
+to read them, and `discovery.roster_first()` returns them. The kinds of source that paid, in order:
 
 1. A practitioner ML conference's speaker page - practitioners rather than
    executives
@@ -115,7 +116,7 @@ If a run is struggling, the fault is the method, and the order to check it in:
    them and a sendable note. Resolving a URL is one search against a name that
    is already known, against the several searches a new name costs. Mine the
    store first, every time.
-2. **Is it a title query?** Those return executives. Go to the rosters, above.
+2. **Was only one source tried?** Title queries and rosters reach different people. Run both, above.
 3. **Is the roster being filtered before it is read?** Ask for every speaker,
    not for the relevant ones.
 4. **Has the source list been exhausted, or just the first source?** The

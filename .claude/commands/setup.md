@@ -47,7 +47,11 @@ python3 tools/env_check.py
 It reports LaTeX, Poppler, pypdf (including the broken-`cffi` case), bun, and every job
 board the app calls: LinkedIn, freehire, Greenhouse, Lever, Ashby, and Workday once a
 Workday board is on file. A host the network policy refuses is named as such, which a bare
-HTTP status could not tell apart from a host that answered. If anything is missing or a
+HTTP status could not tell apart from a host that answered. Its `where:` line says whether
+this is a cloud session or their own computer. **On their own computer**, run
+`./tools/setup_env.sh` yourself and pass on only what it prints as theirs to do (an install
+that asks for the computer's password); a blocked host there is their own network, not a
+setting of ours. **In a cloud session**, if anything is missing or a
 host is blocked, give them the two settings from `START_HERE.md`
 step 3 with the exact clicks (the cloud environment menu in the session's title bar, then
 **Edit**: the **Setup script** line, and **Network access** with its allowed domains), say
