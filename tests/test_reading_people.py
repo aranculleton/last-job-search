@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import sys
 
 import pytest
@@ -297,3 +298,64 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
     assert reading.route(["browser"], "off", LOCAL)["route"] == "public"
     for r in (phone, desk, reading.route([], "paste", LOCAL)):
         assert not any(w in r["say"].lower() for w in ("press", "shortcut", "cmd", "ctrl", "click"))
+
+
+PAGE_PLAIN = """Rosalind Achterberg
+Senior Data Scientist at Kestrel Mutual
+Toronto, Ontario, Canada
+Contact info
+About
+I build pricing models for insurers and teach a weekend course on causal inference for analysts who want to go further than dashboards.
+Activity
+Model drift is a people problem before it is a maths problem. 3 weeks ago
+I spent my 5 years at the old firm learning this
+Experience
+Senior Data Scientist
+Kestrel Mutual
+Jan 2023 - Present
+Data Scientist
+Oakmere Foods
+2019 - 2022
+"""
+
+
+def test_a_plain_paste_keeps_a_post_dated_in_words_and_finds_the_current_employer():
+    r = reading.parse(PAGE_PLAIN, name="Rosalind Achterberg", company="Kestrel Mutual", today=TODAY)
+    assert r["current"] == "Kestrel Mutual"
+    posts = [i for i in r["items"] if i["kind"] == "post"]
+    assert posts and posts[0]["date"] == "2026-09-26" and posts[0]["text"].startswith("Model drift")
+    assert not any("5 years" in p["text"] and p["date"] < "2022" for p in posts)  # not an age
+    assert [e["name"] for e in r["shared"]["employers"]] == ["Oakmere Foods"]
+    long = "I build pricing models for insurers " * 10
+    cut = reading._clip(long, 50)
+    assert cut.endswith("…") and len(cut) <= 51 and cut[:-1].split()[-1] in long.split()
+    assert reading._clip("short and whole", 50) == "short and whole"
+
+
+def test_a_candidate_not_in_the_contact_book_can_be_added_shown_and_judged(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath(*p)))
+    import state
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
+    cid = "kestrel_achterberg"
+    assert reading.main(["add", cid, "--kind", "talk", "--url", "https://example.org/talks/7",
+                         "--text", "Pricing models insurers can explain", "--name",
+                         "Rosalind Achterberg", "--company", "Kestrel Mutual"]) == 0
+    saved = reading.load(cid)
+    assert saved["read_on"] and saved["items"][0]["kind"] == "talk"
+    assert reading.main(["show", cid]) == 0
+    assert "Pricing models insurers can explain" in capsys.readouterr().out
+    assert reading.main(["verdict", cid]) == 0
+
+
+def test_every_flow_that_can_drive_a_browser_says_it_never_clicks():
+    # Browser tools act inside the person's real, signed-in accounts. A flow that
+    # names one carries the read-only rule, or a session could follow it and act.
+    import glob as _glob
+    names = re.compile(r"Claude_Browser|claude-in-chrome|Claude in Chrome|built-in browser", re.I)
+    guard = re.compile(r"never click|nothing clicked|nothing on the page is ever clicked", re.I)
+    files = [f for pat in (".claude/**/*.md", "tools/network/*.py")
+             for f in _glob.glob(os.path.join(ROOT, pat), recursive=True)]
+    missing = [os.path.relpath(f, ROOT) for f in files
+               if names.search(open(f, encoding="utf-8").read())
+               and not guard.search(open(f, encoding="utf-8").read())]
+    assert missing == [], missing
