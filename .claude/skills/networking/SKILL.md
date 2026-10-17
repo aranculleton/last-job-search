@@ -213,6 +213,26 @@ whatever `person.json` `documents.noun` says: in a CV market every message says 
 word in `documents.banned_nouns` in a message is a `tone.check` finding (`document_noun`).
 The composers already write the person's word.
 
+### The shape of a note follows the person
+
+One shape for everyone is how a batch comes out alike, and the length that suits a
+peer is the length a senior reader ignores. `compose.shape_for()` chooses from who
+they are and what was read, and `first_note(shape=)` holds it:
+
+- **shared**: shared history leads (an employer, a school, a city). The default.
+- **their_work**: their talk, post, paper or code leads, with no opener before it.
+- **brief**: a senior reader. The true line, who you are and the ask; no question,
+  under 220 characters.
+- **recruiter**: their job is roles, so who you are, what you want and work authorization.
+- **connected**: already connected, so a message with room for the question and the ask.
+
+Who to write to first is `tools/network/why.py`: a score and one plain line of why
+this person, from the route, shared history, a hiring post, a role open at their
+employer that the candidate scored well, their function, recent activity and the
+reply odds of their kind of title. Where to look is `tools/network/sources.py`: the
+person's own plan of places people in their field are named, ranked by what has
+drawn replies, inside a fixed search budget.
+
 ### What outreach is for: referrals
 
 Every first message exists to start a conversation, and the conversation is

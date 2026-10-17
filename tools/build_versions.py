@@ -146,8 +146,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", True, "your statement templates in your profile, /network looking for "
                                     "your own function's people, outreach in your words"),
             (3, "2026-10-17", False, "OPENALEX is turned on only for a field where people publish"),
+            (4, "2026-10-17", False, "researches where the person's people are named (PEOPLE_SOURCES) and asks once for their connections export"),
         ),
-        "fingerprint": "b2e31fdbbb9b41cb",
+        "fingerprint": "9c3a92a6c1812e82",
     },
     "history": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -257,6 +258,7 @@ METHODS: dict[str, dict] = {
                "people not already in it; nothing is sent",
         "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
+                  "tools/network/sources.py", "tools/network/why.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -287,8 +289,9 @@ METHODS: dict[str, dict] = {
             (13, "2026-10-17", False, "a declined or thin people search goes to connections, rosters and the People tab, never a rephrased query"),
             (14, "2026-10-17", False, "profiles are read at a person's pace with sitting and day caps, each opened once, public sources first, and rosters read every run alongside the title queries"),
             (15, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
+            (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
         ),
-        "fingerprint": "8fe0152269856cd8",
+        "fingerprint": "a1eab394cb851b54",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",

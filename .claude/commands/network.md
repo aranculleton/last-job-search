@@ -35,45 +35,48 @@ untouched employers from the latest round's shortlist.
    note and the draft sent as a message after they accept, and no InMail on a free
    account except to an Open Profile.
 
-3. **Cheapest route first** (see `01-discovery-playbook.md`). The **alumni**
-   searches name the shared history (a past employer, a school) and never the
-   target, so run them **once per /network**, not once per company: triage them with
-   no `target_company`, then `discovery.alumni_at(kept, targets)` sorts each hit to
-   the target they work at. Then, per company: the hiring team from a live posting,
-   then cold. Build queries with `discovery.queries_for()`, which uses the employer's
-   everyday name (`search_name()`: no "Limited", no "(UK)") and caps the queries. Pass
-   `titles=` from the posting's own role family when it differs from the person's
-   usual titles, and `location=` the posting's city when it is not the home city (and
-   the same city to `triage`). Run them with WebSearch, passing
-   `allowed_domains=discovery.SEARCH_DOMAINS`, then put every result through
-   `discovery.resolve_result(url, company)`: it drops listings, turns a post permalink
-   into the author's profile plus the post's exact date (carry it as `signal_date`;
-   a tier-1 signal needs one), and drops a company page's own posts. At most three
-   searches for one company, the alumni pass apart.
-
-   **Rosters as well, every run, not only when search runs dry.** Measured over five
-   employers in one city (2026-10-17, counts from search summaries): the title queries
-   found 26 people in 10 searches, mostly individual contributors and managers; the
-   employers' own team pages and conference speaker lists found 33 in 16 calls, two
-   thirds of them directors or above. Neither alone fills every batch, and one roster
-   page serves every employer in the run, so read each once per run. The search tool
-   sometimes declines a people query: never rephrase a declined query to get round it;
-   these sources carry the run. In this order, and everyone they surface goes through
-   step 4 and the read in step 5 like any other result:
-   - **People they already know**: `state.connections_at()` on their LinkedIn connections
-     export, when it is there. When it is not, say once that the export would let every run
-     start from people they know, with LinkedIn's own help page for it.
-   - **Research papers**, only when `profile/networking.py` `OPENALEX` is on (a field where
-     the people worth meeting publish): `python3 tools/network/openalex.py "<company>"`
-     lists who put that employer on a paper in the last two years, with the paper as
-     their public work. It needs a free key in `OPENALEX_API_KEY` in a cloud session;
-     without one it says so, and the run goes on without it.
-   - **Rosters**: `discovery.roster_first(company)`. Conference speaker lists, the
-     employer's own team and leadership pages, engineering-blog authors, podcast guests and
-     `theorg.com` org charts. Fetched like any page, robots.txt honoured.
+3. **Where to look: this person's own plan, inside a fixed budget.**
+   `python3 tools/network/sources.py "<employer>" ...` prints it: the kinds of place where
+   people in their field, level and country are named (`PEOPLE_SOURCES` in
+   `profile/networking.py`, researched by `/setup`; `sources.DEFAULT_PLAN` until then),
+   ranked by what has drawn replies, and the exact searches already inside the budget:
+   `sources.for_run()` once for the whole run (alumni, rosters, meetups, awards), and
+   `sources.for_company()` for each employer, every kind getting a turn before any gets a
+   second. Run them in that order and **stop the moment the batch from step 2 is full**.
+   Everyone kept carries `found_via`, the kind that surfaced them, so the plan learns
+   which places pay for this person.
+   - **Searches into LinkedIn** (title, hiring posts, alumni): WebSearch with
+     `allowed_domains=discovery.SEARCH_DOMAINS`, every result through
+     `discovery.resolve_result(url, company)`: it drops listings, turns a post permalink
+     into the author's profile plus the post's exact date (carry it as `signal_date`; a
+     tier-1 signal needs one), and drops a company page's own posts. For a posting whose
+     role family or city differs from the person's usual, build the title queries with
+     `discovery.queries_for(company, titles=..., location=...)` instead, and give
+     `triage` the same city. The alumni searches name the shared history and never the
+     target: triage them with no `target_company`, then `discovery.alumni_at(kept,
+     targets)` sorts each hit to the target they work at.
+   - **Searches outside LinkedIn** (team pages, blogs, press, meetups, awards, code,
+     portfolios, directories): run as printed; fetch a page only where its robots.txt
+     allows; take a name only with the employer and role beside it, and ask a roster for
+     every speaker (`discovery.ROSTER_PROMPT`). **Then find their LinkedIn**:
+     `sources.linkedin_check(name, company)` with `SEARCH_DOMAINS`, results only, and the
+     result's URL is their `linkedin_url`. With no profile found they can still be read
+     and reached by email or an introduction, never by a connection request.
+   - **People they already know**: `state.connections_at()` on their connections export
+     (`documents/linkedin/Connections.csv`). Without one, the `connections-export`
+     upgrade asks once; this step never asks.
+   - **Research papers**, only when `OPENALEX` is on: `python3 tools/network/openalex.py
+     "<company>"`. It needs a free key in `OPENALEX_API_KEY` in a cloud session; without
+     one it says so, and the run goes on without it.
    - **LinkedIn's own People tab, in the person's browser**, when the route from step 5 is
      `browser`: `https://www.linkedin.com/company/<company>/people/?keywords=<their function>`,
      read like a profile, at a person's pace, nothing clicked.
+
+   Measured over five employers in one city (2026-10-17): title queries found mostly
+   individual contributors and managers, team pages and speaker lists mostly directors
+   and above. That is why the plan mixes kinds instead of running one. The search tool
+   sometimes declines a people query: never rephrase it to get round that; the next kind
+   in the plan carries the run.
 
 4. **Triage with `discovery.triage()`.** It applies the disqualifiers, the
    staleness check and the tier classification. A result with no location is kept
@@ -88,9 +91,18 @@ untouched employers from the latest round's shortlist.
    If their connections were loaded, `discovery.mark_first_degree(kept, conns)` marks
    the people they already know: a message, not a connection request.
 
+   **Then rank them: `why.why_them(person, reading, today=today)`** (or
+   `python3 tools/network/why.py` over the contact book). Plain code, no model call: a
+   score from 0 to 100 and one line saying why this person, from what is known (a warm
+   route or shared history, a hiring post, a role open at their employer that the person
+   scored well, their function, recent activity, whether they are already connected,
+   and the reply odds of their kind of title). Someone with a request already pending
+   scores 0 and is dropped.
+
 5. **Read each person before writing to them, and keep reading until the batch is full.**
    A snippet holds a title and a line, and notes drafted from snippets alone come out
-   alike. Work through the people steps 3 and 4 kept, best first (tier, then route), the
+   alike. Work through the people steps 3 and 4 kept, best first by `why_them`, and
+   score each again after the read, which adds shared history, activity and reach, the
    way a round works through postings: read one, judge them, then the next, until the run
    has as many people worth writing to as its budget from step 2 can send. That number,
    not a fixed count, is how many are read. Give each candidate its id first
@@ -193,7 +205,12 @@ untouched employers from the latest round's shortlist.
    clear (a route, a length, asking a question) is followed unless a learned rule says otherwise.
    **Compose in one batch with `compose.first_note()`.** One model call
    producing every draft in a group of five, not one per
-   person, then `compose.validate(kind=
+   person, each in **the shape that suits them**: `compose.shape_for(title, reading,
+   route)` picks it and `first_note(..., shape=)` holds it. Shared history leads where
+   there is some; their own talk, post, paper or code leads (with no opener before it)
+   where there is not; a senior reader gets the brief shape, under 220 characters with
+   no question; a recruiter gets who they are, what they want and work authorization;
+   someone already connected gets a message rather than a request. Then `compose.validate(kind=
    "connection")` on each. A draft that fails is rewritten, never shown with a
    warning attached. The rules are in "Composition" in `networking/SKILL.md`;
    the short version:
@@ -225,7 +242,8 @@ untouched employers from the latest round's shortlist.
      only after they have engaged.
 
 7. **Write state.** New contacts at `not_contacted`, with tier, route,
-   route_detail, the quoted signal for tier 1, `linkedin_url`, the channel, and
+   route_detail, `found_via` (the kind from step 3 that surfaced them), the quoted
+   signal for tier 1, `linkedin_url`, the channel, and
    `linked_application` where `state.link_to_applications()` finds one. Each id from
    `state.unique_contact_id(name, company, contacts, linkedin_url=...)`. **Write each
    draft to `documents/network/<contact_id>/draft.md`** and commit it with the
@@ -236,9 +254,11 @@ untouched employers from the latest round's shortlist.
 
 **People and their messages in one reply.** Finding someone and drafting the note
 to them are one step: never list the people and wait to be asked for the drafts.
-Ranked by tier, then by route strength (referral > alumni > cold). For each, as one
-block: name, title, company, location, profile link, tier with the **quoted
-signal** if tier 1, the route, the recommended channel, **what the note rests on**
+Ranked by `why_them`, best first. For each, as one block: name, title, company,
+location, profile link, **why them** (its score and line: "worked at Brindle & Hart
+Logistics, like you; posted about hiring on 2026-10-02; Oakmere has a role open you
+scored 82"), where they were found, tier with the **quoted signal** if tier 1, the
+route, the recommended channel and the note's shape, **what the note rests on**
 (the hook from their reading, with its source and date, so the person can check it
 before sending), and **the message itself, ready to paste**, with its character count
 against the plan's limit (and the subject line for an InMail).

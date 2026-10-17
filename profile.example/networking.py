@@ -28,6 +28,27 @@ PROFILE_READS_PER_DAY = 80
 # where the people worth meeting publish. Morgan's does not.
 OPENALEX = False
 
+# Where the people Morgan should meet are named, best first (tools/network/sources.py
+# KINDS), researched by /setup for a mid-level data scientist in logistics and food
+# in Manchester. Every run works down it, and the order moves by what draws replies.
+PEOPLE_SOURCES = (
+    ("connections", ""),
+    ("alumni_employer", "Brindle & Hart Logistics: Morgan's longest role"),
+    ("alumni_school", "University of Leeds"),
+    ("posting", "a named hiring manager on a shortlisted posting"),
+    ("roster", "the regional supply-chain summit's speakers (ROSTERS above)"),
+    ("community", "the city's data and analytics meetups: organisers work across employers"),
+    ("posts", ""),
+    ("team_page", "logistics and food employers' 'meet the team' and leadership pages"),
+    ("title_search", ""),
+    ("press", "supply-chain trade press quotes data leads by name"),
+    ("people_tab", ""),
+)
+
+# LinkedIn's own export of Morgan's connections, as documents/linkedin/Connections.csv,
+# so every run starts from people Morgan knows. "declined" when they would rather not.
+CONNECTIONS_EXPORT = "declined"
+
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}
 OPENER = "hope you're well"

@@ -95,7 +95,7 @@ def people_at(company: str, country: str = "", years: int = 2, today: dt.date | 
                 continue
             people[name] = {"name": name, "company": company,
                             "employer_on_paper": inst.get("display_name", ""),
-                            "kind": "paper", "text": w.get("title") or "",
+                            "kind": "publication", "text": w.get("title") or "",
                             "date": w.get("publication_date") or "", "url": w.get("id") or "",
                             "orcid": author.get("orcid") or ""}
     return {"institution": inst, "people": list(people.values())}

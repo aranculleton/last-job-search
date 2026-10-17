@@ -774,9 +774,42 @@ def _question(question) -> str:
     return q[0].upper() + q[1:] if q[0].islower() else q
 
 
+# The shape a first note takes, from who they are and what was read about them.
+# One shape for everyone is how a batch comes out alike, and the same length for
+# a director as for a peer is the 300 characters a senior reader ignored.
+#   shared      shared history leads: the default, and the form that has replied most
+#   their_work  their talk, post, paper or code leads, with no opener before it
+#   brief       a senior reader: the true line, who you are and the ask; no question
+#   recruiter   their job is roles, so who you are, what you want and work authorization
+#   connected   already connected: a message, with room for the question and the ask
+SHAPES = ("shared", "their_work", "brief", "recruiter", "connected")
+BRIEF_CHARS = 220
+CONNECTED_CHARS = 600
+_WORK_KINDS = ("talk", "article", "podcast", "code", "publication", "featured")
+
+
+def shape_for(title="", reading=None, route="") -> str:
+    """Which shape suits this person, from their title, the reading and the route."""
+    reading = reading or {}
+    if is_recruiter(title):
+        return "recruiter"
+    if reading.get("reach") == "message":
+        return "connected"
+    import why
+    senior = why.seniority(title) == "senior"
+    shared = reading.get("shared") or {}
+    route = str(route or "").lower()
+    if any(shared.get(k) for k in ("employers", "schools", "places")) \
+            or route.startswith("alumni") or route in ("referral", "mutual"):
+        return "brief" if senior else "shared"
+    if any(i.get("kind") in _WORK_KINDS + ("post",) for i in reading.get("items") or []):
+        return "brief" if senior else "their_work"
+    return "brief"
+
+
 def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
                opener=OPENER, recruiter=False, seniority="peer", their=(),
-               reading=None) -> str:
+               reading=None, shape="shared") -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
         Hi Robin, hope you're well. <common ground>. <about me>. <question>? <ask>.
@@ -802,7 +835,18 @@ def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
     the common ground must rest on it: history they share, or the words of
     something they wrote or said. Their name and employer do not count, because
     a search snippet already had them.
+
+    `shape` is one of SHAPES (`shape_for()` chooses it). "shared" is the form
+    above, unchanged.
     """
+    if shape not in SHAPES:
+        raise ValueError(f"shape must be one of {', '.join(SHAPES)}, not {shape!r}")
+    if shape == "recruiter":
+        recruiter = True
+    if shape in ("their_work", "brief"):
+        opener = ""
+    if shape == "brief":
+        question = None
     if not str(common_ground or "").strip():
         raise ValueError(
             "a first note needs the common ground: the shared employer, school or "
@@ -840,7 +884,8 @@ def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
             "nothing in this note reaches %s. Put what links you to them in "
             "common_ground, or pass their= with the employer or event it names."
             % (tone.first_name(name) or "them"))
-    limit = schema.LIMITS["connection_note_chars"]
+    limit = {"brief": min(BRIEF_CHARS, schema.LIMITS["connection_note_chars"]),
+             "connected": CONNECTED_CHARS}.get(shape, schema.LIMITS["connection_note_chars"])
     if len(note) > limit:
         raise TooLong("first note", len(note), limit)
     return _first_note_voice(note)
