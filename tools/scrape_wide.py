@@ -404,6 +404,71 @@ def merge_alerts(seen: dict[str, dict], alerts: list[dict]) -> int:
     return added
 
 
+# What a person's portal did not reach last round, so the next round starts there:
+# {portal: {"mode": "tail" or "all", "next": an index into what rotates, "sent": the
+# requests it sent, "date": the round}}. "tail" while the board gets through its
+# core each round; "all" once it did not, so a board too slow even for its core
+# still reaches every request over successive rounds.
+# Beside the round summaries, which every session commits, and a dotfile so
+# nothing that globs documents/rounds/*.json reads it as a round.
+SWEEP_STATE = person.state("documents", "rounds", ".sweep.json")
+# This round's plan per person portal: (mode, core requests, rotating length, offset).
+PLAN: dict[str, tuple[str, int, int, int]] = {}
+
+
+def _covered_by_ats() -> set:
+    """Employers whose jobs a round reads from their own ATS (profile boards.py)."""
+    try:
+        from company_key import key
+        boards = person.module("boards") if person.exists("boards.py") else None
+        return {key(e) for e in dict(getattr(boards, "BOARDS", {}) or {})}
+    except Exception:
+        return set()
+
+
+def broadest(queries) -> list:
+    """The queries no broader query in the list already covers, in their order.
+
+    A keyword board answers "data scientist" with the senior and lead roles too,
+    so on a board with a crawl-delay "senior data scientist" spends a request on
+    postings the broader one returns. A query is dropped only when another one's
+    words are a strict subset of its own.
+    """
+    import re as _re
+    words = [(q, frozenset(_re.findall(r"[a-z0-9+#]+", str(q).lower()))) for q in queries]
+    return [q for q, w in words if not any(ow and ow < w for _, ow in words)]
+
+
+def _cursor() -> dict:
+    try:
+        with open(SWEEP_STATE, encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_cursor(sent_by_skill: dict, today: str) -> None:
+    """Where each person portal's tail starts next round, from what this one sent."""
+    if not PLAN:
+        return
+    state = _cursor()
+    for skill, (mode, core, rotating, offset) in PLAN.items():
+        if skill not in sent_by_skill:
+            continue
+        sent = sent_by_skill[skill]
+        done = sent if mode == "all" else max(0, sent - core)
+        state[skill] = {"mode": mode, "next": (offset + done) % rotating if rotating else 0,
+                        "sent": sent, "date": today}
+    try:
+        os.makedirs(os.path.dirname(SWEEP_STATE), exist_ok=True)
+        with open(SWEEP_STATE, "w", encoding="utf-8") as fh:
+            json.dump(state, fh, indent=1, sort_keys=True)
+            fh.write("\n")
+    except OSError:
+        pass
+
+
 def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     """(kind, query, location, page) for every request, for the portals that are on.
 
@@ -440,31 +505,45 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
             if fh:
                 tasks.append(("fh", q, None, 1))
     # A person's own portals, the way LinkedIn is searched: every query at its
-    # first place as deep as it says (`pages:`, capped by --pages); then the
-    # named employers on page one there; then remote postings where the board can
-    # filter for them (`remote: true`, sent as `--remote` and a 5th element);
-    # then every other place, two pages. In that order because a sweep that runs
-    # out of its budget stops, and what it drops should be the last town on the
-    # list: on a board paced five seconds apart, a round asked for about 800
-    # requests against room for 170, and the named employers, queued last, never
-    # ran.
+    # first place as deep as it says (`pages:`, capped by --pages) is the core,
+    # sent first in every round. Then the tail: the named employers on page one
+    # there, remote postings where the board can filter for them (`remote: true`,
+    # sent as `--remote` and a 5th element), every other place two pages. A paced
+    # board runs out of its budget long before its tail: on one, 368 requests
+    # against room for about 56, so the same tail was dropped round after round
+    # and its named employers never ran. Three things fix that. The tail starts
+    # where the last round stopped (SWEEP_STATE), so successive rounds cover all
+    # of it. A query a broader one covers is not sent (`broadest`). And an employer
+    # whose own ATS board a round already reads is not searched for here.
+    covered = _covered_by_ats()
+    cursor = _cursor()
+    PLAN.clear()
+    try:
+        from company_key import key as _key
+    except Exception:  # pragma: no cover
+        def _key(x):
+            return x
     for skill in contract_portals(on):
         places = portal_locations(skill)
         depth = min(pages, portals.pages(skill))
-        for q in QUERIES:
-            for pg in range(1, depth + 1):
-                tasks.append((skill, q, places[0], pg))
-        for emp in EMPLOYERS:
-            for t in EMPLOYER_QUERIES:
-                tasks.append((skill, f"{emp} {t}", places[0], 1))
+        qs = broadest(QUERIES)
+        core = [(skill, q, places[0], pg) for q in qs for pg in range(1, depth + 1)]
+        tail = [(skill, f"{emp} {t}", places[0], 1) for emp in EMPLOYERS
+                if _key(emp) not in covered for t in EMPLOYER_QUERIES]
         if portals.takes_remote(skill):
-            for q in QUERIES:
-                for pg in range(1, min(depth, 2) + 1):
-                    tasks.append((skill, q, None, pg, True))
-        for q in QUERIES:
-            for loc in places[1:]:
-                for pg in range(1, min(depth, 2) + 1):
-                    tasks.append((skill, q, loc, pg))
+            tail += [(skill, q, None, pg, True) for q in qs for pg in range(1, min(depth, 2) + 1)]
+        tail += [(skill, q, loc, pg) for q in qs for loc in places[1:]
+                 for pg in range(1, min(depth, 2) + 1)]
+        last = cursor.get(skill) or {}
+        # A board that last time sent fewer requests than its core rotates through
+        # everything; otherwise the core runs first and only the tail rotates.
+        whole = isinstance(last.get("sent"), int) and last["sent"] < len(core)
+        mode, ring = ("all", core + tail) if whole else ("tail", tail)
+        start = int(last.get("next", 0) or 0) if last.get("mode", "tail") == mode else 0
+        offset = start % len(ring) if ring else 0
+        PLAN[skill] = (mode, len(core), len(ring), offset)
+        rotated = ring[offset:] + ring[:offset]
+        tasks += rotated if mode == "all" else core + rotated
     return tasks
 
 
@@ -553,6 +632,7 @@ def main() -> int:
             for r in rows_:
                 if r.get("url"):
                     seen.setdefault(r["url"], r)
+    swept: dict[str, int] = {}
     for f in as_completed(sweeps):
         portal = sweeps[f]
         try:
@@ -560,12 +640,14 @@ def main() -> int:
         except Exception as e:
             rows_, n, errs = [], 1, [f"{type(e).__name__}: {str(e)[:120]}"]
         sent[portal] = n
+        swept.update({k: n for k in mine if portals.short(k) == portal})
         if errs:
             failed.setdefault(portal, []).extend(errs)
         for r in rows_:
             if r.get("url"):
                 seen.setdefault(r["url"], r)
     paced.shutdown()
+    save_cursor(swept, today.isoformat())
 
     # Employer boards, straight from the ATS: Greenhouse, Lever, Ashby and
     # Workday. No key, no HTML, and keyed by EMPLOYER rather than by keyword,

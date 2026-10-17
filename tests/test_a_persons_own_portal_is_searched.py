@@ -302,3 +302,60 @@ def test_a_remote_search_sends_the_flag(skills, monkeypatch):
     monkeypatch.setattr(scrape_wide, "run", lambda cmd, timeout=90: (sent.append(cmd), ({}, None))[1])
     scrape_wide.contract("cityboard-search", "planner", None, 1, 14, remote=True)
     assert "--remote" in sent[0] and "-l" not in sent[0]
+
+
+# --------------------------------------------------- a slow board reaches every search
+
+def _mine(tasks, skill="cityboard-search"):
+    return [t for t in tasks if t[0] == skill]
+
+
+def test_a_query_a_broader_one_covers_is_not_sent():
+    qs = ["demand planner", "senior demand planner", "Demand Planner (Lead)", "buyer", "lead buyer"]
+    assert scrape_wide.broadest(qs) == ["demand planner", "buyer"]
+    assert scrape_wide.broadest(["planner", "analyst"]) == ["planner", "analyst"]
+
+
+def test_an_employer_read_from_its_own_board_is_not_searched_for_on_a_portal(skills, monkeypatch):
+    from company_key import key
+    monkeypatch.setattr(scrape_wide, "EMPLOYERS", ["Fernhill Freight", "Oakmere Foods"])
+    monkeypatch.setattr(scrape_wide, "_covered_by_ats", lambda: {key("Fernhill Freight")})
+    monkeypatch.setattr(scrape_wide, "_cursor", lambda: {})
+    city = _mine(scrape_wide.build_tasks(portals.enabled({}), 5))
+    assert not any("Fernhill" in t[1] for t in city) and any("Oakmere" in t[1] for t in city)
+    li = [t for t in scrape_wide.build_tasks(portals.enabled({}), 5) if t[0] == "li"]
+    assert any("Fernhill" in t[1] for t in li) or not li     # the app's portals are unchanged
+
+
+def test_successive_rounds_reach_every_request_on_a_board_too_slow_for_one(skills, monkeypatch,
+                                                                         tmp_path):
+    monkeypatch.setattr(scrape_wide, "SWEEP_STATE", str(tmp_path / "rounds" / ".sweep.json"))
+    monkeypatch.setattr(scrape_wide, "_covered_by_ats", lambda: set())
+    monkeypatch.setattr(scrape_wide, "EMPLOYERS", ["Fernhill Freight", "Oakmere Foods"])
+    on = portals.enabled({})
+    everything = set(_mine(scrape_wide.build_tasks(on, 5)))
+    reached, capacity = set(), 7          # fewer than the board's core
+    for n in range(1, 40):
+        planned = _mine(scrape_wide.build_tasks(on, 5))
+        reached |= set(planned[:capacity])
+        scrape_wide.save_cursor({"cityboard-search": capacity}, f"2026-10-{n:02d}")
+        if reached == everything:
+            break
+    assert reached == everything, f"{len(everything - reached)} never sent"
+    state = json.load(open(tmp_path / "rounds" / ".sweep.json"))
+    assert state["cityboard-search"]["mode"] == "all"
+
+
+def test_a_board_that_finishes_its_core_keeps_it_first_and_rotates_the_rest(skills, monkeypatch,
+                                                                            tmp_path):
+    monkeypatch.setattr(scrape_wide, "SWEEP_STATE", str(tmp_path / ".sweep.json"))
+    monkeypatch.setattr(scrape_wide, "_covered_by_ats", lambda: set())
+    monkeypatch.setattr(scrape_wide, "EMPLOYERS", ["Fernhill Freight", "Oakmere Foods"])
+    on = portals.enabled({})
+    first = _mine(scrape_wide.build_tasks(on, 5))
+    mode, core, ring, offset = scrape_wide.PLAN["cityboard-search"]
+    assert mode == "tail" and offset == 0
+    scrape_wide.save_cursor({"cityboard-search": core + 2}, "2026-10-17")
+    second = _mine(scrape_wide.build_tasks(on, 5))
+    assert second[:core] == first[:core]                  # the core still runs first
+    assert second[core] == first[core + 2]                # the tail starts where it stopped
