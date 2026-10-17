@@ -93,6 +93,21 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A slow job board now reaches all its searches over a few rounds.** A board that paces its
+  requests used to stop at its 20-minute budget with most of its searches unsent: 312 of 368
+  on one, and always the same ones, so its named employers never ran. Three changes, for a
+  person's own boards only (LinkedIn and freehire send exactly what they did):
+  - **No duplicate employer searches:** an employer already read from its own hiring system
+    (`profile/boards.py`) is not searched for again on the board.
+  - **No narrower duplicates:** a search a broader one covers is not sent ("senior data
+    scientist" when "data scientist" is already there).
+  - **Resume where it stopped:** each round picks up where the last one stopped
+    (`documents/rounds/.sweep.json`, committed with the round summaries). A board too slow
+    even for its first pass rotates through everything, so successive rounds reach every
+    search.
+
+  On one real profile this took Job Bank from 368 planned requests to 243. No profile
+  upgrade: the next round does it by itself.
 - **Reading people: the gaps a first real run found.**
   - **New candidates:** `reading.py add`, `show` and `verdict` now work for a candidate not
     yet in the contact book (`--name`, `--company`); before, only `read` did.
