@@ -114,8 +114,12 @@ if PLAN not in PLANS:
     PLAN = "free"
 
 LIMITS = {
-    "connections_per_week": 20,   # conservative: LinkedIn's soft cap is ~100/wk but
-                                  # unanswered requests count against future ones
+    # LinkedIn publishes no number. The figure reported everywhere is about 100 a
+    # week, and requests left unanswered count against later ones, so the week
+    # stays at half that. The day cap spreads the sending: a week's requests in one
+    # day is a burst. Drafting is not held to it; the rest wait in the queue.
+    "connections_per_week": 50,
+    "connections_per_day": 25,
     **PLANS[PLAN],
     # A ceiling, not a target: an InMail is the first note with room for one
     # paragraph of evidence, and padding it to a word count is the failure.

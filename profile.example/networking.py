@@ -18,12 +18,15 @@ LINKEDIN_PLAN = "premium"
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
 # where they copy the page when they open it to send the request.
 PROFILE_READS = "paste"
-# How many profiles a browser read opens: at most this many in a sitting (an hour)
-# and in a day, with varied pauses between them. It is Morgan's own LinkedIn account
-# reading, so these stay at what a person prospecting does; raising them raises the
-# chance LinkedIn restricts the account.
-PROFILE_READS_PER_SITTING = 15
-PROFILE_READS_PER_DAY = 40
+# How many profiles a browser read opens: at most this many in an hour and in a day, with varied pauses between them. It is Morgan's own LinkedIn account
+# reading, so these stay at what a person prospecting by hand does; raising them
+# raises the chance LinkedIn restricts the account.
+PROFILE_READS_PER_HOUR = 30
+PROFILE_READS_PER_DAY = 80
+
+# Research papers as a discovery source (tools/network/openalex.py): for a field
+# where the people worth meeting publish. Morgan's does not.
+OPENALEX = False
 
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}

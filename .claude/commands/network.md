@@ -27,7 +27,10 @@ untouched employers from the latest round's shortlist.
    LinkedIn plan (`plan`), the personalised notes left this month on a free account,
    and the drafts already queued and unsent (`queued_unsent`), which spend the same
    budget the moment they go. There is no point producing fifteen drafts against five
-   remaining slots. Size the run to the budget, net of the queue, and say what it is.
+   remaining slots. Size the run to the week's budget, net of the queue, and say what it
+   is and how many can go today (`connections_left_today`, 25 by default inside the
+   week's 50): the rest stay queued and go on the following days. Show drafts as they
+   are ready, five at a time, never only once the whole batch has been read.
    `note` and `inmail_note` say what to do when a limit is reached: a request with no
    note and the draft sent as a message after they accept, and no InMail on a free
    account except to an Open Profile.
@@ -60,6 +63,11 @@ untouched employers from the latest round's shortlist.
    - **People they already know**: `state.connections_at()` on their LinkedIn connections
      export, when it is there. When it is not, say once that the export would let every run
      start from people they know, with LinkedIn's own help page for it.
+   - **Research papers**, only when `profile/networking.py` `OPENALEX` is on (a field where
+     the people worth meeting publish): `python3 tools/network/openalex.py "<company>"`
+     lists who put that employer on a paper in the last two years, with the paper as
+     their public work. It needs a free key in `OPENALEX_API_KEY` in a cloud session;
+     without one it says so, and the run goes on without it.
    - **Rosters**: `discovery.roster_first(company)`. Conference speaker lists, the
      employer's own team and leadership pages, engineering-blog authors, podcast guests and
      `theorg.com` org charts. Fetched like any page, robots.txt honoured.
@@ -124,7 +132,7 @@ untouched employers from the latest round's shortlist.
       - **Before each profile**, `python3 tools/network/reading.py gate`. It answers `go`,
         or `wait:` with how long (exit 3). It holds a varied gap of tens of seconds between
         profiles, a longer break every few, and the caps in `profile/networking.py`:
-        `PROFILE_READS_PER_SITTING` an hour and `PROFILE_READS_PER_DAY`. Wait it out, or
+        `PROFILE_READS_PER_HOUR` an hour and `PROFILE_READS_PER_DAY`. Wait it out, or
         stop the run and say how many are left for tomorrow. Never open two at once.
       - **One pass per profile.** Open their `linkedin_url` in a new tab, read the whole
         page text in one go, close the tab, and pipe the text to
@@ -184,7 +192,8 @@ untouched employers from the latest round's shortlist.
    question asked), never the words or another person's facts, and a difference it calls
    clear (a route, a length, asking a question) is followed unless a learned rule says otherwise.
    **Compose in one batch with `compose.first_note()`.** One model call
-   producing every draft, not one per person, then `compose.validate(kind=
+   producing every draft in a group of five, not one per
+   person, then `compose.validate(kind=
    "connection")` on each. A draft that fails is rewritten, never shown with a
    warning attached. The rules are in "Composition" in `networking/SKILL.md`;
    the short version:

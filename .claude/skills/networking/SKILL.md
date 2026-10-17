@@ -194,7 +194,8 @@ caught at once. So between finding and writing there is a read, and
   only the people public sources left likely, each opened once, one at a time with a
   varied gap of tens of seconds and a longer break every few, nothing clicked, and a stop
   for the day at any warning, check or wall (`reading.py gate` and `stop`). The caps are
-  `PROFILE_READS_PER_SITTING` (15 an hour) and `PROFILE_READS_PER_DAY` (40). That lowers
+  `PROFILE_READS_PER_HOUR` (30 an hour) and `PROFILE_READS_PER_DAY` (80), and at most
+  `connections_per_day` (25) requests go in a day, inside the week's 50. That lowers
   the risk to their account; it does not remove it, because the terms forbid automated
   access at any pace.
 

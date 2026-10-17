@@ -247,9 +247,22 @@ def test_a_pdf_export_gives_the_current_employer_too():
 
 
 def test_browser_reads_are_paced_like_a_person_prospecting():
-    # Well below the old 150 a day and an 8-second rhythm, which read as a loop.
-    assert reading.READS_PER_DAY <= 50 and 10 <= reading.READS_PER_SITTING <= 25
+    # Well below the old 150 a day and an 8-second rhythm, which read as a loop,
+    # and never slower than a person writing to each: an hour and a day can each
+    # read what the request budget can send, so the reads never hold a run back.
+    import schema
+    assert reading.READS_PER_DAY <= 100 and reading.READS_PER_HOUR <= 40
+    assert reading.READS_PER_HOUR >= schema.LIMITS["connections_per_day"]
+    assert reading.READS_PER_DAY >= schema.LIMITS["connections_per_week"]
     assert reading.GAP_SECONDS[0] >= 20 and reading.BREAK_SECONDS[0] >= 120
+
+
+def test_a_week_of_requests_is_never_sent_in_one_day():
+    # LinkedIn publishes no limit; about 100 a week is what is reported. The week
+    # stays well under it, and a day can never send the week's whole budget.
+    import schema
+    week, day = schema.LIMITS["connections_per_week"], schema.LIMITS["connections_per_day"]
+    assert week <= 60 and day < week
 
 
 def _browse(tmp_path, monkeypatch, times, gap=30):
@@ -266,11 +279,11 @@ def test_the_gate_holds_a_read_back_until_a_person_would_have_got_there(tmp_path
     assert reading.browser_gate(now + datetime.timedelta(seconds=25)) == ""
 
 
-def test_a_sitting_and_a_day_have_their_caps(tmp_path, monkeypatch):
+def test_an_hour_and_a_day_have_their_caps(tmp_path, monkeypatch):
     now = datetime.datetime(2026, 10, 17, 10, 0, 0)
-    sitting = [now - datetime.timedelta(minutes=2 * i + 1) for i in range(reading.READS_PER_SITTING)]
-    _browse(tmp_path, monkeypatch, sitting)
-    assert "this sitting" in reading.browser_gate(now)
+    hour = [now - datetime.timedelta(minutes=i + 1) for i in range(reading.READS_PER_HOUR)]
+    _browse(tmp_path, monkeypatch, hour)
+    assert "in the last hour" in reading.browser_gate(now)
     day = [now.replace(hour=0, minute=1) + datetime.timedelta(minutes=3 * i)
            for i in range(reading.READS_PER_DAY)]
     _browse(tmp_path, monkeypatch, day)
