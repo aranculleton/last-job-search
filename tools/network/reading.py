@@ -68,14 +68,20 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
 # for their yes (the profile-reads upgrade asks).
 PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
-# A ceiling, not the limit. How many people are read is however many a run needs:
-# /network reads the people it surfaced, best first, until it has as many good
-# fits as its connection budget, the way a search round runs until its yield
-# target. This stops only a runaway loop; it sits far above what a run needs and
-# the person can set their own (profile/networking.py PROFILE_READS_PER_DAY).
-READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 150) or 150)
-# Seconds between two browser reads: a person's pace, never a burst.
-PACE_SECONDS = 8
+# How a browser read behaves: like a person prospecting, never a loop. It is the
+# person's own signed-in account loading these pages, and a steady machine rhythm
+# or a burst is what automation checks look for. LinkedIn publishes no thresholds,
+# so these are judgement, set well inside what a recruiter reading profiles by
+# hand does in a day, and the person can lower or raise them in
+# profile/networking.py (PROFILE_READS_PER_SITTING, PROFILE_READS_PER_DAY). No
+# setting makes a browser read safe; these make it look like a person reading.
+READS_PER_SITTING = int(getattr(_NET, "PROFILE_READS_PER_SITTING", 15) or 15)
+READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 40) or 40)
+SITTING_MINUTES = 60                    # a sitting: the reads within this rolling window
+GAP_SECONDS = (25, 75)                  # a varied pause between two profiles
+BREAK_EVERY, BREAK_SECONDS = 5, (120, 300)   # and a longer one every few
+PACE_SECONDS = GAP_SECONDS[0]           # the shortest gap ever allowed
+STOP_FILE = ("documents", "network", ".reads_stopped.json")
 FRESH_DAYS = 30
 # A post is something to answer for this long; after that it is history.
 POST_DAYS = 180
@@ -337,6 +343,42 @@ _DATES = re.compile(r"\b(?:19|20)\d{2}\b.*?(?:-|–|to)\s*(?:present|\w+\s+(?:19
 _PDF_LIKE = re.compile(r"\(\s*\d+\s+(?:years?|months?)", re.I)
 
 
+_DEGREE = re.compile(r"(?:^|[·•\s])(1st|2nd|3rd\+?)(?:\s+degree connection)?\s*$", re.I)
+_ACTIONS = ("connect", "message", "follow", "following", "pending")
+
+
+def _reach(pre: list) -> tuple[str, str]:
+    """(their degree, how they can be reached) from the top of their page, read only.
+
+    The buttons LinkedIn shows the person on someone's profile say what is
+    possible: Connect (a request with a note), Message (already connected, or an
+    open profile), Follow only (Connect sits under More), Pending (a request has
+    already gone). Nothing is clicked: the words on the page are enough.
+    """
+    degree = ""
+    seen = set()
+    for line in pre[:60]:
+        m = _DEGREE.search(line)
+        if m and not degree:
+            degree = m.group(1).lower().rstrip("+")
+        low = line.strip().lower()
+        if low in _ACTIONS:
+            seen.add(low)
+    if "pending" in seen:
+        reach = "pending"
+    elif degree == "1st":
+        reach = "message"
+    elif "connect" in seen:
+        reach = "request"
+    elif seen & {"follow", "following"}:
+        reach = "request under More"
+    elif "message" in seen:
+        reach = "message"
+    else:
+        reach = ""
+    return degree, reach
+
+
 def _current(exp: list) -> str:
     """The employer of their first, most recent Experience entry, or "" if unclear."""
     lines = [x for x in exp[:10] if not _NOISE.match(x)]
@@ -370,6 +412,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
         raise ValueError(f"this page does not look like {name}'s profile: their name is not on it")
     pre, secs, before_main = _sections(lines)
     headline, location = _top(pre, before_main)
+    degree, reach = _reach(pre)
     about = " ".join(x for x in secs.get("about", []) if not _NOISE.match(x))[:ABOUT_CHARS]
     items = (_posts(secs.get("activity", []), today, name)
              + _titled(secs.get("featured", []), "featured", 2)
@@ -379,6 +422,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
         "sources": [{"kind": source, "url": url, "date": today.isoformat()}],
         "headline": headline, "location": location, "about": about,
         "current": _current(secs.get("experience", [])),
+        "degree": degree, "reach": reach,
         "shared": _shared(secs), "items": items,
     }
 
@@ -424,7 +468,7 @@ def merge(old: dict | None, new: dict) -> dict:
     if not old:
         return new
     out = dict(old)
-    for k in ("headline", "location", "about", "current"):
+    for k in ("headline", "location", "about", "current", "degree", "reach"):
         out[k] = new.get(k) or old.get(k, "")
     if any(s.get("kind") in PAGE_SOURCES for s in new.get("sources", [])):
         out["shared"] = new.get("shared") or old.get("shared", {})
@@ -460,6 +504,8 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     why = discovery.disqualify(person_, target_company=company)
     if why:
         return False, why
+    if reading.get("reach") == "pending":
+        return False, "a connection request to them is already pending"
     current = reading.get("current", "")
     if company and current and company_key(current) != company_key(company) \
             and not _has(company, headline) and not _has(company, current):
@@ -677,8 +723,9 @@ def fresh(reading: dict | None, today: datetime.date | None = None) -> bool:
         s.get("kind") in PAGE_SOURCES for s in (reading or {}).get("sources", []))
 
 
-def last_browser_read() -> datetime.datetime | None:
-    latest = None
+def _browser_reads() -> list:
+    """Every browser read on file, oldest first: [(when, the gap it asked for)]."""
+    out = []
     for f in glob.glob(person.state(*DIR, "*", "reading.json")):
         try:
             with open(f, encoding="utf-8") as fh:
@@ -688,11 +735,73 @@ def last_browser_read() -> datetime.datetime | None:
         for src in srcs:
             if src.get("kind") == "browser" and src.get("at"):
                 try:
-                    t = datetime.datetime.fromisoformat(src["at"])
+                    out.append((datetime.datetime.fromisoformat(src["at"]),
+                                float(src.get("next_gap") or PACE_SECONDS)))
                 except ValueError:
                     continue
-                latest = t if latest is None or t > latest else latest
-    return latest
+    return sorted(out)
+
+
+def last_browser_read() -> datetime.datetime | None:
+    reads = _browser_reads()
+    return reads[-1][0] if reads else None
+
+
+def stopped(today: datetime.date | None = None) -> str:
+    """Why browser reads are stopped for today, or "". A warning ends the day's reads."""
+    try:
+        with open(person.state(*STOP_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return ""
+    day = (today or datetime.date.today()).isoformat()
+    return str(got.get("reason") or "stopped") if got.get("date") == day else ""
+
+
+def stop(reason: str, today: datetime.date | None = None) -> str:
+    """Record that LinkedIn showed a warning, a security check, a CAPTCHA or a sign-in wall."""
+    p = person.state(*STOP_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"date": (today or datetime.date.today()).isoformat(),
+                   "reason": " ".join(str(reason or "").split())[:200]}, fh)
+        fh.write("\n")
+    return p
+
+
+def browser_gate(now: datetime.datetime | None = None) -> str:
+    """"" when a browser read may go now, otherwise why not and when it may."""
+    now = now or datetime.datetime.now()
+    why = stopped(now.date())
+    if why:
+        return f"browser reads are stopped for today: {why}. Tomorrow, or a paste"
+    reads = _browser_reads()
+    today = [t for t, _ in reads if t.date() == now.date()]
+    if len(today) >= READS_PER_DAY:
+        return (f"{READS_PER_DAY} profiles read today (PROFILE_READS_PER_DAY); "
+                "the rest wait for tomorrow or a paste")
+    window = now - datetime.timedelta(minutes=SITTING_MINUTES)
+    sitting = [t for t, _ in reads if t > window]
+    if len(sitting) >= READS_PER_SITTING:
+        resume = min(sitting) + datetime.timedelta(minutes=SITTING_MINUTES)
+        return (f"{READS_PER_SITTING} profiles this sitting (PROFILE_READS_PER_SITTING); "
+                f"the next after {resume:%H:%M}")
+    if reads:
+        last, gap = reads[-1]
+        waited = (now - last).total_seconds()
+        if waited < gap:
+            return f"{waited:.0f}s since the last profile; wait {gap - waited:.0f}s more"
+    return ""
+
+
+def next_gap(rng=None) -> int:
+    """The pause to leave after this read: varied, and longer every few reads."""
+    import random
+    rng = rng or random
+    window = datetime.datetime.now() - datetime.timedelta(minutes=SITTING_MINUTES)
+    n = sum(1 for t, _ in _browser_reads() if t > window) + 1
+    lo, hi = BREAK_SECONDS if n % BREAK_EVERY == 0 else GAP_SECONDS
+    return int(rng.uniform(lo, hi))
 
 
 def reads_today(today: datetime.date | None = None) -> int:
@@ -779,11 +888,21 @@ def main(argv: list | None = None) -> int:
     s = sub.add_parser("show")
     s.add_argument("contact_id")
     sub.add_parser("queue", help="drafts waiting with no fresh reading")
+    st = sub.add_parser("stop", help="LinkedIn showed a warning or a wall: no browser reads today")
+    st.add_argument("reason")
+    sub.add_parser("gate", help="may a browser read go now, and if not, when")
     ro = sub.add_parser("route", help="how this session reads profiles, and what to tell the person")
     ro.add_argument("--tools", default="",
                     help="what the session has, comma-separated: browser, chrome, enable")
     a = ap.parse_args(argv)
 
+    if a.cmd == "stop":
+        print(f"reading: browser reads stopped for today ({os.path.relpath(stop(a.reason), person.state())})")
+        return 0
+    if a.cmd == "gate":
+        why = browser_gate()
+        print("go" if not why else f"wait: {why}")
+        return 0 if not why else 3
     if a.cmd == "route":
         r_ = route([t for t in a.tools.split(",") if t.strip()])
         print(f"route: {r_['route']} ({surface()})\ndo: {r_['do']}")
@@ -796,8 +915,9 @@ def main(argv: list | None = None) -> int:
         print(f"{len(waiting)} draft(s) waiting with no fresh reading; profile reads: {PROFILE_READS}"
               + (f", {max(0, READS_PER_DAY - reads_today())} browser read(s) left today"
                  if PROFILE_READS == "browser" else ""))
-        for c in waiting:
-            print(f"  {c['contact_id']}: {c.get('name')} ({c.get('company')}) {c.get('linkedin_url') or ''}")
+        for i, c in enumerate(waiting, 1):     # numbered, so a reply can say "3 and 5"
+            print(f"  {i}. {c.get('name')} ({c.get('company')}) {c.get('linkedin_url') or ''}"
+                  f"  [{c['contact_id']}]")
         return 0
     if a.cmd == "verdict":
         found = load(a.contact_id)
@@ -832,14 +952,12 @@ def main(argv: list | None = None) -> int:
                 raise SystemExit("reading: profile reads in the browser are off "
                                  "(profile/networking.py PROFILE_READS); ask the person to paste "
                                  "the page instead")
-            if reads_today() >= READS_PER_DAY:
-                raise SystemExit(f"reading: {READS_PER_DAY} browser reads today, the ceiling "
-                                 "(PROFILE_READS_PER_DAY); the rest wait for tomorrow or a paste")
-            last = last_browser_read()
-            gap = (datetime.datetime.now() - last).total_seconds() if last else None
-            if gap is not None and gap < PACE_SECONDS:
-                raise SystemExit(f"reading: {gap:.0f}s since the last profile; wait "
-                                 f"{PACE_SECONDS - gap:.0f}s more, at a person's pace")
+            if fresh(old):
+                raise SystemExit(f"reading: {a.contact_id} was read on {old.get('read_on')}; "
+                                 "a profile is opened once, and that reading stands")
+            why = browser_gate()
+            if why:
+                raise SystemExit(f"reading: {why}")
         if source == "pdf":
             text = pdf_text(a.file)
         elif a.file == "-":
@@ -855,12 +973,16 @@ def main(argv: list | None = None) -> int:
             raise SystemExit(f"reading: {e}") from None
         if source == "browser":
             new["sources"][0]["at"] = datetime.datetime.now().isoformat(timespec="seconds")
+            new["sources"][0]["next_gap"] = next_gap()
         reading = merge(old, new)
     print(f"reading: saved {os.path.relpath(save(a.contact_id, reading), person.state())}")
     _show(reading)
     if a.cmd == "read":
         keep, why = verdict(reading, contact.get("company", ""))
         print("verdict: KEEP" if keep else f"verdict: SKIP: {why} (read the next person instead)")
+        if source == "browser":
+            print(f"pace: the next profile in {new['sources'][0]['next_gap']}s at the earliest; "
+                  "vary it, never open two at once")
     return 0
 
 

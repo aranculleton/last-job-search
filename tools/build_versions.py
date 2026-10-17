@@ -284,8 +284,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-17", False, "reads the people a run surfaced until the batch is full, skips anyone the page shows has moved on or is based elsewhere and reads the next, and reaches the desktop app's browser from a cloud session"),
             (12, "2026-10-17", False, "screenshots from the LinkedIn app, read like a paste, so a profile is read on a phone or in a web session"),
             (13, "2026-10-17", False, "a declined or thin people search goes to connections, rosters and the People tab, never a rephrased query"),
+            (14, "2026-10-17", False, "profiles are read at a person's pace with sitting and day caps, each opened once, public sources first, and rosters read every run alongside the title queries"),
         ),
-        "fingerprint": "75e4b45887381922",
+        "fingerprint": "39b8dd82333b102e",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -306,8 +307,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-17", False, "a person the page shows has moved on is skipped, and the ceiling on reads is far above a run"),
             (4, "2026-10-17", False, "screenshots count as a read of the person's page"),
             (5, "2026-10-17", False, "posts dated in words, current employers with no employment type, and new candidates read without a contact row"),
+            (6, "2026-10-17", False, "a reading keeps the connection degree and whether a request is pending, and the browser reads are paced and capped"),
         ),
-        "fingerprint": "5100630e4b5daa34",
+        "fingerprint": "93f59d1fe1b6ab56",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -338,8 +340,9 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (3, "2026-10-15", False, "The default set-up is one task, a twice-weekly brief that takes the app's updates; the scheduled round is optional. Existing tasks keep their schedules"),
+            (4, "2026-10-17", False, "how to set up the brief from a session on your own computer"),
         ),
-        "fingerprint": "8f9d30868b929c1d",
+        "fingerprint": "a28754d6f5e10823",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

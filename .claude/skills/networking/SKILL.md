@@ -191,9 +191,12 @@ caught at once. So between finding and writing there is a read, and
   automated access, browser extensions included. The risk is to their own account, the
   one the whole of this skill runs on, so it is asked once, plainly (the `profile-reads`
   upgrade, and `/setup`), and kept to what a person reading profiles by hand would do:
-  only the people the run surfaced, one at a time at a person's pace, nothing clicked.
-  `READS_PER_DAY` (150, or their own `PROFILE_READS_PER_DAY`) is a ceiling against a
-  runaway loop, never the number a run aims for.
+  only the people public sources left likely, each opened once, one at a time with a
+  varied gap of tens of seconds and a longer break every few, nothing clicked, and a stop
+  for the day at any warning, check or wall (`reading.py gate` and `stop`). The caps are
+  `PROFILE_READS_PER_SITTING` (15 an hour) and `PROFILE_READS_PER_DAY` (40). That lowers
+  the risk to their account; it does not remove it, because the terms forbid automated
+  access at any pace.
 
 What a reading keeps is what a note could rest on: their headline, a short excerpt of
 their About, the history they share with the candidate (an employer, a school, a city,

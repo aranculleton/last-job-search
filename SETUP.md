@@ -99,6 +99,10 @@ still succeed while writes fail.
 
 ## B. Local machine
 
+The steps for running the search on your own computer are in
+[START_HERE.md](START_HERE.md#on-your-own-computer), and Claude does most of them. This
+section is what each tool is for and how to install it by hand.
+
 ### Python
 
 3.10 or newer. CI runs the suite on 3.10 and 3.13.

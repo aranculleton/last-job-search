@@ -31,6 +31,12 @@ Only two set-ups work reliably, and they trade the same thing: where the briefin
 Both run on **your private repo**, never on the public app: a chat on the app holds none of
 your state, and anything it pushed would be public.
 
+**From your own computer.** Ask a local session to set up the brief. A local session cannot
+create a cloud task directly, so it starts a cloud chat with `claude --cloud "<the paste in
+(a) step 2>"` on your private repo, and that chat does (a). The desktop app's Routines screen
+also does (b): choose **Cloud**, since a local task runs only while the app is open and the
+computer awake. `/schedule` in a local terminal session makes the same cloud routine.
+
 ### The prompt each task stores
 
 Every task stores this short stub, with its own name and file, and nothing else. Print the

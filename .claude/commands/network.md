@@ -48,10 +48,15 @@ untouched employers from the latest round's shortlist.
    a tier-1 signal needs one), and drops a company page's own posts. At most three
    searches for one company, the alumni pass apart.
 
-   **When search runs dry.** A people search often returns little for a named employer, and
-   the search tool sometimes declines one outright. Never rephrase a declined query to get
-   round it. Go to the sources that name people in public instead, in this order, and send
-   everyone they surface through step 4 and the read in step 5 like any other result:
+   **Rosters as well, every run, not only when search runs dry.** Measured over five
+   employers in one city (2026-10-17, counts from search summaries): the title queries
+   found 26 people in 10 searches, mostly individual contributors and managers; the
+   employers' own team pages and conference speaker lists found 33 in 16 calls, two
+   thirds of them directors or above. Neither alone fills every batch, and one roster
+   page serves every employer in the run, so read each once per run. The search tool
+   sometimes declines a people query: never rephrase a declined query to get round it;
+   these sources carry the run. In this order, and everyone they surface goes through
+   step 4 and the read in step 5 like any other result:
    - **People they already know**: `state.connections_at()` on their LinkedIn connections
      export, when it is there. When it is not, say once that the export would let every run
      start from people they know, with LinkedIn's own help page for it.
@@ -96,37 +101,61 @@ untouched employers from the latest round's shortlist.
       names (screenshots on a phone, a paste on a computer). Never tell the person to press a
       key, find a setting or open a panel.
 
-   1. **Their profile, in the person's own browser**, only when `profile/networking.py`
-      `PROFILE_READS` is `"browser"` and a browser tool is there: Claude in Chrome, or the
-      Claude desktop app's built-in browser, which a cloud session reaches too while it is
-      linked to the person's computer and the app is open (`mcp__remote-devices__Claude_Browser__*`;
-      load the browser's skill first). If LinkedIn answers with its sign-in page, that is
-      the one thing only the person can do, once: tell them LinkedIn's sign-in is open in
-      the app's browser, and carry on when they are in. Claude never types, sees or stores a
-      password. Open their `linkedin_url` in a
-      new tab, read the page text, close the tab, and pipe the text to
-      `python3 tools/network/reading.py read <contact_id> - --source browser`. One profile
-      at a time at a person's pace (the tool refuses a read within `reading.PACE_SECONDS`
-      of the last), and `reading.READS_PER_DAY` is only a ceiling against a runaway loop.
-      One at a time is deliberate, not a limit of the tool: it is the person's own
-      account doing the reading, and a burst of page loads is what LinkedIn's automation
-      checks look for. Never describe it to them as slow; vary the pause between profiles
-      rather than keeping it exact.
-      Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
-      scroll into other people's profiles. A login wall, a security check or a CAPTCHA
-      stops the reads for the day: say so, and never try to get past one. With the setting
-      on and no browser tool in the session (a phone, the web), say once that profiles are
-      read in the browser only when the session is linked to the desktop app on their
-      computer, and ask for screenshots or a paste instead (3).
-   2. **After each read, the verdict.** `read` prints it, and `reading.py verdict
+   1. **Public sources first, before LinkedIn is opened at all.** One WebSearch for
+      `"<Full Name>" "<Company>"` with LinkedIn excluded, for a talk, an article, a
+      podcast, code or a quote in the press, and one for their posts,
+      `"<Full Name>" site:linkedin.com/posts` (results only: `discovery.resolve_result()`
+      dates a post from its link). Keep each one that is plainly theirs with
+      `reading.py add <contact_id> --kind talk|article|podcast|code|post|news --url <url>
+      --date <YYYY-MM-DD> --text "<its title or the line itself>"`, then run
+      `reading.py verdict <contact_id>`: someone a public page shows has moved on or is
+      based elsewhere is skipped here, without a LinkedIn visit. Never a people-search or
+      data-broker site (`reading.BROKERS`; the tool refuses them), and never a fetch of
+      linkedin.com from this session: its robots.txt disallows it and it answers HTTP 999.
+   2. **Their profile, in the person's own browser, once**, only for the people still
+      likely after (1), best first, and only as many as the batch needs. Only when
+      `profile/networking.py` `PROFILE_READS` is `"browser"` and a browser tool is there:
+      Claude in Chrome, or the Claude desktop app's built-in browser, which a cloud session
+      reaches too while it is linked to the person's computer and the app is open
+      (`mcp__remote-devices__Claude_Browser__*`; load the browser's skill first). If
+      LinkedIn answers with its sign-in page, that is the one thing only the person can do,
+      once: tell them LinkedIn's sign-in is open in the app's browser, and carry on when
+      they are in. Claude never types, sees or stores a password.
+      - **Before each profile**, `python3 tools/network/reading.py gate`. It answers `go`,
+        or `wait:` with how long (exit 3). It holds a varied gap of tens of seconds between
+        profiles, a longer break every few, and the caps in `profile/networking.py`:
+        `PROFILE_READS_PER_SITTING` an hour and `PROFILE_READS_PER_DAY`. Wait it out, or
+        stop the run and say how many are left for tomorrow. Never open two at once.
+      - **One pass per profile.** Open their `linkedin_url` in a new tab, read the whole
+        page text in one go, close the tab, and pipe the text to
+        `python3 tools/network/reading.py read <contact_id> - --source browser`. That one
+        read keeps everything a note and the send need: the current role and employer,
+        the location, the connection degree and whether Connect, Message, Follow or
+        Pending shows, About, recent activity and Featured. A reading less than
+        `reading.FRESH_DAYS` old is never read again in the browser; the tool refuses.
+      - **Stop at any wall.** A sign-in wall after they were signed in, a security or
+        identity check, a CAPTCHA, a warning about automated activity or an unusual page:
+        `reading.py stop "<what LinkedIn showed>"`, which halts browser reads for the day,
+        and tell the person what it showed. Never try to get past one.
+      - Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
+        scroll into other people's profiles. It is the person's own account doing the
+        reading. One at a time at a person's pace is how a person prospects, and a burst of
+        page loads is what LinkedIn's automation checks look for. That pacing lowers the
+        risk; it does not remove it, and LinkedIn's terms forbid automated access whatever
+        the pace.
+      With the setting on and no browser tool in the session (a phone, the web), say once
+      that profiles are read in the browser only when the session is linked to the desktop
+      app on their computer, and ask for screenshots or a paste instead (4).
+   3. **After each read, the verdict.** `read` prints it, and `reading.py verdict
       <contact_id>` repeats it: KEEP, or SKIP with the reason. A snippet can be months
-      old, and the page shows that someone has moved on, is based elsewhere, or holds a
-      role the search filters out. A skip is recorded as a `closed` contact with that
-      reason, so they never surface again, and the next person is read in their place.
-      When the people kept run out before the batch is full, run the next query
-      `discovery.queries_for()` allows and read on.
-   3. **Their profile, from the person**: otherwise, the reply that presents the drafts
-      asks for it, one line per person, in whichever way suits where they are:
+      old, and the page shows that someone has moved on, is based elsewhere, holds a role
+      the search filters out, or already has a request pending. A skip is recorded as a
+      `closed` contact with that reason, so they never surface again, and the next person
+      is read in their place. When the people kept run out before the batch is full, run
+      the next query `discovery.queries_for()` allows and read on.
+   4. **Their profile, from the person**: otherwise, the reply that presents the drafts
+      asks for it, as a numbered list (`reading.py queue`), one line per person, in
+      whichever way suits where they are:
       - **on a computer**: open the profile, select all, copy, and paste it here, or attach
         LinkedIn's own **More > Save to PDF** of it (`reading.py read <contact_id> <file>`,
         the `.pdf` as it is);
@@ -141,15 +170,6 @@ untouched employers from the latest round's shortlist.
       They open the profile anyway to send the request, so this costs seconds, and the
       note is rewritten from it in the same turn. This is the route that works wherever
       the session runs, web and phone included, with nothing of theirs at risk.
-   4. **Their public work, always**: one WebSearch for `"<Full Name>" "<Company>"` with
-      LinkedIn excluded, for a talk, an article, a podcast, code or a quote in the press,
-      and one for their posts, `"<Full Name>" site:linkedin.com/posts` (results only:
-      `discovery.resolve_result()` dates a post from its link). Keep each one that is
-      plainly theirs with `reading.py add <contact_id> --kind talk|article|podcast|code|post|news
-      --url <url> --date <YYYY-MM-DD> --text "<its title or the line itself>"`. Never a
-      people-search or data-broker site (`reading.BROKERS`; the tool refuses them), and
-      never a fetch of linkedin.com from this session: its robots.txt disallows it and it
-      answers HTTP 999.
 
    `python3 tools/network/reading.py show <contact_id>` lists what a note can rest on, best
    first: history they share with the candidate (an employer, a school, a city), then their

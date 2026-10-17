@@ -18,9 +18,12 @@ LINKEDIN_PLAN = "premium"
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
 # where they copy the page when they open it to send the request.
 PROFILE_READS = "paste"
-# A ceiling on browser reads a day, against a runaway loop. A run reads as many
-# people as it takes to fill its batch; this only stops one that never ends.
-PROFILE_READS_PER_DAY = 150
+# How many profiles a browser read opens: at most this many in a sitting (an hour)
+# and in a day, with varied pauses between them. It is Morgan's own LinkedIn account
+# reading, so these stay at what a person prospecting does; raising them raises the
+# chance LinkedIn restricts the account.
+PROFILE_READS_PER_SITTING = 15
+PROFILE_READS_PER_DAY = 40
 
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}
