@@ -16,7 +16,8 @@ These apply whenever the change is to the app, whichever repo the session starte
 
 - **Changes are made in the app**, on a branch, through a pull request, and merged only with
   CI green. The app is public, so its Actions minutes are free and its CI is the evidence.
-  Then every person's repo takes the change on its next sync, the maintainer's included.
+  The maintainer's own repo takes it on its next sync; everyone else takes it when it is
+  released ("Releasing", below).
 - **Nothing reaches the app until the leak scan has passed on the exact tree being pushed,
   branches included**: a public repo's branches are public, and its history is permanent. From
   the maintainer's own repo, `python3 tools/build_app.py <dir> --tokens-out <dir>/tokens`
@@ -75,6 +76,31 @@ Every rule below follows from that.
 The one thing not negotiable in the other direction: **do not push to master without CI
 green.** It is the branch every other session starts from, so a broken master breaks all
 of them at once.
+
+## Releasing
+
+A person's repo follows the app's **releases**, the newest `vX.Y.Z` tag, and the
+maintainer's own repo follows **master** (`tools/sync_app.py`, `channel()`: a repo whose
+GitHub owner is the app's follows master, and `"app_channel"` in `profile/person.json`
+overrides either way). So master can move several times a day while everyone else gets only
+what has already run in the maintainer's copy. A first sync takes master, because a repo is
+made from a snapshot of it; after that, stable never goes backwards.
+
+**When**: once the maintainer's copy has run the changes in `[Unreleased]` for a day or two
+without trouble, and never inside the hours their own scheduled tasks run.
+
+**How**:
+
+1. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
+   `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Minor for new
+   behaviour, patch for fixes only. Merge it with CI green.
+2. On GitHub: Releases, **Draft a new release**, tag `vX.Y.Z` on master, title `vX.Y.Z`,
+   the CHANGELOG section as the notes, **Publish**. The tag is what every repo's next sync
+   reads; nothing else needs doing.
+
+A broken release is fixed forward: a fix on master and a new patch release. Never move or
+delete a published tag, because repos that already took it would then hold history the
+app no longer names.
 
 ## Commit state at the moment it changes
 

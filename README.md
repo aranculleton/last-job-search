@@ -64,9 +64,9 @@ the one setting to paste in the first time, is [START_HERE.md](START_HERE.md).
   not in a chat that ends.
 - **It learns what you like.** Say "too formal" or "stop suggesting recruiters" once, and it
   sticks. It also notices which messages got replies and which applications got interviews.
-- **It keeps itself up to date.** Improvements to this app reach your copy by themselves,
-  each day you use it, even if you keep the same chat open for weeks. Nothing about you is
-  ever sent back.
+- **It keeps itself up to date.** Each release of this app reaches your copy by itself,
+  the first day you use it after the release, even if you keep the same chat open for weeks.
+  Nothing about you is ever sent back.
 
 ## Your data
 
