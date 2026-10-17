@@ -60,6 +60,8 @@ Ranked roughly by how bad it would be:
   keeps only what a note could rest on, strips fence markers from it, and a model sees it
   only through `reading.fenced()`. LinkedIn itself is never fetched from a session; a
   profile is read in the person's own browser only when they chose that, or from their paste.
+  That read is opt-in because LinkedIn's terms forbid automated access at any pace, and the
+  account at risk is theirs.
 - **Permission allowlist, guard-enforced.** `.claude/settings.json` pre-approves only the
   specific commands the workflow needs. `tools/security_guards.py` runs in CI and fails
   any change that widens the allowlist, adds a package-manifest lifecycle script, or
@@ -78,8 +80,10 @@ Ranked roughly by how bad it would be:
 - **Nothing is sent.** No command in this repo submits an application, sends a message or
   emails a person. `/notion-sync`, when a person sets it up, copies each tracked job's
   title, company, score, status, deadline, channel, posting URL, the resume and letter
-  filenames and the tracker's dated notes to their own Notion database; no document
-  content is uploaded anywhere. Every artifact stops at a file on disk and waits for a human.
+  filenames and the tracker's dated notes to their own Notion database, and a new job page
+  also names any contacts at that employer with where the conversation stands (the
+  shortlist's warm-route notes); no document content is uploaded anywhere. Every artifact
+  stops at a file on disk and waits for a human.
 - **Secrets are not in the repo.** `salary_data.json` (licensed third-party data) and
   `gmail_sync/state.json` (a sync cursor) stay uncommitted. No API keys are stored here;
   the portal CLIs hit public endpoints.

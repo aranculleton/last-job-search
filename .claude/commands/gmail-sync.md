@@ -10,7 +10,12 @@ Follow these steps **in order**.
 
 ## Step 0: Prerequisites
 
-Confirm the Gmail MCP tools (`mcp__claude_ai_Gmail__*`) are available. If not, tell the user to connect the Gmail integration (claude.ai Settings → Connectors → Gmail) and stop - do not attempt this via Bash, IMAP, or any other channel.
+Confirm the Gmail connector's tools (named like `mcp__claude_ai_Gmail__*`) are in this session's own tool list. Connectors are read when a session starts, so:
+
+- **Not there:** say in one line that Gmail is theirs to connect, once, at [claude.ai/customize/connectors](https://claude.ai/customize/connectors), and that a new session then has it. Stop.
+- **There, but it answers that it needs signing in, or its tools are switched off for this session:** say which in one line; signing in again on that page is theirs, and a new session picks it up. Stop.
+
+Never try to reach the mailbox another way: no Bash, IMAP or any other channel.
 
 ---
 
@@ -40,7 +45,7 @@ Confirm the Gmail MCP tools (`mcp__claude_ai_Gmail__*`) are available. If not, t
 Lookback window: `since <date>` argument if given, else `state.last_sync` if set, else `newer_than:30d`.
 
 1. Call `list_labels` and look for a user label whose name suggests job-search email (e.g. contains "job", "application", "career" case-insensitively). Note its `id` if found.
-2. Normalize each open application's company name for matching later (lowercase; strip `inc`, `inc.`, `llc`, `ltd`, `a/s`, `corp`, `corporation`, `group`; strip punctuation; collapse whitespace).
+2. Normalise each open application's company name for matching later with the app's own helpers, never a hand-kept suffix list: `discovery.search_name()` (`tools/network/discovery.py`) takes off the legal form in any country's spelling (`Ltd`, `Inc.`, `GmbH`, `A/S`, `S.p.A.` and the rest) and a bracketed qualifier, and gives the name as people write it, which is the quoted name in the query below; `company_key.key()` (`tools/company_key.py`) also folds `Group`, a country word and the profile's `COMPANY_ALIASES`, so a sender who writes the initialism still matches. Lowercase, strip punctuation and collapse whitespace on both.
 3. Build a Gmail query combining (with `OR` groups via `{}`):
    - `label:<id>` if a job-search label was found
    - A quoted-name OR-group of the open applications' company names, e.g. `{"Acme Corp" "BigCo"}`

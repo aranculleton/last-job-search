@@ -228,7 +228,7 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
             (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
         ),
-        "fingerprint": "a601351121025a93",
+        "fingerprint": "ced41318db708c64",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -301,7 +301,7 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
             (17, "2026-10-17", False, "shared definitions: dates, places, recruiter test, ruled-out employers, employer names without a legal suffix, an application there and a route's clear reply rate in why-them"),
         ),
-        "fingerprint": "070f9476ae1f9602",
+        "fingerprint": "1dbd7d5733aea5e8",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -361,7 +361,7 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "The default set-up is one task, a twice-weekly brief that takes the app's updates; the scheduled round is optional. Existing tasks keep their schedules"),
             (4, "2026-10-17", False, "how to set up the brief from a session on your own computer"),
         ),
-        "fingerprint": "a28754d6f5e10823",
+        "fingerprint": "2a9327d85038921d",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

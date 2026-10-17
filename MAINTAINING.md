@@ -105,7 +105,8 @@ app no longer names.
 ## Commit state at the moment it changes
 
 Not at the end of the session. A session that runs out of context mid-task loses
-everything uncommitted, and the stop hook is a backstop, not a plan.
+everything uncommitted, and the app ships no hook that would catch it (`tools/security_guards.py`
+keeps the hook allowlist empty).
 
 The table in CLAUDE.md under "Memory: the repo remembers, the chat does not" says what
 goes where. The short version: an application, a message sent or received, a fact learned
@@ -182,7 +183,7 @@ employer sees:
   within a document.
 - The document's noun is the profile's (`documents.noun`), never one of
   `documents.banned_nouns`, in anything the employer sees.
-- **No em dashes anywhere.**
+- **No em or en dashes anywhere.**
 - Filenames are human-looking: `<Prefix>_Resume_<ABBR>`, where `<Prefix>` is
   `identity.file_prefix` in `profile/person.json`, no requisition numbers or date stamps
   unless disambiguating two roles at one employer.
@@ -193,7 +194,10 @@ employer sees:
 
 `.github/workflows/upstream-watch.yml` runs weekly, sorts the upstream commits this fork
 lacks into worth-reviewing versus probably-skip, and writes a rolling issue. It never
-merges or pushes.
+merges or pushes. `python3 tools/upstream_triage.py --remote upstream --branch master` makes
+the same report locally, and `python3 tools/check_upstream_updates.py` names the methodology
+files an update would touch, by `framework_version` marker. A person's copy has no
+`upstream` remote, and the workflow runs only in the app.
 
 Port by hand, and read the diff rather than trusting a clean cherry-pick. On a fork,
 "applies cleanly" is not "correct": a commit fixing a portal this app no longer ships (the

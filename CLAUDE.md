@@ -221,7 +221,7 @@ when the tasks run and where they report is the person's (the automation section
 app's updates; a scheduled job round is optional and off by default, since "find me jobs"
 runs one in any chat. Two set-ups work, and the README walks a person through either: **(a)**
 one chat per task, each task bound to its own chat, whose reply is the briefing; or **(b)**
-each task made in the Claude app's Routines screen with the repo ticked and notifications on. Each task's stored prompt is a stub
+each task made in the Claude app's Routines screen with the repo ticked, every run a new chat. Each task's stored prompt is a stub
 that reads `automation/prompts/_common.md` and its own file from master, so **changing what a
 task does is a normal PR**; only a schedule change needs `update_trigger` or the Routines
 screen. The final reply is the message; nothing depends on `fire_trigger`. An older
@@ -230,6 +230,13 @@ from a chat made before 14 October 2026: never archive, delete
 or rebuild one, and never test a chat-bound task with `fire_trigger` (use a one-off
 `run_once_at` task bound to the chat). `python3 tools/routines.py check` validates the
 registry.
+
+**"Set up my brief" is set-up (a) in `automation/README.md`.** The task's own chat comes first:
+start it yourself where the session can (`create_session` on the person's private repo, titled
+"Job search: morning brief", with the paste in (a) step 2 as its prompt; from a local session,
+`claude --cloud "<that paste>"`), otherwise give them that paste for a new chat. That chat asks
+its two questions, so say where to answer them, and creates the task. (b), the Routines
+screen, is for someone who would rather have each run arrive as a new chat and a notification.
 
 **Silence is the alarm**: the brief is delivered on each of its days even when nothing is
 due, so one of those mornings with no brief means the automation is broken; `automation/README.md` has the set-up
@@ -404,7 +411,10 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
 
 **The rules that matter most**, all enforced in code rather than remembered:
 
-- At most two searches per company (`discovery.queries_for()` builds them), and three is a hard ceiling never meant to be reached.
+- A fixed search budget: at most `sources.SEARCHES_PER_COMPANY` (four) searches per employer
+  across every kind of source, `sources.SEARCHES_PER_RUN` (five) for the kinds searched once a
+  run, and inside that at most two LinkedIn title searches per employer, three a hard ceiling
+  never meant to be reached (`discovery.queries_for()`). `sources.py` prints the run's searches.
 - Alumni and referral routes before cold. The response-rate gap is large.
 - Tier 1 requires a **quoted** live hiring signal, shown as evidence.
 - **Read each person before writing to them** (`tools/network/reading.py`, `/network` step 5):
