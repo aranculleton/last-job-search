@@ -502,8 +502,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             ask="Before a note goes to someone, should Claude read their LinkedIn profile in "
                 "your own signed-in browser? It reads only the people a search surfaced, one at "
                 "a time at a person's pace, and clicks nothing, but LinkedIn's terms forbid "
-                "automated access, so the risk is to your account. The other way is pasting a "
-                "profile when you open it to send the request."),
+                "automated access, so the risk is to your account. The other way, which works on "
+                "a phone too, is pasting the profile or sending screenshots of it from the "
+                "LinkedIn app when you open it to send the request."),
     Upgrade("screen-flags", "2026-10-15",
             "postings from the wrong job family for you flagged, in your field's terms",
             _screen_flags, "/setup --section search", "question", "~5 min",

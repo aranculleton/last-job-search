@@ -289,7 +289,8 @@ characters, so the opener, the line about them and the ask together stay near 12
 LinkedIn profile of each person about to be messaged in their own signed-in browser, said
 plainly: LinkedIn's terms forbid automated access, the risk is to their account, it reads
 only the people a search surfaced, at a person's pace, and clicks nothing, and the
-alternative is pasting a profile when they open it),
+alternative, which works on a phone and in a web session too, is pasting a profile or
+sending screenshots of it from the LinkedIn app when they open it),
 `claims.py`, `screening.py` (standard form
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
 `12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).

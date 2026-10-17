@@ -16,9 +16,12 @@ Where a reading comes from, best first:
            pace, until the run has as many good fits as it can send (see
            `verdict()`), and nothing on the page is ever clicked. LinkedIn's terms
            forbid automated access, which is why it is the person's own choice.
-  paste    the same page, copied by the person when they open it to send the
-           request (select all, copy), or LinkedIn's own "Save to PDF" of the
-           profile. The default: it needs no consent and costs them seconds.
+  paste    the same page from the person, when they open it to send the request:
+           copied (select all, copy), LinkedIn's own "Save to PDF" of it, or, on a
+           phone or in a web session with no browser of theirs to use, screenshots
+           of it from the LinkedIn app, which Claude transcribes word for word
+           (--source screenshot). The default: no consent needed, seconds a person,
+           and it works wherever the session runs.
   public   their own talks, articles, podcasts and code, and their LinkedIn posts
            as a search engine shows them: WebSearch only, never a fetch of
            linkedin.com, never a people-search or data-broker site (BROKERS).
@@ -34,7 +37,7 @@ It lives in documents/network/<contact_id>/reading.json and is fresh for
 FRESH_DAYS. Everything in a reading was written by someone else: a model sees it
 only through `fenced()`, as data, never as instructions.
 
-    python3 tools/network/reading.py read <contact_id> <file|-> [--source paste|browser|pdf] [--url URL]
+    python3 tools/network/reading.py read <contact_id> <file|-> [--source paste|browser|pdf|screenshot] [--url URL]
     python3 tools/network/reading.py add <contact_id> --kind talk --url URL --date YYYY-MM-DD --text "..."
     python3 tools/network/reading.py show <contact_id>      # what a note can rest on, best first
     python3 tools/network/reading.py queue                  # drafts waiting with no fresh reading
@@ -89,6 +92,10 @@ BROKERS = re.compile(
     r"clustrmaps|nuwber|fastpeoplesearch|intelius|instantcheckmate|idcrawl|"
     r"datanyze|leadiq|kaspr|hunter|snov|uplead|adapt|cognism|theofficialboard)\.",
     re.I)
+
+# Where a read of their own page came from. "screenshot" is the LinkedIn app on
+# the person's phone, transcribed from the images word for word.
+PAGE_SOURCES = ("paste", "browser", "pdf", "screenshot")
 
 KINDS = ("post", "repost", "comment", "featured", "publication", "talk", "article",
          "podcast", "code", "news")
@@ -390,7 +397,7 @@ def merge(old: dict | None, new: dict) -> dict:
     out = dict(old)
     for k in ("headline", "location", "about", "current"):
         out[k] = new.get(k) or old.get(k, "")
-    if any(s.get("kind") in ("paste", "browser", "pdf") for s in new.get("sources", [])):
+    if any(s.get("kind") in PAGE_SOURCES for s in new.get("sources", [])):
         out["shared"] = new.get("shared") or old.get("shared", {})
     out["sources"] = old.get("sources", []) + new.get("sources", [])
     seen = {(i.get("kind"), i.get("text")) for i in old.get("items", [])}
@@ -549,6 +556,66 @@ def fenced(reading: dict) -> str:
                            label=f"LinkedIn and public material about {reading.get('name') or 'them'}")
 
 
+# --------------------------------------------------------------------- route
+
+# What a session can tell about itself: a cloud session sets CLAUDE_CODE_REMOTE,
+# and CLAUDE_CODE_ENTRYPOINT names where it was started (a value seen:
+# "remote_desktop", a cloud session opened from the desktop app).
+def surface(env=None) -> str:
+    """"phone", "web", "desktop-cloud", "local" or "unknown": where this session runs."""
+    env = os.environ if env is None else env
+    entry = str(env.get("CLAUDE_CODE_ENTRYPOINT", "")).lower()
+    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true":
+        return "local" if env.get("CLAUDECODE") else "unknown"
+    if any(w in entry for w in ("mobile", "ios", "android", "phone")):
+        return "phone"
+    if "desktop" in entry:
+        return "desktop-cloud"
+    if "web" in entry:
+        return "web"
+    return "unknown"
+
+
+def route(tools=(), consent: str | None = None, env=None) -> dict:
+    """How this session reads a profile, chosen for the person, never asked of them.
+
+    `tools` is what the session itself has: "browser" (the desktop app's built-in
+    browser, as mcp__Claude_Browser__* or mcp__remote-devices__Claude_Browser__*),
+    "chrome" (Claude in Chrome), "enable" (enable__mcp__remote-devices__Claude_Browser,
+    which turns the built-in browser on for the conversation). Returns the route,
+    what Claude does, and the one line the person is told, or "" when nothing needs
+    saying. A person is never told to press a key or find a setting: the browser is
+    used when it is there, switched on when it can be, and otherwise the route that
+    works where they are is asked for, once.
+    """
+    have = {str(t).lower() for t in tools}
+    consent = (consent or PROFILE_READS).lower()
+    where = surface(env)
+    hand = ("screenshots of their profile from the LinkedIn app" if where == "phone"
+            else "their profile pasted (select all, copy), its Save to PDF, or screenshots")
+    if consent == "off":
+        return {"route": "public", "do": "public work only", "say": ""}
+    if consent == "browser":
+        if have & {"browser", "chrome"}:
+            return {"route": "browser", "do": "read each profile in the browser, nothing clicked",
+                    "say": ""}
+        if "enable" in have:
+            return {"route": "enable", "do": "call enable__mcp__remote-devices__Claude_Browser, "
+                    "then read each profile in the browser, nothing clicked", "say": ""}
+        why = {"phone": "this session runs in the cloud and a phone has no browser it can use",
+               "web": "this session runs in the cloud and the web page has no browser it can use",
+               "desktop-cloud": "this session runs in the cloud and the desktop app has not "
+                                "given it a browser",
+               }.get(where, "this session has no browser it can use")
+        return {"route": "hand", "do": f"ask once for {hand}; everything after is automatic",
+                "say": f"Profiles are read automatically only in a session with a browser: "
+                       f"{why}. Until then, send {hand} for each person and I'll do the rest. "
+                       f"A session run on your computer from the Claude desktop app reads "
+                       f"them by itself."}
+    return {"route": "hand", "do": f"ask once for {hand}; everything after is automatic",
+            "say": f"Send {hand} for each person and I'll make each note about them."}
+
+
 # ------------------------------------------------------------------- storage
 
 def path(contact_id: str) -> str:
@@ -578,7 +645,7 @@ def fresh(reading: dict | None, today: datetime.date | None = None) -> bool:
     today = today or datetime.date.today()
     age = _days((reading or {}).get("read_on", ""), today)
     return age is not None and age <= FRESH_DAYS and any(
-        s.get("kind") in ("paste", "browser", "pdf") for s in (reading or {}).get("sources", []))
+        s.get("kind") in PAGE_SOURCES for s in (reading or {}).get("sources", []))
 
 
 def last_browser_read() -> datetime.datetime | None:
@@ -656,7 +723,7 @@ def main(argv: list | None = None) -> int:
     r = sub.add_parser("read", help="a profile page: copied text, a browser read, or a PDF")
     r.add_argument("contact_id")
     r.add_argument("file", help="a text file, a .pdf from LinkedIn's Save to PDF, or - for stdin")
-    r.add_argument("--source", choices=("paste", "browser", "pdf"), default=None)
+    r.add_argument("--source", choices=PAGE_SOURCES, default=None)
     r.add_argument("--url", default="")
     r.add_argument("--name", default="", help="for a candidate not in the contact book yet")
     r.add_argument("--company", default="")
@@ -672,8 +739,17 @@ def main(argv: list | None = None) -> int:
     s = sub.add_parser("show")
     s.add_argument("contact_id")
     sub.add_parser("queue", help="drafts waiting with no fresh reading")
+    ro = sub.add_parser("route", help="how this session reads profiles, and what to tell the person")
+    ro.add_argument("--tools", default="",
+                    help="what the session has, comma-separated: browser, chrome, enable")
     a = ap.parse_args(argv)
 
+    if a.cmd == "route":
+        r_ = route([t for t in a.tools.split(",") if t.strip()])
+        print(f"route: {r_['route']} ({surface()})\ndo: {r_['do']}")
+        if r_["say"]:
+            print(f"tell them, once: {r_['say']}")
+        return 0
     if a.cmd == "queue":
         import state
         waiting = queue(state.load_contacts())

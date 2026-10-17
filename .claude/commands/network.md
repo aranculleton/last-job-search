@@ -72,12 +72,24 @@ untouched employers from the latest round's shortlist.
    `documents/network/<contact_id>/reading.json` (`--name` and `--company` for a
    candidate not in the contact book yet).
 
+   0. **Choose the route, never ask the person to.** Run
+      `python3 tools/network/reading.py route --tools <what this session has>`, naming
+      `browser` (the desktop app's built-in browser, `mcp__Claude_Browser__*` or
+      `mcp__remote-devices__Claude_Browser__*`), `chrome` (Claude in Chrome) or `enable`
+      (`enable__mcp__remote-devices__Claude_Browser`). It reads where the session runs and
+      prints what to do and the one line, if any, to tell the person. Follow it: with
+      `enable`, call that tool yourself first; with no browser, ask once for the route it
+      names (screenshots on a phone, a paste on a computer). Never tell the person to press a
+      key, find a setting or open a panel.
+
    1. **Their profile, in the person's own browser**, only when `profile/networking.py`
       `PROFILE_READS` is `"browser"` and a browser tool is there: Claude in Chrome, or the
       Claude desktop app's built-in browser, which a cloud session reaches too while it is
       linked to the person's computer and the app is open (`mcp__remote-devices__Claude_Browser__*`;
-      load the browser's skill first). The person signs in to LinkedIn there themselves,
-      once; Claude never types, sees or stores a password. Open their `linkedin_url` in a
+      load the browser's skill first). If LinkedIn answers with its sign-in page, that is
+      the one thing only the person can do, once: tell them LinkedIn's sign-in is open in
+      the app's browser, and carry on when they are in. Claude never types, sees or stores a
+      password. Open their `linkedin_url` in a
       new tab, read the page text, close the tab, and pipe the text to
       `python3 tools/network/reading.py read <contact_id> - --source browser`. One profile
       at a time at a person's pace (the tool refuses a read within `reading.PACE_SECONDS`
@@ -85,8 +97,9 @@ untouched employers from the latest round's shortlist.
       Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
       scroll into other people's profiles. A login wall, a security check or a CAPTCHA
       stops the reads for the day: say so, and never try to get past one. With the setting
-      on and no browser tool in the session, say once that profiles can be read when the
-      session is linked to the desktop app on their computer, and carry on with 2 and 3.
+      on and no browser tool in the session (a phone, the web), say once that profiles are
+      read in the browser only when the session is linked to the desktop app on their
+      computer, and ask for screenshots or a paste instead (3).
    2. **After each read, the verdict.** `read` prints it, and `reading.py verdict
       <contact_id>` repeats it: KEEP, or SKIP with the reason. A snippet can be months
       old, and the page shows that someone has moved on, is based elsewhere, or holds a
@@ -95,11 +108,21 @@ untouched employers from the latest round's shortlist.
       When the people kept run out before the batch is full, run the next query
       `discovery.queries_for()` allows and read on.
    3. **Their profile, from the person**: otherwise, the reply that presents the drafts
-      asks for it, one line per person: open the profile, select all, copy, and paste it
-      here, or attach LinkedIn's own **More > Save to PDF** of it. A paste is
-      `reading.py read <contact_id> <file>`; a PDF is the same with the `.pdf`. They open
-      the profile anyway to send the request, so this costs seconds, and the note is
-      rewritten from it in the same turn.
+      asks for it, one line per person, in whichever way suits where they are:
+      - **on a computer**: open the profile, select all, copy, and paste it here, or attach
+        LinkedIn's own **More > Save to PDF** of it (`reading.py read <contact_id> <file>`,
+        the `.pdf` as it is);
+      - **on a phone, or in a web session**: screenshots of the profile in the LinkedIn
+        app (the top, About, Experience and Activity), attached to the message. Transcribe
+        what the images show word for word, section by section under LinkedIn's own
+        headings (About, Activity, Experience, Education), into a file, and run
+        `reading.py read <contact_id> <file> --source screenshot`. Only what is legible
+        in the images: never fill a gap, guess a cut-off line or carry over anything from
+        a second person's profile in the same screenshot.
+
+      They open the profile anyway to send the request, so this costs seconds, and the
+      note is rewritten from it in the same turn. This is the route that works wherever
+      the session runs, web and phone included, with nothing of theirs at risk.
    4. **Their public work, always**: one WebSearch for `"<Full Name>" "<Company>"` with
       LinkedIn excluded, for a talk, an article, a podcast, code or a quote in the press,
       and one for their posts, `"<Full Name>" site:linkedin.com/posts` (results only:
@@ -174,8 +197,8 @@ before sending), and **the message itself, ready to paste**, with its character 
 against the plan's limit (and the subject line for an InMail).
 
 A note with no page read behind it says so on its own line: "Rests only on their title
-and the search snippet. Paste their profile (or its Save to PDF) and I'll make it about
-them." When the reads are in the browser, list who was read, who was skipped after the read and
+and the search snippet. Paste their profile, attach its Save to PDF, or send screenshots
+of it from the LinkedIn app, and I'll make it about them." When the reads are in the browser, list who was read, who was skipped after the read and
 why, and say how many were read to fill the batch.
 
 Then, separately and honestly: **the dead ends**, with the reason for each. A

@@ -170,10 +170,16 @@ caught at once. So between finding and writing there is a read, and
 - **Their profile.** In the person's own signed-in browser when `PROFILE_READS` is
   `"browser"` in `profile/networking.py` (Claude in Chrome, or the Claude desktop app's
   built-in browser, which a cloud session reaches while it is linked to their computer),
-  otherwise pasted by them (select all, copy, or LinkedIn's Save to PDF), which takes
-  seconds because they open the profile anyway to send the request. This session never
+  otherwise from them: pasted (select all, copy), LinkedIn's Save to PDF, or, on a phone or
+  in a web session, screenshots from the LinkedIn app, transcribed word for word. That
+  takes seconds because they open the profile anyway to send the request, and it works
+  wherever the session runs. This session never
   fetches LinkedIn itself: its robots.txt disallows every crawler it does not name and a
   profile request answers HTTP 999.
+- **The route is chosen, never asked.** `reading.py route` reads where the session runs
+  and which browser it has, and says what to do: read in the browser, switch it on first,
+  or ask once for screenshots (phone) or a paste (computer). The person is never told to
+  press a key or find a setting.
 - **Read, judge, next.** How many are read is however many it takes to fill the run's
   batch with people worth writing to, the way a round runs until its yield target.
   `reading.verdict()` skips someone the page shows has moved on, is based elsewhere or

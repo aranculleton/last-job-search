@@ -103,8 +103,9 @@ METHODS: dict[str, dict] = {
                                      "the plan reaches older profiles as its own question"),
             (4, "2026-10-17", False, "asks whether Claude may read LinkedIn profiles in your own browser before writing to someone"),
             (5, "2026-10-17", False, "the browser-read question says it reads only the people a search surfaced, at a person's pace"),
+            (6, "2026-10-17", False, "the browser-read question names screenshots as the way that works on a phone"),
         ),
-        "fingerprint": "d1dec487a6b41a7f",
+        "fingerprint": "c3ddfd7a57c7a420",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -281,8 +282,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (10, "2026-10-17", False, "a note is written from what was read about the person (their profile, posts and public work), refuses a common ground nothing read supports, and no two notes in a batch say the same thing"),
             (11, "2026-10-17", False, "reads the people a run surfaced until the batch is full, skips anyone the page shows has moved on or is based elsewhere and reads the next, and reaches the desktop app's browser from a cloud session"),
+            (12, "2026-10-17", False, "screenshots from the LinkedIn app, read like a paste, so a profile is read on a phone or in a web session"),
         ),
-        "fingerprint": "f9fb1f89a65f84da",
+        "fingerprint": "ec0d26659b9d40f4",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -301,8 +303,9 @@ METHODS: dict[str, dict] = {
                                     "history you share, a recent post, a talk or an article, "
                                     "and no two notes say the same thing"),
             (3, "2026-10-17", False, "a person the page shows has moved on is skipped, and the ceiling on reads is far above a run"),
+            (4, "2026-10-17", False, "screenshots count as a read of the person's page"),
         ),
-        "fingerprint": "81e5bc409b5cf0e4",
+        "fingerprint": "9343d73e73fdc1e3",
     },
     "screening": {
         "by": "round", "priority": 2,
