@@ -444,3 +444,16 @@ def test_every_flow_that_can_drive_a_browser_says_it_never_clicks():
                if names.search(open(f, encoding="utf-8").read())
                and not guard.search(open(f, encoding="utf-8").read())]
     assert missing == [], missing
+
+
+def test_a_past_employer_is_found_without_its_legal_suffix(monkeypatch):
+    # A profile says "Kestrel Mutual"; roles.py says "Kestrel Mutual Ltd". Never a
+    # leading-words match, which would claim a shared employer that is not one.
+    import types
+    stub = types.SimpleNamespace(ROLES=[{"employer": "Kestrel Mutual Ltd"},
+                                        {"employer": "Royal Fernhill Bank of Leeds"}],
+                                 EDUCATION="")
+    monkeypatch.setattr(reading, "_roles", lambda: stub)
+    names = reading.history()["employers"]
+    assert "Kestrel Mutual" in names[0]
+    assert not any(n == "Royal Fernhill" for n in names[1])

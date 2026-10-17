@@ -462,10 +462,15 @@ same turn:
 2. Make it stick where it governs. That means the profile setting: `networking.py`
    (`OPENER`, `ABOUT_ME`, `ASK`, `GREETING`, `REFERRAL_LINE`, `REFERRAL_CLOSE`,
    `TITLE_SETS`), `search.py` (the bar, the scoring words), `profile/CLAUDE.md` (how they
-   want to come across, document rules), `07-interview-prep.md`. A job they dislike is a
-   `seen_jobs.json` exclusion with their words as the reason. A person they do not want
-   contacted is a `closed` contact with their reason. A *kind* of job or person becomes
-   the rule that covers all of them.
+   want to come across, document rules), `07-interview-prep.md`. A job they dislike is
+   `python3 tools/exclude.py add <url> --basis person --reason "<their words>"`. A person
+   they do not want contacted is a `closed` contact with their reason. A *kind* of job or
+   person becomes the rule that covers all of them. **Rulings change, and that is
+   normal:** when they change their mind about a kind of job, a sector or an employer,
+   undo the ruling in the same turn (`exclude.py lift "<words of the reason>"`, the sector or
+   employer out of `search.py` `BAR_EXCLUDED` or `BAR_DECLINED`, the entry out of
+   `job_scraper/do_not_target.json`). A ruling made by their screening rules lapses by
+   itself when those rules change.
 3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted.
 4. Say in one line what will be different from now on.
 
@@ -519,7 +524,7 @@ chat has lost it.
 | A new person worth contacting | `network_contacts.csv` |
 | A contact's situation changed, or something is now owed | that contact's `status` and `next_action` |
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
-| A posting was ruled out | `job_scraper/seen_jobs.json`, with `status: excluded` and a reason |
+| A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `CLAUDE.md` if it belongs in the summary |
 | A reaction or preference: a message, a person, a job, the voice, the questions | the setting it governs, and `profile/learned.json` via `tools/learned.py record` |
 | Company research that cost a fetch | `company_research/<key>.json` |

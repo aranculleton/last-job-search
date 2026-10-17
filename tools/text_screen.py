@@ -38,6 +38,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import places as _places  # noqa: E402
 
 _S = person.module("search")
 CUR = getattr(_S, "CURRENCY_SYMBOL", "$")
@@ -697,17 +698,13 @@ THIN = 400
 # A requirement to live somewhere else, one of the hard cuts CLAUDE.md names: "must
 # be based in one of our talent hub countries (US, UK, Spain, Kenya and Ghana)"
 # passed at fit 91 for somebody who lives in none of them. A sentence that also
-# names the home country is a list that includes them, and passes.
-_LOC_S = dict(getattr(_S, "LOCATION", {}) or {})
-_HOME_COUNTRY_RX = _LOC_S.get("home_country_rx")
-_OTHER_PLACES = [str(c).lower() for c in _LOC_S.get("other_countries", [])]
+# names the home country is a list that includes them, and passes. The places
+# are the profile's (search.py LOCATION, through tools/places.py).
 RESIDE = re.compile(
     r"\b(?:must|need to|needs to|required to|have to)\s+(?:be\s+)?(?:based|located|resid\w*|"
     r"live|living)\s+(?:in|within)\b|\b(?:based|located|residing) in one of\b"
     r"|\bopen (?:only )?to (?:candidates|applicants|people) (?:based|located|residing|living) in\b"
     r"|\b(?:candidates|applicants) (?:must|should) (?:reside|be based|be located|live)\b", re.I)
-_ABROAD_SHORT = re.compile(r"\b(?:us|usa|u\.s\.|uk|eu|emea|apac|latam|united states|"
-                           r"united kingdom|europe)\b", re.I)
 
 
 def residence_cut(text: str) -> str | None:
@@ -716,10 +713,10 @@ def residence_cut(text: str) -> str | None:
         if not RESIDE.search(s):
             continue
         low = s.lower()
-        if _HOME_COUNTRY_RX is not None and _HOME_COUNTRY_RX.search(low):
+        if _places.HOME_COUNTRY_RX.search(low):
             continue
-        if (any(re.search(r"\b" + re.escape(c) + r"\b", low) for c in _OTHER_PLACES)
-                or _ABROAD_SHORT.search(low)):
+        if (any(re.search(r"\b" + re.escape(c) + r"\b", low) for c in _places.OTHER_COUNTRIES)
+                or _places.ABROAD_SHORT.search(low)):
             return s[:220]
     return None
 

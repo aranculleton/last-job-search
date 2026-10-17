@@ -48,6 +48,7 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import dates                                          # noqa: E402
 import outreach                                       # noqa: E402
 import docpaths                                       # noqa: E402
 import person                                         # noqa: E402
@@ -146,10 +147,7 @@ def _status(row: dict) -> str:
 
 
 def _iso(raw) -> datetime.date | None:
-    try:
-        return datetime.date.fromisoformat(str(raw or "").strip()[:10])
-    except ValueError:
-        return None
+    return dates.as_date(raw, iso_only=True)
 
 
 def _clip(text, n: int = 140) -> str:

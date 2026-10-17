@@ -48,7 +48,6 @@ from __future__ import annotations
 
 import argparse
 import datetime
-import glob
 import json
 import os
 import re
@@ -60,11 +59,15 @@ for _p in (_HERE, os.path.dirname(_HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import company_research as research_cache  # noqa: E402
 import compose  # noqa: E402
+import learned  # noqa: E402
 import person  # noqa: E402
 import profile_facts  # noqa: E402
 import state  # noqa: E402
 import tone  # noqa: E402
+import what_works  # noqa: E402
+import why  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 
 # A band that names no currency is written in the market's (search.py CURRENCY_CODE).
@@ -80,7 +83,10 @@ ROOT = os.path.dirname(os.path.dirname(_HERE))
 # root (person.state), which is the repo root unless LJS_STATE moves it.
 STATE_ROOT = person.state()
 PREP_DIR = ("documents", "network")
-RESEARCH_DIR = "company_research"
+# The cache and its freshness rule are tools/company_research.py's; these names
+# stay so a caller that imported them from here still finds them.
+RESEARCH_DIR = research_cache.DIR
+RESEARCH_FRESH_DAYS = research_cache.RESEARCH_FRESH_DAYS
 
 # Where a fact is allowed to say it came from when the caller does not name a
 # more specific source. These are files in the repo, so "source: X" stays
@@ -90,6 +96,8 @@ PROFILE_SOURCE = os.path.relpath(
 CONTACTS_SOURCE = "network_contacts.csv"
 THREADS_SOURCE = "network_threads.csv"
 TRACKER_SOURCE = "job_search_tracker.csv"
+# Where the phrases the person has said never to use are kept (tools/learned.py).
+LEARNED_SOURCE = os.path.relpath(person.path(learned.FILE), ROOT).replace(os.sep, "/")
 
 # The phrase the document uses for anything nobody looked up. One phrase, used
 # everywhere, so the user learns to read past it instead of mistaking a blank
@@ -151,7 +159,6 @@ class Fact(NamedTuple):
 
 
 _WS = re.compile(r"\s+")
-_NON_ALNUM = re.compile(r"[^a-z0-9]+")
 
 # The value and attribution spellings that actually arrive. The research cache
 # writes `claim`/`source_url`, a hand-written dict writes `value`/`source`, and
@@ -173,10 +180,6 @@ def _text(value) -> str:
     if value is None:
         return ""
     return _WS.sub(" ", str(value)).strip()
-
-
-def _slug(value) -> str:
-    return _NON_ALNUM.sub("-", _text(value).lower()).strip("-")
 
 
 def sourced(value, source) -> Fact:
@@ -288,7 +291,7 @@ def _research_source(research) -> str:
     fetched = _text(research.get("fetched_date"))
     if not company and not fetched:
         return ""
-    name = "%s/%s.json" % (RESEARCH_DIR, _slug(company_key(company))) if company else RESEARCH_DIR
+    name = "%s/%s.json" % (RESEARCH_DIR, research_cache.file_key(company)) if company else RESEARCH_DIR
     return "%s, fetched %s" % (name, fetched) if fetched else name
 
 
@@ -320,15 +323,20 @@ def _contact_id(contact) -> str:
 # ---------------------------------------------------------------- sections
 
 
-def _section(title, lines, empty_note) -> list:
+def _section(title, lines, empty_note, extra=()) -> list:
     """A heading and its body, with the empty case saying what to do about it.
 
     Every section renders even when it is empty. A dropped heading reads as
     "nothing to worry about here", and the sections most likely to be empty are
     compensation and fit, which are the two the user most needs to know were
     never researched.
+
+    `extra` is what the rest of the search holds (a role open there, what the
+    letter said), printed after the section's own lines. It never stands in for
+    the empty note: a company nobody researched is still not researched because
+    a cover letter quoted one fact about it.
     """
-    body = list(lines) if lines else ["- " + empty_note]
+    body = (list(lines) if lines else ["- " + empty_note]) + list(extra)
     return ["## " + title, ""] + body + [""]
 
 
@@ -727,7 +735,20 @@ def _sources_lines(research) -> list:
     return out
 
 
-def _company_lines(research) -> list:
+def _stale_line(research, today=None) -> str:
+    """A line saying the research is past `RESEARCH_FRESH_DAYS`, or "" when it is not.
+
+    Printed rather than hiding the facts: stale research is still the best lead
+    to what to re-check, and the date is what tells the reader to re-check it.
+    """
+    age = research_cache.age_days(research, today)
+    if research_cache.is_fresh(research, today) or age is None:
+        return ""
+    return ("- Researched %d days ago, past the %d-day mark: check these against the "
+            "employer's own pages before the call" % (age, RESEARCH_FRESH_DAYS))
+
+
+def _company_lines(research, today=None) -> list:
     """The company, entirely out of the research dict. Nothing is inferred here.
 
     The cautions attached to cached facts are printed with them. They are the
@@ -745,6 +766,10 @@ def _company_lines(research) -> list:
     # screen, and a prohibition read after the call is not a prohibition.
     for fact in _facts(research.get("do_not_claim"), default):
         out.append(_bullet("Do not say", fact))
+    # Older cache files keep the same warnings as a top-level `cautions` list, the
+    # draft-applications workflow's own word for them. They were never printed.
+    for fact in _facts(research.get("cautions"), default):
+        out.append(_bullet("Careful", fact))
     # Everything after this point is substance. The fallback below turns on
     # whether any of it appeared, not on whether `out` is empty: some files
     # carry prohibitions and nothing else, and a company
@@ -1171,6 +1196,91 @@ def fit_assessment(application, profile_facts) -> list:
     return out
 
 
+# A role open at their employer that the search scored this well is the one thing
+# a call there should not end without mentioning, and the prep said nothing of it.
+OPEN_ROLE_FIT = 70
+MAX_OPEN_ROLES = 3
+
+# A `concession` that records there is none. The workflow's default is none, and
+# printing "Conceded in the letter: none" would read as a concession.
+_NO_CONCESSION = re.compile(r"^\W*(?:none|nil|n/?a|nothing|no\s+(?:concessions?|gaps?))\b", re.I)
+
+
+def _fit_number(value):
+    try:
+        return float(str(value).strip())
+    except ValueError:
+        return None
+
+
+def _open_roles_lines(roles) -> list:
+    """The roles open at their employer that scored `OPEN_ROLE_FIT` or more, as one line.
+
+    Only asked for when nothing has been applied for there (`prep_markdown`
+    decides), because with an application in, that application is what the call
+    is about. Each role keeps its fit score, and the line is sourced to the round
+    file the scores came from.
+    """
+    good, seen = [], set()
+    for role in roles or ():
+        fit = _fit_number((role or {}).get("fit"))
+        title = _text((role or {}).get("title"))
+        if fit is None or fit < OPEN_ROLE_FIT or not title or title.lower() in seen:
+            continue
+        seen.add(title.lower())
+        good.append((title, fit, role))
+    if not good:
+        return []
+    good.sort(key=lambda t: -t[1])
+    shown = ", ".join("%s (%d)" % (title, fit) for title, fit, _ in good[:MAX_OPEN_ROLES])
+    more = len(good) - MAX_OPEN_ROLES
+    if more > 0:
+        shown += ", and %d more" % more
+    source = next((_text(r.get(k)) for _, _, r in good for k in _SOURCE_KEYS if _text(r.get(k))), "")
+    fact = sourced("Open there, scored %d or more, nothing applied for: %s"
+                   % (OPEN_ROLE_FIT, shown), source)
+    return ["- %s (source: %s)" % (fact.value, fact.source)]
+
+
+def _letter_lines(draft) -> tuple:
+    """(company lines, fit lines) from the draft the application's letter was rendered from.
+
+    The company fact the letter used goes beside the research, and any gap the
+    letter conceded goes under fit, so what is said on the call matches what the
+    employer was already told. Sourced to the draft file itself, which is the
+    record of what went out.
+    """
+    draft = draft or {}
+    source = _text(draft.get("_path") or draft.get("source"))
+    company, fit = [], []
+    told = _text(draft.get("p2"))
+    if told:
+        company.append(_bullet("The letter told them", sourced(told, source)))
+    conceded = _text(draft.get("concession"))
+    if conceded and not _NO_CONCESSION.match(conceded):
+        fit.append(_bullet("Conceded in the letter", sourced(conceded, source)))
+    return company, fit
+
+
+def _flag_banned(lines, dislikes) -> list:
+    """`lines`, each followed by a flag where it uses a phrase the person has banned.
+
+    Flagged, never dropped: the line still says what to do, and a prep document
+    only gains lines. Run over the sections whose wording this file supplies or
+    the user says out loud (the answers, the questions to ask, fit and tone),
+    because those are where a phrase they have said never to use would reach
+    the call.
+    """
+    out = []
+    for line in lines:
+        out.append(line)
+        hits = list(dict.fromkeys(h.strip() for h in (dislikes(line) or ()) if h.strip()))
+        if hits:
+            out.append("  - careful: %s is wording you have said never to use; say it your "
+                       "way (source: %s)" % (", ".join('"%s"' % h for h in hits), LEARNED_SOURCE))
+    return out
+
+
 def _tone_lines(contact) -> list:
     """How to talk to this person, and how to write the note afterwards."""
     contact = contact or {}
@@ -1251,12 +1361,18 @@ def _same_employer(contact, other, what) -> None:
 
 
 def prep_markdown(contact, company_research=None, application=None, profile_facts=None,
-                  threads=(), today=None) -> str:
+                  threads=(), today=None, open_roles=(), draft=None, never_say=None) -> str:
     """The whole prep document, as markdown.
 
     Assembled from what was passed in and nothing else. Sections with no input
     say so rather than disappearing, because a missing heading reads as an
     absence of risk and the empty sections are usually compensation and fit.
+
+    `open_roles` (round rows, each naming its `source`) and `draft` (the draft
+    object the application's documents were rendered from) are what the rest of
+    the search already holds about this employer; `search_context` loads both.
+    `never_say` finds the phrases the person has banned in a line, and defaults
+    to theirs (`learned.dislikes`).
     """
     contact = contact or {}
     today = _text(today) or datetime.date.today().isoformat()
@@ -1267,6 +1383,12 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
     company = _text(contact.get("company"))
     _same_employer(contact, company_research, "the research")
     _same_employer(contact, application, "the application row")
+    _same_employer(contact, draft, "the letter's draft")
+    banned = never_say or learned.dislikes
+    # Roles open there only when nothing has been applied for: with an
+    # application in, that is what the call is about. The letter only with one.
+    roles = _open_roles_lines(open_roles) if not application else []
+    letter_company, letter_fit = _letter_lines(draft) if application else ([], [])
     role = _text((application or {}).get("role")) or _text(contact.get("role"))
 
     lines = ["# Prep - %s" % ", ".join(p for p in (name, company) if p), ""]
@@ -1296,8 +1418,13 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
     lines += _section(SECTIONS[2], _team_lines(company_research),
                       "%s. Ask them what the team owns; first-hand beats researched anyway."
                       % NOT_RESEARCHED)
-    lines += _section(SECTIONS[3], _company_lines(company_research),
-                      "%s. Nothing is printed here that nobody looked up." % NOT_RESEARCHED)
+    company = _company_lines(company_research, today)
+    # Every line in the section is a sourced fact; how old the research is, is not
+    # one, so the warning stands after them with the other context.
+    stale = _stale_line(company_research, today) if company else ""
+    lines += _section(SECTIONS[3], company,
+                      "%s. Nothing is printed here that nobody looked up." % NOT_RESEARCHED,
+                      extra=([stale] if stale else []) + list(letter_company))
     lines += _section(SECTIONS[4],
                       comp_band(role, _text(contact.get("location")),
                                 "senior" if tone.is_senior(contact.get("title")) else "",
@@ -1308,18 +1435,19 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
     for item in likely_questions(contact, role, profile_facts):
         asked.append("- **Q.** %s" % item["question"])
         asked.append("  **A.** %s (source: %s)" % (item["answer"], item["source"]))
-    lines += _section(SECTIONS[5], asked,
+    lines += _section(SECTIONS[5], _flag_banned(asked, banned),
                       "No profile facts were passed in, so no answers are drafted. Prepare "
                       "them before the call rather than in it.")
 
     ask = ["- %s (source: %s)" % (q["question"], q["source"])
            for q in questions_for_them(company_research, role)]
-    lines += _section(SECTIONS[6], ask,
+    lines += _section(SECTIONS[6], _flag_banned(ask, banned),
                       "Nothing researched to anchor a question on. Ask what the team owns "
                       "and what the first six months need.")
-    lines += _section(SECTIONS[7], fit_assessment(application, profile_facts),
-                      "Nothing recorded. Do not improvise a fit story on the call.")
-    lines += _section(SECTIONS[8], _tone_lines(contact),
+    lines += _section(SECTIONS[7], _flag_banned(fit_assessment(application, profile_facts), banned),
+                      "Nothing recorded. Do not improvise a fit story on the call.",
+                      extra=roles + letter_fit)
+    lines += _section(SECTIONS[8], _flag_banned(_tone_lines(contact), banned),
                       "Nothing recorded about this person. Default to plain and short.")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1333,7 +1461,8 @@ def prep_path(contact, root=STATE_ROOT) -> str:
 
 
 def write_prep(contact, company_research=None, application=None, profile_facts=None,
-               threads=(), today=None, root=STATE_ROOT) -> str:
+               threads=(), today=None, root=STATE_ROOT, open_roles=(), draft=None,
+               never_say=None) -> str:
     """Write the prep document and return its path.
 
     Filed under the contact id rather than a company or a date, because the next
@@ -1342,7 +1471,8 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
     """
     path = prep_path(contact, root)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    text = prep_markdown(contact, company_research, application, profile_facts, threads, today)
+    text = prep_markdown(contact, company_research, application, profile_facts, threads, today,
+                         open_roles=open_roles, draft=draft, never_say=never_say)
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
     return path
@@ -1354,27 +1484,30 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
 def load_research(company, root=STATE_ROOT) -> dict:
     """The cached research for an employer, or {} when nothing is cached.
 
-    Matched through `company_key` rather than on the filename, because the cache
-    was written by hand over months and "acme-analytics-inc.json"
-    does not spell its own key. Sorted so two files that key the same way resolve
-    the same way on every run.
+    The lookup is tools/company_research.py's, through `company_key`, so this
+    reads the file every other reader and writer of the cache finds. How old it
+    is reaches the document through `_stale_line`, from the file's own date.
     """
-    ck = company_key(company)
-    if not ck:
-        return {}
-    folder = os.path.join(root, RESEARCH_DIR)
-    direct = os.path.join(folder, _slug(ck) + ".json")
-    candidates = [direct] if os.path.exists(direct) else []
-    if not candidates:
-        for path in sorted(glob.glob(os.path.join(folder, "*.json"))):
-            stem = os.path.splitext(os.path.basename(path))[0].replace("-", " ")
-            if company_key(stem) == ck:
-                candidates.append(path)
-                break
-    if not candidates:
-        return {}
-    with open(candidates[0], encoding="utf-8") as f:
-        return json.load(f)
+    data, _age, _fresh = research_cache.load(company, root=root)
+    return data
+
+
+def search_context(contact, application, root=STATE_ROOT) -> tuple:
+    """(open roles, draft): what the rest of the search holds about their employer.
+
+    With no application there, the roles open at the employer in the newest kept
+    round (`why.open_roles`), each sourced to its round file. With one, the
+    draft its letter was rendered from (`what_works.draft_for`, which never takes
+    another role's draft), or None when none was kept.
+    """
+    if application:
+        return (), what_works.draft_for(application, what_works.drafts(root))
+    company = _text((contact or {}).get("company"))
+    if not company:
+        return (), None
+    roles = why.open_roles(company, os.path.join(root, "documents", "rounds"))
+    return [dict(r, source=os.path.relpath(r["_path"], root).replace(os.sep, "/"))
+            for r in roles if r.get("_path")], None
 
 
 def find_application(contact, tracker_rows) -> dict:
@@ -1410,13 +1543,16 @@ def _write_one(row, tracker, a) -> str:
         facts = profile_facts.build(
             role=_text(application.get("role")) or _text(row.get("role")),
             posting=_text(application.get("notes")))
+    roles, draft = search_context(row, application, a.root)
     return write_prep(row,
                       company_research=load_research(row.get("company"), a.root),
                       application=application,
                       profile_facts=facts,
                       threads=state.load_threads(a.threads),
                       today=a.today,
-                      root=a.root)
+                      root=a.root,
+                      open_roles=roles,
+                      draft=draft)
 
 
 def main() -> int:

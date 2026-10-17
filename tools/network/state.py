@@ -53,6 +53,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import dates  # noqa: E402
 import schema  # noqa: E402
 from company_key import key as company_key, fold as _ck_fold  # noqa: E402
 from throttle import FINAL as _THROTTLE_FINAL  # noqa: E402
@@ -116,27 +117,15 @@ CAPPED_NOTE = ("Connection cap reached for this week. Following a target costs n
 
 # ---------------------------------------------------------------- dates
 
-_ISO = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
-
-
 def as_date(value) -> datetime.date | None:
     """A date from a date, a datetime, or text. None when there is nothing usable.
 
     Thread rows are hand-edited, so a date arrives as a bare `2030-01-15`, as a
-    timestamp a mail client pasted in, or as a blank. Pulling the first ISO date
-    out of the text handles all three without a format list to keep in sync.
+    timestamp a mail client pasted in, or as a blank. The first ISO date in the
+    text handles all three, which is `dates.as_date` with `anywhere`; a month or
+    a "15 January 2030" is not read as a day here, as it never was.
     """
-    if isinstance(value, datetime.datetime):
-        return value.date()
-    if isinstance(value, datetime.date):
-        return value
-    m = _ISO.search(str(value or ""))
-    if not m:
-        return None
-    try:
-        return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    except ValueError:
-        return None
+    return dates.as_date(value, iso_only=True, anywhere=True)
 
 
 def _need_date(value, what: str) -> datetime.date:

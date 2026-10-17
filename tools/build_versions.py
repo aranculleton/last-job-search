@@ -121,8 +121,9 @@ METHODS: dict[str, dict] = {
                                     "your country, and remote roles filed under the wider regions "
                                     "an employer abroad hiring where you live posts them in"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (5, "2026-10-17", False, "salary and market research reads the one company-research cache and its freshness rule"),
         ),
-        "fingerprint": "bb890cc34c5857cd",
+        "fingerprint": "4ed21873e30e4440",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -181,8 +182,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-15", False, "a gap asked only as a preference is never a reason not to apply"),
             (5, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (6, "2026-10-17", True, "the prep document says what was read about them: the history you share and what they have posted"),
+            (7, "2026-10-17", False, "one research cache with its freshness rule: stale research, roles open there you scored well, the letter's fact and concessions, and the cache's own cautions in the call prep"),
         ),
-        "fingerprint": "4205ea59c85d17e3",
+        "fingerprint": "e3516d5fd7fde125",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -195,6 +197,7 @@ METHODS: dict[str, dict] = {
                   "tools/docpaths.py", "tools/doc_name.py", "tools/outreach.py",
                   "tools/screening_answers.py", "tools/record_drafts.py", "tools/stage_picks.py",
                   "tools/check_claims.py", "tools/check_numbers.py", "tools/voice_check.py",
+                  "tools/locale_rules.py",
                   "tools/audit_letters.py", "tools/verify_pdf.py", "tools/verify_batch.sh",
                   "tools/untrusted.py", "tools/bridges.py",
                   ".claude/commands/apply.md", ".claude/commands/add-template.md",
@@ -223,8 +226,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (9, "2026-10-15", False, "stage_picks.py reminds a chat that has not checked the app today; what it stages is unchanged"),
             (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
+            (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
         ),
-        "fingerprint": "c4b29137c2dc9c11",
+        "fingerprint": "a601351121025a93",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -238,8 +242,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "finds the application's folder under whichever name it "
                                     "was written, instead of starting a second one"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (5, "2026-10-17", False, "interview research reads the one company-research cache and its freshness rule"),
         ),
-        "fingerprint": "7c5df40cee9c4d9b",
+        "fingerprint": "763dc5371f1991d6",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -247,9 +252,13 @@ METHODS: dict[str, dict] = {
         "run": "the employer-researcher again for each employer with an application at "
                "`drafted` or `interview`, refreshing company_research/<key>.json",
         "files": (".claude/agents/employer-researcher.md",
-                  ".claude/skills/job-application-assistant/09-web-research.md"),
-        "versions": (_first(),),
-        "fingerprint": "f715769c777c6f49",
+                  ".claude/skills/job-application-assistant/09-web-research.md",
+                  "tools/company_research.py"),
+        "versions": (
+            _first(),
+            (2, "2026-10-17", False, "one company-research cache (tools/company_research.py): load, save, the freshness rule in one constant, and the workflow's research stage following the employer researcher"),
+        ),
+        "fingerprint": "f19ff1d4a8ed0970",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
@@ -290,8 +299,9 @@ METHODS: dict[str, dict] = {
             (14, "2026-10-17", False, "profiles are read at a person's pace with sitting and day caps, each opened once, public sources first, and rosters read every run alongside the title queries"),
             (15, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
             (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
+            (17, "2026-10-17", False, "shared definitions: dates, places, recruiter test, ruled-out employers, employer names without a legal suffix, an application there and a route's clear reply rate in why-them"),
         ),
-        "fingerprint": "a1eab394cb851b54",
+        "fingerprint": "070f9476ae1f9602",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -314,8 +324,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-17", False, "posts dated in words, current employers with no employment type, and new candidates read without a contact row"),
             (6, "2026-10-17", False, "a reading keeps the connection degree and whether a request is pending, and the browser reads are paced and capped"),
             (7, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
+            (8, "2026-10-17", False, "shared dates and employer names, so a shared employer is found without its legal suffix"),
         ),
-        "fingerprint": "f34351b6ddd2cbec",
+        "fingerprint": "7491520de0b35aed",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -324,7 +335,8 @@ METHODS: dict[str, dict] = {
                "stops blocking (tools/throttle.py ruled_out)",
         "files": ("tools/text_screen.py", "tools/prefilter.py", "tools/fit.py",
                   "tools/opportunity.py", "tools/score_posting.py", "tools/throttle.py",
-                  "tools/bar.py", "tools/sector.py", ".claude/commands/rank.md"),
+                  "tools/bar.py", "tools/sector.py", ".claude/commands/rank.md",
+                  "tools/exclude.py", "tools/places.py"),
         "versions": (
             _first(),
             (2, "2026-10-15", False, "a skip the throttle re-derives every run (a referral "
@@ -333,8 +345,9 @@ METHODS: dict[str, dict] = {
                                     "good; postings on a Workday internal site are dropped"),
             (3, "2026-10-15", False, "exclusions the current rules only rank (a years bar, or a reason naming only the stage that wrote it) are screened again, while a range or degree knockout stands; '<City>, ON, CA', refused permits, private equity, residence abroad, 'asset' and 'bonus', loan sizes as pay, and short names in brackets are read right"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (5, "2026-10-17", False, "one definition of a preference, an equivalence route and the years bar; rulings that lapse when the person's rules change (tools/exclude.py); places from one list"),
         ),
-        "fingerprint": "bf6bb0bc30877e67",
+        "fingerprint": "805c5ca20f5cb0e1",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -380,6 +393,7 @@ METHODS: dict[str, dict] = {
 # with fnmatch, so `*` crosses folders.
 KEEPS_NOTHING: dict[str, str] = {
     "tests/*": "tests change nothing a person has",
+    "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     ".github/*": "the app's own CI and issue templates",
     "profile.example/*": "the invented example person; a new profile name in it is a profile "
                          "upgrade or a safe default, which tests/test_profile_upgrades.py holds",

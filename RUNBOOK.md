@@ -9,7 +9,7 @@ spends them only on writing.
 apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex \
   texlive-fonts-recommended poppler-utils   # icon fonts are vendored in texmf/, see its README
 pip3 install --upgrade cffi && pip3 install -r requirements.txt
-python3 -m pytest tests -q          # over 900 tests; all green before anything else
+python3 -m pytest tests -q          # over 1,200 tests; all green before anything else
 ./tools/ci_local.sh                 # or this: every check CI runs, ~40s, no Actions minutes
 ```
 

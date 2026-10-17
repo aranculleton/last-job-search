@@ -67,6 +67,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+from dates import days_since  # noqa: E402
 
 # --- Freshness -------------------------------------------------------------
 # HARD RULE: a posting older than 14 days is out, no exceptions. Stale postings
@@ -245,14 +246,7 @@ def age_days(job: dict, today: _dt.date | None = None) -> int | None:
     US-format date is treated as no date, which keeps the posting (absence of a
     date is not evidence of age) but means the hard rule cannot act on it.
     """
-    d = job.get("date") or job.get("posted_date")
-    if not d:
-        return None
-    try:
-        posted = _dt.date.fromisoformat(str(d)[:10])
-    except ValueError:
-        return None
-    return ((today or _dt.date.today()) - posted).days
+    return days_since(job.get("date") or job.get("posted_date"), today, iso_only=True)
 
 
 # An employer's own careers board is a different kind of source from an

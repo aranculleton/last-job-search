@@ -25,6 +25,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import dates  # noqa: E402
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 
@@ -42,12 +43,20 @@ CORE_WEIGHT = 7
 CORE = [(rx, label) for rx, pts, label in (getattr(_SEARCH, "FIT_CORE", None) or ())
         if pts >= CORE_WEIGHT and label]
 
+# Who gets the short note: someone who runs a function or a company. Deliberately
+# narrower than tone.is_senior, which decides the formal register and counts every
+# manager and lead: a hands-on lead is the reader most likely to reply to a note
+# with a real question in it, so they keep the question.
 _EXEC = re.compile(r"\b(?:chief|c[a-z]o\b|vp\b|vice\s+president|president|partner|managing\s+director"
-                   r"|head\s+of|director)\b", re.I)
+                   r"|head\s+of|director|founder|co-?founder|owner)\b", re.I)
 
 
 def open_roles(company: str, rounds_dir: str | None = None) -> list:
-    """The roles open at an employer in the latest kept round, best fit first."""
+    """The roles open at an employer in the latest kept round, best fit first.
+
+    Each row carries `_path`, the round file it came from, so a reader that
+    prints a score can say where the score is recorded.
+    """
     files = sorted(glob.glob(os.path.join(rounds_dir or person.state("documents", "rounds"),
                                           "*.json")), key=os.path.getmtime)
     for path in reversed(files):
@@ -59,20 +68,40 @@ def open_roles(company: str, rounds_dir: str | None = None) -> list:
             continue
         if isinstance(rows, list) and rows:
             key = company_key(company)
-            mine = [r for r in rows if isinstance(r, dict) and company_key(r.get("company", "")) == key]
+            mine = [dict(r, _path=path) for r in rows
+                    if isinstance(r, dict) and company_key(r.get("company", "")) == key]
             return sorted(mine, key=lambda r: -(r.get("fit") or 0))
     return []
 
 
 def _age(date: str, today: dt.date) -> int | None:
-    try:
-        return (today - dt.date.fromisoformat(str(date)[:10])).days
-    except ValueError:
-        return None
+    return dates.days_since(date, today, iso_only=True)
+
+
+def route_odds(contacts, threads, today=None) -> dict:
+    """{route group: (points, why)} for the routes whose reply rate clearly differs.
+
+    The person's own results, counted by tools/what_works.py: a route moves a
+    score only once both it and the rest have MIN_GROUP decided first notes and
+    the gap is unlikely to be chance. Until then this is empty and nothing moves.
+    """
+    import what_works
+    openers = [c for c in what_works.message_cases(contacts, threads, today)
+               if c["attempt"] == "opener"]
+    out = {}
+    for route in {c["route"] for c in openers}:
+        mine = [c for c in openers if c["route"] == route]
+        rest = [c for c in openers if c["route"] != route]
+        a, b = sum(c["won"] for c in mine), sum(c["won"] for c in rest)
+        if what_works.clear(a, len(mine), b, len(rest)):
+            better = a / len(mine) > b / len(rest)
+            out[route] = (6 if better else -6,
+                          f"your {route} notes are answered {a} of {len(mine)}")
+    return out
 
 
 def why_them(contact: dict, reading: dict | None = None, roles=None,
-             today: dt.date | None = None) -> dict:
+             today: dt.date | None = None, applied=(), odds=None) -> dict:
     """{"score", "band", "skip", "reasons": [(points, why)], "line"} for one person."""
     import discovery
     today = today or dt.date.today()
@@ -131,9 +160,21 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         r = good[0]
         reasons.append((15, f"{company} has a role open you scored {r.get('fit')}: {r.get('title')}"))
 
+    # An application already in at their employer: the person a referral or a
+    # word with the hiring manager would come through (state.link_to_applications).
+    if applied:
+        import state
+    live = [a for a in applied if str(a.get("status") or "").strip().lower()
+            not in state.TRACKER_FINAL] if applied else []
+    if live:
+        a = live[0]
+        reasons.append((4, f"you applied there: {a.get('role') or 'a role'} ({a.get('status')})"))
+
     items = reading.get("items") or []
+    ages = {id(i): _age(i.get("date", ""), today) for i in items}
+    # An age of 0 is a post from today, the most active there is: never read it as missing.
     recent = [i for i in items if i.get("kind") in ("post", "repost")
-              and (_age(i.get("date", ""), today) or 10 ** 6) <= ACTIVE_DAYS]
+              and ages[id(i)] is not None and ages[id(i)] <= ACTIVE_DAYS]
     if recent:
         reasons.append((8, "active: posted in the last three months"))
     work = [i for i in items if i.get("kind") in ("talk", "article", "podcast", "code",
@@ -146,6 +187,12 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((10, "already connected: a message, not a request"))
     elif reach == "request under More":
         reasons.append((-3, "Connect is behind More on their profile"))
+
+    if odds:
+        import what_works
+        hit = odds.get(what_works.route_group(contact.get("route")))
+        if hit:
+            reasons.append(hit)
 
     rank, why = discovery.reply_rank(contact)
     if rank == 1:
@@ -167,12 +214,20 @@ def seniority(title: str) -> str:
     return "senior" if _EXEC.search(title or "") else "peer"
 
 
-def ranked(contacts: list, today: dt.date | None = None) -> list:
+def ranked(contacts: list, today: dt.date | None = None, tracker=None, threads=None) -> list:
     """Contacts best first, each with its `why` attached (a copy; nothing is written)."""
     import reading as _reading
+    import state
+    if tracker is None:
+        tracker = state.load_tracker() if os.path.exists(state.TRACKER_CSV) else []
+    apps = {l["contact_id"]: l["applications"] for l in state.link_to_applications(contacts, tracker)}
+    if threads is None:
+        threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    odds = route_odds(contacts, threads, today) if threads else {}
     out = []
     for c in contacts:
-        w = why_them(c, _reading.load(c.get("contact_id", "")) or {}, today=today)
+        w = why_them(c, _reading.load(c.get("contact_id", "")) or {}, today=today,
+                     applied=apps.get(c.get("contact_id", ""), ()), odds=odds)
         out.append({**c, "why": w})
     return sorted(out, key=lambda c: (c["why"]["skip"], -c["why"]["score"]))
 

@@ -230,8 +230,7 @@ def check_note(note):
         import voice_check
     except ImportError:
         return problems
-    problems += [f"{f['rule']}: {f['match']}" for f in voice_check.check(note)
-                 if f["severity"] == "hard"]
+    problems += [f"{f['rule']}: {f['match']}" for f in voice_check.hard(note)]
     return problems
 
 

@@ -65,7 +65,9 @@ Follow these steps **in order**.
    first: a small-model agent reading only
    `profile/10-triage-blockers.md` and the posting, at a few
    thousand tokens rather than the full weighted pass. Knockouts are written straight to
-   `seen_jobs.json` as `excluded` with the quoted trigger line and never reach Step 2. On a
+   `seen_jobs.json` with `python3 tools/exclude.py add <url> --title ... --company ... --reason
+   "<the quoted trigger line>"`, which records the rules the knockout rests on, and never reach
+   Step 2. On a
    backlog of a couple of hundred entries this is the difference between a run that finishes and
    one that is not worth starting.
 4. If no candidates remain, say so ("Nothing new to rank - run /scrape to find fresh postings") and stop.

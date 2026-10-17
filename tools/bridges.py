@@ -64,6 +64,12 @@ Assessment = namedtuple("Assessment", "asked verdict have line note")
 MAP = person.module("skills").BRIDGES
 
 _COMPILED = [(re.compile(e["pattern"], re.I), e) for e in MAP]
+# What the fit score already knows is not held (search.py FIT_MISSING) is a gap here
+# too, wherever the map says nothing about it, so a document is never drafted to
+# claim a skill the score is docking the posting for.
+_MISSING = [(rx, {"asked": why, "verdict": GAP, "note": ""})
+            for rx, _pts, why in (getattr(person.module("search"), "FIT_MISSING", None) or ())
+            if why]
 
 
 # A gap asked for as a preference ranks the role down; it is never a reason not to
@@ -71,15 +77,16 @@ _COMPILED = [(re.compile(e["pattern"], re.I), e) for e in MAP]
 # came back as an actuarial credential gap, "do not apply", the same verdict as
 # "Required: ACAS or FCAS", and a drafter reading it literally dropped a role the
 # rules say to rank.
-_PREFERENCE = re.compile(r"\bpreferred\b|\bpreferably\b|\bnice[- ]to[- ]have\b|\ba plus\b|"
-                         r"\bideally\b|\bdesirable\b|\bbonus\b|\b(?:is|be) an? (?:\w+ )?asset\b|"
-                         r"\bdegree in\b[^.;]{0,80}\bor\b", re.I)
+# text_screen's definition of a preference, so "a bonus-eligible role" is not one
+# here either, plus the degree that offers a choice of subjects.
+from text_screen import PREFERRED as _PREFERRED  # noqa: E402
+_PREFERENCE = re.compile(_PREFERRED.pattern + r"|\bdegree in\b[^.;]{0,80}\bor\b", re.I)
 _DO_NOT_APPLY = re.compile(r"\s*\b(?:so )?do not apply\b[^.]*\.?", re.I)
 
 
 def assess(text):
     """Every mapped capability the text mentions, with the honest verdict."""
-    out, seen = [], set()
+    out, seen, claimed = [], set(), set()
     parts = [p for p in re.split(r"(?<=[.;!?])\s+|\n+", text or "") if p.strip()] or [text or ""]
     for rx, e in _COMPILED:
         if e["asked"] in seen or not rx.search(text or ""):
@@ -92,6 +99,13 @@ def assess(text):
                     "ranks the role down, and is never a reason not to apply.").strip()
         out.append(Assessment(e["asked"], e["verdict"], tuple(e.get("have") or ()),
                               e.get("line", ""), note))
+        claimed.update(hits)
+    for rx, e in _MISSING:
+        hits = [p for p in parts if rx.search(p)]
+        # Only where the map is silent: a sentence it already judged keeps its verdict.
+        if hits and e["asked"] not in seen and not set(hits) & claimed:
+            seen.add(e["asked"])
+            out.append(Assessment(e["asked"], GAP, (), "", ""))
     order = {HELD: 0, BRIDGE: 1, GAP: 2}
     return sorted(out, key=lambda a: order[a.verdict])
 

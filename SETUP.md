@@ -31,7 +31,7 @@ pip3 install -r requirements.txt
 
 bun --version || curl -fsSL https://bun.sh/install | bash   # the job-board CLIs; preinstalled in Claude's cloud containers
 
-python3 -m pytest tests -q          # over 900 green before anything else
+python3 -m pytest tests -q          # over 1,200 green before anything else
 ```
 
 Three notes on why each piece is there:

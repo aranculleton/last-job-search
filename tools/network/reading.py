@@ -58,6 +58,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import dates  # noqa: E402
 import person  # noqa: E402
 import untrusted  # noqa: E402
 from company_key import fold  # noqa: E402
@@ -128,11 +129,19 @@ def history() -> dict:
     roles = _roles()
     employers, places = [], []
     home = fold(str(getattr(_NET, "HOME_CITY", "") or ""))
+    import company_key
+    import discovery
     for r in getattr(roles, "ROLES", ()) or ():
         names = [r.get("employer", "")]
         aka = r.get("known_as") or ()
         names += [aka] if isinstance(aka, str) else list(aka)
-        names = [n for n in (x.strip() for x in names) if n]
+        # The name as a profile writes it: "Oakmere Foods", not "Oakmere Foods Ltd", and
+        # the profile's own aliases for the same employer. Never its leading words:
+        # "Royal Bank" would claim a shared employer with the Royal Bank of Scotland.
+        names.append(discovery.search_name(r.get("employer", "")))
+        k = company_key.key(r.get("employer", ""))
+        names += [a for a, v in company_key.ALIASES.items() if v == k and len(a) > 3]
+        names = list(dict.fromkeys(n for n in (x.strip() for x in names) if n))
         if names:
             employers.append(names)
         city = str(r.get("loc") or "").split(",")[0].strip()
@@ -520,10 +529,8 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
 # --------------------------------------------------------------------- hooks
 
 def _days(date: str, today: datetime.date) -> int | None:
-    try:
-        return (today - datetime.date.fromisoformat(date)).days
-    except (TypeError, ValueError):
-        return None
+    # A timestamp is read as its day: a post dated 2026-10-17T10:00:00 is not undated.
+    return dates.days_since(date, today, iso_only=True)
 
 
 def hooks(reading: dict, today: datetime.date | None = None) -> list:

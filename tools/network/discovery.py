@@ -48,8 +48,11 @@ import sys
 from collections import namedtuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import company_research  # noqa: E402
+import dates  # noqa: E402
 import person as _person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
+import places as _places  # noqa: E402
 
 # `person` is the loop variable for a search result throughout this module, so
 # the profile loader goes by another name.
@@ -115,7 +118,8 @@ def reply_rank(contact):
         return (1, "hands-on title, names the work rather than the org")
     if re.search(r"\b(?:founder|co-?founder|ceo)\b", title, re.I):
         return (2, "founder at a small company")
-    if re.search(r"\b(?:recruit\w*|talent)\b", title, re.I):
+    import compose      # its RECRUITER_TITLE is the careful one: a manager "recruiting
+    if compose.is_recruiter(title):   # data scientists" is not a recruiter
         return (3, "recruiter")
     if ADMIN_TITLE.search(title):
         return (5, "administers a data function, unmeasured, ranks last")
@@ -553,8 +557,16 @@ SENIOR_IC_TITLE = _NET_GET("SENIOR_IC_TITLE", None) or re.compile(
 FUNCTION_TITLE = _NET_GET("FUNCTION_TITLE", None) or re.compile(r".", re.S)
 
 # The home city's metro, as a person's location may name it: a search for the
-# home city accepts anyone in one of these. networking.py's METRO.
-METRO = tuple(getattr(_NET, "METRO", ()))
+# home city accepts anyone in one of these. networking.py's METRO and the job
+# search's metro (search.py LOCATION, through tools/places.py) together: the two
+# were written separately and drifted, and a contact in a town only one of them
+# named read as out of market. networking.py's list stays the person's own and is
+# only added to; unset, the search's metro is the whole list.
+METRO = _places.metro_with(getattr(_NET, "METRO", ()))
+# A whole post is read against networking.py's METRO alone. The search's list was
+# written for location strings, and in free text a town named like a word matches
+# the word: "Sale" is in "point of sale".
+_TEXT_METRO = tuple(getattr(_NET, "METRO", ()))
 # A profile that names no city (the country, the region, "Remote") is not
 # evidence of being somewhere else, so it passes rather than failing the market
 # check. networking.py's BROAD_PLACES.
@@ -590,11 +602,7 @@ def _free_text(words):
 _FREE_TEXT_PLACES = _free_text(_REGIONS + _COUNTRY)
 # The countries a location may name that are not home: the profile's location
 # gate list (search.py LOCATION other_countries), which the prefilter reads too.
-try:
-    _OTHER_COUNTRIES = tuple(
-        _norm_place(c) for c in (_person.module("search").LOCATION.get("other_countries") or ()))
-except Exception:                       # no profile, or no LOCATION
-    _OTHER_COUNTRIES = ()
+_OTHER_COUNTRIES = tuple(_norm_place(c) for c in _places.OTHER_COUNTRIES)
 
 
 def _has_words(text, phrase):
@@ -603,8 +611,8 @@ def _has_words(text, phrase):
     return bool(p) and re.search(r"(?<!\w)" + re.escape(p) + r"(?!\w)", text) is not None
 
 
-def _in_metro(text):
-    return any(_has_words(text, g) for g in METRO)
+def _in_metro(text, metro=None):
+    return any(_has_words(text, g) for g in (METRO if metro is None else metro))
 
 
 def _is_home(tokens):
@@ -672,7 +680,7 @@ def _signal_reaches_market(signal, target_location, in_market=False):
     tokens = _city_tokens(target_location)
     if tokens and all(t in words for t in tokens):
         return True
-    if _is_home(tokens) and _in_metro(text):
+    if _is_home(tokens) and _in_metro(text, _TEXT_METRO):
         return True
     if "remote" in words:
         return in_market or any(_has_words(text, w) for w in _FREE_TEXT_PLACES)
@@ -1023,20 +1031,9 @@ STALE_MONTHS = 6
 
 
 def _as_date(value):
-    if isinstance(value, dt.datetime):
-        return value.date()
-    if isinstance(value, dt.date):
-        return value
-    s = _clean(value)
-    if not s:
-        return None
-    s = s.split("T")[0]
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y/%m/%d", "%d %B %Y", "%B %Y", "%b %Y"):
-        try:
-            return dt.datetime.strptime(s, fmt).date()
-        except ValueError:
-            continue
-    return None
+    # A snippet's date comes as a month, a written date or a timestamp: every
+    # format `dates.as_date` reads.
+    return dates.as_date(value)
 
 
 def _months_before(date, months):
@@ -1264,11 +1261,12 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
 # "No relevant presence" is a dated claim, like every other ruling-out here: a
 # company stands up a team in a city, and the finding goes stale. It was written
 # to company_research/ with no date and no reader, so it neither held nor
-# expired. Kept there, beside the employer's research, and read by /network
-# step 1 until the review date. Never written to do_not_target.json: two people
-# searches are not the evidence that file needs, and the throttle reads it to
-# skip the employer's job postings too.
-PRESENCE_REVIEW_DAYS = 90
+# expired. Kept there, beside the employer's research, through
+# tools/company_research.py (which holds the review period beside the research's
+# own freshness rule), and read by /network step 1 until the review date. Never
+# written to do_not_target.json: two people searches are not the evidence that
+# file needs, and the throttle reads it to skip the employer's job postings too.
+PRESENCE_REVIEW_DAYS = company_research.PRESENCE_REVIEW_DAYS
 
 
 def presence_record(verdict, today):
@@ -1286,6 +1284,29 @@ def presence_blocks(record, today):
         return False
     until = _as_date(record.get("review_after"))
     return until is not None and _as_date(today) < until
+
+
+def record_presence(company, verdict, today, root=None):
+    """Merge this run's finding into the employer's research file; its path, or None.
+
+    Only `no_relevant_presence` is recorded (`presence_record`). The merge keeps
+    every other field and leaves `fetched_date` alone, so the research beside it
+    does not start to look freshly fetched.
+    """
+    record = presence_record(verdict, today)
+    if record is None:
+        return None
+    return company_research.save(company, {"network_presence": record}, root=root)
+
+
+def presence_ruled_out(company, today, root=None):
+    """Whether the employer's cached finding still rules it out of a /network run today.
+
+    Read whatever the research's own age: the finding carries its own date and
+    review period, and stale facts beside it do not make it stale.
+    """
+    data, _age, _fresh = company_research.load(company, root=root)
+    return presence_blocks(data.get("network_presence"), today)
 
 
 def alumni_at(people, targets):

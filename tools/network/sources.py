@@ -307,8 +307,28 @@ def _round_robin(lists: list, cap: int) -> list:
     return out
 
 
+def ruled_out(company: str) -> str:
+    """Why no search should be spent on this employer, or "".
+
+    The job search's own verdicts, read rather than repeated: a sector or employer
+    the person excluded (tools/bar.py), or an entry in job_scraper/do_not_target.json
+    saying there is no relevant team there. Two local lookups, no search.
+    """
+    import bar
+    import throttle
+    from company_key import key
+    verdict, why = bar.verdict(company)
+    if verdict == bar.EXCLUDED:
+        return why
+    return throttle.load_do_not_target().get(key(company), "")
+
+
 def for_company(company: str, rows=None) -> list:
-    """(kind, search) for one employer, best kinds first, at most SEARCHES_PER_COMPANY."""
+    """(kind, search) for one employer, best kinds first, at most SEARCHES_PER_COMPANY.
+
+    None at all for an employer the job search has already ruled out."""
+    if ruled_out(company):
+        return []
     rows = ranked() if rows is None else rows
     return _round_robin([[(kind, q) for q in searches(kind, company)] for kind, _, _ in rows
                          if KINDS[kind].scope == "per_company"], SEARCHES_PER_COMPANY)
@@ -371,6 +391,10 @@ def main(argv: list | None = None) -> int:
     for kind, how, what in for_run(rows):
         print(f"  {kind} ({how}): {what}")
     for company in argv:
+        why = ruled_out(company)
+        if why:
+            print(f"for {company}: nothing searched ({why})")
+            continue
         print(f"for {company}:")
         for kind, q in for_company(company, rows):
             print(f"  {kind}: {q}")

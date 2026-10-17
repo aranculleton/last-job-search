@@ -211,6 +211,17 @@ def _people_sources() -> str:
     return ""
 
 
+def _rulings_review() -> str:
+    if _mod("search") is None:
+        return ""
+    n = _probe("import exclude; print(len(exclude.unreviewed()))").strip()
+    if n.isdigit() and int(n):
+        return (f"{n} postings are ruled out on reasons that say nothing about the rules they "
+                "rest on, so they never lapse when your rules change, and some may be wrong "
+                "by the rules as they are now")
+    return ""
+
+
 def _connections_export() -> str:
     if _mod("networking") is None:
         return ""
@@ -520,6 +531,17 @@ REGISTRY: tuple[Upgrade, ...] = (
             "that", "research", "~5 min",
             names=("networking.PEOPLE_SOURCES",),
             priority=2),
+    Upgrade("rulings-review", "2026-10-17",
+            "every posting still ruled out is ruled out by your rules as they are now",
+            _rulings_review, "follow `python3 tools/exclude.py review`: judge each group "
+            "against the four hard cuts (eligibility, language, a professional credential, a "
+            "discipline the profile names as a different job) and the person's own "
+            "deal-breakers in profile/CLAUDE.md. A group that is one of those: `exclude.py stamp "
+            "\"<words>\" --basis rules`, or `--basis person` where it is their own call. Any other "
+            "(a salary, years, seniority, a degree, a score): `exclude.py lift \"<words>\" --why "
+            "\"the current rules rank this, never cut it\"`. Report the count per group, and list "
+            "the person's own calls so they can say if one has changed", "research", "~5 min",
+            priority=2),
     Upgrade("connections-export", "2026-10-17",
             "every networking run starting from the people you already know",
             _connections_export, "save the Connections.csv they attach to "
@@ -674,6 +696,8 @@ SAFE_DEFAULTS: dict[str, str] = {
                                         "in one run; raising it raises the risk to their LinkedIn account",
     "networking.PROFILE_READS_PER_HOUR": "30 browser reads an hour with varied pauses, about "
                                             "one every two minutes, the pace of writing to each",
+    "networking.UNSUPPORTED_WHY": "the reason printed beside an unsupported-status finding in a "
+                                  "resume or letter; unset, it says 'check it'",
     "networking.OPENALEX": "off: research papers find people only in fields that publish, and "
                            "/setup turns it on for one",
     "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "

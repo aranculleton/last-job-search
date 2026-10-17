@@ -66,7 +66,9 @@ class TestCacheDefinition(unittest.TestCase):
     def test_cache_definition_specifies_location_and_ttl(self):
         body = self.sections.get("Company Research Cache", "")
         self.assertIn("company_research/", body, "cache section must name the storage directory")
-        self.assertIn("30", body, "cache section must state the TTL (30 days)")
+        # The number itself lives in code, once; the spec names where.
+        self.assertIn("RESEARCH_FRESH_DAYS", body, "cache section must name the TTL constant")
+        self.assertIn("tools/company_research.py", body, "cache section must name the module")
         self.assertIn("fetched_date", body, "cache section must name the freshness field")
 
     def test_cache_definition_preserves_the_verification_rule(self):

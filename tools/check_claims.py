@@ -40,92 +40,47 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import locale_rules  # noqa: E402
 import person  # noqa: E402
 
-# English words that end in -ise in EVERY variety, so they are never a spelling
-# error. Without this list the -ise check fires on "enterprise-scale" and the
-# whole report gets discounted.
-LEGITIMATE_ISE = [
-    "enterprise", "enterprises", "expertise", "fundraise", "fundraising", "precise", "concise", "comprise",
-    "comprised", "comprises", "supervise", "supervised", "supervising", "advise",
-    "advised", "advising", "otherwise", "likewise", "wise", "rise", "rises",
-    "arise", "arises", "arising", "promise", "promised", "promises", "franchise",
-    "merchandise", "surprise", "surprised", "exercise", "exercised", "exercises",
-    "raise", "raised", "raises", "praise", "noise", "cruise", "devise", "devised",
-    "revise", "revised", "revising", "disguise", "paradise", "compromise",
-    "premise", "premises", "demise", "excise", "improvise", "televise", "chastise",
-    "despise",
-    # Words that merely CONTAIN "ising"/"ise" and are spelled the same in every
-    # dialect. Each of these produced a false positive on a real document.
-    "advertising", "advertise", "advertised", "merchandising", "franchising",
-    "supervision", "revision", "provision", "division", "precision", "decision",
-    # More words that end in -ise in every variety.
-    "wise", "clockwise", "streetwise", "noise", "poise", "guise", "expertise",
-    # -ising forms of the verbs above, and -ising words with no -izing form.
-    # "comprising", "promising", "surprising" and "exercising" each fired on a
-    # real document.
-    "comprising", "promising", "surprising", "exercising", "compromising",
-    "raising", "praising", "arising", "supervising", "revising", "devising",
-    "improvising", "cruising", "disguising", "televising", "chastising",
-    "despising", "advertising", "franchising", "merchandising", "uprising",
-    "enterprising", "unsurprising", "unpromising", "poised", "advertised",
-]
-# Every -ise word above in its -ises form too, now that -ises is read: "supervises"
-# and "advises" are spelled that way in every variety.
-LEGITIMATE_ISE += sorted({w + "s" for w in LEGITIMATE_ISE if w.endswith("ise")}
-                         - set(LEGITIMATE_ISE))
-
-# The app's own rules, which apply to everyone. The locale rules follow the
-# profile's documents settings: the document noun the market does NOT use, and
-# the spelling variant. The rest are writing slips.
-_DOC = person.get("documents", {})
-# A person's documents can carry proper nouns of their own that end in -ise (a
-# product an employer names, say); their claims.py lists them as LEGITIMATE_ISE.
-if person.exists("claims.py"):
-    LEGITIMATE_ISE = LEGITIMATE_ISE + list(getattr(person.module("claims"), "LEGITIMATE_ISE", []))
-_VARIANT_WORDS = {
-    # spelling -> (forms that are wrong in it, why)
-    "canadian": (r"\b(behaviors?|behavioral|modeling|modelers?|centers?)\b",
-                 "Canadian English keeps modelling, behaviour and centre. Use American "
-                 "spelling only for a US posting, and then consistently throughout."),
-    "american": (r"\b(behaviours?|behavioural|modelling|modellers?|centres?|colours?|favours?|analyses?)\b",
-                 "American English: behavior, modeling, center, color, favor, analyze."),
-    "british": (r"\b(behaviors?|behavioral|modeling|modelers?|centers?|colors?|favors?|analyzes?)\b",
-                "British English: behaviour, modelling, centre, colour, favour, analyse."),
-    "australian": (r"\b(behavior|behavioral|modeling|modeler|center|color|favor|analyze)\b",
-                   "Australian English: behaviour, modelling, centre, colour, favour, analyse."),
-}
+# The app's own rules apply to everyone. The locale rules among them (the
+# dashes, the document noun the market does NOT use, the spelling variant)
+# follow the profile's documents settings, and tools/locale_rules.py is the one
+# copy every reader takes them from. These names are kept so a caller that read
+# them here still can. The rest are writing slips.
+_LOCALE = locale_rules.LOCALE
+LEGITIMATE_ISE = _LOCALE.legitimate_ise
+_VARIANT_WORDS = {k: (pat, why) for k, (_, pat, why) in locale_rules.VARIANT_WORDS.items()}
 
 
 def app_rules() -> dict:
     """name -> (severity, name, pattern, why), in the app's order."""
     r = {}
-    if "\u2014" in _DOC.get("banned_characters", ["\u2014", "\u2013"]):
-        r["em-dash"] = ("ERROR", "em-dash", r"\u2014",
-                        "No em dashes anywhere, per CLAUDE.md and rule 7.")
-    noun = _DOC.get("noun", "resume")
-    for banned in _DOC.get("banned_nouns", []):
-        name = "the-word-" + re.sub(r"[^a-z0-9]+", "-", banned.lower())
-        r[name] = ("ERROR", name, r"\b%s\b" % re.escape(banned),
-                   f"The document is a {noun}, never a {banned}, in anything the employer sees.")
-    spelling = _DOC.get("spelling", "")
-    if spelling in ("canadian", "american"):
-        # Only flags -ise forms that have a real -ize counterpart. Words that are
-        # spelled -ise in every variety of English (enterprise, expertise,
-        # precise, comprise, supervise, advise, otherwise, ...) are excluded, or
-        # the check fires on "enterprise-scale" in every resume and gets ignored.
-        why = ("Canadian English uses -ize/-ization. (modelling, behaviour and centre "
-               "keep their British forms and are not matched here.)"
-               if spelling == "canadian" else "American English uses -ize/-ization.")
-        r["british-ise-spelling"] = (
-            "ERROR", "british-ise-spelling",
-            r"\b(?!(?:" + "|".join(LEGITIMATE_ISE) + r")\b)\w{4,}(?:ise|ises|ised|ising|isation|isations)\b",
-            why)
-    if spelling in _VARIANT_WORDS:
-        pat, why = _VARIANT_WORDS[spelling]
-        r["american-spelling" if spelling == "canadian" else f"{spelling}-spelling"] = (
-            "ERROR", "american-spelling" if spelling == "canadian" else f"{spelling}-spelling",
-            pat, why)
+    L = _LOCALE
+    if L.dash_pattern:
+        # Every character the profile bans, and the dash typed as "--" or "---",
+        # which is how LaTeX writes both. The name is the one profiles place.
+        r["em-dash"] = ("ERROR", "em-dash", L.dash_pattern,
+                        "No em dashes anywhere, per CLAUDE.md and rule 7, nor any other "
+                        "character documents.banned_characters names, typed as -- or --- "
+                        "included.")
+    for n in L.nouns:
+        name = "the-word-" + re.sub(r"[^a-z0-9]+", "-", n.word.lower())
+        r[name] = ("ERROR", name, n.document.pattern,
+                   f"The document is a {L.noun}, never a {n.word}, in anything the employer sees.")
+    if L.ise is not None:
+        r["british-ise-spelling"] = ("ERROR", "british-ise-spelling", L.ise.pattern, L.ise_why)
+    if L.variant is not None:
+        name = "american-spelling" if L.spelling == "canadian" else f"{L.spelling}-spelling"
+        r[name] = ("ERROR", name, L.variant.pattern, L.variant_why)
+    # A status the person does not hold (networking.py UNSUPPORTED_STATUS), which every
+    # message was already checked for: a resume or letter is held to the same.
+    net = person.module("networking") if person.exists("networking.py") else None
+    status = getattr(net, "UNSUPPORTED_STATUS", None)
+    if status is not None and status.pattern != r"(?!x)x":
+        r["unsupported-status"] = ("ERROR", "unsupported-status", status.pattern,
+                                   "A status the profile does not hold: "
+                                   + str(getattr(net, "UNSUPPORTED_WHY", "") or "check it"))
     r["duplicated-word"] = ("ERROR", "duplicated-word", r"\b([^\W\d_]{3,})\s+\1\b",
                             "A word is repeated. Usually an editing slip.")
     r["unsupported-connective"] = (
@@ -165,8 +120,14 @@ def strip_latex(text: str) -> str:
     for line in text.splitlines():
         if line.lstrip().startswith("%"):
             continue
-        out.append(line)
+        # A comment after the markup on a line is not prose either. "\%" is a
+        # percent sign, so only an unescaped one starts a comment.
+        out.append(re.sub(r"(?<!\\)%.*", "", line))
     t = "\n".join(out)
+    # LaTeX's named dashes, as the characters, before commands are dropped.
+    t = locale_rules.latex_dashes(t)
+    # A link's address is not prose: \href{address}{text} keeps the text.
+    t = re.sub(r"\\(?:href|url)\s*\{[^}]*\}", " ", t)
     t = re.sub(r"\\textbackslash|\\textasciitilde\{\}", "~", t)
     # Drop \begin{env} / \end{env} with the environment name, or a document full
     # of itemize blocks reports a phantom "itemize itemize" duplicated word.

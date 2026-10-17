@@ -52,7 +52,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from company_key import key as company_key  # noqa: E402
-from text_screen import money_values, salary_range, stated_years  # noqa: E402
+from text_screen import entry_years, money_values, salary_range  # noqa: E402
 import person  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -109,7 +109,8 @@ WRONG_FAMILY = list(getattr(_S, "OPP_WRONG_FAMILY", []))
 # docked for level.
 _NEVER = re.compile(r"(?!x)x")
 SENIOR_UP = getattr(_S, "OPP_ABOVE_LEVEL", None) or _NEVER
-JUNIOR = getattr(_S, "OPP_BELOW_LEVEL", None) or _NEVER
+# Unset, the fit score's own list of levels below the person (FIT_BELOW_LEVEL).
+JUNIOR = getattr(_S, "OPP_BELOW_LEVEL", None) or getattr(_S, "FIT_BELOW_LEVEL", None) or _NEVER
 # A contract, fixed-term or temporary title, docked 6. Most people want a
 # permanent role, so this is the default; a locum, supply or seasonal worker
 # sets OPP_CONTRACT = None in search.py (or a narrower pattern).
@@ -261,12 +262,12 @@ def score(job: dict, today: dt.date | None = None) -> dict:
         pts -= 6
         why.append("-6 contract rather than permanent")
 
-    # Stretch is a cost, never a gate. One shared reading of the bar
-    # (text_screen.stated_years): requirement-cued, boast-guarded, low end of a
-    # range. The old max() over every "N years" in the body docked -14 for
-    # "over 20 years of experience delivering" and "18 years or older".
-    # Measured from the years held, not from fixed numbers (see tools/fit.py).
-    bar, _ = stated_years(body)
+    # Stretch is a cost, never a gate. One shared reading of the bar: the entry bar
+    # (text_screen.entry_years), the one fit.py scores on, because this is a scoring
+    # decision too. The highest bar (stated_years) is for screening: read here it
+    # made every posting that lists years per skill look like a Principal role, the
+    # fault fit.py had already fixed. Measured from the years held (see tools/fit.py).
+    bar, _, _ = entry_years(body)
     over = (bar - YEARS_HELD) if bar else 0
     if bar and over >= 6:
         pts -= 14

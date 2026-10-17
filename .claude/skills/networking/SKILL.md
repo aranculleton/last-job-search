@@ -107,7 +107,8 @@ One search per company. Two if the first returns nothing usable or the company
 has several relevant sub-teams. **Never three.** Two well-formed queries that return
 nothing at all are `no_results`, which proves nothing: try a roster, record nothing.
 Queries that return people of whom none fits are `no_relevant_presence`: record it
-with `discovery.presence_record()`, which holds for 90 days, and move on. That
+with `discovery.record_presence()`, which holds for `PRESENCE_REVIEW_DAYS`
+(`tools/company_research.py`), and move on. That
 verdict is a real output, not a failure: it stops the company being re-targeted
 next month.
 
