@@ -226,3 +226,24 @@ def test_a_reading_is_saved_merged_and_queued(tmp_path, monkeypatch):
     assert [c["contact_id"] for c in reading.queue(contacts, TODAY)] == ["fernhill_haldane"]
     with pytest.raises(ValueError):
         reading.path("../escape")
+
+
+def test_after_the_read_someone_who_no_longer_fits_makes_way_for_the_next():
+    r = _read()
+    assert r["current"] == "Fernhill Freight"
+    assert reading.verdict(r, "Fernhill Freight") == (True, "")
+    keep, why = reading.verdict(r, "Oakmere Foods")  # found at their old employer
+    assert not keep and "moved on" in why and "Fernhill Freight" in why
+    abroad = dict(r, location="Austin, Texas, United States")
+    keep, why = reading.verdict(abroad, "Fernhill Freight")
+    assert not keep and "elsewhere" in why
+    unsure = dict(r, current="")  # no clear current employer: keep, never guess
+    assert reading.verdict(unsure, "Oakmere Foods")[0]
+
+
+def test_a_pdf_export_gives_the_current_employer_too():
+    assert _read(PDF, source="pdf")["current"] == "Fernhill Freight"
+
+
+def test_the_ceiling_is_far_above_a_run_and_the_person_can_set_their_own():
+    assert reading.READS_PER_DAY >= 100 and reading.PACE_SECONDS > 0

@@ -500,10 +500,10 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=2,
             needs="you",
             ask="Before a note goes to someone, should Claude read their LinkedIn profile in "
-                "your own signed-in browser? It reads only the people about to be messaged, a "
-                "few a day, and clicks nothing, but LinkedIn's terms forbid automated access, so "
-                "the risk is to your account. The other way is pasting a profile when you open "
-                "it to send the request."),
+                "your own signed-in browser? It reads only the people a search surfaced, one at "
+                "a time at a person's pace, and clicks nothing, but LinkedIn's terms forbid "
+                "automated access, so the risk is to your account. The other way is pasting a "
+                "profile when you open it to send the request."),
     Upgrade("screen-flags", "2026-10-15",
             "postings from the wrong job family for you flagged, in your field's terms",
             _screen_flags, "/setup --section search", "question", "~5 min",
@@ -629,6 +629,9 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    "networking.PROFILE_READS_PER_DAY": "a ceiling of 150 browser reads a day against a runaway "
+                                        "loop, far above what a run needs; a run reads as many "
+                                        "as it takes to fill its batch",
     "search.PORTAL_LOCATIONS": "defaults to every SCRAPE_LOCATION; /add-portal writes it "
                                "only when a board cannot read those names",
     "search.WORKDAY_INTERNAL_SITES": "the app drops Workday's 'Privileged' site already; a "

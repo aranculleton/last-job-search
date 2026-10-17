@@ -168,10 +168,16 @@ caught at once. So between finding and writing there is a read, and
 `tools/network/reading.py` holds it (`/network` step 5 says how):
 
 - **Their profile.** In the person's own signed-in browser when `PROFILE_READS` is
-  `"browser"` in `profile/networking.py`, otherwise pasted by them (select all, copy,
-  or LinkedIn's Save to PDF), which takes seconds because they open the profile anyway
-  to send the request. This session never fetches LinkedIn itself: its robots.txt
-  disallows every crawler it does not name and a profile request answers HTTP 999.
+  `"browser"` in `profile/networking.py` (Claude in Chrome, or the Claude desktop app's
+  built-in browser, which a cloud session reaches while it is linked to their computer),
+  otherwise pasted by them (select all, copy, or LinkedIn's Save to PDF), which takes
+  seconds because they open the profile anyway to send the request. This session never
+  fetches LinkedIn itself: its robots.txt disallows every crawler it does not name and a
+  profile request answers HTTP 999.
+- **Read, judge, next.** How many are read is however many it takes to fill the run's
+  batch with people worth writing to, the way a round runs until its yield target.
+  `reading.verdict()` skips someone the page shows has moved on, is based elsewhere or
+  holds a role the search filters out, and the next person is read instead.
 - **Their public work.** A talk, an article, a podcast, code, a quote in the press,
   and their posts as a search engine shows them. Never a people-search or data-broker
   site.
@@ -179,8 +185,9 @@ caught at once. So between finding and writing there is a read, and
   automated access, browser extensions included. The risk is to their own account, the
   one the whole of this skill runs on, so it is asked once, plainly (the `profile-reads`
   upgrade, and `/setup`), and kept to what a person reading profiles by hand would do:
-  only the people about to be messaged, one at a time, `READS_PER_DAY` at most, nothing
-  clicked.
+  only the people the run surfaced, one at a time at a person's pace, nothing clicked.
+  `READS_PER_DAY` (150, or their own `PROFILE_READS_PER_DAY`) is a ceiling against a
+  runaway loop, never the number a run aims for.
 
 What a reading keeps is what a note could rest on: their headline, a short excerpt of
 their About, the history they share with the candidate (an employer, a school, a city,

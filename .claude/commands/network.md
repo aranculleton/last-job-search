@@ -61,28 +61,46 @@ untouched employers from the latest round's shortlist.
    If their connections were loaded, `discovery.mark_first_degree(kept, conns)` marks
    the people they already know: a message, not a connection request.
 
-5. **Read each person before writing to them.** A snippet holds a title and a line, and
-   notes drafted from snippets alone come out alike. For every person about to be drafted
-   (the budget from step 2 already capped how many), in this order, and record each with
-   `tools/network/reading.py`, which keeps only what a note could rest on, under
-   `documents/network/<contact_id>/reading.json`:
+5. **Read each person before writing to them, and keep reading until the batch is full.**
+   A snippet holds a title and a line, and notes drafted from snippets alone come out
+   alike. Work through the people steps 3 and 4 kept, best first (tier, then route), the
+   way a round works through postings: read one, judge them, then the next, until the run
+   has as many people worth writing to as its budget from step 2 can send. That number,
+   not a fixed count, is how many are read. Give each candidate its id first
+   (`state.unique_contact_id()`), and record what is read with `tools/network/reading.py`,
+   which keeps only what a note could rest on, under
+   `documents/network/<contact_id>/reading.json` (`--name` and `--company` for a
+   candidate not in the contact book yet).
 
    1. **Their profile, in the person's own browser**, only when `profile/networking.py`
-      `PROFILE_READS` is `"browser"` and a browser tool is connected (Claude in Chrome,
-      or the desktop app's browser pane: load its skill first). Open their
-      `linkedin_url` in a new tab, read the page text, close the tab, and pipe the text to
+      `PROFILE_READS` is `"browser"` and a browser tool is there: Claude in Chrome, or the
+      Claude desktop app's built-in browser, which a cloud session reaches too while it is
+      linked to the person's computer and the app is open (`mcp__remote-devices__Claude_Browser__*`;
+      load the browser's skill first). The person signs in to LinkedIn there themselves,
+      once; Claude never types, sees or stores a password. Open their `linkedin_url` in a
+      new tab, read the page text, close the tab, and pipe the text to
       `python3 tools/network/reading.py read <contact_id> - --source browser`. One profile
-      at a time, a pause between them, at most `reading.READS_PER_DAY` a day (the tool
-      refuses the rest). Never click anything on LinkedIn: no Connect, Message, Follow or
-      Like, and never scroll into other people's profiles. A login wall, a security check
-      or a CAPTCHA stops the reads for the day: say so, and never try to get past one.
-   2. **Their profile, from the person**: otherwise, the reply that presents the drafts
+      at a time at a person's pace (the tool refuses a read within `reading.PACE_SECONDS`
+      of the last), and `reading.READS_PER_DAY` is only a ceiling against a runaway loop.
+      Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
+      scroll into other people's profiles. A login wall, a security check or a CAPTCHA
+      stops the reads for the day: say so, and never try to get past one. With the setting
+      on and no browser tool in the session, say once that profiles can be read when the
+      session is linked to the desktop app on their computer, and carry on with 2 and 3.
+   2. **After each read, the verdict.** `read` prints it, and `reading.py verdict
+      <contact_id>` repeats it: KEEP, or SKIP with the reason. A snippet can be months
+      old, and the page shows that someone has moved on, is based elsewhere, or holds a
+      role the search filters out. A skip is recorded as a `closed` contact with that
+      reason, so they never surface again, and the next person is read in their place.
+      When the people kept run out before the batch is full, run the next query
+      `discovery.queries_for()` allows and read on.
+   3. **Their profile, from the person**: otherwise, the reply that presents the drafts
       asks for it, one line per person: open the profile, select all, copy, and paste it
       here, or attach LinkedIn's own **More > Save to PDF** of it. A paste is
       `reading.py read <contact_id> <file>`; a PDF is the same with the `.pdf`. They open
       the profile anyway to send the request, so this costs seconds, and the note is
       rewritten from it in the same turn.
-   3. **Their public work, always**: one WebSearch for `"<Full Name>" "<Company>"` with
+   4. **Their public work, always**: one WebSearch for `"<Full Name>" "<Company>"` with
       LinkedIn excluded, for a talk, an article, a podcast, code or a quote in the press,
       and one for their posts, `"<Full Name>" site:linkedin.com/posts` (results only:
       `discovery.resolve_result()` dates a post from its link). Keep each one that is
@@ -157,8 +175,8 @@ against the plan's limit (and the subject line for an InMail).
 
 A note with no page read behind it says so on its own line: "Rests only on their title
 and the search snippet. Paste their profile (or its Save to PDF) and I'll make it about
-them." When the reads are in the browser, list who was read and how many reads are left
-today.
+them." When the reads are in the browser, list who was read, who was skipped after the read and
+why, and say how many were read to fill the batch.
 
 Then, separately and honestly: **the dead ends**, with the reason for each. A
 company with no relevant presence in the target city is a real finding and saves the next
@@ -203,8 +221,8 @@ with their reason if they do not want that person contacted.
 - Exceed three searches for one company
 - Fetch a LinkedIn page, a careers page or a blog index from this session (a profile is
   read only in the person's own browser, when they chose it, or from their paste)
-- Click anything on LinkedIn, read more than `reading.READS_PER_DAY` profiles a day, or
-  read anyone who is not about to be messaged
+- Click anything on LinkedIn, read faster than a person would, or read anyone this run did
+  not surface
 - Cite a people-search or data-broker site, or keep more of a profile than `reading.py` keeps
 - Surface anyone already in `network_contacts.csv`
 - Pad the list. Three good names beats twenty mediocre ones, and every message

@@ -102,8 +102,9 @@ METHODS: dict[str, dict] = {
                                      "and keeps the note's pieces short enough for a free account; "
                                      "the plan reaches older profiles as its own question"),
             (4, "2026-10-17", False, "asks whether Claude may read LinkedIn profiles in your own browser before writing to someone"),
+            (5, "2026-10-17", False, "the browser-read question says it reads only the people a search surfaced, at a person's pace"),
         ),
-        "fingerprint": "76fa627d1e6e4f3c",
+        "fingerprint": "d1dec487a6b41a7f",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -279,8 +280,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-15", False, "a reply after 'no action unless they reply' is owed, nobody is nudged against it, a dated close is not reopened, a catch-up message is not a connection request, and plain job asks are caught"),
             (9, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (10, "2026-10-17", False, "a note is written from what was read about the person (their profile, posts and public work), refuses a common ground nothing read supports, and no two notes in a batch say the same thing"),
+            (11, "2026-10-17", False, "reads the people a run surfaced until the batch is full, skips anyone the page shows has moved on or is based elsewhere and reads the next, and reaches the desktop app's browser from a cloud session"),
         ),
-        "fingerprint": "d22060a84031c9f2",
+        "fingerprint": "f9fb1f89a65f84da",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -298,8 +300,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-17", True, "each note rests on something read about the person: "
                                     "history you share, a recent post, a talk or an article, "
                                     "and no two notes say the same thing"),
+            (3, "2026-10-17", False, "a person the page shows has moved on is skipped, and the ceiling on reads is far above a run"),
         ),
-        "fingerprint": "f80ef0bc4bb18c4f",
+        "fingerprint": "81e5bc409b5cf0e4",
     },
     "screening": {
         "by": "round", "priority": 2,
