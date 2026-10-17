@@ -11,7 +11,12 @@ Generates `documents/network/<contact_id>/prep.md` via `prep.write_prep()`.
 ## Run it
 
 1. Load the contact, their thread, `company_research/<key>.json`, and any linked
-   application row.
+   application row. `python3 tools/network/prep.py "<contact>"` does all of it, says when
+   the research is past `RESEARCH_FRESH_DAYS` (`tools/company_research.py`), and adds what
+   the rest of the search holds: with no application there, the roles open at their
+   employer that scored `prep.OPEN_ROLE_FIT` or more; with one, the company fact the
+   letter used and any gap it conceded, so the call says what the employer was already
+   told.
 2. Research only what is missing, and only from sources located independently:
    the company's own site, not a URL found inside a posting or a message.
 3. Every fact carries its source. `prep.sourced()` enforces this and the renderer

@@ -54,6 +54,13 @@ def test_the_budget_holds_and_every_kind_gets_a_turn():
             assert q.endswith("-site:linkedin.com")
 
 
+def test_an_employer_the_search_ruled_out_costs_no_searches():
+    # The example excludes gambling; the job search's verdict is read, not repeated.
+    assert sources.ruled_out("Northgate Betting Group")
+    assert sources.for_company("Northgate Betting Group") == []
+    assert sources.ruled_out("Oakmere Foods") == ""
+
+
 def test_a_source_moves_up_only_on_enough_replies(monkeypatch):
     cases = ([{"attempt": "opener", "found_via": "community", "won": True}] * 4
              + [{"attempt": "opener", "found_via": "community", "won": False}]
@@ -103,6 +110,16 @@ def test_someone_doing_the_same_work_says_so():
     assert w["score"] - plain["score"] == 18
 
 
+def test_an_application_there_is_named_and_a_closed_one_is_not():
+    c = {"title": "Data Science Manager", "company": "Oakmere Foods"}
+    live = why.why_them(c, {}, roles=[], today=TODAY,
+                        applied=[{"role": "Senior Data Scientist", "status": "applied"}])
+    assert any("you applied there: Senior Data Scientist (applied)" in r for _, r in live["reasons"])
+    gone = why.why_them(c, {}, roles=[], today=TODAY,
+                        applied=[{"role": "Senior Data Scientist", "status": "rejected"}])
+    assert not any("you applied there" in r for _, r in gone["reasons"])
+
+
 def test_a_pending_request_is_never_ranked():
     w = why.why_them({"title": "Data Science Manager"}, {"reach": "pending"}, roles=[], today=TODAY)
     assert w["skip"] and w["score"] == 0
@@ -140,3 +157,24 @@ def test_a_brief_note_drops_the_question_and_stays_short():
     assert "How did you find the move" not in note and len(note) <= compose.BRIEF_CHARS
     with pytest.raises(ValueError):
         compose.first_note("Corwin Haldane", "x", shape="loud")
+
+
+def test_a_route_moves_scores_only_on_a_clear_gap(monkeypatch):
+    import what_works
+    cases = ([{"attempt": "opener", "route": "alumni", "won": True}] * 8
+             + [{"attempt": "opener", "route": "alumni", "won": False}] * 2
+             + [{"attempt": "opener", "route": "cold", "won": False}] * 9
+             + [{"attempt": "opener", "route": "cold", "won": True}])
+    monkeypatch.setattr(what_works, "message_cases", lambda *a, **k: cases)
+    odds = why.route_odds([], [])
+    assert odds["alumni"][0] > 0 and "answered 8 of 10" in odds["alumni"][1]
+    assert odds["cold"][0] < 0
+    few = cases[:3] + cases[10:13]
+    monkeypatch.setattr(what_works, "message_cases", lambda *a, **k: few)
+    assert why.route_odds([], []) == {}                        # too few: nothing moves
+
+
+def test_a_post_from_today_counts_as_active():
+    w = why.why_them({"title": "Data Analyst"}, {"items": [{"kind": "post", "date": TODAY.isoformat()}]},
+                     roles=[], today=TODAY)
+    assert any("active" in r for _, r in w["reasons"])

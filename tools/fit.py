@@ -53,7 +53,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from text_screen import NOT_A_DEGREE, entry_years, sentences  # noqa: E402
+from text_screen import ESCAPE, NOT_A_DEGREE, PREFERRED, entry_years, sentences  # noqa: E402
 from prefilter import location_verdict  # noqa: E402
 from opportunity import SCALE as OPP_SCALE  # noqa: E402
 import person  # noqa: E402
@@ -75,6 +75,9 @@ FIT_FLOOR = 65
 # clear of the floor's demotion, because the floor's own justification is that
 # below it an application is a lottery ticket, which a referral is not.
 REFERRAL_BONUS = 12
+# An employer that has interviewed the person before has already read their
+# resume and liked it: a small lift for its next role, never a cut for any other.
+INTERVIEWED_BONUS = 4
 
 # --------------------------------------------------------------------------
 # What the candidate's job is, from the profile (search.py FIT_*). Each list is
@@ -126,9 +129,11 @@ HARD_REQUIRE = re.compile(
     r"\b(must have|must be|required|requires?|minimum|at least|essential|"
     r"you (?:will )?need|proven|demonstrated|extensive|deep|strong|expert|"
     r"\d\+?\s*years?)\b", re.I)
+# A preference in text_screen's own words (one definition, so "a bonus-eligible
+# role" and "our asset management team" are not read as nice-to-haves here either),
+# plus the soft asks that are this file's: familiarity, exposure, willingness.
 SOFT_WANT = re.compile(
-    r"\b(preferred|nice to have|a plus|bonus|desirable|an asset|ideally|"
-    r"familiarity|exposure|awareness|willing(?:ness)? to learn|"
+    PREFERRED.pattern + r"|\b(familiarity|exposure|awareness|willing(?:ness)? to learn|"
     r"appetite for|curiosity about|would be great|welcome)\b", re.I)
 # The employer describing itself, not asking the candidate for anything. "Our platform is
 # built on Kafka" is context; "you will build on Kafka" is a requirement.
@@ -280,8 +285,7 @@ GRAD_COST = 9
 # rather than the sentence: the route often sits past a list the sentence
 # splitter cuts in two, as in "Master's degree in Mathematics, Statistics,
 # Operations Research, Engineering, or equivalent".
-GRAD_ESCAPE = re.compile(r"or equivalent|or comparable|or relevant experience|"
-                         r"equivalent experience", re.I)
+GRAD_ESCAPE = ESCAPE          # text_screen's: one list of the ways a posting says "or equivalent"
 # Offered beside a bachelor's, it is a bar a BSc clears: "Bachelor's or
 # Master's degree in" used to cost the full 9.
 BACHELOR_OR = re.compile(r"\b(?:bachelor|b\.?sc|undergraduate)[^.;:]{0,60}?"
@@ -562,6 +566,25 @@ def fit(job: dict) -> dict:
     return {"fit": pts, "fit_why": why, "location_verdict": lv}
 
 
+def interviewed_at() -> dict:
+    """Employer key -> the role, for every employer that has interviewed the person.
+
+    Read from the tracker the way tools/what_works.py reads it, so the two agree on
+    what reaching an interview means. {} when there is no tracker.
+    """
+    try:
+        import what_works
+        from company_key import key as _ckey
+        rows = what_works._csv(person.state("job_search_tracker.csv"))
+        out = {}
+        for row in rows:
+            if what_works.reached_interview(row):
+                out.setdefault(_ckey(row.get("company")), row.get("role") or "a role")
+        return out
+    except Exception:
+        return {}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("infile")
@@ -583,6 +606,7 @@ def main() -> int:
         warm = warm_routes()
     except Exception:
         warm, _ckey = {}, None
+    interviewed = interviewed_at() if _ckey else {}
 
     out = []
     for j in jobs:
@@ -597,6 +621,12 @@ def main() -> int:
             f["fit_why"] = list(f["fit_why"]) + [
                 "+%d live contact at this employer (%s), so this is not a cold "
                 "application" % (REFERRAL_BONUS, route[0]["name"])]
+        before = interviewed.get(_ckey(j.get("company"))) if _ckey else None
+        if before:
+            f = dict(f)
+            f["fit"] = min(100, f["fit"] + INTERVIEWED_BONUS)
+            f["fit_why"] = list(f["fit_why"]) + [
+                "+%d they interviewed you before (%s)" % (INTERVIEWED_BONUS, before)]
         opp = j.get("opportunity")
         # Product, not sum: neither score may compensate for the other.
         o = opp if opp is not None else 60

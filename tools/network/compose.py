@@ -554,7 +554,7 @@ def _voice(kind: str, text: str) -> str:
         import voice_check
     except ImportError:                       # pragma: no cover - path issue only
         return text
-    hard = [f for f in voice_check.check(text) if f["severity"] == "hard"]
+    hard = voice_check.hard(text)
     if hard:
         raise ReadsAsGenerated(
             "%s reads as generated: %s. %s"
@@ -756,8 +756,7 @@ def _first_note_voice(text) -> str:
         import voice_check
     except ImportError:                       # pragma: no cover - path issue only
         return text
-    hard = [f for f in voice_check.check(text) if f["severity"] == "hard"
-            and not (f["rule"] == "house-style" and _OWN_VOICE.match(f["match"]))]
+    hard = voice_check.hard(text, allow=_OWN_VOICE)
     if hard:
         raise ReadsAsGenerated(
             "first note reads as generated: %s. %s"
@@ -1285,20 +1284,14 @@ _THREAD_WARMTH = re.compile(r"\s*hope\b", re.I)
 def _voice_findings(text: str, kind: str | None = None) -> list:
     """voice_check's HARD findings, or nothing if it cannot be imported.
 
-    Soft findings are dropped deliberately, the same way `_voice()` drops them.
-    `uniformity` is a statistical read that needs a real sample and a
-    connection note is four short sentences by design, so every one of them
-    trips it, and a checker that always fires is a checker nobody reads.
+    Soft findings are dropped deliberately, the same way `_voice()` drops them
+    (voice_check.hard says why). A first note may carry the person's own
+    opener and close, and a live thread a light "hope".
     """
     try:
         import voice_check
     except ImportError:
         return []
-    hard = [f for f in voice_check.check(text) if f["severity"] == "hard"]
-    if kind in ("connection", "inmail"):
-        hard = [f for f in hard
-                if not (f["rule"] == "house-style" and _OWN_VOICE.match(f["match"]))]
-    if kind in ("reply", "referral_ask"):
-        hard = [f for f in hard
-                if not (f["rule"] == "house-style" and _THREAD_WARMTH.match(f["match"]))]
-    return hard
+    allow = {"connection": _OWN_VOICE, "inmail": _OWN_VOICE,
+             "reply": _THREAD_WARMTH, "referral_ask": _THREAD_WARMTH}.get(kind)
+    return voice_check.hard(text, allow=allow)

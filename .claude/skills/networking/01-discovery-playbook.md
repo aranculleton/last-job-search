@@ -14,7 +14,7 @@ Three checks, in order. Each one that fails saves two searches.
 3. **Has it been searched already?** `company_research/<key>.json` holds the
    verdict as `network_presence`, dated. A company recorded as having no relevant
    presence is not re-searched until its `review_after` date
-   (`discovery.presence_blocks()`), because teams get stood up.
+   (`discovery.presence_ruled_out()`), because teams get stood up.
 
 ## Search order per company
 

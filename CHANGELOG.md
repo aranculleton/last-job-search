@@ -22,6 +22,51 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **What is ruled out follows your rules, as they are now.** Exclusions used to last for
+  ever, whatever had changed since. Every ruling now records what it rests on
+  (`tools/exclude.py`):
+  - **Ruled out by your screening rules** (the triage blockers, the evaluation
+    framework, the gate settings in `search.py`): the ruling lapses when those rules
+    change, and the posting is screened again the next time a round finds it. Nothing
+    is fetched before then, and editing what to search for never lifts a ruling.
+  - **Ruled out in your own words** ("not this kind of company"): it holds until you
+    change your mind, and then Claude lifts it in the same turn.
+  - **Employer-level rulings** (excluded sectors, declined employers, "no relevant team
+    here") were already read fresh every round, and still are.
+  - **Older rulings** say nothing about what they rest on, and some are wrong by the
+    current rules: a salary below the floor, "7+ years against 4" or a missing
+    Master's is now ranked down, never cut. They are reviewed once, in groups, against
+    the four hard cuts and your own deal-breakers: what still holds is stamped, the
+    rest is lifted, and your own calls are listed for you to check.
+
+  Profile upgrade: rulings-review (Claude reviews your older rulings in the background).
+- **Your results feed the rankings.** A networking route whose reply rate clearly
+  differs from the rest (enough notes, and a gap unlikely to be chance) moves the
+  people on it up or down. An employer that has interviewed you before gives its next
+  role a small lift. A skill the score docks a posting for is also treated as a gap
+  when the resume and letter are written, so neither claims it. No profile upgrade:
+  it reads the state files already there.
+- **One definition where there were several.** Parts of the app that answer the same
+  question now share one answer, so a fix to one reaches the others:
+  - **What counts as a preference** ("preferred", "a plus", "would be a bonus") is
+    defined once, and the job score and the skill-gap reader both use it. They used to
+    read "a bonus-eligible role requires Python" as if Python were optional.
+  - **"Or equivalent experience"** is recognised in every form, everywhere a degree bar is read.
+  - **The years-of-experience bar** in the opportunity score is now the entry bar the
+    fit score already used, not the highest number in the posting.
+  - **Resumes and letters** are checked for a status the profile does not hold (a
+    citizenship, say), as every message already was, and an American-spelling profile
+    no longer has "analyses", the plural noun, flagged as British.
+  - **Networking:** an employer the job search ruled out (an excluded sector, a declined
+    employer, a "no relevant team here" entry) gets no searches. A past employer is
+    recognised on a profile without its legal suffix ("Oakmere Foods" for "Oakmere
+    Foods Ltd"). The careful recruiter test is used when ranking people, so a manager
+    "recruiting data scientists" is not ranked as a recruiter. A contact at an employer
+    you applied to says so. A call-prep document flags company research more than 30
+    days old.
+
+  Measured on a real person's 13 postings and 114 resumes and letters: no score and no
+  finding changed. No profile upgrade: nothing to set.
 - **Networking finds people where your field names them, says why each one, and writes
   to each in the shape that suits them.**
   - **Where to look is yours.** A LinkedIn title search finds executives and misses most

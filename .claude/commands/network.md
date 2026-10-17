@@ -11,8 +11,8 @@ untouched employers from the latest round's shortlist.
    and `company_research/`. Anyone already contacted is out:
    `state.already_contacted(contacts, name, company, linkedin_url=...)` checks the
    profile URL first, which finds the same person under a nickname or a new employer.
-   A company whose `company_research/<key>.json` `network_presence` record
-   `discovery.presence_blocks(record, today)` is out until its review date.
+   A company whose `company_research/<key>.json` `network_presence` record still
+   holds (`discovery.presence_ruled_out(company, today)`) is out until its review date.
    **Drafts queued by an earlier run come first**: contacts at `not_contacted` with a
    `documents/network/<contact_id>/draft.md`. Show them before any new search: send
    them or drop them. `python3 tools/network/reading.py queue` lists the queued ones with no
@@ -43,6 +43,8 @@ untouched employers from the latest round's shortlist.
    `sources.for_run()` once for the whole run (alumni, rosters, meetups, awards), and
    `sources.for_company()` for each employer, every kind getting a turn before any gets a
    second. Run them in that order and **stop the moment the batch from step 2 is full**.
+   An employer the job search has ruled out (an excluded sector or employer, or a
+   `do_not_target.json` entry) gets no searches at all: `sources.ruled_out()` says why.
    Everyone kept carries `found_via`, the kind that surfaced them, so the plan learns
    which places pay for this person.
    - **Searches into LinkedIn** (title, hiring posts, alumni): WebSearch with
@@ -84,9 +86,10 @@ untouched employers from the latest round's shortlist.
    no date is kept as `undated_signal` but does not earn tier 1. Three verdicts:
    `has_presence`; `no_results` (nothing came back, which proves nothing: try the
    second query or a roster, record nothing); and `no_relevant_presence` (people came
-   back and none fits). Only the last is recorded: merge
-   `{"network_presence": discovery.presence_record(verdict, today)}` into
-   `company_research/<key>.json`, which holds it for 90 days. Never into
+   back and none fits). Only the last is recorded:
+   `discovery.record_presence(company, verdict, today)` merges it into
+   `company_research/<key>.json` through `tools/company_research.py`, which holds it for
+   `PRESENCE_REVIEW_DAYS` and leaves the research beside it as it was. Never into
    `job_scraper/do_not_target.json`, which also stops the employer's postings.
    If their connections were loaded, `discovery.mark_first_degree(kept, conns)` marks
    the people they already know: a message, not a connection request.

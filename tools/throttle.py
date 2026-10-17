@@ -43,6 +43,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bar  # noqa: E402
+from dates import days_since  # noqa: E402
 from company_key import key  # noqa: E402
 from lookup_score import norm  # noqa: E402
 
@@ -245,12 +246,7 @@ SILENCE_DAYS = 45
 
 def _row_age_days(row: dict, today: "dt.date | None" = None) -> int | None:
     """Days since the tracker row's date, or None when it cannot be read."""
-    raw = (row.get("date") or "").strip()[:10]
-    try:
-        then = dt.date.fromisoformat(raw)
-    except (ValueError, TypeError):
-        return None
-    return ((today or dt.date.today()) - then).days
+    return days_since(row.get("date"), today, iso_only=True)
 
 
 LIVE_PROCESS = frozenset({"interview", "offer"})
@@ -374,6 +370,8 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
     urls: dict[str, str] = {}
     pairs: dict[tuple[str, str], str] = {}
     since = rescreen_since()
+    import exclude
+    rules_now = exclude.rules_fingerprint()
     for u, e in entries.items():
         if not isinstance(e, dict):
             continue
@@ -397,6 +395,11 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
             continue
         if (status == "excluded" and since and screened_before(e, since)
                 and not _NOT_A_VERDICT.search(reason)):
+            continue
+        # Ruled out under the person's own screening rules, which have changed since
+        # (tools/exclude.py). The ruling stays as the record and stops blocking; the
+        # posting is screened again by the current rules the next time it is found.
+        if status == "excluded" and e.get("rules") and e["rules"] != rules_now:
             continue
         why = f"{status} in seen_jobs.json: {reason[:120] or 'no reason recorded'}"
         n = norm(e.get("url") or u)

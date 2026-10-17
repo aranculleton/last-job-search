@@ -55,6 +55,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "network"))
 
+import dates  # noqa: E402
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 
@@ -87,10 +88,7 @@ def _today(value=None) -> dt.date:
 
 
 def _date(value):
-    try:
-        return dt.date.fromisoformat(str(value or "").strip()[:10])
-    except ValueError:
-        return None
+    return dates.as_date(value, iso_only=True)
 
 
 def _csv(path: str) -> list[dict]:

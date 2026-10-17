@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.3
+framework_version: 1.1.4
 ---
 
 # Cost Model for the Application Lifecycle
@@ -58,7 +58,8 @@ misses its target or when a shortlist reads as though the words matched and the 
    one-role-per-company rule *before* scoring, not after.
 3. **Never verify a score that cannot change a decision.** A 45 does not need a sceptic.
 4. **Never re-derive what is already recorded.** Scores live in `seen_jobs.json`; company research
-   lives in `company_research/*.json` with a 30-day TTL. Read before you fetch.
+   lives in `company_research/*.json`, fresh for `RESEARCH_FRESH_DAYS` (`tools/company_research.py`).
+   Read before you fetch.
 5. **Never read a file an agent does not need.** The single worst offender was every reviewer
    reading `cv/main_example.tex`, an unpopulated template contributing zero facts.
 

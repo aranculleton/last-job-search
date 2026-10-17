@@ -17,7 +17,10 @@ gets no reply, and a reply is the whole point of sending it.
 
 What it looks for, in rough order of how badly each one gives the game away:
 
-  cliche        "passionate about", "hit the ground running", "leverage my"
+  cliche        "passionate about", "hit the ground running", "leverage my",
+                "circle back": one list, PHRASES, which network/tone.py reads
+                too, so a phrase added there is caught in a message and a
+                letter alike
   ai-diction    "delve", "robust", "seamless", "tapestry", "landscape",
                 "in today's fast-paced", "testament to"
   ai-shape      "not just X, but Y"; "It's not about X. It's about Y.";
@@ -49,6 +52,96 @@ import re
 import statistics
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import locale_rules  # noqa: E402
+
+# --------------------------------------------------------------- the phrases
+#
+# The phrases banned in anything a stranger reads, a message or a document. One
+# list: network/tone.py reads it for every message, and the "cliche" rule below
+# reads it for everything else, so a phrase added here is caught in both. It was
+# two lists, and the phrases in both matched differently: this one caught "move
+# the needle" but never "moved the needle", its "synergi" never matched
+# "synergy" or "synergies", and its "leverage my" missed "leveraging my". Each
+# phrase carries the inflections it actually appears in. What only a message
+# does wrong (naming the reader's team as a "side", excusing their silence)
+# stays in tone.py.
+PHRASES: dict[str, re.Pattern] = {
+    "moved the needle": re.compile(r"\bmov(?:e|es|ed|ing) the needle\b", re.I),
+    # Padding only without a stated scale: see `padding` below.
+    "at scale": re.compile(r"\bat scale\b", re.I),
+    "resonates": re.compile(r"\bresonat(?:e|es|ed|ing)\b", re.I),
+    "deep dive": re.compile(r"\bdeep[ -]div(?:e|es|ed|ing)\b", re.I),
+    # The candidate leveraging their own skills. A message bans the word in
+    # every form (tone.py); a letter restates the employer's own strategy, which
+    # is often "a leader in leveraging data", so only this form is the tell.
+    "leverage my": re.compile(r"\bleverag(?:e|es|ed|ing) my\b", re.I),
+    "excited to share": re.compile(r"\bexcited to share\b", re.I),
+    "circle back": re.compile(r"\bcircl(?:e|es|ed|ing) back\b", re.I),
+    # Only the noun. "I'll reach out next week" is how people speak; "a reach
+    # out", "the first reach-out" and "reachouts" are recruiter dialect.
+    "reach out": re.compile(
+        r"\b(?:a|an|the|this|that|my|your|our|their|another|first|second|initial|"
+        r"cold|quick|last|next)\s+reach[ -]?out\b|\breach[ -]?outs\b|\breachout\b", re.I),
+    "touch base": re.compile(r"\btouch(?:ing|ed)? base\b", re.I),
+    "synergy": re.compile(r"\bsynerg(?:y|ies|istic|ise|ize)\b", re.I),
+    "passionate about": re.compile(r"\bpassionate about\b", re.I),
+    "hit the ground running": re.compile(r"\bhit the ground running\b", re.I),
+    "think outside the box": re.compile(r"\bthink outside the box\b", re.I),
+    "wear many hats": re.compile(r"\bwear many hats\b", re.I),
+    "self-starter": re.compile(r"\bself[- ]starter\b", re.I),
+    "team player": re.compile(r"\bteam player\b", re.I),
+    "go-getter": re.compile(r"\bgo[- ]getter\b", re.I),
+    "results-driven": re.compile(r"\bresults[- ]driven\b", re.I),
+    "proven track record": re.compile(r"\bproven track record\b", re.I),
+    "drive results": re.compile(r"\bdrive results\b", re.I),
+    "value-add": re.compile(r"\bvalue[- ]add\b", re.I),
+    "low-hanging fruit": re.compile(r"\blow[- ]hanging fruit\b", re.I),
+    "best of both worlds": re.compile(r"\bbest of both worlds\b", re.I),
+    "at the end of the day": re.compile(r"\bat the end of the day\b", re.I),
+}
+
+# Boundaries for locating the sentence a match sits in: offsets, not tidy
+# sentences.
+_SENT_BOUND = re.compile(r"[.!?\n]")
+
+
+def _sentence_around(text: str, index: int) -> str:
+    """The run of text between the nearest sentence boundaries either side.
+
+    By offset, not by searching for the phrase. Resolving the sentence by
+    looking up the matched words found whichever sentence used them first, so a
+    message that wrote the honest "at scale across 60M records" above the
+    padded "we also work at scale" cleared both on the first sentence's digit
+    and the padding shipped unflagged.
+    """
+    start = 0
+    for m in _SENT_BOUND.finditer(text, 0, index):
+        start = m.end()
+    end = _SENT_BOUND.search(text, index)
+    return text[start:end.start() if end else len(text)]
+
+
+def padding(text: str, match: re.Match) -> bool:
+    """"At scale" earns its place only when the scale is stated.
+
+    "2.5M records at scale" is a fact with a number attached. "building pipelines
+    at scale" is the same sentence with the claim removed, which is why it reads
+    as filler. A digit anywhere in the sentence is the cheap, checkable proxy.
+    """
+    return not re.search(r"\d", _sentence_around(text, match.start()))
+
+
+def banned_phrases(text: str) -> list[tuple[str, re.Match]]:
+    """(phrase, match) for every banned phrase in `text`, in PHRASES order."""
+    out = []
+    for name, pattern in PHRASES.items():
+        for m in pattern.finditer(text or ""):
+            if name == "at scale" and not padding(text, m):
+                continue
+            out.append((name, m))
+    return out
+
 # --------------------------------------------------------------- the rules
 #
 # Each entry is (id, severity, compiled pattern, what to do instead). Severity
@@ -57,14 +150,6 @@ import sys
 
 RULES: list[tuple[str, str, re.Pattern, str]] = [
     # ---- outright cliche -------------------------------------------------
-    ("cliche", "hard", re.compile(
-        r"\b(passionate about|hit the ground running|think outside the box|"
-        r"wear many hats|self[- ]starter|team player|go[- ]getter|"
-        r"results[- ]driven|proven track record|synergi|drive results|"
-        r"value[- ]add|move the needle|low[- ]hanging fruit|"
-        r"best of both worlds|at the end of the day)\b", re.I),
-     "say the specific thing that phrase is standing in for"),
-
     ("cliche-fit", "hard", re.compile(
         r"\b(I (?:believe I|am confident I|know I) would be (?:a )?(?:great|"
         r"perfect|excellent|strong) fit|I am the ideal candidate|"
@@ -73,7 +158,7 @@ RULES: list[tuple[str, str, re.Pattern, str]] = [
 
     # ---- diction that reads as generated in 2026 -------------------------
     ("ai-diction", "hard", re.compile(
-        r"\b(delve|delving|leverage(?:s|d|ing)? my|robust solutions?|"
+        r"\b(delve|delving|robust solutions?|"
         r"seamless(?:ly)?|tapestry|myriad|plethora|"
         r"in today'?s (?:fast[- ]paced|ever[- ]evolving|dynamic|competitive)|"
         r"ever[- ]evolving|testament to|underscores? the|"
@@ -152,7 +237,9 @@ RULES: list[tuple[str, str, re.Pattern, str]] = [
      "two hedges in one clause reads as apologising for writing"),
 
     # ---- typography ------------------------------------------------------
-    ("em-dash", "hard", re.compile(r"[\u2014\u2013]"),
+    # The characters the profile bans (documents.banned_characters, both
+    # dashes unless it says otherwise) and the dash typed as "--".
+    ("em-dash", "hard", re.compile(locale_rules.LOCALE.dash_pattern or r"(?!x)x"),
      "banned repo-wide, and a reliable tell; use a comma or a full stop"),
 
     ("rule-of-three", "soft", re.compile(
@@ -191,6 +278,7 @@ def plain(text: str) -> str:
         body = re.split(r"\\begin\{document\}", text, maxsplit=1)
         text = body[1] if len(body) > 1 else text
         text = re.sub(r"(?<!\\)%.*", "", text)
+        text = locale_rules.latex_dashes(text)
     prev = None
     while prev != text:
         prev = text
@@ -217,8 +305,22 @@ def check(text: str, *, source: str = "") -> list[dict]:
     """Every finding in `text`. Empty list means it reads as written by a person."""
     body = plain(text or "")
     out: list[dict] = []
+    for _, m in banned_phrases(body):
+        start = max(0, m.start() - 40)
+        out.append({
+            "source": source,
+            "rule": "cliche",
+            "severity": "hard",
+            "match": m.group(0).strip()[:80],
+            "context": body[start:m.end() + 40].strip()[:160],
+            "fix": "say the specific thing that phrase is standing in for",
+        })
     for rid, severity, pat, fix in RULES:
         for m in pat.finditer(body):
+            # A signature delimiter, a table's rule line or a link is not a dash.
+            if (rid == "em-dash" and m.group(0).startswith("-")
+                    and locale_rules.not_a_dash(body, m.start())):
+                continue
             start = max(0, m.start() - 40)
             out.append({
                 "source": source,
@@ -251,6 +353,30 @@ def check(text: str, *, source: str = "") -> list[dict]:
                    "is what a person writes and a generator does not",
         })
     return out
+
+
+# The one rule a caller may lift. The house style is about a phrase recurring
+# from document to document, so a phrase of the person's own (networking.py
+# OWN_VOICE in a first note) or a light "hope" inside a live thread can share
+# it. A cliche, a dash, or a phrase the person has said never to use is never
+# lifted, whatever `allow` matches.
+ALLOWABLE = frozenset({"house-style"})
+
+
+def hard(text: str, allow: re.Pattern | None = None) -> list[dict]:
+    """The hard findings in `text`: what a composer refuses a message on.
+
+    Soft findings are dropped. `uniformity` is a statistical read that needs a
+    real sample and a connection note is four short sentences by design, so
+    every one of them trips it, and a checker that always fires is a checker
+    nobody reads.
+
+    `allow` is a compiled pattern, matched against the start of a finding's
+    match: a house-style finding it matches is not returned.
+    """
+    return [f for f in check(text) if f["severity"] == "hard"
+            and not (allow is not None and f["rule"] in ALLOWABLE
+                     and allow.match(f["match"]))]
 
 
 # --------------------------------------------------------------- the corpus

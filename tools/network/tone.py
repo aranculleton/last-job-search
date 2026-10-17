@@ -35,10 +35,14 @@ import sys
 from typing import NamedTuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import locale_rules  # noqa: E402
 import person  # noqa: E402
+import voice_check  # noqa: E402
 
 _NET = person.module("networking") if person.exists("networking.py") else None
-_DOC = person.get("documents", {})
+# The dashes, the spelling variant and the document noun, from the profile's
+# documents settings: one copy, which the resume and letter checks read too.
+_LOCALE = locale_rules.LOCALE
 
 
 class Violation(NamedTuple):
@@ -79,15 +83,16 @@ RULES = (
     "person_dislikes",
 )
 
-# Written as code points so the one file that bans these characters does not
-# itself contain them, which is what the repo-wide check greps for.
-EM_DASH = chr(0x2014)
-EN_DASH = chr(0x2013)
+EM_DASH = locale_rules.EM_DASH
+EN_DASH = locale_rules.EN_DASH
 
 # The phrases the brief bans, in the brief's own words, so the list can be read
 # against section 6 without translation. Two of them are legitimate in one sense
 # and banned in another ("at scale" as padding, "reach out" as a noun); the
-# patterns below carry that distinction, the list carries the name.
+# patterns carry that distinction, the list carries the name. What fires is
+# voice_check.PHRASES, the one list letters and resumes are checked against
+# too, so a phrase added there is caught here without a second copy, and the
+# message-only patterns below.
 BANNED_PHRASES = (
     "moved the needle",
     "at scale",
@@ -117,27 +122,18 @@ _SIDE_FUNCTION = (
     r"corporate|science|software|platform|infrastructure|design|legal|"
     r"compliance|fraud|pricing|strategy|ai|ml")
 
-# Each banned phrase, with the inflections it actually appears in. "moved the
-# needle" was never once typed in the past tense only.
-_BANNED_PATTERNS = {
-    "moved the needle": re.compile(r"\bmov(?:e|es|ed|ing) the needle\b", re.I),
-    "at scale": re.compile(r"\bat scale\b", re.I),
-    "resonates": re.compile(r"\bresonat(?:e|es|ed|ing)\b", re.I),
-    "deep dive": re.compile(r"\bdeep[ -]div(?:e|es|ed|ing)\b", re.I),
+# What only a message does wrong, beside voice_check.PHRASES: the word
+# "leverage" in any form (a letter is held only to "leverage my", because it
+# restates an employer's strategy in the employer's words), a closeness to the
+# reader the sender has not earned, the reader's team named as a "side", a
+# follow-up excusing the silence it follows, and a message describing itself as
+# a chase.
+_MESSAGE_ONLY = {
     "leverage": re.compile(r"\bleverag(?:e|es|ed|ing)\b", re.I),
-    "excited to share": re.compile(r"\bexcited to share\b", re.I),
     # The manufactured-connection tell. The contraction and the long form both
     # appear, and the middle of it varies ("that's", "this is", nothing at all).
     "I'd imagine that's exactly where": re.compile(
         r"\bI(?:'d| would) imagine\b[^.!?\n]{0,40}\bexactly where\b", re.I),
-    "circle back": re.compile(r"\bcircl(?:e|es|ed|ing) back\b", re.I),
-    # Only the noun. "I'll reach out next week" is how people speak; "a reach
-    # out", "the first reach-out" and "reachouts" are recruiter dialect.
-    "reach out": re.compile(
-        r"\b(?:a|an|the|this|that|my|your|our|their|another|first|second|initial|"
-        r"cold|quick|last|next)\s+reach[ -]?out\b|\breach[ -]?outs\b|\breachout\b", re.I),
-    "touch base": re.compile(r"\btouch(?:ing|ed)? base\b", re.I),
-    "synergy": re.compile(r"\bsynerg(?:y|ies|istic|ise|ize)\b", re.I),
     # "side" standing in for a team, department or function ("on the credit
     # side", "the data side of Acme"). A quiet tell, because a person
     # names the team. The senses that are not the tell are spared: the
@@ -145,6 +141,18 @@ _BANNED_PATTERNS = {
     # terms (buy side, sell side, supply side), the spatial and figurative
     # ones (the other side, side by side, upside, a side project), and
     # "the X side of the world/road/coin/story".
+    # The determiner set covers possessives too: "your side of the org" is the
+    # same tell as "the data side", and a pattern anchored on "the" missed it.
+    # The bare "<possessive> side of" form needs no function noun, because
+    # "your side of the org" is already the team sense on its own.
+    "on the data side": re.compile(
+        r"\b(?:on|in|from|over on)\s+(?:the|your|our|their|his|her|its)\s+"
+        r"(?:[a-z-]+\s+(?:and\s+)?){0,2}(?:" + _SIDE_FUNCTION + r")\s+side\b"
+        r"|\b(?:the|your|our|their|his|her|its)\s+"
+        r"(?:[a-z-]+\s+(?:and\s+)?){0,2}(?:" + _SIDE_FUNCTION + r")\s+side\s+of\b"
+        r"|\b(?:your|our|their|his|her)\s+side\s+of\s+(?:the\s+)?"
+        r"(?:org|organisation|organization|business|company|house|team|shop|world|fence)\b",
+        re.I),
     # Inventing an explanation for their silence. "Happy to resend if it got
     # lost" supposes a failure that almost certainly did not happen; a sent email
     # is a sent email, and the sender knows it. Every version of this move does
@@ -178,18 +186,6 @@ _BANNED_PATTERNS = {
         r"(?:chas|nagg?|bother|pester|hound)(?:e|ing|ping)?\b"
         r"|\bnot\s+(?:trying\s+)?to\s+(?:chase|nag|pester|hound|bother)\b",
         re.I),
-    # The determiner set covers possessives too: "your side of the org" is the
-    # same tell as "the data side", and a pattern anchored on "the" missed it.
-    # The bare "<possessive> side of" form needs no function noun, because
-    # "your side of the org" is already the team sense on its own.
-    "on the data side": re.compile(
-        r"\b(?:on|in|from|over on)\s+(?:the|your|our|their|his|her|its)\s+"
-        r"(?:[a-z-]+\s+(?:and\s+)?){0,2}(?:" + _SIDE_FUNCTION + r")\s+side\b"
-        r"|\b(?:the|your|our|their|his|her|its)\s+"
-        r"(?:[a-z-]+\s+(?:and\s+)?){0,2}(?:" + _SIDE_FUNCTION + r")\s+side\s+of\b"
-        r"|\b(?:your|our|their|his|her)\s+side\s+of\s+(?:the\s+)?"
-        r"(?:org|organisation|organization|business|company|house|team|shop|world|fence)\b",
-        re.I),
 }
 
 # Immigration status the profile does not support: networking.py's
@@ -201,16 +197,6 @@ _BANNED_PATTERNS = {
 # so it fails in the opening HR screen and takes the relationship with it.
 UNSUPPORTED_CLAIM = getattr(_NET, "UNSUPPORTED_STATUS", None) or re.compile(r"(?!x)x")
 
-# A typed em dash. Two or more hyphens between words is the same punctuation
-# mark by another route, and rule 1 of 03-writing-style.md names it that way.
-# Runs of three were missed while runs of two were caught, and a dash left
-# hanging off a word ("quality-- the rest") was missed as well, which are the
-# two forms a draft arrives in when the writer meant an em dash and the editor
-# did not convert it. The lookarounds keep a command-line flag out of it:
-# "--today" is preceded by a space and followed by a letter, which no
-# alternative matches.
-_TYPED_EM = re.compile(
-    r"(?<=\w)-{2,}(?=\w)|(?<=\w)-{2,}(?!\w)|(?<![-\w])-{2,}(?![-\w])")
 _LINE_BOUND = re.compile(r"\n")
 
 # Sentence splitting mirrors `render_application.SENT_SPLIT` rather than
@@ -220,10 +206,6 @@ _LINE_BOUND = re.compile(r"\n")
 _SENT_SPLIT = re.compile(
     r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\betc\.)(?<!\bInc\.)"
     r"(?<!\bLtd\.)(?<![A-Z]\.)(?<=[.!?])\s+")
-
-# Boundaries for locating the sentence a match sits in. Coarser than
-# _SENT_SPLIT on purpose: this one needs offsets, not tidy sentences.
-_SENT_BOUND = re.compile(r"[.!?\n]")
 
 _GREETING = re.compile(r"^(?:hi|hey|hello|dear|good (?:morning|afternoon|evening))\b", re.I)
 _SUBJECT = re.compile(r"^subject\s*:", re.I)
@@ -293,29 +275,6 @@ _MANUFACTURED = re.compile(
     r"|\bright\s+up\s+my\s+(?:street|alley)\b"
     r"|\bwe(?:'re|\u2019re| are)\s+basically\s+(?:the\s+same|doing\s+the\s+same)\b", re.I)
 
-
-# Canadian English keeps modelling, behaviour, centre and labour, so a blanket
-# "British spelling" rule would flag correct words. Only the forms Canadian (and
-# American) English does not keep are listed: the -ise/-isation family and two
-# British adverbs, applied when the profile's documents.spelling is canadian or
-# american. CV is separate and applies when the profile bans the word
-# (documents.banned_nouns), because then the document is a resume and the
-# filename has to say so too. The lookarounds rather than \b are there because
-# the filename is where it hides: <Name>_CV_<Employer>.pdf.
-# `analy` is split out and deliberately does NOT take the `es` ending.
-# "analyses" is the plural of the noun "analysis" in every variety of English,
-# including American, and it is core vocabulary for an analyst: "sensitivity
-# analyses" turns up in ordinary letters, and an early version of this rule
-# flagged each one as a British spelling. The British verb form that would be
-# a real finding ("the team analyses the data") is rarer in this corpus than
-# the noun by a wide margin, so the false positive costs more than the miss.
-_ISE = re.compile(
-    r"\b(?:organi|prioriti|optimi|recogni|speciali|standardi|summari|"
-    r"apologi|reali|utili|minimi|maximi|emphasi|customi|personali|categori|"
-    r"digiti|moderni|normali|visuali)s(?:e|es|ed|ing|ation|ations)\b"
-    r"|\banalys(?:e|ed|ing|ation|ations)\b", re.I)
-_BRITISH_WORDS = re.compile(r"\b(?:whilst|amongst|programmes?)\b", re.I)
-_CV = re.compile(r"(?<![A-Za-z])CV(?![A-Za-z])")
 
 # Register buckets, not job titles. The argument says how formal the surface
 # should be.
@@ -575,31 +534,8 @@ def _greeting_exempt(sents) -> set:
     return exempt
 
 
-def _separator_line(text, index) -> bool:
-    """Is the hyphen run at `index` a signature delimiter rather than a dash?
-
-    "-- " alone on a line is the email signature separator every mail client
-    writes, and flagging it told writers to delete punctuation they never typed.
-    A line that is nothing but hyphens is furniture, not a sentence.
-    """
-    start = text.rfind("\n", 0, index) + 1
-    end = text.find("\n", index)
-    line = text[start:end if end != -1 else len(text)].strip()
-    return bool(line) and set(line) == {"-"}
-
-
 def _dashes(text) -> list:
-    out = []
-    for i, ch in enumerate(text):
-        if ch == EM_DASH:
-            out.append(Violation("em_dash", _around(text, i)))
-        elif ch == EN_DASH:
-            out.append(Violation("en_dash", _around(text, i)))
-    for m in _TYPED_EM.finditer(text):
-        if _separator_line(text, m.start()):
-            continue
-        out.append(Violation("em_dash", _around(text, m.start())))
-    return out
+    return [Violation(rule, _around(text, i)) for rule, i in _LOCALE.dashes(text)]
 
 
 def _around(text, index, width=24) -> str:
@@ -607,40 +543,16 @@ def _around(text, index, width=24) -> str:
     return text[max(0, index - width):index + width].strip()
 
 
-def _sentence_around(text, index) -> str:
-    """The run of text between the nearest sentence boundaries either side.
-
-    By offset, not by searching for the phrase. Resolving the sentence by
-    looking up the matched words found whichever sentence used them first, so a
-    message that wrote the honest "at scale across 60M records" above the
-    padded "we also work at scale" cleared both on the first sentence's digit
-    and the padding shipped unflagged.
-    """
-    start = 0
-    for m in _SENT_BOUND.finditer(text, 0, index):
-        start = m.end()
-    end = _SENT_BOUND.search(text, index)
-    return text[start:end.start() if end else len(text)]
-
-
-def _at_scale_is_padding(text, match) -> bool:
-    """"At scale" earns its place only when the scale is stated.
-
-    "2.5M records at scale" is a fact with a number attached. "building pipelines
-    at scale" is the same sentence with the claim removed, which is why it reads
-    as filler. A digit anywhere in the sentence is the cheap, checkable proxy.
-    """
-    return not re.search(r"\d", _sentence_around(text, match.start()))
-
-
 def _banned(text) -> list:
-    out = []
-    for phrase, pattern in _BANNED_PATTERNS.items():
-        for m in pattern.finditer(text):
-            if phrase == "at scale" and not _at_scale_is_padding(text, m):
-                continue
-            out.append(Violation("banned_phrase", m.group(0)))
-    return out
+    # One violation per stretch of text: "leverage my" is the message rule's
+    # "leverage" and the shared "leverage my" at once.
+    found = [m for pattern in _MESSAGE_ONLY.values() for m in pattern.finditer(text)]
+    found += [m for _, m in voice_check.banned_phrases(text)]
+    kept = []
+    for m in found:
+        if not any(m.start() < k.end() and k.start() < m.end() for k in kept):
+            kept.append(m)
+    return [Violation("banned_phrase", m.group(0)) for m in kept]
 
 
 def _name_starts_sentence(text, name) -> list:
@@ -783,38 +695,23 @@ def _unsupported_claim(text) -> list:
             for m in UNSUPPORTED_CLAIM.finditer(text)]
 
 
-_IZE_SPELLING = _DOC.get("spelling", "") in ("canadian", "american")
-_BANS_CV = "CV" in _DOC.get("banned_nouns", [])
-
-
-def _noun_pattern(noun):
-    """A banned document noun as it shows up in a message. "resume" is also a
-    verb ("happy to resume the conversation"), so it counts only after a word
-    that makes it the document, or inside a filename (_Resume_)."""
-    if noun.upper() == "CV":
-        return None                          # _CV, reported as british_spelling
-    word = re.escape(noun).replace("e", "[eé]") if noun.lower() == "resume" else re.escape(noun)
-    return re.compile(
-        r"(?:\b(?:my|the|a|an|your|our|their|his|her|updated|attached|full|current)\s+|_)"
-        r"(?:%s)s?(?![A-Za-z])" % word, re.I)
-
-
-# Every word the market does not use for the document, not only "CV": a person
-# whose document is a CV bans "resume", and messages saying "my resume" passed.
-_BANNED_NOUNS = [p for p in (_noun_pattern(n) for n in _DOC.get("banned_nouns", [])) if p]
-
-
 def _british(text) -> list:
-    out = []
-    if _IZE_SPELLING:
-        out += [Violation("british_spelling", m.group(0)) for m in _ISE.finditer(text)]
-        out += [Violation("british_spelling", m.group(0)) for m in _BRITISH_WORDS.finditer(text)]
-    if _BANS_CV:
-        out += [Violation("british_spelling", _around(text, m.start(), 16))
-                for m in _CV.finditer(text)]
-    for rx in _BANNED_NOUNS:
-        out += [Violation("document_noun", _around(text, m.start(), 16))
-                for m in rx.finditer(text)]
+    """Another variety's spelling, and the document noun the market does not use.
+
+    Reported as the variety the form belongs to: "british_spelling" for "organise"
+    in a Canadian message, "american_spelling" for "behavior" in it or in a
+    British one. A name and a quotation keep their own spelling (locale_rules
+    says how each is told). "CV" where the profile bans it is reported as british_spelling, the
+    name it has always had. The other banned nouns are document_noun.
+    """
+    # "american_spelling" is not in RULES, and neither is "banned_character" from
+    # _dashes: a person's own suite pins RULES against a fixture per rule
+    # (profile/tests), and a name added there fails it until they write one.
+    out = [Violation(f"{variety}_spelling", m.group(0))
+           for variety, m in _LOCALE.wrong_spellings(text, theirs=True)]
+    for n in _LOCALE.nouns:
+        rule = "british_spelling" if n.word == "CV" else "document_noun"
+        out += [Violation(rule, _around(text, m.start(), 16)) for m in n.message.finditer(text)]
     return out
 
 

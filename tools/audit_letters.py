@@ -13,17 +13,19 @@ import docpaths
 import person
 import company_key
 import doc_name
+import locale_rules
 
 # The opening must name one of the candidate's employers: that is the
 # credential. It is matched as people write it (render_application's
 # EMPLOYER_NAMED: "Brindle & Hart" names Brindle & Hart Logistics), not as the
 # exact string in roles.py. The pronoun is the one the profile gives, for the
-# drafter-text check below. The banned nouns are the document word the market
-# does NOT use ("CV" where it is a resume, "resume" where it is a CV).
+# drafter-text check below. The banned nouns (the document word the market does
+# NOT use: "CV" where it is a resume, "resume" where it is a CV) and the banned
+# characters are the profile's, from tools/locale_rules.py, the copy the resume
+# and message checks read too.
 _EMPLOYERS = R.EMPLOYER_NAMED
 _POSS = re.escape(person.get("identity.pronouns.possessive", "their"))
-_NOUNS = [n for n in person.get("documents.banned_nouns", [])]
-_DASHES = person.get("documents.banned_characters", ["\u2014", "\u2013"])
+_LOCALE = locale_rules.LOCALE
 _SAL_PREFIX = person.get("documents.salutation_prefix", "Dear")
 _SAL_SUFFIX = R._SALUTATION_SUFFIX.strip()
 
@@ -112,6 +114,14 @@ def role_named(role, opening):
     return any(f"{words[i].lower()} {words[i+1].lower()}" in o for i in range(len(words) - 1))
 
 
+def page_flags(t):
+    """The locale rules on the letter's text layer: the banned nouns and dashes."""
+    flags = [f"says {n.word}" for n in _LOCALE.nouns if n.document.search(t)]
+    if _LOCALE.dashes(t):
+        flags.append("dash")
+    return flags
+
+
 def audit(a, batch=()):
     """The flags for one letter. `batch` is every draft rendered with it: two
     roles at one employer is the case where the letter must name its role."""
@@ -171,11 +181,7 @@ def audit(a, batch=()):
                      t, re.I)
     if meta:
         flags.append(f"DRAFTER TEXT ON PAGE: '{meta.group(0)}'")
-    for noun in _NOUNS:
-        if re.search(r"\b" + re.escape(noun) + r"\b", t):
-            flags.append(f"says {noun}")
-    if any(d in t for d in _DASHES):
-        flags.append("dash")
+    flags += page_flags(t)
     if re.search(r"\b(\w+(?: \w+){1,3}) \1\b", t):
         flags.append("doubled phrase in PDF")
     sal = re.search(re.escape(_SAL_PREFIX) + r"\s+(.+?)" + (re.escape(_SAL_SUFFIX)
