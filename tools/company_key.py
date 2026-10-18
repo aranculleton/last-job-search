@@ -61,7 +61,7 @@ TRAILING = re.compile(
     + r"north america|americas|usa|u\.?s\.?|uk|international|global|"
     r"financial group|financial corporation|financial services|financial|"
     r"insurance|concession|technologies|technology|software|solutions|"
-    r"services)$", re.I)
+    r"services|pension plan|pension fund)$", re.I)
 # "Bank of England", "Universite de Lyon": a preposition before the
 # qualifier means it is part of the name.
 KEEP_TRAILING = re.compile(r"\b(of|de|du|des|for)\s+\w+$", re.I)

@@ -105,7 +105,10 @@ section is what each tool is for and how to install it by hand.
 
 ### Python
 
-3.10 or newer. CI runs the suite on 3.10 and 3.13.
+3.9 or newer: a Mac's own `python3` (3.9.6, from Apple's command line tools) is
+enough. CI runs the suite on 3.9 and 3.13. `python3 tools/env_check.py` says which
+you have, and whether pytest and PyYAML are there (`pip3 install --user pytest pyyaml`,
+no password needed).
 
 ```bash
 python3 --version

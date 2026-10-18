@@ -591,7 +591,7 @@ def _stacked_thanks(text) -> list:
     spans = [(m.start(), m.end(), m.group(0)) for m in _THANKS.finditer(text)]
     # Deliberately offset by one: this walks adjacent pairs, so the
     # sequences differ in length by design and strict would be wrong.
-    for (_s1, e1, w1), (s2, _e2, w2) in zip(spans, spans[1:], strict=False):
+    for (_s1, e1, w1), (s2, _e2, w2) in zip(spans, spans[1:]):  # noqa: B905
         if s2 - e1 <= THANKS_WINDOW:
             return [Violation("stacked_thanks", f"{w1}, {w2}")]
     return []

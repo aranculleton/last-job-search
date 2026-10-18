@@ -388,10 +388,12 @@ def fit(a):
             break
         grown = _render_resume(a)
         if grown > PAGES:
-            # strict: snapshot is taken from a["jobs"], so a length
-            # mismatch is a bug, and silently dropping a job's bullets
-            # is the quiet kind that ships.
-            for j, b in zip(a["jobs"], snapshot, strict=True):
+            # snapshot is taken from a["jobs"], so a length mismatch is a
+            # bug, and silently dropping a job's bullets is the quiet kind
+            # that ships. Checked by hand: zip's strict keyword is Python 3.10+.
+            if len(a["jobs"]) != len(snapshot):
+                raise ValueError("fit_to_page: the bullet snapshot lost a job")
+            for j, b in zip(a["jobs"], snapshot):  # noqa: B905
                 j["bullets"] = b
             pages = _render_resume(a)   # the PDF on disk must match the draft
             break

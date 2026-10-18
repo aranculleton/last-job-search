@@ -14,10 +14,10 @@
 # only provides the machine. So it runs here, in under two minutes, and a
 # clean run is the same evidence.
 #
-# CI's second Python leg exists because a bare `import tomllib` passed locally
-# and failed on 3.10. That leg runs here too, the way CI runs it, on the
-# system python3.10 or one uv fetches, and is reported SKIP only where neither
-# exists.
+# CI's second Python leg runs the floor, 3.9 (a Mac's own python3): a bare
+# `import tomllib` once passed locally and failed there. That leg runs here too,
+# the way CI runs it, on the system python3.9 or one uv fetches, and is reported
+# SKIP only where neither exists.
 #
 # On a private repo this is CI: .github/workflows/ci.yml runs only on a public
 # repo (the app, whose minutes are free) or on a manual dispatch. What this cannot be is a second machine; the app's own CI is that,
@@ -119,28 +119,27 @@ fi
 
 echo
 echo "python floor"
-# CI's python-floor job, reproduced: a fresh 3.10 environment holding pytest and
-# nothing else, so an import that only the main environment happens to have is
-# caught as well as 3.11-only syntax. This file once said it could not catch
-# that class of thing at all, while the containers these sessions run in
-# shipped /usr/bin/python3.10.
-FLOOR_NAME="tests on Python 3.10 (CI's floor leg)"
-FLOOR_PY="$(command -v python3.10 || true)"
-# The containers later stopped shipping /usr/bin/python3.10, which left this
-# leg SKIP and the GitHub job the only thing that ran it. uv fetches a
-# standalone 3.10 in about three seconds, so this leg runs here too and a
-# private repo never needs a billed minute for it.
+# CI's python-floor job, reproduced: a fresh environment on the oldest Python the
+# app supports (tools/python_floor.py: 3.9, a Mac's own python3), holding pytest
+# and nothing else, so an import that only the main environment happens to have is
+# caught as well as syntax or a keyword newer than the floor. zip(strict=), a 3.10
+# keyword, crashed the merge driver and the message checks on a Mac's 3.9.6 before
+# this leg moved down to 3.9. uv fetches a standalone 3.9 in seconds where the
+# system has none, so a private repo never needs a billed minute for it.
+FLOOR_VERSION=3.9
+FLOOR_NAME="tests on Python $FLOOR_VERSION (CI's floor leg)"
+FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
 if [ -z "$FLOOR_PY" ] && command -v uv >/dev/null 2>&1; then
-  FLOOR_PY="$(uv python find 3.10 2>/dev/null || true)"
+  FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
   if [ -z "$FLOOR_PY" ]; then
-    uv python install 3.10 >/dev/null 2>&1 || true
-    FLOOR_PY="$(uv python find 3.10 2>/dev/null || true)"
+    uv python install $FLOOR_VERSION >/dev/null 2>&1 || true
+    FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
   fi
 fi
 if [ -z "$FLOOR_PY" ]; then
-  skip "$FLOOR_NAME" "no python3.10 here"
+  skip "$FLOOR_NAME" "no python$FLOOR_VERSION here, and no uv to fetch one"
 else
-  FLOOR_ENV="${TMPDIR:-/tmp}/ci_local_py310"
+  FLOOR_ENV="${TMPDIR:-/tmp}/ci_local_py${FLOOR_VERSION/./}"
   if ! "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
     rm -rf "$FLOOR_ENV"
     "$FLOOR_PY" -m venv "$FLOOR_ENV" >/dev/null 2>&1 \
@@ -152,7 +151,7 @@ else
       run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV/bin/python" -m pytest profile/tests -q -p no:cacheprovider
     fi
   else
-    skip "$FLOOR_NAME" "could not build a 3.10 venv with pytest (no venv module or no network)"
+    skip "$FLOOR_NAME" "could not build a $FLOOR_VERSION venv with pytest (no venv module or no network)"
   fi
 fi
 

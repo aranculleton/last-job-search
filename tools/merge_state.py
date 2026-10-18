@@ -28,7 +28,12 @@ import csv
 import io
 import json
 import os
+import platform
 import sys
+
+# The floor in tools/python_floor.py, inline: git runs this file on its own, from a
+# checkout where nothing else may be importable yet.
+FLOOR = (3, 9)
 
 # The key that says two rows are the same row. A file not named here is merged with
 # the whole row as its key, which suits a log: a row is only ever added.
@@ -84,7 +89,7 @@ def _read(text: str) -> tuple[list[str], list[dict]]:
     if not rows:
         return [], []
     head = rows[0]
-    return head, [dict(zip(head, (r + [""] * len(head))[:len(head)], strict=True))
+    return head, [dict(zip(head, (r + [""] * len(head))[:len(head)]))
                   for r in rows[1:] if r]
 
 
@@ -203,8 +208,11 @@ def merge_json(base, ours, theirs, path: str = "") -> tuple[object, list[str]]:
 # What git runs. Git runs a merge driver from the top of the working tree, so the path
 # is relative and each worktree runs its own copy; a checkout too old to have this file
 # merges lines the way git always did.
+# merge_state exits 0 or 1 when it merged; anything else (an old Python, a crash,
+# no python3 at all) and git's own line merge runs instead, which marks every
+# conflict in the file. The file is never left holding only this side's rows.
 DRIVER = ("if [ -f tools/merge_state.py ]; then python3 tools/merge_state.py %O %A %B %P; "
-          "else git merge-file %A %O %B; fi")
+          "rc=$?; if [ $rc -le 1 ]; then exit $rc; fi; fi; git merge-file %A %O %B")
 
 
 def install(root: str) -> None:
@@ -229,7 +237,19 @@ def merge(base: str, ours: str, theirs: str, path: str) -> tuple[str, list[str]]
     return merge_csv(base, ours, theirs, name)
 
 
+# Exit codes. 0 merged; 1 merged with real conflicts marked for a person. Anything
+# else means this driver could not merge at all and wrote nothing, and the driver
+# command (DRIVER) then runs git's own line merge, which marks every conflict: a
+# state file is never left as one side's copy with the other side's rows lost.
+COULD_NOT = 3
+
+
 def main(argv: list[str]) -> int:
+    if sys.version_info[:2] < FLOOR:
+        print(f"merge_state: Python {FLOOR[0]}.{FLOOR[1]} or newer is needed; this is "
+              f"{platform.python_version()} (python3 tools/env_check.py says how to install it)",
+              file=sys.stderr)
+        return COULD_NOT
     if len(argv) != 4:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2
@@ -239,7 +259,12 @@ def main(argv: list[str]) -> int:
         with open(p, encoding="utf-8", newline="") as f:
             return f.read()
 
-    text, problems = merge(read(base_p), read(ours_p), read(theirs_p), path)
+    try:
+        text, problems = merge(read(base_p), read(ours_p), read(theirs_p), path)
+    except Exception as e:  # noqa: BLE001  nothing is written; git's line merge takes over
+        print(f"merge_state: could not merge {path} ({type(e).__name__}: {e}); "
+              "git's line merge marks the conflicts instead", file=sys.stderr)
+        return COULD_NOT
     with open(ours_p, "w", encoding="utf-8", newline="") as f:
         f.write(text)
     for p in problems:

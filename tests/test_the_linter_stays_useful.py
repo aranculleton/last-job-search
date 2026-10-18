@@ -34,7 +34,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUG_RULES = {"E9", "F", "B"}
 
 # Read the one line this test cares about rather than importing a TOML parser.
-# `tomllib` is stdlib only from 3.11 and CI runs 3.10 through 3.14, so
+# `tomllib` is stdlib only from 3.11 and CI runs 3.9 through 3.13, so
 # importing it failed three tests on the oldest leg while passing locally. A
 # four-key config does not need a parser.
 _SELECT = re.compile(r"^select\s*=\s*\[(.*?)\]", re.M | re.S)
@@ -85,11 +85,27 @@ class TheRepoIsCleanAgainstIt(unittest.TestCase):
         self.assertEqual(0, r.returncode, r.stdout or r.stderr)
 
 
+def _stdlib_on_39(mod: str) -> bool:
+    """Python 3.9 has no sys.stdlib_module_names: a module the standard library ships."""
+    if hasattr(sys, "stdlib_module_names"):
+        return False
+    import importlib.util
+    import sysconfig
+    if mod in sys.builtin_module_names:
+        return True
+    try:
+        spec = importlib.util.find_spec(mod)
+    except (ImportError, ValueError):
+        return False
+    origin = (spec.origin or "") if spec else ""
+    return origin.startswith(sysconfig.get_paths()["stdlib"]) and "site-packages" not in origin
+
+
 class TheDependenciesAreWrittenDown(unittest.TestCase):
     def test_the_manifest_covers_every_third_party_import(self):
         import ast
         manifest = (ROOT / "requirements.txt").read_text(encoding="utf-8").lower()
-        std = set(sys.stdlib_module_names)
+        std = set(getattr(sys, "stdlib_module_names", ()))   # Python 3.10+
         sources = repo_files.files("tools/**/*.py", "templates/**/*.py")
         local = {p.stem for p in sources}
         local |= {"network"}
@@ -103,7 +119,7 @@ class TheDependenciesAreWrittenDown(unittest.TestCase):
                 elif isinstance(n, ast.ImportFrom) and n.module and n.level == 0:
                     third.add(n.module.split(".")[0])
         alias = {"yaml": "pyyaml"}
-        for mod in sorted(third - std - local):
+        for mod in sorted(m for m in third - std - local if not _stdlib_on_39(m)):
             with self.subTest(module=mod):
                 self.assertIn(alias.get(mod, mod), manifest,
                               f"{mod} is imported but not in requirements.txt")

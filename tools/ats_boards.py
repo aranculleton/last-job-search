@@ -817,7 +817,9 @@ def _wd_rows(employer: str, board: _Board, listing, today: dt.date):
                                 _posted_on(p.get("postedOn"), today)))
     failed = []
     details = _two_at_a_time(lambda p: board.body(p["externalPath"]), fetch)
-    for p, (detail, err) in zip(fetch, details, strict=True):
+    if len(details) != len(fetch):  # zip's strict keyword is Python 3.10+
+        raise ValueError("ats_boards: a Workday detail went missing")
+    for p, (detail, err) in zip(fetch, details):  # noqa: B905
         if err:
             failed.append(err)
             continue

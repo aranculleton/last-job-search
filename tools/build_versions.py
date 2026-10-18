@@ -86,8 +86,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-15", False, "employer boards date a posting by when it was first published, not last edited"),
             (6, "2026-10-15", False, "--find locates an employer's board from its name or careers page (through the vendored openroles), and Lever postings include their requirement lists"),
             (7, "2026-10-15", True, "Workday boards whose listing leaves the location out are read again: the place comes from each posting's path, so a board probed as '0 in range' for that reason now counts"),
+            (8, "2026-10-18", False, "Workday details read on Python 3.9, a Mac's own python3"),
         ),
-        "fingerprint": "45bd5c765f4f7afd",
+        "fingerprint": "f36efe43ba260b53",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -228,8 +229,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-17", False, "the runbook lists tools/network/reading.py among the tools run directly"),
             (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
             (12, "2026-10-17", False, "rulings name the blocker or gate they rest on (rank, the scraper skill); the day's sync carries the model check"),
+            (13, "2026-10-18", False, "fit_to_page runs on Python 3.9"),
         ),
-        "fingerprint": "f46677cb58132963",
+        "fingerprint": "21a95038ed685456",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -302,8 +304,9 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-17", False, "people found through the person's own source plan, ranked by why them, each note in the shape that suits them"),
             (17, "2026-10-17", False, "shared definitions: dates, places, recruiter test, ruled-out employers, employer names without a legal suffix, an application there and a route's clear reply rate in why-them"),
             (18, "2026-10-17", False, "alumni searches give every employer left a turn, the most recent leading and the rest taking turns a day at a time, and never search the current employer"),
+            (19, "2026-10-18", False, "message checks run on Python 3.9; a new contact-book column goes at the end of the header"),
         ),
-        "fingerprint": "a3f8b3735b5a3d33",
+        "fingerprint": "2a18d1196c7a7c20",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -351,8 +354,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-17", False, "one definition of a preference, an equivalence route and the years bar; rulings that lapse when the person's rules change (tools/exclude.py); places from one list"),
             (6, "2026-10-17", False, "a ruling in the person's own words is never lifted by a better screen or a scoring rule, only by them"),
             (7, "2026-10-17", False, "a ruling lapses only when the part of the rules it rests on changes; restamp keeps the ones that still hold"),
+            (8, "2026-10-18", False, "the text screen runs on Python 3.9; a pension plan's full and short names key as one employer"),
         ),
-        "fingerprint": "f54863ef5c132769",
+        "fingerprint": "578c5c0def157845",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -476,6 +480,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/fleet.py": "development tooling",
     "tools/score_eval.py": "development tooling",
     "tools/env_check.py": "sets up the container, which is new every session",
+    "tools/python_floor.py": "the oldest Python the app runs on; it leaves nothing behind",
     "tools/setup_env.sh": "sets up the container, which is new every session",
 }
 

@@ -221,10 +221,12 @@ A clean run is the evidence, and merging on it is allowed. Say in the PR that
 hand (Actions, CI, Run workflow) only when a SKIP matters for the change, and tick
 `latex` only when LaTeX changed. That is the one case worth a billed minute here.
 
-CI's second Python leg exists because a bare `import tomllib` passed locally and failed on
-3.10. `ci_local.sh` runs that leg the way CI does (a fresh 3.10 environment with pytest and
-nothing else), on the system `python3.10` or one `uv` fetches in seconds; the containers
-may not ship one. Only where neither exists is the leg reported SKIP, never
+CI's second Python leg runs the oldest Python the app supports, 3.9
+(`tools/python_floor.py`), because that is a Mac's own `python3`: a bare `import tomllib`
+once passed locally and failed there, and `zip(strict=)`, a 3.10 keyword, crashed the merge
+driver on a person's Mac. `ci_local.sh` runs that leg the way CI does (a fresh 3.9
+environment with pytest and nothing else), on the system `python3.9` or one `uv` fetches in
+seconds; the containers may not ship one. Only where neither exists is the leg reported SKIP, never
 passed silently. What a local run cannot be is a second machine; the app's own CI, which
 is free, is that for every change made there.
 
