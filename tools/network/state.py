@@ -176,14 +176,14 @@ def _write_csv(path: str, rows, columns) -> None:
     parent = os.path.dirname(os.path.abspath(path))
     if parent:
         os.makedirs(parent, exist_ok=True)
-    fields = list(columns)
-    seen = set(fields)
-    # Columns somebody added by hand keep their place after the schema ones.
-    # Dropping them here is how a spreadsheet edit gets silently reverted. Only
-    # columns already in the file's header count: a key a tool put on a row in
-    # memory (triage's `undated_signal`, `location_unverified`, a search
-    # snippet) is not a column, and taking every key as one wrote them into the
-    # contact book.
+    # The file's own header order, and a schema column it lacks goes on the END.
+    # Inserting a new column (found_via) in its schema place moved every later
+    # field of all 220 rows, one save rewrote the whole contact book, and two
+    # chats saving that day collided on every line. Columns somebody added by
+    # hand keep their place too: dropping them is how a spreadsheet edit gets
+    # silently reverted. Only columns already in the file's header count: a key
+    # a tool put on a row in memory (triage's `undated_signal`, a search
+    # snippet) is not a column.
     try:
         with open(path, newline="", encoding="utf-8") as f:
             first = f.readline()
@@ -191,10 +191,13 @@ def _write_csv(path: str, rows, columns) -> None:
             header = next(csv.reader(f), [])
     except OSError:
         first, header = "", []
-    for k in header:
-        if k and k not in seen:
-            seen.add(k)
-            fields.append(k)
+    fields = [k for k in dict.fromkeys(header) if k] or list(columns)
+    added = [c for c in columns if c not in fields]
+    if header and added:
+        # Once per file: after this save the header has them.
+        print(f"state: {os.path.basename(path)} gains column(s) {', '.join(added)}, added "
+              "at the end; every row keeps its other fields where they were", file=sys.stderr)
+    fields += added
     # Keep the file's own line ending. A book saved from a spreadsheet ends its
     # lines "\r\n"; rewriting every one as "\n" made one logged message a
     # whole-file change, and two chats that each logged a message collided on

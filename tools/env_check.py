@@ -99,6 +99,12 @@ def workday_url() -> str | None:
     return None
 
 
+def module_state(name: str) -> bool:
+    """Is a Python module importable here? Asked apart, like pypdf, so a broken one cannot crash this."""
+    return subprocess.run([sys.executable, "-c", f"import {name}"],
+                          capture_output=True, text=True).returncode == 0
+
+
 def pypdf_state() -> str:
     """'ok', 'missing' or 'broken'. Run apart, because a pyo3 panic kills the
     interpreter rather than raising."""
@@ -139,6 +145,16 @@ def main() -> int:
         print(f"  {name:28} {'ok' if ok else 'NO'}{'  ' + detail if detail else ''}")
 
     print("tools")
+    import python_floor
+    line(f"Python {python_floor.FLOOR[0]}.{python_floor.FLOOR[1]}+ (this is "
+         f"{sys.version_info[0]}.{sys.version_info[1]})", python_floor.ok(),
+         "" if python_floor.ok() else python_floor.how_to_install())
+    for module, package, why in (("pytest", "pytest", "the checks before a merge"),
+                                 ("yaml", "pyyaml", "the skills check")):
+        have = module_state(module)
+        fix = (f"missing; pip3 install {package}" if CLOUD
+               else f"missing; pip3 install --user {package} (no password needed)")
+        line(f"{package} ({why})", have, "" if have else fix)
     latex = [t for t in ("lualatex", "xelatex") if not shutil.which(t)]
     line("LaTeX (lualatex, xelatex)", not latex, "" if not latex else "missing; " + _install("latex"))
     line("pdftotext (Poppler)", bool(shutil.which("pdftotext")),

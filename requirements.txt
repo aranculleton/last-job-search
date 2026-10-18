@@ -1,6 +1,7 @@
 # What the Python side needs. Pinned to a floor rather than an exact version:
-# this is a private single-user repo, not a library, and CI runs 3.10 through
-# 3.14, so an exact pin would break on a version one of them cannot install.
+# this is a private single-user repo, not a library, and CI runs 3.9 (a Mac's own
+# python3) through 3.13, so an exact pin would break on a version one of them
+# cannot install.
 #
 # pypdf is the first of two text-layer extractors; the second is Poppler's
 # pdftotext, which is a system package and cannot live here.

@@ -20,6 +20,28 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The app runs on the Python a Mac already has.** A Mac's own `python3` is 3.9.6, and
+  five places used a keyword that arrived in 3.10. On a Mac that crashed the merge driver,
+  so a merge touching the contact book or the message log stopped with one side's copy in
+  the file, and it crashed the message checks and the text screen, so some hard cuts were
+  not applied. The app now runs on 3.9 and newer, and CI's second leg runs the whole suite
+  on 3.9, so this cannot return unseen. On an older Python every tool stops with one
+  sentence saying what to install. No profile upgrade: nothing to do in anyone's repo.
+- **A merge can no longer leave a state file holding only one side.** When the row-by-row
+  merge cannot run (an old Python, a crash, no `python3`), git's own line merge now runs
+  instead and marks the conflict in the file. The new driver line reaches every repo on
+  its next sync. No profile upgrade.
+- **`env_check.py` checks the Python version, pytest and PyYAML**, with the install line
+  for each (`pip3 install --user`, no password needed).
+- **A new contact-book column goes on the end.** The first save after an update put
+  `found_via` in the middle of the header, which rewrote all of a contact book's rows and
+  made two chats saving that day collide on every line. Now a new column is added at the
+  end, once, with a line saying so. No profile upgrade.
+- **A pension plan's full name and its short name are one employer** ("<Name> Teachers'
+  Pension Plan" and "<Name> Teachers'"), so the target list and the contact book agree.
+
 ## [3.2.5] - 2026-10-18
 
 ### Fixed

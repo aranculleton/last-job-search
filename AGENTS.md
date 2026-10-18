@@ -1,5 +1,5 @@
 ---
-framework_version: 2.2.0
+framework_version: 2.2.1
 ---
 
 # Agent guidelines
@@ -54,7 +54,7 @@ it now catches.
 
 | Layer | Path | Runs on |
 |---|---|---|
-| Ranking pipeline | `tools/` | Python 3.10+, no model tokens |
+| Ranking pipeline | `tools/` | Python 3.9+, no model tokens |
 | Portal search | `.agents/skills/*/cli/` | Bun, portable Agent Skills format |
 | Document generation | `tools/` + `templates/resume_gen.py` | Python, then lualatex / xelatex |
 | Verification | `tools/verify_batch.sh`, `check_claims.py`, `audit_letters.py` | bash and Python, then pdftotext |

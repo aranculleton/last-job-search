@@ -103,7 +103,7 @@ concurrency:
 #     and a merge run that cannot fail on anything it touched.
 #
 # In a private copy, `./tools/ci_local.sh` IS CI: every check here is a script
-# in this repo, it fetches Python 3.10 with uv when the container lacks it, and
+# in this repo, it fetches Python 3.9 with uv when the container lacks it, and
 # a clean run is the evidence a PR states. Dispatch this workflow by hand
 # (Actions tab, CI, Run workflow) only when ci_local.sh reports a SKIP that
 # matters for the change. Skipped jobs bill nothing.
@@ -273,11 +273,12 @@ jobs:
         run: python -m pytest profile/tests -q
 
   python-floor:
-    # The one leg that is worth a second machine. 3.10 caught a bare
-    # `import tomllib`, stdlib only from 3.11, that had passed locally and on
-    # every other leg. 3.11, 3.12 and 3.14 have never failed alone while both
+    # The one leg that is worth a second machine. It caught a bare `import
+    # tomllib`, stdlib only from 3.11, that had passed locally and on every other
+    # leg. It is 3.9, a Mac's own python3, since zip(strict=), a 3.10 keyword,
+    # crashed the merge driver on a person's Mac (tools/python_floor.py). 3.11, 3.12 and 3.14 have never failed alone while both
     # ends were green, and each cost a billed minute on every push.
-    name: Tests (Python 3.10, the supported floor)
+    name: Tests (Python 3.9, the supported floor)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -285,7 +286,7 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
-          python-version: "3.10"
+          python-version: "3.9"
       - run: pip install pytest
       - run: python -m pytest tests -q
       - if: hashFiles('profile/tests/conftest.py') != ''

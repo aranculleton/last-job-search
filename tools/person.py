@@ -40,6 +40,11 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import python_floor  # noqa: E402
+
+python_floor.require()
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = "LJS_PROFILE"
 DEFAULT = "profile"

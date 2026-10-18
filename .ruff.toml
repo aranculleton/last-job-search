@@ -12,7 +12,9 @@
 # late-binding closures in tools/network/state.py and two dead locals left
 # behind by an earlier dead-code removal.
 line-length = 100
-target-version = "py310"
+# Python 3.9 is the floor: it is what a Mac's own python3 is (3.9.6), so a person
+# needs no installer. At py39, ruff does not ask zip() for strict=, a 3.10 keyword.
+target-version = "py39"
 
 [lint]
 select = ["E9", "F", "B"]

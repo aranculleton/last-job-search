@@ -54,8 +54,16 @@ def test_superseded_ci_runs_are_cancelled():
     assert conc["cancel-in-progress"] is True
 
 
-def test_ci_local_finds_python_310_without_a_system_one():
-    # The cloud containers stopped shipping python3.10; uv installs one in
-    # seconds, which is what lets ci_local.sh stand in for the 3.10 leg.
+def test_ci_local_finds_the_floor_python_without_a_system_one():
+    # The cloud containers stopped shipping the floor Python; uv installs one in
+    # seconds, which is what lets ci_local.sh stand in for CI's floor leg. Both
+    # legs run the floor tools/python_floor.py names, so the three never drift.
+    import sys
+    sys.path.insert(0, str(ROOT / "tools"))
+    import python_floor
+    floor = "%d.%d" % python_floor.FLOOR
     text = (ROOT / "tools" / "ci_local.sh").read_text(encoding="utf-8")
-    assert "uv python find 3.10" in text and "uv python install 3.10" in text
+    assert f"FLOOR_VERSION={floor}" in text
+    assert "uv python find $FLOOR_VERSION" in text and "uv python install $FLOOR_VERSION" in text
+    job = _load("ci.yml")["jobs"]["python-floor"]
+    assert any(str((s.get("with") or {}).get("python-version")) == floor for s in job["steps"])
