@@ -18,11 +18,13 @@ LINKEDIN_PLAN = "premium"
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
 # where they copy the page when they open it to send the request.
 PROFILE_READS = "paste"
-# How many profiles a browser read opens: at most this many in an hour and in a day, with varied pauses between them. It is Morgan's own LinkedIn account
-# reading, so these stay at what a person prospecting by hand does; raising them
-# raises the chance LinkedIn restricts the account.
-PROFILE_READS_PER_HOUR = 30
-PROFILE_READS_PER_DAY = 80
+# How many profiles a browser read opens: at most this many in an hour and in a
+# day, with varied pauses between them, and never more in a day than the requests
+# Morgan can still send that day. It is Morgan's own LinkedIn account reading, and
+# LinkedIn's terms forbid automated access at any pace: these lower the risk of a
+# restriction and do not remove it, and raising them raises it.
+PROFILE_READS_PER_HOUR = 8
+PROFILE_READS_PER_DAY = 15
 
 # Research papers as a discovery source (tools/network/openalex.py): for a field
 # where the people worth meeting publish. Morgan's does not.
@@ -33,7 +35,7 @@ OPENALEX = False
 # in Manchester. Every run works down it, and the order moves by what draws replies.
 PEOPLE_SOURCES = (
     ("connections", ""),
-    ("alumni_employer", "Brindle & Hart Logistics: Morgan's longest role"),
+    ("alumni_employer", "Oakmere Foods and Saltmarsh Analytics, the employers Morgan has left"),
     ("alumni_school", "University of Leeds"),
     ("posting", "a named hiring manager on a shortlisted posting"),
     ("roster", "the regional supply-chain summit's speakers (ROSTERS above)"),

@@ -62,8 +62,12 @@ untouched employers from the latest round's shortlist.
      allows; take a name only with the employer and role beside it, and ask a roster for
      every speaker (`discovery.ROSTER_PROMPT`). **Then find their LinkedIn**:
      `sources.linkedin_check(name, company)` with `SEARCH_DOMAINS`, results only, and the
-     result's URL is their `linkedin_url`. With no profile found they can still be read
-     and reached by email or an introduction, never by a connection request.
+     result's URL is their `linkedin_url`. These kinds name people and do not link them
+     (`sources.py` prints them `[names only]`), so triage marks such a person `name_only`
+     and `why_them` ranks them down until a profile is found. With none found they can
+     still be read and reached by email or an introduction, never by a connection request.
+     A name on a page with a printed date older than a year is kept with `reverify` set:
+     check they still hold the role before writing.
    - **People they already know**: `state.connections_at()` on their connections export
      (`documents/linkedin/Connections.csv`). Without one, the `connections-export`
      upgrade asks once; this step never asks.
@@ -74,11 +78,20 @@ untouched employers from the latest round's shortlist.
      `browser`: `https://www.linkedin.com/company/<company>/people/?keywords=<their function>`,
      read like a profile, at a person's pace, nothing clicked.
 
-   Measured over five employers in one city (2026-10-17): title queries found mostly
-   individual contributors and managers, team pages and speaker lists mostly directors
-   and above. That is why the plan mixes kinds instead of running one. The search tool
-   sometimes declines a people query: never rephrase it to get round that; the next kind
-   in the plan carries the run.
+   Measured over five employers in one city (2026-10-17 and 18): title queries found
+   mostly individual contributors and managers, team pages and speaker lists mostly
+   directors and above. Searches into LinkedIn return mostly job listings (about four
+   results in five), and a third of the profiles they do return belong to people who have
+   since left; pages outside LinkedIn name people without a link, often from years ago.
+   Alumni searches found almost nobody, so the past employers are tried in the order
+   their alumni have replied, then by how recently the person left. That is why the plan
+   mixes kinds instead of running one. The search tool sometimes declines a people query:
+   never rephrase it to get round that; the next kind in the plan carries the run.
+
+   **When the searches the budget allows are spent and the batch is not full, stop and say
+   so**, with `sources.short_batch(found, wanted, tried, have_connections, browser)`: how
+   many it found of how many it could send, what each kind returned, and the ways to more
+   people that are the person's own. Never pad the batch with weaker names.
 
 4. **Triage with `discovery.triage()`.** It applies the disqualifiers, the
    staleness check and the tier classification. A result with no location is kept
@@ -119,10 +132,12 @@ untouched employers from the latest round's shortlist.
       `browser` (the desktop app's built-in browser, `mcp__Claude_Browser__*` or
       `mcp__remote-devices__Claude_Browser__*`), `chrome` (Claude in Chrome) or `enable`
       (`enable__mcp__remote-devices__Claude_Browser`). It reads where the session runs and
-      prints what to do and the one line, if any, to tell the person. Follow it: with
-      `enable`, call that tool yourself first; with no browser, ask once for the route it
-      names (screenshots on a phone, a paste on a computer). Never tell the person to press a
-      key, find a setting or open a panel.
+      prints which browser it will use, whether that browser is usable now, what to do and
+      the one line, if any, to tell the person. Follow it: with `enable`, call that tool
+      yourself first; `chrome` with no Chrome window connected is not usable, and neither is
+      a cloud session the desktop app has not lent a browser; with no usable browser, ask
+      once for the route it names (screenshots on a phone, a paste on a computer). Never
+      tell the person to press a key, find a setting or open a panel.
 
    1. **Public sources first, before LinkedIn is opened at all.** One WebSearch for
       `"<Full Name>" "<Company>"` with LinkedIn excluded, for a talk, an article, a
@@ -140,32 +155,52 @@ untouched employers from the latest round's shortlist.
       `profile/networking.py` `PROFILE_READS` is `"browser"` and a browser tool is there:
       Claude in Chrome, or the Claude desktop app's built-in browser, which a cloud session
       reaches too while it is linked to the person's computer and the app is open
-      (`mcp__remote-devices__Claude_Browser__*`; load the browser's skill first). If
-      LinkedIn answers with its sign-in page, that is the one thing only the person can do,
-      once: tell them LinkedIn's sign-in is open in the app's browser, and carry on when
-      they are in. Claude never types, sees or stores a password.
-      - **Before each profile**, `python3 tools/network/reading.py gate`. It answers `go`,
-        or `wait:` with how long (exit 3). It holds a varied gap of tens of seconds between
-        profiles, a longer break every few, and the caps in `profile/networking.py`:
-        `PROFILE_READS_PER_HOUR` an hour and `PROFILE_READS_PER_DAY`. Wait it out, or
-        stop the run and say how many are left for tomorrow. Never open two at once.
-      - **One pass per profile.** Open their `linkedin_url` in a new tab, read the whole
-        page text in one go, close the tab, and pipe the text to
-        `python3 tools/network/reading.py read <contact_id> - --source browser`. That one
-        read keeps everything a note and the send need: the current role and employer,
-        the location, the connection degree and whether Connect, Message, Follow or
-        Pending shows, About, recent activity and Featured. A reading less than
-        `reading.FRESH_DAYS` old is never read again in the browser; the tool refuses.
-      - **Stop at any wall.** A sign-in wall after they were signed in, a security or
-        identity check, a CAPTCHA, a warning about automated activity or an unusual page:
-        `reading.py stop "<what LinkedIn showed>"`, which halts browser reads for the day,
-        and tell the person what it showed. Never try to get past one.
+      (`mcp__remote-devices__Claude_Browser__*`; load the browser's skill first).
+      - **The first sign-in is a wait, never a stop.** The pane keeps its own sign-ins
+        across sessions, so this happens the first time and again only when LinkedIn signs
+        them out. When the first profile opens on LinkedIn's sign-in or join page (its
+        "authwall"), `reading.py read` says so, exits 4, and records nothing: it is not a
+        read, it counts against no cap and it writes no stop. Run `reading.py signin` and
+        do what it prints: open `https://www.linkedin.com/login` in the pane, say its one
+        sentence once, then every 20 seconds look only at the pane's address and title and
+        run `reading.py signin --url <address>` until it answers `signed-in`. LinkedIn
+        asking them to confirm it is them while they sign in is part of signing in: keep
+        waiting. After 5 minutes, ask once more: sign in now, or send a paste of each
+        profile instead. Claude never types in the sign-in page, reads it, or sees, stores
+        or asks for a password.
+      - **Read only the people a request goes to today.** A read is spent on someone the
+        person is about to write to, never on a list for later: `gate` caps the day's reads
+        at the connection requests still left today plus three for people a read rules out.
+      - **Before each profile**, `python3 tools/network/reading.py gate`. It answers `go`
+        with how long to stay on the page, or `wait:` with how long (exit 3). It holds a
+        varied gap between profiles (about a minute and a half, never under 45 seconds),
+        a longer break after a varying three to seven, and the caps in
+        `profile/networking.py`: `PROFILE_READS_PER_HOUR` (8 unless they set it) and
+        `PROFILE_READS_PER_DAY` (15). Wait it out, or stop the run and say how many are
+        left for tomorrow. Never open two at once.
+      - **One pass per profile.** Open their `linkedin_url` in a new tab, stay the time
+        `gate` gave, scrolling the same profile down to its end at reading pace so the
+        sections LinkedIn loads late (Experience, Education, Activity) are on the page,
+        clicking nothing, then read the whole page text once, close the tab, and pipe the
+        text to `python3 tools/network/reading.py read <contact_id> - --source browser`.
+        That one read keeps everything a note and the send need: the headline, the current
+        role and employer (the top card's employer when Experience did not load), the
+        location, the connection degree and whether Connect, Message, Follow or Pending
+        shows, About, recent activity and Featured. Comments they left on other people's
+        posts are skipped on purpose: a note built on one reads as watching them. A
+        reading less than `reading.FRESH_DAYS` old is never read again in the browser; the
+        tool refuses.
+      - **Stop at any check, and at a sign-in after sign-in.** A security or identity
+        check, a CAPTCHA, a warning about automated activity, or the sign-in page again
+        after they signed in today: `read` stops browser reads for the day itself and
+        says so; for anything else unusual, `reading.py stop "<what LinkedIn showed>"`.
+        Tell the person what it showed. Never try to get past one.
       - Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
         scroll into other people's profiles. It is the person's own account doing the
         reading. One at a time at a person's pace is how a person prospects, and a burst of
         page loads is what LinkedIn's automation checks look for. That pacing lowers the
-        risk; it does not remove it, and LinkedIn's terms forbid automated access whatever
-        the pace.
+        risk of a restriction on their account; it does not remove it, and LinkedIn's
+        terms forbid automated access whatever the pace. Never call this route safe.
       With the setting on and no browser tool in the session (a phone, the web), say once
       that profiles are read in the browser only when the session is linked to the desktop
       app on their computer, and ask for screenshots or a paste instead (4).
@@ -270,6 +305,11 @@ A note with no page read behind it says so on its own line: "Rests only on their
 and the search snippet. Paste their profile, attach its Save to PDF, or send screenshots
 of it from the LinkedIn app, and I'll make it about them." When the reads are in the browser, list who was read, who was skipped after the read and
 why, and say how many were read to fill the batch.
+
+Someone found by name only (no LinkedIn profile found) has no request drafted: say where
+they were named and that a request waits until their profile is found, or offer the email
+or introduction route. Someone named on an old page (`reverify`) says the page's date and
+that they may have moved on.
 
 Then, separately and honestly: **the dead ends**, with the reason for each. A
 company with no relevant presence in the target city is a real finding and saves the next

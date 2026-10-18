@@ -246,15 +246,24 @@ def test_a_pdf_export_gives_the_current_employer_too():
     assert _read(PDF, source="pdf")["current"] == "Fernhill Freight"
 
 
-def test_browser_reads_are_paced_like_a_person_prospecting():
-    # Well below the old 150 a day and an 8-second rhythm, which read as a loop,
-    # and never slower than a person writing to each: an hour and a day can each
-    # read what the request budget can send, so the reads never hold a run back.
+def test_browser_reads_are_paced_like_a_person_writing_to_a_few_people():
+    # A read is for someone sent to that day. The old 30 an hour and 80 a day read a
+    # week's requests in one sitting (a person's whole weekly allowance in a day),
+    # which a person writing each note by hand would never do.
     import schema
-    assert reading.READS_PER_DAY <= 100 and reading.READS_PER_HOUR <= 40
-    assert reading.READS_PER_HOUR >= schema.LIMITS["connections_per_day"]
-    assert reading.READS_PER_DAY >= schema.LIMITS["connections_per_week"]
-    assert reading.GAP_SECONDS[0] >= 20 and reading.BREAK_SECONDS[0] >= 120
+    assert reading.READS_PER_DAY <= 20 and reading.READS_PER_HOUR <= 10
+    assert reading.READS_PER_DAY <= schema.LIMITS["connections_per_day"] + reading.SKIP_SPARE
+    assert reading.GAP_SECONDS[0] >= 40 and reading.BREAK_SECONDS[0] >= 180
+    assert reading.DWELL_SECONDS[0] >= 20
+
+
+def test_a_day_reads_no_more_than_it_can_send(tmp_path, monkeypatch):
+    now = datetime.datetime(2026, 10, 17, 15, 0, 0)
+    _browse(tmp_path, monkeypatch, [now.replace(hour=9) + datetime.timedelta(minutes=20 * i)
+                                    for i in range(5)])
+    assert reading.browser_gate(now, sends_left=10) == ""
+    held = reading.browser_gate(now, sends_left=2)          # 5 read, 2 left to send, 3 spare
+    assert "read only for someone sent to that day" in held
 
 
 def test_a_week_of_requests_is_never_sent_in_one_day():
@@ -297,15 +306,34 @@ def test_a_warning_from_linkedin_ends_the_days_reads(tmp_path, monkeypatch):
     assert reading.browser_gate(datetime.datetime(2026, 10, 18, 12)) == ""
 
 
-def test_the_pause_varies_and_every_few_reads_is_a_longer_break(tmp_path, monkeypatch):
+def test_the_pause_varies_and_the_long_break_never_lands_on_a_fixed_count():
+    # The pause was an even 25 to 75 seconds and the long break came on exactly every
+    # fifth read: a rhythm, which is what automation checks look for.
     import random
-    _browse(tmp_path, monkeypatch, [])
-    gaps = {reading.next_gap(random.Random(i)) for i in range(20)}
-    assert len(gaps) > 5 and all(reading.GAP_SECONDS[0] <= g <= reading.GAP_SECONDS[1] for g in gaps)
-    now = datetime.datetime.now()
-    _browse(tmp_path, monkeypatch, [now - datetime.timedelta(minutes=i + 1)
-                                    for i in range(reading.BREAK_EVERY - 1)])
-    assert reading.next_gap(random.Random(1)) >= reading.BREAK_SECONDS[0]
+    gaps = [reading.next_gap(random.Random(i), reads=[]) for i in range(60)]
+    assert len(set(gaps)) > 20
+    assert all(reading.GAP_SECONDS[0] <= g <= reading.GAP_SECONDS[1] for g in gaps)
+    assert sorted(gaps)[len(gaps) // 2] >= 60               # most near a minute and a half
+    t = datetime.datetime(2026, 10, 17, 9)
+    where = set()
+    for seed in range(40):
+        rng, reads = random.Random(seed), []
+        for n in range(1, 12):
+            gap = reading.next_gap(rng, reads=reads)
+            reads.append((t, gap))
+            if gap >= reading.BREAK_SECONDS[0]:
+                where.add(n)
+                break
+        else:
+            raise AssertionError("no long break in eleven reads")
+    assert len(where) >= 3 and max(where) <= reading.BREAK_AFTER[1]
+    # An ordinary gap at its longest is never taken for a break, which would restart
+    # the count and push the real break later.
+    assert reading.BREAK_SECONDS[0] > reading.GAP_SECONDS[1]
+    longest = [(t, reading.GAP_SECONDS[1])] * (reading.BREAK_AFTER[1] - 1)
+    assert reading.next_gap(random.Random(0), reads=longest) >= reading.BREAK_SECONDS[0]
+    assert all(reading.DWELL_SECONDS[0] <= reading.dwell(random.Random(s)) <= reading.DWELL_SECONDS[1]
+               for s in range(10))
 
 
 def test_the_profile_says_whether_they_can_be_reached_without_clicking_anything():
@@ -357,13 +385,22 @@ def test_where_the_session_runs_is_read_from_its_environment():
 
 
 def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anything():
-    r = reading.route(["browser"], "browser", CLOUD_DESKTOP)
-    assert r["route"] == "browser" and r["say"] == ""          # automatic, nothing to say
+    # It says which browser, whether it can be used, and the sign-in step the first time.
+    r = reading.route(["browser"], "browser", LOCAL, signed_in=False)
+    assert r["route"] == "browser" and r["usable"] and "browser pane in the Claude desktop app" in r["say"]
+    assert "sign in yourself, once" in r["say"] and r["signin"]
+    assert "sign in" not in reading.route(["browser"], "browser", LOCAL, signed_in=True)["say"]
+    assert "while the app is open" in reading.route(["browser"], "browser", CLOUD_DESKTOP,
+                                                    signed_in=True)["say"]
     assert reading.route(["enable"], "browser", CLOUD_DESKTOP)["route"] == "enable"
+    # Claude in Chrome installed with no Chrome window connected is not a browser.
+    off = reading.route(["chrome-off"], "browser", LOCAL)
+    assert off["route"] == "hand" and not off["usable"] and "no Chrome window is connected" in off["say"]
+    assert reading.route(["chrome-off", "browser"], "browser", LOCAL)["route"] == "browser"
     phone = reading.route([], "browser", CLOUD_PHONE)
     assert phone["route"] == "hand" and "screenshots" in phone["say"] and "phone" in phone["say"]
     desk = reading.route([], "browser", CLOUD_DESKTOP)
-    assert "desktop app has not given it a browser" in desk["say"]
+    assert "desktop app has not lent it a browser" in desk["say"]
     assert reading.route([], "paste", CLOUD_PHONE)["say"].startswith("Send screenshots")
     assert reading.route(["browser"], "off", LOCAL)["route"] == "public"
     for r in (phone, desk, reading.route([], "paste", LOCAL)):

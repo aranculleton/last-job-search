@@ -41,6 +41,44 @@ make sense to somebody whose repo just received it.
   end, once, with a line saying so. No profile upgrade.
 - **A pension plan's full name and its short name are one employer** ("<Name> Teachers'
   Pension Plan" and "<Name> Teachers'"), so the target list and the contact book agree.
+- **LinkedIn's first sign-in in the browser pane is a wait, not a stop.** A profile that
+  opened on LinkedIn's sign-in or join page used to read as a failed profile. Now Claude
+  opens LinkedIn's sign-in page in the pane, says one sentence, and waits, looking only at
+  the pane's address, for five minutes before asking once more; nothing is counted against
+  the day's reads and nothing is stopped. The pane keeps the sign-in after that. A security
+  check, or the sign-in page again after signing in that day, still stops reads for the day.
+  `reading.py route` now says which browser it will use and whether it can be used now
+  (Claude in Chrome with no Chrome window connected cannot). No profile upgrade.
+- **A profile read keeps the headline and the employer on the top card.** The headline was
+  taken from the wrong line, and when LinkedIn had not loaded Experience the read had no
+  current employer at all. The headline and current role now ground a note, an About is
+  clipped like the rest, and a press item older than the posts window no longer does.
+  Grounding ignored words that started with a capital letter; it no longer does. Existing
+  readings are not re-read. No profile upgrade.
+- **A read skips someone your location rules rule out**, and says to check where they work
+  when they are somewhere your search does not name, rather than skipping them.
+- **`reading.py stop --reason "<words>"` works**, as well as `stop "<words>"`.
+- **Someone found by name only is marked.** Team pages, press and rosters name people without
+  a LinkedIn link; they are now marked `name_only` and ranked down until a profile is found,
+  and a name on a page more than a year old is marked to re-check. Why-them uses the headline
+  read from their page over an older title in the contact book.
+- **A run that cannot fill its batch says so** (`sources.short_batch`): how many it found,
+  what each kind of search returned, and the ways to more people, never weaker names.
+- **Alumni searches go in the order your alumni have replied**, then by how recently you
+  left. The plan's alumni description named the employer people work at now, which is never
+  searched. Profile upgrade: alumni-text (Claude rewrites that one description in the
+  background).
+
+### Changed
+
+- **Browser reads are paced like a person writing to a few people.** The defaults are 8
+  profiles an hour and 15 a day (from 30 and 80), and a day never reads more than the
+  connection requests it can still send that day, plus three for people a read rules out.
+  The gap between profiles varies around a minute and a half, a longer break comes after a
+  varying three to seven, and each page is scrolled to its end at reading pace before it is
+  read. A profile that sets its own numbers keeps them. This lowers the risk of a
+  restriction on the account; it does not remove it, and LinkedIn's terms forbid automated
+  access at any pace.
 
 ## [3.2.5] - 2026-10-18
 

@@ -360,22 +360,51 @@ def for_run(rows=None) -> list:
     return _round_robin(lists, SEARCHES_PER_RUN)
 
 
-def _past_employers() -> list:
-    """The employers they have left, most recently left first.
+def _past_employers(contacts=None) -> list:
+    """The employers they have left: the one whose alumni have replied most first,
+    then the most recently left.
 
     Never the one they work at now: people there are colleagues, not alumni, and
     a job search is often kept from the current employer. A role whose end the
-    profile does not date keeps its place after the dated ones.
+    profile does not date keeps its place after the dated ones. Replies are counted
+    from the contact book: alumni contacts whose route names that employer and who
+    have answered (throttle.RESPONDED), so a past employer whose people answer is
+    searched every run, not every other day.
     """
     import reading
     h = reading.history()
-    past = [names[0] for names in h["employers"] if names[0] not in h["current"]]
+    names = {n[0]: n for n in h["employers"] if n[0] not in h["current"]}
     ended = h["ended"]
-    return sorted(past, key=lambda n: (ended.get(n) is None,
-                                       -(ended[n].toordinal() if ended.get(n) else 0)))
+    replied = _alumni_replies(names, contacts)
+    return sorted(names, key=lambda n: (-replied.get(n, 0), ended.get(n) is None,
+                                        -(ended[n].toordinal() if ended.get(n) else 0)))
 
 
-def _alumni_order(today: datetime.date | None = None) -> list:
+def _alumni_replies(employers: dict, contacts=None) -> dict:
+    """{employer: how many of its alumni in the contact book have replied}."""
+    import reading
+    import throttle
+    if contacts is None:
+        try:
+            import state
+            contacts = state.load_contacts()
+        except Exception:  # noqa: BLE001  no book yet: recency alone orders them
+            contacts = []
+    out: dict[str, int] = {}
+    for c in contacts or ():
+        if not str(c.get("route") or "").startswith("alumni_employer"):
+            continue
+        if str(c.get("status") or "") not in throttle.RESPONDED:
+            continue
+        detail = str(c.get("route_detail") or "")
+        for first, aka in employers.items():
+            if any(reading._has(a, detail) for a in aka):
+                out[first] = out.get(first, 0) + 1
+                break
+    return out
+
+
+def _alumni_order(today: datetime.date | None = None, contacts=None) -> list:
     """The employers they have left, in the order a run searches them.
 
     The one most recently left always goes first. The rest take turns behind it, one
@@ -383,7 +412,7 @@ def _alumni_order(today: datetime.date | None = None) -> list:
     a run has room for only a few, so the same two searched every run would leave an
     older employer's alumni never searched at all.
     """
-    past = _past_employers()
+    past = _past_employers(contacts)
     if len(past) < 3:
         return past
     rest = past[1:]
@@ -419,7 +448,7 @@ def main(argv: list | None = None) -> int:
         return 0
     print("once for the run:")
     for kind, how, what in for_run(rows):
-        print(f"  {kind} ({how}): {what}")
+        print(f"  {kind} ({how}): {what}{_NAMES_ONLY if not KINDS[kind].linkedin else ''}")
     for company in argv:
         why = ruled_out(company)
         if why:
@@ -427,8 +456,41 @@ def main(argv: list | None = None) -> int:
             continue
         print(f"for {company}:")
         for kind, q in for_company(company, rows):
-            print(f"  {kind}: {q}")
+            print(f"  {kind}: {q}{_NAMES_ONLY if not KINDS[kind].linkedin else ''}")
     return 0
+
+
+# Which kinds can produce someone a request can go to. A LinkedIn result carries
+# their profile's address; every other kind (press, team pages, speaker lists)
+# names a person, and that name has to be found on LinkedIn before any request:
+# sources.linkedin_check, or the person's own search in their browser.
+_NAMES_ONLY = "  [names only: find each on LinkedIn before a request]"
+
+
+def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = False,
+                browser: bool = False) -> str:
+    """What to say when the run's searches are spent and the batch is not full.
+
+    Never padded with weaker names. `tried` is {kind: people worth writing to it
+    found}. The ways to more people are the person's own: the people they already
+    know (their connections export), the People tab of each employer in their own
+    browser, or names they know of.
+    """
+    if found >= wanted:
+        return ""
+    parts = ", ".join(f"{KINDS[k].label if k in KINDS else k} {n}" for k, n in tried.items())
+    more = []
+    if not have_connections:
+        more.append("your LinkedIn connections (LinkedIn sends the export by email in "
+                    "about ten minutes: Settings, Data privacy, Get a copy of your data, "
+                    "Connections), so I start from people you already know")
+    if browser:
+        more.append("each employer's People tab, read in your own browser at the same pace "
+                    "as profiles")
+    more.append("names of anyone you know of there, and I'll read and write to them")
+    return (f"I found {found} of the {wanted} people this run could write to, and stopped "
+            f"rather than pad the list. What I tried: {parts or 'nothing returned'}. To find "
+            f"more: " + "; or ".join(more) + ".")
 
 
 if __name__ == "__main__":
