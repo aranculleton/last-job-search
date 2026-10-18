@@ -36,6 +36,15 @@ fails: no remote, or not a git checkout). Then decide which of these it is.
 
 - **Private.** Carry on.
 
+**Then ask where they will mostly work, before anything else is asked.** Print the words
+with `python3 tools/place.py ask` and ask in them: the question, the two-sentence trade-off
+and the recommendation, nothing more, and no word like "local", "cloud" or "session". Then
+give the one line `python3 tools/place.py next --works-on computer|phone|both` prints for
+their answer: the exact next step for where this chat runs. When it says to close this chat
+(they chose the computer and this chat is not on it), stop here and write nothing; the
+setup starts again in the desktop app, where the question is asked once more. Otherwise
+carry on, and record the answer when the profile is written (Step 3.1).
+
 **Then check this session can do the whole job, and say so now, not at the end.** A setting
 changed in the cloud environment applies only to the next session, so a person told at the
 end has to come back; told now, they can change it while you work and use it next time.
@@ -232,7 +241,8 @@ nouns, spelling, paper, date format, headings, sign-off), from Steps 1 and 2. Th
 printed on the resume's paper unless `documents.letter_paper` says otherwise. Also, from their
 market and level: `resume_pages` (1 unless their market or a long career expects 2),
 `section_order` (a recent graduate often leads with education), and, for a letter in
-another language, `salutation_prefix` and `page_label`.
+another language, `salutation_prefix` and `page_label`. Then record where they said they
+will mostly work, from Step 0: `python3 tools/place.py record computer|phone|both`.
 <!-- /section -->
 
 <!-- section: history -->

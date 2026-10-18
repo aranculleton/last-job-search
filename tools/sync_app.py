@@ -9,6 +9,7 @@ files but not history. This fetches the app and merges its new commits:
     python3 tools/sync_app.py --adopt    # once, for the repo the app was first built from
     python3 tools/sync_app.py --if-stale # the day's first check: master, then the app; else nothing
     ... --on "<model>"                   # with either: the day's model check after the sync
+    ... --tools "<browser,chrome,enable or none>"   # the place check, said once per chat
 
 The rules, enforced here rather than remembered:
 
@@ -499,6 +500,9 @@ def main(argv: list[str]) -> int:
                       help="master, then the app, unless today's check already ran")
     ap.add_argument("--on", default="", metavar="MODEL",
                     help="the model this session runs on: the day's work is checked against it")
+    ap.add_argument("--tools", default=None, metavar="LIST",
+                    help="the browser tools this chat has (browser, chrome, chrome-off, enable, "
+                         "none): the place check says what to do once per chat")
     a = ap.parse_args(argv)
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
@@ -506,6 +510,7 @@ def main(argv: list[str]) -> int:
     if a.if_stale:
         if not stale():
             print("sync_app: already checked today.")
+            place_check(a.tools)    # a new chat on a day already checked still hears it once
             return 0
         if _dirty():
             return sync()  # prints what is uncommitted and stops, changing nothing
@@ -530,7 +535,30 @@ def main(argv: list[str]) -> int:
         _record_check()
         upgrades("--after-sync")
         model_check(a.on)
+        place_check(a.tools)
     return rc
+
+
+def place_check(tools: str | None) -> None:
+    """Is this chat the right place for what the person set up (tools/place.py)?
+
+    Said once per chat, whatever chat it is: run as its own process from the file
+    the merge just brought in, like the model check, so it reaches a chat whose
+    instructions were loaded before it existed. Never changes a setting.
+    """
+    script = os.path.join(ROOT, "tools", "place.py")
+    if not os.path.isfile(script) or not os.path.isdir(os.path.join(ROOT, "profile")):
+        return
+    argv = [sys.executable, script, "check", "--once"]
+    if tools is not None:
+        argv += ["--tools", tools]
+    try:
+        r = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=60)
+        out = (r.stdout or "").strip()
+        if out and not out.startswith("place: this chat is the right place"):
+            print(out)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def model_check(on: str) -> None:

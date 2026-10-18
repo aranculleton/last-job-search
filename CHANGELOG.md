@@ -20,6 +20,20 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **A chat says once when it is the wrong place for your settings, and where to go.** If you
+  chose to have profiles read in your own browser and a chat cannot reach it, the chat says
+  so once, at the end of its reply. A cloud chat in the desktop app says: close this chat,
+  open the Claude desktop app, click the Code tab, choose your folder, or say "paste". A phone
+  or the web says to send screenshots or a paste. A chat on your computer lists anything
+  missing, one command each, marked where it asks for your password. It offers the choice and
+  never makes it, and it changes no setting. It runs with every sync, so it reaches chats
+  already open.
+- **Setting up asks where you will mostly work**, a computer or a phone or the web, with the
+  trade-off in two sentences and a recommendation, and gives the exact next step. Profile
+  upgrade: work-place (asked once, with the session's other questions).
+
 ### Fixed
 
 - **The app runs on the Python a Mac already has.** A Mac's own `python3` is 3.9.6, and
@@ -58,6 +72,16 @@ make sense to somebody whose repo just received it.
 - **A read skips someone your location rules rule out**, and says to check where they work
   when they are somewhere your search does not name, rather than skipping them.
 - **`reading.py stop --reason "<words>"` works**, as well as `stop "<words>"`.
+- **"Set up my brief" never makes a second brief.** An existing one is found by your registry
+  or by its own stored prompt, never its title, so a brief called "Job search: brief (Mon and
+  Thu)" is found as surely as one called "morning brief" (`routines.py brief`). From your
+  computer it says the brief runs in the cloud and needs nothing there, and it never makes a
+  desktop task, which would run only while the app is open. `claude --cloud` is used only
+  where the terminal version is installed: the desktop app alone may not provide it.
+- **Work done on your own computer reaches GitHub.** A chat there has no GitHub tools, so it
+  works on a branch, merges master in first (so the tracker and contact book merge row by row
+  on your computer), and lands it with `gh pr create` and `gh pr merge`. The setup check
+  lists `gh` and its sign-in when they are missing.
 - **Someone found by name only is marked.** Team pages, press and rosters name people without
   a LinkedIn link; they are now marked `name_only` and ranked down until a profile is found,
   and a name on a page more than a year old is marked to re-check. Why-them uses the headline

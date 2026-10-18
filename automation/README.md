@@ -31,11 +31,16 @@ Only two set-ups work reliably, and they trade the same thing: where the briefin
 Both run on **your private repo**, never on the public app: a chat on the app holds none of
 your state, and anything it pushed would be public.
 
-**From your own computer.** Ask a local session to set up the brief. A local session cannot
-create a cloud task directly, so it starts a cloud chat with `claude --cloud "<the paste in
-(a) step 2>"` on your private repo, and that chat does (a). The desktop app's Routines screen
-also does (b): choose **Cloud**, since a local task runs only while the app is open and the
-computer awake. `/schedule` in a local terminal session makes the same cloud routine.
+**From your own computer.** Say "set up my brief" there too. Claude first checks whether a
+brief already exists (`python3 tools/routines.py brief`), by your registry or a task's own
+prompt and never its title, so a second is never made. The brief always runs in the cloud,
+so it arrives when your computer is off. Where the terminal version of Claude Code is
+installed, Claude starts the brief's cloud chat itself with `claude --cloud "<the paste in (a)
+step 2>"`, and that chat does (a); the desktop app alone may not provide that command, and
+then Claude gives you the paste for a new chat at claude.ai/code. The desktop app's Routines
+screen does (b): New routine, then **Cloud**. Never **Local**: a local task runs only while
+the app is open and the computer awake. `/schedule` typed in a chat on your computer makes
+the same cloud routine.
 
 ### The prompt each task stores
 

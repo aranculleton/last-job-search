@@ -135,6 +135,82 @@ def _install(what: str) -> str:
     return "install it once (SETUP.md, Local machine)"
 
 
+BREW = ('/bin/bash -c "$(curl -fsSL '
+        'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"')
+
+
+def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
+                gh_signed_in=None) -> list:
+    """What this computer is missing, as [(what, the one command, whose)].
+
+    The person's own computer, never a cloud session: one list, one exact command
+    each. `whose` is "" where Claude runs it itself, "password" where it asks for the
+    computer's password and "sign-in" where the person signs in themselves, because
+    those two are the person's to run. Every argument is injectable so each machine
+    can be tested from any other.
+    """
+    import python_floor
+    system = system or sys.platform
+    have = have or shutil.which
+    module = module or module_state
+    py_ok = python_floor.ok() if py_ok is None else py_ok
+    pypdf = pypdf or pypdf_state()
+    mac, win = system == "darwin", system.startswith("win")
+    pip = "python -m pip install --user" if win else "pip3 install --user"
+    out = []
+    if not py_ok:
+        cmd = ("xcode-select --install" if mac else "winget install Python.Python.3.12" if win
+               else "sudo apt-get install -y python3")
+        out.append(("Python 3.9 or newer", cmd, "" if win else "password"))
+    for mod, package in (("pytest", "pytest"), ("yaml", "pyyaml")):
+        if not module(mod):
+            out.append((package, f"{pip} {package}", ""))
+    if pypdf != "ok":
+        out.append(("pypdf", f"{pip} --upgrade cffi" if pypdf == "broken" else f"{pip} pypdf",
+                    ""))
+    latex = not (have("lualatex") and have("xelatex"))
+    poppler, bun, gh = not have("pdftotext"), not have("bun"), not have("gh")
+    if mac:
+        if (latex or poppler or gh) and not have("brew"):
+            out.append(("Homebrew (installs what follows)", BREW, "password"))
+        if latex:
+            out.append(("LaTeX, to make the PDFs", "brew install --cask mactex-no-gui", "password"))
+        if poppler:
+            out.append(("Poppler, to check the PDFs", "brew install poppler", ""))
+    elif win:
+        if latex:
+            out.append(("LaTeX, to make the PDFs",
+                        "winget install MiKTeX.MiKTeX (or the installer at https://miktex.org/download)",
+                        "password"))
+        if poppler:
+            out.append(("Poppler, to check the PDFs", "winget install oschwartz10612.Poppler", "password"))
+    elif latex or poppler:
+        out.append(("LaTeX and Poppler, for the PDFs", "./tools/setup_env.sh", "password"))
+    if bun:
+        out.append(("Bun, for the job searches",
+                    'powershell -c "irm bun.sh/install.ps1 | iex"' if win
+                    else "curl -fsSL https://bun.sh/install | bash", ""))
+    # A chat on a computer has no GitHub tools of its own: `gh` is how its work
+    # reaches GitHub, where the other chats and the brief read it.
+    if gh:
+        out.append(("GitHub's command line, so your work reaches GitHub",
+                    "brew install gh" if mac else "winget install GitHub.cli" if win
+                    else "sudo apt-get install -y gh", "password" if not (mac or win) else ""))
+    if gh or gh_signed_in is False or (gh_signed_in is None and not _gh_signed_in(have)):
+        out.append(("GitHub sign-in for it", "gh auth login", "sign-in"))
+    return out
+
+
+def _gh_signed_in(have) -> bool:
+    if not have("gh"):
+        return False
+    try:
+        return subprocess.run(["gh", "auth", "status"], capture_output=True, text=True,
+                              timeout=20).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def main() -> int:
     bad = 0
     print("where: " + ("a cloud session" if CLOUD else "this computer"))

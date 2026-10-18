@@ -32,6 +32,17 @@ repositories** and pick the copy you just made.
 
 ## 3. Open it in Claude Code
 
+First, one question: **will you mostly work on a computer, or on your phone or the web?**
+On a computer, in the Claude desktop app, Claude can read people's LinkedIn profiles in the
+app's own browser and your files sit on your disk; a few free tools go on once, and one or
+two ask for your computer's password. On a phone or the web nothing is installed and it
+works anywhere, but you send a screenshot or a paste of each profile you want read. If you
+have a computer you can use for this, choose the computer: it does more for you.
+
+- **A computer:** go to [On your own computer](#on-your-own-computer) below now, and skip
+  the rest of this step.
+- **A phone or the web:** carry on here.
+
 Go to [claude.ai/code](https://claude.ai/code), start a new session, and choose your copy as
 the repository.
 
@@ -54,9 +65,6 @@ cloud environment menu in the session's title bar and click **Edit**:
 
 Save, and start a new session so the settings apply. If you skip this, Claude can still
 help, but it will stop and say what is missing the first time it needs it.
-
-Would rather run it on your own computer? Steps 1 and 2 are the same; then go to
-[On your own computer](#on-your-own-computer) below.
 
 ## 4. Say "set me up"
 
@@ -105,35 +113,47 @@ sets it up ([automation/README.md](automation/README.md)).
 
 ## On your own computer
 
-Everything works the same in the Claude desktop app's Code tab or the `claude` command in a
-terminal, with your copy on your own disk. The brief still runs in the cloud, so it arrives
-when your computer is off. Signed in with an Anthropic API key instead of a plan, everything
-works except the brief: scheduled tasks and cloud chats need a paid plan.
+Everything works the same in the Claude desktop app's Code tab, with your copy on your own
+disk, and the desktop app's own browser is where people's LinkedIn profiles are read. The
+brief runs in the cloud, so it arrives when your computer is off. Signed in with an Anthropic
+API key instead of a plan, everything works except the brief: scheduled tasks and cloud
+chats need a paid plan.
 
 1. Steps 1 and 2 above. Step 2 is what lets the brief, in the cloud, read your copy.
-2. Install Claude Code, the desktop app or the terminal version:
-   [code.claude.com/docs](https://code.claude.com/docs/en/overview).
-3. Put your copy on your computer (on its GitHub page, **Code**, then **Open with GitHub
-   Desktop**, or `git clone` if you use git) and open that folder in Claude Code, as a local
-   session.
-4. Say "set me up". Claude checks the tools and installs what it can itself, Bun for the job
-   searches included. The rest ask for your computer's password, so they are yours, once: on
-   a Mac, [Homebrew](https://brew.sh) and then the one MacTeX line Claude prints; on Windows,
-   [MiKTeX](https://miktex.org/download) and Poppler (`choco install poppler`). Until then
-   Claude can search and write, but cannot make or check the PDFs.
-5. Say "set up my brief". Claude starts a cloud chat for it (`claude --cloud`), and that
-   chat creates the brief the same way a cloud session does
-   ([automation/README.md](automation/README.md), set-up (a)). The desktop app's Routines
-   screen works too: choose **Cloud**, because a local task runs only while the app is open
-   and the computer awake.
+2. Install the Claude desktop app: [claude.ai/download](https://claude.ai/download).
+3. Put your copy on your computer: on its GitHub page, click **Code**, then **Open with
+   GitHub Desktop**, and save it. Then open the Claude desktop app, click the **Code** tab
+   and choose that folder.
+4. Say "set me up". Claude checks what your computer has and installs what it can itself.
+   What is left is one list, one command each, marked where it asks for your computer's
+   password or signs you in; paste each into Terminal (PowerShell on Windows), once. If your
+   computer has no Python at all, that list cannot run, so here it is: on a Mac,
+   `xcode-select --install` (it asks for your password); on Windows,
+   `winget install Python.Python.3.12`. Until LaTeX is in, Claude can search and write but
+   cannot make or check the PDFs.
+5. Say "set up my brief". Claude checks whether you already have one and never makes a
+   second. It is made in the cloud: Claude makes it itself where it can, and otherwise gives
+   you one thing to paste into a new chat at claude.ai/code. A scheduled task made in the
+   desktop app for your computer runs only while the app is open, so it is never used for
+   the brief.
+
+**How your work reaches GitHub from here.** A chat on your computer has no GitHub tools of
+its own, so Claude uses GitHub's command line, `gh`: step 4's list installs it, and
+`gh auth login` (yours, once) signs it in through your web browser. Claude then works on a
+branch and lands it on master itself: it merges master into the branch first
+(`git fetch origin master && git merge origin/master`, so two chats' changes to your tracker
+or contact book are merged row by row on your computer), runs the checks, then
+`gh pr create --base master --head <branch>` and `gh pr merge <number> --merge --delete-branch`.
+You do none of it; it is written here so you know what it is doing.
 
 **Already using it in the cloud?** Nothing moves: open your copy locally as in step 3 and
 carry on. Cloud and local chats can be mixed, because your copy on GitHub is what they share,
-and Claude merges each session's work into it, so the brief sees it. Never archive the chats
+and Claude merges each chat's work into it, so the brief sees it. Never archive the chats
 your brief is bound to.
 
-**On a phone, or in a browser,** there is no local session: use claude.ai/code as in step 3.
-The brief is set up from a chat there, so a phone is enough for that too.
+**On a phone, or in a browser,** there is nothing to install: use claude.ai/code as in step 3,
+and send a screenshot or a paste of each profile you want read. The brief is set up from a
+chat there, so a phone is enough for that too.
 
 ---
 

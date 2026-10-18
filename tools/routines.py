@@ -9,6 +9,8 @@ whenever ci_local.sh runs, and the app's tests check the example's.
 
     python3 tools/routines.py check [path]   # exit 0 clean, 1 with every problem listed
     python3 tools/routines.py stub <key>     # the exact prompt to store for that task
+    python3 tools/routines.py brief [--triggers <listing.json>]
+                                             # is there a brief already? never make a second
 
 Three set-ups are recognised (`setup` in the registry; automation/README.md
 walks through the first two):
@@ -131,6 +133,53 @@ def check(reg: dict, root: str = ROOT) -> list[str]:
     return out
 
 
+BRIEF_FILE = "automation/prompts/morning_brief.md"
+_BRIEFISH = re.compile(r"\bbrief", re.I)
+
+
+def _is_brief(r: dict) -> bool:
+    return r.get("key") == "morning_brief" or r.get("prompt_file") == BRIEF_FILE
+
+
+def existing_brief(reg: dict | None, triggers=None) -> dict:
+    """Whether a brief already exists, found by the registry or by a task's own prompt.
+
+    Never by its title: a person's brief may be called "Job search: brief (Mon and
+    Thu)" or anything else, and a second brief is two messages every morning.
+    `triggers` is the account's scheduled tasks as a listing gives them (each with
+    `id`, `name` and the stored `prompt`), when the session can list them.
+    Returns {"state": "registered" | "found" | "ask" | "none", "id", "name", "say"}.
+    """
+    triggers = triggers or []
+    mine = [r for r in work(reg or {}) if _is_brief(r)]
+    if mine:
+        r = mine[0]
+        live = next((t for t in triggers if t.get("id") == r.get("trigger_id")), None)
+        if triggers and r.get("trigger_id") and live is None:
+            return {"state": "ask", "id": r.get("trigger_id", ""), "name": r.get("name", ""),
+                    "say": f"profile/routines.json names the brief {r.get('name')!r} "
+                           f"({r.get('trigger_id')}), and no scheduled task with that id is "
+                           "listed: ask the person before making another"}
+        return {"state": "registered", "id": r.get("trigger_id") or "", "name": r.get("name", ""),
+                "say": f"the brief is set up: {r.get('name')!r}"
+                       + (f" ({r['trigger_id']})" if r.get("trigger_id") else "")
+                       + ", in profile/routines.json. Attach to it; never create a second"}
+    for t in triggers:
+        if BRIEF_FILE in (t.get("prompt") or "") or "Scheduled run: morning brief" in (t.get("prompt") or ""):
+            return {"state": "found", "id": t.get("id", ""), "name": t.get("name", ""),
+                    "say": f"a brief already exists as {t.get('name')!r} ({t.get('id')}), not yet "
+                           "in profile/routines.json: record it there; never create a second"}
+    named = [t for t in triggers if _BRIEFISH.search(t.get("name") or "")
+             and "job" in (t.get("name") or "").lower()]
+    if named:
+        t = named[0]
+        return {"state": "ask", "id": t.get("id", ""), "name": t.get("name", ""),
+                "say": f"{t.get('name')!r} ({t.get('id')}) is named like a brief but its prompt "
+                       "is not the brief's: ask the person before making another"}
+    return {"state": "none", "id": "", "name": "",
+            "say": "no brief yet: create one (automation/README.md)"}
+
+
 def load(path: str | None = None) -> dict:
     if path is None:
         import person
@@ -140,9 +189,29 @@ def load(path: str | None = None) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    if not argv or argv[0] not in ("check", "stub"):
+    if not argv or argv[0] not in ("check", "stub", "brief"):
         print(__doc__.split("\n\n")[1])
         return 2
+    if argv[0] == "brief":
+        triggers = []
+        if "--triggers" in argv:
+            with open(argv[argv.index("--triggers") + 1], encoding="utf-8") as fh:
+                got = json.load(fh)
+            triggers = got.get("triggers", got) if isinstance(got, dict) else got
+        try:
+            reg = load()
+        except (OSError, ValueError):
+            reg = None
+        found = existing_brief(reg, triggers)
+        print(f"{found['state']}: {found['say']}")
+        import place
+        if place.surface() == "local":
+            # A chat on their computer never makes a local task for the brief: those run
+            # only while the app is open. The brief is the cloud's, and they are told so.
+            print("tell them: " + (place.BRIEF_LOCAL if found["state"] in ("registered", "found")
+                                   else "Your brief will run in the cloud, so it arrives when "
+                                        "your computer is off. Nothing to do on your computer."))
+        return 0
     if argv[0] == "stub":
         if len(argv) < 2:
             print("usage: routines.py stub <key>", file=sys.stderr)

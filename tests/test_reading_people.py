@@ -400,11 +400,20 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
     phone = reading.route([], "browser", CLOUD_PHONE)
     assert phone["route"] == "hand" and "screenshots" in phone["say"] and "phone" in phone["say"]
     desk = reading.route([], "browser", CLOUD_DESKTOP)
-    assert "desktop app has not lent it a browser" in desk["say"]
+    # A cloud chat in the desktop app with no browser offers the move or a paste, and
+    # makes neither choice itself.
+    assert desk["say"].startswith("Your setting reads LinkedIn profiles in the browser")
+    assert "Close this chat" in desk["say"] and 'say "paste"' in desk["say"]
+    assert not desk["usable"] and desk["route"] == "hand"
     assert reading.route([], "paste", CLOUD_PHONE)["say"].startswith("Send screenshots")
     assert reading.route(["browser"], "off", LOCAL)["route"] == "public"
     for r in (phone, desk, reading.route([], "paste", LOCAL)):
-        assert not any(w in r["say"].lower() for w in ("press", "shortcut", "cmd", "ctrl", "click"))
+        said = r["say"].lower()
+        assert not any(w in said for w in ("press", "shortcut", "cmd", "ctrl", "setting:",
+                                           "find the setting", "open the panel"))
+        # A click is said only with exactly where: a named tab or button, never "click it".
+        for m in re.finditer(r"click ([a-z]+(?:,? [a-z]+)?)", said):
+            assert m.group(1) in ("the code", "code, then"), m.group(0)
 
 
 PAGE_PLAIN = """Rosalind Achterberg
