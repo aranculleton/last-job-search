@@ -241,6 +241,21 @@ def _alumni_text() -> str:
     return ""
 
 
+def _work_place() -> str:
+    """No answer yet to where they will mostly work (tools/place.py, /setup's question)."""
+    if not person.exists("person.json"):
+        return ""
+    try:
+        import json
+        with open(person.path("place.json"), encoding="utf-8") as fh:
+            if json.load(fh).get("works_on"):
+                return ""
+    except (OSError, ValueError):
+        pass
+    return ("set up before the app asked where you will mostly work, so it cannot say when "
+            "a chat is in the wrong place for your settings")
+
+
 def _ruling_parts() -> str:
     if _mod("search") is None:
         return ""
@@ -581,6 +596,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             "one whose alumni reply most first (`python3 tools/network/sources.py` shows the "
             "order), and never the one they work at now; change nothing else", "edit", "~1 min",
             priority=4),
+    Upgrade("work-place", "2026-10-18",
+            "told when a chat is in the wrong place for your settings, and where to go instead",
+            _work_place, "ask it with the session's other questions, in the words `python3 "
+            "tools/place.py ask` prints; record the answer with `python3 tools/place.py record "
+            "computer|phone|both` and give the one line it prints. Change no setting",
+            "question", "~1 min",
+            priority=4, needs="you",
+            ask="Will you mostly work on a computer, or on your phone or the web? (`python3 "
+                "tools/place.py ask` has the two-sentence trade-off and the recommendation.)"),
     Upgrade("ruling-parts", "2026-10-17",
             "a change to one of your rules puts back only the postings ruled out by that rule",
             _ruling_parts, "run `python3 tools/exclude.py cite`, then follow `python3 "

@@ -42,11 +42,15 @@ Every session in a person's repo starts with the same five steps, before anythin
 
 1. **Pull master**: `git fetch origin master && git merge origin/master`. Another chat may have
    merged since this container was built.
-2. **Take the app's updates**: `python3 tools/sync_app.py --on "<this session's model>"`. It
+2. **Take the app's updates**: `python3 tools/sync_app.py --on "<this session's model>"
+   --tools "<the browser tools this chat has: browser, chrome, enable, or none>"`. It
    fetches the app and merges what is new (the newest release; the maintainer's own copy takes
    master), never sends anything back, and ends with the day's model check: what this model
    suits and what wants another, which goes first in the reply when the person's request is
-   one of the latter. The app is public, so nothing needs attaching; if it still cannot reach
+   one of the latter. Then the place check (`tools/place.py`), once per chat: when this chat
+   cannot do what the person set up (profiles read in their browser, from a chat with no
+   browser of theirs; tools missing on their computer), it prints what to tell them, which
+   goes at the end of the reply in its own words. It offers a choice and never makes it. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
@@ -79,7 +83,7 @@ Every session in a person's repo starts with the same five steps, before anythin
 **A chat that carries on for days does this every day, not once.** Most people keep one
 chat going, so "the start of a session" may be days ago. Before each new piece of work (a
 search, an application, outreach, a reply, interview prep), run
-`python3 tools/sync_app.py --if-stale --on "<this session's model>"`. When today's check has
+`python3 tools/sync_app.py --if-stale --on "<this session's model>" --tools "<...>"`. When today's check has
 not run, it does steps 1 and 2 (master, then the app) and the rest follows as above;
 otherwise it prints "already checked today" and changes nothing. `run_round.py` and `stage_picks.py` print a reminder
 when it was skipped, and that reminder is code, so it reaches a chat whose instructions
@@ -157,6 +161,14 @@ same field of the same row to different values; keep the later one, by its date.
 merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
+**On the person's own computer** a chat has no GitHub tools: `gh` is the route, and
+`place.py` lists it (and `gh auth login`, theirs) when it is missing. Never work on master
+there: `git switch -c <branch>`, commit, `git fetch origin master && git merge origin/master`
+(the sync sets the row-by-row driver on their computer too), `./tools/ci_local.sh`,
+`git push -u origin <branch>`, `gh pr create --base master --head <branch> --fill`,
+`gh pr merge <number> --merge --delete-branch`, then `git switch master && git pull --no-rebase
+origin master`.
+
 The one thing that is **not** negotiable in the other direction: do not push to master
 without CI green. It is the branch every other chat starts from, so a broken master
 breaks all of them at once.
@@ -233,12 +245,22 @@ or rebuild one, and never test a chat-bound task with `fire_trigger` (use a one-
 `run_once_at` task bound to the chat). `python3 tools/routines.py check` validates the
 registry.
 
-**"Set up my brief" is set-up (a) in `automation/README.md`.** The task's own chat comes first:
-start it yourself where the session can (`create_session` on the person's private repo, titled
-"Job search: morning brief", with the paste in (a) step 2 as its prompt; from a local session,
-`claude --cloud "<that paste>"`), otherwise give them that paste for a new chat. That chat asks
-its two questions, so say where to answer them, and creates the task. (b), the Routines
-screen, is for someone who would rather have each run arrive as a new chat and a notification.
+**"Set up my brief" is set-up (a) in `automation/README.md`.** First `python3 tools/routines.py
+brief` (with `--triggers <file>` holding the account's scheduled tasks, where the chat can list
+them): a brief that exists, whatever it is called, is attached to and never made twice, and a
+task that only looks like one is asked about. The brief always runs in the cloud. The task's
+own chat comes next: start it yourself where the session can (`create_session` on the person's
+private repo, titled "Job search: morning brief", with the paste in (a) step 2 as its prompt;
+on their computer, `claude --cloud "<that paste>"` when `command -v claude` finds the terminal
+version, which the desktop app alone may not put on the path), otherwise give them that paste
+for a new chat at claude.ai/code. That chat asks its two questions, so say where to answer
+them, and creates the task. On their computer, say the line `routines.py brief` prints
+("Your brief runs in the cloud...") and never make a desktop scheduled task for it: those run
+only while the app is open. A chat with a tool that makes a cloud scheduled task itself
+(`RemoteTrigger`, reported in some chats on a computer) can do (b) with no screen: on the
+private repo, the stub as its prompt, notifications on, recorded as `routines_screen`. (b),
+the Routines screen (New routine, then Cloud), is for someone who would rather have each run
+arrive as a new chat and a notification.
 
 **Silence is the alarm**: the brief is delivered on each of its days even when nothing is
 due, so one of those mornings with no brief means the automation is broken; `automation/README.md` has the set-up

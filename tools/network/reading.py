@@ -851,18 +851,10 @@ def fenced(reading: dict) -> str:
 # and CLAUDE_CODE_ENTRYPOINT names where it was started (a value seen:
 # "remote_desktop", a cloud session opened from the desktop app).
 def surface(env=None) -> str:
-    """"phone", "web", "desktop-cloud", "local" or "unknown": where this session runs."""
-    env = os.environ if env is None else env
-    entry = str(env.get("CLAUDE_CODE_ENTRYPOINT", "")).lower()
-    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true":
-        return "local" if env.get("CLAUDECODE") else "unknown"
-    if any(w in entry for w in ("mobile", "ios", "android", "phone")):
-        return "phone"
-    if "desktop" in entry:
-        return "desktop-cloud"
-    if "web" in entry:
-        return "web"
-    return "unknown"
+    """"phone", "web", "desktop-cloud", "local" or "unknown": where this session runs
+    (tools/place.py, which the right-place check and this share)."""
+    import place
+    return place.surface(env)
 
 
 def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None = None) -> dict:
@@ -907,18 +899,21 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                     "say": (f"I'll read each person's LinkedIn profile in {pane}, one at a "
                             f"time, clicking nothing.{first}"),
                     "signin": not signed_in}
-        why = {"phone": "a chat on a phone has no browser of yours to use",
-               "web": "a chat in a web browser has no browser of yours to use",
-               "desktop-cloud": "this chat runs in the cloud and your desktop app has not "
-                                "lent it a browser",
-               }.get(where, "this chat has no browser of yours to use")
+        import place
         if "chrome-off" in have:
-            why = "Claude in Chrome is installed but no Chrome window is connected to it"
+            say = ("Your setting reads profiles in your own browser, but Claude in Chrome is "
+                   "installed and no Chrome window is connected to it. For now, send "
+                   f"{hand} for each person and I'll do the rest.")
+        else:
+            # The same words the place check says once per chat (tools/place.py): the
+            # choice is offered, never made for them, and the setting is not changed.
+            owner, name = place.repo()
+            told = place.check(where, "browser", [], True, (), owner, name)
+            say = told[0] if told else f"Send {hand} for each person and I'll do the rest."
         return {"route": "hand", "browser": "", "usable": False,
-                "do": f"ask once for {hand}; everything after is automatic",
-                "say": f"Your setting reads profiles in your own browser, but {why}. For now, "
-                       f"send {hand} for each person and I'll do the rest.",
-                "signin": False}
+                "do": f"ask once for {hand}, or wait while they move to the desktop app; "
+                      "everything after is automatic",
+                "say": say, "signin": False}
     return {"route": "hand", "browser": "", "usable": False,
             "do": f"ask once for {hand}; everything after is automatic",
             "say": f"Send {hand} for each person and I'll make each note about them.",

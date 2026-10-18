@@ -4,7 +4,7 @@
     "date": "2026-10-15"
   },
   "documents": {
-    "version": 2,
+    "version": 3,
     "date": "2026-10-15"
   },
   "drafts": {
@@ -28,7 +28,7 @@
     "date": "2026-10-17"
   },
   "network-notes": {
-    "version": 10,
+    "version": 11,
     "date": "2026-10-17"
   },
   "networking": {
@@ -44,7 +44,7 @@
     "date": "2026-10-17"
   },
   "routines": {
-    "version": 4,
+    "version": 5,
     "date": "2026-10-17"
   },
   "screening": {

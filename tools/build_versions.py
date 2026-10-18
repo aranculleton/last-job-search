@@ -135,8 +135,9 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-15", True, "Skills headings in your own words, page count and section order "
                                     "for your career, and a letter that greets in your language"),
+            (3, "2026-10-18", False, "asks early where the person will mostly work and records it in profile/place.json"),
         ),
-        "fingerprint": "4953fed4be45fce9",
+        "fingerprint": "50f6d57697d40f52",
     },
     "voice": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -333,8 +334,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-17", False, "shared dates and employer names, so a shared employer is found without its legal suffix"),
             (9, "2026-10-17", False, "the candidate's current employer is read from the role dates"),
             (10, "2026-10-18", False, "the read keeps the headline and the top card's employer, grounds a note on them, skips anyone the person's location gate fails, and leaves old press out"),
+            (11, "2026-10-18", False, "the route offers the move to the desktop app or a paste when a cloud chat has no browser, in the place check's words"),
         ),
-        "fingerprint": "03081911e6232fec",
+        "fingerprint": "3c6e60a7e0c16e9c",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -371,8 +373,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (3, "2026-10-15", False, "The default set-up is one task, a twice-weekly brief that takes the app's updates; the scheduled round is optional. Existing tasks keep their schedules"),
             (4, "2026-10-17", False, "how to set up the brief from a session on your own computer"),
+            (5, "2026-10-18", False, "finds an existing brief by the registry or its prompt, never its title, so a second is never made"),
         ),
-        "fingerprint": "2a9327d85038921d",
+        "fingerprint": "78450e9a3293bd86",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -483,6 +486,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/score_eval.py": "development tooling",
     "tools/env_check.py": "sets up the container, which is new every session",
     "tools/python_floor.py": "the oldest Python the app runs on; it leaves nothing behind",
+    "tools/place.py": "says once per chat whether the chat suits the person's settings; its one "
+                      "record, profile/place.json, is /setup's question and the work-place upgrade's",
     "tools/setup_env.sh": "sets up the container, which is new every session",
 }
 
