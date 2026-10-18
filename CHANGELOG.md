@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-18
+
 ### Added
 
 - **Networking finds people in bulk from any chat, and reads only the best few.** A run makes
