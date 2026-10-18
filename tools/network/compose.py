@@ -792,7 +792,7 @@ def shape_for(title="", reading=None, route="") -> str:
     reading = reading or {}
     if is_recruiter(title):
         return "recruiter"
-    if reading.get("reach") == "message":
+    if reading.get("reach") == "message" or str(route or "").lower() == "connection":
         return "connected"
     import why
     senior = why.seniority(title) == "senior"

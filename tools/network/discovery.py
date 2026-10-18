@@ -387,6 +387,13 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
     alumni modes it is the shared history: the past employer or the school. The
     target company is absent from those queries on purpose (brief 3.4).
 
+    One title per query, in plain words: "<employer> <title> <city>", run with
+    allowed_domains=SEARCH_DOMAINS. Measured on 2026-10-18 over two employers in one
+    city: the plain shape found 14 people named at the employer for the searches
+    that found 5 in the older shape, which quoted a literal "linkedin.com/in" and
+    ORed four quoted titles; the ORed titles alone brought back job listings, nine
+    results in ten. The domain filter does what the literal did.
+
     Returns at most MAX_QUERIES strings, and never more than HARD_MAX_QUERIES
     whatever the caller passes.
     """
@@ -401,15 +408,18 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
     groups = [g for g in _title_groups(titles, mode) if g]
     if not groups:
         raise ValueError("queries_for needs at least one title to search for")
+    # The caller's titles in their order; otherwise the first of each group, so the
+    # hiring authority and the senior practitioner each get a search.
+    picks = ([t for g in groups for t in g] if titles else [g[0] for g in groups])
 
-    anchor_term = '"%s"' % anchor if mode in QUOTED_ANCHOR_MODES else _quote_term(anchor)
-    place = _quote_term(location)
+    # An alumni anchor is history and stays quoted: unquoted, "<Name> Money" matches
+    # every profile with the word money in it.
+    anchor_term = '"%s"' % anchor if mode in QUOTED_ANCHOR_MODES else anchor
+    place = _clean(location)
 
     out = []
-    for i, group in enumerate(groups):
-        parts = [SITE, " OR ".join(_quote_title(t) for t in group), anchor_term]
-        if place:
-            parts.append(place)
+    for i, title in enumerate(picks):
+        parts = [anchor_term, _clean(title), place]
         # hiring_team runs against a company with a live posting, so the first
         # query leans on the word that separates a manager who is recruiting
         # right now from one who is not.
@@ -419,6 +429,145 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
         if q not in out:
             out.append(q)
     return out[:min(MAX_QUERIES, HARD_MAX_QUERIES)]
+
+
+# ---------------------------------------------------------------------------
+# Search results to people: the bulk step, with nothing fetched
+# ---------------------------------------------------------------------------
+
+# A LinkedIn result title is the profile's own headline as the search engine
+# indexed it: "Name - Employer", "Name - Title - Employer", "Name - Title at
+# Employer", or "Name - <a place>". It is the evidence a person exists at an
+# employer that needs no read: the profile's URL and its own words, captured
+# from the result and never fetched.
+_TITLE_SPLIT = re.compile(r"\s+[-\u2013\u2014|]\s+")
+_CREDENTIAL = re.compile(r"^(?:[A-Z][A-Za-z.]{1,6}|Ph\.?D\.?|M\.?B\.?A\.?|P\.?Eng\.?|"
+                         r"M\.?Eng\.?|C[A-Z]{1,4})$")
+# A part that names a job rather than an employer: "Data and Analytics Leader".
+_ROLE_WORD = re.compile(r"\b(?:manager|director|head|lead|leader|analyst|scientist|engineer|"
+                        r"officer|consultant|founder|specialist|partner|vp|president|adviser|"
+                        r"advisor|architect|coordinator|executive|principal|associate|"
+                        r"strategist|developer|designer|recruiter|researcher|professor|"
+                        r"student|intern)s?\b", re.I)
+_PLACE_WORDS = re.compile(r"\b(?:area|region|metropolitan|greater|county|province|state)\b|,", re.I)
+# The statuses an existence check can give, strongest first. Only "verified" is ever
+# shown as confirmed, and even that is as of the search: the profile was indexed,
+# never read, and may have changed since.
+PROFILE_STATUS = ("verified", "likely", "unconfirmed")
+
+
+def _person_like(name: str) -> bool:
+    words = name.split()
+    return 2 <= len(words) <= 5 and all(re.match(r"^[^\W\d_][\w.'\-]*$", w) for w in words)
+
+
+def parse_result_title(title: str) -> dict:
+    """{"name", "headline", "employer", "location"} from one result title; "" for a
+    part the title does not carry, and no name when it is not a person's."""
+    t = re.sub(r"\s*\|\s*LinkedIn\s*$", "", str(title or ""), flags=re.I)
+    t = re.sub(r"\s*(?:\.\.\.|\u2026)\s*$", "", t).strip()
+    parts = [p.strip() for p in _TITLE_SPLIT.split(t) if p.strip()]
+    out = {"name": "", "headline": "", "employer": "", "location": ""}
+    if not parts:
+        return out
+    name = re.sub(r"\([^)]*\)", " ", parts[0]).split(",")[0]
+    words = name.split()
+    while len(words) > 2 and _CREDENTIAL.match(words[-1]):
+        words.pop()
+    name = " ".join(words)
+    if not _person_like(name):
+        return out
+    out["name"] = name
+    rest = parts[1:]
+    if not rest:
+        return out
+    last = rest[-1]
+    at = re.search(r"\bat\s+(.+)$", last)
+    if len(rest) >= 2:
+        out["headline"] = rest[0]
+    if at:
+        out["headline"] = out["headline"] or last
+        out["employer"] = at.group(1).strip()
+    elif _PLACE_WORDS.search(last):
+        out["location"] = last
+    elif len(rest) == 1 and _ROLE_WORD.search(last):
+        out["headline"] = last
+    else:
+        out["employer"] = last
+    return out
+
+
+def profile_status(parsed: dict, url: str, company: str = "", name: str = "") -> str:
+    """How sure a search result makes it that this person has a profile at this employer.
+
+    verified:    a profile URL whose own title names the person and the employer
+    likely:      a profile URL whose title names the person, and the employer only
+                 as part of its headline, or not at all
+    unconfirmed: anything else. A search cannot prove someone has no profile.
+    """
+    if not is_person_url(url) or not parsed.get("name"):
+        return "unconfirmed"
+    if name:
+        import state
+        if state._match_name(name) != state._match_name(parsed["name"]):
+            return "unconfirmed"
+    if not company:
+        return "likely"
+    want = company_key(company)
+    if parsed.get("employer") and company_key(parsed["employer"]) == want:
+        return "verified"
+    if want and want in company_key(parsed.get("headline", "")):
+        return "likely"
+    return "likely" if not parsed.get("employer") else "unconfirmed"
+
+
+def people_from_results(results, company: str = "", kind: str = "title_search",
+                        query: str = "", today=None) -> list:
+    """The people a set of search results names, each with its evidence. Nothing fetched.
+
+    `results` is what the search tool returned: [{"title", "url"}, ...]. A listing,
+    a company page and a result that is not a person's are dropped; a post becomes
+    its author with the post's date. Only a result that is the person's own profile
+    or post counts: a name that appears in a search summary, a "people also viewed"
+    list or another person's page is somebody else's page and never a candidate.
+    """
+    today = today or dt.date.today()
+    out, seen = [], set()
+    for r in results or ():
+        url, title = str(r.get("url") or ""), str(r.get("title") or "")
+        got = resolve_result(url, company)
+        if not got or not got.get("profile_url"):
+            continue
+        handle = _profile_handle(got["profile_url"])
+        if handle in seen:
+            continue
+        parsed = parse_result_title(title)
+        if got["kind"] == "post":
+            m = re.match(r"^(.+?)\s+(?:on LinkedIn|posted on LinkedIn)\b", title)
+            parsed = {"name": m.group(1).strip() if m else "", "headline": "", "employer": "",
+                      "location": ""}
+            if not _person_like(parsed["name"]):
+                continue
+        if not parsed["name"]:
+            continue
+        seen.add(handle)
+        status = profile_status(parsed, got["profile_url"], company) if got["kind"] == "profile" \
+            else "likely"
+        out.append({
+            "name": parsed["name"], "title": parsed["headline"],
+            "company": parsed["employer"] or (company if status != "unconfirmed" else ""),
+            "location": parsed["location"], "linkedin_url": got["profile_url"],
+            "found_via": kind, "profile_status": status,
+            "post_date": got["post_date"].isoformat() if got.get("post_date") else "",
+            "evidence": f"search result {today.isoformat()}: \"{title.strip()}\" ({url})"
+                        + (f", for {query!r}" if query else ""),
+        })
+    return out
+
+
+def _profile_handle(url: str) -> str:
+    import state
+    return state.profile_handle(url) or url
 
 
 # ---------------------------------------------------------------------------
@@ -1130,9 +1279,10 @@ def _adjacent_reason(person, target_location):
     one the next run needs: the person is not in the target market. A run can
     drop somebody that way.
     """
-    if not _same_market(person.get("location") or "", target_location):
-        return "not in %s: %s" % (
-            target_location, person.get("location") or "location unknown")
+    # A result with no location says nothing about where they are, so it is never
+    # reported as "not in" the city.
+    if _clean(person.get("location")) and not _same_market(person.get("location"), target_location):
+        return "not in %s: %s" % (target_location, person.get("location"))
     return "tier 4 adjacent: better targets exist at this company"
 
 
@@ -1170,7 +1320,7 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
     recorded as no_relevant_presence even though those names came back.
     """
     today = today or dt.date.today()
-    keep, adjacent, dropped = [], [], []
+    keep, adjacent, dropped, unknown = [], [], [], []
 
     for person in people or []:
         reason = disqualify(person, target_company)
@@ -1253,23 +1403,31 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
                          and FUNCTION_TITLE.search(
                              _clean(person.get("title")
                                     or person.get("headline")))) else 1
+        if not _clean(person.get("title") or person.get("headline") or person.get("snippet")):
+            # A result titled only "Name - Employer" says nothing about the job: unknown,
+            # not adjacent. Kept below the people whose title is known and never dropped
+            # as tier 4, because the search that surfaced them asked for the job.
+            enriched["title_unknown"] = True
+            unknown.append((enriched, d, relevant))
+            continue
         (keep if tier in RELEVANT_TIERS else adjacent).append(
             (enriched, d, relevant))
 
     # Three answers, not two. Nothing back from the search is no evidence about
     # the employer at all, and recording it as "no relevant presence" wrote a
     # company off on an empty result.
-    if keep:
+    if keep or unknown:
         verdict = "has_presence"
     elif adjacent or dropped:
         verdict = "no_relevant_presence"
     else:
         verdict = "no_results"
     if not keep:
-        keep = adjacent
+        keep = adjacent + unknown
     else:
         dropped.extend((row[0], _adjacent_reason(row[0], target_location))
                        for row in adjacent)
+        keep = keep + unknown
 
     # Sort is stable, so people with no date keep the order the search returned
     # them in rather than being shuffled to an arbitrary position.

@@ -1,11 +1,13 @@
 """A chat says once whether it is the right place for what the person set up.
 
-Profiles read in the person's own browser need a chat on their computer, or a cloud
-chat the desktop app lends its browser to; a phone has none. A person was left in a
-cloud chat whose setting could never work there, with nothing telling them where to
-go. Each combination the place check can meet is pinned here: the exact place to go,
-"close this chat" only when it is true, no instruction to press a key or find a
-setting without saying where, no em dashes and UK spelling.
+Finding people works in any chat (tools/network/sources.py, the ladder); reading their
+profiles needs a browser of the person's that the chat can use. So the check decides by
+the tools a chat has, never by where it was started: a phone chat linked to the computer
+reads as well as a chat on it. Each combination it can meet is pinned here. The words
+follow the one rule for a path a person follows: the goal first, then the destination
+"at the time of writing" with the official page beside it (tools/claude_surfaces.json),
+and never press, click, tap or find. No em dashes, UK spelling, and never a request for
+everyone's screenshots.
 """
 import json
 import re
@@ -16,6 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
+import claude_surfaces  # noqa: E402
 import env_check  # noqa: E402
 import place  # noqa: E402
 import python_floor  # noqa: E402
@@ -28,14 +31,14 @@ NONE = lambda *_: None  # noqa: E731
 
 
 def _clean(text: str) -> None:
-    assert "—" not in text, "an em dash"
+    assert "\u2014" not in text, "an em dash"
     assert not US.search(text), US.search(text).group(0)
-    low = text.lower()
-    assert not any(w in low for w in ("press ", "shortcut", "cmd+", "ctrl+", "find the setting",
-                                      "open the panel", "go to settings"))
-    # A click is said only with exactly where: a named tab or button.
-    for m in re.finditer(r"click ([a-z]+(?:,? [a-z]+)?)", low):
-        assert m.group(1) in ("the code", "code, then"), m.group(0)
+    assert not claude_surfaces.BANNED.search(text), claude_surfaces.BANNED.search(text).group(0)
+    assert not any(w in text.lower() for w in ("cmd+", "ctrl+", "shift+"))
+    # Every path is dated and sourced: "At the time of writing" and its official page.
+    assert text.count("At the time of writing:") == text.count("(official page: https://")
+    # Never everyone's profile: a paste is for the one or two who matter most.
+    assert not re.search(r"(?:for|of) (?:each|every) (?:person|profile)|everyone's", text, re.I)
 
 
 def _say(where, setting, tools, signed_in=True, fixes=()):
@@ -45,39 +48,47 @@ def _say(where, setting, tools, signed_in=True, fixes=()):
     return "\n".join(out)
 
 
-def test_a_cloud_chat_with_the_browser_setting_and_no_browser_says_where_to_go():
-    said = _say("desktop-cloud", "browser", [])
-    assert said.startswith("Your setting reads LinkedIn profiles in the browser on your computer")
-    assert "Close this chat. Open the Claude desktop app, click the Code tab, choose the folder " \
-           "my-job-search" in said
-    assert "github.com/example-owner/my-job-search, click Code, then Open with GitHub Desktop" in said
-    assert 'Or say "paste"' in said and "this time" in said      # offered, never applied
+def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
+    for where in ("desktop-cloud", "unknown"):
+        said = _say(where, "browser", [])
+        assert said.startswith(place.FINDING_WORKS)            # what works here, first
+        assert "Continue this in a chat on your computer. At the time of writing: open the " \
+               "Claude desktop app" in said and "the folder my-job-search" in said
+        assert "github.com/example-owner/my-job-search, choose Code, then Open with GitHub " \
+               "Desktop" in said
+        assert said.endswith(place.PASTE_TOP)                  # offered, for the few only
     # Not knowing the chat's tools, it asks the chat to look before it says anything.
+    said = _say("desktop-cloud", "browser", [])
     unsure = _say("desktop-cloud", "browser", None)
-    assert unsure.startswith("[only if this chat has no browser tool") and "Close this chat" in unsure
+    assert unsure.startswith("[only if this chat has no browser tool")
     assert unsure[len(place.IF_NO_BROWSER):] == said            # the words said are the same
-    # A cloud chat the desktop app can lend its browser to is already the right place.
+    # A cloud chat the desktop app lends its browser to is already the right place.
     assert _say("desktop-cloud", "browser", ["enable"]) == ""
     assert _say("desktop-cloud", "browser", ["browser"]) == ""
 
 
-def test_a_cloud_chat_that_pastes_hears_nothing():
-    for where in ("desktop-cloud", "web", "phone", "unknown"):
+def test_a_chat_that_pastes_hears_nothing_anywhere():
+    for where in ("desktop-cloud", "web", "phone", "unknown", "local"):
         assert _say(where, "paste", []) == ""
         assert _say(where, "", None) == ""
 
 
-def test_a_phone_or_the_web_is_told_to_send_screenshots_and_nothing_about_installing():
-    for where in ("phone", "web", "unknown"):
+def test_a_phone_or_the_web_is_offered_the_computers_chat_and_never_an_install():
+    for where in ("phone", "web"):
         said = _say(where, "browser", [])
-        assert said == "On a phone or in a browser, send screenshots or a paste for each profile."
-        assert not any(w in said.lower() for w in ("install", "desktop app", "close this chat"))
+        assert said.startswith(place.FINDING_WORKS)
+        assert "/remote-control" in said and "code.claude.com/docs/en/remote-control" in said
+        assert not re.search(r"\binstall", said, re.I)
+    # A phone chat linked to the computer reads as well as one on it: by tools, not place.
+    assert _say("phone", "browser", ["enable"]) == ""
+    assert "sign in there yourself, once" in _say("phone", "browser", ["enable"], signed_in=False)
 
 
 def test_a_chat_on_their_computer_signed_out_is_told_the_sign_in_is_theirs_once():
     said = _say("local", "browser", ["browser"], signed_in=False)
-    assert "LinkedIn's sign-in page opens in the browser pane in the Claude desktop app" in said
-    assert "sign in there yourself, once" in said and "Close this chat" not in said
+    assert said == place.SIGN_IN_ONCE
+    # Chrome shares their own sign-ins: nothing to sign in to.
+    assert _say("local", "browser", ["chrome"], signed_in=False) == ""
 
 
 def test_a_chat_on_their_computer_signed_in_is_the_right_place():
@@ -85,9 +96,11 @@ def test_a_chat_on_their_computer_signed_in_is_the_right_place():
     assert _say("local", "paste", [], signed_in=True) == ""
 
 
-def test_a_terminal_chat_with_no_browser_offers_the_desktop_app_or_a_paste():
+def test_a_terminal_chat_with_no_browser_names_the_desktop_app_and_chrome():
     said = _say("local", "browser", [])
-    assert "This chat has no browser" in said and "Close this chat" in said and '"paste"' in said
+    assert said.startswith("Finding people works in this chat.")
+    assert "Continue this in a chat on your computer" not in said      # it is on one
+    assert "claude --chrome" in said and place.PASTE_TOP in said
 
 
 def test_a_computer_missing_python_gets_one_list_with_the_password_ones_marked():
@@ -117,16 +130,16 @@ def test_nothing_missing_says_nothing():
                                  pypdf="ok", gh_signed_in=True) == []
 
 
-def test_the_next_step_after_setups_question_says_close_this_chat_only_when_true():
+def test_the_next_step_after_setups_question_moves_them_only_when_true():
     for where in ("web", "desktop-cloud", "phone"):
         step = place.next_step("computer", where, *REPO)
-        assert step.startswith("Close this chat. Open the Claude desktop app, click the Code tab")
+        assert step.startswith("Continue this in a chat on your computer. At the time of writing")
         assert 'say "set me up"' in step
         _clean(step)
     for answer, where in (("computer", "local"), ("phone", "web"), ("phone", "phone"),
                           ("phone", "local"), ("both", "web"), ("both", "local")):
         step = place.next_step(answer, where, *REPO)
-        assert "close this chat" not in step.lower()
+        assert "continue this in a chat on your computer" not in step.lower()
         _clean(step)
     _clean(place.QUESTION + " " + place.TRADE_OFF + " " + place.RECOMMEND)
     assert "local" not in place.TRADE_OFF.lower() and "cloud" not in place.TRADE_OFF.lower()
@@ -140,6 +153,7 @@ def test_said_once_per_chat(tmp_path, monkeypatch):
            "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE1"}
     first = place.report([], once=True, env=env)
     assert first.startswith("Place check (Claude: tell the person this once in this chat")
+    assert "never hold back work that does not need it" in first
     assert place.report([], once=True, env=env) == ""
     assert place.report([], once=True, env={**env, "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE2"})
 

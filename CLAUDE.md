@@ -217,7 +217,8 @@ third-party data) or `gmail_sync/state.json`.
 
 - **`./tools/setup_env.sh` sets the container up**: LaTeX, Poppler and the Python side, one
   package at a time, and a no-op when they are present. The line in its header, pasted into
-  the cloud environment's Setup script, caches it. It is not a SessionStart hook, on purpose:
+  the cloud environment's setup script (where: `python3 tools/claude_surfaces.py say
+  cloud-environment`), caches it. It is not a SessionStart hook, on purpose:
   `tools/security_guards.py` keeps that allowlist empty.
 - **`texlive-fonts-extra` is not installed**: moderncv's `fontawesome5` and `academicons` are
   vendored in `texmf/`. `File fontawesome5.sty not found` means `TEXMFHOME` was not set;
@@ -235,10 +236,10 @@ when the tasks run and where they report is the person's (the automation section
 app's updates; a scheduled job round is optional and off by default, since "find me jobs"
 runs one in any chat. Two set-ups work, and the README walks a person through either: **(a)**
 one chat per task, each task bound to its own chat, whose reply is the briefing; or **(b)**
-each task made in the Claude app's Routines screen with the repo ticked, every run a new chat. Each task's stored prompt is a stub
+each task made as a routine with the repo ticked, every run a new chat. Each task's stored prompt is a stub
 that reads `automation/prompts/_common.md` and its own file from master, so **changing what a
-task does is a normal PR**; only a schedule change needs `update_trigger` or the Routines
-screen. The final reply is the message; nothing depends on `fire_trigger`. An older
+task does is a normal PR**; only a schedule change needs `update_trigger` or the routine's
+own page. The final reply is the message; nothing depends on `fire_trigger`. An older
 shared-chat set-up that relays to the phone through a fresh-session task still works only
 from a chat made before 14 October 2026: never archive, delete
 or rebuild one, and never test a chat-bound task with `fire_trigger` (use a one-off
@@ -248,19 +249,19 @@ registry.
 **"Set up my brief" is set-up (a) in `automation/README.md`.** First `python3 tools/routines.py
 brief` (with `--triggers <file>` holding the account's scheduled tasks, where the chat can list
 them): a brief that exists, whatever it is called, is attached to and never made twice, and a
-task that only looks like one is asked about. The brief always runs in the cloud. The task's
-own chat comes next: start it yourself where the session can (`create_session` on the person's
-private repo, titled "Job search: morning brief", with the paste in (a) step 2 as its prompt;
-on their computer, `claude --cloud "<that paste>"` when `command -v claude` finds the terminal
-version, which the desktop app alone may not put on the path), otherwise give them that paste
-for a new chat at claude.ai/code. That chat asks its two questions, so say where to answer
-them, and creates the task. On their computer, say the line `routines.py brief` prints
-("Your brief runs in the cloud...") and never make a desktop scheduled task for it: those run
-only while the app is open. A chat with a tool that makes a cloud scheduled task itself
-(`RemoteTrigger`, reported in some chats on a computer) can do (b) with no screen: on the
-private repo, the stub as its prompt, notifications on, recorded as `routines_screen`. (b),
-the Routines screen (New routine, then Cloud), is for someone who would rather have each run
-arrive as a new chat and a notification.
+task that only looks like one is asked about. The brief always runs in the cloud. **In a cloud
+chat**, the task's own chat comes next: start it yourself where the session can
+(`create_session` on the person's private repo, titled "Job search: morning brief", with the
+paste in (a) step 2 as its prompt), otherwise give them that paste for a new chat at
+claude.ai/code; that chat asks its two questions, so say where to answer them, and creates the
+task. **On their computer** (`python3 tools/claude_surfaces.py show <id>` for remote-trigger,
+routines-cloud, routines-local and cli-cloud, each dated and sourced): with the `RemoteTrigger`
+tool, make it yourself as (b), on the private repo, the stub as its prompt, notifications on,
+recorded as `routines_screen`; without it, ask them once, in the words `claude_surfaces.py say
+routines-cloud` prints. Never start a cloud chat from your own shell (cli-cloud: the command
+refuses a shell that is not an interactive terminal, which yours is not), and never make a
+desktop scheduled task for the brief (it runs on the computer). Say the line `routines.py brief` prints. (b) is also for someone who
+would rather have each run arrive as a new chat and a notification.
 
 **Silence is the alarm**: the brief is delivered on each of its days even when nothing is
 due, so one of those mornings with no brief means the automation is broken; `automation/README.md` has the set-up

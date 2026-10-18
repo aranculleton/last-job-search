@@ -251,7 +251,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
-                                                                 "connections-export", "work-place"}
+                                                                 "connections-export", "work-place",
+                                                                 "connections-first"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -259,6 +260,9 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert "contacts nobody" in U.by_id("connections-export").ask
     # Where they will mostly work is theirs to say; nothing in a profile answers it.
     assert "computer, or on your phone or the web" in U.by_id("work-place").ask
+    # Asked once, of people who said no before the export became the first rung, and a
+    # second no is final.
+    assert "not asked again" in U.by_id("connections-first").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):

@@ -17,7 +17,7 @@ walks through the first two):
 
   chat_per_briefing  chats created with the repo, each task bound to one (its
                      own, or one shared by both); the chat's reply is the briefing
-  routines_screen    each task created in the Claude app's Routines screen with
+  routines_screen    each task created as a routine (claude_surfaces: routines-cloud) with
                      the repo ticked and notifications on; every run is a new chat
   ops_relay          the older shape: every task fires into one ops chat, which
                      hands its message to a fresh-session relay task for push
@@ -204,13 +204,23 @@ def main(argv: list[str]) -> int:
             reg = None
         found = existing_brief(reg, triggers)
         print(f"{found['state']}: {found['say']}")
+        import claude_surfaces
         import place
         if place.surface() == "local":
-            # A chat on their computer never makes a local task for the brief: those run
-            # only while the app is open. The brief is the cloud's, and they are told so.
-            print("tell them: " + (place.BRIEF_LOCAL if found["state"] in ("registered", "found")
-                                   else "Your brief will run in the cloud, so it arrives when "
-                                        "your computer is off. Nothing to do on your computer."))
+            # A chat on their computer never makes a local task for the brief: those run on
+            # the computer (claude_surfaces: routines-local). The brief is the cloud's.
+            if found["state"] in ("registered", "found"):
+                print("tell them: " + place.BRIEF_LOCAL)
+            elif found["state"] == "none":
+                print("make it in the cloud: with the RemoteTrigger tool where this chat has it "
+                      "(claude_surfaces: remote-trigger), as set-up (b); never a desktop "
+                      "scheduled task, and never a cloud chat started from this shell")
+                print("otherwise tell them, once: Your brief will run in the cloud, so it arrives "
+                      "when your computer is off. " + claude_surfaces.say("routines-cloud"))
+            for eid in ("routines-cloud", "remote-trigger", "routines-local", "cli-cloud"):
+                w = claude_surfaces.warning(claude_surfaces.entry(eid))
+                if w:
+                    print(w)
         return 0
     if argv[0] == "stub":
         if len(argv) < 2:

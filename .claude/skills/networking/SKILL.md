@@ -77,24 +77,35 @@ lists, meetups, trade press, code, official directories and more), chosen by `/s
 (`PEOPLE_SOURCES`) and ranked by what has drawn replies. `/network` step 3 runs it. The
 LinkedIn people searches inside it follow the rules below.
 
+**Bulk discovery never depends on reading anyone** (`sources.LADDER`, `/network`, "The
+ladder"). A run makes its whole list from rungs any chat has: their own connections export,
+then public pages and search results, then a profile check from the results' own titles.
+Reading a profile, in their browser or from a paste, enriches a short list of that list:
+the best ten in a browser, the best three from a paste, never everyone.
+
 ### Searching LinkedIn for people
 
 ```
 WebSearch(
-  query='"linkedin.com/in" "[JOB TITLE]" [COMPANY] [LOCATION]',
+  query='[COMPANY] [ONE JOB TITLE] [LOCATION]',
   allowed_domains=["linkedin.com", "<country>.linkedin.com"],
 )
 ```
 
 `discovery.queries_for()` builds the query string and `discovery.SEARCH_DOMAINS`
-holds the domain list. Pass both.
+holds the domain list. Pass both. One title per query, in plain words: measured on
+2026-10-18, that shape found 14 people named at the employer where the old one, a quoted
+literal `"linkedin.com/in"` and four ORed quoted titles, found 5; the ORed titles alone
+brought back job listings. Save the results' titles and addresses and run
+`sources.py harvest` over them: it turns them into people with evidence and a profile
+status, and drops every result that is not the person's own profile or post.
 
 **The `site:` operator does not work for profile searches.** The brief this skill was built from
 prescribes `site:linkedin.com/in ...`, and three live runs proved it wrong for
 this toolchain: a company search returned Glassdoor and ZipRecruiter
 listings, and an alumni search returned nothing but LinkedIn `/jobs/` pages. The
-same intent as a quoted phrase with the domains constrained returned mostly real
-profiles. Do not re-introduce `site:` into a profile query; a test asserts its absence. The
+same intent with the domains constrained returned mostly real profiles. Do not
+re-introduce `site:` into a profile query; a test asserts its absence. The
 hiring-posts search is the deliberate exception: it asks for `site:linkedin.com/posts`, and
 its results are read, never fetched.
 
@@ -191,17 +202,19 @@ caught at once. So between finding and writing there is a read, and
 
 - **Their profile.** In the person's own signed-in browser when `PROFILE_READS` is
   `"browser"` in `profile/networking.py` (Claude in Chrome, or the Claude desktop app's
-  built-in browser, which a cloud session reaches while it is linked to their computer),
+  built-in browser, which a cloud chat with the remote-devices browser tools reaches too:
+  `claude_surfaces.py show cloud-linked-browser`),
   otherwise from them: pasted (select all, copy), LinkedIn's Save to PDF, or, on a phone or
   in a web session, screenshots from the LinkedIn app, transcribed word for word. That
   takes seconds because they open the profile anyway to send the request, and it works
   wherever the session runs. This session never
   fetches LinkedIn itself: its robots.txt disallows every crawler it does not name and a
   profile request answers HTTP 999.
-- **The route is chosen, never asked.** `reading.py route` reads where the session runs
-  and which browser it has, and says what to do: read in the browser, switch it on first,
-  or ask once for screenshots (phone) or a paste (computer). The person is never told to
-  press a key or find a setting.
+- **The route is chosen, never asked.** `reading.py route` reads which browser the chat
+  has, never where it was started, and says what to do: read the best ten in the browser,
+  switch it on first, or offer a paste for the best three only (screenshots on a phone, a
+  paste on a computer). The person is never told to press a key, click, tap or find
+  anything; a path comes from `tools/claude_surfaces.py`, with its official page.
 - **Read, judge, next.** How many are read is however many it takes to fill the run's
   batch with people worth writing to, the way a round runs until its yield target.
   `reading.verdict()` skips someone the page shows has moved on, is based elsewhere or

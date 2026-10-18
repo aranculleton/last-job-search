@@ -5,6 +5,32 @@ Find the right people at target companies and produce ready-to-send drafts.
 Usage: `/network Acme, Initech, Globex` or `/network` to use the top
 untouched employers from the latest round's shortlist.
 
+## The ladder: finding people never waits on reading them
+
+A run finds people in bulk from any chat, and reads a short list of them only where it can.
+`python3 tools/network/sources.py ladder --tools <browser,chrome,enable, or none>` prints what
+this chat can use, cheapest and safest first:
+
+1. **Their own connections export**: everyone they already know at the employer, read only,
+   contacting nobody (`sources.py connections "<employer>"`).
+2. **Public pages and search results**: named people at the employer in bulk, each from a
+   result that is their own profile or post, titled with their employer
+   (`sources.py harvest`, step 3).
+3. **A profile check from search results**: verified when the result's own title names the
+   person and the employer, likely when it names the person only, unconfirmed otherwise; a
+   search cannot prove someone has no profile, and nothing is fetched.
+4. **A read in their own browser**, where this chat has one: the best `reading.READS_PER_RUN`
+   (10) only, on the day's short list, paced (step 5).
+5. **A paste or screenshots from them**, for the best `reading.HAND_TOP` (3) at most, and only
+   where there is no browser. It is never how the list is made, and never asked for everyone.
+
+With no browser, the run still presents the whole ranked list from rungs 1 to 3, says once,
+under the list, the one line `ladder` prints about what reading would add, and offers rung 5
+for the top few. Nothing is sent, clicked, connected or submitted by any rung; the person
+acts. Automating a site can break its terms: LinkedIn's forbid automated access, so a browser
+read is paced, read only and the person's own choice, and lowers that risk without removing
+it. LinkedIn is never fetched from a session.
+
 ## Run it
 
 1. **Load state.** `state.load_contacts()`, `state.load_threads()`, the tracker,
@@ -17,10 +43,12 @@ untouched employers from the latest round's shortlist.
    `documents/network/<contact_id>/draft.md`. Show them before any new search: send
    them or drop them. `python3 tools/network/reading.py queue` lists the queued ones with no
    fresh reading of their profile: read them (step 5) and rewrite those notes first.
-   **Their own connections, if exported.** `state.first_degree()` reads
-   `documents/linkedin/Connections.csv` (LinkedIn's data export). For each company,
-   `state.connections_at(conns, company)` lists the people they already know there:
-   the first to message, as a message, at no cost to the budget, before any search.
+   **Their own connections, if exported: rung 1.** `python3 tools/network/sources.py
+   connections "<employer>"` (`sources.from_connections()`) lists the people they already
+   know there from `documents/linkedin/Connections.csv`, in their function first, then the
+   hands-on titles that reply most, with anyone already in the contact book left out: the
+   first to message, as a message (route `connection`), at no cost to the budget, before
+   any search. Without the export, the `connections-export` upgrade asks for it once.
 
 2. **Check the budget before searching.** `state.platform_budget(contacts, threads,
    today)` returns the connection requests and InMail credits left on the person's
@@ -48,8 +76,16 @@ untouched employers from the latest round's shortlist.
    Everyone kept carries `found_via`, the kind that surfaced them, so the plan learns
    which places pay for this person.
    - **Searches into LinkedIn** (title, hiring posts, alumni): WebSearch with
-     `allowed_domains=discovery.SEARCH_DOMAINS`, every result through
-     `discovery.resolve_result(url, company)`: it drops listings, turns a post permalink
+     `allowed_domains=discovery.SEARCH_DOMAINS`. Save each search's results, the title and
+     address of every one, as JSON (`[{"title": ..., "url": ...}]`), and run
+     `python3 tools/network/sources.py harvest <results.json> --company "<employer>"
+     --kind <kind> --query "<the search>"` (rungs 2 and 3): it keeps only results that are a
+     person's own profile or post, reads who they are and where they work from the
+     result's own title, judges each profile verified, likely or unconfirmed, triages,
+     drops anyone already in the contact book, marks their connections, and ranks the rest
+     by why-them, each with its evidence and route. A name in the search's own summary, a
+     "people also viewed" list or another person's page is never a candidate.
+     `discovery.resolve_result(url, company)` turns a post permalink
      into the author's profile plus the post's exact date (carry it as `signal_date`; a
      tier-1 signal needs one), and drops a company page's own posts. For a posting whose
      role family or city differs from the person's usual, build the title queries with
@@ -78,7 +114,11 @@ untouched employers from the latest round's shortlist.
      `browser`: `https://www.linkedin.com/company/<company>/people/?keywords=<their function>`,
      read like a profile, at a person's pace, nothing clicked.
 
-   Measured over five employers in one city (2026-10-17 and 18): title queries found
+   Measured over two employers in one city on 2026-10-18: the plain query shape
+   `queries_for()` now writes ("<employer> <one title> <city>") found 14 people named at the
+   employer for the searches that found 5 in the old one, which quoted a literal
+   "linkedin.com/in" and ORed four quoted titles (those alone brought back job listings, nine
+   results in ten). Measured over five employers in one city (2026-10-17 and 18): title queries found
    mostly individual contributors and managers, team pages and speaker lists mostly
    directors and above. Searches into LinkedIn return mostly job listings (about four
    results in five), and a third of the profiles they do return belong to people who have
@@ -115,13 +155,15 @@ untouched employers from the latest round's shortlist.
    and the reply odds of their kind of title). Someone with a request already pending
    scores 0 and is dropped.
 
-5. **Read each person before writing to them, and keep reading until the batch is full.**
-   A snippet holds a title and a line, and notes drafted from snippets alone come out
-   alike. Work through the people steps 3 and 4 kept, best first by `why_them`, and
-   score each again after the read, which adds shared history, activity and reach, the
-   way a round works through postings: read one, judge them, then the next, until the run
-   has as many people worth writing to as its budget from step 2 can send. That number,
-   not a fixed count, is how many are read. Give each candidate its id first
+5. **Read the short list, where this chat can: rungs 4 and 5.** The list from steps 3 and
+   4 is the run's result with or without a read. A snippet holds a title and a line, and
+   notes drafted from snippets alone come out alike, so a read improves the best few: put
+   the best `reading.READS_PER_RUN` (10) by `why_them` on the day's short list,
+   `python3 tools/network/reading.py shortlist <ids, best first>`; a browser read refuses
+   anyone not on it. Score each again after the read, which adds shared history, activity
+   and reach, and read the next on the list when one is skipped. With no browser, nobody is
+   read: present the list and offer a paste for the best `reading.HAND_TOP` (3) only
+   (`reading.py queue`, which lists those three). Give each candidate its id first
    (`state.unique_contact_id()`), and record what is read with `tools/network/reading.py`,
    which keeps only what a note could rest on, under
    `documents/network/<contact_id>/reading.json` (`--name` and `--company` for a
@@ -135,9 +177,11 @@ untouched employers from the latest round's shortlist.
       prints which browser it will use, whether that browser is usable now, what to do and
       the one line, if any, to tell the person. Follow it: with `enable`, call that tool
       yourself first; `chrome` with no Chrome window connected is not usable, and neither is
-      a cloud session the desktop app has not lent a browser; with no usable browser, ask
-      once for the route it names (screenshots on a phone, a paste on a computer). Never
-      tell the person to press a key, find a setting or open a panel.
+      a cloud session the desktop app has not lent a browser; with no usable browser, the
+      list is made all the same and a paste is offered for the best three only (screenshots
+      on a phone, a paste on a computer). Never tell the person to press a key, click, tap or
+      find anything: a path they follow comes from `tools/claude_surfaces.py`, written as
+      where to go at the time of writing, with the official page.
 
    1. **Public sources first, before LinkedIn is opened at all.** One WebSearch for
       `"<Full Name>" "<Company>"` with LinkedIn excluded, for a talk, an article, a
@@ -153,9 +197,10 @@ untouched employers from the latest round's shortlist.
    2. **Their profile, in the person's own browser, once**, only for the people still
       likely after (1), best first, and only as many as the batch needs. Only when
       `profile/networking.py` `PROFILE_READS` is `"browser"` and a browser tool is there:
-      Claude in Chrome, or the Claude desktop app's built-in browser, which a cloud session
-      reaches too while it is linked to the person's computer and the app is open
-      (`mcp__remote-devices__Claude_Browser__*`; load the browser's skill first).
+      Claude in Chrome, or the Claude desktop app's built-in browser, which a cloud chat that
+      has the `mcp__remote-devices__Claude_Browser__*` tools reaches too
+      (`python3 tools/claude_surfaces.py show cloud-linked-browser`; load the browser's skill
+      first). Decide by the tools this chat has, never by where it was started.
       - **The first sign-in is a wait, never a stop.** The pane keeps its own sign-ins
         across sessions, so this happens the first time and again only when LinkedIn signs
         them out. When the first profile opens on LinkedIn's sign-in or join page (its
@@ -211,9 +256,10 @@ untouched employers from the latest round's shortlist.
       `closed` contact with that reason, so they never surface again, and the next person
       is read in their place. When the people kept run out before the batch is full, run
       the next search the budget from step 3 still allows and read on.
-   4. **Their profile, from the person**: otherwise, the reply that presents the drafts
-      asks for it, as a numbered list (`reading.py queue`), one line per person, in
-      whichever way suits where they are:
+   4. **Their profile, from the person, for the best few only**: otherwise, the reply that
+      presents the drafts offers it for the top `reading.HAND_TOP` (3) at most
+      (`reading.py queue` lists exactly those), never for everyone: the rest go as they
+      are, from what the search found. In whichever way suits where they are:
       - **on a computer**: open the profile, select all, copy, and paste it here, or attach
         LinkedIn's own **More > Save to PDF** of it (`reading.py read <contact_id> <file>`,
         the `.pdf` as it is);
@@ -299,12 +345,16 @@ scored 82"), where they were found, tier with the **quoted signal** if tier 1, t
 route, the recommended channel and the note's shape, **what the note rests on**
 (the hook from their reading, with its source and date, so the person can check it
 before sending), and **the message itself, ready to paste**, with its character count
-against the plan's limit (and the subject line for an InMail).
+against the plan's limit (and the subject line for an InMail). Each person's **evidence**
+(the search result and its date, or their connections export) and **profile status**
+(verified, likely or unconfirmed) are shown as `harvest` gave them: "likely" is never
+written as confirmed, and "verified" means the result's own title named them at the
+employer on that date, not that their profile was read.
 
-A note with no page read behind it says so on its own line: "Rests only on their title
-and the search snippet. Paste their profile, attach its Save to PDF, or send screenshots
-of it from the LinkedIn app, and I'll make it about them." When the reads are in the browser, list who was read, who was skipped after the read and
-why, and say how many were read to fill the batch.
+A note with no page read behind it says so on its own line: "Rests on the search result
+only." Under the list, once, the line `sources.py ladder` prints, which offers a paste for
+the best three at most; never ask for everyone's. When the reads are in the browser, list
+who was read, who was skipped after the read and why, and how many were read.
 
 Someone found by name only (no LinkedIn profile found) has no request drafted: say where
 they were named and that a request waits until their profile is found, or offer the email

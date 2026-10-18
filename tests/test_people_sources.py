@@ -129,7 +129,10 @@ def test_a_source_moves_up_only_on_enough_replies(monkeypatch):
 
 def test_the_linkedin_check_finds_a_profile_by_name_and_employer():
     q = sources.linkedin_check("Rosalind Achterberg", "Kestrel Mutual Ltd")
-    assert q == '"linkedin.com/in" "Rosalind Achterberg" "Kestrel Mutual"'
+    # Plain words with the name quoted, run with the LinkedIn domain filter: the literal
+    # "linkedin.com/in" in the query cost results (measured 2026-10-18).
+    assert q == '"Rosalind Achterberg" Kestrel Mutual'
+    assert "linkedin.com" not in q
 
 
 # ------------------------------------------------------------------ why them

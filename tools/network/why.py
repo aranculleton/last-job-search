@@ -122,7 +122,9 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
                 "reasons": [(0, "a connection request to them is already pending")],
                 "line": "a connection request to them is already pending"}
 
-    if route in ("referral", "mutual") or contact.get("referred_by"):
+    if route == "connection" or contact.get("first_degree"):
+        reasons.append((30, "already in your connections: a message, not a request"))
+    elif route in ("referral", "mutual") or contact.get("referred_by"):
         reasons.append((30, f"a warm route: {contact.get('route_detail') or 'someone you know'}"))
     shared = reading.get("shared") or {}
     employers = [e.get("name") for e in shared.get("employers", []) if e.get("name")]
@@ -159,6 +161,10 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((12 + 6 * (len(same) > 1),
                         f"works on {' and '.join(same[:2])}, like you"))
 
+    if contact.get("found_for") and not title:
+        # Not their title: the result named only the employer. A search for the job
+        # surfaced them, which is a reason to look, never a claim about their role.
+        reasons.append((4, f"a search for {contact['found_for']} found them there"))
     in_function = bool(title) and bool(discovery.FUNCTION_TITLE.search(title))
     roles = open_roles(company) if roles is None else roles
     good = [r for r in roles if (r.get("fit") or 0) >= ROLE_FIT_FLOOR]
@@ -189,7 +195,7 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((6, f"public work to start from: {work[0].get('text', '')[:60]}".rstrip(": ")))
 
     reach = reading.get("reach") or ""
-    if reach == "message":
+    if reach == "message" and not (route == "connection" or contact.get("first_degree")):
         reasons.append((10, "already connected: a message, not a request"))
     elif reach == "request under More":
         reasons.append((-3, "Connect is behind More on their profile"))
@@ -210,6 +216,8 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
     if contact.get("name_only") or not ((contact.get("linkedin_url") or "").strip()
                                         or (contact.get("email") or "").strip()):
         reasons.append((-8, "found by name only: find them on LinkedIn before any request"))
+    elif contact.get("profile_status") == "likely":
+        reasons.append((-4, "profile found, but its title does not name the employer: check it"))
     if contact.get("reverify"):
         reasons.append((-6, "named on an old page: check they still hold the role"))
 

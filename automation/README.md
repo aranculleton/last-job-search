@@ -21,12 +21,12 @@ Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 
 Only two set-ups work reliably, and they trade the same thing: where the briefing arrives.
 
-| | (a) One chat per briefing | (b) The Routines screen |
+| | (a) One chat per briefing | (b) A routine, a new chat each run |
 |---|---|---|
 | Where the briefing arrives | A reply in that briefing's own chat | A new chat each run |
 | Push to your phone | No | Yes, where the app notifies you of the run |
 | Where you reply to the shortlist | The "Job search: shortlist" chat | The chat that run opened |
-| Set up from | A chat (Claude does it) | The Claude app's Routines screen (you do it) |
+| Set up from | A chat (Claude does it) | A routine (Claude, where its chat has the tool; otherwise you, once) |
 
 Both run on **your private repo**, never on the public app: a chat on the app holds none of
 your state, and anything it pushed would be public.
@@ -34,13 +34,32 @@ your state, and anything it pushed would be public.
 **From your own computer.** Say "set up my brief" there too. Claude first checks whether a
 brief already exists (`python3 tools/routines.py brief`), by your registry or a task's own
 prompt and never its title, so a second is never made. The brief always runs in the cloud,
-so it arrives when your computer is off. Where the terminal version of Claude Code is
-installed, Claude starts the brief's cloud chat itself with `claude --cloud "<the paste in (a)
-step 2>"`, and that chat does (a); the desktop app alone may not provide that command, and
-then Claude gives you the paste for a new chat at claude.ai/code. The desktop app's Routines
-screen does (b): New routine, then **Cloud**. Never **Local**: a local task runs only while
-the app is open and the computer awake. `/schedule` typed in a chat on your computer makes
-the same cloud routine.
+so it arrives when your computer is off. Where the chat on your computer has the tool for
+routines, Claude makes it itself, as (b); otherwise you make it, once:
+
+<!-- claude-surface: routines-cloud -->
+Make the brief in the cloud. At the time of writing: type /schedule in a chat on your
+computer and answer its questions; or open claude.ai/code/routines in a browser and choose
+New routine; in the desktop app's Code tab it is Routines, then New routine, then Cloud
+(official page: https://code.claude.com/docs/en/routines). Checked 2026-10-18.
+<!-- /claude-surface -->
+
+A scheduled task that runs on your computer is never used for it:
+
+<!-- claude-surface: routines-local -->
+A desktop scheduled task made with Local runs on the computer, and only while the desktop
+app is running and the computer is awake, so it is never used for the brief. Checked
+2026-10-18.
+<!-- /claude-surface -->
+
+Claude cannot start a cloud chat from its own shell on your computer, so it never tries:
+
+<!-- claude-surface: cli-cloud claim -->
+claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude
+Code, installed apart from the desktop app and signed in to the same claude.ai account, and
+it refuses to run without an interactive terminal: Claude cannot run it from its own shell,
+only the person can, in theirs. Checked 2026-10-18.
+<!-- /claude-surface -->
 
 ### The prompt each task stores
 
@@ -64,8 +83,8 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
 Say **"set up my brief"** in any chat in your repo. Where it can, Claude starts the brief's
 own chat with the paste in step 2, and you answer its two questions there. Otherwise:
 
-1. In Claude Code (claude.ai/code, or the Claude app's Code tab), start a **new chat with
-   your private repo selected**. Name it after its task: **Job search: morning brief**.
+1. In a cloud chat (claude.ai/code in a browser, or the Claude app on your phone), start a
+   **new chat with your private repo selected**. Name it after its task: **Job search: morning brief**.
    (Optional, and cheaper over months: first make the capped environment in "Keep a
    long-lived chat small" below, and start the chat in it.)
 2. Paste this into it:
@@ -85,9 +104,16 @@ own chat with the paste in step 2, and you answer its two questions there. Other
 4. Test each one as below. Each briefing then arrives as a reply in its chat, with no push.
    If you would rather scroll one chat, bind both tasks to the same one.
 
-### (b) The Routines screen
+### (b) A routine, a new chat each run
 
-1. In the Claude app, open **Routines** and create a new one for each task.
+1. Make a routine for each task:
+
+   <!-- claude-surface: routines-cloud -->
+   Make the brief in the cloud. At the time of writing: type /schedule in a chat on your
+   computer and answer its questions; or open claude.ai/code/routines in a browser and
+   choose New routine; in the desktop app's Code tab it is Routines, then New routine, then
+   Cloud (official page: https://code.claude.com/docs/en/routines). Checked 2026-10-18.
+   <!-- /claude-surface -->
 2. **Name:** Job search: morning brief. **Repository:** tick your private repo.
    **Schedule:** weekly, on the first of your two days (Monday and Thursday suit most
    searches), at your time; the screen offers set frequencies, so step 4 adds the second
@@ -95,14 +121,13 @@ own chat with the paste in step 2, and you answer its two questions there. Other
    the app offers them.
 3. Only if you want a scheduled search too: the same for **Job search: shortlist**, with its
    stub and its days.
-4. Ask any chat in your repo: "add my Routines-screen tasks to `profile/routines.json`, with
+4. Ask any chat in your repo: "add my routines to `profile/routines.json`, with
    `setup` set to `routines_screen`, and give the brief its second day". It records each
    name, cron and prompt file, with `"notifications": {"push": true}` on each
    (`routines.py check` fails without it, because a task nobody hears from is broken), and
    the trigger ids from `list_triggers` if it can see them (they are optional here). Where
-   it can see the task it sets both days itself with `update_trigger`; otherwise it says
-   what to ask `/schedule update` in Claude Code on your computer, which does not run inside
-   a cloud chat.
+   it can see the task it sets both days itself with `update_trigger`; otherwise it gives you
+   the words to change it from a chat on your computer, where routines can be changed.
 5. Every run is a new chat, and its final reply is the briefing, and the notification where
    the app sends one. Reply to the shortlist in the chat that run opened.
 
@@ -163,10 +188,10 @@ can still make it.
 | Ask | What the chat does |
 |---|---|
 | "Make the brief shorter", "add X to the TLDR", "stop drafting on Fridays" | Writes it into `profile/CLAUDE.md`, section "This search's automation", which every run reads and which is yours. The prompt files under `prompts/` are the app's: a sync puts an edit to them back. Takes effect on the next run. |
-| "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json` and, for (a), calls `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), the same where it can see the task, and otherwise says what to change in the Routines screen. Merges the registry. |
+| "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json` and, for (a), calls `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), the same where it can see the task, and otherwise says what to change on the routine's own page. Merges the registry. |
 | "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies them the same way, merges. |
 | "Add a task that does Y" | A new kind of task needs its own prompt file in the app (`prompts/<key>.md`), so it is a change to the app: the maintainer makes it, anyone else gets it written up as an issue. Until then, what an existing task should also do goes in `profile/CLAUDE.md`. |
-| "Pause the shortlist" | `update_trigger` with `enabled: false` (or the Routines screen), and `"paused": "<date> <reason>"` on the entry. |
+| "Pause the shortlist" | `update_trigger` with `enabled: false` (or the routine's own page), and `"paused": "<date> <reason>"` on the entry. |
 
 ## Cost
 

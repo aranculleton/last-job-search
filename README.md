@@ -38,7 +38,7 @@ has the full walk-through, and the steps for running it on your own computer ins
 |---|---|
 | "Find me jobs" | A scored shortlist with links, then a question: which ones? |
 | A job posting, pasted or linked | A resume and cover letter written for that job, checked |
-| "Who should I talk to at Acme?" | People worth contacting there, and a first note to send |
+| "Who should I talk to at Acme?" | People worth contacting there, found from any chat, ranked with the evidence for each, and a first note to send. Nothing is sent: you send it |
 | "What do I owe?" | Replies and follow-ups that are due |
 | "Prep me for my interview at Acme" | Likely questions, your best answers and questions to ask |
 | "They replied" or "I got an interview" | The record updated, and what to do next |

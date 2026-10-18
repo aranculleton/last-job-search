@@ -62,8 +62,8 @@ this is a cloud session or their own computer. **On their own computer**, run
 that asks for the computer's password); a blocked host there is their own network, not a
 setting of ours. **In a cloud session**, if anything is missing or a
 host is blocked, give them the two settings from `START_HERE.md`
-step 3 with the exact clicks (the cloud environment menu in the session's title bar, then
-**Edit**: the **Setup script** line, and **Network access** with its allowed domains), say
+step 3 (the setup script line, and the network setting with its allowed domains), with the way
+to them in the words `python3 tools/claude_surfaces.py say cloud-environment` prints, say
 that setup itself can carry on without them (web search still works for the research), and
 that the job search and the test resume need them, in a new session. If LaTeX is missing,
 `./tools/setup_env.sh` installs it for this session only.
@@ -300,11 +300,12 @@ about them, the ask, their home city and timezone, and `LINKEDIN_PLAN`, "free" o
 "premium", from their answer; on a free account the whole connection note is 200
 characters, so the opener, the line about them and the ask together stay near 120; and
 `PROFILE_READS`, "browser" or "paste", from their answer to whether Claude may read the
-LinkedIn profile of each person about to be messaged in their own signed-in browser, said
-plainly: LinkedIn's terms forbid automated access, the risk is to their account, it reads
-only the people a search surfaced, at a person's pace, and clicks nothing, and the
-alternative, which works on a phone and in a web session too, is pasting a profile or
-sending screenshots of it from the LinkedIn app when they open it),
+LinkedIn profiles of the best few people a run finds, in their own signed-in browser, said
+plainly: finding people never needs it (search results and their own connections make the
+list in any chat); LinkedIn's terms forbid automated access, and automating a site can break
+its terms, so the risk is to their account; it reads only the best ten a run shortlists, at
+a person's pace, and clicks nothing; the app reads and drafts and they act; and the
+alternative is pasting the one or two profiles that matter most),
 `claims.py`, `screening.py` (standard form
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,
 `12-scoring-brief.md`, `13-positioning.md` and `routines.json` (no routines yet).

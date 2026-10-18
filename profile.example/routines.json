@@ -1,5 +1,5 @@
 {
-  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to its own chat, named after the task, whose reply is the briefing) or routines_screen (each task made in the Claude app's Routines screen with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
+  "_about": "The example person's registry of scheduled tasks, with placeholder ids. A real profile fills in the ids its chats report; automation/README.md walks through it. `setup` is chat_per_briefing (each task bound to its own chat, named after the task, whose reply is the briefing) or routines_screen (each task made as a routine with the repo ticked and notifications on; trigger_id may be left null). Check it with python3 tools/routines.py check; print a task's prompt with python3 tools/routines.py stub <key>.",
   "setup": "chat_per_briefing",
   "timezone": "Europe/London",
   "routines": [

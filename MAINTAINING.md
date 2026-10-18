@@ -50,6 +50,20 @@ These apply whenever the change is to the app, whichever repo the session starte
   asking: `/upgrade` in the background, the sync itself for an instant one, or every round
   for screening. A new app file fails the same test until it is placed in a method or in
   `KEEPS_NOTHING`. The decision can be made either way; it cannot be skipped.
+- **Anything the app says about the Claude app lives in `tools/claude_surfaces.json`**: what a
+  chat on the computer, a cloud chat, a phone, the browser pane or a routine can do, and how a
+  person reaches each. An entry carries the official page, a quote from it, `verified_on`,
+  `verified_against` and `ui_sensitive`. Messages read it (`claude_surfaces.say`), a person's
+  docs carry it in `<!-- claude-surface: <id> -->` blocks (`claude_surfaces.py sync-docs`
+  rewrites them), and Claude's own instructions name the entry by id. A path is written as a
+  destination, "At the time of writing", with the official page beside it, and never tells
+  anyone to press, click, tap or find. `tests/test_claude_surfaces.py` fails on a vocabulary
+  phrase outside the registry. **The weekly watch** (`.github/workflows/claude-surfaces-watch.yml`,
+  the app only) opens the "Claude surfaces to re-check" issue when a quote has left its page, an
+  entry is older than 60 days, or a Claude Code release is newer than `checked_version`: re-read
+  the page, correct the entry, set `verified_on` and `checked_version`, run `sync-docs`, and
+  merge. Decide what a chat can do by the tools it has, never by where it was started: which
+  app started a cloud chat is not documented.
 
 ## The failure this is all defending against
 
