@@ -322,8 +322,9 @@ METHODS: dict[str, dict] = {
                  "is not taken as working at the employer, a short surname is never cut as if it "
                  "were letters after the name, and someone whose job the result does not give "
                  "ranks below a known title"),
+            (24, "2026-10-18", False, "the line saying why someone was found names the job a title search looked for, and nothing else: no search operators, never the person's own name"),
         ),
-        "fingerprint": "271cf33cab2c7119",
+        "fingerprint": "53be3c48d7d8b965",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
