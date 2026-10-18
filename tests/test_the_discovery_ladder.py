@@ -268,3 +268,18 @@ def test_letters_after_a_name_come_off_and_a_short_surname_stays():
     for still_here in ("Former teacher turned data scientist at Kestrel Mutual",
                        "Ex-Googler, Data Lead", "Previously at Fenwick Lane, now Head of Data"):
         assert not discovery.disqualify({**left, "title": still_here}, "Kestrel Mutual"), still_here
+
+
+def test_only_a_title_search_says_what_job_it_looked_for():
+    # A posts search put its operators where the job goes ("( we're OR join my team ...)
+    # site:linkedin.com/posts"), and a name check put the person's own name there.
+    one = [{"title": "Fenella Quarrie - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-fenella"}]
+    for kind, query in (("posts", '"Kestrel Mutual" ("we\'re hiring" OR "join my team") Data '
+                                  'Scientist site:linkedin.com/posts'),
+                        ("profile_check", '"Gopi Example" Kestrel Mutual')):
+        got = sources.harvest(one, "Kestrel Mutual", kind=kind, query=query, today=TODAY,
+                              connections=[], contacts=[])
+        assert not got["keep"][0].get("found_for"), kind
+        assert not any("came up in a search" in w for _, w in got["keep"][0]["why"]["reasons"])
+    assert sources._searched_for('"Kestrel Mutual" ("Head of Data" OR Lead) -site:x.com Manchester',
+                                 "Kestrel Mutual") == "Head of Data Lead"

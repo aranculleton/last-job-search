@@ -654,7 +654,9 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
             continue
         p.setdefault("route", "connection" if p.get("first_degree") else "cold")
         p.setdefault("company", company)
-        if query and not p.get("title"):
+        if query and kind == "title_search" and not p.get("title"):
+            # Only a title search looks for a job. A posts, press or name search would
+            # put its operators, or the person's own name, where the job goes.
             p["found_for"] = _searched_for(query, company)
         p["why"] = why.why_them(p, today=today, roles=[])
         keep.append(p)
@@ -669,10 +671,10 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
 def _searched_for(query: str, company: str) -> str:
     """The words a search added to the employer and the city: the job it looked for."""
     import discovery
-    q = query.replace('"', " ")
+    q = re.sub(r"\S+:\S+|-\S+|[()\"]|\bOR\b|\bAND\b", " ", query)
     for w in (discovery.search_name(company), company, discovery.HOME_CITY, "hiring"):
         if w:
-            q = re.sub(re.escape(w), " ", q, flags=re.I)
+            q = re.sub(r"(?<!\w)" + re.escape(w) + r"(?!\w)", " ", q, flags=re.I)
     return " ".join(q.split())
 
 

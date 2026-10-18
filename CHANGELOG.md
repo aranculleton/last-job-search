@@ -72,7 +72,9 @@ make sense to somebody whose repo just received it.
   ranked a Chief Data Officer below people whose job nobody knew. Each is fixed: a title
   that says former drops them, a post counts only when it names the employer, only real
   letters after a name come off, and someone whose result gives no title ranks below a
-  known one. Profile upgrade: method-networking.
+  known one. The line saying why someone was found names the job a title search looked
+  for and nothing else: a posts search had put its search operators there, and a name check
+  the person's own name. Profile upgrade: method-networking.
 - **A sync names every change it brings.** It printed the first twelve lines of new
   CHANGELOG text, so a sync that brought a whole release told you about its first entry
   and nothing else. It now gives one line per change. No profile upgrade.
