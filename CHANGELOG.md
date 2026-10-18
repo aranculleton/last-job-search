@@ -54,14 +54,20 @@ make sense to somebody whose repo just received it.
   connections export, reading your job alerts, reading profiles in your browser, keeping your
   own way when the app changes something you set) keeps your no with its date. It is asked
   again when what it offers has changed, saying what changed, or after 90 days, saying when
-  you said no; until then it stands. A no from before this was kept is asked again once now,
-  with what has changed. Profile upgrade: connections-export, job-alerts, profile-reads.
+  you said no; until then it stands. A no from before this was kept is asked again now only
+  where the question has changed since (your connections export, reading profiles), saying
+  what changed; otherwise it waits 90 days from when the question first appeared, so a "not
+  now" from last week is not asked again this week. Profile upgrade: connections-export,
+  job-alerts, profile-reads.
 - **Setting up asks where you will mostly work**, a computer or a phone or the web, with the
   trade-off in two sentences and a recommendation, and gives the exact next step. Profile
   upgrade: work-place (asked once, with the session's other questions).
 
 ### Fixed
 
+- **A sync names every change it brings.** It printed the first twelve lines of new
+  CHANGELOG text, so a sync that brought a whole release told you about its first entry
+  and nothing else. It now gives one line per change. No profile upgrade.
 - **The app runs on the Python a Mac already has.** A Mac's own `python3` is 3.9.6, and
   five places used a keyword that arrived in 3.10. On a Mac that crashed the merge driver,
   so a merge touching the contact book or the message log stopped with one side's copy in

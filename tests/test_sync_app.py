@@ -452,3 +452,19 @@ def test_no_release_yet_means_master(repos):
     commit(app, "more")
     rc, out = run(me, app)
     assert rc == 0 and "no release yet" in out and read(me, "README.md") == "v2\n"
+
+
+def test_a_release_names_every_change_not_its_first_lines():
+    # A sync that brought a whole release printed the first 12 raw lines of new CHANGELOG
+    # text: the first entry's opening, and nothing about the rest. Every entry is named.
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app
+    lines = ["## [Unreleased]", "### Added",
+             "- **Rounds read Kestrel Mutual's board.** It names", "  its source.",
+             "- **A no is for now.** It is asked again", "  after 90 days.",
+             "  reworded line inside an older entry",
+             "- A plain entry with no headline"]
+    assert sync_app.headlines(lines) == [
+        "Rounds read Kestrel Mutual's board.", "A no is for now.",
+        "A plain entry with no headline"]
+    assert sync_app.headlines(["  only a reworded line"]) == ["  only a reworded line"]

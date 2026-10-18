@@ -484,6 +484,16 @@ def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
     assert U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=89)) == ""
     later = U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=U.REASK_DAYS))
     assert later.startswith("you said no on 2026-10-18, 90 days ago")
+    # A no from before this was kept, to a question that has not changed ("not now" to
+    # job alerts three days earlier): held until REASK_DAYS after the question shipped,
+    # never asked again the day the upgrade lands.
+    a = U.by_id("job-alerts")
+    assert a.ask_version == 1 and U.again(a.id, a.ask_version, a.changed, today) == ""
+    added = dt.date.fromisoformat(a.added)
+    assert U.again(a.id, a.ask_version, a.changed, added + dt.timedelta(days=89)) == ""
+    assert U.again(a.id, a.ask_version, a.changed,
+                   added + dt.timedelta(days=U.REASK_DAYS)) == (
+        "you said no before; it is asked once more in case that has changed")
     # The question changes: asked again at once, saying how.
     assert U.again(u.id, u.ask_version + 1, "something new", today).endswith("something new")
     # Every question a no can answer is re-askable, and says what it changed when it did.
