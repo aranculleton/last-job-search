@@ -93,6 +93,13 @@ BREAK_SECONDS = (300, 720)
 DWELL_SECONDS = (20, 60)                # time on each page, scrolled through at reading pace
 PACE_SECONDS = GAP_SECONDS[0]           # the shortest gap ever allowed
 STOP_FILE = ("documents", "network", ".reads_stopped.json")
+# Reading enriches a short list; it never makes the list. A run ranks everyone it
+# found (tools/network/sources.py, the ladder), puts its best READS_PER_RUN on the
+# day's short list, and a browser read refuses anyone not on it. Without a browser,
+# a paste is offered for the best HAND_TOP at most, never for everyone.
+READS_PER_RUN = 10
+HAND_TOP = 3
+SHORTLIST_FILE = ("documents", "network", ".shortlist.json")
 # Signed in to LinkedIn in the browser today, as the session last saw it. A sign-in
 # page before this is a wait for the person; after it, LinkedIn signed them out
 # mid-run, which is a stop. Never a password: only that a signed-in page was seen.
@@ -889,34 +896,38 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
             return {"route": "browser", "browser": label, "usable": True,
                     "do": ("`reading.py signin` first when it says so, then read each profile "
                            "in " + label + ", nothing clicked"),
-                    "say": (f"I'll read each person's LinkedIn profile in {label}, one at a "
-                            f"time, clicking nothing.{first}"),
+                    "say": (f"I'll read the LinkedIn profiles of the best {READS_PER_RUN} I find, "
+                            f"in {label}, one at a time, clicking nothing.{first}"),
                     "signin": not signed_in}
         if "enable" in have:
             return {"route": "enable", "browser": pane, "usable": True,
                     "do": "call enable__mcp__remote-devices__Claude_Browser, then `reading.py "
                           "signin` when it says so, and read each profile, nothing clicked",
-                    "say": (f"I'll read each person's LinkedIn profile in {pane}, one at a "
-                            f"time, clicking nothing.{first}"),
+                    "say": (f"I'll read the LinkedIn profiles of the best {READS_PER_RUN} I find, "
+                            f"in {pane}, one at a time, clicking nothing.{first}"),
                     "signin": not signed_in}
         import place
         if "chrome-off" in have:
             say = ("Your setting reads profiles in your own browser, but Claude in Chrome is "
-                   "installed and no Chrome window is connected to it. For now, send "
-                   f"{hand} for each person and I'll do the rest.")
+                   "installed and no Chrome window is connected to it. For now, for the one or "
+                   f"two who matter most, send {hand} and I'll do the rest.")
         else:
             # The same words the place check says once per chat (tools/place.py): the
             # choice is offered, never made for them, and the setting is not changed.
             owner, name = place.repo()
             told = place.check(where, "browser", [], True, (), owner, name)
-            say = told[0] if told else f"Send {hand} for each person and I'll do the rest."
+            say = told[0] if told else (f"For the one or two who matter most, send {hand} and "
+                                        "I'll do the rest.")
         return {"route": "hand", "browser": "", "usable": False,
-                "do": f"ask once for {hand}, or wait while they move to the desktop app; "
-                      "everything after is automatic",
+                "do": f"make the whole list from search results and their connections "
+                      f"(sources.ladder); offer {hand} for the best {HAND_TOP} only, never "
+                      "everyone, or carry on in the chat they move to",
                 "say": say, "signin": False}
     return {"route": "hand", "browser": "", "usable": False,
-            "do": f"ask once for {hand}; everything after is automatic",
-            "say": f"Send {hand} for each person and I'll make each note about them.",
+            "do": f"make the whole list from search results and their connections "
+                  f"(sources.ladder); offer {hand} for the best {HAND_TOP} only, never everyone",
+            "say": (f"For the one or two who matter most, send {hand} and I'll make the note "
+                    "about them; the rest are written from what the search found."),
             "signin": False}
 
 
@@ -1082,6 +1093,27 @@ def reads_today(today: datetime.date | None = None) -> int:
     return n
 
 
+def shortlist(ids, today: datetime.date | None = None) -> list:
+    """Today's short list for browser reads: the run's best READS_PER_RUN, in order."""
+    ids = list(dict.fromkeys(i for i in ids if i))[:READS_PER_RUN]
+    p = person.state(*SHORTLIST_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"date": (today or datetime.date.today()).isoformat(), "ids": ids}, fh)
+        fh.write("\n")
+    return ids
+
+
+def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
+    try:
+        with open(person.state(*SHORTLIST_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    return (got.get("date") == (today or datetime.date.today()).isoformat()
+            and contact_id in (got.get("ids") or []))
+
+
 def queue(contacts: list, today: datetime.date | None = None) -> list:
     """Contacts with a first note waiting and no fresh reading of their profile."""
     out = []
@@ -1152,7 +1184,11 @@ def main(argv: list | None = None) -> int:
     a_.add_argument("--company", default="")
     s = sub.add_parser("show")
     s.add_argument("contact_id")
-    sub.add_parser("queue", help="drafts waiting with no fresh reading")
+    qu = sub.add_parser("queue", help="drafts waiting with no fresh reading")
+    qu.add_argument("--top", type=int, default=HAND_TOP,
+                    help="how many to offer a paste for: the best few, never everyone")
+    sl = sub.add_parser("shortlist", help="today's short list for browser reads, best first")
+    sl.add_argument("ids", nargs="+")
     st = sub.add_parser("stop", help="LinkedIn showed a check or a warning: no browser reads today")
     st.add_argument("reason", nargs="?", default="")
     st.add_argument("--reason", dest="reason_flag", default="")
@@ -1220,13 +1256,23 @@ def main(argv: list | None = None) -> int:
         if r_["say"]:
             print(f"tell them, once: {r_['say']}")
         return 0
+    if a.cmd == "shortlist":
+        got = shortlist(a.ids)
+        print(f"reading: today's short list, {len(got)} of at most {READS_PER_RUN}: "
+              + ", ".join(got))
+        return 0
     if a.cmd == "queue":
         import state
-        waiting = queue(state.load_contacts())
+        import why
+        waiting = [c for c in why.ranked(queue(state.load_contacts()))]
+        top = waiting[:max(0, a.top)]
         print(f"{len(waiting)} draft(s) waiting with no fresh reading; profile reads: {PROFILE_READS}"
               + (f", {max(0, READS_PER_DAY - reads_today())} browser read(s) left today"
                  if PROFILE_READS == "browser" else ""))
-        for i, c in enumerate(waiting, 1):     # numbered, so a reply can say "3 and 5"
+        if waiting:
+            print(f"offer a paste for these {len(top)} only, the best by why-them; the rest go "
+                  "as they are, from what the search found:")
+        for i, c in enumerate(top, 1):         # numbered, so a reply can say "1 and 3"
             print(f"  {i}. {c.get('name')} ({c.get('company')}) {c.get('linkedin_url') or ''}"
                   f"  [{c['contact_id']}]")
         return 0
@@ -1291,6 +1337,10 @@ def main(argv: list | None = None) -> int:
                 print("reading: LinkedIn's sign-in page, not a profile. Not a read, not counted, "
                       "nothing stopped: run `reading.py signin` and wait for the person")
                 return 4
+        if source == "browser" and not on_shortlist(a.contact_id):
+            raise SystemExit(f"reading: {a.contact_id} is not on today's short list. A browser "
+                             f"read is for the run's best {READS_PER_RUN} only: rank everyone "
+                             "found, then `reading.py shortlist <ids, best first>`")
         try:
             new = parse(text, name=contact.get("name", ""), company=contact.get("company", ""),
                         source=source,

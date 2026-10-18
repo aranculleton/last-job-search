@@ -1,0 +1,202 @@
+{
+  "_about": "Every statement the app makes about the Claude app, Claude Code and where a chat runs: what each surface can do, how to reach it, and how a cloud task is made from a computer. Messages read their words from here (tools/claude_surfaces.py say), docs carry them in marked blocks (sync-docs), and tests/test_claude_surfaces.py fails on a statement outside it. Each entry is dated and sourced; `watch` (the maintainer's, run by .github/workflows/claude-surfaces-watch.yml in the app only) checks each quote is still on its page and flags entries after a new Claude Code release. A path a person follows is written as a destination, 'at the time of writing', with the official page beside it, and never tells them to press, click, tap or find anything.",
+  "stale_after_days": 60,
+  "checked_version": "2.1.302",
+  "release_notes": "https://code.claude.com/docs/en/changelog",
+  "vocabulary": [
+    "Code tab", "Routines screen", "New routine", "Open with GitHub Desktop", "claude --cloud",
+    "/schedule", "Remote Control", "/remote-control", "claude remote-control", "Setup script",
+    "Network access",
+    "environment menu", "environment selector", "Edit cloud environment",
+    "only while the app is open", "lent it a browser", "linked to the person's computer",
+    "linked to their computer", "linked to your computer", "Cmd+Shift+B", "Ctrl+Shift+B",
+    "globe icon", "Browser tools"
+  ],
+  "entries": [
+    {
+      "id": "local-chat",
+      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, on a folder chosen there with the Local environment. The desktop app includes Claude Code, so nothing else needs installing for it.",
+      "goal": "continue this in a chat on your computer",
+      "how": "open the Claude desktop app, go to its Code tab, choose Local and then the folder {name}",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "The desktop app includes Claude Code, so you don't need to install Node.js or the CLI to use the Code tab."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Select Local for your machine"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302",
+      "ui_sensitive": true
+    },
+    {
+      "id": "clone-copy",
+      "claim": "GitHub Desktop puts a copy of a repository on the computer from the repository's page on GitHub.",
+      "goal": "put your copy on your computer",
+      "how": "on github.com/{owner}/{name}, choose Code, then Open with GitHub Desktop, and choose where to keep it",
+      "sources": [
+        {"url": "https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop", "quote": "To clone and open the repository with GitHub Desktop, click Open with GitHub Desktop."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "docs.github.com read 2026-10-18",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane",
+      "claim": "A chat in the desktop app can read web pages in the app's own browser pane, a browser of its own, separate from the person's, with none of their sign-ins until they sign in there. The pane keeps those sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that the profile is separate).",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18, and the built-in-browser skill as installed that day",
+      "ui_sensitive": false
+    },
+    {
+      "id": "cloud-linked-browser",
+      "claim": "A cloud chat can use the browser pane on the person's computer while the desktop app is open there and the chat is linked to it: its tools are mcp__remote-devices__Claude_Browser__*, or enable__mcp__remote-devices__Claude_Browser before they are turned on. This is in Anthropic's built-in-browser skill and not in the docs pages read, so the app decides by the tools a chat has, never by where it was started.",
+      "sources": [
+        {"url": "skill:anthropic-skills:built-in-browser", "quote": "when the session runs in the cloud (started from the web, a phone, or the desktop app) and is linked to the person's computer"}
+      ],
+      "status": "skill only",
+      "verified_on": "2026-10-18",
+      "verified_against": "the built-in-browser skill as installed 2026-10-18; not found in code.claude.com",
+      "ui_sensitive": false
+    },
+    {
+      "id": "chrome",
+      "claim": "Claude in Chrome lets a chat in a terminal or in VS Code use the person's own Chrome, with its sign-ins. It needs the Chrome extension and a claude.ai sign-in.",
+      "how": "start Claude Code with claude --chrome",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/chrome", "quote": "Chrome integration also requires signing in with /login ."},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "When you want Claude to act as you in your logged-in sessions, use the Claude in Chrome extension instead, which shares your browser's login state."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302 has --chrome",
+      "ui_sensitive": true
+    },
+    {
+      "id": "remote-control",
+      "claim": "Remote Control lets the Claude app on a phone, or claude.ai/code in a browser, drive a chat that runs on the person's computer, keeping that chat's tools. The computer has to stay on and the chat has to keep running. It is the way to read profiles in the computer's browser while away from it.",
+      "goal": "use the chat on your computer from your phone",
+      "how": "in the chat on your computer, type /remote-control (in a terminal, run claude remote-control in the folder {name}), then open that chat from the Claude app on your phone",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "Remote Control connects claude.ai/code or the Claude app for iOS and Android to a Claude Code session running on your machine."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "your computer has to stay on and the claude process has to keep running."},
+        {"url": "https://code.claude.com/docs/en/remote-control", "quote": "the Desktop app and VS Code use the /remote-control command."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302 has --remote-control",
+      "ui_sensitive": true
+    },
+    {
+      "id": "routines-cloud",
+      "claim": "A routine (a scheduled task) runs in the cloud and keeps working with the computer closed. It is made at claude.ai/code/routines, in the desktop app's Code tab as a Cloud routine, or with /schedule typed in a chat on the computer; /schedule is not available inside a cloud chat. The brief is always one of these.",
+      "goal": "make the brief in the cloud",
+      "how": "type /schedule in a chat on your computer and answer its questions; or open claude.ai/code/routines in a browser and choose New routine; in the desktop app's Code tab it is Routines, then New routine, then Cloud",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "so they keep working when your laptop is closed."},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "Create and manage them at claude.ai/code/routines , or from the CLI with /schedule ."},
+        {"url": "https://code.claude.com/docs/en/routines", "quote": "then New routine , and choose Cloud"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302",
+      "ui_sensitive": true
+    },
+    {
+      "id": "routines-local",
+      "claim": "A desktop scheduled task made with Local runs on the computer, and only while the desktop app is running and the computer is awake, so it is never used for the brief.",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop-scheduled-tasks", "quote": "Tasks only run while the desktop app is running and your computer is awake."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18",
+      "ui_sensitive": false
+    },
+    {
+      "id": "remote-trigger",
+      "claim": "The RemoteTrigger tool creates, updates, runs and lists routines and is what /schedule uses, so a chat that has it makes the brief in the cloud itself. It is in Claude Code 2.1.302; whether a given chat is offered it depends on the plan and the organisation's policy.",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "Creates, updates, runs, and lists Routines on claude.ai. Backs the /schedule command."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; present in the Claude Code 2.1.302 binary",
+      "ui_sensitive": false
+    },
+    {
+      "id": "cli-cloud",
+      "claim": "claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude Code, installed apart from the desktop app and signed in to the same claude.ai account, and it refuses to run without an interactive terminal: Claude cannot run it from its own shell, only the person can, in theirs.",
+      "how": "in a terminal on your computer, in the folder {name}, run claude --cloud",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/claude-code-on-the-web", "quote": "These workflows require the Claude Code CLI signed in to the same claude.ai account."},
+        {"url": "observed:claude-code-2.1.302", "quote": "Error: --cloud requires an interactive terminal."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; run in Claude Code 2.1.302 from a non-interactive shell",
+      "ui_sensitive": true
+    },
+    {
+      "id": "phone-and-web",
+      "claim": "A chat started on a phone (the Claude app) or in a web browser (claude.ai/code) is a cloud chat. It has no browser of the person's unless it is linked to their computer (cloud-linked-browser), or it drives a chat there (remote-control).",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/claude-code-on-the-web", "quote": "Mobile : the Code tab in the Claude app"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18",
+      "ui_sensitive": false
+    },
+    {
+      "id": "cloud-detect",
+      "claim": "CLAUDE_CODE_REMOTE is true in a cloud chat. Which app started a cloud chat is not documented: CLAUDE_CODE_ENTRYPOINT is read only as a hint, never as the reason to tell anyone to move.",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/env-vars", "quote": "Set automatically to true when Claude Code is running as a cloud session ."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18",
+      "ui_sensitive": false
+    },
+    {
+      "id": "web-search",
+      "claim": "Web search works in a cloud chat (run 2026-10-18) and in a chat on the computer, where an interactive terminal session has a limit of 200 searches. Every rung of finding people that needs no browser runs on it.",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/tools-reference", "quote": "An interactive terminal session has a limit of 200 WebSearch calls."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18; searches run from a cloud chat that day",
+      "ui_sensitive": false
+    },
+    {
+      "id": "gh-local",
+      "claim": "A chat on the computer has no GitHub tools of its own: the GitHub command line, gh, installed and signed in, is how its work reaches GitHub.",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "PR monitoring requires the GitHub CLI ( gh ) to be installed and authenticated on your machine."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18",
+      "ui_sensitive": false
+    },
+    {
+      "id": "cloud-environment",
+      "claim": "A cloud environment's setup script and network access are edited from the environment selector under the message box on the new-session screen at claude.ai/code, or, for a running chat, from the caret after its title (Edit cloud environment). A change applies to the next chat.",
+      "goal": "change the cloud environment's settings",
+      "how": "on the new-session screen at claude.ai/code, open the environment selector under the message box and edit the environment (in a running chat: the caret after its title, then Edit cloud environment); its Setup script and Network access are the two settings",
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "Add, edit, and archive environments from the environment selector under the message box on the screen where you start a new session at claude.ai/code ."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-18",
+      "verified_against": "code.claude.com docs read 2026-10-18",
+      "ui_sensitive": true
+    }
+  ]
+}

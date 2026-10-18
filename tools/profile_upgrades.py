@@ -280,6 +280,21 @@ def _connections_export() -> str:
             "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
 
 
+def _connections_first() -> str:
+    """Declined the export before the people search began with it, and not asked since."""
+    net = _mod("networking")
+    if net is None or getattr(net, "CONNECTIONS_EXPORT", None) != "declined":
+        return ""
+    if getattr(net, "CONNECTIONS_EXPORT_ASKED", ""):
+        return ""
+    root = os.environ.get("LJS_STATE") or ROOT
+    root = root if os.path.isabs(root) else os.path.join(ROOT, root)
+    if os.path.exists(os.path.join(root, "documents", "linkedin", "Connections.csv")):
+        return ""
+    return ("you declined the connections export before networking began every run from it; "
+            "asked once more, with what changed")
+
+
 def _contract() -> str:
     try:
         import portals
@@ -623,10 +638,25 @@ REGISTRY: tuple[Upgrade, ...] = (
             names=("networking.CONNECTIONS_EXPORT",),
             priority=3,
             needs="you",
-            ask="Want every networking run to start from people you already know? LinkedIn lets "
-                "you download your own connections list (Settings, Data privacy, Get a copy of "
-                "your data, Connections). It arrives by email in about ten minutes; attach the "
+            ask="Networking finds people in bulk from any chat, and the people you already know "
+                "are the best of them. Want every run to start from them? LinkedIn lets you "
+                "download your own connections list (Settings, Data privacy, Get a copy of your "
+                "data, Connections). It arrives by email in about ten minutes; attach the "
                 "Connections.csv here. Claude only reads it, and contacts nobody."),
+    Upgrade("connections-first", "2026-10-18",
+            "the people you already know as the first place every networking run looks",
+            _connections_first, "ask once; save the Connections.csv they attach to "
+            "documents/linkedin/Connections.csv, or, if they would still rather not, write "
+            "CONNECTIONS_EXPORT_ASKED = \"2026-10-18\" in profile/networking.py so it is never "
+            "asked again", "question", "~2 min",
+            names=("networking.CONNECTIONS_EXPORT_ASKED",),
+            priority=4,
+            needs="you",
+            ask="You said no to sharing your LinkedIn connections list before. Networking now "
+                "finds people in bulk from any chat, and that list is the first and strongest "
+                "place it looks: the only way to find people you already know, read only, "
+                "contacting nobody. Would you like to share it now? If not, nothing changes "
+                "and this is not asked again."),
     Upgrade("profile-reads", "2026-10-17",
             "a note to each person built from their own profile, not a search snippet",
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "

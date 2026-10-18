@@ -398,22 +398,24 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
     assert off["route"] == "hand" and not off["usable"] and "no Chrome window is connected" in off["say"]
     assert reading.route(["chrome-off", "browser"], "browser", LOCAL)["route"] == "browser"
     phone = reading.route([], "browser", CLOUD_PHONE)
-    assert phone["route"] == "hand" and "screenshots" in phone["say"] and "phone" in phone["say"]
+    assert phone["route"] == "hand" and "/remote-control" in phone["say"]
     desk = reading.route([], "browser", CLOUD_DESKTOP)
-    # A cloud chat in the desktop app with no browser offers the move or a paste, and
-    # makes neither choice itself.
-    assert desk["say"].startswith("Your setting reads LinkedIn profiles in the browser")
-    assert "Close this chat" in desk["say"] and 'say "paste"' in desk["say"]
+    # A cloud chat in the desktop app with no browser says finding works, offers the move
+    # or a paste for the few who matter, and makes neither choice itself.
+    assert desk["say"].startswith("Finding people works in this chat.")
+    assert "Continue this in a chat on your computer" in desk["say"]
+    assert "one or two who matter most" in desk["say"]
     assert not desk["usable"] and desk["route"] == "hand"
-    assert reading.route([], "paste", CLOUD_PHONE)["say"].startswith("Send screenshots")
+    paste = reading.route([], "paste", CLOUD_PHONE)
+    assert paste["say"].startswith("For the one or two who matter most, send screenshots")
     assert reading.route(["browser"], "off", LOCAL)["route"] == "public"
-    for r in (phone, desk, reading.route([], "paste", LOCAL)):
-        said = r["say"].lower()
-        assert not any(w in said for w in ("press", "shortcut", "cmd", "ctrl", "setting:",
-                                           "find the setting", "open the panel"))
-        # A click is said only with exactly where: a named tab or button, never "click it".
-        for m in re.finditer(r"click ([a-z]+(?:,? [a-z]+)?)", said):
-            assert m.group(1) in ("the code", "code, then"), m.group(0)
+    import claude_surfaces
+    for r in (phone, desk, paste, reading.route([], "paste", LOCAL)):
+        said = r["say"]
+        assert not claude_surfaces.BANNED.search(said), claude_surfaces.BANNED.search(said)
+        assert not any(w in said.lower() for w in ("cmd+", "ctrl+", "for each person", "everyone"))
+        assert said.count("At the time of writing:") == said.count("(official page: https://")
+        assert "never everyone" in r["do"] or r["route"] != "hand"
 
 
 PAGE_PLAIN = """Rosalind Achterberg

@@ -105,8 +105,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-17", False, "asks whether Claude may read LinkedIn profiles in your own browser before writing to someone"),
             (5, "2026-10-17", False, "the browser-read question says it reads only the people a search surfaced, at a person's pace"),
             (6, "2026-10-17", False, "the browser-read question names screenshots as the way that works on a phone"),
+            (7, "2026-10-18", False, "the profile-reads question says finding people never needs a read, and that a read is for the best ten a run finds"),
         ),
-        "fingerprint": "c3ddfd7a57c7a420",
+        "fingerprint": "4e000e0488ba35e5",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -231,8 +232,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-17", False, "one source for the document-language rules (dashes, spelling in every locale, the document's noun, a status not held) and one voice filter shared with messages"),
             (12, "2026-10-17", False, "rulings name the blocker or gate they rest on (rank, the scraper skill); the day's sync carries the model check"),
             (13, "2026-10-18", False, "fit_to_page runs on Python 3.9"),
+            (14, "2026-10-18", False, "RUNBOOK names the people ladder and the Claude surfaces registry"),
         ),
-        "fingerprint": "21a95038ed685456",
+        "fingerprint": "68b573e016285c37",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -307,8 +309,9 @@ METHODS: dict[str, dict] = {
             (18, "2026-10-17", False, "alumni searches give every employer left a turn, the most recent leading and the rest taking turns a day at a time, and never search the current employer"),
             (19, "2026-10-18", False, "message checks run on Python 3.9; a new contact-book column goes at the end of the header"),
             (20, "2026-10-18", False, "LinkedIn's first sign-in is a wait, reads only for people written to that day at a person's pace, finds with no LinkedIn profile and finds on old pages are marked, a short batch stops and says why, and alumni searches go in the order their alumni have replied"),
+            (21, "2026-10-18", False, "people are found in bulk from any chat (connections, search results with their own titles, a profile check), plain one-title searches, and only the best ten are read or the best three pasted"),
         ),
-        "fingerprint": "9b4a89cc9eab668e",
+        "fingerprint": "0757244e5f8ab740",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -335,8 +338,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-17", False, "the candidate's current employer is read from the role dates"),
             (10, "2026-10-18", False, "the read keeps the headline and the top card's employer, grounds a note on them, skips anyone the person's location gate fails, and leaves old press out"),
             (11, "2026-10-18", False, "the route offers the move to the desktop app or a paste when a cloud chat has no browser, in the place check's words"),
+            (12, "2026-10-18", False, "a browser read is for the day's short list only, a paste is offered for the best three, and the route says what works in this chat"),
         ),
-        "fingerprint": "3c6e60a7e0c16e9c",
+        "fingerprint": "8684c66baca483d3",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -374,8 +378,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "The default set-up is one task, a twice-weekly brief that takes the app's updates; the scheduled round is optional. Existing tasks keep their schedules"),
             (4, "2026-10-17", False, "how to set up the brief from a session on your own computer"),
             (5, "2026-10-18", False, "finds an existing brief by the registry or its prompt, never its title, so a second is never made"),
+            (6, "2026-10-18", False, "the words for making the brief from a computer come from the registry, and Claude never starts a cloud chat from its own shell"),
         ),
-        "fingerprint": "78450e9a3293bd86",
+        "fingerprint": "e80ecf2bb60066a6",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -486,6 +491,10 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/score_eval.py": "development tooling",
     "tools/env_check.py": "sets up the container, which is new every session",
     "tools/python_floor.py": "the oldest Python the app runs on; it leaves nothing behind",
+    "tools/claude_surfaces.py": "reads the registry of what Claude's surfaces can do; it writes "
+                                "nothing in a person's repo, and its watch runs in the app only",
+    "tools/claude_surfaces.json": "the registry of what Claude's surfaces can do, dated and "
+                                  "sourced: the app's words, read in place, never copied",
     "tools/place.py": "says once per chat whether the chat suits the person's settings; its one "
                       "record, profile/place.json, is /setup's question and the work-place upgrade's",
     "tools/setup_env.sh": "sets up the container, which is new every session",

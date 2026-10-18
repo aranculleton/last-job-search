@@ -33,10 +33,11 @@ repositories** and pick the copy you just made.
 ## 3. Open it in Claude Code
 
 First, one question: **will you mostly work on a computer, or on your phone or the web?**
-On a computer, in the Claude desktop app, Claude can read people's LinkedIn profiles in the
-app's own browser and your files sit on your disk; a few free tools go on once, and one or
-two ask for your computer's password. On a phone or the web nothing is installed and it
-works anywhere, but you send a screenshot or a paste of each profile you want read. If you
+Finding people, searching for jobs and writing work the same everywhere. On a computer, in
+the Claude desktop app, Claude can also read each person's LinkedIn profile before writing to
+them, and your files sit on your disk; a few free tools go on once, and one or two ask for
+your computer's password. On a phone or the web nothing is installed, and you paste the one
+or two profiles that matter most, or reach the chat on your computer from your phone. If you
 have a computer you can use for this, choose the computer: it does more for you.
 
 - **A computer:** go to [On your own computer](#on-your-own-computer) below now, and skip
@@ -46,17 +47,25 @@ have a computer you can use for this, choose the computer: it does more for you.
 Go to [claude.ai/code](https://claude.ai/code), start a new session, and choose your copy as
 the repository.
 
-The first time only, change two settings so it can make PDFs and reach job boards. Open the
-cloud environment menu in the session's title bar and click **Edit**:
+The first time only, change two settings of the cloud environment so it can make PDFs and
+reach job boards:
 
-- **Setup script:** copy and paste this line exactly. You do not need to understand it: it
-  installs the tools that turn your resume into a PDF, once, and they are kept for next time.
+<!-- claude-surface: cloud-environment -->
+Change the cloud environment's settings. At the time of writing: on the new-session screen
+at claude.ai/code, open the environment selector under the message box and edit the
+environment (in a running chat: the caret after its title, then Edit cloud environment); its
+Setup script and Network access are the two settings (official page:
+https://code.claude.com/docs/en/cloud-environments). Checked 2026-10-18.
+<!-- /claude-surface -->
+
+- **The setup script:** copy and paste this line exactly. You do not need to understand it:
+  it installs the tools that turn your resume into a PDF, once, and they are kept for next time.
 
   ```
   apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
   ```
 
-- **Network access:** the search has to reach job boards. Choose full internet access, or
+- **The network setting:** the search has to reach job boards. Choose full internet access, or
   a custom list that keeps the default package managers and adds these allowed domains:
   `linkedin.com`, `www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`,
   `api.lever.co`, `api.ashbyhq.com`, `*.myworkdayjobs.com`, and `api.openalex.org` if your
@@ -113,17 +122,28 @@ sets it up ([automation/README.md](automation/README.md)).
 
 ## On your own computer
 
-Everything works the same in the Claude desktop app's Code tab, with your copy on your own
-disk, and the desktop app's own browser is where people's LinkedIn profiles are read. The
-brief runs in the cloud, so it arrives when your computer is off. Signed in with an Anthropic
-API key instead of a plan, everything works except the brief: scheduled tasks and cloud
-chats need a paid plan.
+Everything works the same in a chat on your computer in the Claude desktop app, with your
+copy on your own disk, and the desktop app's own browser is where people's LinkedIn profiles
+are read. The brief runs in the cloud, so it arrives when your computer is off. Signed in
+with an Anthropic API key instead of a plan, everything works except the brief: scheduled
+tasks and cloud chats need a paid plan.
 
 1. Steps 1 and 2 above. Step 2 is what lets the brief, in the cloud, read your copy.
 2. Install the Claude desktop app: [claude.ai/download](https://claude.ai/download).
-3. Put your copy on your computer: on its GitHub page, click **Code**, then **Open with
-   GitHub Desktop**, and save it. Then open the Claude desktop app, click the **Code** tab
-   and choose that folder.
+3. Put your copy on your computer, then start a chat there on it:
+
+   <!-- claude-surface: clone-copy -->
+   Put your copy on your computer. At the time of writing: on github.com/you/of your copy,
+   choose Code, then Open with GitHub Desktop, and choose where to keep it (official page:
+   https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop).
+   Checked 2026-10-18.
+   <!-- /claude-surface -->
+
+   <!-- claude-surface: local-chat -->
+   Continue this in a chat on your computer. At the time of writing: open the Claude desktop
+   app, go to its Code tab, choose Local and then the folder of your copy (official page:
+   https://code.claude.com/docs/en/desktop-quickstart). Checked 2026-10-18.
+   <!-- /claude-surface -->
 4. Say "set me up". Claude checks what your computer has and installs what it can itself.
    What is left is one list, one command each, marked where it asks for your computer's
    password or signs you in; paste each into Terminal (PowerShell on Windows), once. If your
@@ -132,10 +152,23 @@ chats need a paid plan.
    `winget install Python.Python.3.12`. Until LaTeX is in, Claude can search and write but
    cannot make or check the PDFs.
 5. Say "set up my brief". Claude checks whether you already have one and never makes a
-   second. It is made in the cloud: Claude makes it itself where it can, and otherwise gives
-   you one thing to paste into a new chat at claude.ai/code. A scheduled task made in the
-   desktop app for your computer runs only while the app is open, so it is never used for
-   the brief.
+   second. It always runs in the cloud, so it arrives when your computer is off. Claude makes
+   it itself where the chat has the tool for it; otherwise it asks you to do this, once:
+
+   <!-- claude-surface: routines-cloud -->
+   Make the brief in the cloud. At the time of writing: type /schedule in a chat on your
+   computer and answer its questions; or open claude.ai/code/routines in a browser and
+   choose New routine; in the desktop app's Code tab it is Routines, then New routine, then
+   Cloud (official page: https://code.claude.com/docs/en/routines). Checked 2026-10-18.
+   <!-- /claude-surface -->
+
+   A scheduled task that runs on your computer is never used for the brief:
+
+   <!-- claude-surface: routines-local -->
+   A desktop scheduled task made with Local runs on the computer, and only while the desktop
+   app is running and the computer is awake, so it is never used for the brief. Checked
+   2026-10-18.
+   <!-- /claude-surface -->
 
 **How your work reaches GitHub from here.** A chat on your computer has no GitHub tools of
 its own, so Claude uses GitHub's command line, `gh`: step 4's list installs it, and
@@ -151,9 +184,18 @@ carry on. Cloud and local chats can be mixed, because your copy on GitHub is wha
 and Claude merges each chat's work into it, so the brief sees it. Never archive the chats
 your brief is bound to.
 
-**On a phone, or in a browser,** there is nothing to install: use claude.ai/code as in step 3,
-and send a screenshot or a paste of each profile you want read. The brief is set up from a
-chat there, so a phone is enough for that too.
+**On a phone, or in a browser,** there is nothing to install: use claude.ai/code as in step 3.
+Finding people works there. To have profiles read too, paste the one or two that matter most,
+or use the chat on your computer from your phone:
+
+<!-- claude-surface: remote-control -->
+Use the chat on your computer from your phone. At the time of writing: in the chat on your
+computer, type /remote-control (in a terminal, run claude remote-control in the folder of
+your copy), then open that chat from the Claude app on your phone (official page:
+https://code.claude.com/docs/en/remote-control). Checked 2026-10-18.
+<!-- /claude-surface -->
+
+The brief is set up from a chat there, so a phone is enough for that too.
 
 ---
 

@@ -18,7 +18,7 @@ about and never overwrites the rest; see [Resetting](#resetting) before starting
 ## A. Fresh cloud container
 
 Nobody using the app needs this section: the line START_HERE.md has you paste into the cloud
-environment's Setup script does all of it, and `./tools/setup_env.sh` repeats it in a session
+environment's setup script does all of it, and `./tools/setup_env.sh` repeats it in a session
 if that was skipped. By hand, it is:
 
 ```bash

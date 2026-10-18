@@ -38,18 +38,30 @@ BROWSERS = {"browser", "chrome", "enable"}
 
 QUESTION = "Will you mostly work on a computer, or on your phone or the web?"
 TRADE_OFF = (
-    "On a computer, in the Claude desktop app, Claude can read people's LinkedIn profiles "
-    "in the app's own browser and your files sit on your disk; a few free tools go on "
-    "once, and one or two ask for your computer's password. On a phone or the web nothing "
-    "is installed and it works anywhere, but you send a screenshot or a paste of each "
-    "profile you want read.")
+    "Finding people, searching for jobs and writing work the same everywhere. On a computer, "
+    "in the Claude desktop app, Claude can also read each person's LinkedIn profile before "
+    "writing to them, and your files sit on your disk; a few free tools go on once, and one or "
+    "two ask for your computer's password. On a phone or the web nothing is installed, and you "
+    "paste the one or two profiles that matter most, or reach the chat on your computer from "
+    "your phone.")
 RECOMMEND = "If you have a computer you can use for this, choose the computer: it does more for you."
 
-PHONE_WEB = "On a phone or in a browser, send screenshots or a paste for each profile."
+# The one line a chat with no browser of the person's says about reading. Finding
+# people never needs it (tools/network/sources.py, the ladder), so the line says what
+# works here first, and nothing it says blocks the work.
+FINDING_WORKS = ("Finding people works in this chat. Reading their profiles before writing "
+                 "to them needs a browser of yours, which this chat cannot reach.")
+PASTE_TOP = ("Or paste the profile of the one or two who matter most, here, and I'll write "
+             "to them from it.")
 # When the chat's tools were not named, a line carries this condition for Claude to
 # test first. It is never said to the person.
 IF_NO_BROWSER = ("[only if this chat has no browser tool: no Claude_Browser tools, no "
                  "enable__mcp__remote-devices__Claude_Browser, no Claude in Chrome] ")
+SIGN_IN_ONCE = ("The first time a profile is read, LinkedIn's sign-in page opens in the "
+                "desktop app's own browser: sign in there yourself, once. It remembers it "
+                "after that, until LinkedIn signs you out.")
+
+
 BRIEF_LOCAL = ("Your brief runs in the cloud, so it arrives when your computer is off. "
                "Nothing to do on your computer.")
 
@@ -86,15 +98,15 @@ def repo() -> tuple:
     return (m.group(1), m.group(2)) if m else ("", os.path.basename(ROOT))
 
 
-def _folder(owner: str, name: str) -> str:
-    where = f"github.com/{owner}/{name}" if owner else "your copy's page on GitHub"
-    return (f"If {name} is not on your computer yet: on {where}, click Code, then Open with "
-            "GitHub Desktop, and save it there first.")
+def _say(eid: str, owner: str, name: str, goal: bool = True) -> str:
+    import claude_surfaces
+    return claude_surfaces.say(eid, name=name, owner=owner, goal=goal)
 
 
-def _open_locally(owner: str, name: str, then: str) -> str:
-    return (f"Close this chat. Open the Claude desktop app, click the Code tab, choose the "
-            f"folder {name} and say \"{then}\". {_folder(owner, name)}")
+def _continue_locally(owner: str, name: str, then: str) -> str:
+    """Goal first, then the way there at the time of writing, from the registry."""
+    return (_say("local-chat", owner, name) + f" Then say \"{then}\" there. If {name} is not "
+            "on your computer yet, put it there first. " + _say("clone-copy", owner, name, False))
 
 
 def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(),
@@ -107,23 +119,28 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
     """
     out = []
     have = None if tools is None else {str(t).lower() for t in tools} & BROWSERS
+    then = f"find me people at {employer}" if employer else "find me people at <employer>"
     if setting == "browser":
-        if where in ("phone", "web", "unknown"):
-            out.append(PHONE_WEB)
-        elif where == "desktop-cloud" and not have:
-            then = f"find me people at {employer}" if employer else "find me people at <employer>"
-            line = ("Your setting reads LinkedIn profiles in the browser on your computer, and "
-                    "this chat runs in the cloud without it. " + _open_locally(owner, name, then)
-                    + " Or say \"paste\" and send each profile here instead, this time.")
+        # By the tools the chat has, never by where it was started: a phone chat linked
+        # to the computer reads profiles as well as a chat on it does (claude_surfaces:
+        # cloud-linked-browser), and where a chat was started is not documented.
+        if have:
+            if not signed_in and have & {"browser", "enable"}:
+                out.append(SIGN_IN_ONCE)
+        else:
+            if where in ("phone", "web"):
+                line = (f"{FINDING_WORKS} The chat on your computer can do the reading, and you "
+                        f"can use it from your phone. {_say('remote-control', owner, name, False)}"
+                        f" {PASTE_TOP}")
+            elif where == "local":
+                line = ("Finding people works in this chat. Reading their profiles before writing "
+                        "to them needs a browser this chat can use: the Claude desktop app has "
+                        f"its own. {_say('local-chat', owner, name, False)} In a terminal, Claude "
+                        f"in Chrome reads them in your own Chrome. {_say('chrome', owner, name, False)}"
+                        f" {PASTE_TOP}")
+            else:
+                line = f"{FINDING_WORKS} {_continue_locally(owner, name, then)} {PASTE_TOP}"
             out.append(line if have is not None else IF_NO_BROWSER + line)
-        elif where == "local" and have is not None and not have:
-            out.append("This chat has no browser to read LinkedIn profiles in. "
-                       + _open_locally(owner, name, "find me people at <employer>")
-                       + " Or say \"paste\" and send each profile here instead, this time.")
-        elif where in ("local", "desktop-cloud") and not signed_in:
-            out.append("The first time a profile is read, LinkedIn's sign-in page opens in the "
-                       "browser pane in the Claude desktop app: sign in there yourself, once. "
-                       "The pane remembers it after that, until LinkedIn signs you out.")
     if where == "local" and fixes:
         lines = ["This computer is missing a few things. Each is one command; I run the ones "
                  "without a mark myself. The marked ones are yours, once, pasted into Terminal "
@@ -140,7 +157,7 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
 def next_step(works_on: str, where: str, owner: str = "", name: str = "my-job-search") -> str:
     """The exact next step after /setup's question, for where this chat runs."""
     if works_on == "computer" and where != "local":
-        return _open_locally(owner, name, "set me up")
+        return _continue_locally(owner, name, "set me up")
     if works_on == "phone" and where == "local":
         return (f"Carry on here. On your phone, open claude.ai/code (or the Claude app's Code "
                 f"tab) and choose {name}: both work on your copy on GitHub.")
@@ -257,10 +274,16 @@ def report(tools=None, employer: str = "", once: bool = False, env=None) -> str:
         mark_told(chat)
     if not lines:
         return ""
+    import claude_surfaces
+    used = [e for e in claude_surfaces.load()["entries"]
+            if e.get("how") and claude_surfaces.say(e["id"], name=name, owner=owner)
+            and any(claude_surfaces.say(e["id"], name=name, owner=owner) in l for l in lines)]
+    warn = [w for w in (claude_surfaces.warning(e) for e in used) if w]
     return ("Place check (Claude: tell the person this once in this chat, in these words, "
-            "at the end of your reply; never apply a choice for them. A [bracketed] condition "
-            "is yours to test, never said):\n"
-            + "\n".join("  " + l.replace("\n", "\n  ") for l in lines))
+            "at the end of your reply; never apply a choice for them, and never hold back "
+            "work that does not need it. A [bracketed] condition is yours to test, never said):\n"
+            + "\n".join("  " + l.replace("\n", "\n  ") for l in lines)
+            + "".join("\n  " + w for w in warn))
 
 
 def main(argv=None) -> int:

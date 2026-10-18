@@ -14,8 +14,9 @@
 #
 # The cheapest fix is not this script: it is the environment's own setup
 # script, which runs before a session starts and is cached. Paste the one line
-# below into the cloud environment's settings (environment menu, Edit, Setup
-# script) and this script becomes a no-op check:
+# below into the cloud environment's setup script (where it is, at the time of
+# writing: python3 tools/claude_surfaces.py say cloud-environment) and this
+# script becomes a no-op check:
 #
 #     apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
 #

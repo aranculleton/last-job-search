@@ -34,7 +34,7 @@ CONTACT_COLUMNS = [
     "linkedin_url",
     "email",
     "tier",              # 1 live hiring intent | 2 hiring authority | 3 senior IC | 4 adjacent
-    "route",             # cold | alumni_employer | alumni_school | referral | mutual | hiring_team
+    "route",             # cold | connection | alumni_employer | alumni_school | referral | mutual | hiring_team
     "route_detail",      # "Acme alumni", "referred by Jane Smith", "named on the posting"
     "found_via",         # the source kind that surfaced them (tools/network/sources.py KINDS)
     "referred_by",       # contact_id of the referrer, for the referral graph

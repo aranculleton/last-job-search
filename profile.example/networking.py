@@ -50,6 +50,9 @@ PEOPLE_SOURCES = (
 # LinkedIn's own export of Morgan's connections, as documents/linkedin/Connections.csv,
 # so every run starts from people Morgan knows. "declined" when they would rather not.
 CONNECTIONS_EXPORT = "declined"
+# Asked once more when networking began every run from the export (the connections-first
+# upgrade), and Morgan kept their no: never asked again.
+CONNECTIONS_EXPORT_ASKED = "2026-10-18"
 
 # Who is writing.
 SIGN_OFF = {"senior": "Kind regards,\nMorgan Ellis", "peer": "Thanks,\nMorgan"}

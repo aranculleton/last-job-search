@@ -22,14 +22,30 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Networking finds people in bulk from any chat, and reads only the best few.** A run makes
+  its whole list from the rungs every chat has: your own connections export, search results
+  whose own titles name the person and the employer, and a profile check from those titles,
+  marked verified, likely or unconfirmed and never more than that. Nothing is fetched from
+  LinkedIn, nothing is sent and nothing is asked per person. Reading enriches a short list:
+  the best ten in your browser where the chat has one, paced as before, or a paste of the one
+  or two who matter most where it has not, never screenshots of everyone. People searches are
+  plain words, one title at a time: measured on two employers, that found 14 people at the
+  employer where the old searches found 5. Profile upgrade: connections-first (asked once,
+  only if you declined the connections export before).
 - **A chat says once when it is the wrong place for your settings, and where to go.** If you
-  chose to have profiles read in your own browser and a chat cannot reach it, the chat says
-  so once, at the end of its reply. A cloud chat in the desktop app says: close this chat,
-  open the Claude desktop app, click the Code tab, choose your folder, or say "paste". A phone
-  or the web says to send screenshots or a paste. A chat on your computer lists anything
-  missing, one command each, marked where it asks for your password. It offers the choice and
-  never makes it, and it changes no setting. It runs with every sync, so it reaches chats
-  already open.
+  chose to have profiles read in your own browser and a chat cannot reach one, it says once,
+  at the end of its reply, that finding people works there, and where reading does: a chat on
+  your computer, or that chat from your phone. It decides by what the chat can do, never by
+  where it was started, so a phone chat linked to your computer is left alone. A chat on your
+  computer lists anything missing, one command each, marked where it asks for your password.
+  It offers the choice and never makes it, holds back no work, and changes no setting. It
+  runs with every sync, so it reaches chats already open.
+- **What the app says about the Claude app is kept in one place, dated and sourced.** Every
+  path a message or a doc gives you comes from `tools/claude_surfaces.json`, with the official
+  page beside it and the day it was checked, written as where to go "at the time of writing",
+  never as a key to press or a button to click. An entry older than 60 days says so before it
+  is used, and a weekly check in the app compares each one with its page and with Claude
+  Code's release notes.
 - **Setting up asks where you will mostly work**, a computer or a phone or the web, with the
   trade-off in two sentences and a recommendation, and gives the exact next step. Profile
   upgrade: work-place (asked once, with the session's other questions).
@@ -72,6 +88,10 @@ make sense to somebody whose repo just received it.
 - **A read skips someone your location rules rule out**, and says to check where they work
   when they are somewhere your search does not name, rather than skipping them.
 - **`reading.py stop --reason "<words>"` works**, as well as `stop "<words>"`.
+- **"Set up my brief" from your computer works.** Claude was told to start the brief's cloud
+  chat with `claude --cloud` from its own shell, which that command refuses: it needs an
+  interactive terminal. Now it makes the brief itself where its chat has the tool for routines,
+  and otherwise asks you once, in the registry's words, to make it in the cloud.
 - **"Set up my brief" never makes a second brief.** An existing one is found by your registry
   or by its own stored prompt, never its title, so a brief called "Job search: brief (Mon and
   Thu)" is found as surely as one called "morning brief" (`routines.py brief`). From your

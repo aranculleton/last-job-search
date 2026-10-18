@@ -23,11 +23,17 @@ plain code: no model call decides the order.
 Usage:
     python3 tools/network/sources.py                 # this person's plan, ranked
     python3 tools/network/sources.py "<employer>"...  # the run's searches, within the budget
+    python3 tools/network/sources.py ladder --tools <browser,chrome,enable or none>
+                                                     # what this chat can use, and what to say
+    python3 tools/network/sources.py connections "<employer>"   # rung 1: who they already know there
+    python3 tools/network/sources.py harvest <results.json> --company "<employer>" [--kind K]
+                                                     # rungs 2 and 3: search results to a ranked list
 """
 from __future__ import annotations
 
 import datetime
 import os
+import re
 import sys
 from collections import namedtuple
 
@@ -39,6 +45,9 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 # "declined" when the person would rather not export their connections: the
 # connections kind then drops out of the plan instead of asking again every run.
 CONNECTIONS_EXPORT = str(getattr(_NET, "CONNECTIONS_EXPORT", "") or "")
+# The day a person who had declined was asked once more, when the export became the
+# ladder's first rung (the connections-first upgrade). After it, never again.
+CONNECTIONS_EXPORT_ASKED = str(getattr(_NET, "CONNECTIONS_EXPORT_ASKED", "") or "")
 
 # scope: "per_company" is searched for each employer, "per_run" once for the run,
 # "local" needs no search (a file or the browser). `searches` are WebSearch query
@@ -426,13 +435,65 @@ def _schools() -> list:
 
 
 def linkedin_check(name: str, company: str) -> str:
-    """The search that finds a person's LinkedIn profile: read the result URL, never fetch it."""
+    """Rung 3, the search that finds a named person's LinkedIn profile: run it with
+    allowed_domains=discovery.SEARCH_DOMAINS, read the result, never fetch it, and
+    judge it with discovery.profile_status(). Plain words with the name quoted: the
+    form that found a named person's profile first, titled with their employer
+    (2026-10-18)."""
     import discovery
-    return f'{discovery.SITE} "{name}" "{discovery.search_name(company)}"'
+    return f'"{name}" {discovery.search_name(company)}'
+
+
+def _cli_ladder(argv: list) -> int:
+    tools = []
+    if "--tools" in argv:
+        tools = [t for t in argv[argv.index("--tools") + 1].split(",") if t.strip() not in ("", "none")]
+    got = ladder(tools)
+    for i, (rung, usable, why) in enumerate(got["rungs"], 1):
+        print(f"  {i}. {'yes' if usable else 'no '} {rung.label}: {rung.yields} [{why}]")
+    print(f"read: {got['read']}, at most {got['read_cap']} in the browser this run"
+          + (f"; a paste offered for the best {got['hand_top']} at most" if got["hand_top"] else ""))
+    if got["say"]:
+        print(f"tell them, once, under the list: {got['say']}")
+    return 0
+
+
+def _cli_harvest(argv: list) -> int:
+    import json
+    path = argv[0]
+    opt = {k: argv[argv.index(k) + 1] for k in ("--company", "--kind", "--query", "--out")
+           if k in argv}
+    with open(path, encoding="utf-8") as fh:
+        got = json.load(fh)
+    results = got.get("results", got) if isinstance(got, dict) else got
+    company = opt.get("--company", "")
+    run = harvest(results, company, opt.get("--kind", "title_search"), opt.get("--query", ""))
+    c = run["counts"]
+    print(f"{company}: {c['results']} results, {c['people']} people named, {c['kept']} kept "
+          f"({c['verified']} with a profile titled with the employer)")
+    for i, p in enumerate(run["keep"], 1):
+        print(f"  {i}. {p['why']['score']:>3} {p['name']}: {p.get('title') or '(no title in the result)'}"
+              f" [{p.get('profile_status')}, {p.get('route')}] {p.get('linkedin_url')}\n"
+              f"       why: {p['why']['line']}\n       evidence: {p.get('evidence')}")
+    for p, why in run["dropped"]:
+        print(f"  dropped {p.get('name')}: {why}")
+    if "--out" in opt:
+        with open(opt["--out"], "w", encoding="utf-8") as fh:
+            json.dump({**run, "dropped": [{"person": p, "why": w} for p, w in run["dropped"]]},
+                      fh, indent=1, default=str)
+    return 0
 
 
 def main(argv: list | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "ladder":
+        return _cli_ladder(argv[1:])
+    if argv and argv[0] == "harvest" and len(argv) > 1:
+        return _cli_harvest(argv[1:])
+    if argv and argv[0] == "connections" and len(argv) > 1:
+        for p in from_connections(argv[1]):
+            print(f"  {p['name']}: {p.get('title')} ({p.get('evidence')}) {p.get('linkedin_url')}")
+        return 0
     import state
     try:
         rows = ranked(state.load_contacts(), state.load_threads())
@@ -458,6 +519,162 @@ def main(argv: list | None = None) -> int:
         for kind, q in for_company(company, rows):
             print(f"  {kind}: {q}{_NAMES_ONLY if not KINDS[kind].linkedin else ''}")
     return 0
+
+
+# ------------------------------------------------------------------ the ladder
+
+# How a run finds people and what it reads about them, cheapest and safest first.
+# Bulk discovery never depends on reading anyone: rungs 1 to 3 make the list from
+# any chat (a phone, the web, a cloud chat with no browser), and reading, rungs 4
+# and 5, only enriches a short list of it. A run with no browser still delivers the
+# whole ranked list, says in one line what reading would add, and offers a paste
+# for at most reading.HAND_TOP people; it never asks for a screenshot of everyone.
+# Browser reads are capped at reading.READS_PER_RUN a run, on top of the hourly and
+# daily caps and the day's sends.
+Rung = namedtuple("Rung", "id label yields cannot needs")
+LADDER = (
+    Rung("connections", "your own LinkedIn connections export",
+         "everyone you already know at the employer, in bulk, each with their profile "
+         "address; read only, and it contacts nobody",
+         "people you are not connected to", "the export, downloaded by you once"),
+    Rung("public_web", "public pages and search results",
+         "named people at the employer in bulk: profile results titled with their employer, "
+         "team and leadership pages, speaker lists, papers, code and press",
+         "what a profile says beyond its title", "web search, in any chat"),
+    Rung("exists", "a profile check from search results",
+         "whether a named person has a LinkedIn profile at the employer, verified or likely, "
+         "from the result's own title; nothing is fetched",
+         "anything the profile says", "web search, in any chat"),
+    Rung("browser_read", "a read in your own browser",
+         "the profile itself, for the short list only: current role, location, shared "
+         "history, recent posts, and whether a request is already pending",
+         "anyone beyond the short list", "a browser of yours this chat can use, and your yes"),
+    Rung("hand", "a paste or screenshots from you",
+         "one or two profiles you care most about, read from what you send",
+         "a list: it is never how people are found", "you, a few seconds each"),
+)
+
+
+def ladder(tools=(), consent: str | None = None, has_export: bool | None = None) -> dict:
+    """What this run can use from the ladder, for the tools this chat has.
+
+    `tools` as reading.route() takes them (browser, chrome, chrome-off, enable).
+    Returns {"rungs": [(Rung, usable, why)], "read": route, "read_cap": n,
+    "hand_top": n, "say": the one line for the person, or ""}.
+    """
+    import reading
+    r = reading.route(list(tools or ()), consent)
+    export = _has_export() if has_export is None else has_export
+    declined = CONNECTIONS_EXPORT == "declined"
+    reads = r["route"] in ("browser", "enable")
+    rungs = []
+    for rung in LADDER:
+        if rung.id == "connections":
+            usable = export
+            why = ("on file" if export
+                   else f"declined, and kept when asked again on {CONNECTIONS_EXPORT_ASKED}"
+                   if declined and CONNECTIONS_EXPORT_ASKED
+                   else "declined: the connections-first upgrade asks once more" if declined
+                   else "not on file yet: the connections-export upgrade asks once")
+        elif rung.id == "browser_read":
+            usable = reads
+            why = (f"{r['browser']}, the best {reading.READS_PER_RUN} only, paced" if reads
+                   else "no browser of yours in this chat" if reading.PROFILE_READS == "browser"
+                   else f"PROFILE_READS is {reading.PROFILE_READS!r}")
+        elif rung.id == "hand":
+            usable = not reads
+            why = f"offered for the best {reading.HAND_TOP} at most" if not reads else "not needed"
+        else:
+            usable, why = True, "any chat"
+        rungs.append((rung, usable, why))
+    say = "" if reads else (
+        "These were found from search results" + (" and your connections" if export else "")
+        + ", without reading anyone's profile. Reading a profile adds their current role, "
+        "shared history and recent posts; for the one or two who matter most, paste their "
+        "profile, its Save to PDF, or screenshots, and I'll write to them from it.")
+    return {"rungs": rungs, "read": r["route"], "read_cap": reading.READS_PER_RUN if reads else 0,
+            "hand_top": 0 if reads else reading.HAND_TOP, "say": say}
+
+
+def from_connections(company: str, connections=None, contacts=None) -> list:
+    """Rung 1: the person's own connections at one employer, best first, none already
+    in the contact book. Nothing searched, nothing fetched, nobody contacted.
+
+    In their function first (discovery.FUNCTION_TITLE), then the hands-on titles that
+    reply most (discovery.reply_rank), then the most recently connected.
+    """
+    import discovery
+    import state
+    conns = state.first_degree() if connections is None else connections
+    if contacts is None:
+        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+    out = []
+    for c in state.connections_at(conns, company):
+        if state.already_contacted(contacts, name=c.get("name"), company=c.get("company"),
+                                   linkedin_url=c.get("linkedin_url")):
+            continue
+        out.append({**c, "found_via": "connections", "route": "connection",
+                    "route_detail": "in your connections", "first_degree": True,
+                    "channel": "message", "profile_status": "verified",
+                    "evidence": "your connections export"
+                                + (f", connected {c['connected_on']}" if c.get("connected_on") else "")})
+
+    def key(p):
+        in_function = bool(discovery.FUNCTION_TITLE.search(p.get("title") or ""))
+        rank, _ = discovery.reply_rank({**p, "route": ""})
+        return (not in_function, rank, str(p.get("connected_on") or ""))
+    return sorted(out, key=key)
+
+
+def harvest(results, company: str, kind: str = "title_search", query: str = "",
+            today: datetime.date | None = None, connections=None, contacts=None) -> dict:
+    """Rungs 2 and 3 for one employer: search results to a ranked list, nothing fetched.
+
+    The results' own titles say who each person is and where they work
+    (discovery.people_from_results); discovery.triage() drops the moved-on, the
+    elsewhere-based and the wrong function; anyone already in the contact book is
+    dropped; their own connections are marked as a message rather than a request;
+    and why.why_them() ranks the rest. Returns {"keep": [...], "dropped": [(p, why)],
+    "counts": {...}}; every kept person carries `evidence`, `profile_status` and
+    `route`, and nobody is asked for anything.
+    """
+    import discovery
+    import state
+    import why
+    today = today or datetime.date.today()
+    people = discovery.people_from_results(results, company, kind=kind, query=query, today=today)
+    t = discovery.triage(people, today=today, target_company=company)
+    if contacts is None:
+        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+    conns = state.first_degree() if connections is None else connections
+    keep, dropped = [], list(t["dropped"])
+    for p in discovery.mark_first_degree(t["keep"], conns):
+        if state.already_contacted(contacts, name=p.get("name"), company=company,
+                                   linkedin_url=p.get("linkedin_url")):
+            dropped.append((p, "already in your contact book"))
+            continue
+        p.setdefault("route", "connection" if p.get("first_degree") else "cold")
+        p.setdefault("company", company)
+        if query and not p.get("title"):
+            p["found_for"] = _searched_for(query, company)
+        p["why"] = why.why_them(p, today=today, roles=[])
+        keep.append(p)
+    # Stable: people the scores cannot tell apart keep the search engine's order.
+    keep.sort(key=lambda p: (-p["why"]["score"], discovery.PROFILE_STATUS.index(
+        p.get("profile_status") or "unconfirmed")))
+    return {"keep": keep, "dropped": dropped,
+            "counts": {"results": len(results or ()), "people": len(people), "kept": len(keep),
+                       "verified": sum(p.get("profile_status") == "verified" for p in keep)}}
+
+
+def _searched_for(query: str, company: str) -> str:
+    """The words a search added to the employer and the city: the job it looked for."""
+    import discovery
+    q = query.replace('"', " ")
+    for w in (discovery.search_name(company), company, discovery.HOME_CITY, "hiring"):
+        if w:
+            q = re.sub(re.escape(w), " ", q, flags=re.I)
+    return " ".join(q.split())
 
 
 # Which kinds can produce someone a request can go to. A LinkedIn result carries
