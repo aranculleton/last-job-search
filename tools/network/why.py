@@ -47,7 +47,8 @@ CORE = [(rx, label) for rx, pts, label in (getattr(_SEARCH, "FIT_CORE", None) or
 # narrower than tone.is_senior, which decides the formal register and counts every
 # manager and lead: a hands-on lead is the reader most likely to reply to a note
 # with a real question in it, so they keep the question.
-_EXEC = re.compile(r"\b(?:chief|c[a-z]o\b|vp\b|vice\s+president|president|partner|managing\s+director"
+# AVP, SVP and EVP are as senior as VP: "AVP, Data Platforms" read as a peer.
+_EXEC = re.compile(r"\b(?:chief|c[a-z]o\b|[asde]?vp\b|vice\s+president|president|partner|managing\s+director"
                    r"|head\s+of|director|founder|co-?founder|owner)\b", re.I)
 
 
@@ -258,7 +259,11 @@ def ranked(contacts: list, today: dt.date | None = None, tracker=None, threads=N
 
 def main(argv: list | None = None) -> int:
     import state
-    ids = set(argv if argv is not None else sys.argv[1:])
+    args = argv if argv is not None else sys.argv[1:]
+    if any(a in ("-h", "--help") for a in args):
+        print("usage: python3 tools/network/why.py [contact_id ...]\n\n" + __doc__.strip())
+        return 0
+    ids = set(args)
     contacts = [c for c in state.load_contacts() if not ids or c.get("contact_id") in ids]
     for c in ranked(contacts):
         w = c["why"]

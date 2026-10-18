@@ -110,3 +110,18 @@ def test_upgrades_and_redos_are_told_to_leave_the_persons_settings_alone():
     assert "learned.py locked" in upgrade and "learned.py offer" in upgrade
     assert "learned.py locked" in setup
     assert "learned.py record" in claude and "learned.py brief" in claude
+
+
+def test_a_later_never_say_overrules_an_earlier_rule_that_prescribes_the_phrase(profile):
+    # Two reactions days apart: the first set a phrase, the second said never to use it.
+    # Both stayed active, so the brief told a drafting step to do both.
+    learned.record("messages", "sign off warmly", "every first note signs off with 'cheers'",
+                   today="2026-10-12")
+    learned.record("messages", "too casual", "never 'cheers'",
+                   never_say=["cheers"], today="2026-10-14")
+    learned.record("messages", "keep it short", "three sentences at most; never 'cheers' either",
+                   never_say=["cheers"], today="2026-10-15")
+    got = learned.brief("messages")
+    assert "signs off with 'cheers'" not in got           # overruled, kept as history
+    assert "never 'cheers'" in got and "three sentences at most" in got   # they agree: both stand
+    assert len(learned.load()) == 3 and len(learned.superseded()) == 1

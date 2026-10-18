@@ -503,3 +503,47 @@ def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
         assert "--no " + uid in x.run, uid
     assert not any("not asked again" in (x.ask or "") or "never asked again" in (x.run or "")
                    for x in U.REGISTRY)
+
+
+def test_a_read_pace_left_on_an_old_default_moves_to_the_current_one(profile):
+    # Written in while 80 a day was the app's default, it held the person at the old pace
+    # after the app moved to 15. A pace the person chose (learned.json) stays theirs.
+    import learned
+    net = profile / "networking.py"
+    net.write_text(re.sub(r"(?m)^PROFILE_READS_PER_DAY = \d+", "PROFILE_READS_PER_DAY = 80",
+                          net.read_text(encoding="utf-8")), encoding="utf-8")
+    person._modules.clear()
+    u = U.by_id("read-pace")
+    assert "PROFILE_READS_PER_DAY = 80" in u.pending() and u.needs == "nobody"
+    assert u.cost == "instant" and u.paths == ("profile/networking.py",)
+    before = net.read_text(encoding="utf-8")
+    assert U.apply_read_pace() == 0
+    after = net.read_text(encoding="utf-8")
+    assert "PROFILE_READS_PER_DAY = 15" in after
+    assert [a for a, b in zip(before.splitlines(), after.splitlines()) if a != b] == [
+        "PROFILE_READS_PER_DAY = 80"]                       # nothing else in the file moved
+    person._modules.clear()
+    assert u.pending() == ""
+    # Theirs: 80 because they said so is never moved.
+    net.write_text(after.replace("PROFILE_READS_PER_DAY = 15", "PROFILE_READS_PER_DAY = 80"),
+                   encoding="utf-8")
+    learned.record("other", "I want 80 a day", "80 browser reads a day",
+                   applied_to=["profile/networking.py PROFILE_READS_PER_DAY"], today="2026-10-18")
+    person._modules.clear()
+    assert u.pending() == ""
+
+
+def test_a_profile_line_telling_drafts_to_use_a_forbidden_phrase_is_found(profile):
+    # A never-say left the profile's own instruction to use the phrase in place, so every
+    # draft read both. Only a line that prescribes it counts.
+    import learned
+    learned.record("messages", "too casual", "never 'cheers'", never_say=["cheers"],
+                   today="2026-10-18")
+    (profile / "13-positioning.md").write_text(
+        "Sign-off: the line is \"cheers\" in every note.\n"
+        "Never write \"cheers\" to a recruiter.\n"
+        "We said cheers at the leaving do.\n", encoding="utf-8")
+    u = U.by_id("never-said")
+    got = u.pending()
+    assert "profile/13-positioning.md:1 ('cheers')" in got and u.needs == "nobody"
+    assert ":2 " not in got and ":3 " not in got

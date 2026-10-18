@@ -67,6 +67,33 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **People searches spend their budget where people are found.** Both title searches for
+  an employer now run first, then one each of the other kinds. Measured: the title search
+  was the only kind that named people at the employer in two real runs, and a round robin
+  had given it one search in four. Profile upgrade: method-networking.
+- **A name check keeps only the person checked, with the job the page gave them.** A search
+  for one speaker kept four other people its results happened to name, and the speaker
+  page's "AVP, Data Platforms" was lost, so a named leader ranked with people
+  nobody knew. Name checks are now counted, at most three an employer, where one run had
+  made 13 searches against a budget of four. Profile upgrade: method-networking.
+- **A post is dated, so an old one no longer passes for someone there now.** Its date was
+  read and stored where no check looked, and a 2023 post was kept as current evidence. It
+  is now the author's last activity, and a hiring post's signal date. AVP, SVP and EVP read
+  as senior, as VP did. Profile upgrade: method-networking.
+- **A short batch counts everyone found**, not only the ones it can write to: "I found 12
+  people; 2 of the 25 this run could write to have enough known about them for a note".
+  No profile upgrade: it is the message itself.
+- **A later "never say" overrules an earlier rule that tells a draft to use the phrase.**
+  Both had stayed active, so the brief before every draft said to use it and not to. The
+  earlier one stays on record and `learned.py list` marks it overruled. No profile upgrade:
+  the brief reads it every time.
+- **Your profile stops telling drafts to use wording you said never to use.** A line like
+  "in outbound messages say <the phrase>" stayed after the never-say. Claude rewrites each
+  such line in the background, keeping the fact; a sentence of yours that merely contains
+  the words is left alone. Profile upgrade: `never-said`.
+- **Profile reads move off the old default pace.** A pace written in while 80 a day and 30
+  an hour were the defaults held people there after the app moved to 15 and 8. It moves to
+  the current one; a pace you chose yourself stays. Profile upgrade: `read-pace`.
 - **The people a run finds are cleaned before any is added.** A real run at one employer,
   before release, kept a former chief executive (a comma made his title read as a place),
   took a post about another company as someone working at the employer searched, cut short

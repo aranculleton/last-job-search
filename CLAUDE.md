@@ -437,8 +437,11 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
 
 - A fixed search budget: at most `sources.SEARCHES_PER_COMPANY` (four) searches per employer
   across every kind of source, `sources.SEARCHES_PER_RUN` (five) for the kinds searched once a
-  run, and inside that at most two LinkedIn title searches per employer, three a hard ceiling
-  never meant to be reached (`discovery.queries_for()`). `sources.py` prints the run's searches.
+  run, and inside that the two LinkedIn title searches go first (`sources.TITLE_SEARCHES`, the
+  one kind measured to name people in bulk), three a hard ceiling never meant to be reached
+  (`discovery.queries_for()`). On top, at most `sources.CHECKS_PER_COMPANY` (three) profile
+  checks for the best name-only people (`sources.to_check`). `sources.py` prints the run's
+  searches.
 - Alumni and referral routes before cold. The response-rate gap is large.
 - Tier 1 requires a **quoted** live hiring signal, shown as evidence.
 - **Read each person before writing to them** (`tools/network/reading.py`, `/network` step 5):

@@ -24,6 +24,9 @@ These apply whenever the change is to the app, whichever repo the session starte
   writes the denylist from their profile; then `python3 tools/leak_scan.py <app checkout>
   --tokens <dir>/tokens` scans the app checkout with it. The app's CI scans again with the
   `LEAK_TOKENS` secret, but CI only sees what is already public, so the local scan is the gate.
+- **A test never writes to a person's state.** Run it on a copy of their repo, or with
+  `LJS_STATE` pointing at a copy of the state files. A test contact written to a real
+  contact book on 2026-10-17 then sat in it as a queued draft, counted as already contacted.
 - **No example may be a disguised person.** An example resume, story, message or incident is
   invented, or it is the example person in `profile.example/`. A real case with the names
   swapped is still that person.

@@ -323,8 +323,9 @@ METHODS: dict[str, dict] = {
                  "were letters after the name, and someone whose job the result does not give "
                  "ranks below a known title"),
             (24, "2026-10-18", False, "the line saying why someone was found names the job a title search looked for, and nothing else: no search operators, never the person's own name"),
+            (25, "2026-10-18", True, "people searches spend the budget where people are found: both title searches run first, a name check keeps only that person with the job the page gave them and is capped at three an employer, a post is dated so an old one no longer counts, and AVP, SVP and EVP read as senior"),
         ),
-        "fingerprint": "53be3c48d7d8b965",
+        "fingerprint": "1ecabaabe6964fb2",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",

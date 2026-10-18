@@ -100,7 +100,7 @@ HANDS_ON_TITLE = _NET_GET("HANDS_ON_TITLE", None) or _NEVER
 # Titles that name the org rather than the work. Still worth contacting; they
 # just sort below the ones above when a run has more names than slots.
 ADMIN_TITLE = re.compile(
-    r"\b(?:chief\b[\w&,\s]{0,30}?\bofficer|cdao|vice\s+president|vp\b|managing\s+director"
+    r"\b(?:chief\b[\w&,\s]{0,30}?\bofficer|cdao|vice\s+president|[asde]?vp\b|managing\s+director"
     r"|associate\s+partner|head\s+of\s+(?:enterprise|strategy|governance))", re.I)
 
 
@@ -442,8 +442,8 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
 # from the result and never fetched.
 _TITLE_SPLIT = re.compile(r"\s+[-\u2013\u2014|]\s+")
 # A letters-after-the-name word: all capitals (CFA, PMP, FCA), dotted (P.Eng., M.Sc.), or
-# one of the mixed-case degrees. Never any short capitalised word: that took "Nazir" off
-# "M. Irfan Nazir" and would take "Smith" off "Mary Ann Smith".
+# one of the mixed-case degrees. Never any short capitalised word: that took a short
+# surname off a three-word name, and would take "Smith" off "Mary Ann Smith".
 _CREDENTIAL = re.compile(r"^(?:[A-Z][A-Z0-9&]{1,6}|(?=[A-Za-z.]*\.)[A-Z][A-Za-z.]{1,7}|"
                          r"Ph\.?D\.?|D\.?Phil\.?|M\.?Sc\.?|B\.?Sc\.?|M\.?Eng\.?|"
                          r"P\.?Eng\.?|M\.?B\.?A\.?|M\.?P\.?H\.?)$")
@@ -561,7 +561,7 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
             if not _person_like(parsed["name"]):
                 continue
             # A post the search matched on its body, about another company, says nothing
-            # about where its author works: "Data Engineer - Willa" was kept as a
+            # about where its author works: a post about another company was kept as a
             # candidate at the employer searched. Only a post titled with the employer.
             if company and not _names_employer(title, company):
                 continue
@@ -576,6 +576,11 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
             "location": parsed["location"], "linkedin_url": got["profile_url"],
             "found_via": kind, "profile_status": status,
             "post_date": got["post_date"].isoformat() if got.get("post_date") else "",
+            # A post's date is its author's own last activity on LinkedIn, and a hiring
+            # post's signal date: kept only as post_date, which no check reads, a 2023
+            # post passed for someone there now.
+            "activity_date": got["post_date"].isoformat() if got.get("post_date") else "",
+            "signal_date": got["post_date"].isoformat() if got.get("post_date") else "",
             "evidence": f"search result {today.isoformat()}: \"{title.strip()}\" ({url})"
                         + (f", for {query!r}" if query else ""),
         })
@@ -718,7 +723,7 @@ def quote_signal(snippet):
 # neither, so in another language everybody read as tier 4, and "Staff Nurse"
 # read as a senior IC.
 AUTHORITY_TITLE = _NET_GET("AUTHORITY_TITLE", None) or re.compile(
-    r"\b(head of|director|dir\.|vp|vice president|svp|evp|chief|"
+    r"\b(head of|director|dir\.|vp|vice president|svp|evp|avp|chief|"
     r"manager|managing director)\b", re.I)
 
 SENIOR_IC_TITLE = _NET_GET("SENIOR_IC_TITLE", None) or re.compile(
