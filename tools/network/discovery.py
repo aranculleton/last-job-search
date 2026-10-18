@@ -441,8 +441,12 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
 # employer that needs no read: the profile's URL and its own words, captured
 # from the result and never fetched.
 _TITLE_SPLIT = re.compile(r"\s+[-\u2013\u2014|]\s+")
-_CREDENTIAL = re.compile(r"^(?:[A-Z][A-Za-z.]{1,6}|Ph\.?D\.?|M\.?B\.?A\.?|P\.?Eng\.?|"
-                         r"M\.?Eng\.?|C[A-Z]{1,4})$")
+# A letters-after-the-name word: all capitals (CFA, PMP, FCA), dotted (P.Eng., M.Sc.), or
+# one of the mixed-case degrees. Never any short capitalised word: that took "Nazir" off
+# "M. Irfan Nazir" and would take "Smith" off "Mary Ann Smith".
+_CREDENTIAL = re.compile(r"^(?:[A-Z][A-Z0-9&]{1,6}|(?=[A-Za-z.]*\.)[A-Z][A-Za-z.]{1,7}|"
+                         r"Ph\.?D\.?|D\.?Phil\.?|M\.?Sc\.?|B\.?Sc\.?|M\.?Eng\.?|"
+                         r"P\.?Eng\.?|M\.?B\.?A\.?|M\.?P\.?H\.?)$")
 # A part that names a job rather than an employer: "Data and Analytics Leader".
 _ROLE_WORD = re.compile(r"\b(?:manager|director|head|lead|leader|analyst|scientist|engineer|"
                         r"officer|consultant|founder|specialist|partner|vp|president|adviser|"
@@ -488,6 +492,14 @@ def parse_result_title(title: str) -> dict:
     if at:
         out["headline"] = out["headline"] or last
         out["employer"] = at.group(1).strip()
+    elif "," in last and _ROLE_WORD.search(last.rsplit(",", 1)[0]) \
+            and not _PLACE_WORDS.search(last.rsplit(",", 1)[1].replace(",", "")):
+        # "Former President and CEO, Kestrel Mutual": a job and its employer. The comma
+        # alone once made it a place, so a former CEO kept the employer he had left.
+        out["headline"], out["employer"] = (x.strip() for x in last.rsplit(",", 1))
+    elif "," in last and _ROLE_WORD.search(last.split(",", 1)[0]):
+        # "Head of Data, Greater Toronto Area": a job and where they are.
+        out["headline"], out["location"] = (x.strip() for x in last.split(",", 1))
     elif _PLACE_WORDS.search(last):
         out["location"] = last
     elif len(rest) == 1 and _ROLE_WORD.search(last):
@@ -548,6 +560,11 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
                       "location": ""}
             if not _person_like(parsed["name"]):
                 continue
+            # A post the search matched on its body, about another company, says nothing
+            # about where its author works: "Data Engineer - Willa" was kept as a
+            # candidate at the employer searched. Only a post titled with the employer.
+            if company and not _names_employer(title, company):
+                continue
         if not parsed["name"]:
             continue
         seen.add(handle)
@@ -563,6 +580,16 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
                         + (f", for {query!r}" if query else ""),
         })
     return out
+
+
+def _names_employer(text: str, company: str) -> bool:
+    """Does `text` name `company`, as people write it (search_name), word for word?"""
+    want = search_name(company).lower()
+    words = re.findall(r"[a-z0-9&]+", want)
+    if not words:
+        return False
+    return bool(re.search(r"(?<![a-z0-9])" + r"\W+".join(map(re.escape, words)) + r"(?![a-z0-9])",
+                          str(text or "").lower()))
 
 
 def _profile_handle(url: str) -> str:
@@ -1094,6 +1121,11 @@ DISQUALIFIERS = (
     # the search matched them to. Otherwise it is career history, and dropping
     # on it loses good people: half of a city's data leaders keep an ex-big-tech
     # name in the headline.
+    # Their own headline says they have left: "Former President and CEO". It is the
+    # title the search result carries, so it describes them now.
+    Rule("moved_on_former_title", "person", re.compile(
+        r"^\s*(former|ex|retired)\b(?!-\w)(?!.*\b(?:turned|now|current(?:ly)?)\b)", re.I),
+        "has moved on, their own title says so"),
     Rule("moved_on_former", "text", re.compile(
         r"(?i:\b(?:formerly at|previously at|ex-))\s*"
         r"([A-Z][\w&.'-]*(?:\s+[A-Z][\w&.'-]*){0,2})"),

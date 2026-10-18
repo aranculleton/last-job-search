@@ -316,8 +316,14 @@ METHODS: dict[str, dict] = {
             (20, "2026-10-18", False, "LinkedIn's first sign-in is a wait, reads only for people written to that day at a person's pace, finds with no LinkedIn profile and finds on old pages are marked, a short batch stops and says why, and alumni searches go in the order their alumni have replied"),
             (21, "2026-10-18", False, "people are found in bulk from any chat (connections, search results with their own titles, a profile check), plain one-title searches, and only the best ten are read or the best three pasted"),
             (22, "2026-10-18", True, "discovery runs again over every employer already in the contact book with the plain searches, which found nearly three times as many people at an employer; account-free rungs only, nothing read, nothing sent"),
+            (23, "2026-10-18", True, "discovery runs again over every employer already in the "
+                 "contact book with the plain searches, and the people found are cleaned before "
+                 "any is added: a title that says former drops them, a post about another company "
+                 "is not taken as working at the employer, a short surname is never cut as if it "
+                 "were letters after the name, and someone whose job the result does not give "
+                 "ranks below a known title"),
         ),
-        "fingerprint": "e618c3872d4e58e8",
+        "fingerprint": "271cf33cab2c7119",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
