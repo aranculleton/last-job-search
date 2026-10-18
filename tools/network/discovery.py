@@ -1136,6 +1136,17 @@ def _adjacent_reason(person, target_location):
     return "tier 4 adjacent: better targets exist at this company"
 
 
+def printed_date(person) -> bool:
+    """Is this person's date the date of a page that names them, not their own activity?
+
+    True for every source kind that is not LinkedIn itself (sources.KINDS: press,
+    team pages, rosters, awards...), where the date is the article's or the event's.
+    """
+    import sources
+    kind = sources.KINDS.get(str(person.get("found_via") or ""))
+    return bool(kind) and not kind.linkedin
+
+
 def triage(people, target_location=HOME_CITY, today=None, target_company=None):
     """Run the whole discovery filter over one company's search results.
 
@@ -1180,10 +1191,18 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
             continue
 
         presence = _person_date(person, PRESENCE_DATE_FIELDS)
+        reverify = ""
         if is_stale(presence, today):
-            dropped.append((person, "stale: last activity %s is over %d months old"
-                            % (presence.isoformat(), STALE_MONTHS)))
-            continue
+            # A press piece, a team page or an event's speaker list is dated by the
+            # page, not by the person: a 2018 appointment says who was appointed,
+            # not that they left. Kept, and marked to be checked before a note rests
+            # on it. A date from LinkedIn itself is their own last activity.
+            if not printed_date(person):
+                dropped.append((person, "stale: last activity %s is over %d months old"
+                                % (presence.isoformat(), STALE_MONTHS)))
+                continue
+            reverify = ("named on a %s page dated %s: check they still hold this role "
+                        "before a note rests on it" % (person.get("found_via"), presence.isoformat()))
 
         tier, signal = classify_tier(
             person.get("snippet"),
@@ -1218,6 +1237,12 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
             enriched["undated_signal"] = kept_line
         if not _clean(person.get("location")):
             enriched["location_unverified"] = True
+        if reverify:
+            enriched["reverify"] = reverify
+        if not (person.get("linkedin_url") or "").strip():
+            # Found by name only (a press piece, a speaker list): no request can go to
+            # someone who has not been found on LinkedIn yet.
+            enriched["name_only"] = True
         # Tier 4 is a flat bucket, but it is not a uniform one: a Data Engineer
         # at the target company and an Events Coordinator are both tier 4, and
         # when tier 4 becomes the fallback list the first name in it is the one

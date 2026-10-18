@@ -106,7 +106,13 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
     import discovery
     today = today or dt.date.today()
     reading = reading or {}
-    title = contact.get("title") or reading.get("headline") or ""
+    # What was read on their own page outranks the contact book's title, which can
+    # be months old: a stale "Head of Data Enablement" ranked a person as hands-on.
+    page = any(s.get("kind") in ("paste", "browser", "pdf", "screenshot")
+               for s in reading.get("sources") or [])
+    title = ((reading.get("headline") if page else "") or contact.get("title")
+             or reading.get("headline") or "")
+    contact = {**contact, "title": title}
     company = contact.get("company") or reading.get("company") or ""
     route = str(contact.get("route") or "").lower()
     reasons: list[tuple[int, str]] = []
@@ -201,6 +207,11 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((-10, "runs a function rather than doing the work; replies least"))
     if contact.get("location_unverified"):
         reasons.append((-5, "location not confirmed"))
+    if contact.get("name_only") or not ((contact.get("linkedin_url") or "").strip()
+                                        or (contact.get("email") or "").strip()):
+        reasons.append((-8, "found by name only: find them on LinkedIn before any request"))
+    if contact.get("reverify"):
+        reasons.append((-6, "named on an old page: check they still hold the role"))
 
     score = max(0, min(100, 30 + sum(p for p, _ in reasons)))
     band = "strong" if score >= STRONG else "good" if score >= GOOD else "worth a try"

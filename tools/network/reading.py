@@ -69,22 +69,37 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
 # for their yes (the profile-reads upgrade asks).
 PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
-# How a browser read behaves: like a person prospecting, never a loop. It is the
-# person's own signed-in account loading these pages, and a steady machine rhythm
-# or a burst is what automation checks look for. LinkedIn publishes no thresholds,
-# so these are judgement. 30 an hour is about one profile every two minutes, the
-# pace of someone writing a note to each person by hand, and 80 a day is enough to
-# prepare a whole week's connection requests (schema.LIMITS connections_per_week)
-# in one run, whenever and however long it is. The person can lower or raise both in
-# profile/networking.py (PROFILE_READS_PER_HOUR, PROFILE_READS_PER_DAY). No
-# setting makes a browser read safe; these make it look like a person reading.
-READS_PER_HOUR = int(getattr(_NET, "PROFILE_READS_PER_HOUR", 30) or 30)
-READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 80) or 80)
+# How a browser read behaves: like a person writing to a few people, never a loop.
+# It is the person's own signed-in account loading these pages, and a steady
+# machine rhythm or a burst is what automation checks look for. LinkedIn
+# publishes no thresholds and its terms forbid automated access at any pace, so
+# nothing here makes a browser read safe: these lower the risk and do not remove
+# it. A read is for someone the person will send to today, so the day's reads stop
+# at the requests left today (state.platform_budget) and SKIP_SPARE more, for the
+# people a read rules out; 15 a day and 8 an hour are the ceilings, the pace of
+# someone writing each note by hand. The person can set their own in
+# profile/networking.py (PROFILE_READS_PER_HOUR, PROFILE_READS_PER_DAY); the
+# send-day cap holds whatever they set. Earlier defaults were 30 and 80, with an
+# even 25 to 75 second gap and a longer break on exactly every fifth read: a
+# rhythm, which is what this replaced.
+READS_PER_HOUR = int(getattr(_NET, "PROFILE_READS_PER_HOUR", 8) or 8)
+READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 15) or 15)
+SKIP_SPARE = 3
 HOUR_MINUTES = 60                       # the hourly cap counts reads in this rolling window
-GAP_SECONDS = (25, 75)                  # a varied pause between two profiles
-BREAK_EVERY, BREAK_SECONDS = 5, (120, 300)   # and a longer one every few
+GAP_SECONDS = (45, 240)                 # between two profiles: most near a minute and a half
+GAP_MEDIAN = 90
+BREAK_AFTER = (3, 7)                    # a longer break after somewhere between 3 and 7 reads
+BREAK_SECONDS = (300, 720)
+DWELL_SECONDS = (20, 60)                # time on each page, scrolled through at reading pace
 PACE_SECONDS = GAP_SECONDS[0]           # the shortest gap ever allowed
 STOP_FILE = ("documents", "network", ".reads_stopped.json")
+# Signed in to LinkedIn in the browser today, as the session last saw it. A sign-in
+# page before this is a wait for the person; after it, LinkedIn signed them out
+# mid-run, which is a stop. Never a password: only that a signed-in page was seen.
+SIGNIN_FILE = ("documents", "network", ".signed_in.json")
+SIGNIN_URL = "https://www.linkedin.com/login"
+SIGNIN_POLL_SECONDS = 20                # how often the session looks at the pane's address
+SIGNIN_WAIT_MINUTES = 5                 # then it asks again, never gives up silently
 FRESH_DAYS = 30
 # A post is something to answer for this long; after that it is history.
 POST_DAYS = 180
@@ -284,19 +299,41 @@ def _sections(lines: list) -> tuple[list, dict, list]:
     return pre, secs, before_main or []
 
 
-def _top(pre: list, before_main: list) -> tuple[str, str]:
-    """(headline, location) from the top of the page."""
-    anchor = next((i for i, x in enumerate(pre) if x.lower() == "contact info"), None)
+_CONTACT = re.compile(r"^[\u00b7\u2022]?\s*contact info$", re.I)
+# The signed-in top card puts "Current employer · School" between the headline and
+# the location. Taking the line before the location as the headline saved that
+# line instead of the headline.
+_ORG_LINE = re.compile(r"\s[\u00b7\u2022]\s")
+
+
+def _top(pre: list, before_main: list, name: str = "") -> tuple[str, str, str]:
+    """(headline, location, the card's "Employer · School" line) from the top of the page."""
+    anchor = next((i for i, x in enumerate(pre) if _CONTACT.match(x)), None)
     if anchor is not None:
         before = [x for x in pre[:anchor] if not _NOISE.match(x)]
-        if len(before) >= 2:
-            return before[-2][:160], before[-1][:120]
-        return (before[-1][:160], "") if before else ("", "")
+        surname = (fold(name).split() or [""])[-1]
+        at = next((i for i, x in enumerate(before) if surname and len(x) <= len(name) + 30
+                   and re.search(r"(?<!\w)" + re.escape(surname) + r"(?!\w)", fold(x))), None)
+        card = before[at + 1:] if at is not None else before
+        if at is None and len(card) >= 3 and _ORG_LINE.search(card[-2]) and "|" not in card[-2]:
+            card = card[-3:]
+        if not card:
+            return "", "", ""
+        if len(card) == 1:
+            return card[0][:160], "", ""
+        org = next((x for x in card[1:-1] if _ORG_LINE.search(x)), "")
+        return card[0][:160], card[-1][:120], org[:200]
     # A "Save to PDF" export: name, headline and location sit right before Summary
     # or Experience, after the sidebar sections LinkedIn prints first.
     if len(before_main) == 3:
-        return before_main[1][:160], before_main[2][:120]
-    return "", ""
+        return before_main[1][:160], before_main[2][:120], ""
+    return "", "", ""
+
+
+def _card_employer(org: str) -> str:
+    """The current employer the top card names, never the school beside it."""
+    first = _ORG_LINE.split(org or "")[0].strip()
+    return "" if not first or _SCHOOL.search(first) else first[:120]
 
 
 def _posts(lines: list, today: datetime.date, name: str = "") -> list:
@@ -457,9 +494,9 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
     if name and not _names_them(name, lines):
         raise ValueError(f"this page does not look like {name}'s profile: their name is not on it")
     pre, secs, before_main = _sections(lines)
-    headline, location = _top(pre, before_main)
+    headline, location, org = _top(pre, before_main, name)
     degree, reach = _reach(pre)
-    about = " ".join(x for x in secs.get("about", []) if not _NOISE.match(x))[:ABOUT_CHARS]
+    about = _clip(" ".join(x for x in secs.get("about", []) if not _NOISE.match(x)), ABOUT_CHARS)
     items = (_posts(secs.get("activity", []), today, name)
              + _titled(secs.get("featured", []), "featured", 2)
              + _titled(secs.get("publications", []), "publication", 2))
@@ -467,7 +504,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
         "name": name, "company": company, "read_on": today.isoformat(),
         "sources": [{"kind": source, "url": url, "date": today.isoformat()}],
         "headline": headline, "location": location, "about": about,
-        "current": _current(secs.get("experience", [])),
+        "current": _current(secs.get("experience", [])) or _card_employer(org),
         "degree": degree, "reach": reach,
         "shared": _shared(secs), "items": items,
     }
@@ -481,6 +518,107 @@ def _names_them(name: str, lines: list) -> bool:
         return True
     text = fold(" ".join(lines[:400]))
     return re.search(r"(?<!\w)" + re.escape(words[-1]) + r"(?!\w)", text) is not None
+
+
+# ------------------------------------------------------- what LinkedIn showed
+
+# A check LinkedIn puts in front of the account: the one kind of page that ends the
+# day's reads. Looked for first, because a check page can carry sign-in words too.
+_CHECK = re.compile(
+    r"security (?:verification|check)|let's do a quick security check|verify (?:your )?identity|"
+    r"confirm (?:it's|that it's) you|captcha|are you a (?:human|robot)|press and hold|"
+    r"unusual activity|suspicious activity|automated (?:activity|behaviou?r|software)|"
+    r"account (?:has been |is )?(?:temporarily )?restricted|temporarily (?:limited|restricted)|"
+    r"we've (?:detected|noticed)|too many (?:requests|profile views)", re.I)
+# Signed out: LinkedIn's sign-in or join page, or a public profile view behind its
+# authwall. Before the person has signed in today this is a wait, never a stop.
+_SIGNIN = re.compile(
+    r"\bauthwall\b|^join linkedin$|^sign in$|join now|sign in to view|join to view|"
+    r"new to linkedin\?|forgot password\?|agree & join|^welcome back$|"
+    r"sign in with (?:email|apple|google)|email or phone|keep me logged in|"
+    r"to see (?:more|their full profile), sign in", re.I | re.M)
+# What only the signed-in view of a profile prints.
+_SIGNED_IN = re.compile(r"^[\u00b7\u2022]?\s*contact info$|^(?:1st|2nd|3rd\+?)$|"
+                        r"^[\u00b7\u2022]\s*(?:1st|2nd|3rd\+?)$|^message$|^connect$|^pending$|"
+                        r"^more$", re.I | re.M)
+
+
+def page_kind(text: str) -> tuple[str, str]:
+    """("check" | "signin" | "profile" | "unknown", the words that decided it).
+
+    Reads the page text the browser returned, nothing more: a check LinkedIn
+    showed, its sign-in or join page, or a signed-in profile.
+    """
+    body = "\n".join(_clean_lines(text)[:120])
+    m = _CHECK.search(body)
+    if m:
+        return "check", m.group(0)
+    signed = len(_SIGNED_IN.findall(body))
+    m = _SIGNIN.search(body)
+    if m and signed < 3:
+        return "signin", m.group(0)
+    if signed >= 2 or _SECTION_LINE.search(body):
+        return "profile", ""
+    return "unknown", ""
+
+
+_SECTION_LINE = re.compile(r"^(?:about|experience|education|activity)$", re.I | re.M)
+
+# Where the pane is, by its address alone: the session looks at the tab's URL and
+# title while the person signs in, never at the page.
+_SIGNED_OUT_URL = re.compile(r"linkedin\.com/(?:login|uas/login|authwall|signup|"
+                             r"checkpoint/lg|m/login)", re.I)
+_CHECK_URL = re.compile(r"linkedin\.com/checkpoint/challenge", re.I)
+_SIGNED_IN_URL = re.compile(r"linkedin\.com/(?:feed|in/|mynetwork|messaging|notifications|"
+                            r"search/results|company/|jobs/|m/feed)", re.I)
+
+
+def url_kind(url: str) -> str:
+    """"signed-in", "verifying" (LinkedIn asking the person to confirm it is them while
+    they sign in), or "waiting" (still on the sign-in page, or somewhere unclear)."""
+    if _CHECK_URL.search(url or ""):
+        return "verifying"
+    if _SIGNED_OUT_URL.search(url or ""):
+        return "waiting"
+    return "signed-in" if _SIGNED_IN_URL.search(url or "") else "waiting"
+
+
+def signed_in_today(today: datetime.date | None = None) -> bool:
+    try:
+        with open(person.state(*SIGNIN_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return False
+    return got.get("date") == (today or datetime.date.today()).isoformat()
+
+
+def mark_signed_in(now: datetime.datetime | None = None) -> None:
+    now = now or datetime.datetime.now()
+    p = person.state(*SIGNIN_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"date": now.date().isoformat(), "at": now.isoformat(timespec="seconds")}, fh)
+        fh.write("\n")
+
+
+SIGNIN_SAY = ("LinkedIn's sign-in is open in the browser pane. Sign in there yourself, then "
+              "say 'done' or just wait; I'll carry on.")
+
+
+def signin_steps() -> list:
+    """What the session does when LinkedIn is not signed in yet: open its sign-in page
+    in the pane, say one sentence, and wait, looking only at the pane's address."""
+    return [
+        f"open {SIGNIN_URL} in the browser pane (the sign-in page, not a profile)",
+        f"tell the person, once: {SIGNIN_SAY}",
+        "never type in it, read it, look at it or keep anything from it while they sign in",
+        f"every {SIGNIN_POLL_SECONDS}s, look only at the pane's address and title and run "
+        "`reading.py signin --url <address>`: signed-in means carry on with the first "
+        "profile; verifying means LinkedIn is asking them to confirm it is them, part of "
+        "signing in, so keep waiting",
+        f"after {SIGNIN_WAIT_MINUTES} minutes with no sign-in, ask once more whether they "
+        "want to sign in now or send a paste of each profile instead; never give up silently",
+    ]
 
 
 def pdf_text(path: str) -> str:
@@ -556,8 +694,21 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     if company and current and company_key(current) != company_key(company) \
             and not _has(company, headline) and not _has(company, current):
         return False, f"has moved on: their current employer is {current}, not {company}"
-    if discovery._abroad(reading.get("location", "")) and "remote" not in fold(headline):
-        return False, f"based elsewhere: {reading.get('location')}"
+    loc = reading.get("location", "")
+    if loc and "remote" not in fold(headline):
+        if discovery._abroad(loc):
+            return False, f"based elsewhere: {loc}"
+        # The person's own location gate, the one that screens postings, knows their
+        # market and the places they consider. A place it fails is elsewhere. A bare
+        # city it does not recognise ("Amsterdam", "Slough") cannot be placed without
+        # a gazetteer: kept, with a caution, because a wrong skip loses a good contact.
+        import prefilter
+        v, why_loc = prefilter.location_verdict(loc, headline)
+        if v == "FAIL":
+            return False, f"based elsewhere: {loc} ({why_loc})"
+        if "not recognized" in why_loc and not discovery._same_market(loc, discovery.HOME_CITY):
+            return True, (f"caution: based in {loc}, a place your search does not name; check "
+                          f"they work in {discovery.HOME_CITY} before writing")
     return True, ""
 
 
@@ -591,7 +742,14 @@ def hooks(reading: dict, today: datetime.date | None = None) -> list:
         out.append((6, "same city before", f"you both worked in {p['name']}", p.get("evidence", "")))
     if reading.get("about"):
         out.append((3, "about", "something specific in their About", _clip(reading["about"], 200)))
+    if reading.get("headline") and _page_read(reading):
+        out.append((2, "headline", "what they call their work", reading["headline"]))
     return sorted(out, key=lambda h: -h[0])
+
+
+def _page_read(reading: dict) -> bool:
+    """Was their own page read (pasted, in the browser, a PDF, screenshots), not only searched?"""
+    return any(s.get("kind") in PAGE_SOURCES for s in (reading or {}).get("sources", []))
 
 
 _STOP = set("""a an and are as at be been both but by for from had has have how i i'm in
@@ -611,7 +769,9 @@ today topic took two use used using very want way well work worked working would
 
 
 def _words(text: str) -> set:
-    return {w for w in re.findall(r"[a-z0-9][a-z0-9'&+.-]*[a-z0-9]|[a-z0-9]", fold(text))
+    # Lowercased first: without it the pattern dropped every capital, so "Model
+    # Governance" read as "odel overnance" and never met "model governance".
+    return {w for w in re.findall(r"[a-z0-9][a-z0-9'&+.-]*[a-z0-9]|[a-z0-9]", fold(text).lower())
             if len(w) >= 3 and w not in _STOP and w not in _GENERIC}
 
 
@@ -635,8 +795,18 @@ def grounded(common_ground: str, reading: dict | None) -> tuple[bool, str]:
     # prove nothing: "your work at <Employer>" is the note a snippet already made.
     known = _words(reading.get("name", "")) | _words(reading.get("company", ""))
     mine = _words(cg) - known
-    sources = [(i.get("kind", "item"), i.get("text", "")) for i in reading.get("items", [])]
+    today = datetime.date.today()
+    # A dated item older than POST_DAYS is history, as hooks() treats it: a 2018
+    # appointment is evidence of who was appointed, not of what they do now.
+    sources = [(i.get("kind", "item"), i.get("text", "")) for i in reading.get("items", [])
+               if not (i.get("kind") in _DATED and (_days(i.get("date", ""), today) or 0) > POST_DAYS)]
     sources += [("about", reading.get("about", ""))]
+    # Their headline and current role count when they were read on their own page:
+    # what they call their work is a fair thing to write about, and the page, not a
+    # months-old search snippet, is where it was read.
+    if _page_read(reading):
+        sources += [("headline", reading.get("headline", "")),
+                    ("current role", reading.get("current", ""))]
     for kind, text in sources:
         theirs = _words(text)
         need = 1 if len(theirs) <= 6 else 2
@@ -695,44 +865,64 @@ def surface(env=None) -> str:
     return "unknown"
 
 
-def route(tools=(), consent: str | None = None, env=None) -> dict:
+def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None = None) -> dict:
     """How this session reads a profile, chosen for the person, never asked of them.
 
     `tools` is what the session itself has: "browser" (the desktop app's built-in
-    browser, as mcp__Claude_Browser__* or mcp__remote-devices__Claude_Browser__*),
-    "chrome" (Claude in Chrome), "enable" (enable__mcp__remote-devices__Claude_Browser,
-    which turns the built-in browser on for the conversation). Returns the route,
-    what Claude does, and the one line the person is told, or "" when nothing needs
-    saying. A person is never told to press a key or find a setting: the browser is
-    used when it is there, switched on when it can be, and otherwise the route that
-    works where they are is asked for, once.
+    browser pane, as mcp__Claude_Browser__* or mcp__remote-devices__Claude_Browser__*),
+    "chrome" (Claude in Chrome with a Chrome window connected), "chrome-off" (Claude
+    in Chrome installed, but list_connected_browsers returned none), "enable"
+    (enable__mcp__remote-devices__Claude_Browser, which turns the pane on for the
+    conversation). Returns the route, which browser, whether it can be used now,
+    what Claude does, and the one sentence the person is told ("" when nothing needs
+    saying). A person is never told to press a key or find a setting.
     """
     have = {str(t).lower() for t in tools}
     consent = (consent or PROFILE_READS).lower()
     where = surface(env)
+    signed_in = signed_in_today() if signed_in is None else signed_in
     hand = ("screenshots of their profile from the LinkedIn app" if where == "phone"
             else "their profile pasted (select all, copy), its Save to PDF, or screenshots")
+    pane = ("the browser pane in the Claude desktop app" if where == "local"
+            else "the browser pane in the Claude desktop app on your computer, while the app is open")
+    first = ("" if signed_in else
+             " The first time, LinkedIn's sign-in opens there: sign in yourself, once; the "
+             "pane remembers it after that, until LinkedIn signs you out.")
     if consent == "off":
-        return {"route": "public", "do": "public work only", "say": ""}
+        return {"route": "public", "browser": "", "usable": False, "do": "public work only",
+                "say": "", "signin": False}
     if consent == "browser":
-        if have & {"browser", "chrome"}:
-            return {"route": "browser", "do": "read each profile in the browser, nothing clicked",
-                    "say": ""}
+        if "browser" in have or "chrome" in have:
+            label = pane if "browser" in have else "your own Chrome, through Claude in Chrome"
+            return {"route": "browser", "browser": label, "usable": True,
+                    "do": ("`reading.py signin` first when it says so, then read each profile "
+                           "in " + label + ", nothing clicked"),
+                    "say": (f"I'll read each person's LinkedIn profile in {label}, one at a "
+                            f"time, clicking nothing.{first}"),
+                    "signin": not signed_in}
         if "enable" in have:
-            return {"route": "enable", "do": "call enable__mcp__remote-devices__Claude_Browser, "
-                    "then read each profile in the browser, nothing clicked", "say": ""}
-        why = {"phone": "this session runs in the cloud and a phone has no browser it can use",
-               "web": "this session runs in the cloud and the web page has no browser it can use",
-               "desktop-cloud": "this session runs in the cloud and the desktop app has not "
-                                "given it a browser",
-               }.get(where, "this session has no browser it can use")
-        return {"route": "hand", "do": f"ask once for {hand}; everything after is automatic",
-                "say": f"Profiles are read automatically only in a session with a browser: "
-                       f"{why}. Until then, send {hand} for each person and I'll do the rest. "
-                       f"A session run on your computer from the Claude desktop app reads "
-                       f"them by itself."}
-    return {"route": "hand", "do": f"ask once for {hand}; everything after is automatic",
-            "say": f"Send {hand} for each person and I'll make each note about them."}
+            return {"route": "enable", "browser": pane, "usable": True,
+                    "do": "call enable__mcp__remote-devices__Claude_Browser, then `reading.py "
+                          "signin` when it says so, and read each profile, nothing clicked",
+                    "say": (f"I'll read each person's LinkedIn profile in {pane}, one at a "
+                            f"time, clicking nothing.{first}"),
+                    "signin": not signed_in}
+        why = {"phone": "a chat on a phone has no browser of yours to use",
+               "web": "a chat in a web browser has no browser of yours to use",
+               "desktop-cloud": "this chat runs in the cloud and your desktop app has not "
+                                "lent it a browser",
+               }.get(where, "this chat has no browser of yours to use")
+        if "chrome-off" in have:
+            why = "Claude in Chrome is installed but no Chrome window is connected to it"
+        return {"route": "hand", "browser": "", "usable": False,
+                "do": f"ask once for {hand}; everything after is automatic",
+                "say": f"Your setting reads profiles in your own browser, but {why}. For now, "
+                       f"send {hand} for each person and I'll do the rest.",
+                "signin": False}
+    return {"route": "hand", "browser": "", "usable": False,
+            "do": f"ask once for {hand}; everything after is automatic",
+            "say": f"Send {hand} for each person and I'll make each note about them.",
+            "signin": False}
 
 
 # ------------------------------------------------------------------- storage
@@ -813,8 +1003,22 @@ def stop(reason: str, today: datetime.date | None = None) -> str:
     return p
 
 
-def browser_gate(now: datetime.datetime | None = None) -> str:
-    """"" when a browser read may go now, otherwise why not and when it may."""
+def sends_left_today(today: datetime.date | None = None) -> int | None:
+    """Connection requests the person can still send today, or None when unknown."""
+    try:
+        import state
+        b = state.platform_budget(state.load_contacts(), state.load_threads(),
+                                  today or datetime.date.today())
+        return int(b.get("connections_left_today"))
+    except Exception:  # noqa: BLE001  the cap is a ceiling; without the book it stands alone
+        return None
+
+
+def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = -1) -> str:
+    """"" when a browser read may go now, otherwise why not and when it may.
+
+    `sends_left` is the requests left today; -1 reads it from the contact book.
+    """
     now = now or datetime.datetime.now()
     why = stopped(now.date())
     if why:
@@ -824,6 +1028,11 @@ def browser_gate(now: datetime.datetime | None = None) -> str:
     if len(today) >= READS_PER_DAY:
         return (f"{READS_PER_DAY} profiles read today (PROFILE_READS_PER_DAY); "
                 "the rest wait for tomorrow or a paste")
+    left = sends_left_today(now.date()) if sends_left == -1 else sends_left
+    if left is not None and len(today) >= left + SKIP_SPARE:
+        return (f"{len(today)} profiles read today, enough for the {left} request(s) that can "
+                "still go today: a profile is read only for someone sent to that day. The rest "
+                "wait for tomorrow")
     window = now - datetime.timedelta(minutes=HOUR_MINUTES)
     last_hour = [t for t, _ in reads if t > window]
     if len(last_hour) >= READS_PER_HOUR:
@@ -838,14 +1047,31 @@ def browser_gate(now: datetime.datetime | None = None) -> str:
     return ""
 
 
-def next_gap(rng=None) -> int:
-    """The pause to leave after this read: varied, and longer every few reads."""
+def next_gap(rng=None, reads=None) -> int:
+    """The pause to leave after this read: varied, with a longer break that comes after
+    anywhere from 3 to 7 reads, never on a fixed count."""
+    import math
     import random
     rng = rng or random
-    window = datetime.datetime.now() - datetime.timedelta(minutes=HOUR_MINUTES)
-    n = sum(1 for t, _ in _browser_reads() if t > window) + 1
-    lo, hi = BREAK_SECONDS if n % BREAK_EVERY == 0 else GAP_SECONDS
-    return int(rng.uniform(lo, hi))
+    reads = _browser_reads() if reads is None else reads
+    since_break = 0
+    for _, gap in reversed(reads):
+        if gap > GAP_SECONDS[1]:          # a break, never a long ordinary gap
+            break
+        since_break += 1
+    since_break += 1                       # this read
+    if since_break >= rng.randint(*BREAK_AFTER):
+        return int(rng.uniform(*BREAK_SECONDS))
+    gap = rng.lognormvariate(math.log(GAP_MEDIAN), 0.45)
+    return int(min(max(gap, GAP_SECONDS[0]), GAP_SECONDS[1]))
+
+
+def dwell(rng=None) -> int:
+    """Seconds to spend on a profile before its text is read: scrolled through to the
+    end at reading pace, which is also what loads the About, Experience and Education
+    sections LinkedIn only fills in as the page is scrolled."""
+    import random
+    return int((rng or random).uniform(*DWELL_SECONDS))
 
 
 def reads_today(today: datetime.date | None = None) -> int:
@@ -932,24 +1158,70 @@ def main(argv: list | None = None) -> int:
     s = sub.add_parser("show")
     s.add_argument("contact_id")
     sub.add_parser("queue", help="drafts waiting with no fresh reading")
-    st = sub.add_parser("stop", help="LinkedIn showed a warning or a wall: no browser reads today")
-    st.add_argument("reason")
+    st = sub.add_parser("stop", help="LinkedIn showed a check or a warning: no browser reads today")
+    st.add_argument("reason", nargs="?", default="")
+    st.add_argument("--reason", dest="reason_flag", default="")
     sub.add_parser("gate", help="may a browser read go now, and if not, when")
+    pg = sub.add_parser("page", help="what LinkedIn showed: a profile, its sign-in page, or a check")
+    pg.add_argument("file", help="the page text, or - for stdin")
+    si = sub.add_parser("signin", help="LinkedIn is not signed in yet: what to do, and the wait")
+    si.add_argument("--url", default="", help="the pane's address, looked at while they sign in")
+    si.add_argument("--done", action="store_true", help="a signed-in page was seen")
     ro = sub.add_parser("route", help="how this session reads profiles, and what to tell the person")
     ro.add_argument("--tools", default="",
                     help="what the session has, comma-separated: browser, chrome, enable")
     a = ap.parse_args(argv)
 
     if a.cmd == "stop":
-        print(f"reading: browser reads stopped for today ({os.path.relpath(stop(a.reason), person.state())})")
+        reason = a.reason or a.reason_flag
+        if not reason:
+            raise SystemExit("reading: stop needs what LinkedIn showed, as `stop \"<words>\"` "
+                             "or `stop --reason \"<words>\"`")
+        print(f"reading: browser reads stopped for today ({os.path.relpath(stop(reason), person.state())})")
         return 0
     if a.cmd == "gate":
         why = browser_gate()
-        print("go" if not why else f"wait: {why}")
-        return 0 if not why else 3
+        if why:
+            print(f"wait: {why}")
+            return 3
+        if not signed_in_today():
+            print("go, after sign-in: open the profile; if LinkedIn shows its sign-in page "
+                  "instead, run `reading.py signin` (a wait, not a stop)")
+        print(f"go: spend {dwell()}s on the page, scrolling it to the end at reading pace "
+              "(nothing clicked), then read its text once")
+        return 0
+    if a.cmd == "page":
+        text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+        kind, words = page_kind(text)
+        print(kind + (f": {words}" if words else ""))
+        return {"profile": 0, "signin": 4, "check": 5}.get(kind, 6)
+    if a.cmd == "signin":
+        if a.done:
+            mark_signed_in()
+            print("reading: signed in; carry on with the first profile")
+            return 0
+        if a.url:
+            state_ = url_kind(a.url)
+            if state_ == "signed-in":
+                mark_signed_in()
+            print(state_)
+            return 0 if state_ == "signed-in" else 4
+        if signed_in_today():
+            print("reading: already signed in today; a sign-in page now means LinkedIn signed "
+                  "them out, which is a stop: `reading.py stop \"signed out mid-run\"`")
+            return 0
+        print("LinkedIn is not signed in yet. This is a wait for the person, never a stop, and "
+              "nothing is counted:")
+        for i, step in enumerate(signin_steps(), 1):
+            print(f"  {i}. {step}")
+        return 4
     if a.cmd == "route":
         r_ = route([t for t in a.tools.split(",") if t.strip()])
-        print(f"route: {r_['route']} ({surface()})\ndo: {r_['do']}")
+        print(f"route: {r_['route']} ({surface()})"
+              + (f"\nbrowser: {r_['browser']}" if r_["browser"] else "")
+              + f"\nusable now: {'yes' if r_['usable'] else 'no'}\ndo: {r_['do']}")
+        if r_["signin"]:
+            print("first: `reading.py signin` when the first profile shows LinkedIn's sign-in page")
         if r_["say"]:
             print(f"tell them, once: {r_['say']}")
         return 0
@@ -969,7 +1241,7 @@ def main(argv: list | None = None) -> int:
             print(f"reading: nothing read about {a.contact_id} yet")
             return 1
         keep, why = verdict(found, a.company or found.get("company", ""))
-        print("KEEP" if keep else f"SKIP: {why}")
+        print(("KEEP" + (f" ({why})" if why else "")) if keep else f"SKIP: {why}")
         return 0 if keep else 3
     old = load(a.contact_id)
     if a.cmd == "show":                 # a reading stands on its own: no contact row needed
@@ -1009,6 +1281,21 @@ def main(argv: list | None = None) -> int:
         else:
             with open(a.file, encoding="utf-8") as fh:
                 text = fh.read()
+        if source == "browser":
+            kind, words = page_kind(text)
+            if kind == "check":
+                stop(f"LinkedIn showed a check: {words}")
+                raise SystemExit(f"reading: LinkedIn showed a check ({words}). Browser reads are "
+                                 "stopped for today; tell the person what it showed, and never "
+                                 "try to get past it")
+            if kind == "signin" and signed_in_today():
+                stop("LinkedIn's sign-in page after they had signed in today")
+                raise SystemExit("reading: LinkedIn signed them out mid-run. Browser reads are "
+                                 "stopped for today; tell the person, and carry on tomorrow")
+            if kind == "signin":
+                print("reading: LinkedIn's sign-in page, not a profile. Not a read, not counted, "
+                      "nothing stopped: run `reading.py signin` and wait for the person")
+                return 4
         try:
             new = parse(text, name=contact.get("name", ""), company=contact.get("company", ""),
                         source=source,
@@ -1018,12 +1305,14 @@ def main(argv: list | None = None) -> int:
         if source == "browser":
             new["sources"][0]["at"] = datetime.datetime.now().isoformat(timespec="seconds")
             new["sources"][0]["next_gap"] = next_gap()
+            mark_signed_in()            # a profile in the pane means they are signed in
         reading = merge(old, new)
     print(f"reading: saved {os.path.relpath(save(a.contact_id, reading), person.state())}")
     _show(reading)
     if a.cmd == "read":
         keep, why = verdict(reading, contact.get("company", ""))
-        print("verdict: KEEP" if keep else f"verdict: SKIP: {why} (read the next person instead)")
+        print(("verdict: KEEP" + (f" ({why})" if why else "")) if keep
+              else f"verdict: SKIP: {why} (read the next person instead)")
         if source == "browser":
             print(f"pace: the next profile in {new['sources'][0]['next_gap']}s at the earliest; "
                   "vary it, never open two at once")

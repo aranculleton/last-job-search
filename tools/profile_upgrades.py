@@ -222,6 +222,25 @@ def _rulings_review() -> str:
     return ""
 
 
+def _alumni_text() -> str:
+    """The plan's alumni line names the employer they work at now, which is never searched."""
+    if _mod("networking") is None:
+        return ""
+    code = ("import reading\n"
+            "net = reading._NET\n"
+            "lines = [str(r[1]) for r in (getattr(net, 'PEOPLE_SOURCES', None) or ())\n"
+            "         if r and r[0] == 'alumni_employer' and len(r) > 1]\n"
+            "h = reading.history()\n"
+            "now = [n for names in h['employers'] if names[0] in h['current'] for n in names]\n"
+            "print(sorted({n for n in now for t in lines if reading._has(n, t)}))")
+    got = _probe(code).strip()
+    if got and got != "[]":
+        return (f"the alumni line in PEOPLE_SOURCES names {got.strip('[]')}, where you work "
+                "now: alumni searches never search a current employer, so the line says "
+                "something the plan does not do")
+    return ""
+
+
 def _ruling_parts() -> str:
     if _mod("search") is None:
         return ""
@@ -555,6 +574,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             "\"the current rules rank this, never cut it\"`. Report the count per group, and list "
             "the person's own calls so they can say if one has changed", "research", "~5 min",
             priority=2),
+    Upgrade("alumni-text", "2026-10-18",
+            "the plan's description of its alumni searches matches what they search",
+            _alumni_text, "rewrite only the description of the alumni_employer entry in "
+            "PEOPLE_SOURCES (profile/networking.py) to name the employers they have left, the "
+            "one whose alumni reply most first (`python3 tools/network/sources.py` shows the "
+            "order), and never the one they work at now; change nothing else", "edit", "~1 min",
+            priority=4),
     Upgrade("ruling-parts", "2026-10-17",
             "a change to one of your rules puts back only the postings ruled out by that rule",
             _ruling_parts, "run `python3 tools/exclude.py cite`, then follow `python3 "
@@ -717,10 +743,11 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
-    "networking.PROFILE_READS_PER_DAY": "80 browser reads a day, enough to prepare a week's requests "
-                                        "in one run; raising it raises the risk to their LinkedIn account",
-    "networking.PROFILE_READS_PER_HOUR": "30 browser reads an hour with varied pauses, about "
-                                            "one every two minutes, the pace of writing to each",
+    "networking.PROFILE_READS_PER_DAY": "15 browser reads a day, and never more than the requests "
+                                        "that can still go that day plus three; raising it raises "
+                                        "the risk to their LinkedIn account",
+    "networking.PROFILE_READS_PER_HOUR": "8 browser reads an hour with varied pauses around a "
+                                            "minute and a half, the pace of writing to each",
     "networking.UNSUPPORTED_WHY": "the reason printed beside an unsupported-status finding in a "
                                   "resume or letter; unset, it says 'check it'",
     "networking.OPENALEX": "off: research papers find people only in fields that publish, and "

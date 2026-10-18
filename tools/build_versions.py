@@ -305,8 +305,9 @@ METHODS: dict[str, dict] = {
             (17, "2026-10-17", False, "shared definitions: dates, places, recruiter test, ruled-out employers, employer names without a legal suffix, an application there and a route's clear reply rate in why-them"),
             (18, "2026-10-17", False, "alumni searches give every employer left a turn, the most recent leading and the rest taking turns a day at a time, and never search the current employer"),
             (19, "2026-10-18", False, "message checks run on Python 3.9; a new contact-book column goes at the end of the header"),
+            (20, "2026-10-18", False, "LinkedIn's first sign-in is a wait, reads only for people written to that day at a person's pace, finds with no LinkedIn profile and finds on old pages are marked, a short batch stops and says why, and alumni searches go in the order their alumni have replied"),
         ),
-        "fingerprint": "2a18d1196c7a7c20",
+        "fingerprint": "9b4a89cc9eab668e",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -331,8 +332,9 @@ METHODS: dict[str, dict] = {
             (7, "2026-10-17", False, "the request budget is 50 a week and 25 a day, reads 30 an hour and 80 a day, and research papers are an optional source"),
             (8, "2026-10-17", False, "shared dates and employer names, so a shared employer is found without its legal suffix"),
             (9, "2026-10-17", False, "the candidate's current employer is read from the role dates"),
+            (10, "2026-10-18", False, "the read keeps the headline and the top card's employer, grounds a note on them, skips anyone the person's location gate fails, and leaves old press out"),
         ),
-        "fingerprint": "a3cf92b368655b4c",
+        "fingerprint": "03081911e6232fec",
     },
     "screening": {
         "by": "round", "priority": 2,
