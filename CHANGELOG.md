@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.2.5] - 2026-10-18
+
 ### Fixed
 
 - **Alumni searches reach every employer you have left.** They took the first employer in
