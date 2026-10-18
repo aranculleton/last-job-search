@@ -163,21 +163,28 @@ def record_no(uid: str, today: dt.date | None = None) -> str:
 def again(uid: str, version: int, changed: str, today: dt.date | None = None) -> str:
     """Why a question they said no to is asked again now, or "" while their no stands.
 
-    A no with no record (given before this was kept) is asked again once, with what
-    has changed; a recorded no stands until the question changes or REASK_DAYS pass.
+    A recorded no stands until the question changes or REASK_DAYS pass. A no with no
+    record (given before this was kept) answered the question's first version, no earlier
+    than the day it shipped (`added`): asked again at once only when it has changed since, and
+    otherwise REASK_DAYS after that day, so a no given last week is not asked again now.
     """
     today = today or dt.date.today()
-    rec = asked().get(uid) or {}
-    when = rec.get("no", "")
+    rec = asked().get(uid)
+    if rec is None:
+        known = next((u for u in REGISTRY if u.id == uid), None)
+        rec, when, said = {"version": 1}, known.added if known else "", "you said no before"
+    else:
+        when = rec.get("no", "")
+        said = f"you said no on {when}" if when else "you said no before"
     try:
         since = (today - dt.date.fromisoformat(when)).days if when else None
     except ValueError:
         since = None
-    said = f"you said no on {when}" if when else "you said no before"
     if int(rec.get("version") or 0) < version:
         return f"{said}, and it has changed since: {changed}" if changed else f"{said}"
     if since is not None and since >= REASK_DAYS:
-        return f"{said}, {since} days ago; it is asked once more in case that has changed"
+        ago = f", {since} days ago" if said != "you said no before" else ""
+        return f"{said}{ago}; it is asked once more in case that has changed"
     return ""
 
 

@@ -299,6 +299,20 @@ def _changelog(old: str) -> list[str]:
             if ln.startswith("+") and not ln.startswith("+++") and ln[1:].strip()]
 
 
+def headlines(lines: list[str]) -> list[str]:
+    """One line per new CHANGELOG entry, its bold headline, so a sync that brings a whole
+    release names every change rather than the first entry's opening lines. Lines that
+    start no entry (a heading, a reworded line inside an old entry) are left out; with no
+    entry at all, the lines themselves."""
+    out = []
+    for ln in lines:
+        s = ln.strip()
+        if s.startswith("- "):
+            m = re.match(r"- \*\*(.+?)\*\*", s)
+            out.append(m.group(1).strip() if m else s[2:])
+    return out or lines
+
+
 def sync() -> int:
     dirty = _dirty()
     if dirty:
@@ -365,11 +379,13 @@ def sync() -> int:
         print(git("diff", "--stat", "--stat-width=100", old, "HEAD").stdout.rstrip())
     for p in restored:
         print(f"  put back (edited here): {p}")
-    new = _changelog(old)
+    new = headlines(_changelog(old))
     if new:
         print("What changed, from the app's CHANGELOG:")
-        for ln in new[:12]:
-            print(f"  {ln}")
+        for ln in new[:20]:
+            print(f"  - {ln}")
+        if len(new) > 20:
+            print(f"  ... and {len(new) - 20} more (CHANGELOG.md)")
     # Commands and skills are read from disk each time they run; these are read once, when
     # a chat starts, so a chat kept open for days would go on following the old copy.
     for p in ("CLAUDE.md", "AGENTS.md"):
