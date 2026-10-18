@@ -85,7 +85,7 @@ def test_search_results_become_people_with_evidence_and_a_profile_status_nothing
                for p, w in got["dropped"])
     assert got["counts"] == {"results": 8, "people": 5, "kept": 3, "verified": 2}
     # The searched-for job is a reason to look, never a claim about their role.
-    assert any("a search for Head of Data found them there" in w
+    assert any("came up in a search for Head of Data there, which is not their title" in w
                for _, w in by["Rosalind Achterberg"]["why"]["reasons"])
 
 
@@ -217,3 +217,54 @@ def test_the_networking_tools_never_fetch_linkedin():
     net = (ROOT / ".claude" / "commands" / "network.md").read_text(encoding="utf-8")
     assert "never a fetch of\n      linkedin.com from this session" in net or "LinkedIn is never fetched from a session" in net
     assert "Nothing is sent, clicked, connected or submitted by any rung" in net
+
+
+# The shapes a real run at one employer brought back on 2026-10-18, names invented.
+REAL_SHAPES = [
+    {"title": "Ottoline Barraclough - Chief Data Officer - Group Functions - Kestrel Mutual",
+     "url": "https://www.linkedin.com/in/example-ottoline"},
+    {"title": "Fenella Quarrie - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-fenella"},
+    {"title": "Bastian Merriweather - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-bastian"},
+    {"title": "M. Ilyas Tremayne - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-ilyas"},
+    {"title": "Gideon Ashworth - Former President and CEO, Kestrel Mutual",
+     "url": "https://www.linkedin.com/in/example-gideon"},
+    {"title": "Perpetua Lindqvist on LinkedIn: Data Engineer - Willowmere",
+     "url": "https://www.linkedin.com/posts/example-perpetua_data-engineer-activity-7380000000000000000-AbCd"},
+]
+
+
+def test_a_real_runs_shapes_rank_the_known_leader_first_and_keep_nobody_wrong():
+    # A real run ranked a Chief Data Officer last, below eight people whose job nobody
+    # knew and a former CEO; took a surname off; and kept a post about another company.
+    got = sources.harvest(REAL_SHAPES, "Kestrel Mutual", query="Kestrel Mutual Head of Data Manchester",
+                          today=TODAY, connections=[], contacts=[])
+    names = [p["name"] for p in got["keep"]]
+    assert names[0] == "Ottoline Barraclough", names
+    assert "M. Ilyas Tremayne" in names                       # the whole name
+    assert "Gideon Ashworth" not in names and any(
+        p["name"] == "Gideon Ashworth" and w.startswith("has moved on") for p, w in got["dropped"])
+    everyone = [p["name"] for p in discovery.people_from_results(REAL_SHAPES, "Kestrel Mutual",
+                                                                 today=TODAY)]
+    assert "Perpetua Lindqvist" not in everyone               # a post about Willowmere
+    unknown = [p for p in got["keep"] if not p.get("title")]
+    assert unknown and all(any("title is not in the search result" in w
+                                for _, w in p["why"]["reasons"]) for p in unknown)
+
+
+def test_letters_after_a_name_come_off_and_a_short_surname_stays():
+    for title, name in (("Mary Ann Smith - Kestrel Mutual", "Mary Ann Smith"),
+                        ("M. Ilyas Tremayne - Kestrel Mutual", "M. Ilyas Tremayne"),
+                        ("Tamsin Oyelaran CFA - Kestrel Mutual", "Tamsin Oyelaran"),
+                        ("Corwin Haldane P.Eng. - Kestrel Mutual", "Corwin Haldane"),
+                        ("Rhian Pellow PhD - Kestrel Mutual", "Rhian Pellow")):
+        assert discovery.parse_result_title(title)["name"] == name, title
+    got = discovery.parse_result_title("Gideon Ashworth - Former President and CEO, Kestrel Mutual")
+    assert got["headline"] == "Former President and CEO" and got["employer"] == "Kestrel Mutual"
+    assert discovery.parse_result_title("Idris Corrie - Toronto, Ontario, Canada")["location"]
+    got = discovery.parse_result_title("Anna Lee - Head of Data, Greater Toronto Area")
+    assert (got["headline"], got["location"]) == ("Head of Data", "Greater Toronto Area")
+    left = {"company": "Kestrel Mutual"}
+    assert discovery.disqualify({**left, "title": "Former President and CEO"}, "Kestrel Mutual")
+    for still_here in ("Former teacher turned data scientist at Kestrel Mutual",
+                       "Ex-Googler, Data Lead", "Previously at Fenwick Lane, now Head of Data"):
+        assert not discovery.disqualify({**left, "title": still_here}, "Kestrel Mutual"), still_here

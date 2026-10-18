@@ -449,7 +449,9 @@ def _cli_ladder(argv: list) -> int:
     got = ladder(tools)
     for i, (rung, usable, why) in enumerate(got["rungs"], 1):
         print(f"  {i}. {'yes' if usable else 'no '} {rung.label}: {rung.yields} [{why}]")
-    print(f"read: {got['read']}, at most {got['read_cap']} in the browser this run"
+    print(f"read: {got['read']}, "
+          + (f"at most {got['read_cap']} in the browser this run" if got["read_cap"]
+             else "no browser reads in this chat")
           + (f"; a paste offered for the best {got['hand_top']} at most" if got["hand_top"] else ""))
     if got["say"]:
         print(f"tell them, once, under the list: {got['say']}")

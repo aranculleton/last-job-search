@@ -65,6 +65,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The people a run finds are cleaned before any is added.** A real run at one employer,
+  before release, kept a former chief executive (a comma made his title read as a place),
+  took a post about another company as someone working at the employer searched, cut short
+  surnames as if they were letters after the name ("Mary Ann Smith" became "Mary Ann"), and
+  ranked a Chief Data Officer below people whose job nobody knew. Each is fixed: a title
+  that says former drops them, a post counts only when it names the employer, only real
+  letters after a name come off, and someone whose result gives no title ranks below a
+  known one. Profile upgrade: method-networking.
 - **A sync names every change it brings.** It printed the first twelve lines of new
   CHANGELOG text, so a sync that brought a whole release told you about its first entry
   and nothing else. It now gives one line per change. No profile upgrade.

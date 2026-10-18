@@ -161,10 +161,15 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((12 + 6 * (len(same) > 1),
                         f"works on {' and '.join(same[:2])}, like you"))
 
+    if not title:
+        # Nothing says what they do. A known Chief Data Officer ranked below eight people
+        # whose results named only the employer, because the unknowns lost nothing for it.
+        reasons.append((-8, "their title is not in the search result: see what they do first"))
     if contact.get("found_for") and not title:
         # Not their title: the result named only the employer. A search for the job
         # surfaced them, which is a reason to look, never a claim about their role.
-        reasons.append((4, f"a search for {contact['found_for']} found them there"))
+        reasons.append((4, f"came up in a search for {contact['found_for']} there, "
+                           "which is not their title"))
     in_function = bool(title) and bool(discovery.FUNCTION_TITLE.search(title))
     roles = open_roles(company) if roles is None else roles
     good = [r for r in roles if (r.get("fit") or 0) >= ROLE_FIT_FLOOR]
