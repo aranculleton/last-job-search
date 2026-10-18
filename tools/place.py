@@ -51,6 +51,18 @@ RECOMMEND = "If you have a computer you can use for this, choose the computer: i
 # works here first, and nothing it says blocks the work.
 FINDING_WORKS = ("Finding people works in this chat. Reading their profiles before writing "
                  "to them needs a browser of yours, which this chat cannot reach.")
+# A cloud chat can reach the browser in the Claude desktop app on the person's computer
+# while the app is open there (claude_surfaces: cloud-linked-browser). Anthropic's skill
+# describes it and its docs do not yet, so the person is told so plainly, both when a
+# chat can and when it cannot.
+CLOUD_LINK_NOW = ("This chat reads profiles in the Claude desktop app's browser on your "
+                  "computer, while the app stays open there. Anthropic's documentation does not "
+                  "describe this yet, so it may change; if it stops working, the same reading "
+                  "works in a chat on your computer.")
+CLOUD_LINK_NOT = ("A cloud chat can sometimes reach that browser while the Claude desktop app "
+                  "is open on your computer, but this one cannot, and Anthropic's documentation "
+                  "does not describe that link yet, so the reliable place is a chat on your "
+                  "computer.")
 PASTE_TOP = ("Or paste the profile of the one or two who matter most, here, and I'll write "
              "to them from it.")
 # When the chat's tools were not named, a line carries this condition for Claude to
@@ -125,6 +137,8 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
         # to the computer reads profiles as well as a chat on it does (claude_surfaces:
         # cloud-linked-browser), and where a chat was started is not documented.
         if have:
+            if where != "local" and have & {"browser", "enable"}:
+                out.append(CLOUD_LINK_NOW)
             if not signed_in and have & {"browser", "enable"}:
                 out.append(SIGN_IN_ONCE)
         else:
@@ -139,7 +153,8 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
                         f"in Chrome reads them in your own Chrome. {_say('chrome', owner, name, False)}"
                         f" {PASTE_TOP}")
             else:
-                line = f"{FINDING_WORKS} {_continue_locally(owner, name, then)} {PASTE_TOP}"
+                line = (f"{FINDING_WORKS} {CLOUD_LINK_NOT} {_continue_locally(owner, name, then)} "
+                        f"{PASTE_TOP}")
             out.append(line if have is not None else IF_NO_BROWSER + line)
     if where == "local" and fixes:
         lines = ["This computer is missing a few things. Each is one command; I run the ones "
@@ -227,25 +242,38 @@ def _told_path() -> str:
     return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), TOLD_FILE)
 
 
-def told(chat: str) -> bool:
+def _digest(lines) -> str:
+    import hashlib
+    return hashlib.sha1("\n".join(lines).encode("utf-8")).hexdigest()[:12]
+
+
+def told(chat: str, lines=None) -> bool:
+    """Was this chat told these words already? A chat told an older wording is told the
+    new one once: it is how a chat open before a change hears about it."""
     try:
         with open(_told_path(), encoding="utf-8") as fh:
-            return chat in json.load(fh).get("chats", [])
+            got = json.load(fh)
     except (OSError, ValueError):
         return False
+    said = got.get("said") or {}
+    if lines is None:
+        return chat in said or chat in got.get("chats", [])
+    return said.get(chat) == _digest(lines)
 
 
-def mark_told(chat: str) -> None:
+def mark_told(chat: str, lines=()) -> None:
     p = _told_path()
     try:
         with open(p, encoding="utf-8") as fh:
             got = json.load(fh)
     except (OSError, ValueError):
         got = {}
-    chats = [c for c in got.get("chats", []) if c != chat][-49:] + [chat]
+    said = {k: v for k, v in (got.get("said") or {}).items() if k != chat}
+    said = dict(list(said.items())[-49:])
+    said[chat] = _digest(lines)
     try:
         with open(p, "w", encoding="utf-8") as fh:
-            json.dump({"chats": chats}, fh)
+            json.dump({"said": said}, fh)
     except OSError:
         pass
 
@@ -258,8 +286,6 @@ def this_chat(env=None) -> str:
 def report(tools=None, employer: str = "", once: bool = False, env=None) -> str:
     """The check as the sync prints it: "" when there is nothing to say, or already said."""
     chat = this_chat(env)
-    if once and chat and told(chat):
-        return ""
     where = surface(env)
     fixes = ()
     if where == "local":
@@ -271,7 +297,9 @@ def report(tools=None, employer: str = "", once: bool = False, env=None) -> str:
     owner, name = repo()
     lines = check(where, setting(), tools, signed_in_ever(), fixes, owner, name, employer)
     if once and chat:
-        mark_told(chat)
+        if told(chat, lines):
+            return ""
+        mark_told(chat, lines)
     if not lines:
         return ""
     import claude_surfaces

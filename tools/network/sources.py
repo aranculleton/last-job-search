@@ -45,9 +45,7 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 # "declined" when the person would rather not export their connections: the
 # connections kind then drops out of the plan instead of asking again every run.
 CONNECTIONS_EXPORT = str(getattr(_NET, "CONNECTIONS_EXPORT", "") or "")
-# The day a person who had declined was asked once more, when the export became the
-# ladder's first rung (the connections-first upgrade). After it, never again.
-CONNECTIONS_EXPORT_ASKED = str(getattr(_NET, "CONNECTIONS_EXPORT_ASKED", "") or "")
+
 
 # scope: "per_company" is searched for each employer, "per_run" once for the run,
 # "local" needs no search (a file or the browser). `searches` are WebSearch query
@@ -572,10 +570,9 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
         if rung.id == "connections":
             usable = export
             why = ("on file" if export
-                   else f"declined, and kept when asked again on {CONNECTIONS_EXPORT_ASKED}"
-                   if declined and CONNECTIONS_EXPORT_ASKED
-                   else "declined: the connections-first upgrade asks once more" if declined
-                   else "not on file yet: the connections-export upgrade asks once")
+                   else "declined for now: asked again when what it offers changes, or after "
+                        "a while (the connections-export upgrade)" if declined
+                   else "not on file yet: the connections-export upgrade asks")
         elif rung.id == "browser_read":
             usable = reads
             why = (f"{r['browser']}, the best {reading.READS_PER_RUN} only, paced" if reads

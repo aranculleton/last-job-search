@@ -62,9 +62,13 @@ def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
     unsure = _say("desktop-cloud", "browser", None)
     assert unsure.startswith("[only if this chat has no browser tool")
     assert unsure[len(place.IF_NO_BROWSER):] == said            # the words said are the same
-    # A cloud chat the desktop app lends its browser to is already the right place.
-    assert _say("desktop-cloud", "browser", ["enable"]) == ""
-    assert _say("desktop-cloud", "browser", ["browser"]) == ""
+    # A cloud chat the desktop app lends its browser to can read, and says plainly once that
+    # this rests on a link Anthropic's documentation does not describe yet.
+    assert _say("desktop-cloud", "browser", ["enable"]) == place.CLOUD_LINK_NOW
+    assert _say("desktop-cloud", "browser", ["browser"]) == place.CLOUD_LINK_NOW
+    assert "does not describe this yet" in place.CLOUD_LINK_NOW
+    # One that cannot reach it says that link exists and is not documented, too.
+    assert place.CLOUD_LINK_NOT in said
 
 
 def test_a_chat_that_pastes_hears_nothing_anywhere():
@@ -80,7 +84,7 @@ def test_a_phone_or_the_web_is_offered_the_computers_chat_and_never_an_install()
         assert "/remote-control" in said and "code.claude.com/docs/en/remote-control" in said
         assert not re.search(r"\binstall", said, re.I)
     # A phone chat linked to the computer reads as well as one on it: by tools, not place.
-    assert _say("phone", "browser", ["enable"]) == ""
+    assert _say("phone", "browser", ["enable"]) == place.CLOUD_LINK_NOW
     assert "sign in there yourself, once" in _say("phone", "browser", ["enable"], signed_in=False)
 
 
@@ -154,6 +158,11 @@ def test_said_once_per_chat(tmp_path, monkeypatch):
     first = place.report([], once=True, env=env)
     assert first.startswith("Place check (Claude: tell the person this once in this chat")
     assert "never hold back work that does not need it" in first
+    assert place.report([], once=True, env=env) == ""
+    # A chat that was told an older wording (one open before an update) hears the new one,
+    # once, and then nothing again.
+    monkeypatch.setattr(place, "FINDING_WORKS", "Finding people works in this chat, still.")
+    assert "still." in place.report([], once=True, env=env)
     assert place.report([], once=True, env=env) == ""
     assert place.report([], once=True, env={**env, "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE2"})
 
