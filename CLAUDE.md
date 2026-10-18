@@ -445,7 +445,11 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
   their profile, in the person's own browser when `PROFILE_READS` is `"browser"` or pasted
   by them, and their public work. A note's common ground rests on what was read
   (`first_note(reading=)` refuses one that does not), and no two notes say the same thing.
-  LinkedIn is never fetched from a session.
+  No LinkedIn profile is ever fetched from a session. Finding people uses no LinkedIn
+  account at all (a web search and their own export), so it cannot get anyone restricted;
+  only the optional read uses their account, capped and paced. The jobs search reads
+  LinkedIn's public listings with no account and **stays on**: only the person switches it
+  off, never a session.
 - **Outreach is for referrals, in three stages that are never compressed into one:** a
   first note that asks for a conversation (`compose.first_note()`), the conversation, then
   a referral ask for one linked role (`compose.referral_ask()`). A first note never names
@@ -524,7 +528,9 @@ from now on." Once per kind of output per session, and never in place of the wor
 code, not their settings. When an update would change a setting `learned.py locked`
 lists, `/upgrade` changes nothing. It records `learned.py offer` instead, and the
 person is asked once, with the session's other questions, whether to keep theirs or try
-the new way. A kept choice is never offered again for that app version.
+the new way. A kept choice is offered again after 90 days, saying when it was kept: a no
+to any question is for now, never for ever (`profile_upgrades.py --no <id>` keeps one,
+dated, and it comes back when the question changes or after `REASK_DAYS`).
 
 ### What works: it learns from results, not only from what they say
 

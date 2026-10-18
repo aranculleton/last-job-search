@@ -26,7 +26,9 @@ this chat can use, cheapest and safest first:
 
 With no browser, the run still presents the whole ranked list from rungs 1 to 3, says once,
 under the list, the one line `ladder` prints about what reading would add, and offers rung 5
-for the top few. Nothing is sent, clicked, connected or submitted by any rung; the person
+for the top few. Rungs 1 to 3 use no LinkedIn account at all (a web search engine and their
+own file), so they cannot get anyone restricted; that is what makes the list faster than
+searching LinkedIn by hand without adding any risk. Only rung 4 uses their account. Nothing is sent, clicked, connected or submitted by any rung; the person
 acts. Automating a site can break its terms: LinkedIn's forbid automated access, so a browser
 read is paced, read only and the person's own choice, and lowers that risk without removing
 it. LinkedIn is never fetched from a session.
@@ -48,7 +50,8 @@ it. LinkedIn is never fetched from a session.
    know there from `documents/linkedin/Connections.csv`, in their function first, then the
    hands-on titles that reply most, with anyone already in the contact book left out: the
    first to message, as a message (route `connection`), at no cost to the budget, before
-   any search. Without the export, the `connections-export` upgrade asks for it once.
+   any search. Without the export, the `connections-export` upgrade asks for it, and asks
+   again later after a no.
 
 2. **Check the budget before searching.** `state.platform_budget(contacts, threads,
    today)` returns the connection requests and InMail credits left on the person's

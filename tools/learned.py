@@ -40,9 +40,10 @@ apply: they change code, not the person's settings. When an update would change 
 setting the person has shaped (a better default voice, a sharper question set),
 nothing changes behind their back and nothing is quietly ignored either: /upgrade
 records an *offer* (`offer()`): what the app now does, what they chose and why. It is
-put to them once, with the session's other questions: keep theirs, or switch. Either
-answer is recorded, so the same app version never asks twice; switching retires the
-old entry and records the new choice as theirs.
+put to them with the session's other questions: keep theirs, or switch. Either answer is
+recorded; a switch retires the old entry and records the new choice as theirs, and a
+keep is offered again after REOFFER_DAYS, saying when they kept it, because a no is for
+now, never for ever.
 """
 
 from __future__ import annotations
@@ -180,9 +181,28 @@ def all_offers() -> list[dict]:
     return [r for r in rows if isinstance(r, dict)]
 
 
-def offers() -> list[tuple[int, dict]]:
-    """(number, offer) for every app improvement still waiting on the person's choice."""
-    return [(i, o) for i, o in enumerate(all_offers(), 1) if not o.get("decision")]
+# Keeping their own way is an answer for now, never for ever: a kept choice is offered
+# again once this many days have passed (tools/profile_upgrades.py REASK_DAYS, the same
+# rule every question follows), saying when they kept it. A switch is final: it is theirs.
+REOFFER_DAYS = 90
+
+
+def offers(today: dt.date | None = None) -> list[tuple[int, dict]]:
+    """(number, offer) for every app improvement waiting on the person's choice: never
+    answered, or kept long enough ago to be worth asking again."""
+    today = today or dt.date.today()
+    out = []
+    for i, o in enumerate(all_offers(), 1):
+        if not o.get("decision"):
+            out.append((i, o))
+        elif o.get("decision") == "keep":
+            try:
+                kept = dt.date.fromisoformat(str(o.get("decided") or ""))
+            except ValueError:
+                continue
+            if (today - kept).days >= REOFFER_DAYS:
+                out.append((i, {**o, "again": f"you kept your own way on {kept.isoformat()}"}))
+    return out
 
 
 def offer(setting: str, new: str, why: str, version: str, today: str | None = None) -> dict:
@@ -209,8 +229,9 @@ def offer(setting: str, new: str, why: str, version: str, today: str | None = No
 def question(o: dict) -> str:
     """The offer as the one plain question the person is asked."""
     theirs = (f" You told me \"{o['said']}\", so it is: {o['theirs']}." if o.get("said") else "")
-    return (f"The app now does this differently ({o['setting']}): {o['new']}. {o['why']}.{theirs} "
-            "Keep yours, or try the new way?")
+    again = f" Asked again: {o['again']}." if o.get("again") else ""
+    return (f"The app now does this differently ({o['setting']}): {o['new']}. {o['why']}.{theirs}"
+            f"{again} Keep yours, or try the new way?")
 
 
 def decide(n: int, choice: str, today: str | None = None) -> dict:

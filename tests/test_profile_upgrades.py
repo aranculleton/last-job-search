@@ -44,6 +44,14 @@ def profile(tmp_path, monkeypatch):
     """A copy of the example profile, in use for the test."""
     d = tmp_path / "profile"
     shutil.copytree(EXAMPLE, d)
+    # The example's nos are as recent as the run, so a calendar date never turns the suite
+    # red: a no is asked again after REASK_DAYS, and that is tested on its own below.
+    asked = d / "asked.json"
+    if asked.exists():
+        got = json.loads(asked.read_text(encoding="utf-8"))
+        for rec in got.values():
+            rec["no"] = dt.date.today().isoformat()
+        asked.write_text(json.dumps(got), encoding="utf-8")
     monkeypatch.setenv(person.ENV, str(d))
     person._modules.clear()
     person._data.clear()
@@ -251,8 +259,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
-                                                                 "connections-export", "work-place",
-                                                                 "connections-first"}
+                                                                 "connections-export", "work-place"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -260,9 +267,6 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert "contacts nobody" in U.by_id("connections-export").ask
     # Where they will mostly work is theirs to say; nothing in a profile answers it.
     assert "computer, or on your phone or the web" in U.by_id("work-place").ask
-    # Asked once, of people who said no before the export became the first rung, and a
-    # second no is final.
-    assert "not asked again" in U.by_id("connections-first").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):
@@ -460,3 +464,32 @@ def test_a_commit_that_fails_leaves_nothing_changed_and_says_so(tmp_path, monkey
     assert notes == ["prep-docs: not applied (the commit failed: refused)"]
     assert _git(repo, "status", "--porcelain") == ""
     assert _git(repo, "log", "--format=%s") == "init\n"
+
+
+def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
+    # A person disliked questions that were never asked again. A no comes back when what
+    # the question offers has changed, saying what changed, or after REASK_DAYS, saying
+    # when they said no; until then it stands.
+    today = dt.date(2026, 10, 18)
+    monkeypatch.setattr(U, "_mod", lambda name: (
+        type("N", (), {"CONNECTIONS_EXPORT": "declined", "PROFILE_READS": "paste"}) if
+        name == "networking" else None))
+    (profile / "asked.json").unlink()
+    u = U.by_id("connections-export")
+    # A no from before this was kept: asked again once, with what changed.
+    why = U.again(u.id, u.ask_version, u.changed, today)
+    assert why.startswith("you said no before, and it has changed since: networking now finds")
+    U.record_no(u.id, today)
+    assert U.again(u.id, u.ask_version, u.changed, today) == ""
+    assert U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=89)) == ""
+    later = U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=U.REASK_DAYS))
+    assert later.startswith("you said no on 2026-10-18, 90 days ago")
+    # The question changes: asked again at once, saying how.
+    assert U.again(u.id, u.ask_version + 1, "something new", today).endswith("something new")
+    # Every question a no can answer is re-askable, and says what it changed when it did.
+    for uid in ("connections-export", "job-alerts", "profile-reads"):
+        x = U.by_id(uid)
+        assert x.needs == "you" and (x.ask_version == 1 or x.changed), uid
+        assert "--no " + uid in x.run, uid
+    assert not any("not asked again" in (x.ask or "") or "never asked again" in (x.run or "")
+                   for x in U.REGISTRY)

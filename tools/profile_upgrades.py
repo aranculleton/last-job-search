@@ -20,6 +20,8 @@ nothing worth building") counts as done.
     python3 tools/profile_upgrades.py --after-sync   # sync_app.py: run the instant ones, then list
     python3 tools/profile_upgrades.py --plan     # JSON, most urgent first: what /upgrade works through
     python3 tools/profile_upgrades.py --check boards  # one upgrade: "done" or what is missing
+    python3 tools/profile_upgrades.py --no <id>  # their no to a question: kept, dated, asked
+                                                 # again when it changes or after REASK_DAYS
 
 Exit 0 always, except --check while its upgrade is pending: a pending upgrade never
 blocks a sync, a round or a session.
@@ -92,6 +94,11 @@ class Upgrade:
     # has to read and act on is a list nobody acts on.
     needs: str = "nobody"
     ask: str = ""
+    # A no is an answer for now, never for ever: a question someone said no to comes
+    # back when what it offers has changed (ask_version moves on and `changed` says
+    # how) or once REASK_DAYS have passed, saying when they said no (`again()`).
+    ask_version: int = 1
+    changed: str = ""
 
 
 # ------------------------------------------------------------------ helpers
@@ -117,6 +124,61 @@ def _missing(module: str, *names: str) -> list[str]:
     if m is None:
         return []
     return [n for n in names if not hasattr(m, n)]
+
+
+# ------------------------------------------------------------------ a no, for now
+
+ASKED_FILE = "asked.json"     # in profile/: {upgrade id: {"no": "YYYY-MM-DD", "version": n}}
+REASK_DAYS = 90
+
+
+def _asked_path() -> str:
+    return person.path(ASKED_FILE)
+
+
+def asked() -> dict:
+    """Every no on record, by upgrade id."""
+    try:
+        import json
+        with open(_asked_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError, person.NoProfile):
+        return {}
+
+
+def record_no(uid: str, today: dt.date | None = None) -> str:
+    """Their no to one question, dated, with the version of the question it answered."""
+    import json
+    u = by_id(uid)
+    got = asked()
+    got[uid] = {"no": (today or dt.date.today()).isoformat(), "version": u.ask_version}
+    p = _asked_path()
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(got, fh, indent=2, sort_keys=True)
+        fh.write("\n")
+    return p
+
+
+def again(uid: str, version: int, changed: str, today: dt.date | None = None) -> str:
+    """Why a question they said no to is asked again now, or "" while their no stands.
+
+    A no with no record (given before this was kept) is asked again once, with what
+    has changed; a recorded no stands until the question changes or REASK_DAYS pass.
+    """
+    today = today or dt.date.today()
+    rec = asked().get(uid) or {}
+    when = rec.get("no", "")
+    try:
+        since = (today - dt.date.fromisoformat(when)).days if when else None
+    except ValueError:
+        since = None
+    said = f"you said no on {when}" if when else "you said no before"
+    if int(rec.get("version") or 0) < version:
+        return f"{said}, and it has changed since: {changed}" if changed else f"{said}"
+    if since is not None and since >= REASK_DAYS:
+        return f"{said}, {since} days ago; it is asked once more in case that has changed"
+    return ""
 
 
 def _probe(code: str) -> str:
@@ -172,6 +234,9 @@ def _alerts() -> str:
     if _missing("search", "JOB_ALERT_QUERY"):
         return ("nobody has asked whether rounds should read your LinkedIn job alerts "
                 "(profile/search.py has no JOB_ALERT_QUERY)")
+    if not str(getattr(_mod("search"), "JOB_ALERT_QUERY", "") or "").strip():
+        u = by_id("job-alerts")
+        return again("job-alerts", u.ask_version, u.changed)
     return ""
 
 
@@ -200,6 +265,9 @@ def _profile_reads() -> str:
         return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
                 "about to be messaged in your own browser (profile/networking.py has no "
                 "PROFILE_READS), so a note rests on what you paste and on their public work")
+    if str(getattr(_mod("networking"), "PROFILE_READS", "") or "") == "paste":
+        u = by_id("profile-reads")
+        return again("profile-reads", u.ask_version, u.changed)
     return ""
 
 
@@ -275,24 +343,10 @@ def _connections_export() -> str:
     if os.path.exists(os.path.join(root, "documents", "linkedin", "Connections.csv")):
         return ""
     if getattr(_mod("networking"), "CONNECTIONS_EXPORT", None) == "declined":
-        return ""
+        u = by_id("connections-export")
+        return again("connections-export", u.ask_version, u.changed)
     return ("every networking run starts from strangers, because the people you already know "
             "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
-
-
-def _connections_first() -> str:
-    """Declined the export before the people search began with it, and not asked since."""
-    net = _mod("networking")
-    if net is None or getattr(net, "CONNECTIONS_EXPORT", None) != "declined":
-        return ""
-    if getattr(net, "CONNECTIONS_EXPORT_ASKED", ""):
-        return ""
-    root = os.environ.get("LJS_STATE") or ROOT
-    root = root if os.path.isabs(root) else os.path.join(ROOT, root)
-    if os.path.exists(os.path.join(root, "documents", "linkedin", "Connections.csv")):
-        return ""
-    return ("you declined the connections export before networking began every run from it; "
-            "asked once more, with what changed")
 
 
 def _contract() -> str:
@@ -560,7 +614,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=2),
     Upgrade("job-alerts", "2026-10-15",
             "your LinkedIn job alerts read into every round, if you want them",
-            _alerts, "/setup --section boards", "question", "~2 min",
+            _alerts, "/setup --section boards; a no again is `python3 tools/profile_upgrades.py "
+            "--no job-alerts`", "question", "~2 min",
             names=("search.JOB_ALERT_QUERY",),
             priority=3,
             needs="you",
@@ -633,45 +688,39 @@ REGISTRY: tuple[Upgrade, ...] = (
     Upgrade("connections-export", "2026-10-17",
             "every networking run starting from the people you already know",
             _connections_export, "save the Connections.csv they attach to "
-            "documents/linkedin/Connections.csv, or write CONNECTIONS_EXPORT = \"declined\" in "
-            "profile/networking.py if they would rather not", "question", "~2 min",
+            "documents/linkedin/Connections.csv, or, if they would rather not, write "
+            "CONNECTIONS_EXPORT = \"declined\" in profile/networking.py and run `python3 "
+            "tools/profile_upgrades.py --no connections-export`", "question", "~2 min",
             names=("networking.CONNECTIONS_EXPORT",),
             priority=3,
             needs="you",
+            ask_version=2,
+            changed="networking now finds people in bulk from any chat, and your own "
+                    "connections are the first and strongest place it looks",
             ask="Networking finds people in bulk from any chat, and the people you already know "
                 "are the best of them. Want every run to start from them? LinkedIn lets you "
                 "download your own connections list (Settings, Data privacy, Get a copy of your "
                 "data, Connections). It arrives by email in about ten minutes; attach the "
                 "Connections.csv here. Claude only reads it, and contacts nobody."),
-    Upgrade("connections-first", "2026-10-18",
-            "the people you already know as the first place every networking run looks",
-            _connections_first, "ask once; save the Connections.csv they attach to "
-            "documents/linkedin/Connections.csv, or, if they would still rather not, write "
-            "CONNECTIONS_EXPORT_ASKED = \"2026-10-18\" in profile/networking.py so it is never "
-            "asked again", "question", "~2 min",
-            names=("networking.CONNECTIONS_EXPORT_ASKED",),
-            priority=4,
-            needs="you",
-            ask="You said no to sharing your LinkedIn connections list before. Networking now "
-                "finds people in bulk from any chat, and that list is the first and strongest "
-                "place it looks: the only way to find people you already know, read only, "
-                "contacting nobody. Would you like to share it now? If not, nothing changes "
-                "and this is not asked again."),
     Upgrade("profile-reads", "2026-10-17",
             "a note to each person built from their own profile, not a search snippet",
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "
-            "profile/networking.py from their answer", "question", "~1 min",
+            "profile/networking.py from their answer; \"paste\" again is also `python3 "
+            "tools/profile_upgrades.py --no profile-reads`", "question", "~1 min",
             names=("networking.PROFILE_READS",),
             priority=2,
             needs="you",
-            ask="Before a note goes to someone, should Claude read their LinkedIn profile in "
+            ask_version=2,
+            changed="finding people no longer needs any read, and a read is now only of the best "
+                    "ten a run finds, paced, in a chat on your computer",
+            ask="Finding people needs no read: the list comes from search results and your own "
+                "connections, in any chat, and uses no LinkedIn account. Before a note goes to "
+                "one of the best ten a run finds, should Claude read their LinkedIn profile in "
                 "your own signed-in browser? That works in a chat on your computer in the Claude "
-                "desktop app, which lends Claude your browser; a chat on a phone or the web "
-                "uses the other way below. It reads only the people a search surfaced, one at "
-                "a time at a person's pace, and clicks nothing, but LinkedIn's terms forbid "
-                "automated access, so the risk is to your account. The other way, which works on "
-                "a phone too, is pasting the profile or sending screenshots of it from the "
-                "LinkedIn app when you open it to send the request."),
+                "desktop app. It reads one at a time at a person's pace and clicks nothing, but "
+                "LinkedIn's terms forbid automated access, so the risk is to your account: lower "
+                "with these limits, never nothing. The other way is pasting the profile of the "
+                "one or two who matter most."),
     Upgrade("screen-flags", "2026-10-15",
             "postings from the wrong job family for you flagged, in your field's terms",
             _screen_flags, "/setup --section search", "question", "~5 min",
@@ -879,6 +928,9 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
         lines.append("  These need you (asked at the end of a session, a few at a time):")
         for u, why in yours:
             lines.append(f"    {u.id:20} {u.ask or why}")
+            if why.startswith("you said no"):
+                # Asked again: the person hears when they said no and what has changed.
+                lines.append(f"    {'':20}   asked again: {why}")
     # Said here as well as in CLAUDE.md: the session that runs the sync which brings
     # this in is still reading the CLAUDE.md from before it.
     lines.append("  Claude: "
@@ -1023,9 +1075,17 @@ def main(argv: list[str] | None = None) -> int:
                       help="the pending upgrades as JSON, most urgent first (/upgrade reads it)")
     mode.add_argument("--check", metavar="ID",
                       help="one upgrade: 'done', or what is missing; exit 1 while pending")
+    mode.add_argument("--no", metavar="ID",
+                      help="record the person's no to one question, dated: it is asked again "
+                           "when the question changes or after REASK_DAYS")
     a = ap.parse_args(argv)
     if not person.exists():
         return 0                                    # the app, or a repo before /setup
+    if a.no:
+        p = record_no(a.no)
+        print(f"profile_upgrades: their no to {a.no} kept in {os.path.relpath(p, ROOT)}; asked "
+              f"again when the question changes or after {REASK_DAYS} days")
+        return 0
     if a.check:
         why = by_id(a.check).pending()
         print(why or "done")

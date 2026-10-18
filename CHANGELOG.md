@@ -30,13 +30,17 @@ make sense to somebody whose repo just received it.
   the best ten in your browser where the chat has one, paced as before, or a paste of the one
   or two who matter most where it has not, never screenshots of everyone. People searches are
   plain words, one title at a time: measured on two employers, that found 14 people at the
-  employer where the old searches found 5. Profile upgrade: connections-first (asked once,
-  only if you declined the connections export before).
+  employer where the old searches found 5. Finding people uses no LinkedIn account at all, so
+  it cannot get anyone restricted; only the optional read uses yours. Claude runs the new
+  searches over every employer already in your contact book, in the background, reading
+  nobody and sending nothing. Profile upgrade: method-networking.
 - **A chat says once when it is the wrong place for your settings, and where to go.** If you
   chose to have profiles read in your own browser and a chat cannot reach one, it says once,
   at the end of its reply, that finding people works there, and where reading does: a chat on
   your computer, or that chat from your phone. It decides by what the chat can do, never by
-  where it was started, so a phone chat linked to your computer is left alone. A chat on your
+  where it was started. A cloud chat that reads through the Claude desktop app's browser on
+  your computer says so, and says that Anthropic's documentation does not describe that link
+  yet, so it may change; a chat that was told an older wording hears the new one once. A chat on your
   computer lists anything missing, one command each, marked where it asks for your password.
   It offers the choice and never makes it, holds back no work, and changes no setting. It
   runs with every sync, so it reaches chats already open.
@@ -46,6 +50,12 @@ make sense to somebody whose repo just received it.
   never as a key to press or a button to click. An entry older than 60 days says so before it
   is used, and a weekly check in the app compares each one with its page and with Claude
   Code's release notes.
+- **A no is for now, never for ever.** Every question that can be answered no (your
+  connections export, reading your job alerts, reading profiles in your browser, keeping your
+  own way when the app changes something you set) keeps your no with its date. It is asked
+  again when what it offers has changed, saying what changed, or after 90 days, saying when
+  you said no; until then it stands. A no from before this was kept is asked again once now,
+  with what has changed. Profile upgrade: connections-export, job-alerts, profile-reads.
 - **Setting up asks where you will mostly work**, a computer or a phone or the web, with the
   trade-off in two sentences and a recommendation, and gives the exact next step. Profile
   upgrade: work-place (asked once, with the session's other questions).
@@ -88,6 +98,9 @@ make sense to somebody whose repo just received it.
 - **A read skips someone your location rules rule out**, and says to check where they work
   when they are somewhere your search does not name, rather than skipping them.
 - **`reading.py stop --reason "<words>"` works**, as well as `stop "<words>"`.
+- **LinkedIn's job search stays on.** It reads LinkedIn's public listings with no LinkedIn
+  account, so it cannot get yours restricted, and only you switch it off. No tool, upgrade or
+  chat ever turns it off or suggests it, and a test now holds that.
 - **"Set up my brief" from your computer works.** Claude was told to start the brief's cloud
   chat with `claude --cloud` from its own shell, which that command refuses: it needs an
   interactive terminal. Now it makes the brief itself where its chat has the tool for routines,

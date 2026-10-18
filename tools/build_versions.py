@@ -87,8 +87,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-15", False, "--find locates an employer's board from its name or careers page (through the vendored openroles), and Lever postings include their requirement lists"),
             (7, "2026-10-15", True, "Workday boards whose listing leaves the location out are read again: the place comes from each posting's path, so a board probed as '0 in range' for that reason now counts"),
             (8, "2026-10-18", False, "Workday details read on Python 3.9, a Mac's own python3"),
+            (9, "2026-10-18", False, "LinkedIn's job search stays on and uses no LinkedIn account; only the person switches it off"),
         ),
-        "fingerprint": "f36efe43ba260b53",
+        "fingerprint": "8d81048aaace1368",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -269,8 +270,12 @@ METHODS: dict[str, dict] = {
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
         "gives": "the people worth contacting at your target employers found the current way",
-        "run": "/network again for each employer already in network_contacts.csv, adding only "
-               "people not already in it; nothing is sent",
+        "run": "for each employer already in network_contacts.csv, rungs 1 to 3 of /network's "
+               "ladder only: their connections there (`sources.py connections`), the two plain "
+               "title searches from `discovery.queries_for()` run through `sources.py harvest`, "
+               "and a profile check from the results; add only people not already in the book, "
+               "with their evidence and profile status, as not_contacted with drafts. No profile "
+               "is read in the background and nothing is sent",
         "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py",
@@ -310,8 +315,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-18", False, "message checks run on Python 3.9; a new contact-book column goes at the end of the header"),
             (20, "2026-10-18", False, "LinkedIn's first sign-in is a wait, reads only for people written to that day at a person's pace, finds with no LinkedIn profile and finds on old pages are marked, a short batch stops and says why, and alumni searches go in the order their alumni have replied"),
             (21, "2026-10-18", False, "people are found in bulk from any chat (connections, search results with their own titles, a profile check), plain one-title searches, and only the best ten are read or the best three pasted"),
+            (22, "2026-10-18", True, "discovery runs again over every employer already in the contact book with the plain searches, which found nearly three times as many people at an employer; account-free rungs only, nothing read, nothing sent"),
         ),
-        "fingerprint": "0757244e5f8ab740",
+        "fingerprint": "e618c3872d4e58e8",
     },
     "network-notes": {
         "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",

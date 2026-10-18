@@ -45,11 +45,14 @@ also searched with `--remote` and no place.
 
 ## linkedin-search, and what its default means
 
-It ships on: in most markets it carries more postings than every other source
-together. LinkedIn's robots.txt disallows its guest job endpoints for crawlers
-it does not name, and a round sends it thousands of requests, so the person
-should know that, and `/setup` tells them. Turning it off is one line:
-`PORTALS = {"linkedin-search": False}`.
+It ships on, and it stays on: in most markets it carries more postings than every
+other source together. It reads LinkedIn's public job listings with no LinkedIn
+account, so it cannot get anyone's account restricted; what LinkedIn can do is slow
+or refuse the machine sending the requests. LinkedIn's robots.txt disallows its
+guest job endpoints for crawlers it does not name, and a round sends it thousands of
+requests, so the person should know that, and `/setup` tells them. Only the person
+switches it off (`PORTALS = {"linkedin-search": False}` in profile/search.py): no tool,
+upgrade or session ever does, and none suggests it (tests/test_linkedin_stays_on.py).
 """
 
 from __future__ import annotations
