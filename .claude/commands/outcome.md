@@ -88,6 +88,11 @@ Also collect, without interrogating - one or two open questions are enough:
     [--landed yes|partly|no] [--note "<what they would change>"] [--date YYYY-MM-DD]
   ```
 
+  A question they were **told** about rather than asked (the recruiter listed what the next
+  round covers, a contact who interviewed there, a review site) goes in the same way with
+  `--source "<who or where, and its link>"` and no `--landed`: the pack prepares it as
+  "reported by" that source, and it never counts as a question asked.
+
   The bank is `documents/interview/question_bank.csv`, one file across every application; `python3 tools/what_works.py brief interviews` reads it back. It is ignored like the rest of `documents/`, so a person's repo commits it by path: `git add -f documents/interview/question_bank.csv`.
 
 ---

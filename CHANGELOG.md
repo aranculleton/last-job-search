@@ -20,6 +20,34 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **An interview pack no longer tells you to message someone whose row says to wait for
+  their reply.** "Wait for his reply", "awaiting her response" and "leave him be" now read
+  as leave them be, like "no action" and HOLD already did, and the pack says the interview
+  is "booked" only when the round has a date; without one it says to tell them once it
+  has a date.
+- **A row or a reading is quoted whole, or cut at a word.** A fixed 140-character cut
+  left a pack quoting a contact's next step as "...Connecti". The networking prep doc
+  had the same cut and has the same fix.
+- **Every section of a hand-written outcome file reaches the pack.** The pack read only a
+  `## Notes` heading, so a file written as one heading per round ("What was learned",
+  "Owed") gave its Earlier stages section nothing. Each item now comes through as one
+  line under its heading: its bold headline, a labelled line whole, or its first
+  sentence, 24 lines at most and the rest counted.
+- **A pack's own "Do not say" list is no longer flagged as something you will say.** It
+  quotes the very phrases it warns against, so the voice check called them seven hard
+  findings and a pack carrying the list could never come back clean. The list is marked
+  as quoted, and `tools/voice_check.py` skips a quoted list; the same words anywhere else
+  are still caught.
+- **A question you were told about, rather than asked, keeps its true source.**
+  `interview_pack.py asked --source "<the recruiter, a contact, a review site>"` records
+  it; the pack prepares it as "reported by" that source, and it never counts as a
+  question asked. The question bank gains a `source` column only when a row has one.
+
+No profile upgrade: the next interview pack for a live interview is written beside the
+old one by itself (build version interview 8).
+
 ### Changed
 
 - **When your own self-checks need deleting after an update, you are asked in plain words,

@@ -33,6 +33,9 @@ What it looks for, in rough order of how badly each one gives the game away:
   uniformity    every sentence the same length, which is what generated prose
                 does and what a person almost never does
 
+A list of words to avoid, written between QUOTED_OPEN and QUOTED_CLOSE, is skipped:
+it quotes what not to say, and is nobody's prose.
+
 `uniformity` is the only statistical check and the only one that can be wrong
 about a human, so it needs a real sample and reports at a lower severity.
 
@@ -301,9 +304,23 @@ def uniformity(text: str) -> tuple[float | None, int]:
     return statistics.pstdev(lens), len(lens)
 
 
+# A list of words to avoid, quoted in a document so the person knows not to say them (an
+# interview pack's "Do not say"), is wrapped in these and never read as the person's own
+# words: read as prose, the pack's own list came back as seven hard findings, so a pack
+# that carried one could never come back clean.
+QUOTED_OPEN = "<!-- quoted: words to avoid, not to say -->"
+QUOTED_CLOSE = "<!-- /quoted -->"
+_QUOTED = re.compile(r"<!--\s*quoted\b.*?-->.*?<!--\s*/quoted\s*-->", re.S)
+
+
+def unquoted(text: str) -> str:
+    """`text` without its quoted lists of words to avoid."""
+    return _QUOTED.sub(" ", text or "")
+
+
 def check(text: str, *, source: str = "") -> list[dict]:
     """Every finding in `text`. Empty list means it reads as written by a person."""
-    body = plain(text or "")
+    body = plain(unquoted(text or ""))
     out: list[dict] = []
     for _, m in banned_phrases(body):
         start = max(0, m.start() - 40)

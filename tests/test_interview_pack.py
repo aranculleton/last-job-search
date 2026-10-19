@@ -26,6 +26,7 @@ import interview_pack as P  # noqa: E402
 import outreach  # noqa: E402
 import screening_answers  # noqa: E402
 import untrusted  # noqa: E402
+import voice_check  # noqa: E402
 import what_works  # noqa: E402
 
 TODAY = "2026-03-11"
@@ -235,6 +236,54 @@ def test_a_phrase_the_person_banned_is_flagged_where_it_would_be_said(app):
     flagged = [i for i, ln in enumerate(screen) if "wording you have said never to use" in ln]
     assert flagged and "cross-dock" in screen[flagged[0] - 1]
     assert '- Words you have said never to use: "cross-dock"' in "\n".join(screen)
+
+
+def test_the_list_of_what_not_to_say_is_not_read_as_something_to_say(app):
+    never = [(p, re.compile(r"\b%s\b" % re.escape(p), re.I))
+             for p in ("passionate about", "leverage my", "synergy")]
+    text = _pack(never_say=never)
+    screen = _section(text, "On one screen")
+    donts = "\n".join(screen[screen.index("**Do not say**"):])
+    assert '"passionate about", "leverage my", "synergy"' in donts
+    # Neither flagged as wording to avoid by the pack itself, nor read by the voice check
+    # as the person's own words: the pack carrying the list comes back clean of it.
+    assert "wording you have said never to use" not in donts
+    found = [f["match"].lower() for f in voice_check.check(text) if f["severity"] == "hard"]
+    assert not any(p in m for p, _ in never for m in found)
+    # Outside the quoted list the same words are still caught.
+    assert voice_check.check("I am passionate about forecasting and the team.")
+
+
+def test_a_question_reported_rather_than_asked_keeps_its_source(app):
+    P.add_asked(COMPANY, ROLE, "Technical interview", "Walk me through a SQL window function.",
+                date="2026-03-09", source="the recruiter's email of 2026-03-09")
+    [row] = what_works.bank()
+    assert row["source"] == "the recruiter's email of 2026-03-09" and row["landed"] == ""
+    ctx = P.gather(COMPANY, today=TODAY, contacts=CONTACTS, threads=[])   # the bank on disk
+    detail = "\n".join(_section(P.pack_markdown(ctx, never_say=[]), "Likely questions"))
+    assert ("- **Q.** Walk me through a SQL window function. (reported by the recruiter's email "
+            "of 2026-03-09 (Technical interview, 2026-03-09); source: the recruiter's email of "
+            "2026-03-09, recorded in documents/interview/question_bank.csv)") in detail
+    with pytest.raises(ValueError, match="reported question was not asked"):
+        P.add_asked(COMPANY, ROLE, "Technical interview", "Why us?", landed="yes",
+                    source="a contact")
+    # Never counted as a question asked.
+    P.add_asked("Larkspur Retail", "Planner", "Technical interview",
+                "Walk me through a SQL window function.", date="2026-03-10", source="a review site")
+    assert "Asked 2 times" not in what_works.brief_interviews([], what_works.bank())
+
+
+def test_a_bank_written_before_sources_keeps_its_lines(app):
+    path = os.path.join(os.path.dirname(os.path.dirname(app)), "interview", "question_bank.csv")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    old = "date,company,role,stage,question,story,landed,note\n2026-03-02,Kestrel,A,Screen,Why?,,,\n"
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(old)
+    P.add_asked(COMPANY, ROLE, "Phone screen", "Why logistics?", date="2026-03-03")
+    lines = open(path, encoding="utf-8").read().splitlines()
+    assert lines[:2] == old.splitlines() and len(lines) == 3   # no column added for nothing
+    P.add_asked(COMPANY, ROLE, "Technical interview", "SQL?", date="2026-03-04", source="a contact")
+    assert open(path, encoding="utf-8").read().splitlines()[0].endswith(",note,source")
 
 
 # ------------------------------------------------------------------ the paper and the money

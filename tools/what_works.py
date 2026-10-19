@@ -613,7 +613,10 @@ def furthest(row: dict) -> str:
 # asked` writes it, and the next pack reads it. A person's state file, kept
 # beside the tracker's other records.
 BANK = ("documents", "interview", "question_bank.csv")
-BANK_COLUMNS = ("date", "company", "role", "stage", "question", "story", "landed", "note")
+# `source` is blank for a question the person was asked, and names where a question they
+# were told about came from (the recruiter, a contact, a review site): a reported question
+# is prepared for, never counted as asked.
+BANK_COLUMNS = ("date", "company", "role", "stage", "question", "story", "landed", "note", "source")
 LANDED = ("yes", "partly", "no")
 MAX_BANK_LINES = 3
 
@@ -652,7 +655,7 @@ def brief_interviews(tracker, rows=None) -> str:
                              % (STEP_WORDS[at], lost, reached[at]))
     asked: dict[str, list[dict]] = {}
     for r in rows:
-        if _norm(r.get("question")):
+        if _norm(r.get("question")) and not str(r.get("source") or "").strip():
             asked.setdefault(_norm(r.get("question")), []).append(r)
     again = sorted((v for v in asked.values() if len(v) > 1), key=lambda v: (-len(v), v[-1]["date"]))
     for v in again[:MAX_BANK_LINES]:

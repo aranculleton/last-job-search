@@ -199,8 +199,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-17", True, "the prep document says what was read about them: the history you share and what they have posted"),
             (7, "2026-10-17", False, "one research cache with its freshness rule: stale research, roles open there you scored well, the letter's fact and concessions, and the cache's own cautions in the call prep"),
             (8, "2026-10-19", False, "each document is stamped with the prep that wrote it, and only an older one is rewritten; a tool you lack is never claimed unless you say yes"),
+            (9, "2026-10-19", False, "a quote from a reading is cut at a word, never mid-word"),
         ),
-        "fingerprint": "633a1fd22d68fd59",
+        "fingerprint": "d83ea31239405387",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -250,8 +251,9 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-19", False, "an application from any employer board openroles reads is recorded as applied online"),
             (17, "2026-10-19", False, "RUNBOOK says what to do when a person's own tests fail after an update; an application's folder is found when its role carries a requisition number"),
             (18, "2026-10-19", False, "The person is asked in plain words before any of their own failing tests is deleted; wording only, nothing to redo"),
+            (19, "2026-10-19", False, "the voice check skips a quoted list of words to avoid, so a document that warns against a phrase is not flagged for it"),
         ),
-        "fingerprint": "d7f0589a56545bbe",
+        "fingerprint": "c6ccd284dc890b35",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -268,8 +270,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-17", False, "interview research reads the one company-research cache and its freshness rule"),
             (6, "2026-10-19", True, "the pack is built by tools/interview_pack.py: sourced, one screen first, the money the form already named, the question bank, warm routes, an offer branch, mock feedback kept, and each skill you said yes to claiming flagged as one to expect a question on"),
             (7, "2026-10-19", True, "a pack finds its application however the role is written (a requisition number in it), reads a hand-written outcome's rounds, finds the referrer from every record, and never tells you to message someone whose row says to leave them be"),
+            (8, "2026-10-19", True, "a pack treats waiting on someone's reply as leave them be, says booked only when the round has a date, quotes rows whole or cut at a word, carries every section of a hand-written outcome file, keeps its do-not-say list out of the voice check, and prepares a question you were told about as reported, with its source"),
         ),
-        "fingerprint": "bd99593c4f356aaf",
+        "fingerprint": "cd3b48d46e33ce20",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
