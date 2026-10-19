@@ -31,6 +31,7 @@ import personal_paths  # noqa: E402
 import record_drafts  # noqa: E402
 import run_round  # noqa: E402
 import stage_picks  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 POSTING = "Larkspur Retail is hiring a Senior Supply Chain Analyst in Manchester. " * 3
 ROW = {"company": "Larkspur Retail", "title": "Senior Supply Chain Analyst",
@@ -165,7 +166,7 @@ def test_no_em_dash_in_any_document_the_app_ships():
     # The app's own documents only: this suite runs in a person's repo too, where
     # a saved posting is theirs and says whatever its employer wrote.
     dash = chr(0x2014)
-    files = subprocess.check_output(["git", "ls-files", "*.md"], cwd=ROOT, text=True).split()
+    files = repo_files.tracked("*.md", root=ROOT)
     found = [f for f in files if f != "CHANGELOG-upstream.md" and not personal_paths.is_personal(f)
              and dash in open(os.path.join(ROOT, f), encoding="utf-8").read()]
     assert not found, found

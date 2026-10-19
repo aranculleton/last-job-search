@@ -23,7 +23,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 
 import pytest
@@ -36,6 +35,7 @@ import person  # noqa: E402
 import profile_upgrades as U  # noqa: E402
 import throttle  # noqa: E402
 from personal_paths import is_personal  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 SETUP = os.path.join(ROOT, B.SETUP)
 SETUP_METHODS = [n for n, m in B.METHODS.items() if m.get("setup")]
@@ -57,11 +57,10 @@ def profile(tmp_path, monkeypatch):
 
 
 def _app_files() -> list[str]:
-    out = subprocess.run(["git", "-C", ROOT, "ls-files"], text=True, capture_output=True)
-    if out.returncode != 0:
+    names = repo_files.tracked(root=ROOT)
+    if not names:
         pytest.skip("not a git checkout")
-    return [f for f in out.stdout.splitlines()
-            if not is_personal(f) and os.path.isfile(os.path.join(ROOT, f))]
+    return [f for f in names if not is_personal(f) and os.path.isfile(os.path.join(ROOT, f))]
 
 
 # ------------------------------------------------------------------ nothing slips past

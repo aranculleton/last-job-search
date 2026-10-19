@@ -20,6 +20,17 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The app's own tests pass in your repo, whatever your notes say.** Two tests read every
+  file git tracks, your notes, research and profile included, and failed on your own words:
+  a note quoting LinkedIn's switch, or a screen's name. They read only the app's files now
+  (`tools/personal_paths.py` is the line), and so does every other test that lists tracked
+  files, through one helper (`tests/repo_files.py` `tracked()`), which a test now pins. A
+  file name with a space in it was also cut in two; it is read whole. No profile upgrade.
+- **Every line of the release notes is a sentence,** however its CHANGELOG heading ended.
+  No profile upgrade.
+
 ### Changed
 
 - **Release notes are short.** One line per change, a few words where it needs you, and one

@@ -23,9 +23,10 @@ files /setup writes from its own Step 3 - so a new drop folder or a new /setup
 target fails this test until /reset covers it.
 """
 import re
-import subprocess
 import unittest
 from pathlib import Path
+
+from tests import repo_files
 
 REPO = Path(__file__).resolve().parent.parent
 RESET = REPO / ".claude" / "commands" / "reset.md"
@@ -34,15 +35,10 @@ SETUP = REPO / ".claude" / "commands" / "setup.md"
 
 def tracked_document_subfolders():
     """Names of documents/ subfolders tracked in git (ignores local noise)."""
-    out = subprocess.run(
-        ["git", "ls-files", "documents/"],
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    # The app's own documents/ folders. A person's repo tracks folders of their own there
+    # too (a document for someone else, say), which are theirs, not /reset's list.
     folders = set()
-    for line in out.splitlines():
+    for line in repo_files.tracked("documents/", root=REPO):
         parts = line.split("/")
         if len(parts) >= 3:  # documents/<subfolder>/<file...>
             folders.add(parts[1])
