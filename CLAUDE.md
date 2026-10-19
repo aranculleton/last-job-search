@@ -184,14 +184,17 @@ So, every session:
 **Two chats changing the same state file is not a conflict to resolve by hand.** The
 tracker, the contact book, the message log and `seen_jobs.json` merge row by row
 (`tools/merge_state.py`, which every sync wires into git): rows either side added are both
-kept, and notes both sides added are both kept. Git stops only where both sides changed the
-same field of the same row to different values; keep the later one, by its date. Before
+kept, and notes both sides added are both kept. Where both sides changed the same field of
+the same row, the later change is kept by itself, and the merge says which and what the other
+side had: tell the person, whose word outranks it. Git stops only where neither change is
+later. Before
 merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
 **On the person's own computer** a chat has no GitHub tools: `gh` is the route, and
 `place.py` lists it (and `gh auth login`, theirs) when it is missing. **Each local chat
-works in a folder of its own**: `python3 tools/sync_app.py --worktree <name>` makes
+works in a folder of its own, made before any other work** (the sync's first line says so
+while a chat is still in the main folder): `python3 tools/sync_app.py --worktree <name>` makes
 `../<repo>-<name>` on a new, unique branch from master, and every command runs there; two
 chats in one folder switch branches under each other and fight over git's index. Files git
 does not carry (the connections export) are read from the main folder. Then: commit,

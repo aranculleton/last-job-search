@@ -108,3 +108,23 @@ def test_all_is_still_the_full_rewrite_and_its_dry_run_writes_nothing(tmp_path, 
     assert prep.main(["--all", *args]) == 0
     assert "3 prep documents written" in capsys.readouterr().out
     assert all(_doc(tmp_path, c["contact_id"]).exists() for c in CONTACTS)
+
+
+def test_a_rewrite_that_would_change_only_the_date_leaves_the_document_alone(tmp_path, capsys):
+    # Two chats that each rewrote every prep wrote the same documents a day apart, and every
+    # one of them conflicted when the two met.
+    args = _book(tmp_path)
+    assert prep.main(["--all", *args]) == 0
+    capsys.readouterr()
+    first = {c["contact_id"]: _doc(tmp_path, c["contact_id"]).read_text(encoding="utf-8")
+             for c in CONTACTS}
+    later = [a if a != TODAY else "2026-10-16" for a in args]
+    assert prep.main(["--all", *later]) == 0
+    out = capsys.readouterr().out
+    assert all(_doc(tmp_path, cid).read_text(encoding="utf-8") == text
+               for cid, text in first.items())
+    assert "0 prep documents written" in out and "3 already current" in out
+    # A real change to one contact still rewrites that one, with the new date.
+    path = prep.write_prep(dict(CONTACTS[2], status="in_conversation"), today="2026-10-16",
+                           root=str(tmp_path))
+    assert "Written 2026-10-16." in open(path, encoding="utf-8").read()

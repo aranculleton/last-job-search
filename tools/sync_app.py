@@ -540,6 +540,29 @@ def pull_master() -> int:
     return 0
 
 
+def own_folder() -> str:
+    """The first thing a chat on the person's computer is told, while it is still in their
+    main folder: make one of its own. Two chats in one folder switch branches under each
+    other and fight over git's index, and the second one is usually opened before anyone
+    thinks of it, so this is said before any work starts rather than when it goes wrong.
+    "" in the cloud, where every chat has its own container, and in a folder already made
+    for a chat."""
+    if CLOUD:
+        return ""
+    here = git("rev-parse", "--absolute-git-dir", check=False).stdout.strip()
+    common = git("rev-parse", "--git-common-dir", check=False).stdout.strip()
+    if not here or not common:
+        return ""
+    if not os.path.isabs(common):
+        common = os.path.join(ROOT, common)
+    if os.path.realpath(here) != os.path.realpath(common):
+        return ""                                   # a worktree: this chat's own folder
+    return ("sync_app: this chat is in your main folder. Before any work, give it a folder of "
+            "its own: python3 tools/sync_app.py --worktree <a short name for this chat>, then "
+            "run every command there. Two chats in one folder switch branches under each "
+            "other.")
+
+
 def branch_name(name: str, today: datetime.date | None = None) -> str:
     """chat/<name>-<date>, with -2, -3 and on when that branch is already here or on
     origin: a stale local branch with the day's name already existed once."""
@@ -671,6 +694,10 @@ def main(argv: list[str]) -> int:
         return 0
     if a.worktree:
         return worktree(a.worktree)
+    if (a.pull or a.if_stale) and not is_the_app():
+        hint = own_folder()
+        if hint:
+            print(hint)
     if a.pull:
         return pull_master()
     if is_the_app():

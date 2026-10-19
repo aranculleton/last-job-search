@@ -1364,14 +1364,75 @@ def _personal_repo() -> bool:
     return os.path.isdir(os.path.join(ROOT, "profile"))
 
 
+# A claim on an update's upgrades, pushed to the person's own repository the moment a chat
+# takes them: one ref per app commit, whose value is the claiming chat's sync. Git takes the
+# first push and refuses a different second one, so of two chats that synced the same update
+# a minute apart, the second learns at once that the first has it, before either has landed
+# anything on master. Where the push cannot go (offline, or the session may push only its
+# own branch), the check against master below still holds.
+CLAIM_REFS = "refs/ljs/upgrades/"
+CLAIMS_SEEN = "refs/remotes/origin-ljs-upgrades/"
+
+
 def fetch_master() -> None:
-    """origin/master as it is now, so what another chat landed is seen before this one starts
-    the same work. Best effort: offline, the last fetch stands."""
+    """origin/master as it is now, and every chat's claim, so what another chat landed or
+    took is seen before this one starts the same work. Best effort: offline, the last fetch
+    stands."""
+    for spec in (("master",), ("+%s*:%s*" % (CLAIM_REFS, CLAIMS_SEEN),)):
+        try:
+            subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", *spec],
+                           capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+
+def _sync_head() -> tuple:
+    """(this chat's latest sync commit, its time, the app commit it brought in) or ("", 0, "")."""
+    r = _git("log", "-1", "--format=%H %ct %P", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.split()
+    if len(r) < 2:
+        return "", 0, ""
+    return r[0], int(r[1]), (r[3] if len(r) > 3 else "")
+
+
+def push_claim() -> str:
+    """Push this chat's claim on the update its sync brought in: "claimed", "taken" (another
+    chat's claim is there already) or "" (no merge to claim, or the push could not go)."""
+    sha, _when, app = _sync_head()
+    if not app or not _personal_repo():
+        return ""
+    # Never a prompt: a push that wants a password or a passphrase fails at once and the
+    # check against master stands, rather than hanging a sync on the person's computer.
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
     try:
-        subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", "master"],
-                       capture_output=True, text=True, timeout=60)
+        r = subprocess.run(["git", "-C", ROOT, "push", "-q", "origin",
+                            "%s:%s%s" % (sha, CLAIM_REFS, app)],
+                           capture_output=True, text=True, timeout=60, env=env)
     except (OSError, subprocess.TimeoutExpired):
-        pass
+        return ""
+    if r.returncode == 0:
+        _git("update-ref", CLAIMS_SEEN + app, sha)
+        return "claimed"
+    err = (r.stderr or "") + (r.stdout or "")
+    # Only git's own refusal of a second, different value means another chat has it. A
+    # server that refuses the push for its own reasons ("remote rejected") says nothing
+    # about other chats.
+    if "(fetch first)" in err or "(non-fast-forward)" in err or "(already exists)" in err:
+        fetch_master()
+        return "taken"
+    return ""
+
+
+def _claimed_elsewhere(sha: str, app: str) -> int:
+    """When another chat's claim on this app commit is on file, the time of that chat's sync;
+    else 0."""
+    if not app:
+        return 0
+    got = _git("rev-parse", "-q", "--verify", CLAIMS_SEEN + app).stdout.strip()
+    if not got or got == sha:
+        return 0
+    when = _git("log", "-1", "--format=%ct", got).stdout.strip()
+    return int(when) if when.isdigit() else 0
 
 
 def done_on_master() -> set[str]:
@@ -1419,9 +1480,9 @@ def owner_elsewhere(now: float | None = None) -> str:
     except OSError:
         pass
     # Checked before this chat's own claim: two chats that synced the same update a minute
-    # apart each claimed it, and both applied it. The one whose sync reached master first
-    # owns it.
-    theirs = _landed_elsewhere(sha, r[2:])
+    # apart each claimed it, and both applied it. The one whose claim was pushed first, or
+    # whose sync reached master first, owns it.
+    theirs = _claimed_elsewhere(sha, r[3] if len(r) > 3 else "") or _landed_elsewhere(sha, r[2:])
     if theirs:
         ends = theirs + OWNER_MINUTES * 60
         if (now if now is not None else time.time()) >= ends:
@@ -1446,9 +1507,10 @@ def owner_elsewhere(now: float | None = None) -> str:
 
 def claim(taken: bool = False) -> None:
     """Mark the update this chat's sync brought in as this chat's, for its background
-    /upgrade too: worktrees share the git directory the marker lives in. `taken` is the
-    person's word that no other chat is open (--take), which outranks a sync another chat
-    landed first."""
+    /upgrade too: worktrees share the git directory the marker lives in. Chats on other
+    computers learn of it from the pushed claim (`push_claim`). `taken` is the person's word
+    that no other chat is open (--take), which outranks another chat's claim or landed
+    sync."""
     r = _git("log", "-1", "--format=%H", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.strip()
     if r:
         try:
@@ -1555,6 +1617,12 @@ def main(argv: list[str] | None = None) -> int:
         # file is always the one the sync brought in, so the check runs from here too.
         import sync_app
         sync_app.own_tests_after_sync(ROOT)
+    if a.after and rows and _personal_repo() and not owner_elsewhere():
+        # Pushed before this chat decides it owns them: of two chats that both found no other
+        # claim, git takes one push and refuses the other, and the refused one sees the
+        # winner's claim below. A chat another chat's claim or landed sync already covers
+        # pushes nothing, so it never stakes a claim on top of theirs.
+        push_claim()
     elsewhere = owner_elsewhere() if rows and (a.after or a.plan or a.line) else ""
     if elsewhere:
         # Another chat brought this update in and is applying it: say so once, start

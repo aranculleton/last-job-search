@@ -181,3 +181,163 @@ def test_a_chat_whose_own_sync_landed_first_keeps_the_update(tmp_path, monkeypat
     monkeypatch.setattr(P, "ROOT", a)
     P.claim()
     assert P.owner_elsewhere() == "" and P.done_on_master() == set()
+
+
+def _people(*chats):
+    for chat in chats:
+        os.makedirs(os.path.join(chat, "profile"), exist_ok=True)
+
+
+def test_the_first_chat_to_take_an_update_tells_the_other_before_anything_lands(
+        tmp_path, monkeypatch):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    monkeypatch.setattr(P, "ROOT", a)
+    assert P.push_claim() == "claimed"
+    monkeypatch.setattr(P, "ROOT", b)
+    assert P.push_claim() == "taken"                  # git took a's push and refused b's
+    assert P.done_on_master() == set()                # nothing has landed anywhere
+    assert P.owner_elsewhere() != ""                  # and b already knows a has them
+    # The person's word that no other chat is open still hands them over.
+    P.claim(taken=True)
+    assert P.owner_elsewhere() == ""
+    monkeypatch.setattr(P, "ROOT", a)
+    P.fetch_master()
+    assert P.owner_elsewhere() == ""                  # a's own claim is a's
+
+
+def test_a_chat_the_claim_reached_starts_nothing(tmp_path, monkeypatch, capsys):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    monkeypatch.setattr(P, "ROOT", a)
+    P.push_claim()
+    monkeypatch.setattr(P, "ROOT", b)
+    monkeypatch.setattr(P, "pending", lambda: [(P.REGISTRY[0], "missing")])
+    monkeypatch.setattr(P, "run_instant", lambda rows: [])
+    import merge_state
+    import sync_app
+    monkeypatch.setattr(merge_state, "install", lambda root: None)
+    monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
+    assert P.main(["--after-sync"]) == 0
+    assert "belong to another chat" in capsys.readouterr().out
+    assert P.main(["--plan"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_a_claim_is_never_staked_over_a_sync_that_landed(tmp_path, monkeypatch, capsys):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    _git(a, "push", "-q", "origin", "HEAD:master")    # a's sync landed, from an older copy
+    monkeypatch.setattr(P, "ROOT", b)
+    monkeypatch.setattr(P, "pending", lambda: [(P.REGISTRY[0], "missing")])
+    monkeypatch.setattr(P, "run_instant", lambda rows: [])
+    import merge_state
+    import sync_app
+    monkeypatch.setattr(merge_state, "install", lambda root: None)
+    monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
+    P.main(["--after-sync"])
+    capsys.readouterr()
+    refs = _git(b, "ls-remote", "origin", P.CLAIM_REFS + "*")
+    assert refs.stdout.strip() == ""                  # b pushed no claim of its own
+    monkeypatch.setattr(P, "ROOT", a)
+    P.claim()                                         # as a's own sync did
+    P.fetch_master()
+    assert P.owner_elsewhere() == ""                  # so a, whose sync landed, keeps them
+
+
+def test_no_claim_is_pushed_from_the_app(tmp_path, monkeypatch):
+    a, _b = _two_chats_one_update(tmp_path)           # no profile/: the app itself
+    monkeypatch.setattr(P, "ROOT", a)
+    assert P.push_claim() == ""
+    assert _git(a, "ls-remote", "origin", P.CLAIM_REFS + "*").stdout.strip() == ""
+
+
+# ------------------------------------------------------------------ the later change wins
+
+CONTACTS = "contact_id,name,status,next_action\n"
+JUNO = "oakmere_castellan,Juno Castellan,awaiting_reply,\n"
+
+
+def _two_sides(tmp_path, ours_at, theirs_at, ours_status="call_booked",
+               theirs_status="in_conversation"):
+    """A person's repo where two chats changed one contact's status, each at its own time."""
+    repo = str(tmp_path / "repo")
+    os.makedirs(os.path.join(repo, "tools"))
+    _git(repo, "init", "-q", "-b", "master")
+    for f in ("tools/merge_state.py", ".gitattributes"):
+        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
+            dst.write(src.read())
+    book = os.path.join(repo, "network_contacts.csv")
+    open(book, "w").write(CONTACTS + JUNO)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+
+    def change(status, when, msg):
+        open(book, "w").write(CONTACTS + JUNO.replace("awaiting_reply", status))
+        subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "commit", "-qam", msg], check=True, capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+
+    _git(repo, "checkout", "-qb", "other")
+    change(theirs_status, theirs_at, "theirs")
+    _git(repo, "checkout", "-q", "master")
+    change(ours_status, ours_at, "ours")
+    M.install(repo)
+    return repo, book
+
+
+def test_a_status_both_chats_changed_takes_the_later_change(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00", theirs_at="2026-10-19T15:00:00")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = open(book).read()
+    assert "<<<<<<<" not in text and "in_conversation" in text and "call_booked" not in text
+    said = r.stdout + r.stderr
+    assert "kept 'in_conversation', the later change" in said and "'call_booked'" in said
+
+
+def test_the_later_change_wins_whichever_side_it_is_on(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T15:00:00", theirs_at="2026-10-19T09:00:00")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "call_booked" in open(book).read()
+
+
+def test_a_change_with_no_later_side_is_still_left_for_a_person(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00", theirs_at="2026-10-19T09:00:00")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode != 0
+    text = open(book).read()
+    assert "<<<<<<<" in text and "call_booked" in text and "in_conversation" in text
+
+
+def test_without_git_history_a_both_changed_field_is_a_conflict_as_before():
+    base = CONTACTS + JUNO
+    ours = base.replace("awaiting_reply", "call_booked")
+    theirs = base.replace("awaiting_reply", "in_conversation")
+    out, problems = M.merge_csv(base, ours, theirs, "network_contacts.csv")
+    assert problems and "<<<<<<<" in out
+    settled = []
+    out, problems = M.merge_csv(base, ours, theirs, "network_contacts.csv",
+                                later=lambda k, f, o, t: "theirs", settled=settled)
+    assert not problems and "in_conversation" in out and "call_booked" not in out
+    assert settled and "both changed status" in settled[0]
+
+
+def test_a_seen_posting_both_chats_changed_takes_the_later_change():
+    base = {"seen": {"u1": {"status": "new"}}}
+    ours = {"seen": {"u1": {"status": "excluded"}}}
+    theirs = {"seen": {"u1": {"status": "applied"}}}
+    settled = []
+    out, problems = M.merge_json(base, ours, theirs, later=lambda p, o, t: "theirs",
+                                 settled=settled)
+    assert not problems and out == theirs and "seen/u1/status" in settled[0]
+
+
+def test_a_rebase_takes_the_later_change_too(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00", theirs_at="2026-10-19T15:00:00")
+    _git(repo, "checkout", "-q", "other")
+    r = _git(repo, "rebase", "master")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = open(book).read()
+    assert "<<<<<<<" not in text and "in_conversation" in text

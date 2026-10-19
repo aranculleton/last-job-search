@@ -213,7 +213,8 @@ Then get it onto master. A branch left behind at the end of a session is work th
 session cannot see and will duplicate.
 
 **On a computer of your own** (no GitHub tools in the chat; `gh` is the route), each chat
-works in a folder of its own, made once: `python3 tools/sync_app.py --worktree <name>`
+works in a folder of its own, made once and first, before any other work (the sync's first
+line says so while a chat is in the main folder): `python3 tools/sync_app.py --worktree <name>`
 (`../<repo>-<name>`, on a new branch from master). Two chats in one folder switch
 branches under each other. Then, from that folder:
 

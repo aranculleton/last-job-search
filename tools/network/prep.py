@@ -1834,6 +1834,14 @@ def prep_path(contact, root=STATE_ROOT) -> str:
     return os.path.join(root, *PREP_DIR, cid, "prep.md")
 
 
+def _read(path):
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except OSError:
+        return None
+
+
 def write_prep(contact, company_research=None, application=None, profile_facts=None,
                threads=(), today=None, root=STATE_ROOT, open_roles=(), draft=None,
                never_say=None) -> str:
@@ -1852,12 +1860,17 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
         kept = {}
     text = prep_markdown(contact, company_research, application, profile_facts, threads, today,
                          open_roles=open_roles, draft=draft, never_say=never_say, kept=kept)
+    wrote = generated(contact, application, profile_facts)
+    new = (text + "\n" + stamp_line(as_of(contact, threads, company_research, application, today))
+           + "\n" + ("<!-- generated answers: %s -->\n" % json.dumps(wrote, sort_keys=True)
+                     if wrote else ""))
+    old = _read(path)
+    # A document that would change only its date is left as it is: two chats that each
+    # regenerated every prep wrote the same documents a day apart, and all 217 conflicted.
+    if old is not None and _WRITTEN.sub("", old) == _WRITTEN.sub("", new):
+        return path
     with open(path, "w", encoding="utf-8") as f:
-        wrote = generated(contact, application, profile_facts)
-        f.write(text + "\n" + stamp_line(as_of(contact, threads, company_research, application,
-                                                today)) + "\n"
-                + ("<!-- generated answers: %s -->\n" % json.dumps(wrote, sort_keys=True)
-                   if wrote else ""))
+        f.write(new)
     return path
 
 
@@ -1995,11 +2008,18 @@ def main(argv=None) -> int:
             print("%d prep documents would be written (prep v%d); nothing written"
                   % (len(todo), generator_version()))
             return 0
-        for row, _path in todo:
+        wrote = same = 0
+        for row, path in todo:
+            before = _read(path)
             _write_one(row, tracker, a)
-        print("%d prep documents written%s" % (
-            len(todo), " (the ones older than prep v%d, or whose contact or thread has changed "
-            "since)" % redo_from() if a.stale_only else ""))
+            if _read(path) == before:
+                same += 1
+            else:
+                wrote += 1
+        print("%d prep documents written%s%s" % (
+            wrote, " (the ones older than prep v%d, or whose contact or thread has changed "
+            "since)" % redo_from() if a.stale_only else "",
+            "; %d already current, left as they were" % same if same else ""))
         for line in needs:
             print(line)
         return 0

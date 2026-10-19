@@ -11,10 +11,15 @@ that matters, so this merges rows:
 - a row both sides changed the same way is taken once;
 - a row both sides changed differently is merged field by field, and the notes both
   sides added are both kept;
-- a field both sides set to different values, or a row one side removed while the
-  other changed it, is a real conflict. The CSV gets git's markers around the two
-  versions of that row, the JSON keeps this side's value, the conflicts are listed,
-  and the exit is 1, so git leaves the file for a person, as it would have anyway.
+- a field both sides set to different values takes the later change: each side's own
+  history says when its value was set (the author date of the commit that set it, which
+  a rebase keeps), and the merge says which it kept and what the other side had, so a
+  person who wants the other can say so;
+- where neither change is later (no history to read, or the same moment), or a row one
+  side removed while the other changed it, it is a real conflict. The CSV gets git's
+  markers around the two versions of that row, the JSON keeps this side's value, the
+  conflicts are listed, and the exit is 1, so git leaves the file for a person, as it
+  would have anyway.
 
 `tools/sync_app.py` sets `merge.ljs-state.driver` in the repo's git config on every
 run and `.gitattributes` names the files. Where the driver is not set (a fresh clone
@@ -65,10 +70,13 @@ def merge_note(base: str, ours: str, theirs: str) -> str:
     return ours + (" | " if ours and theirs else "") + theirs
 
 
-def merge_fields(base: dict | None, ours: dict, theirs: dict) -> tuple[dict, list[str]]:
-    """One row both sides changed: field by field. Returns (row, conflicting fields)."""
+def merge_fields(base: dict | None, ours: dict, theirs: dict,
+                 decide=None) -> tuple[dict, list[str], list[str]]:
+    """One row both sides changed: field by field. `decide(field, ours, theirs)` says which
+    side made the later change ("ours", "theirs", or "" when neither is known to be later).
+    Returns (row, conflicting fields, what was settled by which change was later)."""
     base = base or {}
-    out, clash = {}, []
+    out, clash, settled = {}, [], []
     for k in list(ours) + [k for k in theirs if k not in ours]:
         b, o, t = base.get(k), ours.get(k), theirs.get(k)
         if o == t or t == b:
@@ -78,8 +86,15 @@ def merge_fields(base: dict | None, ours: dict, theirs: dict) -> tuple[dict, lis
         elif k in NOTES and all(isinstance(v, str) or v is None for v in (b, o, t)):
             out[k] = merge_note(b or "", o or "", t or "")
         else:
-            out[k], clash = o, clash + [k]
-    return out, clash
+            side = decide(k, o, t) if decide else ""
+            if side:
+                kept, other = (o, t) if side == "ours" else (t, o)
+                out[k] = kept
+                settled.append(f"{k}: kept {kept!r}, the later change; the other side had "
+                               f"{other!r}")
+            else:
+                out[k], clash = o, clash + [k]
+    return out, clash, settled
 
 
 # ------------------------------------------------------------------ CSV
@@ -104,7 +119,10 @@ def _keyed(rows: list[dict], fields) -> dict:
     return out
 
 
-def merge_csv(base: str, ours: str, theirs: str, name: str) -> tuple[str, list[str]]:
+def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
+              settled: list | None = None) -> tuple[str, list[str]]:
+    """`later(key, field, ours, theirs)` says which side changed a field last (see
+    `git_later`); what it settled is appended to `settled`."""
     fields = KEYS.get(name)
     hb, rb = _read(base)
     ho, ro = _read(ours)
@@ -135,7 +153,10 @@ def merge_csv(base: str, ours: str, theirs: str, name: str) -> tuple[str, list[s
             return o
         if o == b:
             return t
-        row, clash = merge_fields(b, o, t)
+        row, clash, done = merge_fields(
+            b, o, t, (lambda f, ov, tv: later(k, f, ov, tv)) if later and fields else None)
+        if settled is not None:
+            settled.extend(f"{name}: {', '.join(k[0])}: both changed {d}" for d in done)
         if clash:
             problems.append(f"{name}: {', '.join(k[0])}: both changed {', '.join(clash)}")
             return ("conflict", o, t)
@@ -171,13 +192,22 @@ def merge_csv(base: str, ours: str, theirs: str, name: str) -> tuple[str, list[s
 # ------------------------------------------------------------------ JSON
 
 
-def merge_json(base, ours, theirs, path: str = "") -> tuple[object, list[str]]:
-    """Dicts merge key by key, all the way down; anything else three ways."""
+def merge_json(base, ours, theirs, path: str = "", later=None,
+               settled: list | None = None) -> tuple[object, list[str]]:
+    """Dicts merge key by key, all the way down; anything else three ways, the later
+    change taking a value both sides changed where `later(path, ours, theirs)` knows it."""
     if ours == theirs or theirs == base:
         return ours, []
     if ours == base:
         return theirs, []
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
+        side = later(path, ours, theirs) if later and path else ""
+        if side:
+            kept, other = (ours, theirs) if side == "ours" else (theirs, ours)
+            if settled is not None:
+                settled.append(f"{path}: both changed it: kept {kept!r}, the later change; "
+                               f"the other side had {other!r}")
+            return kept, []
         return ours, [path or "(the whole file)"]
     base = base if isinstance(base, dict) else {}
     out, problems = {}, []
@@ -199,7 +229,7 @@ def merge_json(base, ours, theirs, path: str = "") -> tuple[object, list[str]]:
         if k in NOTES and all(isinstance(v, str) for v in (ours[k], theirs[k])):
             out[k] = merge_note(base.get(k) or "", ours[k], theirs[k])
             continue
-        out[k], more = merge_json(base.get(k), ours[k], theirs[k], sub)
+        out[k], more = merge_json(base.get(k), ours[k], theirs[k], sub, later, settled)
         problems += more
     return out, problems
 
@@ -225,7 +255,105 @@ def install(root: str) -> None:
                        capture_output=True, text=True, check=False)
 
 
-def merge(base: str, ours: str, theirs: str, path: str) -> tuple[str, list[str]]:
+# ------------------------------------------------------------------ which change was later
+
+# The other side of whatever git is doing. A merge names it in the driver's environment
+# (GITHEAD_<sha>, which git sets for its conflict labels: MERGE_HEAD is written only after
+# the driver has run); a rebase names the commit it is picking in its own todo list.
+_THEIRS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD")
+
+
+def _git(*args) -> str:
+    import subprocess
+    try:
+        r = subprocess.run(["git", *args], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+    return r.stdout if r.returncode == 0 else ""
+
+
+def _theirs() -> str:
+    import re
+    named = [k[len("GITHEAD_"):] for k in os.environ
+             if re.fullmatch(r"GITHEAD_[0-9a-f]{40}([0-9a-f]{24})?", k)]
+    if len(named) == 1:
+        return named[0]
+    if named:
+        return ""                                   # an octopus merge: no one other side
+    for ref in _THEIRS:
+        got = _git("rev-parse", "-q", "--verify", ref).strip()
+        if got:
+            return got
+    gd = _git("rev-parse", "--git-dir").strip()
+    try:
+        with open(os.path.join(gd, "rebase-merge", "done"), encoding="utf-8") as fh:
+            last = [ln.split() for ln in fh if ln.strip() and not ln.startswith("#")]
+    except OSError:
+        return ""
+    return last[-1][1] if last and len(last[-1]) > 1 else ""
+
+
+def git_later(path: str):
+    """`later(key, field, ours, theirs)` for the file git is merging, read from each side's
+    own history: when did each side's value appear, by the author date of the commit that
+    set it (a rebase keeps it)? None where git has no other side to read, and the merge
+    then leaves a field both sides changed for a person, as before."""
+    theirs_ref = _theirs()
+    if not theirs_ref:
+        return None
+    base_ref = _git("merge-base", "HEAD", theirs_ref).strip()
+    if not base_ref:
+        return None
+    name = os.path.basename(path)
+    fields = KEYS.get(name)
+    cache: dict = {}
+
+    def value(commit, key, field):
+        if commit not in cache:
+            text = _git("show", f"{commit}:{path}")
+            if name.endswith(".json"):
+                try:
+                    cache[commit] = json.loads(text) if text.strip() else {}
+                except ValueError:
+                    cache[commit] = {}
+            else:
+                _head, rows = _read(text)
+                cache[commit] = _keyed(rows, fields) if fields else {}
+        got = cache[commit]
+        if name.endswith(".json"):
+            for part in key.split("/"):
+                if not isinstance(got, dict) or part not in got:
+                    return None
+                got = got[part]
+            return got
+        row = got.get(key)
+        return None if row is None else row.get(field)
+
+    def introduced(ref, key, field, final) -> int:
+        """When `final` became this side's value: the oldest of the newest run of commits
+        that carry it. 0 where the side never set it since the two parted."""
+        when = 0
+        for ln in _git("log", "--format=%H %at", f"{base_ref}..{ref}", "--", path).splitlines():
+            commit, _, at = ln.partition(" ")
+            if value(commit, key, field) != final:
+                break
+            when = int(at) if at.isdigit() else 0
+        return when
+
+    def later(key, field, ours, theirs):
+        a = introduced("HEAD", key, field, ours)
+        b = introduced(theirs_ref, key, field, theirs)
+        if a and b and a != b:
+            return "ours" if a > b else "theirs"
+        return ""
+
+    if name.endswith(".json"):                     # a JSON value is found by its path alone
+        return lambda where, ours, theirs: later(where, None, ours, theirs)
+    return later
+
+
+def merge(base: str, ours: str, theirs: str, path: str, later=None,
+          settled: list | None = None) -> tuple[str, list[str]]:
     name = os.path.basename(path)
     if name.endswith(".json"):
         try:
@@ -233,9 +361,9 @@ def merge(base: str, ours: str, theirs: str, path: str) -> tuple[str, list[str]]
             o, t = json.loads(ours), json.loads(theirs)
         except ValueError as e:
             return ours, [f"{path}: not JSON on one side ({e})"]
-        merged, problems = merge_json(b, o, t)
+        merged, problems = merge_json(b, o, t, later=later, settled=settled)
         return json.dumps(merged, indent=2, ensure_ascii=False) + "\n", problems
-    return merge_csv(base, ours, theirs, name)
+    return merge_csv(base, ours, theirs, name, later=later, settled=settled)
 
 
 # Exit codes. 0 merged; 1 merged with real conflicts marked for a person. Anything
@@ -260,14 +388,18 @@ def main(argv: list[str]) -> int:
         with open(p, encoding="utf-8", newline="") as f:
             return f.read()
 
+    settled: list[str] = []
     try:
-        text, problems = merge(read(base_p), read(ours_p), read(theirs_p), path)
+        text, problems = merge(read(base_p), read(ours_p), read(theirs_p), path,
+                               later=git_later(path), settled=settled)
     except Exception as e:  # noqa: BLE001  nothing is written; git's line merge takes over
         print(f"merge_state: could not merge {path} ({type(e).__name__}: {e}); "
               "git's line merge marks the conflicts instead", file=sys.stderr)
         return COULD_NOT
     with open(ours_p, "w", encoding="utf-8", newline="") as f:
         f.write(text)
+    for p in settled:
+        print(f"merge_state: {p}. Tell the person; their word outranks this.", file=sys.stderr)
     for p in problems:
         print(f"merge_state: {p}", file=sys.stderr)
     return 1 if problems else 0
