@@ -155,6 +155,17 @@ PAGE_ALL_MAX = 1000
 COUNTRY_ID, COUNTRY_NAME = getattr(_B, "WORKDAY_COUNTRY", ("", ""))
 
 
+def __getattr__(name: str):
+    """A name not here (PEP 562). A private one is named for what it is: a person's test
+    that reached into this module's private parts broke by the dozen when 3.5.0 moved the
+    reading into openroles, and the bare AttributeError told nobody what to do."""
+    hint = (". Names starting with an underscore are private to the app and change between "
+            "releases (3.5.0 moved the board reading into tools/openroles). A person's own test "
+            "fakes a board with tools/offline_boards.py; `python3 tools/sync_app.py --own-tests` "
+            "says what to do." if name.startswith("_") and not name.startswith("__") else "")
+    raise AttributeError(f"module 'ats_boards' has no attribute {name!r}{hint}")
+
+
 # ------------------------------------------------------------------ robots
 
 def robots_allows(host: str, paths) -> tuple[bool, str]:

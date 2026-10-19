@@ -20,16 +20,18 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-## [3.5.1] - 2026-10-19
+## [3.6.0] - 2026-10-19
 
 ### Fixed
 
-- **Your own tests are checked on the very sync that brings an update, and you are told
-  why one fails.** A repo whose sync code was older than the check ran nothing, so after
-  3.5.0 the maintainer's own tests failed by the dozen with no word from the sync. The
-  check now runs from the part of the sync that is always the new copy, once per update,
-  and tells a test that uses a part of the app the update removed (with what to do) apart
-  from one pinning behaviour that changed. No profile upgrade.
+- **When your own tests fail after an update, you are told which, why and what to do,
+  wherever it shows.** After 3.5.0 the maintainer's own tests failed by the dozen and
+  nothing explained it: the sync's check never ran (its copy of the code was older than the
+  check) and CI only listed names. Now the sync runs it from the part that is always new,
+  once per update; `ci_local.sh` prints the same when they fail; the error itself says what
+  a removed private name means; and `python3 tools/sync_app.py --own-tests` says it at any
+  time. A test using a part of the app the update removed is told apart from one pinning
+  behaviour that changed, and retiring one is asked once. No profile upgrade.
 
 ### Added
 
@@ -37,6 +39,9 @@ make sense to somebody whose repo just received it.
   answers every employer-board request from canned responses; a name that starts with an
   underscore, and anything inside `tools/openroles/`, can change in any release. No
   profile upgrade.
+- **Tests that will break are named before they do.** `ci_local.sh` notes your own tests
+  that reach into private parts of the app, so they are moved onto public names before an
+  update changes those parts. No profile upgrade.
 
 ## [3.5.0] - 2026-10-19
 

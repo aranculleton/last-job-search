@@ -514,12 +514,30 @@ def main(argv: list[str]) -> int:
                       help="once, for the repo the app was built from")
     mode.add_argument("--if-stale", action="store_true",
                       help="master, then the app, unless today's check already ran")
+    mode.add_argument("--own-tests", action="store_true",
+                      help="which of the person's own tests fail on this tree, and what to do")
+    mode.add_argument("--own-test-risks", action="store_true",
+                      help="the person's own tests that reach into private parts of the app")
     ap.add_argument("--on", default="", metavar="MODEL",
                     help="the model this session runs on: the day's work is checked against it")
     ap.add_argument("--tools", default=None, metavar="LIST",
                     help="the browser tools this chat has (browser, chrome, chrome-off, enable, "
                          "none): the place check says what to do, once and then weekly")
     a = ap.parse_args(argv)
+    if a.own_tests:
+        failures = own_test_failures()
+        text = own_tests_report(failures or [])
+        print(text or ("Your own tests pass on this tree." if failures == [] else
+                       "Your own tests could not be run."))
+        risk = own_test_risks_report(own_test_risks())
+        if risk:
+            print(risk)
+        return 1 if failures else 0
+    if a.own_test_risks:
+        risk = own_test_risks_report(own_test_risks())
+        if risk:
+            print(risk)
+        return 0
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
         return 0
@@ -645,8 +663,81 @@ def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -
                      "change looks wrong.")
     lines.append("Claude: they are the person's files. Retiring a failing test is their call: "
                  "ask once, in one line, with the counts above, and say in the PR which you "
-                 "retired and which you rewrote.")
+                 "retired and which you rewrote. `python3 tools/sync_app.py --own-tests` says "
+                 "this again at any time.")
     return "\n".join(lines)
+
+
+def own_test_risks(root: str | None = None) -> dict[str, list[str]]:
+    """{test file: ["module._name", ...]} for the person's own tests that reach into a
+    private part of the app: a name starting with an underscore on one of the app's
+    modules, imported, read, or patched by name. They pass today and break the day the
+    app changes that part, which is what 3.5.0 did to dozens of them at once."""
+    import ast
+    root = root or ROOT
+    tests = os.path.join(root, "profile", "tests")
+    out: dict[str, list[str]] = {}
+    if not os.path.isdir(tests):
+        return out
+
+    def private(name: str) -> bool:
+        return name.startswith("_") and not name.startswith("__")
+
+    for base, _dirs, files in os.walk(tests):
+        for fn in sorted(files):
+            if not fn.endswith(".py"):
+                continue
+            path = os.path.join(base, fn)
+            try:
+                tree = ast.parse(open(path, encoding="utf-8").read())
+            except (OSError, SyntaxError, ValueError):
+                continue
+            alias: dict[str, str] = {}
+            found: list[str] = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for a in node.names:
+                        if _app_module(root, a.name):
+                            alias[(a.asname or a.name).split(".")[0]] = a.name
+                            if any(private(part) for part in a.name.split(".")):
+                                found.append(a.name)
+                elif isinstance(node, ast.ImportFrom) and node.module and _app_module(root, node.module):
+                    for a in node.names:
+                        if private(a.name) or any(private(p) for p in node.module.split(".")):
+                            found.append(f"{node.module}.{a.name}")
+                        elif _app_module(root, f"{node.module}.{a.name}"):
+                            alias[a.asname or a.name] = f"{node.module}.{a.name}"
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and node.value.id in alias and private(node.attr)):
+                    found.append(f"{alias[node.value.id]}.{node.attr}")
+                elif isinstance(node, ast.Call):
+                    args = node.args
+                    # mock.patch("module._name") and mock.patch.object(module, "_name")
+                    if (args and isinstance(args[0], ast.Constant) and isinstance(args[0].value, str)
+                            and "." in args[0].value):
+                        mod, _, name = args[0].value.rpartition(".")
+                        if _app_module(root, mod) and private(name):
+                            found.append(args[0].value)
+                    if (len(args) > 1 and isinstance(args[0], ast.Name) and args[0].id in alias
+                            and isinstance(args[1], ast.Constant) and isinstance(args[1].value, str)
+                            and private(args[1].value)):
+                        found.append(f"{alias[args[0].id]}.{args[1].value}")
+            if found:
+                out[os.path.relpath(path, root)] = sorted(set(found))
+    return out
+
+
+def own_test_risks_report(risks: dict[str, list[str]]) -> str:
+    """One note for the person's tests that will break when the app changes a private part."""
+    if not risks:
+        return ""
+    names = sorted({n for v in risks.values() for n in v})
+    return (f"Note: {len(risks)} of your own test file(s) reach into private parts of the app "
+            f"({', '.join(names[:5])}{', ...' if len(names) > 5 else ''}): they pass now and break "
+            "when the app changes those parts. Claude: when next working in these files, move them "
+            "onto public names (a job board through tools/offline_boards.py), keeping every "
+            "assertion: " + "; ".join(sorted(risks)[:4]) + ("; ..." if len(risks) > 4 else ""))
 
 
 # In the repository's .git, never committed: the sync commit the person's own tests last

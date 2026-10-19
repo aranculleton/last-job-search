@@ -121,7 +121,14 @@ run_py_module pytest "pytest (the app's suite, on the example person)" python3 -
 # The person's own suite, against their profile, in its own process: the tools
 # read the profile once at import, so the two suites cannot share one.
 if [ -d profile/tests ]; then
+  before=$FAIL
   run_py_module pytest "pytest (profile/tests, on this person)" python3 -m pytest profile/tests -q
+  # A failure here is often an update that changed or removed what the test pinned: say
+  # which, and what to do, rather than leave a list of names to guess from.
+  if [ "$FAIL" -gt "$before" ]; then
+    python3 tools/sync_app.py --own-tests 2>&1 | sed 's/^/      /'
+  fi
+  python3 tools/sync_app.py --own-test-risks 2>/dev/null | sed 's/^/  /'
 fi
 
 echo

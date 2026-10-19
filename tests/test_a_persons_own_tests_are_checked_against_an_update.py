@@ -93,3 +93,40 @@ def test_a_persons_tests_are_tried_on_a_tree_before_it_ships(tmp_path, monkeypat
     assert "Your own tests: 1 now fail" in capsys.readouterr().out
     assert subprocess.run(["git", "-C", str(person), "status", "--porcelain"],
                           capture_output=True, text=True).stdout == ""      # nothing changed there
+
+
+def test_a_test_reaching_into_private_parts_is_noted_before_it_breaks(tmp_path):
+    tests = tmp_path / "profile" / "tests"
+    tests.mkdir(parents=True)
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "tools" / "ats_boards.py").write_text("")
+    (tmp_path / "tools" / "fit.py").write_text("")
+    (tests / "test_reaching.py").write_text(
+        "from unittest import mock\nimport ats_boards as A\nfrom fit import _core_points, score\n"
+        "def test_a():\n    A._ROBOTS.clear()\n    A.FETCH\n"
+        "    with mock.patch('ats_boards._request'), mock.patch.object(A, '_get'):\n        pass\n")
+    (tests / "test_public.py").write_text("import ats_boards\ndef test_b():\n    ats_boards.FETCH\n")
+    risks = sync_app.own_test_risks(str(tmp_path))
+    assert risks == {os.path.join("profile", "tests", "test_reaching.py"): [
+        "ats_boards._ROBOTS", "ats_boards._get", "ats_boards._request", "fit._core_points"]}
+    note = sync_app.own_test_risks_report(risks)
+    assert note.startswith("Note: 1 of your own test file(s) reach into private parts of the app")
+    assert "tools/offline_boards.py" in note and "keeping every assertion" in note
+    assert sync_app.own_test_risks_report({}) == ""
+
+
+def test_the_error_itself_says_what_a_removed_private_name_means():
+    import ats_boards
+    try:
+        ats_boards._ROBOTS
+    except AttributeError as e:
+        text = str(e)
+    assert text.startswith("module 'ats_boards' has no attribute '_ROBOTS'")
+    assert "tools/offline_boards.py" in text and "--own-tests" in text
+    assert sync_app._gone(ROOT, f"AttributeError: {text}") == "ats_boards._ROBOTS"
+
+
+def test_ci_says_what_to_do_when_a_persons_own_tests_fail():
+    ci = open(os.path.join(ROOT, "tools", "ci_local.sh"), encoding="utf-8").read()
+    assert "python3 tools/sync_app.py --own-tests" in ci
+    assert "python3 tools/sync_app.py --own-test-risks" in ci

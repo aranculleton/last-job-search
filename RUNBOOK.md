@@ -251,6 +251,31 @@ and the sentence to say it in. The
 resume states no gaps and the cover letter volunteers none; this is what it says instead
 when asked directly.
 
+## Your own tests fail after an update
+
+A person's own tests (`profile/tests`) pin how the app worked when they were written, and
+an update can change or remove what they pinned. CI going red after a sync is usually this,
+not a bug in the update.
+
+1. `python3 tools/sync_app.py --own-tests` sorts every failing test into two kinds and says
+   what to do. The sync and `ci_local.sh` print the same by themselves.
+2. **It uses a part of the app the update removed** (an `AttributeError` or `ImportError`
+   naming one of the app's modules, often a name starting with an underscore). What it
+   checked has moved, and the app's own tests cover the app's behaviour. Rewrite the ones
+   that pin the person's own data through the app's public names (a job board through
+   `tools/offline_boards.py`), keeping every assertion; the rest are retired.
+3. **It checks behaviour the update changed.** Read the CHANGELOG entry for the change and
+   bring the test in line with it. If the new behaviour looks wrong for this person, report
+   it to the app (the way this repo's `profile/CLAUDE.md` says, or an issue on the app) and
+   leave the test failing rather than weaken it.
+4. **Retiring a failing test is the person's call.** Ask once, in one line, with the counts
+   from step 1. A permission check that stops an unexplained deletion is right to.
+5. Run `./tools/ci_local.sh`, then land on master as usual. Until it is green, master stays
+   on the old version and nothing breaks.
+
+`python3 tools/sync_app.py --own-test-risks` names the tests that will break the next time
+the app changes a private part, before it does; `ci_local.sh` prints it as a note.
+
 ## Documents for someone else
 
 The repo has no pipeline for drafting a resume for somebody other than the candidate. Its
