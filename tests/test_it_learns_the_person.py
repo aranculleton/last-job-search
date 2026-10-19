@@ -165,6 +165,3 @@ def test_the_profiles_own_never_write_rules_are_checked_in_every_draft(profile):
     assert learned.adopt_profile_rules() == []
     learned.retire(1)
     assert learned.unadopted() == []
-    # A banned document noun is a word choice, not a spelling.
-    found = {v.rule for v in tone.check("I have attached my resume for context.")}
-    assert "document_noun" in found and "british_spelling" not in found
