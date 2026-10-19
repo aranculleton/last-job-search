@@ -72,7 +72,7 @@ Ask the user what happened, then classify:
 - `hired` - accepted an offer
 - `offer_declined` - received an offer, turned it down
 - `rejected` - explicit rejection at any stage
-- `no_response` - no reply; if the user is unsure whether to call it, note how long it has been since the last contact and let them decide - do not impose a cutoff
+- `no_response` - no reply; if the user is unsure whether to call it, note how long it has been since the last contact and let them decide - do not impose a cutoff. (The brief closes an application on its own once the chase has ended, `followups.py --close-quiet`, with a dated note on the row; a reply after that is recorded here as usual.)
 - `interview_only` - reached interviews but the process stalled or was abandoned without an explicit rejection
 
 Also collect, without interrogating - one or two open questions are enough:

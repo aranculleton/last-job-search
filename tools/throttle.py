@@ -233,9 +233,10 @@ def is_stale_exclusion(reason: str) -> bool:
 # to it: a sent row with no terminal status suppressed its employer forever.
 #
 # It is not hypothetical: a tracker can hold dozens of sent rows and none in a
-# terminal state. Nothing in the system ever writes `no_response`, because that
-# requires somebody to notice silence and run /outcome, and silence is exactly
-# what nobody notices. So most of the named target employers become
+# terminal state. Nothing in the system wrote `no_response`, because that
+# required somebody to notice silence and run /outcome, and silence is exactly
+# what nobody notices. (The brief now closes them, `followups.close_quiet`, at
+# the same number; this rule still covers any row it has not reached.) So most of the named target employers become
 # permanently invisible to the search.
 #
 # Six weeks is the number because that is well past the point where a hiring
@@ -255,10 +256,10 @@ LIVE_PROCESS = frozenset({"interview", "offer"})
 def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     """A sent application with no reply recorded, old enough to presume dead.
 
-    Deliberately does NOT rewrite the tracker. Marking a row `no_response` is a
-    claim about the world that a person should make, and /outcome is where that
-    happens. This only stops the row SUPPRESSING, which is a claim about this
-    repo's own behaviour and is ours to make.
+    Does NOT rewrite the tracker: this only stops the row SUPPRESSING, which is a
+    claim about this repo's own behaviour. Closing the row as `no_response` is
+    `followups.close_quiet`, which the brief runs and which notes the close on
+    the row so the person sees it and can reverse it with /outcome.
     """
     # A live process is not silence, however long it has run: an interview loop
     # at a bank routinely passes six weeks, and a row at `interview` older than

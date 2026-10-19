@@ -33,7 +33,7 @@ prog = prog.replace('"%s"', '"' + "/".join(["%d"] * len(names)) + '"') + "}"
 print(prog)
 PYX
 )
-fail=0; tb=0; n=0
+fail=0; tb=0; n=0; readers=""
 printf "%-9s %-4s %-4s %-14s %s\n" ABBR pgs blt "$ROLE_HEADER" flags
 for a in $ABBRS; do
   R="$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.pdf"; C="$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.pdf"
@@ -74,8 +74,11 @@ PYX
   # verify_pdf.py reads with pypdf first and fails words run together. A resume
   # built with LuaLaTeX and an OpenType font read in pypdf with its city and
   # phone number run together, and would have passed everything else here.
-  python3 "$ROOT/tools/verify_pdf.py" "$R" >/dev/null 2>&1 || p="$p SPACING_RESUME"
-  python3 "$ROOT/tools/verify_pdf.py" "$C" >/dev/null 2>&1 || p="$p SPACING_LETTER"
+  # Which reader it used is said once at the end: only pypdf catches words run
+  # together, and a fallback to pdftotext passed them without a word.
+  vr=$(python3 "$ROOT/tools/verify_pdf.py" "$R" 2>&1) || p="$p SPACING_RESUME"
+  vc=$(python3 "$ROOT/tools/verify_pdf.py" "$C" 2>&1) || p="$p SPACING_LETTER"
+  readers="$readers $(printf '%s\n%s\n' "$vr" "$vc" | grep -oE 'extractor: [a-z]+' | cut -d' ' -f2)"
   grep -qF -- "$EMAIL" $VB/vb_r1.txt && grep -qF -- "$PHONE" $VB/vb_r1.txt || p="$p CONTACT"
   [ -z "$PINNED" ] || grep -qF -- "$PINNED" $VB/vb_r1.txt || p="$p NO_PINNED_SKILL"
   # Skills sits between Professional Experience and Education; the old range
@@ -108,6 +111,11 @@ PYX
   [ -n "$p" ] && fail=1
 done
 echo "mean bullets: $((tb/n))"
+used=$(echo $readers | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ $//')
+case " $used " in
+  *" pdftotext "*) echo "text layer read with: ${used:-nothing} (pdftotext fallback: words run together are NOT caught; pip3 install pypdf, or pip3 install --upgrade cffi if it is installed)" ;;
+  *) echo "text layer read with: ${used:-nothing}" ;;
+esac
 echo "=== claims ==="
 # The pipeline's exit status is the last command's, so a failing check hid
 # behind grep|head and the script said ALL PASS over letters carrying

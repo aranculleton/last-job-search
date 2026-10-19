@@ -178,11 +178,40 @@ def _own_initialism(name: str) -> str:
     """
     m = _INITIALISM.search(str(name or ""))
     if not m:
-        return ""
+        return _own_short_word(name)
     short = re.sub(r"[^A-Za-z]", "", m.group(1)).lower()
-    words = [w for w in re.findall(r"[A-Za-z]+", str(name)[:m.start()]) if w.lower() not in _MINOR]
-    initials = "".join(w[0] for w in words).lower()
-    return short if len(short) >= 2 and initials == short else ""
+    words = [w.lower() for w in re.findall(r"[A-Za-z]+", str(name)[:m.start()])]
+    return short if len(short) >= 2 and _initials_of(short, words) else ""
+
+
+_BRACKET_END = re.compile(r"^(.*\S)\s*\(\s*([^()]{2,40}?)\s*\)\s*$")
+
+
+def _own_short_word(name: str) -> str:
+    """The short name in a closing bracket when it is the name's own first words:
+    "Brindle Hart Capital Partners (Brindle Hart)". Never a listing detail such as
+    "(UK)" or "(Contract)", which is not how the name starts."""
+    m = _BRACKET_END.match(str(name or ""))
+    if not m:
+        return ""
+    short, long_ = _norm(m.group(2)), _norm(m.group(1))
+    if not short or short in _MINOR or not long_.startswith(short + " "):
+        return ""
+    return short
+
+
+def _initials_of(short: str, words: list[str]) -> bool:
+    """Whether `short` is the words' initials, each small word ("of", "the") either
+    counted or not: "Northgate of Lakeshore Pension Plan" is NLPP and NOLPP alike. Only
+    small words may be skipped, so "(UK)" or "(Remote)" never passes for a name."""
+    if not short:
+        return not any(w not in _MINOR for w in words)
+    if not words:
+        return False
+    w, rest = words[0], words[1:]
+    if w[0] == short[0] and _initials_of(short[1:], rest):
+        return True
+    return w in _MINOR and _initials_of(short, rest)
 
 
 # Short name -> the long name's key, learned from every "Long Name (LN)" seen:

@@ -248,9 +248,11 @@ def _stored_draft(contact) -> str:
 def due_items(contacts, threads, tracker, today, docs=None):
     """Everything due today or overdue in both halves, plus what a hold is keeping back.
 
-    Contacts: every `next_action_due` on or before today on a thread that is
-    not finished, which is the set `state.owed` already carries a due action
-    on, so the rule lives there once. Applications: every follow-up
+    Contacts: everything `state.owed` lists, which is only ever what is owed
+    now (a reply the moment they answer, a nudge once its clock has run, a
+    date the person set on themselves), so the rule lives there once. Each is
+    dated by the person's own `next_action_due` where there is one, else by
+    when it fell owed, else today. Applications: every follow-up
     `followups.review` finds due or held, and a gone-quiet notice on its one
     day. Unsorted; `render_due` orders it.
     """
@@ -258,10 +260,11 @@ def due_items(contacts, threads, tracker, today, docs=None):
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     items = []
     for o in state.owed(contacts, threads, today):
-        if not o["next_action_due"]:
-            continue
+        # A reply nobody put a date on is owed all the same. Reading only
+        # next_action_due dropped it, and the brief's first line said
+        # "0 replies owed" while someone sat waiting for an answer.
         c = by_id.get(o["contact_id"], {})
-        due = state.as_date(o["next_action_due"])
+        due = state.as_date(o["next_action_due"] or o.get("due")) or today
         name = o["name"] or o["contact_id"]
         who = name + "".join(", " + x for x in (c.get("title"), o["company"]) if x)
         items.append({
