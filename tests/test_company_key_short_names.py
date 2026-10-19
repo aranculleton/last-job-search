@@ -13,8 +13,8 @@ import company_key  # noqa: E402
 
 
 def test_a_bracketed_initialism_counts_small_words_either_way():
-    company_key.learn(["Northgate of Lakeshore Pension Plan (NOLPP)"])
-    assert company_key.key("NOLPP") == company_key.key("Northgate of Lakeshore Pension Plan")
+    company_key.learn(["Northgate of Fernhill Pension Plan (NOFPP)"])
+    assert company_key.key("NOFPP") == company_key.key("Northgate of Fernhill Pension Plan")
     company_key.learn(["Fernhill and Larkspur Trust (FLT)"])
     assert company_key.key("FLT") == company_key.key("Fernhill and Larkspur Trust")
 

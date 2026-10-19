@@ -202,7 +202,7 @@ def _own_short_word(name: str) -> str:
 
 def _initials_of(short: str, words: list[str]) -> bool:
     """Whether `short` is the words' initials, each small word ("of", "the") either
-    counted or not: "Northgate of Lakeshore Pension Plan" is NLPP and NOLPP alike. Only
+    counted or not: "Northgate of Fernhill Pension Plan" is NFPP and NOFPP alike. Only
     small words may be skipped, so "(UK)" or "(Remote)" never passes for a name."""
     if not short:
         return not any(w not in _MINOR for w in words)
