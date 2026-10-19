@@ -776,10 +776,16 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=3),
     Upgrade("connections-export", "2026-10-17",
             "every networking run starting from the people you already know",
-            _connections_export, "save the Connections.csv they attach to "
-            "documents/linkedin/Connections.csv, or, if they would rather not, write "
+            _connections_export, "save what they attach with `python3 tools/network/sources.py "
+            "import-connections <file>` (a ZIP is read for Connections.csv alone, and the "
+            "line it prints says so), or, if they would rather not, write "
             "CONNECTIONS_EXPORT = \"declined\" in profile/networking.py and run `python3 "
-            "tools/profile_upgrades.py --no connections-export`", "question", "~2 min",
+            "tools/profile_upgrades.py --no connections-export`. While the file is on its way, "
+            "after giving the steps, offer once, in its words, what `python3 "
+            "tools/network/sources.py while-you-wait` prints: one employer's 1st-degree "
+            "people, pasted, go through `python3 tools/network/sources.py people-paste "
+            "\"<employer>\" <file>`, and the steps for that, if they want them, are `python3 "
+            "tools/claude_surfaces.py steps linkedin-people-at-employer`", "question", "~2 min",
             names=("networking.CONNECTIONS_EXPORT",),
             priority=3,
             needs="you",
@@ -787,8 +793,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             changed="networking now finds people in bulk from any chat, and your own "
                     "connections are the first and strongest place it looks",
             ask="Want me to start from the people you already know on LinkedIn? That means "
-                "downloading one file from LinkedIn, about ten minutes, and I'll walk you "
-                "through it. Yes, or not now?",
+                "requesting one file from LinkedIn, which arrives anything from ten minutes "
+                "to a day later, and I'll walk you through it. Yes, or not now?",
             steps=lambda: "\n".join(_surface_steps("linkedin-connections")
                                     + ["I only read it. Nothing is sent to anyone."]),
             why_ask="People you already know can be messaged directly, with no connection "

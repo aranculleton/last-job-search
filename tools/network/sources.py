@@ -510,6 +510,28 @@ def main(argv: list | None = None) -> int:
         return _cli_ladder(argv[1:])
     if argv and argv[0] == "harvest" and len(argv) > 1:
         return _cli_harvest(argv[1:])
+    if argv and argv[0] == "import-connections" and len(argv) == 2:
+        try:
+            print(import_connections(argv[1]))
+        except (OSError, ValueError) as e:
+            print(f"sources: nothing saved: {e}")
+            return 1
+        return 0
+    if argv and argv[0] == "while-you-wait":
+        print(while_you_wait())
+        return 0
+    if argv and argv[0] == "people-paste" and len(argv) >= 3:
+        degree = argv[3] if len(argv) > 3 else ""
+        with open(argv[2], encoding="utf-8") as fh:
+            people = from_people_paste(fh.read(), argv[1], degree)
+        if not people:
+            print(f"sources: nobody in that paste reads as a person at {argv[1]}")
+            return 1
+        for i, p in enumerate(people, 1):
+            how = "message (1st, no request)" if p.get("route") == "connection" else "connection request (2nd)"
+            print(f"  {i}. {p['name']}: {p.get('title') or 'title not given'} [{how}]"
+                  + (f" {p['linkedin_url']}" if p.get("linkedin_url") else ""))
+        return 0
     if argv and argv[0] == "connections" and len(argv) > 1:
         for p in from_connections(argv[1]):
             print(f"  {p['name']}: {p.get('title')} ({p.get('evidence')}) {p.get('linkedin_url')}")
@@ -647,6 +669,165 @@ def from_connections(company: str, connections=None, contacts=None) -> list:
     return sorted(out, key=key)
 
 
+# LinkedIn's Connections.csv is a few hundred kilobytes for most people; a file far past
+# this is not one, and is not read into memory to find out.
+CONNECTIONS_MAX_BYTES = 20 * 1024 * 1024
+
+
+def import_connections(src: str, dest: str | None = None) -> str:
+    """Save LinkedIn's Connections.csv into documents/linkedin/, from the file itself or
+    from the archive it came in, and return what to tell the person.
+
+    From a ZIP only Connections.csv is read: the archive also holds the person's
+    messages and much else the app never needs, so nothing else in it is opened or
+    kept. The file starts with a few lines of notes above its header, which
+    state.first_degree() finds; one with no connection under a "First Name" header is
+    refused, and nothing is saved."""
+    import tempfile
+    import zipfile
+    import state
+    dest = dest or person.state("documents", "linkedin", "Connections.csv")
+    note = ""
+    if zipfile.is_zipfile(src):
+        with zipfile.ZipFile(src) as z:
+            names = z.namelist()
+            found = [n for n in names if os.path.basename(n).lower() == "connections.csv"]
+            if not found:
+                raise ValueError("there is no Connections.csv in that archive: it is probably "
+                                 "the shorter download, which leaves connections out")
+            if z.getinfo(found[0]).file_size > CONNECTIONS_MAX_BYTES:
+                raise ValueError("the Connections.csv in that archive is too large to be one")
+            data = z.read(found[0])
+        others = len(names) - 1
+        note = (" I read only Connections.csv from the archive" + (
+            f"; the other {others} file{'s' if others != 1 else ''} in it "
+            f"{'were' if others != 1 else 'was'} not opened." if others else "."))
+    else:
+        if os.path.getsize(src) > CONNECTIONS_MAX_BYTES:
+            raise ValueError("that file is too large to be LinkedIn's Connections.csv")
+        with open(src, "rb") as fh:
+            data = fh.read()
+    text = data.decode("utf-8-sig", errors="replace")
+    with tempfile.TemporaryDirectory() as tmp:
+        probe = os.path.join(tmp, "Connections.csv")
+        with open(probe, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        count = len(state.first_degree(probe))
+    if not count:
+        raise ValueError("that file has no connections in it: no row under a \"First Name\" "
+                         "header, which is how LinkedIn writes Connections.csv")
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "w", encoding="utf-8", newline="") as fh:
+        fh.write(text)
+    return f"Saved your {count} connections.{note}"
+
+
+def while_you_wait(tracker=None) -> str:
+    """The quicker route to the people who matter most while the export is on its way,
+    offered once with its steps: one employer's 1st-degree people, pasted, starting
+    where an interview is running."""
+    import csv
+    rows = tracker
+    if rows is None:
+        try:
+            with open(person.state("job_search_tracker.csv"), encoding="utf-8", newline="") as fh:
+                rows = list(csv.DictReader(fh))
+        except OSError:
+            rows = []
+    live = next((str(r.get("company") or "").strip() for r in reversed(rows)
+                 if str(r.get("status") or "").strip().lower() == "interview"
+                 and str(r.get("company") or "").strip()), "")
+    where = f"{live}, where you are interviewing" if live else "the employer that matters most to you now"
+    return (f"While you wait, the people who matter most can come first, starting with {where}: "
+            "paste me its 1st-degree people and I'll draft a message to each, no connection "
+            "request needed. Want the steps for that?")
+
+
+# One person in a paste of LinkedIn's people search: their degree is written beside the
+# name ("Name \u2022 1st") or on a line of its own ("\u2022 1st", "1st degree connection").
+_DEGREE = re.compile(r"(?:^|[\s\u2022\u00b7])(1st|2nd|3rd\+?)(?:\s+degree(?:\s+connection)?)?\s*$",
+                     re.I)
+_PROFILE_LINK = re.compile(r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/in/[^\s)>\]\"']+", re.I)
+# What a search result's card says that is neither their job nor where they are.
+_CARD_NOISE = re.compile(r"^(?:view\b.*\bprofile|message|connect|follow|following|pending|"
+                         r"send inmail|status is \w+|.*\bmutual connections?\b|current:|past:|"
+                         r"summary:|skills:|open to work|provides services|premium|\d+ followers?)",
+                         re.I)
+
+
+def people_paste(text: str, company: str, degree: str = "") -> list:
+    """[{name, title, location, linkedin_url, degree}] from a paste of LinkedIn's people
+    search for one employer, or a screenshot of it written out the same way. `degree`
+    is for a paste that carries none, such as one filtered to 1st already."""
+    import discovery
+    lines = [ln.strip() for ln in str(text or "").splitlines()]
+    out, cur, want = [], None, ""
+    for ln in lines:
+        if not ln:
+            continue
+        link = _PROFILE_LINK.search(ln)
+        if link:
+            if cur is not None and not cur["linkedin_url"]:
+                cur["linkedin_url"] = link.group(0).rstrip(".,")
+            continue
+        m = _DEGREE.search(ln)
+        head = ln[:m.start()].strip(" \u2022\u00b7-") if m else ln
+        if (head and discovery._a_person(head, company) and not _CARD_NOISE.match(head)
+                and not discovery._ROLE_WORD.search(head) and not discovery._AT.search(head)
+                and not discovery._is_place(head)):
+            cur = {"name": head, "title": "", "location": "", "linkedin_url": "",
+                   "degree": (m.group(1).lower() if m else "") or degree}
+            out.append(cur)
+            want = "title"
+            continue
+        if cur is None:
+            continue
+        if m and not head:
+            cur["degree"] = m.group(1).lower()
+            continue
+        if _CARD_NOISE.match(ln):
+            continue
+        if want == "title":
+            cur["title"], want = ln, "location"
+        elif want == "location":
+            if discovery._is_place(ln):
+                cur["location"] = ln
+            want = ""
+    for p in out:
+        p["degree"] = p["degree"].rstrip("+") if p["degree"] else (degree or "")
+    return out
+
+
+def from_people_paste(text: str, company: str, degree: str = "", contacts=None) -> list:
+    """The people a paste of one employer's people search names, ranked: 1st-degree
+    connections first, each a message with no connection request (route "connection"),
+    as from_connections ranks them; then 2nd-degree, each a connection request. Anyone
+    already in the contact book is left out. Needs no browser: the person pastes."""
+    import state
+    got = [p for p in people_paste(text, company, degree) if p["name"]]
+    if contacts is None:
+        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+    first = [dict(p, company=company) for p in got if p["degree"] == "1st"]
+    ranked = [dict(p, evidence="your paste of LinkedIn's people search, 1st-degree")
+              for p in from_connections(company, connections=first, contacts=contacts)]
+    import discovery
+    second = []
+    for p in got:
+        if p["degree"] != "2nd" or state.already_contacted(
+                contacts, name=p["name"], company=company, linkedin_url=p["linkedin_url"]):
+            continue
+        rank, _ = discovery.reply_rank({**p, "route": ""})
+        second.append((not discovery.FUNCTION_TITLE.search(p["title"] or ""), rank, p))
+    second.sort(key=lambda x: (x[0], x[1]))
+    ranked += [dict(p, company=company, found_via="people_paste", route="",
+                    route_detail="2nd-degree: you share connections", channel="connection",
+                    evidence="your paste of LinkedIn's people search, 2nd-degree")
+               for _, _, p in second]
+    for p in ranked:
+        p["found_via"] = "people_paste"
+    return ranked
+
+
 def harvest(results, company: str, kind: str = "title_search", query: str = "",
             today: datetime.date | None = None, connections=None, contacts=None,
             name: str = "", known: dict | None = None) -> dict:
@@ -740,7 +921,8 @@ def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = F
         # The path itself is dated and sourced in tools/claude_surfaces.json
         # (linkedin-connections), given when they say yes, never pasted unasked.
         more.append("your LinkedIn connections, so I start from people you already know: "
-                    "one file from LinkedIn, about ten minutes, and I'll walk you through it")
+                    "one file from LinkedIn, which takes anything from ten minutes to a day "
+                    "to arrive, and I'll walk you through it")
     if browser:
         more.append("each employer's People tab, read in your own browser at the same pace "
                     "as profiles")

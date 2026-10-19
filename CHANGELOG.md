@@ -83,6 +83,21 @@ make sense to somebody whose repo just received it.
   began by rewriting the notes just written, which needs the reads they were waiting
   on. Only a note with nothing read behind it and no such mark is redone now, and a
   note written from someone's public work leaves the queue.
+- **The steps for your LinkedIn connections match LinkedIn's own help page.** They said to
+  choose "Connections only" and to expect the file in ten minutes. LinkedIn no longer
+  offered that choice, and one person waited for a file that never came. Now:
+  - The steps ask for the larger download, which LinkedIn says arrives within a day, and
+    say so: "anything from about ten minutes to a day".
+  - You attach only Connections.csv. Attach the whole archive and only Connections.csv is
+    read from it, and you are told nothing else was opened
+    (`sources.py import-connections`).
+  - While the file is on its way, you can paste one employer's 1st-degree people, starting
+    where you are interviewing, and each is drafted a message with no connection request.
+    No browser is needed (`sources.py people-paste`).
+- **A step on another company's site is checked before it is given.** Every step printed
+  now carries the day it was checked and its official page, and a stale one tells Claude
+  to check the page first or say it could not. LinkedIn's help pages are never fetched,
+  so the weekly watch puts them to the maintainer by hand once a month instead.
 - **Nothing that needs your browser is listed as something Claude applies alone.** The
   notes rewrite was, until 3.4.1; a test now keeps it that way.
 

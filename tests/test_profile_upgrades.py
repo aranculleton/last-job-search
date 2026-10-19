@@ -549,7 +549,7 @@ def test_every_question_is_short_and_plain_with_its_detail_kept_for_a_yes():
             assert 1 < len(lines) <= 5, (u.id, len(lines))
             assert not set(lines) & set(u.ask.splitlines())                       # kept apart
     steps = U.by_id("connections-export").steps().splitlines()
-    assert steps[0].startswith("At the time of writing (official page: https://")
+    assert steps[0].startswith("At the time of writing (checked ") and "official page: https://" in steps[0]
     assert steps[-1] == "I only read it. Nothing is sent to anyone."
     assert U.NO_REPLY == "No problem, I'll ask again in a month." and U.REASK_DAYS == 30
 

@@ -419,10 +419,11 @@ def _match_name(name: str | None) -> str:
 def first_degree(path=None) -> list:
     """The person's own LinkedIn connections, from LinkedIn's data export, or [].
 
-    LinkedIn (Settings, Data privacy, Get a copy of your data, Connections)
-    writes Connections.csv with a few lines of notes above the header. Dropped
-    into documents/linkedin/, it is the one source of who the person is already
-    connected with, which no search can see.
+    LinkedIn's data export (tools/claude_surfaces.json, linkedin-connections) writes
+    Connections.csv with a few lines of notes above the header, so the header is found
+    rather than assumed to be line one. Saved into documents/linkedin/ by `sources.py
+    import-connections`, it is the one source of who the person is already connected
+    with, which no search can see.
     """
     path = path or person.state("documents", "linkedin", "Connections.csv")
     try:

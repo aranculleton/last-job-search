@@ -505,6 +505,17 @@ Commit these alongside application artefacts:
 git add -f network_contacts.csv network_threads.csv documents/network/
 ```
 
+## A step on another company's site is checked before it is given
+
+Steps that name LinkedIn's, Gmail's, GitHub's or Claude's own screens come from
+`tools/claude_surfaces.json` (`claude_surfaces.py steps <id>`), each headed by the day it was
+checked and its official page. Before giving one, check that page that day: a web search for
+linkedin.com, which no session fetches, and a fetch for the rest. Where the page says
+something else, give what it says and fix the entry. Where it cannot be checked, say "I could
+not check this today" and keep the step short. Never pass on a step about another site from
+memory: a LinkedIn path given unchecked sent a person to an option LinkedIn no longer offered.
+A screen name written outside the registry fails `tests/test_claude_surfaces.py`.
+
 ## Every output is shown, never only filed
 
 Whatever the person asked for arrives **in the reply**. That covers a message to send,
