@@ -29,11 +29,27 @@ file and which no sync touches:
     python3 tools/learned.py brief [area]        # the active rules, for a drafting step
     python3 tools/learned.py list [area]         # every entry, numbered
     python3 tools/learned.py record --area voice --said "..." --rule "..." \\
-        [--applied-to "profile/networking.py OPENER"]... [--never-say "..."]...
+        [--applied-to "profile/networking.py OPENER"]... [--never-say "..."]... \\
+        [--overrides <check>]... [--replaces <n>]...
+    python3 tools/learned.py skip --said "..." --why "..."   # a reaction that sets no rule
+    python3 tools/learned.py pending             # reactions this chat has not recorded
     python3 tools/learned.py retire <n>          # they changed their mind
     python3 tools/learned.py locked              # the settings no upgrade may change
     python3 tools/learned.py offers              # app improvements waiting on their choice
     python3 tools/learned.py decide <n> keep|switch
+
+**A reaction is recorded, not remembered.** Writing "record each reaction" in CLAUDE.md
+did not make it happen: one chat redrafted nine times on the person's corrections ("rude",
+"identical in structure", "too long", "that's not how I found him") and recorded none of
+them until asked. So it is code now. `hook` is the one hook the app ships: on each
+prompt it notes a reaction in this chat's pending list (`pending`), and the turn cannot
+end while one is there; `compose.py` and `reading.py draft` refuse to draft over one. A
+`record` (or a `skip`, saying why it sets no rule) clears it. A record shows the rule
+back in one line, lists the earlier rules it contradicts, with their dates, so the person
+can say which stands, and may name the checks the rule outranks (`--overrides`): the
+person's own voice wins over a validator's default once they have said so. An edit the
+person made to a draft before sending it is recorded by itself (`record_edit`), from the
+sent text against the draft.
 
 **When the app learns something better.** A sync brings genuine fixes, and they
 apply: they change code, not the person's settings. When an update would change a
@@ -114,17 +130,135 @@ def entries(area: str | None = None) -> list[dict]:
 
 
 def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
-           today: str | None = None) -> dict:
-    """Keep one reaction. Returns the entry written."""
+           today: str | None = None, overrides=(), replaces=()) -> dict:
+    """Keep one reaction, in the person's own words (`said`, kept as said). Returns the
+    entry written, with `conflicts`: the earlier active rules it contradicts, for the
+    person to choose between. `replaces` retires earlier entries by number, once they
+    have chosen this one; `overrides` names the checks this rule outranks."""
     if area not in AREAS:
         raise SystemExit(f"learned: area {area!r}; one of {', '.join(AREAS)}")
     if not str(said or "").strip() or not str(rule or "").strip():
         raise SystemExit("learned: record needs what they said and the rule it gives")
     entry = {"date": today or dt.date.today().isoformat(), "area": area,
-             "said": " ".join(str(said).split()), "rule": " ".join(str(rule).split()),
+             "said": str(said).strip(), "rule": " ".join(str(rule).split()),
              "applied_to": [str(a) for a in applied_to if str(a).strip()],
              "never_say": [str(p) for p in never_say if str(p).strip()],
              "status": "active"}
+    over = [str(c).strip() for c in overrides if str(c).strip()]
+    if over:
+        entry["overrides"] = over
+    rows = load()
+    for n in replaces:
+        if not 1 <= int(n) <= len(rows):
+            raise SystemExit(f"learned: no entry {n} to replace; there are {len(rows)}")
+        rows[int(n) - 1]["status"] = "retired"
+        rows[int(n) - 1]["retired_for"] = entry["date"]
+    found = conflicts(entry, rows)
+    rows.append(entry)
+    _save(rows)
+    resolve_pending(entry["said"])
+    return {**entry, "conflicts": found}
+
+
+# Words that change nothing about what a phrase says: "recently moved" and "just moved"
+# make the same claim, and the person who banned one and later wrote the other in their
+# own template needs to be asked which stands.
+_HEDGES = {"recently", "just", "currently", "now", "really", "very", "so", "the", "a",
+           "an", "my", "i", "i'm", "i've", "i'd", "to", "of", "and", "in", "on", "for",
+           "with", "that", "this", "is", "am", "be", "been", "have", "has", "it", "your"}
+
+
+def _content(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z][a-z']+", str(text or "").lower())
+            if w not in _HEDGES and len(w) > 2}
+
+
+def _says(text: str, phrase: str) -> bool:
+    """Does `text` say what `phrase` says: the phrase itself, or every word of it that
+    carries meaning?"""
+    low = str(text or "").lower()
+    if str(phrase).lower() in low:
+        return True
+    words = _content(phrase)
+    return bool(words) and words <= _content(low)
+
+
+def conflicts(entry: dict, rows: list[dict] | None = None) -> list[tuple[int, dict, str]]:
+    """[(number, earlier entry, why)] for each active entry, or never-write rule in
+    profile/CLAUDE.md, that `entry` contradicts: one bans what the other prescribes, or
+    both set one setting differently."""
+    rows = load() if rows is None else rows
+    mine = " ".join([entry.get("rule") or "", entry.get("said") or ""])
+    bans = [str(p) for p in entry.get("never_say") or () if str(p).strip()]
+    out = []
+    for n, r in enumerate(rows, 1):
+        if r.get("status", "active") != "active" or r is entry:
+            continue
+        theirs = " ".join([r.get("rule") or "", r.get("said") or ""])
+        why = ""
+        for p in r.get("never_say") or ():
+            if _says(mine, str(p)) and not any(_says(str(p), b) for b in bans):
+                why = f"it says never \"{p}\", and this one uses it"
+                break
+        if not why:
+            for p in bans:
+                if _says(theirs, p) and str(p).lower() not in {
+                        str(x).lower() for x in r.get("never_say") or ()}:
+                    why = f"it uses \"{p}\", which this one says never to"
+                    break
+        if not why:
+            same = set(r.get("applied_to") or ()) & set(entry.get("applied_to") or ())
+            if same and (r.get("rule") or "") != (entry.get("rule") or ""):
+                why = f"both set {', '.join(sorted(same))}"
+        if why:
+            out.append((n, r, why))
+    adopted = {str(p).lower() for r in rows for p in r.get("never_say") or ()}
+    for phrase, rule in profile_never_phrases():
+        if phrase.lower() in adopted:
+            continue                                # listed above, as the entry it became
+        if _says(mine, phrase) and not any(_says(phrase, b) for b in bans):
+            out.append((0, {"date": "profile/CLAUDE.md", "rule": rule, "said": rule},
+                        f"profile/CLAUDE.md says never \"{phrase}\", and this one uses it"))
+    return out
+
+
+def overrides() -> set[str]:
+    """The checks a rule of the person's outranks, by name: a validator that fights their
+    voice warns instead of refusing, once they have said which wins."""
+    return {str(c) for r in entries() for c in r.get("overrides") or ()}
+
+
+# ------------------------------------------------------------------ edits before sending
+
+
+def _changes(draft: str, sent: str, most: int = 3) -> list[tuple[str, str]]:
+    import difflib
+    a, b = str(draft or "").split(), str(sent or "").split()
+    out = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if op != "equal":
+            out.append((" ".join(a[i1:i2]), " ".join(b[j1:j2])))
+    return out[:most]
+
+
+def record_edit(draft: str, sent: str, where: str = "", today: str | None = None) -> dict | None:
+    """The person changed a draft before sending it: that edit is a reaction, recorded by
+    itself, with both texts. None when nothing changed beyond spacing."""
+    if " ".join(str(draft or "").split()) == " ".join(str(sent or "").split()):
+        return None
+    parts = []
+    for old, new in _changes(draft, sent):
+        if old and new:
+            parts.append(f'"{old}" became "{new}"')
+        elif old:
+            parts.append(f'cut "{old}"')
+        else:
+            parts.append(f'added "{new}"')
+    entry = {"date": today or dt.date.today().isoformat(), "area": "messages", "kind": "edit",
+             "said": "edited the draft before sending" + (f" ({where})" if where else ""),
+             "rule": "write it the way they edited it: " + "; ".join(parts),
+             "applied_to": [], "never_say": [], "status": "active",
+             "draft": str(draft).strip(), "sent": str(sent).strip()}
     rows = load()
     rows.append(entry)
     _save(rows)
@@ -348,7 +482,271 @@ def decide(n: int, choice: str, today: str | None = None) -> dict:
     return o
 
 
+# ------------------------------------------------------------------ reactions not yet recorded
+
+# What a person says when they react to something drafted or surfaced. Loose on purpose:
+# a false alarm costs one `skip` with its reason, and a missed reaction costs the person
+# saying it again, which is the failure this exists for.
+REACTION = re.compile("|".join([
+    r"\b(?:i\s+)?(?:don'?t|do not|didn'?t)\s+(?:like|love|want)\b", r"\bhate\b",
+    r"\bnot (?:a )?fan\b",
+    r"\b(?:too|so|very|really|way too)\s+(?:formal|long|short|wordy|stiff|robotic|generic|salesy"
+    r"|pushy|cringe\w*|rude|polite|indirect|vague|much|many|samey|stilted|corporate)\b",
+    r"\b(?:rude|cringe\w*|awkward|robotic|stilted|clunky|desperate|creepy|patroni[sz]ing"
+    r"|useless|pointless|awful|terrible|weird)\b",
+    r"\breads? like\b", r"\bsounds? like (?:a|an|someone|ai|a bot|chatgpt)\b",
+    r"\b(?:ai|chatgpt|gpt)[- ]?(?:sounding|generated|written|ish|tells?)\b",
+    r"\bthat'?s not (?:how|what|right|true|me)\b", r"\bnot how i\b",
+    r"\bwhy (?:did|would|do) you\b",
+    r"\bstop (?:suggesting|using|saying|adding|putting|sending|doing|asking)\b",
+    r"\bnever (?:say|use|write|suggest|send|put|call)\b",
+    r"\b(?:don'?t|do not) (?:say|use|write|suggest|send|put|add|mention|call|start|end|open)\b",
+    r"\b(?:identical|all the same|same (?:structure|shape|opener|opening|closing|line|ending))\b",
+    r"\b(?:i|i've|i have) (?:changed|edited|rewrote|reworded|tweaked)\b",
+    r"\bhere'?s what i (?:sent|wrote)\b", r"\bwhat i actually sent\b",
+    r"\bi (?:sent|wrote) (?:this|it) instead\b",
+    r"\bi'?d (?:rather|prefer)\b", r"\bi prefer\b",
+    r"\b(?:more|less) (?:casual|direct|formal|warm|friendly|personal|specific|forthright"
+    r"|concise|human|natural|honest)\b",
+]), re.I)
+
+
+def reaction(text: str) -> str:
+    """The words in `text` that make it a reaction, or "" when it is none."""
+    t = str(text or "")
+    if not t.strip() or t.lstrip().startswith(("<task-notification", "<system-reminder",
+                                                 "<command-", "<local-command")):
+        return ""
+    m = REACTION.search(t)
+    return m.group(0) if m else ""
+
+
+def _reactions_path() -> str | None:
+    """This chat's list: its own worktree's git directory, never shared with another
+    chat's folder. Tests point LJS_STATE at a temporary folder."""
+    st = os.environ.get("LJS_STATE")
+    if st:
+        return os.path.join(st, ".reactions.json")
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", os.path.dirname(os.path.dirname(os.path.abspath(
+            __file__))), "rev-parse", "--absolute-git-dir"], capture_output=True, text=True,
+            timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    gd = r.stdout.strip()
+    return os.path.join(gd, "ljs-reactions.json") if r.returncode == 0 and gd else None
+
+
+def _load_pending() -> list[dict]:
+    p = _reactions_path()
+    try:
+        with open(p, encoding="utf-8") as fh:
+            rows = json.load(fh)
+    except (OSError, TypeError, ValueError):
+        return []
+    return [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+
+
+def _save_pending(rows: list[dict]) -> None:
+    p = _reactions_path()
+    if not p:
+        return
+    try:
+        with open(p, "w", encoding="utf-8") as fh:
+            json.dump(rows, fh, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def pending() -> list[dict]:
+    """Reactions this chat has noted and not yet recorded or skipped."""
+    return _load_pending()
+
+
+def note_reaction(text: str, cue: str = "") -> dict | None:
+    """Put a reaction on this chat's list, once."""
+    said = " ".join(str(text or "").split())[:400]
+    if not said:
+        return None
+    rows = _load_pending()
+    if any(r.get("said") == said for r in rows):
+        return None
+    row = {"said": said, "cue": cue or reaction(text),
+           "at": dt.datetime.now().isoformat(timespec="seconds")}
+    rows.append(row)
+    _save_pending(rows)
+    return row
+
+
+def resolve_pending(said: str = "") -> None:
+    """A record or a skip clears the reaction it answers: the one it quotes, else the
+    oldest."""
+    rows = _load_pending()
+    if not rows:
+        return
+    words = _content(said)
+    best = max(range(len(rows)), key=lambda i: len(words & _content(rows[i].get("said"))))
+    if not words or not (words & _content(rows[best].get("said"))):
+        best = 0
+    del rows[best]
+    _save_pending(rows)
+
+
+def skip(said: str, why: str, today: str | None = None) -> dict:
+    """A reaction that sets no rule (a one-off, or not a reaction at all), with the reason:
+    the explicit alternative to recording it."""
+    if not str(why or "").strip():
+        raise SystemExit("learned: skip needs why it sets no rule")
+    data = _data()
+    row = {"date": today or dt.date.today().isoformat(), "said": str(said or "").strip(),
+           "why": " ".join(str(why).split())}
+    path = _path()
+    if path:
+        data.setdefault("skipped", []).append(row)
+        data.setdefault("entries", load())
+        data.setdefault("offers", all_offers())
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+    resolve_pending(said)
+    return row
+
+
+def refuse_over_pending(what: str) -> str:
+    """The line a drafting command prints, and refuses on, while a reaction waits."""
+    rows = pending()
+    if not rows:
+        return ""
+    first = rows[0]["said"]
+    return (f"{what}: {len(rows)} reaction(s) from the person not recorded yet, the first: "
+            f"\"{first[:160]}\". Record it before drafting again (python3 tools/learned.py "
+            "record --area <area> --said \"<their words>\" --rule \"<what changes>\"), or say "
+            "why it sets no rule (python3 tools/learned.py skip --said \"...\" --why \"...\").")
+
+
+# How many times the end of one turn is held for one reaction before letting it end with
+# a warning: the chat can always record or skip, so this is only a guard against a loop.
+HOLD_LIMIT = 3
+
+
+def _transcript_texts(path: str) -> list[tuple[int, str, str]]:
+    """[(line number, kind, text)] from a Claude Code transcript: kind "user" for what the
+    person typed, "tool" for each command the chat ran."""
+    out = []
+    try:
+        fh = open(path, encoding="utf-8")
+    except (OSError, TypeError):
+        return out
+    with fh:
+        for n, line in enumerate(fh):
+            try:
+                d = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(d, dict) or d.get("isMeta") or d.get("isSidechain"):
+                continue
+            msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+            content = msg.get("content")
+            if d.get("type") == "user":
+                if isinstance(content, str):
+                    out.append((n, "user", content))
+                elif isinstance(content, list):
+                    texts = [c.get("text", "") for c in content
+                             if isinstance(c, dict) and c.get("type") == "text"]
+                    if texts and not any(isinstance(c, dict) and c.get("type") == "tool_result"
+                                         for c in content):
+                        out.append((n, "user", "\n".join(texts)))
+            elif d.get("type") == "assistant" and isinstance(content, list):
+                for c in content:
+                    if isinstance(c, dict) and c.get("type") == "tool_use":
+                        inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                        out.append((n, "tool", " ".join(str(v) for v in inp.values())))
+                if msg.get("stop_reason") == "end_turn":
+                    out.append((n, "end", ""))
+    return out
+
+
+def _this_turn(items: list) -> list:
+    """What came after the last turn the chat finished: the prompt that opened this one,
+    the messages sent while it worked, and what it ran. A reaction days old in a chat that
+    has carried on since is not this turn's to hold."""
+    for i in range(len(items) - 1, -1, -1):
+        if items[i][1] == "end":
+            return items[i + 1:]
+    return items
+
+
+_ANSWERED = re.compile(r"learned\.py\s+(?:record|skip)\b")
+
+
+def hook(event: dict) -> dict:
+    """The Claude Code hook (the one the app ships, allowlisted in security_guards.py).
+
+    UserPromptSubmit: a prompt that reads as a reaction goes on this chat's list, and the
+    chat is told, in the turn, to record it. Stop: the turn is held while a reaction from
+    the person has no `learned.py record` or `skip` after it, read from the transcript
+    (which also holds messages sent while the chat was working) and from the list. Returns
+    what the hook prints: {} to let things be."""
+    if _path() is None:
+        return {}                                   # the app itself, or before /setup
+    name = event.get("hook_event_name") or ""
+    if name == "UserPromptSubmit":
+        text = str(event.get("prompt") or "")
+        cue = reaction(text)
+        if not cue:
+            return {}
+        note_reaction(text, cue)
+        return {"hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": (
+                f"The person reacted (\"{cue}\"). In this turn, before drafting again: apply "
+                "it, make it stick in the setting it governs, record it in their own words "
+                "with python3 tools/learned.py record (it shows the rule back and any earlier "
+                "rule it contradicts), and say in one line what changes from now on. If it "
+                "sets no rule, python3 tools/learned.py skip --said \"...\" --why \"...\".")}}
+    if name != "Stop":
+        return {}
+    items = _this_turn(_transcript_texts(event.get("transcript_path") or ""))
+    waiting = []
+    for i, (_n, kind, text) in enumerate(items):
+        if kind != "user" or not reaction(text):
+            continue
+        if not any(k == "tool" and _ANSWERED.search(t) for _m, k, t in items[i + 1:]):
+            waiting.append(text)
+    for text in waiting[-3:]:
+        note_reaction(text)
+    rows = pending()
+    if not rows:
+        return {}
+    first = rows[0]
+    held = int(first.get("held") or 0)
+    if held >= HOLD_LIMIT:
+        rows.pop(0)
+        _save_pending(rows)
+        return {"systemMessage": f"learned.py: a reaction was let go unrecorded after {held} "
+                                 f"tries: \"{first['said'][:120]}\""}
+    first["held"] = held + 1
+    _save_pending(rows)
+    return {"decision": "block", "reason": refuse_over_pending("Not finished")}
+
+
+def _cli_hook() -> int:
+    try:
+        event = json.loads(sys.stdin.read() or "{}")
+        out = hook(event if isinstance(event, dict) else {})
+    except Exception as e:  # noqa: BLE001  a hook must never break the chat it runs in
+        print(f"learned.py hook: {type(e).__name__}: {e}", file=sys.stderr)
+        return 0
+    if out:
+        print(json.dumps(out))
+    return 0
+
+
 def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["hook"]:
+        return _cli_hook()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("brief")
@@ -361,6 +759,14 @@ def main(argv=None) -> int:
     r.add_argument("--rule", required=True)
     r.add_argument("--applied-to", action="append", default=[])
     r.add_argument("--never-say", action="append", default=[])
+    r.add_argument("--overrides", action="append", default=[],
+                   help="a check this rule outranks, by its name (compose.py prints it)")
+    r.add_argument("--replaces", action="append", default=[], type=int,
+                   help="an earlier entry this one replaces, by number, once they chose")
+    k = sub.add_parser("skip")
+    k.add_argument("--said", required=True)
+    k.add_argument("--why", required=True)
+    sub.add_parser("pending")
     t = sub.add_parser("retire")
     t.add_argument("n", type=int)
     sub.add_parser("locked")
@@ -388,8 +794,31 @@ def main(argv=None) -> int:
             print(f"{i:3}. [{status}] {row.get('date')} {row.get('area')}: "
                   f"{row.get('rule')}  (said: \"{row.get('said')}\")")
     elif a.cmd == "record":
-        e = record(a.area, a.said, a.rule, a.applied_to, a.never_say)
+        e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
+                   replaces=a.replaces)
         print(f"learned: {e['area']}: {e['rule']}")
+        print(f"Say to the person, in one line: From now on, {e['rule']} (you said: "
+              f"\"{e['said'][:160]}\").")
+        if e.get("overrides"):
+            print(f"  outranks the check(s): {', '.join(e['overrides'])}")
+        for n, old, why in e["conflicts"]:
+            where = f"entry {n}" if n else "a rule in profile/CLAUDE.md"
+            print(f"  CONTRADICTS {where} ({old.get('date')}: {old.get('rule')}): {why}.")
+        if e["conflicts"]:
+            nums = [str(n) for n, _o, _w in e["conflicts"] if n]
+            print("Ask the person once which stands, with both dates. Theirs is this one: "
+                  + (f"python3 tools/learned.py retire {' '.join(nums)}" if nums else
+                     "change the line in profile/CLAUDE.md")
+                  + f"; the earlier one: python3 tools/learned.py retire {len(load())}.")
+    elif a.cmd == "skip":
+        skip(a.said, a.why)
+        print(f"learned: not a rule ({a.why}); {len(pending())} reaction(s) still unrecorded")
+    elif a.cmd == "pending":
+        rows = pending()
+        for r in rows:
+            print(f"- {r.get('at')}: \"{r.get('said')}\"")
+        print(f"{len(rows)} reaction(s) not recorded yet")
+        return 1 if rows else 0
     elif a.cmd == "retire":
         e = retire(a.n)
         print(f"retired: {e.get('rule')}")
