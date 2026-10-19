@@ -44,7 +44,7 @@ import tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bar  # noqa: E402
 from dates import as_date, days_since  # noqa: E402
-from company_key import key  # noqa: E402
+from company_key import key, row_key  # noqa: E402
 from lookup_score import norm  # noqa: E402
 
 import person  # noqa: E402
@@ -738,7 +738,7 @@ def _contacts_by_employer(path: str, statuses: set, rows: list[dict] | None = No
     for r in rows:
         if _status_of(r, live) not in statuses:
             continue
-        k = key(r.get("company"))
+        k = row_key(r)
         if not k:
             continue
         out.setdefault(k, []).append({

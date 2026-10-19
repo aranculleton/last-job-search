@@ -55,7 +55,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
 
 import dates  # noqa: E402
 import schema  # noqa: E402
-from company_key import key as company_key, fold as _ck_fold  # noqa: E402
+from company_key import key as company_key, fold as _ck_fold, row_key as _ck_row_key  # noqa: E402
 from throttle import FINAL as _THROTTLE_FINAL  # noqa: E402
 import person  # noqa: E402
 
@@ -455,17 +455,8 @@ def unique_contact_id(name: str | None, company: str | None, existing=(),
 
 
 def row_company_key(row) -> str:
-    """The employer identity of a contact row.
-
-    Recomputed from the company name, with the stored `company_key` column used
-    only when the name is blank. The column is a convenience for filtering in a
-    spreadsheet, not the authority: `company_key.ALIASES` grows, so a key written
-    last month can be stale while the name it came from still resolves correctly.
-    """
-    k = company_key(row.get("company"))
-    if k:
-        return k
-    return str(row.get("company_key") or "").strip().lower()
+    """The employer identity of a contact row: `company_key.row_key`, shared with the throttle."""
+    return _ck_row_key(row)
 
 
 def _match_name(name: str | None) -> str:
