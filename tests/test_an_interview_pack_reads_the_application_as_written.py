@@ -114,7 +114,7 @@ def test_a_row_that_says_to_leave_them_be_is_never_given_a_message(step):
 def test_booked_is_said_only_when_the_stage_has_a_date(date, said):
     referrer = {"contact_id": "f_r", "name": "Hal Okonedo", "company": "Fernhill",
                 "status": "referral_in_progress", "route": "referral", "next_action": ""}
-    talking = {"contact_id": "f_t", "name": "Noor Achterberg", "company": "Fernhill",
+    talking = {"contact_id": "f_t", "name": "Juno Castellan", "company": "Fernhill",
                "status": "replied", "route": "cold", "next_action": ""}
     lines = interview_pack.warm_lines(_ctx([referrer, talking], date=date))
     assert any(said in ln for ln in lines)
