@@ -95,16 +95,15 @@ PYX
   sed -n "/^$H_SKILLS/,/^$H_EDUCATION/{/^$H_EDUCATION/d;p}" $VB/vb_r.txt | grep -q '[()]' && p="$p SKILLPARENS"
   [ "$(grep -E '^ *•' $VB/vb_r.txt | sed 's/^ *• *//' | cut -c1-45 | sort | uniq -d | wc -l)" = 0 ] || p="$p DUPBULLET"
   [ -z "$BANNED_NOUNS" ] || ! grep -qiE "\\b($BANNED_NOUNS)\\b" $VB/vb_r.txt $VB/vb_c.txt || p="$p $BANNED_FLAG"
-  shared=$(python3 - "$VB/vb_r.txt" "$H_EXPERIENCE" "$H_EDUCATION" <<'PYX'
+  # Six words in a row shared by two bullets: audit_letters.shared_runs, which
+  # also reads each letter's bullets against the resume's.
+  shared=$(python3 - "$VB/vb_r.txt" "$H_EXPERIENCE" "$H_EDUCATION" "$ROOT/tools" <<'PYX'
 import re, sys
+sys.path.insert(0, sys.argv[4])
+from audit_letters import shared_runs
 t=open(sys.argv[1]).read()
 bul=[re.sub(r"\s+"," ",b).strip() for b in re.split(r"\n\s*• ", "\n"+t.split(sys.argv[2],1)[1].split(sys.argv[3],1)[0])[1:]]
-runs={}
-for i,b in enumerate(bul):
-    w=b.lower().split()
-    for j in range(len(w)-5):
-        runs.setdefault(" ".join(w[j:j+6]),set()).add(i)
-print(sum(1 for k,v in runs.items() if len(v)>1))
+print(len(shared_runs(bul)))
 PYX
 )
   [ "$shared" = 0 ] || p="$p SHARED_PHRASE($shared)"

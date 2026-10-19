@@ -71,6 +71,45 @@ def sentences(s):
     return R.split_sentences(_plain(s))
 
 
+def runs(words, n=6):
+    """Every run of `n` consecutive words."""
+    return {" ".join(words[i:i + n]) for i in range(len(words) - n + 1)}
+
+
+def shared_runs(texts, n=6):
+    """{run: the indices of the texts carrying it}, for every six-word run that
+    more than one of `texts` carries. verify_batch.sh's SHARED_PHRASE check runs
+    this over a resume's bullets; the letter audit runs it against them."""
+    seen = {}
+    for i, t in enumerate(texts):
+        for r in runs(str(t).lower().split(), n):
+            seen.setdefault(r, set()).add(i)
+    return {r: v for r, v in seen.items() if len(v) > 1}
+
+
+def _words(text):
+    """Lower-case words with the LaTeX and the punctuation gone, so a letter's
+    "22% to 14%" meets a bullet's "22\\% to 14\\%"."""
+    return " ".join(re.sub(r"[^\w%£$]+", " ", _plain(text).lower()).split())
+
+
+def resume_repeats(a, n=6):
+    """[(label, run)] for each letter bullet that repeats a resume bullet the
+    allocator chose for this draft. 06-cover-letter-templates.md cuts "any
+    bullet duplicating the resume": the reader has both pages in front of them,
+    and a sentence read twice is a sentence wasted."""
+    chosen = [_words(R.BULLETS[b]) for j in a.get("jobs") or []
+              for b in j.get("bullets") or [] if b in R.BULLETS]
+    out = []
+    for b in a.get("cl_bullets") or []:
+        mine = _words(b.get("text", "") if isinstance(b, dict) else " ".join(b[1:]))
+        common = {r for r, ix in shared_runs([mine] + chosen, n).items() if 0 in ix}
+        if common:
+            label = b.get("label", "") if isinstance(b, dict) else b[0]
+            out.append((label, sorted(common)[0]))
+    return out
+
+
 def pdf_text(abbr):
     """The letter's text layer. Raises rather than returning "".
 
@@ -172,6 +211,8 @@ def audit(a, batch=()):
         lab = b["label"].rstrip(": ").strip()
         if lab and _plain(b["text"]).lower().startswith(lab.lower()):
             flags.append(f"bullet text repeats its label ({lab[:20]})")
+    for lab, run in resume_repeats(a):
+        flags.append(f"letter bullet ({lab.rstrip(': ')[:20]}) repeats the resume: \"{run}\"")
     t = pdf_text(R.final_abbr(a))
     # The drafter's own notes must never reach the page. Letters have shipped
     # with "conceded in one sentence mid-letter in p2" in their closing.
