@@ -685,7 +685,6 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     next in a round. Keeps them when unsure: a wrong skip costs a good contact.
     """
     import discovery
-    from company_key import key as company_key
     company = company or reading.get("company", "")
     headline = reading.get("headline", "")
     posts = " ".join(i.get("text", "") for i in reading.get("items", [])
@@ -698,7 +697,9 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     if reading.get("reach") == "pending":
         return False, "a connection request to them is already pending"
     current = reading.get("current", "")
-    if company and current and company_key(current) != company_key(company) \
+    # The employer under another of its names ("<Name> Ratings", "<Brand>, AI by
+    # <Parent>") is where they were found, not somewhere they moved to.
+    if company and current and not discovery.same_employer(current, company) \
             and not _has(company, headline) and not _has(company, current):
         return False, f"has moved on: their current employer is {current}, not {company}"
     loc = reading.get("location", "")

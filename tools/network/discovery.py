@@ -51,7 +51,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import company_research  # noqa: E402
 import dates  # noqa: E402
 import person as _person  # noqa: E402
-from company_key import key as company_key  # noqa: E402
+import company_key as _company_key  # noqa: E402
+from company_key import fold as _ck_fold, key as company_key  # noqa: E402
 import places as _places  # noqa: E402
 
 # `person` is the loop variable for a search result throughout this module, so
@@ -453,7 +454,29 @@ _ROLE_WORD = re.compile(r"\b(?:manager|director|head|lead|leader|analyst|scienti
                         r"advisor|architect|coordinator|executive|principal|associate|"
                         r"strategist|developer|designer|recruiter|researcher|professor|"
                         r"student|intern)s?\b", re.I)
-_PLACE_WORDS = re.compile(r"\b(?:area|region|metropolitan|greater|county|province|state)\b|,", re.I)
+# "<function> @ <Employer>" is how many headlines write "at". Read whole, "Data @
+# Kestrel" was an employer of that name, and its person was dropped as working elsewhere.
+_AT = re.compile(r"(?:\bat\s+|(?:^|\s)@\s*)(\S.*)$")
+# A place in the shape a LinkedIn location takes, whatever the city: "Greater <City>
+# Area", "<City> Bay Area", "Region of <Name>", "<Name> County". The words alone are
+# not enough: "Kestrel State Bank" and "Greater Kestrel Analytics" are employers.
+_PLACE_SHAPE = re.compile(r"^(?:greater\s+\S|(?:region|county|province|state)\s+of\s)|"
+                          r"\s(?:area|region|county|province|state)$", re.I)
+# An institution: where somebody studies or works, never a place, and never the employer
+# a search was for unless it is that institution.
+_INSTITUTION = re.compile(r"\b(?:university|universit[éeà]|college|school|institute|"
+                          r"polytechnic|academy|hochschule|école|escuela)\b", re.I)
+# Words that name a team or a function, not an employer and not a place: "Data
+# Science, Data & AI Strategy" and "Data Governance Team" are where in an
+# organisation somebody sits. A part made only of these is never read as a place
+# or as an employer.
+_TEAM_WORDS = frozenset("""data analytics analysis ai ml science sciences strategy governance
+office team engineering insight insights platform platforms risk operations technology digital
+research product products finance marketing enterprise intelligence business machine learning
+artificial decision decisions quantitative modelling modeling pricing growth transformation
+innovation lab labs centre center excellence management information systems security cloud
+software development global and of the for""".split())
+_JOINERS = frozenset({"and", "of", "the", "for"})
 # The statuses an existence check can give, strongest first. Only "verified" is ever
 # shown as confirmed, and even that is as of the search: the profile was indexed,
 # never read, and may have changed since.
@@ -465,9 +488,85 @@ def _person_like(name: str) -> bool:
     return 2 <= len(words) <= 5 and all(re.match(r"^[^\W\d_][\w.'\-]*$", w) for w in words)
 
 
-def parse_result_title(title: str) -> dict:
+def _team_only(text: str) -> bool:
+    words = re.findall(r"[a-z]+", _ck_fold(text).lower())
+    return bool(words) and all(w in _TEAM_WORDS for w in words) \
+        and any(w not in _JOINERS for w in words)
+
+
+def _plain_words(part: str) -> bool:
+    """Could this be a place's name: a few plain words, no job, team or institution in it."""
+    s = str(part or "")
+    if re.search(r"[\d&@]", s) or _ROLE_WORD.search(s) or _INSTITUTION.search(s):
+        return False
+    words = re.findall(r"[a-z]+", _ck_fold(s).lower())
+    return 1 <= len(words) <= 4 and not any(w in _TEAM_WORDS - _JOINERS for w in words)
+
+
+def _known_place(part: str) -> bool:
+    """A place the person's profile names (their metro, regions, home country, the
+    countries and cities its location gate knows), or one in a place's shape."""
+    s = _norm_place(part)
+    if not s:
+        return False
+    if s in _PLACE_NAMES or _places.HOME_COUNTRY_RX.fullmatch(s):
+        return True
+    return bool(_PLACE_SHAPE.search(str(part).strip())) and _plain_words(part)
+
+
+def _is_place(text: str) -> bool:
+    """A location as a result title writes one. Every comma part could be a place and
+    at least one is a known place: a comma alone made "Data Science, Data & AI
+    Strategy" a location, which no city matched, so its person ranked as out of market."""
+    parts = [p.strip() for p in str(text or "").split(",") if p.strip()]
+    return (bool(parts) and all(_known_place(p) or _plain_words(p) for p in parts)
+            and any(_known_place(p) for p in parts))
+
+
+def _comma_part(last: str, company: str = "") -> tuple:
+    """(headline, employer, location) from a final title part that holds a comma and
+    is not a location as a whole."""
+    parts = [p.strip() for p in last.split(",") if p.strip()]
+    n = 0
+    while n < len(parts) - 1 and _known_place(parts[-1 - n]):
+        n += 1
+    body, place = parts[:len(parts) - n], ", ".join(parts[len(parts) - n:])
+    # The employer searched, in any part: "Northgate Bank, Data Governance Team" is
+    # that bank's governance team.
+    for p in body if company else ():
+        if same_employer(p, company):
+            return ", ".join(x for x in body if x is not p), p, place
+    if _BRAND_LINE.match(", ".join(body)):
+        return "", ", ".join(body), place      # "Quillfeather, AI by Brannock": one employer
+    # "University of Larkspur, Faculty of Science": the institution is where they are.
+    inst = next((p for p in body if _INSTITUTION.search(p)), "")
+    if inst:
+        return ", ".join(x for x in body if x is not inst), inst, place
+    head = ", ".join(body)
+    if place and _ROLE_WORD.search(head):
+        return head, "", place                 # "Head of Data, Greater Manchester"
+    if len(body) >= 2 and _ROLE_WORD.search(", ".join(body[:-1])) and not _team_only(body[-1]):
+        # "Former President and CEO, Kestrel Mutual": a job and its employer. The comma
+        # alone once made it a place, so a former CEO kept the employer he had left.
+        return ", ".join(body[:-1]), body[-1], place
+    return head, "", place                     # a job or a team, never a place
+
+
+def _employer_and_place(text: str) -> tuple:
+    """"Kestrel Mutual, Greater Manchester" after "at": the employer, and where they are."""
+    parts = [p.strip() for p in text.split(",") if p.strip()]
+    n = 0
+    while n < len(parts) - 1 and _known_place(parts[-1 - n]):
+        n += 1
+    return ", ".join(parts[:len(parts) - n]), ", ".join(parts[len(parts) - n:])
+
+
+def parse_result_title(title: str, company: str = "") -> dict:
     """{"name", "headline", "employer", "location"} from one result title; "" for a
-    part the title does not carry, and no name when it is not a person's."""
+    part the title does not carry, and no name when it is not a person's.
+
+    `company` is the employer the search was for: a part that names it is read as
+    where they work, wherever it sits in the title."""
     t = re.sub(r"\s*\|\s*LinkedIn\s*$", "", str(title or ""), flags=re.I)
     t = re.sub(r"\s*(?:\.\.\.|\u2026)\s*$", "", t).strip()
     parts = [p.strip() for p in _TITLE_SPLIT.split(t) if p.strip()]
@@ -486,24 +585,19 @@ def parse_result_title(title: str) -> dict:
     if not rest:
         return out
     last = rest[-1]
-    at = re.search(r"\bat\s+(.+)$", last)
+    at = _AT.search(last)
     if len(rest) >= 2:
         out["headline"] = rest[0]
     if at:
         out["headline"] = out["headline"] or last
-        out["employer"] = at.group(1).strip()
-    elif "," in last and _ROLE_WORD.search(last.rsplit(",", 1)[0]) \
-            and not _PLACE_WORDS.search(last.rsplit(",", 1)[1].replace(",", "")):
-        # "Former President and CEO, Kestrel Mutual": a job and its employer. The comma
-        # alone once made it a place, so a former CEO kept the employer he had left.
-        out["headline"], out["employer"] = (x.strip() for x in last.rsplit(",", 1))
-    elif "," in last and _ROLE_WORD.search(last.split(",", 1)[0]):
-        # "Head of Data, Greater Manchester": a job and where they are.
-        out["headline"], out["location"] = (x.strip() for x in last.split(",", 1))
-    elif _PLACE_WORDS.search(last):
+        out["employer"], out["location"] = _employer_and_place(at.group(1).strip())
+    elif _is_place(last):
         out["location"] = last
-    elif len(rest) == 1 and _ROLE_WORD.search(last):
-        out["headline"] = last
+    elif "," in last:
+        headline, out["employer"], out["location"] = _comma_part(last, company)
+        out["headline"] = out["headline"] or headline
+    elif (len(rest) == 1 and _ROLE_WORD.search(last)) or _team_only(last):
+        out["headline"] = out["headline"] or last
     else:
         out["employer"] = last
     return out
@@ -516,6 +610,11 @@ def profile_status(parsed: dict, url: str, company: str = "", name: str = "") ->
     likely:      a profile URL whose title names the person, and the employer only
                  as part of its headline, or not at all
     unconfirmed: anything else. A search cannot prove someone has no profile.
+
+    A match rests on the employer named as where they work, never on a word of the
+    title that happens to spell it: an institution whose name contains it, or the
+    person's own name. A search for a one-word employer finds everyone with that
+    first name, and each came back "likely" at the employer.
     """
     if not is_person_url(url) or not parsed.get("name"):
         return "unconfirmed"
@@ -525,12 +624,19 @@ def profile_status(parsed: dict, url: str, company: str = "", name: str = "") ->
             return "unconfirmed"
     if not company:
         return "likely"
-    want = company_key(company)
-    if parsed.get("employer") and company_key(parsed["employer"]) == want:
-        return "verified"
-    if want and want in company_key(parsed.get("headline", "")):
+    if parsed.get("employer"):
+        return "verified" if same_employer(parsed["employer"], company) else "unconfirmed"
+    if _names_employer(parsed.get("headline", ""), company):
         return "likely"
-    return "likely" if not parsed.get("employer") else "unconfirmed"
+    return "unconfirmed" if name_explains(parsed["name"], company) else "likely"
+
+
+def name_explains(name: str, company: str) -> bool:
+    """Is the employer's name one of the person's own names? Then a result that names
+    no employer was found by their name, and says nothing about where they work."""
+    want = re.findall(r"[a-z0-9]+", _ck_fold(search_name(company)).lower())
+    have = set(re.findall(r"[a-z0-9]+", _ck_fold(name).lower()))
+    return bool(want) and all(w in have for w in want)
 
 
 def people_from_results(results, company: str = "", kind: str = "title_search",
@@ -553,26 +659,33 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
         handle = _profile_handle(got["profile_url"])
         if handle in seen:
             continue
-        parsed = parse_result_title(title)
+        parsed = parse_result_title(title, company)
         if got["kind"] == "post":
-            m = re.match(r"^(.+?)\s+(?:on LinkedIn|posted on LinkedIn)\b", title)
+            m = re.match(r"^(.+?)\s+(?:on LinkedIn|posted on LinkedIn)\b:?", title)
             parsed = {"name": m.group(1).strip() if m else "", "headline": "", "employer": "",
                       "location": ""}
             if not _person_like(parsed["name"]):
                 continue
             # A post the search matched on its body, about another company, says nothing
             # about where its author works: a post about another company was kept as a
-            # candidate at the employer searched. Only a post titled with the employer.
-            if company and not _names_employer(title, company):
+            # candidate at the employer searched. Only a post titled with the employer,
+            # after its author's name: an author whose first name is the employer's
+            # was kept on the strength of the name.
+            if company and not _names_employer(title[m.end():], company):
                 continue
         if not parsed["name"]:
             continue
         seen.add(handle)
         status = profile_status(parsed, got["profile_url"], company) if got["kind"] == "profile" \
             else "likely"
-        out.append({
+        employer = parsed["employer"]
+        if employer and status == "verified" and company_key(employer) != company_key(company):
+            # The employer under another of its names ("<Name> Ratings", a brand line):
+            # filed under the name searched, so the contact joins its applications.
+            employer = company
+        found = {
             "name": parsed["name"], "title": parsed["headline"],
-            "company": parsed["employer"] or (company if status != "unconfirmed" else ""),
+            "company": employer or (company if status != "unconfirmed" else ""),
             "location": parsed["location"], "linkedin_url": got["profile_url"],
             "found_via": kind, "profile_status": status,
             "post_date": got["post_date"].isoformat() if got.get("post_date") else "",
@@ -583,8 +696,60 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
             "signal_date": got["post_date"].isoformat() if got.get("post_date") else "",
             "evidence": f"search result {today.isoformat()}: \"{title.strip()}\" ({url})"
                         + (f", for {query!r}" if query else ""),
-        })
+        }
+        if status == "unconfirmed" and not parsed["employer"] and company:
+            # Nothing but their own name ties them to the employer: triage drops them.
+            found["name_match_only"] = (f"the search matched their name, not {company}: "
+                                        "the result names no employer")
+        out.append(found)
     return out
+
+
+# Words a group gives one of its businesses: "<Name> Ratings", "<Name> Analytics",
+# "<Name> Data & Services". company_key strips some (services, solutions,
+# technologies) and keeps the rest, so somebody at the ratings arm read as working
+# somewhere else and was dropped from a search for the group. A firm the person knows
+# to be separate goes in their employers.py SEPARATE, and is never joined here.
+BUSINESS_LINE = frozenset({"ratings", "analytics", "data", "services", "solutions", "digital",
+                           "labs", "ai", "research", "insights", "intelligence", "technology",
+                           "technologies", "consulting", "advisory"})
+# "<Brand>, <what it does> by <Parent>": one employer, written as its brand and its parent,
+# which a person may file as "<Parent> <Brand>".
+_BRAND_LINE = re.compile(r"^\s*([^,]+?)\s*,\s*(?:[^,]*?\s)?by\s+([^,]+?)\s*$", re.I)
+
+
+def _names_of(name: str) -> list:
+    """The names one employer string stands for: itself, a brand line's brand and its
+    parent (alone and together), or each part of "Northgate Bank, Data Team"."""
+    s = str(name or "").strip()
+    m = _BRAND_LINE.match(s)
+    if m:
+        brand, parent = m.group(1), m.group(2)
+        return [s, brand, parent, f"{brand} {parent}", f"{parent} {brand}"]
+    return [s] + ([p.strip() for p in s.split(",") if p.strip()] if "," in s else [])
+
+
+def _same_key(a: str, b: str) -> bool:
+    ka, kb = company_key(a), company_key(b)
+    if not ka or not kb:
+        return False
+    if ka == kb:
+        return True
+    if _company_key.SEPARATE.match(ka) or _company_key.SEPARATE.match(kb):
+        return False
+    short, long_ = sorted((ka.split(), kb.split()), key=len)
+    return long_[:len(short)] == short and all(w in BUSINESS_LINE for w in long_[len(short):])
+
+
+def same_employer(a: str, b: str) -> bool:
+    """Do these two names mean one employer? company_key's join, plus what a profile
+    headline writes that it does not: a business line after the name ("<Name> Ratings",
+    "<Name> Data & Services") and a brand line ("<Brand>, AI by <Parent>" against
+    "<Parent> <Brand>"). Each of those was dropped as "works at <it>, not <the employer>".
+    """
+    if not company_key(a) or not company_key(b):
+        return False
+    return any(_same_key(x, y) for x in _names_of(a) for y in _names_of(b))
 
 
 def _names_employer(text: str, company: str) -> bool:
@@ -784,6 +949,19 @@ _FREE_TEXT_PLACES = _free_text(_REGIONS + _COUNTRY)
 # The countries a location may name that are not home: the profile's location
 # gate list (search.py LOCATION other_countries), which the prefilter reads too.
 _OTHER_COUNTRIES = tuple(_norm_place(c) for c in _places.OTHER_COUNTRIES)
+
+
+# Every place the profile names, normalised: what a result title's location may be.
+# The person's metro and home city, their regions and country, the broad places, the
+# countries and cities the job search's location gate knows, and networking.py
+# PLACE_WORDS. With no world gazetteer, a part the profile never names is a place only
+# in a place's shape (_PLACE_SHAPE) or beside a known one ("<City>, <Region>, France").
+_LOC = _places.LOCATION
+_PLACE_NAMES = frozenset(n for n in (_norm_place(x) for x in (
+    *METRO, _HOME, *_REGIONS, *_COUNTRY, *BROAD_PLACES, *_OTHER_COUNTRIES, *_places.REGIONS,
+    *(_LOC.get("outside") or ()), *(_LOC.get("home_country_alone") or ()),
+    *(str(_LOC.get(k) or "") for k in ("home_country", "home_region", "metro_name")),
+    *getattr(_NET, "PLACE_WORDS", ()))) if n)
 
 
 def _has_words(text, phrase):
@@ -1194,14 +1372,12 @@ def disqualify(person, target_company=None):
                 continue
 
         if rule.name == "moved_on_joined":
-            joined = company_key(_matched(m))
-            if joined and target_k and joined == target_k:
+            if target_k and same_employer(_matched(m), target):
                 continue    # they joined the company being searched, which is the point
             return "%s: %s" % (rule.reason, _matched(m))
 
         if rule.name == "moved_on_former":
-            left = company_key(_matched(m))
-            if not left or not target_k or left != target_k:
+            if not target_k or not same_employer(_matched(m), target):
                 continue    # career history at some other employer, not a move away
             return "%s: %s" % (rule.reason, _matched(m))
 
@@ -1357,9 +1533,14 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
     recorded as no_relevant_presence even though those names came back.
     """
     today = today or dt.date.today()
-    keep, adjacent, dropped, unknown = [], [], [], []
+    keep, adjacent, dropped, unknown, unrelated = [], [], [], [], []
 
     for person in people or []:
+        # Found by their own name, not the employer's (people_from_results): nothing
+        # says they work there, so they are not counted as a person who came back.
+        if person.get("name_match_only"):
+            unrelated.append((person, person["name_match_only"]))
+            continue
         reason = disqualify(person, target_company)
         if reason:
             dropped.append((person, reason))
@@ -1370,10 +1551,11 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
         # perfect tier 2 and who is no use for a referral at the target. The
         # run asked "who at <Company>", so a result naming a different
         # current employer is out, and a blank employer field is not, because
-        # most search results never return one.
+        # most search results never return one. The employer under another of
+        # its names (a business line, a brand line) is the same employer.
         stated = person.get("company") or ""
-        stated_k, target_k = company_key(stated), company_key(target_company or "")
-        if stated_k and target_k and stated_k != target_k:
+        if company_key(stated) and company_key(target_company or "") \
+                and not same_employer(stated, target_company):
             dropped.append((person, "works at %s, not %s" % (stated, target_company)))
             continue
 
@@ -1465,6 +1647,7 @@ def triage(people, target_location=HOME_CITY, today=None, target_company=None):
         dropped.extend((row[0], _adjacent_reason(row[0], target_location))
                        for row in adjacent)
         keep = keep + unknown
+    dropped.extend(unrelated)
 
     # Sort is stable, so people with no date keep the order the search returned
     # them in rather than being shuffled to an arbitrary position.
@@ -1536,13 +1719,19 @@ def alumni_at(people, targets):
     once per /network rather than once per company, and each hit is sorted to
     the target it works at. Run through triage with no target_company first.
     """
-    want = {company_key(t): t for t in targets or () if company_key(t)}
+    want = [t for t in targets or () if company_key(t)]
     out = {}
     for p in people or ():
-        k = company_key(p.get("company") or "")
-        if k in want:
-            out.setdefault(want[k], []).append(p)
+        hit = next((t for t in want if same_employer(p.get("company") or "", t)), None)
+        if hit is not None:
+            out.setdefault(hit, []).append(p)
     return out
+
+
+def _same_or_blank(a, b) -> bool:
+    """One employer, or both unnamed: how two records of one person are matched."""
+    return same_employer(a, b) if company_key(a or "") and company_key(b or "") \
+        else not company_key(a or "") and not company_key(b or "")
 
 
 def mark_first_degree(people, connections):
@@ -1555,14 +1744,15 @@ def mark_first_degree(people, connections):
     import state
     by_url = {state.profile_handle(c.get("linkedin_url")): c for c in connections or ()
               if state.profile_handle(c.get("linkedin_url"))}
-    by_name = {(state._match_name(c.get("name")), company_key(c.get("company") or "")): c
-               for c in connections or ()}
+    by_name = {}
+    for c in connections or ():
+        by_name.setdefault(state._match_name(c.get("name")), []).append(c)
     out = []
     for p in people or ():
         q = dict(p)
         hit = (by_url.get(state.profile_handle(p.get("linkedin_url") or p.get("url")))
-               or by_name.get((state._match_name(p.get("name")),
-                               company_key(p.get("company") or ""))))
+               or next((c for c in by_name.get(state._match_name(p.get("name")), ())
+                        if _same_or_blank(c.get("company"), p.get("company"))), None))
         if hit:
             q["first_degree"] = True
             q["channel"] = "message"

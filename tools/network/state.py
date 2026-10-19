@@ -501,9 +501,14 @@ def first_degree(path=None) -> list:
 
 
 def connections_at(connections, company) -> list:
-    """The person's 1st-degree connections at one employer: the first people to message."""
-    k = company_key(company)
-    return [c for c in connections or () if k and company_key(c.get("company")) == k]
+    """The person's 1st-degree connections at one employer: the first people to message.
+
+    The employer under any of its names: a connection whose export says "<Name>
+    Ratings" works for <Name> (discovery.same_employer)."""
+    import discovery
+    if not company_key(company):
+        return []
+    return [c for c in connections or () if discovery.same_employer(c.get("company"), company)]
 
 
 def already_contacted(contacts, name=None, company=None, contact_id=None, linkedin_url=None):
