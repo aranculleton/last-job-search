@@ -159,17 +159,17 @@ def write_summary(shortlist_path, out_dir, name):
 
 
 # The files the MISSED message tells you to read. A round that hit its target
-# needs none of them; a round that missed needs all three, because they are the
-# three places a posting can disappear: the free gates, the stated-fact screen,
-# and the throttle.
+# needs none of them; a round that missed needs all of them, because they are the
+# places a posting can disappear: the free gates, the search's own past rulings,
+# the stated-fact screen, and the throttle.
 #
 # They used to be deleted a dozen lines before the message that names them. The
 # advice was printed over an empty directory, and on `--expand` every widened
 # round pruned its own too, so three rounds of diagnosis left nothing to
 # diagnose. What made them big was never the metadata, it was `desc`: the full
 # posting body, capped at BODY_CAP per record and multiplied by a thousand
-# records. Strip that and the three files that answer "where did everything go"
-# cost a few hundred KB between them.
+# records. Strip that and the files that answer "where did everything go" cost
+# a few hundred KB between them.
 #
 # The free gates' drops are the scrape's own: scrape_wide applies the age, place
 # and title gates before it writes kept.json, so they land in 00_scrape/dropped.json.
@@ -498,8 +498,8 @@ def main():
     widen = not met and a.expand and a.round < MAX_ROUNDS
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
-        # is also read for exactly the three files the MISSED message below
-        # names, so those survive with their posting bodies stripped. A round
+        # is also read for exactly the files the MISSED message below names, so
+        # those survive with their posting bodies stripped. A round
         # about to widen holds its hydrated bodies back for the next one.
         freed = prune(a.out, keep=() if met else DIAGNOSTICS,
                       hold=(HYDRATED,) if widen else ())
