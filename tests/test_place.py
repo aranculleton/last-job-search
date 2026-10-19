@@ -252,3 +252,19 @@ def test_what_every_chat_says_unasked_is_two_or_three_short_sentences_and_no_lin
         assert place.TWO_CHATS in place.next_step(answer, where, *REPO)
     # The steps are all still there for the person who asks.
     assert "At the time of writing:" in _say("desktop-cloud", "browser", [])
+
+
+def test_an_existing_person_at_a_computer_hears_about_two_chats_without_browser_reads():
+    """Two chats is said to a person with a computer in a cloud chat even when they do not
+    read profiles in their browser: someone who set up in the cloud was never told."""
+    for works in ("computer", "both"):
+        for where in ("desktop-cloud", "web", "unknown"):
+            short = place.check(where, "paste", [], False, (), *REPO, works=works)
+            assert short == [place.SHORT_TWO_CHATS]
+            _clean(short[0])
+            said = "\n".join(place.check(where, "paste", [], False, (), *REPO, detail=True,
+                                         works=works))
+            assert said.startswith(place.TWO_CHATS) and "At the time of writing:" in said
+        assert place.check("local", "paste", [], False, (), *REPO, works=works) == []
+    assert place.check("web", "paste", [], False, (), *REPO, works="phone") == []
+    assert place.check("web", "paste", [], False, (), *REPO) == []      # never asked yet

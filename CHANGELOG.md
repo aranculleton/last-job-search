@@ -26,7 +26,9 @@ make sense to somebody whose repo just received it.
   everything you do (job searches, resumes, interview prep and networking), and your brief
   in the cloud, which follows up for you and arrives even when your computer is off. It is
   in the README, the start guide, /setup's question about where you work, and the
-  reminder a cloud chat gives on a computer, which no longer offers pasting profiles.
+  reminder a cloud chat gives on a computer, which no longer offers pasting profiles. If
+  you already said you work on a computer, your next cloud chat tells you once, then
+  weekly while it still applies, whether or not profiles are read in your browser.
 
 - **When your own self-checks need deleting after an update, you are asked in plain words,
   with the answer recommended.** 3.5.1 asked whether to "retire" failing tests, which only a
