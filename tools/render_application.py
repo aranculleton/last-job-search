@@ -357,6 +357,7 @@ def build(a):
     derived = final_abbr(a)
     if derived and derived != abbr:
         a["abbr"] = abbr = derived
+    contact = str(a.get("contact_person") or "").strip()
     d = dict(
         abbr=abbr, company=a["company"], role=a["role"],
         summary=summary,
@@ -379,7 +380,11 @@ def build(a):
         # Every other field goes through clean(); this one did not, so an
         # ampersand or percent in a company name reached the .tex raw. A
         # bare % eats the rest of the line, silently.
-        salutation=clean(salutation(a["company"])) + _SALUTATION_SUFFIX,
+        # A person the research found named for this role on the employer's
+        # own pages is addressed by name (draft-applications.js says when);
+        # otherwise the team, which every letter used to get.
+        salutation=(clean(contact) if contact
+                    else clean(salutation(a["company"])) + _SALUTATION_SUFFIX),
         # `concession` is the drafter's note about WHERE the concession sits
         # ("conceded in one sentence mid-letter in p2"). It was being prepended
         # to the closing paragraph and shipped in letters. It is metadata.
@@ -393,6 +398,9 @@ def build(a):
     if not str(a.get("letter_date") or "").strip():
         a["letter_date"] = gen._long_date()
     d["letter_date"] = a["letter_date"]
+    # The requisition the letter answers, kept with it (the .tex header) and in
+    # the tracker's notes; record_drafts.py writes it there.
+    d["req_id"] = str(a.get("req_id") or "").strip()
     return d
 
 

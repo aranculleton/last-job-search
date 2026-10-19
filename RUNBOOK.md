@@ -113,7 +113,9 @@ For each chosen posting, write one draft object; the fields are in
 `tools/render_application.py` `build()`. In short: `abbr`, `company`, `role`, `summary`
 (40 to 48 words, identity first), `tools` (the stack the posting names that the profile
 supports), `p1` / `p2` / `lead` / `p4` (200 to 250 body words between them), `cl_bullets`,
-and `posting` (the full text).
+and `posting` (the full text). `contact_person` (the recruiter or hiring manager the employer's
+own page names for this role, never a name from anywhere else) addresses the letter to them,
+and `req_id` reaches the tracker's notes; both stay empty when the research found none.
 
 **`cl_bullets` is a list of dicts**, `{"label": ..., "text": ...}`, not a list of pairs.
 `build()` turns them into the `(label, text)` tuples the template wants, so the tuple

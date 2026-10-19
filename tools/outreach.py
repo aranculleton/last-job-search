@@ -345,6 +345,10 @@ def archive_posting(d, a, meta, today):
         f.write(f"- **Source:** {url}\n" if url else "")
         f.write(f"- **Retrieved:** {meta.get('date', today)} via {meta.get('portal', 'portal search')}\n")
         f.write(f"- **Location:** {meta.get('location', '')}\n")
+        if str(a.get("req_id") or "").strip():
+            f.write(f"- **Requisition:** {str(a['req_id']).strip()}\n")
+        if str(a.get("contact_person") or "").strip():
+            f.write(f"- **Named on the posting:** {str(a['contact_person']).strip()}\n")
         f.write(f"- **{docpaths.noun_word()}:** {docpaths.resume_rel(a['abbr'], '.pdf')}\n")
         f.write(f"- **Cover letter:** {docpaths.letter_rel(a['abbr'], '.pdf')}\n\n")
         # A `---` rule is not a fence: the posting author controls the text and

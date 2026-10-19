@@ -136,7 +136,7 @@ CERTIFICATIONS = r"""
 """
 
 LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Cover Letter - {company}, {role}
+% Cover Letter - {company}, {role}{req}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[{letter_paper}]{{cover}}
@@ -305,7 +305,9 @@ def letter(a):
     # The country's paper unless the profile says otherwise (person.paper()).
     # US Letter is the class's default, so it is written as no option at all.
     paper = person.paper("letter")
+    req = str(a.get("req_id") or "").strip()
     body = LETTER.format(company=a["company"], role=a["role"],
+                         req=f" (requisition {req})" if req else "",
                          letter_paper="" if paper == "letterpaper" else paper,
                          salutation=a.get("salutation", f"{a['company']}{suffix}"),
                          letter_date=a.get("letter_date") or _long_date(),

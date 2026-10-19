@@ -95,6 +95,7 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
         (meta.get("throttle_override_note") or ""),
         (meta.get("warm_route_note") or ""),
         (meta.get("outreach_pending_note") or ""),
+        (f"Req {str(draft['req_id']).strip()}." if str(draft.get("req_id") or "").strip() else ""),
     ) if x).strip()
     abbr = draft["abbr"]
     return {
@@ -102,7 +103,9 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
         "role": draft["role"], "role_type": draft.get("role_type", ""),
         "channel": _channel(meta.get("portal")),
         "status": "drafted",
-        "contact_person": "",
+        # Only a person the research found named for this role on the employer's
+        # own pages; the letter is addressed to them (render_application.build).
+        "contact_person": str(draft.get("contact_person") or "").strip(),
         "fit_rating": "" if fit is None else str(int(round(float(fit)))),
         "notes": notes,
         "cv_file": docpaths.resume_rel(abbr),
@@ -138,6 +141,8 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
                 open_match[col] = new[col]
         if new["deadline"]:
             open_match["deadline"] = new["deadline"]
+        if new["contact_person"] and not (open_match.get("contact_person") or "").strip():
+            open_match["contact_person"] = new["contact_person"]
         if (open_match.get("status") or "").strip().lower() == "drafted":
             open_match["date"] = today
         open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | redrafted").strip(" |")
