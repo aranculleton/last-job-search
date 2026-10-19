@@ -128,9 +128,14 @@ def test_a_killed_scrape_leaves_files_the_round_can_go_on_with(tmp_path):
 
 
 def test_the_progress_line_says_how_far_along_a_portal_is():
+    # Failures are recorded through Tally.failure, which counts each with its cause, so
+    # the line can say why ("300 failed" said nothing). It used to count len(failed),
+    # which also holds the note a stopped portal leaves, so this set `failed` directly.
     t = scrape_wide.Tally("linkedin", 400)
-    t.sent, t.limited, t.timeouts = 120, 2, 1
-    t.failed = ["x"] * 3
+    for err in ("timeout after 90s", LIMITED, LIMITED):
+        t.failure(err)
+    t.sent = 120
     line = t.line(left=14 * 60)
     assert line.startswith("progress: linkedin 120/400 sent, 3 failed")
     assert "2 rate-limited (429), 1 timed out" in line and "14 min left" in line
+    assert "2x 429 Too Many Requests, 1x timeout" in line
