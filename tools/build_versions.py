@@ -177,7 +177,9 @@ METHODS: dict[str, dict] = {
         "by": "instant", "priority": 3, "applies": "prep_docs",
         "gives": "every call-prep document rewritten by the current prep",
         "run": "python3 tools/build_versions.py redo prep-docs",
-        "command": ("python3", "tools/network/prep.py", "--all"),
+        # Only what an older prep wrote: --all rewrote every document, hundreds in one
+        # repo, and created one for every contact who never had a call.
+        "command": ("python3", "tools/network/prep.py", "--stale-only"),
         "paths": ("documents/network/*",),
         "files": ("tools/network/prep.py", "tools/network/profile_facts.py", "tools/bridges.py",
                   ".claude/commands/prep.md"),
@@ -278,8 +280,11 @@ METHODS: dict[str, dict] = {
                "ladder only: their connections there (`sources.py connections`), the two plain "
                "title searches from `discovery.queries_for()` run through `sources.py harvest`, "
                "and a profile check from the results; add only people not already in the book, "
-               "with their evidence and profile status, as not_contacted with drafts. No profile "
-               "is read in the background and nothing is sent",
+               "with their evidence and profile status, as not_contacted, each draft written with "
+               "`reading.py draft` (it waits on a read). Then re-check every not_contacted "
+               "contact a search found against today's matching (`discovery.same_employer`, "
+               "`discovery.profile_status`): close any it would not keep, with the reason in "
+               "`outcome`. No profile is read in the background and nothing is sent",
         "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py",

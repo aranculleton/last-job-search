@@ -39,6 +39,16 @@ make sense to somebody whose repo just received it.
 - **Your own tests are named when an update breaks them.** After an update lands, the tests
   in your own profile run, and any that pinned how the app worked before is named, with what
   to do. No profile upgrade.
+- **People are matched to an employer only when their result names it as where they
+  work.** A first name that spelled a one-word employer, an author's name on a post, or a
+  university in a title made someone "likely" there. A networking redo closes any such
+  contact already in the book, with the reason. No profile upgrade.
+- **Someone at an employer's ratings or analytics arm, or under its brand line, counts as
+  working there.** They were dropped as working somewhere else; a firm you list as separate
+  is never joined. No profile upgrade.
+- **"Data @ <Employer>" is a job at that employer, and a title with a comma is a place only
+  when it names one.** The first was read as an employer called "Data @ <Employer>" and the
+  second as a location. No profile upgrade.
 - **The denylist remembers names taken out of your files.** It reads every past version of
   your tracker, contact book and message log, so a row deleted later is still checked. No
   profile upgrade.
@@ -62,6 +72,19 @@ make sense to somebody whose repo just received it.
   each unmerged branch, new commit messages and pull request text for the maintainer's own
   names; nothing has to be kept up to date by hand, and CI's secret is optional. Anyone
   else's repo is unaffected. No profile upgrade.
+
+### Added
+
+- **A connection request you withdrew is recorded, and that person is never written to
+  again.** Nothing recorded a withdrawal, so the request stayed on the list to withdraw.
+  No profile upgrade.
+- **Several LinkedIn profiles can be pasted in one message.** Each is matched to its waiting
+  note and read on its own. No profile upgrade.
+- **A note written before anything was read about the person says so at its top.** It waits
+  on a read and is never sent as it stands. No profile upgrade.
+- **Prep documents say which version wrote them, and only out-of-date ones are rewritten.**
+  Rewriting every one rewrote hundreds of files and made one for every contact. No profile
+  upgrade.
 
 ### Removed
 
