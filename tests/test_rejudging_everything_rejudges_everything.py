@@ -58,7 +58,7 @@ def test_the_prefilter_keeps_it_too_and_still_ages_it(tmp_path):
 def test_the_round_passes_it_to_both_and_still_reads_first_sightings(tmp_path, monkeypatch):
     import run_round
     stages = []
-    monkeypatch.setattr(run_round, "run", lambda cmd, log, deadline=None: stages.append(cmd))
+    monkeypatch.setattr(run_round, "run", lambda cmd, log, deadline=None, ok=(0,): stages.append(cmd))
     scraped = tmp_path / "scraped.json"
     scraped.write_text("[]")
     monkeypatch.setattr(sys, "argv", ["run_round.py", "--out", str(tmp_path / "r1"),

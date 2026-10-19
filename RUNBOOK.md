@@ -52,7 +52,9 @@ which is what it is for after the rules change. Postings are still aged from whe
 were first seen.
 
 **Read the exit code.** 0 means the yield target was met, 2 means it was missed, 1 means
-a stage actually broke. A thin market and a broken pipeline are different answers.
+a stage actually broke. A thin market and a broken pipeline are different answers. A scrape
+where more than a quarter of the portal requests failed is neither: the round carries on
+with what the rest found and prints a warning, which belongs in what you tell the person.
 
 **`--jobage` is the window in days**, 14 by default, and nothing older is ranked; the
 scheduled round uses 7. `--expand` widens it (below). If a portal is blocked by the

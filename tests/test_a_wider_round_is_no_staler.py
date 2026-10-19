@@ -23,7 +23,7 @@ def _round(tmp_path, monkeypatch, *extra):
     """Run main() with every stage stubbed; returns (stage commands, the widened call)."""
     stages, widened = [], []
 
-    def stage(cmd, log, deadline=None):
+    def stage(cmd, log, deadline=None, ok=(0,)):
         stages.append(cmd)
         if os.path.basename(cmd[1]) == "hydrate.py":
             out = cmd[cmd.index("--out") + 1]

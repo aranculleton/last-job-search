@@ -64,7 +64,7 @@ def test_many_rulings_are_one_write_and_the_same_as_one_at_a_time(tmp_path):
 def _screen_command(tmp_path, monkeypatch, *extra):
     import run_round
     stages = []
-    monkeypatch.setattr(run_round, "run", lambda cmd, log, deadline=None: stages.append(cmd))
+    monkeypatch.setattr(run_round, "run", lambda cmd, log, deadline=None, ok=(0,): stages.append(cmd))
     scraped = tmp_path / "scraped.json"
     scraped.write_text("[]")
     monkeypatch.setattr(sys, "argv", ["run_round.py", "--out", str(tmp_path / "r1"),

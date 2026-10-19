@@ -23,7 +23,7 @@ DROPPED = [{"title": "Supply Chain Analyst", "company": "Northgate", "location":
 
 
 def test_a_missed_round_keeps_the_scrapes_drops_and_names_them(tmp_path, monkeypatch, capsys):
-    def stage(cmd, log, deadline=None):
+    def stage(cmd, log, deadline=None, ok=(0,)):
         if os.path.basename(cmd[1]) == "scrape_wide.py":
             out = cmd[cmd.index("--out") + 1]
             os.makedirs(out, exist_ok=True)

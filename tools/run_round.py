@@ -73,7 +73,8 @@ def _stage_budget(cmd, deadline):
     return max(1, min(own, int(deadline - time.monotonic())))
 
 
-def run(cmd, log, deadline=None):
+def run(cmd, log, deadline=None, ok=(0,)):
+    """Run one stage; its exit code, which is one of `ok`, or the round stops."""
     print("+", " ".join(cmd), flush=True)
     budget = _stage_budget(cmd, deadline)
     try:
@@ -90,12 +91,20 @@ def run(cmd, log, deadline=None):
                  "the container is reclaimed and the whole search is lost.")
     log.write("\n$ " + " ".join(cmd) + "\n" + r.stdout + r.stderr)
     log.flush()
-    if r.returncode != 0:
+    if r.returncode not in ok:
         print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
         sys.exit(f"stage failed: {os.path.basename(cmd[1])} (exit {r.returncode})")
     tail = [l for l in (r.stdout + "\n" + r.stderr).strip().splitlines() if l.strip()][-3:]
     for l in tail:
         print("   ", l)
+    return r.returncode
+
+
+# scrape_wide exits 2, after writing its files, when more than a quarter of the
+# portal requests failed. The skill says a portal failing is logged and the search
+# continues, and that exit stopped the round as a broken stage, losing what every
+# other request had found. It is a warning the round carries to its summary.
+SCRAPE_PARTIAL = 2
 
 
 # CLAUDE.md, Job Search Behaviour: "Yield target: at least 5 postings scoring
@@ -394,6 +403,7 @@ def main():
     # smaller of its own budget and what is left of this.
     deadline = time.monotonic() + ROUND_BUDGET_SEC
     scrape_dir = f("00_scrape")
+    partial = ""
 
     if a.from_scraped:
         os.makedirs(scrape_dir, exist_ok=True)
@@ -411,10 +421,12 @@ def main():
         print(f"+ (scrape skipped; {a.from_scraped} -> {scrape_dir}/kept.json)")
     else:
         # scrape_wide's --out is a DIRECTORY holding scraped/kept/dropped.json.
-        run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
-             "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-             "--workers", str(a.workers)] + (["--alerts", a.alerts] if a.alerts else []),
-            log, deadline)
+        if run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
+                "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
+                "--workers", str(a.workers)] + (["--alerts", a.alerts] if a.alerts else []),
+               log, deadline, ok=(0, SCRAPE_PARTIAL)) == SCRAPE_PARTIAL:
+            partial = ("more than a quarter of the portal requests failed (round.log names "
+                       "the portals and why), so this round is not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
 
     # `--seen` is what stops hydrate paying for postings this search already
@@ -467,6 +479,8 @@ def main():
     met = good >= YIELD_60 and strong >= YIELD_75
     print(f"yield: {good} scoring 60+ (target {YIELD_60}), "
           f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
+    if partial:
+        print(f"warning: {partial}")
 
     # Write the keeper, then drop the rest. Done before the expansion branch
     # below returns, so every exit path leaves the same small footprint.
@@ -545,6 +559,8 @@ def main():
         print(f"  *** {', '.join(down)} returned nothing to the pre-flight probe. ***")
         print("  This round is NOT evidence about the market. Fix the portal and "
               "re-run before widening or concluding anything from the count.")
+    if partial:
+        print(f"  *** {partial}. ***")
     print(f"  tried: {a.pages} pages per query, {a.jobage}-day freshness, "
           f"scrape_wide's full query and location set")
     scrape_dropped = (f"{SCRAPE_DROPPED} for the age, location and title gates, "
