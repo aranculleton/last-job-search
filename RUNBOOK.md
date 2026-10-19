@@ -269,8 +269,9 @@ not a bug in the update.
    it to the app (the way this repo's `profile/CLAUDE.md` says, or an issue on the app) and
    leave the test failing rather than weaken it.
 4. **Deleting a failing test is the person's call, asked in plain words.** The sync prints
-   the exact question, what to say if they ask what it means, and the reply to yes and to no
-   (`ASK_TIDY` and the lines under it in `tools/sync_app.py`). Ask once, in those words: most
+   the exact question, its two answers with "Yes (recommended)" first, what to say if they
+   ask what it means, and the reply to each (`ASK_TIDY` and the lines under it in
+   `tools/sync_app.py`). Ask once, in those words: most
    people have never seen a test, and "retire 57 tests?" means nothing to them. When none
    needs deleting there is no question. A permission check that stops an unexplained
    deletion is right to.

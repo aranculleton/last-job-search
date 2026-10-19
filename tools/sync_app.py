@@ -636,15 +636,15 @@ def own_test_failures(root: str | None = None) -> list[tuple[str, str]] | None:
 
 
 # What the person is asked before any of their own tests is deleted, in words for someone
-# who has never seen a test. "Retire 57 tests?" was answerable by a developer and nobody else.
-ASK_TIDY = ("Your setup has some built-in self-checks written for an older version of the "
-            "app, and {n} of them no longer match it. Shall I tidy them up? Nothing about "
-            "your job search changes.")
-TIDY_MEANS = ("They are checks that make sure your setup works the way it was set up. When "
-              "the app improves, some still describe the old way and fail even though nothing "
-              "is wrong. Tidying deletes the ones for parts the app replaced, which the app "
-              "now checks itself, and updates the rest. Your profile, applications, contacts "
-              "and documents are not touched.")
+# who has never seen a test, with the answer recommended. "Retire 57 tests?" was answerable
+# by a developer and nobody else.
+ASK_TIDY = ("Some self-checks in your setup are out of date after this update. Clear them "
+            "out? Nothing about your job search changes.")
+ASK_ANSWERS = ("Yes (recommended)", "Not now")
+TIDY_MEANS = ("They check that your setup works. A few were written for the old version, so "
+              "they now fail even though nothing is wrong. Clearing them out deletes those and "
+              "updates the rest. Your profile, applications, contacts and documents are not "
+              "touched.")
 TIDY_YES = "Done: your setup is on the new version."
 TIDY_NO = ("No problem. Your setup stays on the version before until you say yes, and "
            "nothing breaks meanwhile.")
@@ -678,10 +678,11 @@ def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -
                      "change looks wrong.")
     if gone:
         lines.append("Claude: they are the person's files, so ask before deleting any. Ask "
-                     f"once, in these words: \"{ASK_TIDY.format(n=len(failures))}\" If they ask "
-                     f"what that means: \"{TIDY_MEANS}\" On yes, tidy them and say \"{TIDY_YES}\" "
-                     f"On no, say \"{TIDY_NO}\" Either way, name in the PR which you deleted and "
-                     "which you rewrote.")
+                     f"once, in these words: \"{ASK_TIDY}\" Offer two answers, "
+                     f"\"{ASK_ANSWERS[0]}\" first and \"{ASK_ANSWERS[1]}\" (as buttons where "
+                     f"you can). If they ask what it means: \"{TIDY_MEANS}\" On yes, clear them "
+                     f"out and say \"{TIDY_YES}\" On no, say \"{TIDY_NO}\" Either way, name in "
+                     "the PR which you deleted and which you rewrote.")
     else:
         lines.append("Claude: none needs deleting, so there is nothing to ask the person: bring "
                      "each in line, and name them in the PR.")

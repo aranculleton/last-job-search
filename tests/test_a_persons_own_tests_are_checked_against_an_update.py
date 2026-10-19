@@ -38,19 +38,22 @@ def test_a_failure_on_a_removed_name_is_told_apart_from_a_behaviour_change():
 
 def test_the_person_is_asked_in_words_that_need_no_idea_what_a_test_is():
     text = sync_app.own_tests_report([("mine::test_robots", GONE)] * 3, ROOT)
-    question = sync_app.ASK_TIDY.format(n=3)
-    assert f'"{question}"' in text and "3 of them no longer match it" in question
-    for words in (sync_app.TIDY_MEANS, sync_app.TIDY_YES, sync_app.TIDY_NO):
+    for words in (sync_app.ASK_TIDY, *sync_app.ASK_ANSWERS, sync_app.TIDY_MEANS,
+                  sync_app.TIDY_YES, sync_app.TIDY_NO):
         assert f'"{words}"' in text
-    said = " ".join([question, sync_app.TIDY_MEANS, sync_app.TIDY_YES, sync_app.TIDY_NO]).lower()
-    for jargon in ("test", "retire", "pytest", "ci", "assert", "module", "private", "repo"):
-        assert jargon not in said.replace(".", " ").split(), jargon
+    assert sync_app.ASK_ANSWERS[0] == "Yes (recommended)"
+    assert text.index(sync_app.ASK_ANSWERS[0]) < text.index(sync_app.ASK_ANSWERS[1])
+    said = " ".join([sync_app.ASK_TIDY, *sync_app.ASK_ANSWERS, sync_app.TIDY_MEANS,
+                     sync_app.TIDY_YES, sync_app.TIDY_NO]).lower()
+    for jargon in ("test", "tests", "retire", "pytest", "ci", "assert", "module", "private", "repo"):
+        assert jargon not in said.replace(".", " ").replace(",", " ").split(), jargon
+    assert len(sync_app.ASK_TIDY.split()) <= 25
     assert "profile, applications, contacts and documents are not touched" in said
 
 
 def test_nothing_is_asked_when_nothing_needs_deleting():
     text = sync_app.own_tests_report([("mine::test_old_shape", "AssertionError: 1 != 2")], ROOT)
-    assert sync_app.ASK_TIDY.format(n=1) not in text
+    assert sync_app.ASK_TIDY not in text
     assert "nothing to ask the person" in text
 
 

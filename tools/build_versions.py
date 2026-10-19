@@ -251,7 +251,7 @@ METHODS: dict[str, dict] = {
             (17, "2026-10-19", False, "RUNBOOK says what to do when a person's own tests fail after an update; an application's folder is found when its role carries a requisition number"),
             (18, "2026-10-19", False, "The person is asked in plain words before any of their own failing tests is deleted; wording only, nothing to redo"),
         ),
-        "fingerprint": "74a3c026021203c1",
+        "fingerprint": "d7f0589a56545bbe",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
