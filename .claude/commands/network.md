@@ -280,6 +280,11 @@ it. LinkedIn is never fetched from a session.
         in the images: never fill a gap, guess a cut-off line or carry over anything from
         a second person's profile in the same screenshot.
 
+      Several at once is one paste with a line of `---` between profiles:
+      `python3 tools/network/reading.py paste <file|->` matches each to a queued contact by
+      name and employer, reads each on its own, and says which matched, which did not, and
+      which notes to rewrite.
+
       They open the profile anyway to send the request, so this costs seconds, and the
       note is rewritten from it in the same turn. This is the route that works wherever
       the session runs, web and phone included, with nothing of theirs at risk.
@@ -339,9 +344,12 @@ it. LinkedIn is never fetched from a session.
    signal for tier 1, `linkedin_url`, the channel, and
    `linked_application` where `state.link_to_applications()` finds one. Each id from
    `state.unique_contact_id(name, company, contacts, linkedin_url=...)`. **Write each
-   draft to `documents/network/<contact_id>/draft.md`** and commit it with the
+   draft to `documents/network/<contact_id>/draft.md`** with
+   `python3 tools/network/reading.py draft <contact_id> <file|->`, and commit it with the
    contacts: a draft that lives only in the chat is gone when the session ends, and the
-   next run would skip the contact as already queued.
+   next run would skip the contact as already queued. A note for someone nothing was
+   read about opens on a `WAITS ON A READ` line, so `reading.py queue` lists it and nobody
+   sends it as it stands; it is rewritten from a reading the same way.
 
 ## Present
 
