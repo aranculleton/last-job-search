@@ -131,6 +131,22 @@ def owners(name: str, rows: list[dict]) -> list[dict]:
                    for col in ("cv_file", "cover_letter_file"))]
 
 
+def _unsent(row: dict) -> bool:
+    """Drafted and never sent: its documents may be rendered again."""
+    return (row.get("status") or "").strip().lower() == "drafted"
+
+
+def reusable(name: str, role: str, rows: list[dict]) -> bool:
+    """Whether every application holding this name is this role, still unsent.
+
+    A regenerated draft for the SAME role keeps its name while nothing has gone
+    out. Once it has (applied, interview, rejected), the files under that name
+    are what the employer received: `/interview` and `/outcome` read them, and
+    a redraft rendered over them replaced the record with a document nobody sent.
+    """
+    return all(_norm(r.get("role")) == _norm(role) and _unsent(r) for r in owners(name, rows))
+
+
 def check_free(name: str, company: str, role: str, rows: list[dict]) -> None:
     """Raise when writing this name would replace another application's documents.
 
@@ -138,17 +154,19 @@ def check_free(name: str, company: str, role: str, rows: list[dict]) -> None:
     name the first one was sent under. A round can pick second roles at
     employers whose resumes are already on file under their plain names;
     rendering would overwrite the record `/interview` reads with a document
-    nobody sent. A regenerated draft for the SAME role keeps its name, so only
-    a different role is refused.
+    nobody sent. Only an unsent draft of the same role may be rendered over.
     """
     for r in owners(name, rows):
-        if _norm(r.get("role")) != _norm(role):
-            raise FileExistsError(
-                f"{name} already holds the documents for {r.get('company')}, "
-                f"{r.get('role')!r} ({r.get('status')}, {r.get('date')}). Rendering "
-                f"{company}, {role!r} under it would overwrite them. Give the draft an "
-                f"abbr with a role token, e.g. {suffix(company, 'RoleName')}, or stage "
-                "it with tools/stage_picks.py, which picks one.")
+        same = _norm(r.get("role")) == _norm(role)
+        if same and _unsent(r):
+            continue
+        what = ("the documents already sent for" if same else "the documents for")
+        raise FileExistsError(
+            f"{name} already holds {what} {r.get('company')}, "
+            f"{r.get('role')!r} ({r.get('status')}, {r.get('date')}). Rendering "
+            f"{company}, {role!r} under it would overwrite them. Give the draft an "
+            f"abbr with a role token, e.g. {suffix(company, 'RoleName')}, or stage "
+            "it with tools/stage_picks.py, which picks one.")
 
 
 if __name__ == "__main__":   # pragma: no cover

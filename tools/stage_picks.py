@@ -152,13 +152,15 @@ def choose_abbr(company: str, role: str, rows: list[dict], root: str = ROOT,
     """The filename suffix for this application, never one another application owns.
 
     The plain company name is used when nothing holds it, or when the only
-    holder is this same role (a regenerated draft keeps its name). Otherwise a
-    role token is appended, lengthened until it is free.
+    holder is an unsent draft of this same role (a regenerated draft keeps its
+    name). A name an application was sent under is never reused, whatever the
+    role: a redraft of a role already applied to gets a role token, lengthened
+    until it is free, so the documents the employer received stay as they were.
     """
     claimed = claimed if claimed is not None else set()
     base = doc_name.suffix(company, "")
     held = owners(base, rows)
-    same = all(_norm(r.get("role")) == _norm(role) for r in held)
+    same = doc_name.reusable(base, role, rows)
     if base not in claimed and (not held or same) and (held or not file_taken(base, root)):
         return base
     tried: set[str] = set()
@@ -166,7 +168,10 @@ def choose_abbr(company: str, role: str, rows: list[dict], root: str = ROOT,
         tok = role_token(role, tried)
         tried.add(tok)
         abbr = doc_name.suffix(company, tok)
-        if abbr not in claimed and not owners(abbr, rows) and not file_taken(abbr, root):
+        # The redraft of a redraft keeps the token name its unsent draft has.
+        free = (doc_name.reusable(abbr, role, rows) if owners(abbr, rows)
+                else not file_taken(abbr, root))
+        if abbr not in claimed and free:
             return abbr
     raise ValueError(
         f"no free filename for {company!r} / {role!r}: {base} and every role token tried "
