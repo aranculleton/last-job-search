@@ -364,8 +364,8 @@ def sync() -> int:
                   + ", ".join(extra[:5]) + (" ..." if len(extra) > 5 else ""))
         return 0
     n = int(git("rev-list", "--count", f"{old}..{APP}").stdout.strip() or 0) if behind else 0
-    title = (f"Sync from the app: {n} new commit(s)" if behind
-             else f"Sync from the app: {len(restored)} app-owned file(s) put back")
+    title = (f"{SYNC_SUBJECT}: {n} new commit(s)" if behind
+             else f"{SYNC_SUBJECT}: {len(restored)} app-owned file(s) put back")
     body = ""
     if restored:
         body = ("App-owned files edited here, put back to the app's version:\n"
@@ -559,31 +559,150 @@ def main(argv: list[str]) -> int:
     return rc
 
 
-def own_tests() -> None:
-    """After an update lands, the person's own tests (profile/tests), which may have pinned
-    how the app worked before: one that now fails is named, never left for the next
-    ci_local.sh run to find. A person's copy of an old discovery test asserted the old
-    search shape for days after the app changed it, and nothing said so."""
-    tests = os.path.join(ROOT, "profile", "tests")
+# A failure that names a part of the app no longer there: the test pinned how the app
+# was built, not what it does for the person.
+_GONE = (re.compile(r"AttributeError: module '([\w.]+)' has no attribute '(\w+)'"),
+         re.compile(r"ImportError: cannot import name '(\w+)' from '([\w.]+)'"),
+         re.compile(r"ModuleNotFoundError: No module named '([\w.]+)'"),
+         # mock.patch's own wording for a name that is not there to patch
+         re.compile(r"AttributeError: <module '([\w.]+)' from [^>]*> does not have the attribute '(\w+)'"))
+
+
+def _app_module(root: str, name: str) -> bool:
+    """Is `name` one of the app's modules (tools/<name>.py, or a package there)?"""
+    path = os.path.join(root, "tools", *name.split("."))
+    return os.path.isfile(path + ".py") or os.path.isdir(path) or name.split(".")[0] == "openroles"
+
+
+def _gone(root: str, message: str) -> str:
+    """"module.name" when a failure names a part of the app the update removed, else ""."""
+    for n, rx in enumerate(_GONE):
+        m = rx.search(message or "")
+        if not m:
+            continue
+        module, name = ((m.group(2), m.group(1)) if n == 1 else
+                        (m.group(1), "") if n == 2 else (m.group(1), m.group(2)))
+        if _app_module(root, module) or (n == 2 and module.split(".")[0] == "openroles"):
+            return f"{module}.{name}" if name else module
+    return ""
+
+
+def own_test_failures(root: str | None = None) -> list[tuple[str, str]] | None:
+    """[(test, failure message)] for the person's own tests (profile/tests) that fail on
+    this tree, or None when there are none to run or they could not be run."""
+    import tempfile
+    import xml.etree.ElementTree as ET
+    root = root or ROOT
+    tests = os.path.join(root, "profile", "tests")
     if not os.path.isdir(tests):
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        report = os.path.join(tmp, "report.xml")
+        try:
+            r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                                "--tb=no", f"--junitxml={report}", tests], cwd=root, text=True,
+                               capture_output=True, timeout=300)
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        if r.returncode != 1 or not os.path.isfile(report):   # 0 clean; 5 none collected
+            return [] if r.returncode in (0, 5) else None
+        out = []
+        for case in ET.parse(report).iter("testcase"):
+            bad = case.find("failure")
+            if bad is None:
+                bad = case.find("error")
+            if bad is not None:
+                name = f"{case.get('classname', '')}::{case.get('name', '')}".strip(":")
+                out.append((name, bad.get("message") or (bad.text or "")[:300]))
+        return out
+
+
+def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -> str:
+    """What the sync says about the person's own tests the update broke, or ""."""
+    if not failures:
+        return ""
+    root = root or ROOT
+    gone: dict[str, int] = {}
+    changed = []
+    for name, message in failures:
+        part = _gone(root, message)
+        if part:
+            gone[part] = gone.get(part, 0) + 1
+        else:
+            changed.append(name)
+    lines = [f"Your own tests: {len(failures)} now fail after this update."]
+    if gone:
+        n = sum(gone.values())
+        parts = ", ".join(f"{k} ({v})" for k, v in sorted(gone.items(), key=lambda x: -x[1])[:6])
+        lines.append(f"  {n} use parts of the app this update removed: {parts}. What they checked "
+                     "moved, and the app's own tests cover the app's behaviour. Rewrite each that "
+                     "pins the person's own data through the app's public names (a job board "
+                     "through tools/offline_boards.py), and retire the rest.")
+    if changed:
+        lines.append(f"  {len(changed)} check behaviour the update changed: "
+                     + "; ".join(changed[:6]) + (f"; and {len(changed) - 6} more" if len(changed) > 6 else "")
+                     + ". Bring each in line with the CHANGELOG, or report it to the app if the "
+                     "change looks wrong.")
+    lines.append("Claude: they are the person's files. Retiring a failing test is their call: "
+                 "ask once, in one line, with the counts above, and say in the PR which you "
+                 "retired and which you rewrote.")
+    return "\n".join(lines)
+
+
+# In the repository's .git, never committed: the sync commit the person's own tests last
+# ran on, so they run once for each update whichever copy of this file brought it.
+OWN_TESTS_MARK = "ljs_own_tests_ran_on"
+SYNC_SUBJECT = "Sync from the app"
+
+
+def _git_out(root: str, *args: str) -> str:
+    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def _mark_path(root: str) -> str:
+    gd = _git_out(root, "rev-parse", "--git-dir")
+    return os.path.join(root, gd, OWN_TESTS_MARK) if gd and not os.path.isabs(gd) else (
+        os.path.join(gd, OWN_TESTS_MARK) if gd else "")
+
+
+def own_tests(root: str | None = None) -> None:
+    """After an update lands, the person's own tests (profile/tests), which may have pinned
+    how the app worked before: each that now fails is named with why, never left for the
+    next ci_local.sh run to find. A person's copy of an old discovery test asserted the
+    old search shape for days after the app changed it, and when 3.5.0 moved the employer
+    boards into openroles, the maintainer's own tests failed by the dozen on names it
+    removed and the sync said nothing, because the copy of this file that ran the sync
+    predated the check."""
+    root = root or ROOT
+    text = own_tests_report(own_test_failures(root) or [], root)
+    if text:
+        print(text)
+    mark = _mark_path(root)
+    if mark:
+        try:
+            with open(mark, "w", encoding="utf-8") as fh:
+                fh.write(_git_out(root, "rev-parse", "HEAD"))
+        except OSError:
+            pass
+
+
+def own_tests_after_sync(root: str | None = None) -> None:
+    """The own-tests check for a sync whose copy of this file is older than the check:
+    `profile_upgrades.py --after-sync` is always the copy the sync just brought in, so it
+    calls this, and it runs once for the sync commit at HEAD."""
+    root = root or ROOT
+    if not _git_out(root, "log", "-1", "--format=%s").startswith(SYNC_SUBJECT):
         return
+    mark = _mark_path(root)
+    head = _git_out(root, "rev-parse", "HEAD")
     try:
-        r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-                            "--tb=no", "-rf", tests], cwd=ROOT, text=True,
-                           capture_output=True, timeout=180)
-    except (OSError, subprocess.TimeoutExpired):
-        return
-    if r.returncode not in (1,):            # 0 clean; 5 none collected; anything else not a failure
-        return
-    failed = [ln.split(" ", 1)[1].split(" - ", 1)[0] for ln in r.stdout.splitlines()
-              if ln.startswith("FAILED ")]
-    if failed:
-        print(f"Your own tests: {len(failed)} now fail after this update, likely pinning how "
-              "the app worked before: " + "; ".join(failed[:6])
-              + (f"; and {len(failed) - 6} more" if len(failed) > 6 else "")
-              + ". Claude: they are the person's files: bring each in line with the app's new "
-              "behaviour (CHANGELOG says what changed), or remove one the app now covers, "
-              "and say which in one line.")
+        with open(mark, encoding="utf-8") as fh:
+            if fh.read().strip() == head:
+                return
+    except OSError:
+        pass
+    own_tests(root)
 
 
 def app_watch() -> None:

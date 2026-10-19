@@ -134,10 +134,16 @@ reason in one line in the reply.
 
 **How**:
 
-1. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
+1. Before the release PR merges, run the maintainer's own tests against it:
+   `python3 tools/try_personal_tests.py <the maintainer's repo>`. It lays this tree over a
+   copy of that repo, the way a sync would, and changes neither. A failure the release
+   causes is fixed in the app where the app is wrong, and otherwise named in the CHANGELOG
+   entry it comes from, so the sync's message has something to point at. 3.5.0 skipped
+   this and broke dozens of the maintainer's tests on names it removed.
+2. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
    `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Merge it with CI
    green.
-2. Nothing: merging it is the release. `.github/workflows/release.yml` runs
+3. Nothing: merging it is the release. `.github/workflows/release.yml` runs
    `tools/release.py publish`, which tags `vX.Y.Z` on that commit and publishes the
    CHANGELOG section as its notes, once. The tag is what every repo's next sync reads.
    `python3 tools/release.py newest` says whether the newest version is out. Only if the

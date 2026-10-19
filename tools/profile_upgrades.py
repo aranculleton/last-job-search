@@ -1204,6 +1204,10 @@ def main(argv: list[str] | None = None) -> int:
     if a.after:
         import merge_state
         merge_state.install(ROOT)
+        # The copy of sync_app.py that ran this sync may predate the own-tests check; this
+        # file is always the one the sync brought in, so the check runs from here too.
+        import sync_app
+        sync_app.own_tests_after_sync(ROOT)
     elsewhere = owner_elsewhere() if rows and (a.after or a.plan or a.line) else ""
     if elsewhere:
         # Another chat brought this update in and is applying it: say so once, start

@@ -20,6 +20,24 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-10-19
+
+### Fixed
+
+- **Your own tests are checked on the very sync that brings an update, and you are told
+  why one fails.** A repo whose sync code was older than the check ran nothing, so after
+  3.5.0 the maintainer's own tests failed by the dozen with no word from the sync. The
+  check now runs from the part of the sync that is always the new copy, once per update,
+  and tells a test that uses a part of the app the update removed (with what to do) apart
+  from one pinning behaviour that changed. No profile upgrade.
+
+### Added
+
+- **Your own tests can fake a job board the supported way.** `tools/offline_boards.py`
+  answers every employer-board request from canned responses; a name that starts with an
+  underscore, and anything inside `tools/openroles/`, can change in any release. No
+  profile upgrade.
+
 ## [3.5.0] - 2026-10-19
 
 ### Added
