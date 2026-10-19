@@ -430,14 +430,16 @@ def seen_on(seen_path: str, today: _dt.date | None = None):
     return first_seen(entries, (today or _dt.date.today()).isoformat())
 
 
-def already_ruled_out(seen_path: str, keep_ruled_out: bool = False):
+def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
+                      today: _dt.date | None = None):
     """A predicate over a posting: has this search already ruled it out?
 
     Returns `lambda job -> reason or ""`. A missing or unreadable seen file
     rules nothing out, because a cross-run gate that fails closed would silently
     empty a round. `keep_ruled_out` reads none of its rulings either, so every
     posting is judged again (run_round.py --no-seen-read); the live holds below
-    still apply, because they are today's state and not a past ruling.
+    still apply, because they are today's state and not a past ruling. `today`
+    is the round's (--today), so a replay reads do_not_target.json as it stood.
 
     The decision is `throttle.ruled_out`, imported rather than restated, so
     this can only ever drop what the throttle would drop anyway.
@@ -457,7 +459,8 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False):
     # because those outlived the hold; checked live here, they still cost
     # hydrate nothing, and they lift the day the hold does.
     try:
-        live = {**referral_holds(), **load_do_not_target()}
+        live = {**referral_holds(),
+                **load_do_not_target(today=(today or _dt.date.today()).isoformat())}
     except Exception:                    # no contact book or do_not_target yet
         live = {}
     # And the candidate's bar where the employer's name alone decides it (an
@@ -515,7 +518,7 @@ def main() -> int:
     today = _dt.date.fromisoformat(a.today) if a.today else _dt.date.today()
 
     rows, was_dict = load_jobs(a.infile)
-    ruled = already_ruled_out(a.seen, a.keep_ruled_out) if a.seen else (lambda job: "")
+    ruled = already_ruled_out(a.seen, a.keep_ruled_out, today) if a.seen else (lambda job: "")
     first = seen_on(a.seen, today)
     kept, dropped = [], []
     n_seen = 0

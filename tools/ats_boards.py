@@ -870,20 +870,23 @@ def workday(employer: str, token: str, queries=None,
 FETCH = {"greenhouse": greenhouse, "lever": lever, "ashby": ashby, "workday": workday}
 
 
-def fetch_all(boards=None, workers: int = 16,
-              notes: dict | None = None) -> tuple[list[dict], dict[str, str]]:
+def fetch_all(boards=None, workers: int = 16, notes: dict | None = None,
+              today: dt.date | None = None) -> tuple[list[dict], dict[str, str]]:
     """(rows, {employer: why it returned nothing}) across every board.
 
     `notes`, when given, collects what a board that DID return rows left out,
     a Workday body that would not fetch, which is worth saying and is not the
     same thing as a board gone quiet. The worker count is across boards; the
-    politeness budget per host is held in `_request`.
+    politeness budget per host is held in `_request`. `today` dates Workday's
+    "Posted N days ago", so a replayed round (scrape_wide.py --today) dates its
+    postings from its own day and not the day it is replayed.
     """
     boards = BOARDS if boards is None else boards
     rows: list[dict] = []
     quiet: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(FETCH[kind], employer, token): employer
+        futs = {(ex.submit(FETCH[kind], employer, token, today=today) if kind == "workday"
+                 else ex.submit(FETCH[kind], employer, token)): employer
                 for employer, (kind, token) in boards.items()}
         for f in as_completed(futs):
             employer = futs[f]
