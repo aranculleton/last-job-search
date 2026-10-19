@@ -49,6 +49,13 @@ make sense to somebody whose repo just received it.
 - **"Data @ <Employer>" is a job at that employer, and a title with a comma is a place only
   when it names one.** The first was read as an employer called "Data @ <Employer>" and the
   second as a location. No profile upgrade.
+- **What works counts each application once, and finds the draft it was sent with.** An
+  "applied" row followed by an "interview" row for the same role counted as one loss and one
+  win, and a draft was never matched by its short name. No profile upgrade.
+- **"Help me prepare for an interview" gets the full interview pack.** A second way in had
+  a four-line step with no archive, research or saved pack. No profile upgrade.
+- **Interview prep treats postings and pages as data, and never fetches an interviewer's
+  LinkedIn.** No profile upgrade.
 - **The denylist remembers names taken out of your files.** It reads every past version of
   your tracker, contact book and message log, so a row deleted later is still checked. No
   profile upgrade.
@@ -75,6 +82,17 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Interview packs are built by a tool, sourced, one screen first.** Five likely questions
+  each with the story or answer to use, three hooks, the money your application form already
+  named, what not to say; then the detail. It was put together by hand, so an unsourced fact
+  or a banned phrase could reach an interview. Your stories are matched to questions by a
+  `Use for:` line, added for you to any story without one. Profile upgrade: interview-tags.
+- **A booked interview shows on the due list, with a thank-you reminder after it.** There
+  was nowhere to write a booked stage. No profile upgrade.
+- **The questions interviews asked, and the stories that landed, go into one bank.** The next
+  pack at that employer leads with them, and `what_works.py brief interviews` shows how far
+  applications get. No profile upgrade.
+- **An offer gets a negotiation pack.** Nothing prepared for one before. No profile upgrade.
 - **A connection request you withdrew is recorded, and that person is never written to
   again.** Nothing recorded a withdrawal, so the request stayed on the list to withdraw.
   No profile upgrade.
