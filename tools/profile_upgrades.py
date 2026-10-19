@@ -954,6 +954,9 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    "search.HOURS_PER_YEAR": "2,080 hours, a full-time year of 40 hours a week, to read a band "
+                             "stated by the hour as a year's pay; a market that works fewer "
+                             "hours sets its own",
     "networking.PROFILE_READS_PER_DAY": "15 browser reads a day, and never more than the requests "
                                         "that can still go that day plus three; raising it raises "
                                         "the risk to their LinkedIn account",
