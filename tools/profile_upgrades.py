@@ -527,6 +527,15 @@ def _dropped_rows() -> str:
             "them" % n) if n else ""
 
 
+def _old_sweep_cursor() -> str:
+    """3.7.0 kept the slow boards' resume point at documents/rounds/.sweep.json, beside the
+    round summaries, and a person's own test that reads every documents/rounds/*.json as a
+    round failed on it from their first round on. Moving it is instant: no web, no question."""
+    old = person.state("documents", "rounds", ".sweep.json")
+    return ("documents/rounds/.sweep.json sits among your round summaries, where a check "
+            "that every file there is a round reads it" if os.path.exists(old) else "")
+
+
 def _read_break() -> str:
     """Browser reads pause between bursts; how long is the person's call, so it is written
     into their profile where they can see and change it, at the app's value."""
@@ -1100,6 +1109,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             _dropped_rows, "python3 tools/network/state.py dropped-rows --apply", "instant",
             command=("python3", "tools/network/state.py", "dropped-rows", "--apply"),
             paths=("network_contacts.csv",), priority=2),
+    Upgrade("sweep-cursor-moved", "2026-10-19",
+            "the slow boards' resume point moved out from among your round summaries, so a "
+            "check that every file there is a round passes again",
+            _old_sweep_cursor, "python3 tools/scrape_wide.py --move-cursor", "instant",
+            command=("python3", "tools/scrape_wide.py", "--move-cursor"),
+            paths=("documents/rounds/.sweep.json", "documents/rounds/.sweep/cursor.json"),
+            priority=1),
     Upgrade("read-break", "2026-10-19",
             "the pause between bursts of profile reads written in your profile, yours to change",
             _read_break, "add PROFILE_READ_BREAK_MINUTES = (5, 12) to profile/networking.py "

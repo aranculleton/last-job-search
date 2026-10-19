@@ -25,8 +25,10 @@ export TEXMFHOME="$PWD/texmf"     # from the repo root
 cd cv && lualatex <Prefix>_Resume_<ABBR>.tex
 ```
 
-`tools/setup_env.sh` also links `~/texmf` here, which is kpathsea's default
-`TEXMFHOME`, so a hand compile in a container it has run in needs nothing.
+Nothing links `~/texmf` (kpathsea's default `TEXMFHOME`) to this directory, on purpose:
+with two copies of the app on one computer, two worktrees for two chats, each would take
+the one link from the other. A compile by hand sets the variable as above, and a
+`~/texmf` that is already there is left as it is.
 
 The cover letter needs none of this: `cover.cls` loads its fonts from
 `cover_letters/OpenFonts/` by path.

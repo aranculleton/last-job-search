@@ -410,6 +410,9 @@ jobs:
           fi
       - name: Compile cover letter example (xelatex)
         run: |
+          # cover.cls loads its fonts by path, but every compile sets this, so none
+          # relies on a ~/texmf link (tests/test_vendored_texmf.py).
+          export TEXMFHOME="$PWD/texmf"
           cd cover_letters
           xelatex -interaction=nonstopmode -halt-on-error cover_example.tex
           test -f cover_example.pdf

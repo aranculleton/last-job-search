@@ -43,7 +43,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections import deque
+from collections import Counter, deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -149,6 +149,13 @@ def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
     on this side on purpose: the portal CLIs are plug-ins, `/add-portal`
     scaffolds more of them, and every one written the same way would carry the
     same bug.
+
+    ## Why the reason is not always stderr's last line
+
+    One person's board printed `THROTTLED: ... redirecting searches to /sandbox
+    (robots.txt disallows it); not followed.` and then its JSON error, and only the
+    JSON reached the round. A line that names a refusal is kept wherever it falls, and
+    exit 0 with nothing found and a refusal said is a refusal, not an empty market.
     """
     env = dict(os.environ, NODE_USE_ENV_PROXY="1")
     try:
@@ -157,16 +164,104 @@ def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
                                text=True, timeout=timeout, env=env)
             fh.seek(0)
             out = fh.read()
+        said = _refusal(p.stderr)
         if p.returncode != 0:
             err = (p.stderr or "").strip().splitlines()
-            return None, f"exit {p.returncode}: {err[-1][:120] if err else 'no stderr'}"
+            why = said or (err[-1].strip()[:120] if err else "no stderr")
+            return None, f"exit {p.returncode}: {why}"
         if not out.strip():
-            return None, "empty output"
-        return json.loads(out), None
+            return None, f"exit 0: {said}" if said else "empty output"
+        got = json.loads(out)
+        if said and isinstance(got, dict) and not got.get("results"):
+            return None, f"exit 0: {said}"
+        return got, None
     except subprocess.TimeoutExpired:
         return None, f"timeout after {timeout}s"
     except Exception as e:
         return None, f"{type(e).__name__}: {str(e)[:120]}"
+
+
+# ------------------------------------------------------- why a request failed
+#
+# "progress: freehire 300/300 sent, 300 failed" said nothing about why. freehire had
+# answered every request with 403 Forbidden, and a board of the person's own had said
+# it was being redirected to a page its robots.txt disallows. A failure is now named by
+# its cause, and a cause that will not change within a round (a refusal) is caught by
+# the probe, before any sweep time is spent on that portal.
+_REFUSAL = re.compile(r"\bTHROTTLED\b|/sandbox\b|robots\.txt\s+disallows|disallowed by "
+                      r"robots\.txt|\bMISSING_CREDENTIALS\b")
+# An HTTP status where an error names one: after "HTTP", "status" or "failed:", or
+# followed by its reason phrase. Never any three digits: a truncated body's
+# JSONDecodeError says "line 363 column 412".
+_STATUS = re.compile(r"(?:\b(?:HTTP|[Ss]tatus|failed:?)\s*(\d{3})\b|\b(\d{3})(?=\s+[A-Z][a-z]))"
+                     r"((?:\s+[A-Z][A-Za-z]*)*)")
+_EXIT = re.compile(r"^exit -?\d+:\s*")
+# The answers that will not change within a round: refused credentials, forbidden,
+# a proxy that will not carry the request, unavailable for legal reasons, and the 999
+# LinkedIn sends a machine it is refusing. A 429 or a 5xx is worth asking again later.
+REFUSING_STATUS = (401, 403, 407, 451, 999)
+
+
+def _refusal(text: str | None) -> str:
+    """The line in which a portal said it is refusing (THROTTLED, a sandbox redirect,
+    robots.txt, a missing credential), as it said it, or ""."""
+    for line in str(text or "").splitlines():
+        line = _EXIT.sub("", line.strip())
+        if not _REFUSAL.search(line):
+            continue
+        try:
+            body = json.loads(line)
+            if isinstance(body, dict) and body.get("error"):
+                line = str(body["error"])
+        except ValueError:
+            pass
+        return line[:200]
+    return ""
+
+
+def _status(err: str | None) -> tuple[int, str] | None:
+    """(code, "403 Forbidden") for the first HTTP error status an error names."""
+    for m in _STATUS.finditer(str(err or "")):
+        code = int(m.group(1) or m.group(2))
+        if 400 <= code <= 599 or code == 999:
+            return code, f"{code}{m.group(3)}".strip()
+    return None
+
+
+def cause(err: str | None) -> str:
+    """What a failed request comes down to, short enough for a progress line:
+    "403 Forbidden", "429 Too Many Requests", "timeout", or what a board said."""
+    if not err:
+        return ""
+    said = _refusal(err)
+    if said:
+        return said
+    status = _status(err)
+    if status:
+        return status[1]
+    low = err.lower()
+    if "timeout" in low or "timed out" in low:
+        return "timeout"
+    text = _EXIT.sub("", err.strip())
+    try:
+        body = json.loads(text)
+        if isinstance(body, dict) and body.get("error"):
+            return str(body["error"])[:60]
+    except ValueError:
+        pass
+    named = re.match(r"([A-Z]\w*(?:Error|Exception))\b", text)
+    return named.group(1) if named else (text[:60] or "failed")
+
+
+def refused(err: str | None) -> str:
+    """The cause when a failure is an answer that will not change within the round
+    (REFUSING_STATUS, or a board's own refusal), else "": a timeout, a 429 or a 5xx
+    is worth asking again."""
+    said = _refusal(err)
+    if said:
+        return said
+    status = _status(err)
+    return status[1] if status and status[0] in REFUSING_STATUS else ""
 
 
 def _remote_mark(location, remote: bool):
@@ -266,29 +361,81 @@ def portal_locations(skill: str) -> list[str | None]:
 SWEEP_BUDGET = 20 * 60
 SWEEP_MAX_FAILS = 3
 
+# How long one paced request takes, its crawl-delay included, decides how many fit the
+# budget. One board at a crawl-delay of 5 seconds managed about 7 a minute, so its
+# 20 minutes held about 150 of its 243 requests whatever happened, and nothing said so.
+# The round measures it (save_cursor keeps it for the next round), takes the health
+# probe's time where nothing was measured yet, and guesses this much where neither is.
+DEFAULT_REQUEST_SECONDS = 3.0
+# {portal's short name: seconds its probe took}, filled by canary().
+PROBE_SECONDS: dict[str, float] = {}
+
+
+def request_seconds(skill: str) -> float:
+    """Seconds one request to a paced board takes, its wait included."""
+    delay = portals.crawl_delay(skill)
+    last = (_cursor().get(skill) or {}).get("secs")
+    if isinstance(last, (int, float)) and not isinstance(last, bool) and last > 0:
+        return max(float(last), delay)
+    probe = PROBE_SECONDS.get(portals.short(skill))
+    return delay + (probe if probe is not None else DEFAULT_REQUEST_SECONDS)
+
+
+def describe(task: tuple) -> str:
+    """One request as a person reads it: "demand planner" (Next Town, page 2)."""
+    q, loc, pg = task[1:4]
+    where = loc or ("remote" if len(task) > 4 and task[4] else "")
+    return f'"{q}" ({where + ", " if where else ""}page {pg})'
+
+
+def plan_line(skill: str, total: int, delay: float) -> str:
+    """Said before a paced sweep that will not fit its budget, or ""."""
+    per = request_seconds(skill)
+    fits = int(SWEEP_BUDGET // per) if per > 0 else total
+    if fits >= total:
+        return ""
+    return (f"portals: {portals.short(skill)} plans {total} requests, {delay:g}s apart and "
+            f"about {per:.1f}s each, so about {fits} fit its {SWEEP_BUDGET // 60}-minute "
+            "budget: page one of every search at its first place goes first and the places "
+            "further out last, and later rounds reach the rest")
+
+
+def unsent_line(name: str, rest: list[tuple], total: int, why: str, show: int = 3) -> str:
+    """What a stopped sweep did not send: the count, the first few, and why."""
+    first = "; ".join(describe(t) for t in rest[:show])
+    more = f"; and {len(rest) - show} more" if len(rest) > show else ""
+    return (f"portals: {name} stopped, {why}: {len(rest)} of {total} requests not sent, "
+            f"the first: {first}{more}. Later rounds reach them (documents/rounds/.sweep/).")
+
 
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
           clock=time.monotonic, tally: "Tally | None" = None,
-          on_rows=None) -> tuple[list[dict], int, list[str]]:
+          on_rows=None, log=None) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
     takes its time without holding a worker the app's portals need. It waits
-    before the first request too: the health probe has just asked. It stops
-    at SWEEP_BUDGET or SWEEP_MAX_FAILS failures in a row, and says so.
+    before the first request too: the health probe has just asked. It says up
+    front when the requests will not all fit its budget, stops at SWEEP_BUDGET or
+    SWEEP_MAX_FAILS failures in a row, and names what it did not send and why.
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
-    start, streak, sent = clock(), 0, 0
+    start, streak, sent, last, why = clock(), 0, 0, "", ""
+    plan = plan_line(skill, len(tasks), delay)
+    if plan:
+        _say(plan, log)
+    if tally is not None:
+        tally.ends = start + SWEEP_BUDGET
     for task in tasks:
         q, loc, pg = task[1:4]
         remote = len(task) > 4 and task[4]
         if streak >= SWEEP_MAX_FAILS:
+            why = f"{streak} failures in a row ({last})"
             failed.append(f"stopped after {streak} failures in a row; "
-                          f"{len(tasks) - sent} requests not sent")
+                          f"{len(tasks) - sent} requests not sent ({last})")
             break
         if clock() - start > SWEEP_BUDGET:
-            print(f"portals: {skill} stopped at its {SWEEP_BUDGET // 60}-minute budget, "
-                  f"{len(tasks) - sent} of {len(tasks)} requests not sent", file=sys.stderr)
+            why = f"its {SWEEP_BUDGET // 60}-minute budget ran out"
             break
         if delay:
             sleep(delay)
@@ -301,18 +448,25 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         streak = streak + 1 if err else 0
         if err:
             failed.append(err)
+            last = cause(err)
         rows += got
         if on_rows and got:
             on_rows(list(got))
         if tally is not None:
-            tally.sent, tally.failed = sent, list(failed)
-            tally.limited += int(rate_limited(err))
-            tally.timeouts += int(bool(err) and "timeout" in err.lower())
+            tally.sent = sent
+            if err:
+                tally.failure(err)
+            else:
+                tally.success()
+    rest = tasks[sent:]
+    if rest:
+        _say(unsent_line(portals.short(skill), rest, len(tasks), why), log)
     if tally is not None:
-        tally.sent, tally.failed = sent, list(failed)
-        if sent < len(tasks):
-            tally.stopped = (f"{streak} failures in a row" if streak >= SWEEP_MAX_FAILS
-                             else f"its {SWEEP_BUDGET // 60}-minute budget ran out")
+        tally.sent = sent
+        tally.per = (clock() - start) / sent if sent else None
+        if rest:
+            tally.stopped = why
+        tally.finished = True
     return rows, sent, failed
 
 
@@ -326,12 +480,22 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
 # POOL_BUDGET, well inside the stage limit, writes what it has, and says what it
 # did not send; it backs off a portal that answers 429 (Retry-After when the error
 # carries one), halves that portal's share of the workers, and stops it after
-# POOL_MAX_LIMITED in a row; and it prints a line per portal every PROGRESS_SECONDS,
-# so a chat can tell a slow round from a hung one.
+# POOL_MAX_LIMITED in a row; and it prints a portal's progress line as it changes
+# (progress_lines), so a chat can tell a slow round from a hung one.
 POOL_BUDGET = 20 * 60
 POOL_MAX_LIMITED = 3
+# A portal that gives the same failure this many times running, with no success
+# between, is stopped: freehire answered 403 Forbidden to all 300 of one round's
+# requests and the pool sent every one. Five, where a paced board stops at three
+# (SWEEP_MAX_FAILS), because the pool has several requests in flight at once (four on
+# a person's own computer) and one bad moment can fail those together; five identical
+# failures running is more than that. A 429 keeps its own, gentler rule above.
+POOL_MAX_FAILS = 5
 BACKOFF_SECONDS = 60
 PROGRESS_SECONDS = 60
+# A portal still sending whose line has not changed in this long is said again, so a
+# hung one is told from a slow one; every other line is printed only when it changes.
+HEARTBEAT_SECONDS = 5 * 60
 _RETRY_AFTER = re.compile(r"retry[- ]after[\"':= ]+(\d{1,5})", re.I)
 
 
@@ -355,18 +519,78 @@ class Tally:
         self.until = 0.0
         self.stopped = ""
         self.capped = 0
+        # Failed requests, counted as they land with their causes. `failed` also
+        # carries the note a stopped portal leaves, which is not a request.
+        self.errors = 0
+        self.causes: Counter = Counter()
+        self.same, self.last = 0, ""      # the run of identical failures, and its cause
+        self.queued = 0                   # the pool's requests for it not yet taken
+        self.finished = False             # nothing more will be sent
+        self.ends: float | None = None    # when its budget runs out, on its own clock
+        self.per: float | None = None     # seconds a paced request took, wait included
+
+    def failure(self, err: str) -> None:
+        c = cause(err) or "failed"
+        self.failed.append(err)
+        self.errors += 1
+        self.causes[c] += 1
+        self.same = self.same + 1 if c == self.last else 1
+        self.last = c
+        self.limited += int(rate_limited(err))
+        self.timeouts += int("timeout" in str(err).lower())
+
+    def success(self) -> None:
+        self.same, self.last = 0, ""
+
+    def _failures(self) -> str:
+        said = f"{self.errors} failed"
+        if not self.causes:
+            return said
+        top = self.causes.most_common(2)
+        if len(self.causes) == 1:
+            return f"{said} ({top[0][0]})"
+        return (f"{said} (" + ", ".join(f"{n}x {c}" for c, n in top)
+                + (", and others" if len(self.causes) > 2 else "") + ")")
 
     def line(self, left: float | None = None) -> str:
-        bits = [f"{self.sent}/{self.total} sent", f"{len(self.failed)} failed"]
+        bits = [f"{self.sent}/{self.total} sent", self._failures()]
         if self.limited or self.timeouts:
             bits.append(f"{self.limited} rate-limited (429), {self.timeouts} timed out")
         if self.capped:
             bits.append(f"{self.capped} deeper page(s) left by the round's cap")
         if self.stopped:
             bits.append(f"stopped: {self.stopped}")
+        elif self.finished:
+            bits.append("done")
         elif left is not None:
             bits.append(f"{max(0, int(left // 60))} min left")
         return f"progress: {self.name} " + ", ".join(bits)
+
+
+def progress_lines(tallies: list[Tally], shown: dict, now: float,
+                   quiet: float | None = None) -> list[str]:
+    """The progress lines worth printing now.
+
+    Every portal's line was printed every minute, finished or not, each finished one
+    with a countdown that meant nothing to it, so after 77 lines one round's log was
+    mostly repeats. A line is printed when it changes, once more when the portal
+    finishes ("done" or "stopped: <why>"), and, for a portal still sending that has not
+    moved, again after HEARTBEAT_SECONDS. Only a portal still sending has a countdown.
+    `shown` is the caller's memory between calls."""
+    quiet = HEARTBEAT_SECONDS if quiet is None else quiet
+    out = []
+    for t in tallies:
+        seen = shown.setdefault(t.name, {"line": None, "at": None, "closed": False})
+        if seen["closed"]:
+            continue
+        line = t.line()
+        stale = not t.finished and seen["at"] is not None and now - seen["at"] >= quiet
+        if line == seen["line"] and not stale:
+            continue
+        sending = not (t.finished or t.stopped)
+        out.append(t.line(t.ends - now if sending and t.ends is not None else None))
+        seen.update(line=line, at=now, closed=t.finished)
+    return out
 
 
 def _say(line: str, log=None) -> None:
@@ -386,16 +610,19 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
 
     Each portal gets a Tally (in `tallies`, shared with the progress line). A 429
     halves that portal's share of the workers and pauses it (Retry-After, else
-    BACKOFF_SECONDS times the run of 429s); POOL_MAX_LIMITED in a row stops it. `cap`
+    BACKOFF_SECONDS times the run of 429s); POOL_MAX_LIMITED in a row stops it, and
+    POOL_MAX_FAILS identical failures in a row of any kind stop it too. `cap`
     is the most requests a portal may send. `on_rows` sees each batch of rows as it
     lands, which is how a partial scrape survives a stage that is killed.
     Returns (rows, tallies)."""
     tallies = {} if tallies is None else tallies
-    for portal in dict.fromkeys(j[0] for j in jobs):
-        n = sum(1 for j in jobs if j[0] == portal)
-        tallies.setdefault(portal, Tally(portal, min(n, cap) if cap else n, workers, cap))
-    queue, rows, lock = deque(jobs), [], threading.Lock()
     start = clock()
+    mine = list(dict.fromkeys(j[0] for j in jobs))
+    for portal in mine:
+        n = sum(1 for j in jobs if j[0] == portal)
+        t = tallies.setdefault(portal, Tally(portal, min(n, cap) if cap else n, workers, cap))
+        t.queued, t.ends = n, start + budget
+    queue, rows, lock = deque(jobs), [], threading.Lock()
 
     def take():
         now = clock()
@@ -414,6 +641,7 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
                 continue
             del queue[i]
             t.active += 1
+            t.queued -= 1
             return "go", job
         return ("wait", max(0.2, min(waits))) if waits else ("done", None)
 
@@ -436,22 +664,25 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
                 t.active -= 1
                 t.sent += 1
                 if err:
-                    t.failed.append(err)
+                    t.failure(err)
                     if rate_limited(err):
-                        t.limited += 1
                         t.streak += 1
                         t.limit = max(1, t.limit // 2)
                         t.until = clock() + (retry_after(err) or BACKOFF_SECONDS * t.streak)
                         if t.streak >= POOL_MAX_LIMITED:
                             t.stopped = (f"rate-limited {t.streak} times in a row (HTTP 429); "
                                          "the portal is asking for less")
-                    elif "timeout" in err.lower():
-                        t.timeouts += 1
+                    if t.same >= POOL_MAX_FAILS and not t.stopped:
+                        t.stopped = f"{t.same} failures in a row, each {t.last}"
                 else:
                     t.streak = 0
+                    t.success()
                     rows.extend(got or ())
                     if on_rows and got:
                         on_rows(list(got))
+                if not t.active and (t.stopped or not t.queued
+                                     or (t.cap and t.sent >= t.cap)):
+                    t.finished = True
 
     threads = [threading.Thread(target=worker, daemon=True) for _ in range(max(1, workers))]
     for th in threads:
@@ -471,6 +702,8 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
             # The cap is the plan, not a failure: the deep pages it leaves are what a
             # gentler round chose not to ask for.
             t.capped = left
+    for portal in mine:
+        tallies[portal].finished = True
     return rows, tallies
 
 
@@ -505,9 +738,26 @@ class PortalDown(RuntimeError):
     """A portal answered, without error, and returned nothing at all."""
 
 
+# A probe whose error will not change within the round (refused()) marks the portal
+# down with this before what it said, and main() sends it nothing more. It used to be
+# "left to the scrape": freehire's 403 Forbidden went on to fail all 300 requests, and a
+# board's THROTTLED (it was redirecting searches to /sandbox, which its robots.txt
+# disallows) was learned only mid-sweep, after its sweep time was spent.
+REFUSED = "refused the probe, so nothing more is sent to it this round: "
+
+
+def not_searched(health: dict[str, tuple[bool, str]]) -> dict[str, str]:
+    """{portal: what it said} for every portal the probe found refusing."""
+    return {n: d[len(REFUSED):] for n, (h, d) in health.items()
+            if not h and d.startswith(REFUSED)}
+
+
 def canary(jobage: int = CANARY_JOBAGE,
            on: dict[str, bool] | None = None) -> dict[str, tuple[bool, str]]:
-    """One broad probe per enabled portal. {portal: (healthy, detail)}."""
+    """One broad probe per enabled portal. {portal: (healthy, detail)}.
+
+    Down is either silent (no results and no error: a broken extractor) or refusing
+    (`REFUSED`, then what the portal said). Any other error is left to the scrape."""
     on = portals.enabled() if on is None else on
     out: dict[str, tuple[bool, str]] = {}
     probes = [
@@ -528,14 +778,18 @@ def canary(jobage: int = CANARY_JOBAGE,
     for name, fn in probes:
         if name not in wanted:
             continue
+        began = time.monotonic()
         try:
             rows_, err = fn()
         except Exception as e:                      # a build or resolve failure
             out[name] = (False, f"{type(e).__name__}: {str(e)[:150]}")
             continue
-        if err:
-            # An error IS diagnosable downstream, and the existing failure
-            # fraction already covers it. Not the canary's job.
+        PROBE_SECONDS[name] = time.monotonic() - began
+        if err and refused(err):
+            out[name] = (False, REFUSED + refused(err))
+        elif err:
+            # A timeout, a 429 or a 5xx may not happen again, and the pool's backoff,
+            # its streak stop and the failure fraction cover it if it does.
             out[name] = (True, f"probe errored ({err[:80]}), left to the scrape")
         elif not rows_:
             out[name] = (False, f'0 results for the probe query in '
@@ -547,14 +801,19 @@ def canary(jobage: int = CANARY_JOBAGE,
 
 def canary_report(health: dict[str, tuple[bool, str]]) -> tuple[str, bool]:
     """A human line per portal, and whether every portal is usable."""
-    lines, ok = [], True
+    lines, ok, silent = [], True, False
     for name, (healthy, detail) in sorted(health.items()):
         lines.append(f"  {'OK  ' if healthy else 'DOWN'} {name}: {detail}")
         ok = ok and healthy
-    if not ok:
+        silent = silent or (not healthy and not detail.startswith(REFUSED))
+    if silent:
         lines.append("A portal returning nothing to a deliberately broad query is "
                      "broken, not evidence of a thin market. Fix the portal before "
                      "reading this round's yield.")
+    if not_searched(health):
+        lines.append("A portal that refuses the probe would refuse its sweep too, so it is "
+                     "sent nothing more, and this round is not a full picture of the market "
+                     "without it.")
     return "\n".join(lines), ok
 
 
@@ -604,9 +863,26 @@ def merge_alerts(seen: dict[str, dict], alerts: list[dict]) -> int:
 # requests it sent, "date": the round}}. "tail" while the board gets through its
 # core each round; "all" once it did not, so a board too slow even for its core
 # still reaches every request over successive rounds.
-# Beside the round summaries, which every session commits, and a dotfile so
-# nothing that globs documents/rounds/*.json reads it as a round.
-SWEEP_STATE = person.state("documents", "rounds", ".sweep.json")
+#
+# Under documents/rounds, which every session commits, in a folder of its own. It was
+# documents/rounds/.sweep.json, beside the summaries, on the reasoning that a dotfile is
+# out of the way: a person's own test reads every documents/rounds/*.json and requires
+# each to be named like a round (r19), pathlib's glob matches dotfiles, and every
+# repo's local CI failed after its first round. Nothing a round writes at the top of
+# documents/rounds is anything but a round summary now. The old file is read until a
+# round (save_cursor) or the sync (`--move-cursor`, the sweep-cursor-moved upgrade)
+# moves it. Read at call time; a test sets SWEEP_STATE to a path of its own.
+SWEEP_STATE: str | None = None
+
+
+def _sweep_paths() -> tuple[str, str]:
+    """(where the cursor lives, where 3.7.0 put it, or "" for a test's own path)."""
+    if SWEEP_STATE:
+        return SWEEP_STATE, ""
+    return (person.state("documents", "rounds", ".sweep", "cursor.json"),
+            person.state("documents", "rounds", ".sweep.json"))
+
+
 # This round's plan per person portal: (mode, core requests, rotating length, offset).
 PLAN: dict[str, tuple[str, int, int, int]] = {}
 
@@ -634,18 +910,53 @@ def broadest(queries) -> list:
     return [q for q, w in words if not any(ow and ow < w for _, ow in words)]
 
 
-def _cursor() -> dict:
+def _load(path: str) -> dict:
     try:
-        with open(SWEEP_STATE, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             got = json.load(fh)
         return got if isinstance(got, dict) else {}
     except (OSError, ValueError):
         return {}
 
 
-def save_cursor(sent_by_skill: dict, today: str) -> None:
-    """Where each person portal's tail starts next round, from what this one sent."""
-    if not PLAN:
+def _cursor() -> dict:
+    """The cursor, read from where it lives and from where 3.7.0 put it, the newer
+    winning: an old file a move could not remove loses nothing it still holds."""
+    new, old = _sweep_paths()
+    return {**_load(old), **_load(new)}
+
+
+def _write_cursor(state: dict) -> bool:
+    """Write the cursor where it lives, then remove the old one. False if it could not."""
+    new, old = _sweep_paths()
+    try:
+        os.makedirs(os.path.dirname(new), exist_ok=True)
+        with open(new, "w", encoding="utf-8") as fh:
+            json.dump(state, fh, indent=1, sort_keys=True)
+            fh.write("\n")
+    except OSError:
+        return False
+    try:
+        os.remove(old)
+    except OSError:
+        pass
+    return True
+
+
+def move_cursor() -> str:
+    """Move a cursor from where 3.7.0 put it into its own folder; what happened, in words."""
+    new, old = _sweep_paths()
+    if not os.path.exists(old):
+        return "nothing to move"
+    if not _write_cursor(_cursor()):
+        return f"could not write {new}"
+    return f"moved {old} to {new}"
+
+
+def save_cursor(sent_by_skill: dict, today: str, secs_by_skill: dict | None = None) -> None:
+    """Where each person portal's tail starts next round, from what this one sent, and how
+    long one of its requests took (`secs`, for the next round's plan)."""
+    if not PLAN and not os.path.exists(_sweep_paths()[1]):
         return
     state = _cursor()
     for skill, (mode, core, rotating, offset) in PLAN.items():
@@ -655,13 +966,10 @@ def save_cursor(sent_by_skill: dict, today: str) -> None:
         done = sent if mode == "all" else max(0, sent - core)
         state[skill] = {"mode": mode, "next": (offset + done) % rotating if rotating else 0,
                         "sent": sent, "date": today}
-    try:
-        os.makedirs(os.path.dirname(SWEEP_STATE), exist_ok=True)
-        with open(SWEEP_STATE, "w", encoding="utf-8") as fh:
-            json.dump(state, fh, indent=1, sort_keys=True)
-            fh.write("\n")
-    except OSError:
-        pass
+        secs = (secs_by_skill or {}).get(skill)
+        if secs:
+            state[skill]["secs"] = round(float(secs), 1)
+    _write_cursor(state)
 
 
 def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
@@ -707,9 +1015,15 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     # board runs out of its budget long before its tail: on one, 368 requests
     # against room for about 56, so the same tail was dropped round after round
     # and its named employers never ran. Three things fix that. The tail starts
-    # where the last round stopped (SWEEP_STATE), so successive rounds cover all
+    # where the last round stopped (the cursor), so successive rounds cover all
     # of it. A query a broader one covers is not sent (`broadest`). And an employer
     # whose own ATS board a round already reads is not searched for here.
+    #
+    # The order is the order of value, because a budget cuts from the end: page one of
+    # every search before anyone's page two, the first place before the rest, the
+    # places further out last, each in the order the person lists them. It was every
+    # page of the first search before page one of the second, so a board whose budget
+    # held about 150 of its 243 requests lost whole searches to an accident of order.
     covered = _covered_by_ats()
     cursor = _cursor()
     PLAN.clear()
@@ -722,13 +1036,13 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
         places = portal_locations(skill)
         depth = min(pages, portals.pages(skill))
         qs = broadest(QUERIES)
-        core = [(skill, q, places[0], pg) for q in qs for pg in range(1, depth + 1)]
+        core = [(skill, q, places[0], pg) for pg in range(1, depth + 1) for q in qs]
         tail = [(skill, f"{emp} {t}", places[0], 1) for emp in EMPLOYERS
                 if _key(emp) not in covered for t in EMPLOYER_QUERIES]
-        if portals.takes_remote(skill):
-            tail += [(skill, q, None, pg, True) for q in qs for pg in range(1, min(depth, 2) + 1)]
-        tail += [(skill, q, loc, pg) for q in qs for loc in places[1:]
-                 for pg in range(1, min(depth, 2) + 1)]
+        for pg in range(1, min(depth, 2) + 1):
+            if portals.takes_remote(skill):
+                tail += [(skill, q, None, pg, True) for q in qs]
+            tail += [(skill, q, loc, pg) for loc in places[1:] for q in qs]
         last = cursor.get(skill) or {}
         # A board that last time sent fewer requests than its core rotates through
         # everything; otherwise the core runs first and only the tail rotates.
@@ -806,7 +1120,10 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out", help="the directory the scrape's files go in (required)")
+    ap.add_argument("--move-cursor", dest="move_cursor", action="store_true",
+                    help="no requests: move documents/rounds/.sweep.json, where 3.7.0 kept "
+                         "the slow boards' resume point, to documents/rounds/.sweep/cursor.json")
     ap.add_argument("--pages", type=int, default=None,
                     help=f"default {CLOUD_PAGES} in the cloud, {LOCAL_PAGES} on a person's own "
                          "computer (profile/search.py SCRAPE_PAGES sets their own)")
@@ -829,6 +1146,12 @@ def main() -> int:
     ap.add_argument("--alerts", default=None,
                     help="postings from the person's job-alert emails (tools/job_alerts.py)")
     a = ap.parse_args()
+    if a.move_cursor:
+        said = move_cursor()
+        print(f"scrape_wide: {said}")
+        return 1 if said.startswith("could not") else 0
+    if not a.out:
+        ap.error("the following arguments are required: --out")
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
     pages, workers, cap = defaults()
     pages = a.pages or pages
@@ -868,15 +1191,27 @@ def main() -> int:
     # gone quiet is reported as broken here rather than as a thin market three
     # widenings later. It does not abort the round: the other sources' results
     # are still worth having, and a round that says so beats a round that stops.
+    #
+    # The report goes where the progress lines go, as it is written: stderr, which
+    # run_round passes on and writes to round.log the moment it arrives, and --log.
+    # On stdout it reached the round's log only when the scrape stage had ended, so a
+    # portal answering 403 and a board redirecting to a sandbox were named after
+    # their sweeps rather than before. A portal that refused is sent nothing more.
+    health: dict[str, tuple[bool, str]] = {}
     if not a.skip_canary:
         health = canary(a.jobage, on)
         report, ok = canary_report(health)
-        print("portal health:")
-        print(report)
+        _say("portal health:", a.log)
+        for line in report.splitlines():
+            _say(line, a.log)
         if not ok:
             down = [n for n, (h, _) in health.items() if not h]
-            json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()}},
+            json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()},
+                       "not_searched": not_searched(health)},
                       open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)
+    skipped = not_searched(health)
+    for skill in [k for k, v in on.items() if v and portals.short(k) in skipped]:
+        on[skill] = False
 
     tasks = build_tasks(on, pages)
     if not tasks:
@@ -902,7 +1237,7 @@ def main() -> int:
                                  for k, ts in mine.items()}
     paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
     sweeps = {paced.submit(sweep, skill, ts, a.jobage, tally=tallies[portals.short(skill)],
-                           on_rows=landed): portals.short(skill)
+                           on_rows=landed, log=a.log): portals.short(skill)
               for skill, ts in mine.items()}
     jobs = []
     for task in tasks:
@@ -920,14 +1255,13 @@ def main() -> int:
     # is the deep pages, never a query or a place that was never asked at all.
     jobs.sort(key=lambda j: (j[2][2] if j[1] is linkedin else j[2][1],
                              0 if j[1] is not linkedin or str(j[2][1]).startswith(DEEP) else 1))
-    started = time.monotonic()
     done = threading.Event()
+    shown: dict = {}
 
     def progress():
         while not done.wait(PROGRESS_SECONDS):
-            left = a.budget - (time.monotonic() - started)
-            for t in list(tallies.values()):
-                _say(t.line(left), a.log)
+            for line in progress_lines(list(tallies.values()), shown, time.monotonic()):
+                _say(line, a.log)
             with lock:
                 _write_partial(a.out, seen)
 
@@ -949,18 +1283,24 @@ def main() -> int:
         landed(rows_)
     paced.shutdown()
     done.set()
+    ticker.join()
     for name, t in pool_tallies.items():
         if name in sent:
             continue
         sent[name] = t.sent
         if t.failed:
             failed.setdefault(name, []).extend(t.failed)
+    # Each portal's last line, unless the ticker has already said it.
     for t in tallies.values():
-        _say(t.line(), a.log)
+        t.finished = True
+    for line in progress_lines(list(tallies.values()), shown, time.monotonic()):
+        _say(line, a.log)
+    for t in tallies.values():
         if t.stopped and t.name in ("linkedin", "freehire"):
             _say(f"portals: {t.name} stopped, {t.stopped}; {t.total - t.sent} of {t.total} "
                  "requests not sent", a.log)
-    save_cursor(swept, today.isoformat())
+    save_cursor(swept, today.isoformat(),
+                {k: tallies[portals.short(k)].per for k in mine})
     _write_partial(a.out, seen)
 
     # Employer boards, straight from the ATS: every system openroles reads, and
@@ -1004,8 +1344,11 @@ def main() -> int:
         print(f"job alerts: {added} added, {len(alert_rows) - added} already found by the search")
 
     cut = [t for t in pool_tallies.values() if t.stopped and t.name in ("linkedin", "freehire")]
-    partial = ("; ".join(f"{t.name} stopped ({t.stopped}) with {t.total - t.sent} of its "
-                         f"{t.total} requests unsent" for t in cut))
+    notes = [f"{t.name} stopped ({t.stopped}) with {t.total - t.sent} of its "
+             f"{t.total} requests unsent" for t in cut]
+    notes += [f"{name} not searched (it refused the probe: {why})"
+              for name, why in sorted(skipped.items())]
+    partial = "; ".join(notes)
     return finish(a.out, seen, today, a.jobage, len(tasks), sent, failed, partial=partial)
 
 if __name__ == "__main__":

@@ -372,21 +372,34 @@ def count(path):
         return "?"
 
 
+def _health_file(out_dir: str) -> dict:
+    for path in (os.path.join(out_dir, "00_scrape", "00_portal_health.json"),
+                 os.path.join(out_dir, "00_portal_health.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                got = json.load(fh)
+            if isinstance(got, dict):
+                return got
+        except (OSError, ValueError):
+            continue
+    return {}
+
+
 def _portals_down(out_dir: str) -> list[str]:
-    """Portals the pre-flight probe found silent, if scrape_wide wrote the file.
+    """Portals the pre-flight probe found silent or refusing, if scrape_wide wrote the file.
 
     Fails open. A missing file means the probe did not run or was skipped,
     which is not the same as every portal being healthy, but it is not
     something to stop a round over either.
     """
-    for path in (os.path.join(out_dir, "00_scrape", "00_portal_health.json"),
-                 os.path.join(out_dir, "00_portal_health.json")):
-        try:
-            with open(path, encoding="utf-8") as fh:
-                return list(json.load(fh).get("portals_down") or [])
-        except (OSError, ValueError, AttributeError):
-            continue
-    return []
+    return list(_health_file(out_dir).get("portals_down") or [])
+
+
+def _down_detail(out_dir: str, name: str) -> str:
+    """What the probe found for one portal that is down: silent, or what it said when it
+    refused. Every down portal used to be reported as "0 results", the 403 ones too."""
+    detail = (_health_file(out_dir).get("detail") or {}).get(name)
+    return str(detail) if detail else "0 results to a deliberately broad probe"
 
 
 def _upgrades_line() -> str:
@@ -505,8 +518,8 @@ def main():
             partial = ("the scrape stage ran out of time and kept only what had arrived"
                        if nonlocal_partial else
                        "more than a quarter of the portal requests failed, or a portal was "
-                       "stopped short (round.log names the portals and why), so this round is "
-                       "not a full picture of the market")
+                       "stopped short or refused the pre-flight probe (round.log names the "
+                       "portals and why), so this round is not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
 
     # `--seen` is what stops hydrate paying for postings this search already
@@ -573,8 +586,8 @@ def main():
     # Read before the prune below deletes 00_scrape/, or a portal that went
     # quiet is never reported and the MISSED message blames the market.
     down = _portals_down(a.out)
-    if down:
-        print(f"portal health: {', '.join(down)} DOWN (0 results to a deliberately broad probe)")
+    for name in down:
+        print(f"portal health: {name} DOWN ({_down_detail(a.out, name)})")
     widen = not met and a.expand and a.round < MAX_ROUNDS
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
@@ -636,7 +649,7 @@ def main():
     # A portal that has gone quiet produces exactly this message, and every
     # sentence below it about a thin local market would be a true-sounding lie.
     if down:
-        print(f"  *** {', '.join(down)} returned nothing to the pre-flight probe. ***")
+        print(f"  *** {', '.join(down)} failed the pre-flight probe (portal health, above). ***")
         print("  This round is NOT evidence about the market. Fix the portal and "
               "re-run before widening or concluding anything from the count.")
     if partial:
