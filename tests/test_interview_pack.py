@@ -217,6 +217,18 @@ def test_a_bridged_gap_gets_its_framing_and_a_credential_is_never_claimed(app):
                for ln in donts)
 
 
+def test_what_the_score_and_the_audit_saw_is_kept_when_the_draft_carries_it(app):
+    path = os.path.join(app, "draft.json")
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump([dict(DRAFT, fit_why=["+10 forecasting named", "-6 SAP stated as essential"],
+                        residual_risks=["SAP depth is reporting, not configuration"])], fh)
+    gaps = _section(_pack(), "Gaps and honest framing")
+    assert any(ln.startswith("- The score docked it: -6 SAP stated as essential") for ln in gaps)
+    assert not any("+10 forecasting" in ln for ln in gaps)
+    assert any(ln.startswith("- The grounding audit said an interviewer could probe: SAP depth")
+               for ln in gaps)
+
+
 def test_a_phrase_the_person_banned_is_flagged_where_it_would_be_said(app):
     text = _pack(never_say=[("cross-dock", re.compile(r"\bcross-dock\b", re.I))])
     screen = _section(text, "On one screen")

@@ -88,6 +88,7 @@ MAX_FORM_LINES = 8
 MAX_NOTES = 8
 MAX_ASK = 6
 MAX_NEVER_SAY = 5
+MAX_GAP_NOTES = 3
 # How close a question has to be to a story's `Use for:` tag for the tag to count.
 MATCH = 0.34
 # A story that landed for a like question before is a better bet, and one that fell
@@ -649,7 +650,15 @@ def paper_lines(ctx) -> list:
 
 
 def gap_lines(ctx) -> list:
+    """The gaps and their framings, then what the score and the audit already saw.
+
+    `fit_why` (the score's reasons) and `residual_risks` (what the grounding audit
+    said an interviewer could probe) are read from the draft when it carries them;
+    neither is written to it yet, and a pack built from an older draft goes without.
+    """
     out = []
+    draft = ctx["draft"] or {}
+    src = _text(draft.get("_path"))
     for g in ctx["facts"].get("gaps") or []:
         if g["framing"]:
             out.append("- %s. Say: %s (source: %s)" % (g["gap"], g["framing"], g["source"]))
@@ -659,6 +668,11 @@ def gap_lines(ctx) -> list:
     for b in ctx["facts"].get("blockers") or []:
         out.append("- BLOCKER: %s. No framing fixes this. (source: %s)"
                    % (b, prep._profile_source(ctx["facts"])))
+    docked = [_text(w) for w in draft.get("fit_why") or [] if _text(w).startswith("-")]
+    out += ["- The score docked it: %s (source: %s)" % (w, src) for w in docked[:MAX_GAP_NOTES]]
+    out += ["- The grounding audit said an interviewer could probe: %s (source: %s)"
+            % (_text(r), src) for r in list(draft.get("residual_risks") or [])[:MAX_GAP_NOTES]
+            if _text(r)]
     return out
 
 
