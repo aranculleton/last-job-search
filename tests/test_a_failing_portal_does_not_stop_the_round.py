@@ -21,13 +21,15 @@ import run_round  # noqa: E402
 def _round(tmp_path, monkeypatch, scrape_exit):
     calls = []
 
-    def fake_run(cmd, **kw):
+    def fake_stream(cmd, log, budget):
         calls.append(os.path.basename(cmd[1]))
         code = scrape_exit if os.path.basename(cmd[1]) == "scrape_wide.py" else 0
-        return subprocess.CompletedProcess(cmd, code, "", "")
+        return code, "", ""
 
+    # Each stage runs through run_round._stream, which passes its output on as it comes.
+    monkeypatch.setattr(run_round, "_stream", fake_stream)
     monkeypatch.setattr(run_round, "subprocess", types.SimpleNamespace(
-        run=fake_run, TimeoutExpired=subprocess.TimeoutExpired, call=lambda cmd: 0))
+        TimeoutExpired=subprocess.TimeoutExpired, call=lambda cmd: 0))
     monkeypatch.setattr(sys, "argv", ["run_round.py", "--out", str(tmp_path / "r1"),
                                       "--summary-dir", str(tmp_path / "summ")])
     return run_round.main(), calls

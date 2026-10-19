@@ -332,6 +332,8 @@ def draft_for(row: dict, kept: list[dict]) -> dict | None:
     was credited with the interview the earlier application won, and the
     allocator lifted bullets that employer never saw.
     """
+    if throttle.is_process(row):
+        return None          # nothing was sent: a draft for the same role never went
     k = company_key(row.get("company"))
     at = [d for d in kept if company_key(d.get("company")) == k]
     # The profile's own filename pattern. A bare "_(...)\.tex" took everything
@@ -402,8 +404,8 @@ def application_cases(tracker: list[dict], today=None) -> list[dict]:
     later = followups.superseded(tracker)
     cases = []
     for r in tracker:
-        if id(r) in later:
-            continue
+        if id(r) in later or throttle.is_process(r):
+            continue        # a process with no application is not an application's result
         status = str(r.get("status") or "").strip().lower()
         applied = _date(r.get("date"))
         if status in WIN or (status in LOSS and reached_interview(r)):
@@ -494,6 +496,13 @@ def event_company(tracker, kept, company: str, today=None, role: str = "") -> st
     rate = "Interviews so far: %s." % _rate(sum(c["won"] for c in cases), len(cases))
     if not reached_interview(row):
         return rate
+    if throttle.is_process(row):
+        return ("%s at %s (%s), a process with no application%s: nothing was sent, so it "
+                "teaches the documents nothing. %s" % (
+                    ("interview" if status not in WIN else status).replace("_", " ").capitalize(),
+                    row.get("company"), row.get("role") or "role not recorded",
+                    " (%s)" % " ".join(str(row.get("channel") or "").split())
+                    if row.get("channel") else "", rate))
     if status not in WIN:
         status = "interview"
     d = draft_for(row, kept)
@@ -632,8 +641,9 @@ def brief_interviews(tracker, rows=None) -> str:
     """How far applications get, and what the question bank has learned."""
     import followups
     later = followups.superseded(tracker)
-    sent = [r for r in tracker if id(r) not in later
+    sent = [r for r in tracker if id(r) not in later and not throttle.is_process(r)
             and str(r.get("status") or "").strip().lower() not in throttle.UNSENT | {""}]
+    processes = [r for r in tracker if id(r) not in later and throttle.is_process(r)]
     rows = bank() if rows is None else rows
     lines = []
     if sent:
@@ -655,6 +665,9 @@ def brief_interviews(tracker, rows=None) -> str:
             if lost:
                 lines.append("- Where they stop most: after %s (%d of %d went no further)."
                              % (STEP_WORDS[at], lost, reached[at]))
+    if processes:
+        lines.append("- Besides those, %d hiring process(es) with no application (a referral or "
+                     "a recruiter's call), counted apart." % len(processes))
     asked: dict[str, list[dict]] = {}
     for r in rows:
         if _norm(r.get("question")) and not str(r.get("source") or "").strip():

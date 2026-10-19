@@ -3,7 +3,10 @@
 Every step below is a command. Nothing spends model tokens until step 2, and step 2
 spends them only on writing.
 
-## 0. Fresh container
+## 0. Fresh container, or a computer of your own
+
+`./tools/setup_env.sh` does all of this where it can, and is a no-op when it is done.
+By hand, in a cloud container (Debian or Ubuntu):
 
 ```bash
 apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex \
@@ -13,7 +16,24 @@ python3 -m pytest tests -q          # over 1,200 tests; all green before anythin
 ./tools/ci_local.sh                 # or this: every check CI runs, under two minutes, no Actions minutes
 ```
 
-Full detail, including why `cffi` comes first, is in [SETUP.md](SETUP.md).
+On a Mac (Homebrew; the TeX install asks for the Mac's password once):
+
+```bash
+brew install --cask mactex-no-gui   # nothing to add to the shell: the app finds /Library/TeX/texbin
+brew install poppler
+brew install oven-sh/bun/bun
+python3 -m pip install --user -r requirements.txt   # the Mac's own python3 (3.9) is enough
+./tools/ci_local.sh
+```
+
+Full detail, including why `cffi` comes first and which Python to use, is in [SETUP.md](SETUP.md).
+
+**`$SCRATCH` below is any folder outside the repo**: the session's scratchpad in a
+cloud chat, or something like `~/ljs-scratch` on a computer (`export SCRATCH=~/ljs-scratch`).
+A round run on a person's own computer is gentler by default (two pages, four at once, at
+most 300 requests a portal; `profile/search.py` `SCRAPE_PAGES`, `SCRAPE_WORKERS` and
+`SCRAPE_MAX_REQUESTS` change that), because it comes from the address their own LinkedIn
+account uses. Its progress prints a line a portal a minute, to the screen and `round.log`.
 
 ## 1. Find jobs
 
@@ -192,6 +212,28 @@ Never `*.aux *.log *.out *.fls *.fdb_latexmk *.synctex.gz cv/*.txt`. Never edit
 Then get it onto master. A branch left behind at the end of a session is work the next
 session cannot see and will duplicate.
 
+**On a computer of your own** (no GitHub tools in the chat; `gh` is the route), each chat
+works in a folder of its own, made once: `python3 tools/sync_app.py --worktree <name>`
+(`../<repo>-<name>`, on a new branch from master). Two chats in one folder switch
+branches under each other. Then, from that folder:
+
+```bash
+git fetch origin master && git merge origin/master   # the row-by-row driver merges state files
+./tools/ci_local.sh
+git push -u origin HEAD
+gh pr create --base master --fill
+gh pr merge <number> --merge
+gh pr view <number> --json state -q .state           # MERGED is the answer, not the exit code
+git fetch origin master && git switch --detach origin/master   # no local master to fall behind
+```
+
+`gh pr merge` can exit non-zero after a merge that worked: it tries to fast-forward a local
+master that has fallen behind and prints "fatal: Not possible to fast-forward". Keep no
+local master, and read the state, not the exit code. In the Claude desktop app, a merge
+may be refused by the app's own permission check ("merge without review"): then the
+person merges it, or approves it, and the chat says so once and stops; it never retries.
+When the pull request has landed, `git worktree remove <the folder>`.
+
 ## 5. After the user applies
 
 - `/outcome`, or edit the tracker directly: `status=applied`.
@@ -225,11 +267,12 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 |---|---|
 | `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
 | `python3 tools/job_alerts.py <messages.json> --out <alerts.json>` | The person's LinkedIn job alerts, read by the session from Gmail only when `profile/search.py` `JOB_ALERT_QUERY` asks for it (`--query` prints the search). Takes the job ids alone and fills each posting from LinkedIn's own page; `run_round.py --alerts <alerts.json>` adds them to the round before the free filters. |
-| `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. Each document's last line says which prep wrote it: `--stale-only` rewrites only the documents an older prep wrote (and never writes one for a contact who has none), and `--dry-run` lists what would be written and writes nothing. |
+| `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. Each document's last line says which prep wrote it: `--stale-only` rewrites only the documents an older prep wrote or written before the contact's row or thread changed (and never writes one for a contact who has none), keeping answers already rewritten to be said, and `--dry-run` lists what would be written and writes nothing. `"<contact>" --check` exits 1 while an answer is raw profile wording or reads as written. |
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
 | `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. An interview booked in an application's `outcome.md` is due once it is a week away with no pack for that stage, and its thank-you for a week after it until one is on file. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
 | `python3 tools/what_works.py brief <messages\|documents\|search\|interviews>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, the interview rate by fit band and route, and (`interviews`) how far applications get by the stages ticked in each `outcome.md`, with the questions the bank says keep coming up and the stories that landed. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
-| `python3 tools/interview_pack.py pack "<company>"` | The interview pack `/interview` builds, one screen first: likely questions with the story or answer for each, hooks, the money the form already named, what not to say, then the detail, every fact sourced. `--stage`, `--map <json>` (the session's story mapping) and `--write` (beside the application, as `interview_prep_<stage>.md`). `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on to a stage's pack, which a rebuild keeps. |
+| `python3 tools/interview_pack.py pack "<company>"` | The one living prep document `/interview` builds for a hiring process, one screen first (what they are assessing and want to hear, likely questions with the story or answer for each, hooks, the money, what not to say), then your answers to write as said, what the employer's people and papers have been told (conflicts flagged), who you are meeting and the question for each, the format, and the detail, every fact sourced. `--stage`, `--date`, `--with`, `--format` (case, coding, behavioural, technical, presentation, screen), `--map <json>` and `--write` (beside the application, as `interview_prep.md`, keeping what the person wrote). `process "<company>" --contact <id> --role "<role>"` registers a process with no application (a referral or a recruiter's call) and writes its document in one command. `check` exits 1 while an answer is unwritten or reads as written, or research is still to do. `campaign --yes "<chat>"\|--no` records the one-time offer of a chat for that employer. `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on, which a rebuild keeps. |
+| `python3 tools/profile_consistency.py` | The pay band, the walk-away floor, the notice period, the sponsorship position and the permit-disclosure rule, said the same way across the profile: names every other place that says one differently from its source (the rubric's salary table, the candidate profile's notice line, the summary's sponsorship sentence). Exit 1 when anything disagrees; the `profile-consistency` upgrade asks the person which is right. |
 | `python3 tools/followups.py` | The application nudges alone. The first is due 7 days after applying, the second 7 days after the first **actually went**, read from `followed up YYYY-MM-DD` in the row's notes (the form `/outcome` Step 2b writes), never from the application's age. Held, with the reason printed, while an interview or offer runs at that employer, a referral is in flight there, or the row's notes say `DO NOT CHASE` (`until <date>` in that note, or a later `chase again`, lifts it). A later row for the same role closes the earlier one. It names who the nudge goes to, from the row's `contact_person`, the application's `outreach.md`, or a contact there who has replied, and otherwise says nobody is on file and drafts nothing. It stops a week after the second follow-up, or at the throttle's 45 days of silence, and says so once. A separate clock from the networking nudge below, deliberately. |
 | `python3 tools/stage_picks.py stage <round_dir> <pick>...` | The step between a shortlist and a draft. A pick is a shortlist rank or `Company::title words`. In a later session, when `rounds/` is gone, it reads `documents/rounds/<round>.json` instead and fetches each pick's body from its board, or reads `<round_dir>/postings/<slug>.txt` when the board will not give it. `single <dir> --company --role --posting-file` stages one posting from no round, which is how `/apply` enters the same pipeline. Writes each posting fenced by `tools/untrusted.py`, `picks.json` (the `draft-applications` workflow's args) and `apps_in.json`, and picks each filename: **a name another application was sent under is never reused**, so a second role at an employer gets a role token (`Acme_DemandPlanning`). It prints one short question per pick about the skills the posting names that the profile does not hold, and `consent <round_dir> <slug> --yes ... --no ...` records the answers: nothing is drafted or assembled while one waits, a yes prints on that resume's skills line, and both answers go into the documents' header. `assemble <round_dir>` turns the audited drafts into `drafts.json` and names any pick with no draft. |
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |

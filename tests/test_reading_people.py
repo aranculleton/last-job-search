@@ -462,7 +462,10 @@ def test_a_candidate_not_in_the_contact_book_can_be_added_shown_and_judged(tmp_p
     assert saved["read_on"] and saved["items"][0]["kind"] == "talk"
     assert reading.main(["show", cid]) == 0
     assert "Pricing models insurers can explain" in capsys.readouterr().out
-    assert reading.main(["verdict", cid]) == 0
+    # A public finding rules nothing out, and nothing of their own page was read: not a
+    # KEEP. It printed KEEP and exited 0 for someone a request had already gone to.
+    assert reading.main(["verdict", cid]) == reading.EXIT["not_read"]
+    assert "NOT READ YET" in capsys.readouterr().out
 
 
 def test_a_profile_is_opened_in_the_browser_once(tmp_path, monkeypatch):

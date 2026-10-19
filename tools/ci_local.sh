@@ -31,6 +31,20 @@
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
+# MacTeX's and Bun's own directories, which a chat's non-login shell does not have.
+# shellcheck source=tools/local_path.sh
+. tools/local_path.sh
+
+# Which Python: the one the person set up for this repo when there is one (an
+# active virtual environment, or .venv here), else python3. A Mac's own python3 is
+# 3.9.6 and lacked PyYAML, so the first run said FAIL for a missing package while
+# the person's working 3.10 sat in a venv the script never used. Said first.
+PY="python3"
+if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
+  PY="$VIRTUAL_ENV/bin/python"
+elif [ -x .venv/bin/python ]; then
+  PY=".venv/bin/python"
+fi
 
 QUICK=0
 [ "${1:-}" = "--quick" ] && QUICK=1
@@ -61,8 +75,8 @@ skip() {
 # it either blocks a correct push or teaches the reader to ignore a red line.
 run_py_module() {             # run_py_module <module> <name> <command...>
   local mod="$1" name="$2"; shift 2
-  if ! python3 -c "import $mod" >/dev/null 2>&1; then
-    skip "$name" "python3 -m $mod is not installed here"
+  if ! "$PY" -c "import $mod" >/dev/null 2>&1; then
+    skip "$name" "$PY -m $mod is not installed here"
     return
   fi
   run "$name" "$@"
@@ -70,46 +84,58 @@ run_py_module() {             # run_py_module <module> <name> <command...>
 
 echo
 echo "ci_local: the checks .github/workflows/ci.yml runs"
+echo "  python: $("$PY" -c 'import sys; print(sys.executable, "%d.%d.%d" % sys.version_info[:3])' 2>/dev/null || echo "$PY: not found")"
+if ! "$PY" -c 'import sys; sys.path.insert(0, "tools"); import python_floor; raise SystemExit(0 if python_floor.ok() else 1)' 2>/dev/null; then
+  echo "  this Python is older than the app supports: $("$PY" -c 'import sys; sys.path.insert(0, "tools"); import python_floor; print(python_floor.how_to_install())' 2>/dev/null)"
+fi
+missing_mods=""
+for pair in yaml:pyyaml pytest:pytest pypdf:pypdf; do
+  "$PY" -c "import ${pair%%:*}" >/dev/null 2>&1 || missing_mods="$missing_mods ${pair##*:}"
+done
+if [ -n "$missing_mods" ]; then
+  echo "  missing for this Python:$missing_mods ($PY -m pip install --user$missing_mods;"
+  echo "  the checks that need them say SKIP or FAIL below for that reason, not the code's)"
+fi
 echo
 
 echo "lint"
-run "skills, commands and settings" python3 tools/lint_skills.py
+run "skills, commands and settings" "$PY" tools/lint_skills.py
 run_py_module ruff "ruff (bugs only, see .ruff.toml)" \
-    python3 -m ruff check --no-cache tools/ templates/ tests/
+    "$PY" -m ruff check --no-cache tools/ templates/ tests/
 # The scoring baseline is a person's own (their screened postings, in
 # profile/tests/fixtures), so the app has none to check, and that is not a skip.
 if [ -f profile/tests/fixtures/score_baseline.json ]; then
-  run "scoring baseline" python3 tools/score_eval.py
+  run "scoring baseline" "$PY" tools/score_eval.py
 else
   printf '  %-42s n/a   (a person'"'"'s own, in profile/tests/fixtures)\n' "scoring baseline"
 fi
-run "framework version guard" python3 tools/check_framework_version.py
+run "framework version guard" "$PY" tools/check_framework_version.py
 # A person's scheduled tasks: a missing prompt file, a mistyped id or a cron
 # with no CRON_TZ fails here rather than at seven in the morning. The app's
 # own tests check the example's registry.
 if [ -f profile/routines.json ]; then
-  run "scheduled-task registry" python3 tools/routines.py check profile/routines.json
+  run "scheduled-task registry" "$PY" tools/routines.py check profile/routines.json
 else
   printf '  %-42s n/a   (a person'"'"'s own, in profile/routines.json)\n' "scheduled-task registry"
 fi
 
 echo
 echo "security"
-run "permissions, gitignore, manifests" python3 tools/security_guards.py
+run "permissions, gitignore, manifests" "$PY" tools/security_guards.py
 # The leak scan. In the app it reads the tree itself; in a person's repo it
 # builds the app's tree from HEAD and scans that with the person's own
 # denylist, so their data reaching an app-owned file fails here, long before
 # anything could carry it to the app. Commit first: it reads HEAD.
 if [ -f profile/person.json ]; then
   LEAK_OUT="$(mktemp -d)"
-  run "leak scan (app tree built from HEAD)" python3 tools/build_app.py "$LEAK_OUT/app"
+  run "leak scan (app tree built from HEAD)" "$PY" tools/build_app.py "$LEAK_OUT/app"
   rm -rf "$LEAK_OUT"
 else
-  run "leak scan (what git would commit)" python3 tools/leak_scan.py . --git
+  run "leak scan (what git would commit)" "$PY" tools/leak_scan.py . --git
   # A stranger from a real search is on no denylist: a full name the app has never
   # carried, in what this branch adds, is reported (tools/name_guard.py).
   if git rev-parse -q --verify origin/master >/dev/null; then
-    run "new names are invented ones" python3 tools/name_guard.py diff origin/master
+    run "new names are invented ones" "$PY" tools/name_guard.py diff origin/master
   else
     skip "new names are invented ones" "no origin/master to compare with"
   fi
@@ -117,18 +143,18 @@ fi
 
 echo
 echo "tests"
-run_py_module pytest "pytest (the app's suite, on the example person)" python3 -m pytest tests -q
+run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q
 # The person's own suite, against their profile, in its own process: the tools
 # read the profile once at import, so the two suites cannot share one.
 if [ -d profile/tests ]; then
   before=$FAIL
-  run_py_module pytest "pytest (profile/tests, on this person)" python3 -m pytest profile/tests -q
+  run_py_module pytest "pytest (profile/tests, on this person)" "$PY" -m pytest profile/tests -q
   # A failure here is often an update that changed or removed what the test pinned: say
   # which, and what to do, rather than leave a list of names to guess from.
   if [ "$FAIL" -gt "$before" ]; then
-    python3 tools/sync_app.py --own-tests 2>&1 | sed 's/^/      /'
+    "$PY" tools/sync_app.py --own-tests 2>&1 | sed 's/^/      /'
   fi
-  python3 tools/sync_app.py --own-test-risks 2>/dev/null | sed 's/^/  /'
+  "$PY" tools/sync_app.py --own-test-risks 2>/dev/null | sed 's/^/  /'
 fi
 
 echo

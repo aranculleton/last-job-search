@@ -106,14 +106,20 @@ section is what each tool is for and how to install it by hand.
 ### Python
 
 3.9 or newer: a Mac's own `python3` (3.9.6, from Apple's command line tools) is
-enough. CI runs the suite on 3.9 and 3.13. `python3 tools/env_check.py` says which
-you have, and whether pytest and PyYAML are there (`pip3 install --user pytest pyyaml`,
-no password needed).
+enough, and is what a Mac should use unless you already keep another. CI runs the suite on
+3.9 and 3.13, so nothing in the app may need a newer one. `python3 tools/env_check.py` says
+which you have, and whether pytest and PyYAML are there (`pip3 install --user pytest
+pyyaml`, no password needed).
 
 ```bash
 python3 --version
-pip3 install -r requirements.txt    # pytest, pyyaml, pypdf, openpyxl
+python3 -m pip install --user -r requirements.txt    # pytest, pyyaml, pypdf, openpyxl
 ```
+
+A virtual environment works too, with any Python from 3.9 up (`uv venv`, or
+`python3 -m venv .venv`): `./tools/ci_local.sh` uses an active one, or `.venv` in the repo,
+before the system `python3`, and says which it used on its first line. Install the
+requirements into whichever one it names.
 
 ### Bun
 

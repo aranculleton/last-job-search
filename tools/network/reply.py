@@ -113,7 +113,7 @@ NUDGE_WINDOW = (5, 7)
 # A thread the user walked away from stays walked away from. `converted_to_application`
 # is deliberately absent: a thread that produced an application is the most alive
 # thread in the book, and refusing to reply inside it would be the wrong advice.
-STOP_STATUSES = frozenset({"closed", "gone_cold"})
+STOP_STATUSES = frozenset({"closed", "gone_cold", "dropped"})
 # Statuses where they have already said yes to something: never read as stopped.
 LIVE_STATUSES = frozenset({"call_booked", "referral_in_progress"})
 

@@ -74,21 +74,35 @@ STORIES_FILE = "07-interview-prep.md"
 # The salary table screening_answers.py reads, named the same way it names it.
 EVALUATION = person.file("evaluation", "04-job-evaluation.md")
 
-SECTIONS = ("On one screen", "Likely questions", "Stories", "What the paper says",
-            "Gaps and honest framing", "Money and eligibility", "The company", "Ask them",
-            "Warm route", "Earlier stages", "To rework")
+SECTIONS = ("On one screen", "Your answers", "What they have been told", "Who you are meeting",
+            "The format", "Likely questions", "Stories", "What the paper says", "Gaps and honest framing",
+            "Money and eligibility", "The company", "Small talk", "Ask them", "Warm route",
+            "Earlier stages", "To rework", "Notes")
+# One living document per employer process, beside the application: every answer the person
+# changes is changed here, and it is sent to them again each time. The material had lived in
+# four places (a prep file per contact, a pack per stage, notes kept by hand, the chat), and
+# a person asked for one. The sections the person writes in are kept across every rebuild.
+LIVING = "interview_prep.md"
+OWNED = ("Your answers", "To rework", "Notes")
+FOUND_OUT = "### What you found out"
+FOUND_EMPTY = "- Nothing yet: each line added here, with its source, stays."
+NOTES_EMPTY = "- Nothing yet: anything you want kept, write it here."
+TO_WRITE = "[to write: said aloud, first person, whole sentences, contractions welcome]"
+LAST_UPDATED = re.compile(r"^Last updated (\d{4}-\d{2}-\d{2})\.", re.M)
+_STAGES_MARK = re.compile(r"^<!-- stages: (.*?) -->$", re.M)
 
 # One screen is what is read in the minutes before: five questions, three hooks,
 # one money line, four things not to say. The detail below is for the night before.
 ONE_SCREEN_QUESTIONS = 5
 HOOKS = 3
 MAX_DO_NOT = 4
-MAX_QUESTIONS = 10
+MAX_QUESTIONS = 18
 MAX_REQUIREMENTS = 3
 MAX_FORM_LINES = 8
 MAX_RECORD = 24   # lines of the person's own outcome record
 RECORD_ITEM = 200
 MAX_ASK = 6
+MAX_ASK_SCREEN = 3            # a twenty-minute screen has time for about three
 MAX_NEVER_SAY = 5
 MAX_GAP_NOTES = 3
 # How close a question has to be to a story's `Use for:` tag for the tag to count.
@@ -104,7 +118,15 @@ EVIDENCE_MATCH = 0.3
 STAGE_QUESTIONS = {
     "screen": ("Tell me about yourself.", "Why are you looking?", "Why {company}?",
                "What are your salary expectations?", "Do you need sponsorship?",
-               "What is your notice period?"),
+               "What is your notice period, and when could you start?",
+               # What a recruiter's screen asks that the six above do not: written by hand
+               # for a real screen because the pack lacked them.
+               "Where are you based?", "Why are you leaving your current role?",
+               "Walk me through your career, and the moves between jobs.",
+               "Walk me through a project in sixty seconds.",
+               "And one with a commercial result?",
+               "Tell me about a time you led something.",
+               "Are you interviewing anywhere else?"),
     "technical": ("Walk me through a project end to end.", "Tell me about yourself."),
     "final": ("Why {company}?", "Do you have any reservations about the role?",
               "Where do you see yourself in five years?", "What are your salary expectations?"),
@@ -230,8 +252,17 @@ def hard_answers(path=None) -> list:
             continue
         confirm = "[CONFIRM" in answer
         answer = _text(re.sub(r"`?\[CONFIRM:[^\]]*\]`?", "", answer).replace("**", ""))
+        # "Suits: product, bank" and "Not for: consulting": the employers a stock answer is
+        # for. Untagged, an answer is read for words that argue against the employer.
+        tags = {}
+        for ln in body:
+            m = re.match(r"^\s*(suits|not for)\s*:\s*(.+)$", ln, re.I)
+            if m:
+                tags[m.group(1).lower()] = tuple(t.strip().lower() for t in m.group(2).split(",")
+                                                 if t.strip())
         out.append({"question": heading.strip("\"“” "), "answer": answer,
-                    "confirm": confirm, "source": _repo_rel(path)})
+                    "confirm": confirm, "source": _repo_rel(path),
+                    "suits": tags.get("suits", ()), "not_for": tags.get("not for", ())})
     return out
 
 
@@ -260,6 +291,24 @@ def similar(a, b) -> float:
     """Shared content words over all content words, 0 to 1."""
     x, y = _words(a), _words(b)
     return len(x & y) / len(x | y) if x and y else 0.0
+
+
+# The words a question means beside the words it says, for matching it to a story's
+# `Use for:` tags: "a project in sixty seconds" is "a project end to end", and "took
+# something on without being asked" is "a time you took initiative".
+_MEANS = (
+    (re.compile(r"\b(?:in (?:sixty|60) seconds|in a minute|briefly|quickly)\b", re.I), " end to end"),
+    (re.compile(r"without being asked|took (?:something|it) on", re.I), " initiative improve a process"),
+    (re.compile(r"changed someone'?s mind|influence|persuad", re.I),
+     " stakeholders getting people to adopt your work"),
+    (re.compile(r"different from you", re.I), " working with commercial teams stakeholders"),
+    (re.compile(r"commercial result|business result", re.I), " analysis changed a business result"),
+)
+
+
+def _match_text(question) -> str:
+    q = _text(question)
+    return q + "".join(extra for rx, extra in _MEANS if rx.search(q))
 
 
 def best_story(question, story_list, bank_rows=()) -> tuple:
@@ -303,7 +352,21 @@ def _answer_for(question, answers) -> dict | None:
 
 # ---------------------------------------------------------------- the application
 
-def _row(company, role, tracker) -> dict:
+# A hiring process with no application in it: a referral that led to a recruiter's call,
+# or a recruiter who came to the person. Applying through the portal as well would put a
+# second, worse record of the same person in front of them, so there is no application to
+# track; but the interview stages, the brief and the throttle all read the tracker. So the
+# process gets a row of its own: status `interview`, its channel (referral, recruiter), no
+# documents, its source the contact who led it, and a note saying it is not an application.
+PROCESS_NOTE = throttle.PROCESS_NOTE
+_LIVE_CONTACT = frozenset({"call_booked", "referral_in_progress", "replied_needs_response",
+                           "in_conversation"})
+
+
+is_process = throttle.is_process
+
+
+def _row(company, role, tracker, contacts=None) -> dict:
     """The tracker row this pack is for: the employer's, the role's, live first."""
     k = company_key(company)
     rows = [r for r in tracker if k and company_key(r.get("company")) == k]
@@ -312,8 +375,23 @@ def _row(company, role, tracker) -> dict:
     live = [r for r in rows if _text(r.get("status")).lower() not in throttle.FINAL]
     pick = live or rows
     if not pick:
-        raise LookupError("no application at %r%s in the tracker: /outcome %s registers one"
-                          % (company, " for %r" % role if role else "", company))
+        # The strongest lead the search makes, a referral with a recruiter's call booked,
+        # has no application, and /interview refused it: name the contacts behind it and
+        # the one command that makes it a process the pack, /outcome and the brief can read.
+        live_here = [c for c in (contacts or ()) if company_key(c.get("company")) == k
+                     and _text(c.get("status")) in _LIVE_CONTACT]
+        hint = ""
+        if live_here:
+            c = live_here[0]
+            hint = (". A process runs there with no application: %s. Register it, once: "
+                    "python3 tools/interview_pack.py process \"%s\" --contact %s --role \"<the "
+                    "role>\" [--stage \"Recruiter screen\" --date YYYY-MM-DD --with \"<who>\"]"
+                    % ("; ".join("%s [%s, %s]" % (_text(x.get("name")), _text(x.get("contact_id")),
+                                                  _text(x.get("status"))) for x in live_here[:3]),
+                       company, _text(c.get("contact_id"))))
+        raise LookupError("no application at %r%s in the tracker%s" % (
+            company, " for %r" % role if role else "",
+            hint or ": /outcome %s registers one" % company))
     roles = sorted({_text(r.get("role")) for r in pick})
     if len(roles) > 1 and not role:
         raise LookupError("%s has %d applications (%s): name the role with --role"
@@ -397,12 +475,16 @@ def _record(text) -> list:
     return out
 
 
-def _next_stage(stages) -> dict:
-    """The stage this pack is for, when none is named: the next one booked, else the next undone."""
-    booked = [s for s in stages if s["scheduled"] and not s["done"]]
+def _next_stage(stages, today="") -> dict:
+    """The stage this pack is for, when none is named: the next one booked, else the next undone.
+    A booked stage whose date has passed and nobody ticked was most likely held: it is passed
+    over, as a held one would be."""
+    past = [i for i, s in enumerate(stages) if s["scheduled"] and not s["done"]
+            and today and s.get("date") and s["date"] < today]
+    booked = [s for i, s in enumerate(stages) if s["scheduled"] and not s["done"] and i not in past]
     if booked:
         return booked[0]
-    done = [i for i, s in enumerate(stages) if s["done"]]
+    done = [i for i, s in enumerate(stages) if s["done"] or i in past]
     after = stages[(done[-1] + 1) if done else 0:]
     if after:
         return after[0]
@@ -411,21 +493,135 @@ def _next_stage(stages) -> dict:
     return {"label": "Round %d" % (len(stages) + 1), "date": "", "with": ""} if stages else {}
 
 
+def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
+                     contacts=None) -> tuple:
+    """Make a hiring process with no application something every reader can see: a
+    tracker row (PROCESS_NOTE) and its folder with an outcome.md, the booked stage on it
+    when given. Returns (row, folder, added). Run twice, it changes nothing."""
+    import record_drafts
+    today = _text(today) or dt.date.today().isoformat()
+    # Read where gather() reads, at call time: the state root, not a path fixed at import.
+    contacts = state.load_contacts(person.state("network_contacts.csv")) if contacts is None \
+        else contacts
+    c = state.already_contacted(contacts, contact_id=_text(contact_id))
+    if c is None:
+        raise LookupError("no contact %r in the contact book: the process is led by someone in it"
+                          % contact_id)
+    company = _text(company) or _text(c.get("company"))
+    if company_key(company) != company_key(c.get("company")):
+        raise ValueError("%s works at %s, not %s" % (_text(c.get("name")), _text(c.get("company")),
+                                                     company))
+    if not _text(role):
+        raise ValueError("name the role this process is for (--role), as the recruiter or the "
+                         "referral named it: the folder and every later stage are filed under it")
+    name = state.person_name(c.get("name")) or _text(c.get("name"))
+    for label, value in (("--date", date), ("--today", today)):
+        if _text(value) and state.as_date(_text(value)) is None:
+            raise ValueError("%s %r is not a date: write it YYYY-MM-DD" % (label, value))
+    tracker_path = person.state("job_search_tracker.csv")
+    rows = csv_store.read_rows(tracker_path, record_drafts.HEADER)
+    k = company_key(company)
+    have = next((r for r in rows if company_key(r.get("company")) == k
+                 and throttle._same_title(role, r.get("role"))
+                 and _text(r.get("status")).lower() not in throttle.FINAL), None)
+    if have is not None and not is_process(have) \
+            and _text(have.get("status")).lower() not in throttle.UNSENT:
+        # An application went in for this role: this is its interview, not a process with no
+        # application, and making it one would hide the application from every reader.
+        raise ValueError("an application for %s at %s is already on record (%s, %s): this call "
+                         "is that application's next stage. Record it with /outcome %s, then "
+                         "build the prep with pack." % (_text(have.get("role")), company,
+                                                        _text(have.get("status")),
+                                                        _text(have.get("date")), company))
+    referral = (_text(c.get("status")) == "referral_in_progress"
+                or _text(c.get("route")).startswith("referral")
+                or "referr" in _text(c.get("outcome")).lower())
+    process = dict(status="interview",
+                   channel="referral" if referral else ("recruiter" if prep.is_recruiter(c)
+                                                       else "contact"),
+                   contact_person=name, source="contact:%s" % _text(c.get("contact_id")))
+    note = ("%s: led by %s (%s) %s; nobody applied through the portal, so this is the only "
+            "record" % (PROCESS_NOTE, name, _text(c.get("contact_id")), today))
+    added = have is None or not is_process(have)
+    if have is None:
+        have = {k_: "" for k_ in record_drafts.HEADER}
+        have.update(date=today, company=company, role=_text(role), notes=note, **process)
+        rows.append(have)
+        csv_store.write_rows(tracker_path, rows, record_drafts.HEADER)
+    elif not is_process(have):
+        # Documents were drafted for this role and never sent: the row becomes the process,
+        # so nothing reads it as an application waiting to go, or nudges it. Its source
+        # stays: it is the posting's link, and the contact is named beside it.
+        have.update({k_: v for k_, v in process.items()
+                     if k_ != "source" or not _text(have.get("source"))})
+        have["notes"] = "; ".join(x for x in (_text(have.get("notes")), note + "; the drafted "
+                                              "documents were never sent") if x)
+        csv_store.write_rows(tracker_path, rows, record_drafts.HEADER)
+    folder = outreach.app_folder(company, role)
+    os.makedirs(folder, exist_ok=True)
+    out = os.path.join(folder, "outcome.md")
+    text = _read(out)
+    screen_first = bool(_text(stage)) and what_works.stage_step(stage) == "screen"
+    if not text:
+        text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages reached\n"
+                "%s- [ ] Technical interview\n- [ ] Case interview\n- [ ] Final round\n"
+                "- [ ] Offer received\n\n## Notes\n- %s: a process with no application, led "
+                "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
+                              today, name))
+    if _text(stage):
+        same = re.compile(r"^- \[ \] %s(?:\s*\(.*\))?\s*$" % re.escape(stage), re.M | re.I)
+        hits = list(same.finditer(text))
+        if not _text(with_) and hits:
+            # Rebooked with a new date only: the interviewer already on the line stays.
+            had = re.search(r",\s*with\s+([^)]*)\)", hits[0].group(0))
+            with_ = had.group(1).strip() if had else ""
+        line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
+            date, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
+        if not hits:
+            # A bare template line for the same step ("Phone screen" when a recruiter screen
+            # is booked) is this stage under another name: it is replaced, never doubled.
+            step = what_works.stage_step(stage)
+            hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)\s*$", text, re.M)
+                    if what_works.stage_step(m.group(1)) == step][:1]
+        if hits:
+            # The first keeps its place with the new date; any later copies go, line and all.
+            for m in reversed(hits[1:]):
+                end = m.end() + 1 if text[m.end():m.end() + 1] == "\n" else m.end()
+                text = text[:m.start()] + text[end:]
+            text = text[:hits[0].start()] + line + text[hits[0].end():]
+        else:
+            # A new stage goes after the last one held, so the order stays the order it ran.
+            held = list(re.finditer(r"^- \[[xX]\] .*$", text, re.M))
+            if held:
+                text = text[:held[-1].end()] + "\n" + line + text[held[-1].end():]
+            else:
+                text = text.replace("## Interview stages reached\n",
+                                    "## Interview stages reached\n%s\n" % line, 1)
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return have, folder, added
+
+
 def gather(company, role="", stage="", date="", with_="", today=None, story_map=None,
-           tracker=None, contacts=None, threads=None) -> dict:
+           tracker=None, contacts=None, threads=None, format_="") -> dict:
     """Everything the pack is built from, read once."""
     root = person.state()
     today = _text(today) or dt.date.today().isoformat()
     tracker = what_works._csv(os.path.join(root, "job_search_tracker.csv")) if tracker is None \
         else tracker
-    row = _row(company, role, tracker)
+    contacts = state.load_contacts(os.path.join(root, "network_contacts.csv")) \
+        if contacts is None else contacts
+    row = _row(company, role, tracker, contacts)
     company, role = _text(row.get("company")) or company, _text(row.get("role")) or role
     folder = outreach.app_folder(company, role)
     if not os.path.isdir(folder):
         # Built from a folder that is not there, a pack has no posting, no form and no
         # stages, and says nothing about it. A folder at this employer under another
         # name is the likely one: name them rather than guess.
-        others = outreach.employer_folders(company)
+        mine = {os.path.basename(outreach.app_folder(_text(r.get("company")), _text(r.get("role"))))
+                for r in tracker if company_key(r.get("company")) == company_key(company)
+                and r is not row}
+        others = [f for f in outreach.employer_folders(company) if f not in mine]
         if others:
             raise LookupError(
                 "no application folder %s for %s, %r; this employer has %s. Rename the one "
@@ -437,7 +633,7 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
     if not stage:
         # Nothing on record yet means the first conversation, which is a screen
         # at nearly every employer; /interview asks, and passes --stage when not.
-        found = _next_stage(stages)
+        found = _next_stage(stages, today)
         stage = found.get("label") or "Phone screen"
         date, with_ = date or found.get("date", ""), with_ or found.get("with", "")
     else:
@@ -445,17 +641,19 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         if same:
             date, with_ = date or same[0]["date"], with_ or same[0]["with"]
     posting = untrusted.unfence(_read(os.path.join(folder, "job_posting.md")))
-    contacts = state.load_contacts(os.path.join(root, "network_contacts.csv")) \
-        if contacts is None else contacts
     threads = state.load_threads(os.path.join(root, "network_threads.csv")) \
         if threads is None else threads
     return {
         "company": company, "role": role, "row": row, "folder": folder, "today": today,
         "stage": stage, "step": what_works.stage_step(stage), "date": date, "with": with_,
         "outcome": outcome, "stages": stages, "posting": posting,
-        "form": _form_answers(_read(os.path.join(folder, "screening_answers.md"))),
-        "form_fields": [ln.rstrip() for ln in _read(os.path.join(folder, "form_fields.txt"))
-                        .splitlines() if ln.strip()],
+        # A process had no form: answers record_drafts wrote for a draft never sent were
+        # never seen by anyone.
+        "form": [] if is_process(row) else
+        _form_answers(_read(os.path.join(folder, "screening_answers.md"))),
+        "form_fields": [] if is_process(row) else
+        [ln.rstrip() for ln in _read(os.path.join(folder, "form_fields.txt")).splitlines()
+         if ln.strip()],
         "outreach_sent": os.path.exists(os.path.join(folder, "outreach.md")),
         "draft": what_works.draft_for(row, what_works.drafts(root)),
         "research": prep.load_research(company, root),
@@ -466,7 +664,14 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         "map": dict(story_map or {}),
         "earlier": sorted(f for f in _listdir(folder)
                           if f.startswith("interview_prep_") and f != pack_name(stage)),
-        "rework": _rework_lines(_read(os.path.join(folder, pack_name(stage)))),
+        "rework": _rework_lines(_read(os.path.join(folder, LIVING))
+                                or _read(os.path.join(folder, pack_name(stage)))),
+        "living": _read(os.path.join(folder, LIVING)),
+        "format": _text(format_),
+        "process": is_process(row),
+        "elsewhere": len({company_key(r.get("company")) for r in tracker
+                          if company_key(r.get("company")) != company_key(company)
+                          and _text(r.get("status")).lower() in throttle.LIVE_PROCESS}),
     }
 
 
@@ -513,6 +718,9 @@ def likely_questions(ctx) -> list:
                    % what_works.STEP_WORDS.get(step, "an interview"), "the stage", {})
                   for q in STAGE_QUESTIONS.get(step, ())],
         "gaps": [], "reqs": [],
+        "cond": [(q, why, "the screen", {}) for q, why in conditional_questions(ctx)],
+        "format": [(q, "what %s usually asks" % FORMAT_NAMES[f].lower(), "the format", {})
+                   for f in interview_formats(ctx)[0] for q in FORMAT_PREP[f]["questions"]],
     }
     draft = ctx["draft"] or {}
     gaps = [dict(g) for g in ctx["facts"].get("gaps") or []]
@@ -527,9 +735,12 @@ def likely_questions(ctx) -> list:
         if same is not None:
             same.setdefault("evidence", evidence)
         elif len(group["reqs"]) < MAX_REQUIREMENTS:
-            group["reqs"].append(("Tell me about your experience with %s." % req,
+            group["reqs"].append(("Tell me about your experience with %s." % re.sub(
+                                      r"^(?:(?:proven|strong|solid|demonstrable)\s+)?"
+                                      r"experience (?:with|in|of)\s+", "", req, flags=re.I),
                                   "a stated requirement", _text(draft.get("_path")),
-                                  {"evidence": evidence, "evidence_source": _text(draft.get("_path"))}))
+                                  {"evidence": evidence, "req": True,
+                                   "evidence_source": _text(draft.get("_path"))}))
     group["gaps"] = [("What is your experience with %s?" % g["gap"],
                       "the posting asks for it and the profile does not hold it as such",
                       g["source"], {"framing": g["framing"], "gap": True,
@@ -551,10 +762,10 @@ def likely_questions(ctx) -> list:
                     for q in ctx["map"] if what_works._norm(q) not in known]
     stage = group["stage"]
     order = {
-        "screen": ["map", "here", stage[:3], group["gaps"][:1], stage[3:], "reqs", group["gaps"][1:],
-                   "again"],
-        "technical": ["map", "here", "reqs", "gaps", "stage", "again"],
-        "final": ["map", "here", stage[:1], group["gaps"][:1], stage[1:], "reqs",
+        "screen": ["map", "here", stage[:3], group["gaps"][:1], stage[3:6], "cond", "format",
+                   stage[6:], "reqs", group["gaps"][1:], "again"],
+        "technical": ["map", "here", "reqs", "gaps", "format", "stage", "again"],
+        "final": ["map", "here", stage[:1], group["gaps"][:1], stage[1:], "format", "reqs",
                   group["gaps"][1:], "again"],
         "offer": ["map", "here"],
     }[step if step in STAGE_QUESTIONS else "technical"]
@@ -564,10 +775,16 @@ def likely_questions(ctx) -> list:
     return out[:MAX_QUESTIONS]
 
 
+# A question about pay, by whole word: "payments data" and "Payward" are not pay.
+_PAY_Q = r"\bsalary\b|\bcompensation\b|\bpay\b|\bremuneration\b|\bexpected (?:base|package)\b"
+
+
 def _form_value(ctx, pattern) -> tuple:
     """(question, answer) from the portal's form whose question matches, or ("", "")."""
     rx = re.compile(pattern, re.I)
-    return next(((q, a) for q, a in ctx["form"] if rx.search(q)), ("", ""))
+    # "[decide: ...]" is a field still to fill, never something the form told them.
+    return next(((q, a) for q, a in ctx["form"] if rx.search(q)
+                 and not _text(a).startswith("[")), ("", ""))
 
 
 def answer_for(item, ctx) -> dict:
@@ -586,24 +803,34 @@ def answer_for(item, ctx) -> dict:
         story = next((s for s in ctx["stories"] if s["title"].lower() == _text(mapped).lower()),
                      None)
     how = "mapped"
-    if story is None and not mapped:
-        story, _score = best_story(q, ctx["stories"], ctx["bank"])
-        how = "matched by its Use for tags"
+    # What the letter evidenced comes first: the interviewer read it, and a story that
+    # matches a tag better but tells something else contradicts the paper.
     if story is None and not mapped and item.get("evidence"):
         story = story_for_evidence(item["evidence"], ctx["stories"])
         how = "it carries the letter's evidence"
+    if story is None and not mapped:
+        story, _score = best_story(_match_text(q), ctx["stories"], ctx["bank"])
+        how = "matched by its Use for tags"
     prepared = _answer_for(q, ctx["answers"])
+    if prepared is None and re.search(r"why are you leaving", q, re.I):
+        # The same reason, asked from the other side: the prepared "why are you looking".
+        prepared = _answer_for("Why are you looking?", ctx["answers"])
     why_us = bool(re.search(r"^why %s" % re.escape(ctx["company"]), q, re.I))
     if item.get("framing"):
         lines.append("Say: %s (source: %s)" % (item["framing"], item["source"]))
     if item.get("evidence"):
         lines.append("What the letter answered it with: %s (source: %s)"
                      % (item["evidence"], item.get("evidence_source") or item["source"]))
-    if re.search(r"salary|pay|compensation", q, re.I):
-        fq, fa = _form_value(ctx, r"salary|pay|compensation")
+    if re.search(_PAY_Q, q, re.I):
+        fq, fa = _form_value(ctx, _PAY_Q)
         if fa:
             lines.append("The form said: %s (source: %s/screening_answers.md). Say the same band."
                          % (fa, folder))
+        else:
+            target, _floor = _band()
+            if target:
+                lines.append("Your target band: %s (source: %s). Say it as a range; the floor "
+                             "stays unsaid." % (target, _repo_rel(EVALUATION)))
     elif re.search(r"sponsor|right to work|visa", q, re.I):
         fq, fa = _form_value(ctx, r"sponsor")
         if fa:
@@ -616,7 +843,53 @@ def answer_for(item, ctx) -> dict:
         if fa:
             lines.append("The form said: %s (source: %s/screening_answers.md)" % (fa, folder))
     elif re.search(r"about yourself", q, re.I) and facts.get("summary"):
-        lines.append("%s (source: %s)" % (facts["summary"], prof))
+        # The profile's summary is written, not said: never the answer as it stands.
+        lines.append("%s %s (source: %s)" % (prep.RAW_MARK, facts["summary"], prof))
+    elif re.search(r"where are you based|how are you finding", q, re.I):
+        if home_place():
+            lines.append("You live in %s (source: profile/person.json)" % home_place())
+        if newcomer(ctx):
+            lines.append("You moved there %s: see Small talk, and tell nothing you have not "
+                         "done." % newcomer(ctx))
+    elif re.search(r"moves between jobs|walk me through your career", q, re.I):
+        moves = ["%s (%s)" % (_text(e.get("company")), _text(e.get("dates")))
+                 for e in facts.get("employers") or [] if isinstance(e, dict) and _text(e.get("company"))]
+        if moves:
+            lines.append("The moves, newest first: %s (source: %s). Say the one thread that "
+                         "joins them, a line a move, ending on why this one." % ("; ".join(moves), prof))
+    elif re.search(r"led something|leadership", q, re.I):
+        led = [x for x in facts.get("strengths") or [] if re.search(
+            r"\b(?:mentor|first|introduc|standard|train|onboard|set up|owned|led)\w*", _text(x), re.I)]
+        lines += ["From your profile: %s (source: %s)" % (prep.clip(x, 170), prof) for x in led[:2]]
+        lines.append("No people management is claimed that your profile does not hold: lead "
+                     "from what you set up, the standards you brought in and who you brought along.")
+    elif re.search(r"interviewing anywhere else", q, re.I):
+        n = ctx.get("elsewhere", 0)
+        lines.append(("Yes: %d other process(es) at an interview stage. Say so, name nobody, and "
+                      "invent no offer (source: %s)" % (n, prep.TRACKER_SOURCE)) if n else
+                     ("Nothing at an interview stage elsewhere: say you are in early conversations "
+                      "if that is true, and invent nothing (source: %s)" % prep.TRACKER_SOURCE))
+    elif re.search(r"^how do you know", q, re.I):
+        ref = referrer_of(ctx)
+        row_ = state.already_contacted(ctx["contacts"], name=ref, company=ctx["company"]) if ref else None
+        how = _text((row_ or {}).get("route_detail")) or prep.ROUTE_WORDS.get(
+            _text((row_ or {}).get("route")), _text((row_ or {}).get("route")))
+        if how:
+            lines.append("How you came to know them: %s (source: %s)" % (how, prep.CONTACTS_SOURCE))
+    elif re.search(r"after your permit|longer term", q, re.I):
+        if facts.get("work_authorization"):
+            lines.append("Your status: %s (source: %s). Asked directly, so answer it: what you "
+                         "intend, and nothing beyond what your profile says."
+                         % (facts["work_authorization"], prof))
+    elif re.search(r"willing to travel", q, re.I):
+        lines.append("Say what travel works for you, honestly. Your profile records nothing on it: "
+                     "add it to 01-candidate-profile.md so the next pack can say it.")
+    elif re.search(r"commercial result", q, re.I):
+        money_story = next((s for s in ctx["stories"] if re.search(r"[£$€]|\d+%|\bsaved|\brevenue",
+                                                                  _text(s["star"].get("R")), re.I)), None)
+        if money_story:
+            lines.append("Story: %s, the one whose result is money or a number (source: %s)"
+                         % (money_story["title"], money_story["source"]))
     elif why_us:
         told = _text((ctx["draft"] or {}).get("p2"))
         if told:
@@ -628,6 +901,14 @@ def answer_for(item, ctx) -> dict:
             prepared["answer"], prepared["source"],
             " Marked CONFIRM in the file: check it is still true first." if prepared["confirm"]
             else ""))
+        etype = employer_type(ctx)
+        against = argues_against(prepared["answer"], etype) if etype not in prepared.get("suits", (etype,)) \
+            or etype in prepared.get("not_for", ()) else ""
+        if etype and (against or etype in prepared.get("not_for", ())):
+            lines.append("CAREFUL: this argues against a %s employer%s, and %s is one. Rewrite it "
+                         "from your real reasons for this one before you say it."
+                         % (etype, " (\"%s\")" % against if against else " (its Not for: line)",
+                            ctx["company"]))
     if story:
         lines.append("Story: %s (%s; source: %s)" % (story["title"], how, story["source"]))
     elif mapped:
@@ -638,7 +919,16 @@ def answer_for(item, ctx) -> dict:
     if prepared:
         return {"kind": "prepared", "short": "prepared answer, below", "lines": lines}
     if why_us:
-        return {"kind": "say", "short": "a hook below, and what the letter told them",
+        return {"kind": "say", "short": "a hook below" + (", and what the letter told them"
+                                                          if _text((ctx["draft"] or {}).get("p2"))
+                                                          else ""),
+                "lines": lines}
+    if item.get("req") and not item.get("evidence") and not story:
+        # The paper claimed nothing here: a story drafted now would claim more than it did.
+        lines.append("The letter named no evidence for this. If your profile holds none, it is "
+                     "a gap: say the nearest true thing plainly, and never a story you do not "
+                     "have (Gaps and honest framing).")
+        return {"kind": "none", "short": "no evidence on paper: the nearest true thing",
                 "lines": lines}
     if item.get("gap") and not item.get("framing"):
         lines.append("No framing recorded (profile skills.py BRIDGES): write one before the "
@@ -648,6 +938,8 @@ def answer_for(item, ctx) -> dict:
                 "lines": lines}
     if lines:
         first = re.sub(r" \(source: .*$", "", lines[0]).replace("The form said: ", "the form said ")
+        if first.startswith(prep.RAW_MARK):
+            first = "your summary, said your way (Your answers)"
         return {"kind": "say", "short": prep._short(first, 70), "lines": lines}
     lines.append("No story or prepared answer covers this yet: draft one from %s, facts only "
                  "(interview.md Step 3)." % prep.PROFILE_SOURCE)
@@ -669,6 +961,8 @@ def hooks(ctx) -> list:
         if fact is not None:
             out.append(fact)
     out += prep._facts(research.get("recent_news") or research.get("news"), default)
+    # A fact only a search summary gave is a lead, so it hangs "why us" last, if at all.
+    out.sort(key=lambda f: prep.UNREAD in f.value)
     if len(out) < HOOKS:
         out += [prep.sourced(a, u) for a, u in prep._source_anchors(research)]
     return out
@@ -699,6 +993,16 @@ def paper_lines(ctx) -> list:
     src = _text(draft.get("_path"))
     out = []
     files = [f for f in (row.get("cv_file"), row.get("cover_letter_file")) if _text(f)]
+    if ctx.get("process"):
+        # Nothing was submitted, so nothing a draft argued reached them.
+        out.append("- Nothing went in through a portal, so there is no letter or form: what they "
+                   "hold is what the messages carried (What they have been told), and any %s "
+                   "sent by email%s." % (_noun(), " or passed on by %s" % referrer_of(ctx)
+                                         if referrer_of(ctx) else ""))
+        if files:
+            out.append("- Drafted for this role and never sent: %s. Not what they read."
+                       % ", ".join(files))
+        return out
     if files:
         out.append("- Sent: %s (source: %s)" % (", ".join(files), prep.TRACKER_SOURCE))
     if ctx["outreach_sent"]:
@@ -760,16 +1064,18 @@ def _screening():
     try:
         import screening_answers
         return screening_answers
-    except Exception:
+    except (ImportError, person.NoProfile):
         return None
 
 
 def _band():
     """(target line, floor) from the salary table, or ("", None) when there is none."""
     sheet = _screening()
+    if sheet is None:
+        return "", None
     try:
         floor, low, high = sheet.salary_band()
-    except Exception:       # no sheet, or screening_answers.MissingFact: no table to read
+    except sheet.MissingFact:       # no table to read: said where the band is printed
         return "", None
     cur = prep._CURRENCY_CODE
     return ("%s%s to %s" % (cur + " " if cur else "", "{:,}".format(low), "{:,}".format(high)),
@@ -813,6 +1119,12 @@ def money(ctx) -> tuple:
         lines.append("- Your target band: %s. Walk-away floor %s: keep it to yourself. "
                      "(source: %s)" % (target, "{:,}".format(floor),
                                        _repo_rel(EVALUATION)))
+        import profile_consistency
+        for f in profile_consistency.findings():
+            if f["fact"] in ("pay band", "walk-away floor"):
+                lines.append("  - CHECK: %s:%d says \"%s\". The band above is the one the "
+                             "form answers use: settle which is right before the call."
+                             % (f["file"], f["line"], f["said"]))
     else:
         lines.append("- Your band: %s, no salary table in %s. Ask their range rather than quote "
                      "a number you cannot source." % (prep.NOT_RESEARCHED,
@@ -820,15 +1132,19 @@ def money(ctx) -> tuple:
     lines.append("- Market band:")
     lines += ["  " + ln for ln in prep.comp_band(
         ctx["role"], "", "", prep._comp_sources(ctx["research"], ctx["row"]))]
+    sheet = _screening()
     try:
-        sponsor = "needed" if _screening().requires_sponsorship() else "not needed"
+        sponsor = "needed" if sheet.requires_sponsorship() else "not needed"
         lines.append("- Sponsorship: %s. Say it plainly, with no caveat. (source: %s)"
                      % (sponsor, prep.PROFILE_SOURCE))
-    except Exception:       # the profile does not say, and this is never guessed
-        pass
+    except (AttributeError, getattr(sheet, "MissingFact", LookupError)):
+        # Never guessed, and never silently left out either.
+        lines.append("- Sponsorship: your profile does not say \"no sponsorship required\" or "
+                     "\"sponsorship required\" in so many words, so nothing is printed here. Add "
+                     "the one that is true to %s." % prep.PROFILE_SOURCE)
     if ctx["step"] == "offer":
         lines += _offer_lines()
-    _q, said = _form_value(ctx, r"salary|pay|compensation")
+    _q, said = _form_value(ctx, _PAY_Q)
     if ctx["step"] == "offer":
         one = "weigh total compensation, not base%s; the floor stays unsaid" % (
             ", against your target %s" % target if target else "")
@@ -862,11 +1178,11 @@ def ask_lines(ctx) -> list:
     cats = _guide_categories()
     for cat in STEP_CATEGORIES.get(ctx["step"], ()):
         for q in [q for q in cats.get(cat, []) if "[" not in q][:2]:
-            if len(out) >= MAX_ASK:
+            if len(out) >= (MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK):
                 break
             out.append("- %s (the guide's \"%s\" list: cut it if the research already answers it)"
                        % (q, cat))
-    return out[:MAX_ASK]
+    return out[:MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK]
 
 
 # A row whose own next step says to leave them be: "Keep warm, no action", "Do not use
@@ -886,9 +1202,13 @@ def _referred(c, ctx, name) -> bool:
     or the application's own notes name them beside a referral. The status alone missed
     a referrer whose row was waiting on his reply, with "referral_converted_to_interview"
     as its outcome and his name beside "referral" in the tracker."""
-    if _text(c.get("status")) == "referral_in_progress" or _text(c.get("route")).startswith("referral"):
+    # A route of "referral" with someone named in `referred_by` says this contact was
+    # reached through that person's introduction, not that they put the candidate forward;
+    # with nobody named, they are the referral.
+    if _text(c.get("status")) == "referral_in_progress" or (
+            _text(c.get("route")).startswith("referral") and not _text(c.get("referred_by"))):
         return True
-    if "referr" in _text(c.get("outcome")).lower():
+    if _said_referral(_text(c.get("outcome"))):
         return True
     linked = _text(c.get("linked_application"))
     if linked and linked == _text(ctx["row"].get("cv_file")):
@@ -896,9 +1216,21 @@ def _referred(c, ctx, name) -> bool:
     if len(name) > 3:
         text = " ".join([_text(ctx["row"].get("notes")), _text(ctx.get("outcome"))]).lower()
         for m in re.finditer(re.escape(name.lower()), text):
-            if "referr" in text[max(0, m.start() - 80):m.end() + 80]:
+            if _said_referral(text[max(0, m.start() - 80):m.end() + 80]):
                 return True
     return False
+
+
+# "declined: no referral, hiring freeze" is the opposite of a referral, and a pack that read
+# it as one told the candidate to thank someone who had said no.
+_NO_REFERRAL = re.compile(r"\b(?:no|not|never|declin\w*|refus\w*|couldn'?t|can'?t|won'?t|unable|"
+                          r"without)\b[^.;]{0,30}\breferr|\breferr\w*[^.;]{0,25}\b(?:declin\w*|"
+                          r"refus\w*|fell through|not possible|withdrawn)\b", re.I)
+
+
+def _said_referral(text) -> bool:
+    """Does `text` say a referral happened (and not that it was declined)?"""
+    return "referr" in text.lower() and not _NO_REFERRAL.search(text)
 
 
 def warm_lines(ctx) -> list:
@@ -921,7 +1253,10 @@ def warm_lines(ctx) -> list:
         step = _text(c.get("next_action"))
         if _referred(c, ctx, name):
             referrer = referrer or name
-        if step and _HANDS_OFF.search(step):
+        stale_wait = status in ("replied_needs_response", "in_conversation") and re.search(
+            r"\b(?:wait|waiting|await|awaiting)\b", step, re.I) and not re.search(
+            r"\b(?:HOLD|FREEZE|no action|do not|don'?t)\b", step, re.I)
+        if step and _HANDS_OFF.search(step) and not stale_wait:
             out.append("- %s%s [%s]: their row says to leave them be for now: \"%s\". "
                        "(source: %s)" % (name, title, status, prep.clip(step, ROW_QUOTE), prep.CONTACTS_SOURCE))
             continue
@@ -989,18 +1324,1135 @@ def _rework_lines(text) -> list:
     body = text[m.end():]
     nxt = re.search(r"^## ", body, re.M)
     body = body[:nxt.start()] if nxt else body
-    return [ln.rstrip() for ln in body.splitlines()
-            if ln.strip().startswith("-") and REWORK_EMPTY not in ln]
+    # Every line the person kept there, bullet or not; only the placeholder goes.
+    return [ln.rstrip() for ln in body.splitlines() if ln.strip() and REWORK_EMPTY not in ln]
+
+
+# ---------------------------------------------------------------- who, where, what was said
+
+# The person.json values the pack reads, written out so a reader of the profile's names
+# (tools/profile_names.py) sees each one.
+_PERSON = {
+    "identity.moved": lambda: person.get("identity.moved", ""),
+    "identity.area": lambda: person.get("identity.area", ""),
+    "identity.location": lambda: person.get("identity.location", ""),
+}
+
+
+def _noun() -> str:
+    """The person's word for the document, as their profile says it (a resume, or a CV)."""
+    try:
+        return _text(person.get("documents.noun", "resume")) or "resume"
+    except person.NoProfile:
+        return "resume"
+
+
+def _person(dotted) -> str:
+    """One optional value from person.json, "" when the profile does not hold it."""
+    try:
+        return _text(_PERSON[dotted]())
+    except person.NoProfile:
+        return ""
+
+
+def referrer_of(ctx) -> str:
+    """The name of whoever put the candidate forward for this process, or ""."""
+    k = company_key(ctx["company"])
+    for c in ctx["contacts"]:
+        if company_key(c.get("company")) != k:
+            continue
+        name = state.person_name(c.get("name")) or _text(c.get("name"))
+        if _referred(c, ctx, name):
+            return name
+    return ""
+
+
+# Words that say a status is temporary: a permit, a visa, a working holiday. Read from the
+# profile's own work-authorization wording, never guessed.
+_TEMPORARY = re.compile(r"\b(?:permit|visa|working holiday|temporary|fixed[- ]term|expires?|"
+                        r"until \d{4})\b", re.I)
+
+
+def temporary_status(ctx) -> bool:
+    """Read from the work-authorization facts, with every sentence about sponsorship taken
+    out first: "No visa sponsorship required" says nothing about a permit."""
+    clauses = re.split(r"[.;,]", _text(ctx["facts"].get("work_authorization")))
+    return any(_TEMPORARY.search(c) for c in clauses if not re.search(r"\bsponsor", c, re.I))
+
+
+MOVED_MONTHS = 12
+
+
+def _moved_on() -> str:
+    """identity.moved when it is a date (YYYY-MM or YYYY-MM-DD), else "": the move-and-area
+    upgrade writes "none" for everyone who has not moved recently."""
+    moved = _person("identity.moved")
+    return moved if re.fullmatch(r"\d{4}-\d{2}(?:-\d{2})?", moved) else ""
+
+
+def newcomer(ctx) -> str:
+    """The month the person moved, when it was within MOVED_MONTHS (person.json
+    identity.moved), else ""."""
+    moved = _person("identity.moved")
+    when = state.as_date(moved + ("-01" if re.fullmatch(r"\d{4}-\d{2}", moved) else ""))
+    today = state.as_date(ctx["today"]) or dt.date.today()
+    if when is None or (today - when).days > MOVED_MONTHS * 31 or when > today:
+        return ""
+    return moved
+
+
+def home_place() -> str:
+    """Where the person lives, as their profile says it."""
+    return _person("identity.area") or _person("identity.location")
+
+
+# What an employer is, read from the tracker's sector, the research and the name: the
+# kind of place a stock answer can argue against.
+EMPLOYER_TYPES = (
+    ("consulting", re.compile(r"\b(?:consult(?:ing|ancy|ancies|ants?)|advisory (?:firm|services|"
+                              r"practice)|professional services)\b", re.I)),
+    ("public sector", re.compile(r"\b(?:public sector|government|ministry|city council|county "
+                                 r"council|(?:government|public|federal|provincial|state) "
+                                 r"agency|nhs|municipal)\b", re.I)),
+    ("bank", re.compile(r"\b(?:banks?|banking|insurers?|insurance|asset manage\w*|pension "
+                        r"funds?|financial services)\b", re.I)),
+    ("startup", re.compile(r"\b(?:start-?up|seed|series [abc]|scale-?up)\b", re.I)),
+    ("product", re.compile(r"\b(?:saas|software|platform|product company|tech company|technology|"
+                           r"marketplace|app)\b", re.I)),
+)
+
+
+def employer_type(ctx) -> str:
+    """The kind of employer, from the most direct source that names one: the tracker's
+    sector, then the research's own sector words, then the name, then what the research
+    says it does. A bank whose summary mentions a wealth-advisory arm is a bank."""
+    research = ctx["research"] or {}
+    # The person's own rule for what counts as public sector (profile/search.py BAR_PUBLIC,
+    # read by tools/bar.py) outranks the generic words below; their pension funds never do.
+    try:
+        import bar
+        name = "%s %s" % (ctx["company"], company_key(ctx["company"]))
+        if bar.PUBLIC.search(name) and not bar.PENSIONS.search(name):
+            return "public sector"
+    except (ImportError, person.NoProfile, AttributeError):
+        pass
+    sources = (ctx["row"].get("sector"),
+               " ".join(_text(research.get(k)) for k in ("sector", "industry", "type")),
+               ctx["company"],
+               " ".join(_text(research.get(k)) for k in ("summary", "what_they_do")))
+    for i, text in enumerate(sources):
+        # In a summary, what the employer makes comes first: "software used by banks and
+        # consulting firms" is a software company, whoever its customers are.
+        types = EMPLOYER_TYPES if i < 3 else sorted(EMPLOYER_TYPES, key=lambda t: t[0] != "product")
+        found = next((t for t, rx in types if rx.search(_text(text))), "")
+        if found:
+            return found
+    return ""
+
+
+# A stock answer that argues against the kind of employer it is about to be said to:
+# "depth over a rotating client portfolio" and "product companies rather than more
+# consulting" were both about to be used for a consulting firm.
+_AGAINST = {
+    "consulting": re.compile(r"(?:rather than|instead of|away from|not|less|over|leave|leaving|"
+                             r"tired of)\b[^.]{0,50}\b(?:consult\w*|client portfolio|rotating "
+                             r"clients?|client work|clients)\b|depth over[^.]{0,30}\bclient", re.I),
+    "product": re.compile(r"(?:rather than|instead of|away from|over)\b[^.]{0,40}\bproduct\b", re.I),
+    "bank": re.compile(r"(?:rather than|instead of|away from|leave|leaving)\b[^.]{0,40}"
+                       r"\b(?:bank\w*|financ\w*)\b", re.I),
+    "public sector": re.compile(r"(?:rather than|instead of|away from|leave|leaving)\b[^.]{0,40}"
+                                r"\b(?:public sector|government)\b", re.I),
+    "startup": re.compile(r"(?:rather than|instead of|away from)\b[^.]{0,40}\bstart-?ups?\b", re.I),
+}
+
+
+def argues_against(answer, etype) -> str:
+    """The words in `answer` that argue against an employer of `etype`, or ""."""
+    rx = _AGAINST.get(etype)
+    m = rx.search(_text(answer)) if rx else None
+    return m.group(0) if m else ""
+
+
+# What the people at this employer have been told, by topic. A recruiter screen checks
+# location and start date first, and the referrer had been told by message five weeks
+# before that the candidate was "moving" and "currently at a UK consultancy", while the
+# profile said the move was complete.
+TOLD_TOPICS = (
+    ("where you are", re.compile(r"\b(?:(?:moving|move|moved) (?:to|from|over|here)|relocat\w*|"
+                                 r"based in|living in|will be in|arriv\w*|from the (?:uk|us)|"
+                                 r"currently in)\b", re.I)),
+    ("current employer", re.compile(r"\b(?:currently (?:at|with|working)|i work (?:at|for)|"
+                                    r"now at|at the moment i|i'm at|i am at|consult\w* (?:at|for))\b",
+                                    re.I)),
+    ("work authorization", re.compile(r"\b(?:sponsor\w*|visa|permit|right to work|work "
+                                      r"authori[sz]ation|eligible to work|entitled to work)\b",
+                                      re.I)),
+    ("notice or start", re.compile(r"\b(?:notice|start(?:ing)? (?:on|in|from|date)|available "
+                                   r"(?:from|to start)|could start)\b", re.I)),
+    # An amount only beside a currency sign or a word for pay: "250k customers" is not pay.
+    ("pay", re.compile(r"(?:\b(?:salary|compensation|base pay|pay of|package|"
+                       r"looking for around|expecting)\b|[$£€]\s?\d+(?:[.,]\d+)?\s?k\b|"
+                       r"[$£€]\s?\d{2,3},\d{3}\b(?![^.]{0,40}\b(?:saved|released|revenue|sales|"
+                       r"stock|costs?|budget|worth|turnover|profit|spend|savings)\b))", re.I)),
+)
+
+
+def _said(text) -> list:
+    """[(topic, sentence)] for every sentence of `text` on a topic a screen checks."""
+    out = []
+    text = _text(text).replace("\\n", "\n").replace("\u2019", "'").replace("\u2018", "'")
+    for sent in re.split(r"(?<=[.!?])\s+|\n+", text):
+        sent = sent.strip()
+        for topic, rx in TOLD_TOPICS:
+            if sent and rx.search(sent):
+                out.append((topic, sent))
+    return out
+
+
+def _differs_from_band(sent) -> bool:
+    """Does `sent` name pay outside the person's target band? Amounts are read as amounts
+    (110,000, 110000, 110k): a "000" in the band is not a match for every round number."""
+    import profile_consistency as pc
+    sheet = _screening()
+    try:
+        _floor, low, high = sheet.salary_band()
+    except (AttributeError, getattr(sheet, "MissingFact", LookupError)):
+        return False
+    for m in pc._RANGE.finditer(sent):
+        lo, hi = pc._range_of(m)
+        # A narrower band inside the target is the same answer; only one reaching outside it
+        # is a number a recruiter would hold against the one on the form.
+        if lo < low or hi > high:
+            return True
+    rest = pc._RANGE.sub(" ", sent)
+    return any(not low <= pc._amount(m.group(1)) <= high
+               for m in pc._SINGLE.finditer(rest) if pc._amount(m.group(1)) >= 1000)
+
+
+def told_lines(ctx) -> list:
+    """Every message to anyone at this employer, and what the form said, on the topics a
+    screen checks first, each with a line where it disagrees with the profile now."""
+    k = company_key(ctx["company"])
+    here = {_text(c.get("contact_id")): c for c in ctx["contacts"]
+            if company_key(c.get("company")) == k}
+    out, seen = [], set()
+    moved = _moved_on()
+    current = [n for e in ctx["facts"].get("employers") or [] if isinstance(e, dict)
+               and "present" in _text(e.get("dates")).lower()
+               for n in (_text(e.get("company")),) if n]
+    for r in ctx["threads"]:
+        cid = _text(r.get("contact_id"))
+        if cid not in here or _text(r.get("direction")).lower() not in ("out", "outbound", "sent"):
+            continue
+        name = state.person_name(here[cid].get("name")) or _text(here[cid].get("name"))
+        for topic, sent in _said(r.get("full_text")):
+            key = (topic, sent.lower())
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append("- %s, to %s, on %s: \"%s\" (source: %s)" % (
+                _text(r.get("date")) or "undated", name, topic, prep.clip(sent, 180),
+                prep.THREADS_SOURCE))
+            if topic == "where you are" and moved and re.search(
+                    r"\b(?:moving (?:to|from|over|here)|relocating|move to|will be in)\b",
+                    sent, re.I):
+                out.append("  - DIFFERS: they were told you were moving; your profile says you "
+                           "moved (%s). Say \"I made the move\" plainly if it comes up." % moved)
+            if topic == "current employer" and current and not any(
+                    _text(n).split()[0].lower() in sent.lower() for n in current if _text(n)):
+                out.append("  - CHECK: your profile's current employer is %s; say it the same "
+                           "way they heard it, or explain the difference." % ", ".join(current))
+            if topic == "pay" and _differs_from_band(sent):
+                out.append("  - CHECK: your target band is %s; a number they heard that "
+                           "differs is the one a recruiter remembers." % _band()[0])
+    for q, a in ctx["form"]:
+        for topic, _sent in _said(q + ". " + a):
+            out.append("- The form, on %s: %s **%s** (source: %s/screening_answers.md)"
+                       % (topic, q, a, _rel(ctx["folder"])))
+            break
+    if ctx["process"]:
+        out.append("- No documents went through a portal: anything they hold (a %s sent by "
+                   "email%s) %s. Check the city and number on it match what you will say."
+                   % (_noun(), ", or passed on by %s" % referrer_of(ctx) if referrer_of(ctx)
+                      else "", "is in the messages above" if out
+                      else "came outside the message log"))
+    return out
+
+
+# How each kind of interviewer tends to listen, by their title. A recruiter checks the
+# basics and the story hangs together; a hiring manager, fit and motivation; a
+# practitioner, depth; an executive, judgement.
+ANGLES = (
+    (prep._SCREENER,
+     "the basics and that your story hangs together: location, start date, work "
+     "authorization, pay, why this move"),
+    (re.compile(r"\b(?:chief|vp|vice presidents?|directors?|heads?|partners?|principals?)\b",
+                re.I),
+     "judgement and why: what you would do in their first months, and why you"),
+    (re.compile(r"\b(?:managers?|leads?)\b", re.I),
+     "fit and motivation: how you work with a team like theirs, and what you would own"),
+    (re.compile(r".", re.I),
+     "depth: how you did the work, the trade-offs, and what you would do differently"),
+)
+
+
+def _reading_for(name, company):
+    """(contact_id, reading) for someone at this employer, from the contact book's id or
+    any reading kept under documents/network, or (\"\", None)."""
+    import glob
+    want = state._match_name(name)
+    k = company_key(company)
+    for path in glob.glob(person.state("documents", "network", "*", "reading.json")):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                got = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        if state._match_name(got.get("name")) == want and company_key(got.get("company")) == k:
+            return os.path.basename(os.path.dirname(path)), got
+    return "", None
+
+
+# Telling a person's name from a title in "--with". A title opens on a seniority word or
+# ends on a role noun ("Senior Data Scientist", "Engagement Manager", "two partners"); a name
+# is two or three capitalised words, perhaps with an initial ("Priya A. Shah"), and a surname
+# that is also a word ("Tom Head") is still a name.
+_ROLE_FIRST = re.compile(r"^(?:head|lead|senior|principal|associate|chief|vp|svp|evp|director|"
+                         r"managing|staff|junior|the|a|an|two|three|some|someone|their|our|hr|"
+                         r"talent|people|recruit\w*|hiring)\b", re.I)
+_ROLE_LAST = re.compile(r"\b(?:scientists?|engineers?|analysts?|managers?|partners?|"
+                        r"recruiters?|directors?|consultants?|leads?|officers?|specialists?|"
+                        r"architects?|developers?|team|panel|founders?|ceo|cto|cfo|coo)$", re.I)
+_NAME = re.compile(r"^[A-Z][\w'\-]+(?:\s+[A-Z]\.)?(?:\s+(?:(?:de|la|le|du|da|di|del|der|den|van|von|"
+                   r"bin|al|el)\s+)*[A-Z][\w'\-]+){0,3}$")
+# Words that make a capitalised pair a team or a field, never a person: "Data Science",
+# "Supply Chain Analytics".
+_DOMAIN = re.compile(r"\b(?:data|science|analytics|engineering|product|marketing|finance|"
+                     r"operations|supply|chain|research|platform|design|sales|strategy|risk|"
+                     r"pricing|technology|security|growth|insights|ml|ai|people|talent|hr|"
+                     r"recruiting|recruitment|legal|commercial|digital|infrastructure|"
+                     r"consulting|practice|team|panel|office|revenue|forecasting|planning|"
+                     r"logistics|customer|payments|fraud|credit|treasury|actuarial|reporting|"
+                     r"economics|quant\w*|bi)\b", re.I)
+_HONORIFIC = re.compile(r"^(?:dr|mr|mrs|ms|mx|prof|professor|sir|dame)\.?\s+", re.I)
+
+
+def _is_name(part) -> bool:
+    bare = _HONORIFIC.sub("", part).strip()
+    return bool(_NAME.match(bare)) and not _ROLE_FIRST.match(bare) and \
+        not _ROLE_LAST.search(bare) and not _DOMAIN.search(bare)
+
+
+def _interviewers(ctx) -> list:
+    """[{name, title}] from who this stage is with: each name paired with the title written
+    after it ("Dana Okafor, Head of Data", "Dana Okafor (Head of Data)", "Dana Okafor - Head
+    of Data"), a title alone where no name is known. An "&" or "and" inside a title ("Data &
+    Analytics Manager") stays in it; between two names it separates them."""
+    out = []
+    for part in re.split(r"\s*[,;]\s*", _text(ctx["with"])):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.match(r"^(.+?)\s*(?:\((.+)\)|\s[-\u2013]\s(.+))$", part)
+        if m and _is_name(m.group(1).strip()):
+            out.append({"name": m.group(1).strip(), "title": (m.group(2) or m.group(3)).strip()})
+            continue
+        halves = [h.strip() for h in re.split(r"\s+(?:and|&)\s+", part)]
+        if len(halves) > 1 and any(_is_name(h) for h in halves):
+            out += [{"name": h, "title": ""} if _is_name(h) else {"name": "", "title": h}
+                    for h in halves]
+        elif _is_name(part):
+            out.append({"name": part, "title": ""})
+        elif out and out[-1]["name"] and not out[-1]["title"]:
+            out[-1]["title"] = part
+        else:
+            out.append({"name": "", "title": part})
+    return out
+
+
+def _reading_of(ctx, name):
+    """(contact_id, reading or None, contact row or None) for one interviewer."""
+    import reading as _reading
+    name = _HONORIFIC.sub("", name).strip()
+    row = state.already_contacted(ctx["contacts"], name=name, company=ctx["company"])
+    cid, found = (_text(row.get("contact_id")), _reading.load(_text(row.get("contact_id")))) \
+        if row else ("", None)
+    if found is None:
+        cid, found = _reading_for(name, ctx["company"])
+    return cid, found, row
+
+
+def _said_of(ctx, name) -> list:
+    """What an earlier stage's notes say about this interviewer: "Tom pushed hard on how I
+    validated the forecast" is the question they will come back to."""
+    first = _HONORIFIC.sub("", name).split()[0] if name.split() else ""
+    if len(first) < 3:
+        return []
+    rx = re.compile(r"\b%s\b" % re.escape(first), re.I)
+    return ["  - Last time: %s. Expect them to come back to it; have that answer ready first "
+            "(source: %s/outcome.md)." % (prep.clip(ln, 160).rstrip("."), _rel(ctx["folder"]))
+            for _h, ln in _record(ctx["outcome"]) if rx.search(ln)][:2]
+
+
+def meeting_lines(ctx) -> list:
+    """Who the person will meet: what each tends to listen for and wants to hear, what the
+    person shares with them, their recent public, professional work, and the stories to lead
+    with. Only what tools/network/reading.py keeps: their headline, a short excerpt of their
+    About, history shared with the candidate, and their own public work. Nothing personal,
+    ever. Someone named only by title ("the recruiter", "Head of Data") still gets what their
+    kind of interviewer listens for, and the question to ask them."""
+    import reading as _reading
+    formats, _assumed = interview_formats(ctx)
+    out = []
+    for who in _interviewers(ctx):
+        name, given = who["name"], who["title"]
+        if not name:
+            title = given
+            out.append("- **%s**. Likely listening for %s." % (
+                title[:1].upper() + title[1:], dict(zip(KINDS, ANGLES))[_kind(title)][1]))
+            out += tailored(ctx, "", title, " ".join([ctx["role"], ctx["posting"][:2000]]),
+                            {}, "", formats)
+            continue
+        cid, found, row = _reading_of(ctx, name)
+        title = _text((found or {}).get("headline")) or given or _text((row or {}).get("title"))
+        angle = dict(zip(KINDS, ANGLES))[_kind(title)][1]
+        out.append("- **%s**%s. Likely listening for %s." % (name, ", " + prep.clip(title, 90)
+                                                              if title else "", angle))
+        if not found and _kind(title) != "screener":
+            # A recruiter's own posts are about hiring: nothing worth reading for the call.
+            out.append("  - RESEARCH FIRST (Claude, not you): %s's public, professional work "
+                       "(a talk, an article, code, their team's own pages), kept with `python3 "
+                       "tools/network/reading.py add <id> --name \"%s\" --company \"%s\" ...`, "
+                       "then this is rebuilt. Never a people-search site; their profile only "
+                       "through your own browser when you have set that up."
+                       % (name, name, ctx["company"]))
+        if not found:
+            out += tailored(ctx, name, title, " ".join([title, ctx["role"]]), {}, "", formats)
+            out += _said_of(ctx, name)
+            continue
+        src = "documents/network/%s/reading.json" % cid
+        out += _said_of(ctx, name)
+        for _strength, kind, what, ev in _reading.hooks(found)[:3]:
+            if kind == "about":
+                continue
+            out.append("  - %s%s (source: %s)" % (what[:1].upper() + what[1:],
+                                                  ": \"%s\"" % prep.clip(ev, 120) if ev else "", src))
+        topics = " ".join([_text(found.get("headline")), _text(found.get("about"))]
+                          + [_text(i.get("text")) for i in found.get("items") or []])
+        out += tailored(ctx, name, title, topics, found, src, formats)
+    if out:
+        out.append("- Use what is here to choose what to lead with, not to show you looked: "
+                   "nothing personal, nothing from outside their work, and never \"I saw on "
+                   "your profile\".")
+    return out
+
+
+# How a stage changes what one interviewer listens for: the same person probes depth in a
+# technical round and judgement in a final.
+STAGE_ANGLE = {"screen": "whether the basics hold and the story makes sense",
+               "technical": "how you did the work and the trade-offs you made",
+               "final": "whether they would hire you over the others, and why now",
+               "offer": "whether you will say yes, and on what terms"}
+
+
+# Who an interviewer is, by their title: one kind per entry of ANGLES, in its order.
+KINDS = ("screener", "senior", "manager", "practitioner")
+# What each kind wants to hear: the signal that scores, beside what they listen for.
+WANT = {
+    "screener": "the basics said plainly and the same as on paper, and real interest in this "
+                "employer rather than any job",
+    "senior": "judgement and commercial sense: what you would do, why, and what it would "
+              "change for them",
+    "manager": "that you would own your work, make the team better and need little managing",
+    "practitioner": "that you did the work yourself and know it in depth, including what went "
+                    "wrong and what you would change",
+}
+
+
+# What a question is really checking, and what a strong answer gives them. The person's own
+# material answers it; this is what to aim the answer at. Most specific first.
+INTENT = tuple((re.compile(rx, re.I), checking, hear) for rx, checking, hear in (
+    (r"tell me about yourself|walk me through your (?:background|resume|cv)\b",
+     "whether your story is clear and points at this role",
+     "about ninety seconds: where you are now, the thread through your roles, and why this "
+     "role is the next step"),
+    (r"why are you leaving|why are you looking|^why now\??$|why (?:did|would) you (?:leave|go)\b",
+     "whether you are running from something, and whether you would stay",
+     "a pull towards this kind of work, and nothing negative about your current employer"),
+    (r"walk me through your career|career moves|career so far|moves between jobs|"
+     r"why (?:did you|so many) (?:move|change)",
+     "whether you would leave them soon too",
+     "each move as a step towards more of one thing, said in a breath"),
+    (r"code you'?re proud of|\bbug\b",
+     "craft", "the problem, your reasoning, the fix, and the test that proves it"),
+    (r"commercial|business (?:result|impact)|measurable",
+     "whether your work changed a number someone cared about",
+     "the number, and who acted on it"),
+    (r"went wrong|mistake|\bfail",
+     "self-awareness, and whether you learn",
+     "your own part owned plainly, what you did next, what you do differently now"),
+    (r"project|walk me through",
+     "whether you did the work yourself and understand it",
+     "the problem, what you did, and the result in numbers, in about a minute"),
+    (r"why do you want to (?:work|join)|why (?:this|our) (?:company|firm|team)",
+     "whether you chose them, or are applying everywhere",
+     "something specific and true about them (the hooks), tied to what you want to do next"),
+    # "Why data science?", "Why consulting?": the field, not the employer.
+    (r"^why (?:this (?:role|field|work|area|career)|data|analytics|consulting|engineering|"
+     r"product|finance|research|[a-z]+ (?:science|engineering|analytics))\b",
+     "whether you chose this work on purpose",
+     "what draws you to it, shown by something you have actually done"),
+    (r"salary|\bpay\b|compensation",
+     "whether you fit the budget, and whether you will be straightforward about it",
+     "a band you can stand behind, the same one they have already heard, said calmly"),
+    (r"sponsor|work authori[sz]ation|right to work|eligible to work|entitled to work",
+     "whether hiring you creates paperwork",
+     "a plain answer in your profile's own wording, with no hedging"),
+    (r"\bnotice(?: period)?\b(?!d)|when could you start|start date",
+     "whether your timing fits theirs",
+     "a date, and how flexible you can honestly be"),
+    (r"where are you based|where do you live|relocat",
+     "whether you can do the job where it is done",
+     "the place, plainly, matching what they have already been told"),
+    (r"interviewing (?:anywhere|elsewhere)|other (?:processes|offers)",
+     "how much time they have, and how serious you are",
+     "the honest shape (for example, early stages elsewhere), no names, no invented offers, "
+     "and that this one is a priority if it is"),
+    (r"\bled\b|leadership|lead something",
+     "whether you take ownership and bring people with you",
+     "something you started or owned, how you got others on board, and what changed"),
+    (r"changed someone'?s mind|influence|persuad",
+     "influence without authority",
+     "their view first, what you did to understand it, the evidence you used, the outcome"),
+    (r"without being asked|initiative|took (?:something|it) on",
+     "drive", "what you noticed that nobody asked about, what you did, what it led to"),
+    (r"different from you|conflict|disagree",
+     "how you work with people unlike you",
+     "respect for their view, what you adapted, and the result"),
+    (r"weakness",
+     "self-awareness", "a real one, what you do about it, and evidence it is improving"),
+    (r"five years|long ?term|after your permit",
+     "whether you would stay and grow here",
+     "a direction this employer can offer, and your plan to stay"),
+    (r"reservations|concerns",
+     "whether anything will stop you saying yes",
+     "something honest and small, with what would settle it"),
+    (r"^tell me about your experience with",
+     "whether you can do this part of the job, as your papers say you can",
+     "one specific time you did it, what you did yourself and the result"),
+    (r"^what is your experience with|how much .+ have you done",
+     "whether a gap is a problem",
+     "the nearest real thing you have done, plainly, and how fast you would close the gap"),
+    (r"result was right|check(?:ed)? |validat",
+     "rigour", "how you knew it was right: the test, the baseline, what you would have done if "
+               "it failed"),
+    (r"differently",
+     "reflection", "one concrete change, and why"),
+    (r"more time|left out",
+     "judgement under constraints", "what you put first and why, and the next thing you would do"),
+    (r"how do you know|introduction",
+     "how strong the referral is", "how you know them, in a sentence, warmly"),
+    (r"how are you finding",
+     "whether you are settling, and staying",
+     "something true and good about it, and a question back"),
+    (r"travel",
+     "whether you can do the job the way it is done", "a straight answer, any limit said plainly"),
+    (r"anything (?:else|about my background)|go into more",
+     "a last chance to settle a doubt",
+     "the one strength you have not landed yet, in two sentences"),
+))
+INTENT_MARK = "> Checking:"
+
+
+def intent(question, company="") -> tuple:
+    """(what it is checking, what they want to hear) for a question, or ("", ""). "Why
+    <the employer>?" is read by the employer's own name first, whatever the name is."""
+    q = _text(question)
+    if company and re.match(r"^why %s\b" % re.escape(_text(company)), q, re.I):
+        q = "Why this company?"
+    return next(((c, h) for rx, c, h in INTENT if rx.search(q)), ("", ""))
+
+
+def _kind(title) -> str:
+    return next(k for k, (rx, _a) in zip(KINDS, ANGLES) if rx.search(title or "x"))
+
+
+# The question to ask, by who they are and what the round is. A recruiter is asked about
+# the process, never about their own posts (a recruiter's posts are about hiring, and asking
+# reads as having looked); a practitioner about how the team does the work the round tests.
+ASK_KIND = {
+    "screener": "What does the next stage look like, and what will the team weigh most in it?",
+    "senior": "Where do you want this team to be in a year, and what would get it there?",
+    "manager": "What would someone in this role have done well, six months in?",
+}
+ASK_FORMAT = {
+    "coding": "How does the team review and test code before it ships?",
+    "technical": "How does the team decide an analysis or a model is ready to be used?",
+    "case": "What kind of work have you been on lately, and what made it hard?",
+    "presentation": "What will the people in the room want to have decided by the end?",
+    "behavioural": "What do the people who do well here have in common?",
+}
+_PUBLIC_WORK = ("talk", "article", "podcast", "publication", "post", "code", "featured")
+
+
+def _ask_them(ctx, kind, formats, work, src) -> list:
+    """The question for one interviewer: anchored on their own public work where they have
+    some and it fits, else on what their kind of interviewer owns and the round tests. A
+    screen leaves time for one."""
+    if kind == "screener":
+        return ["  - Ask them: \"%s\" Nothing about their own posts." % ASK_KIND["screener"]]
+    out = []
+    if work:
+        w = work[0]
+        out.append("  - Ask them, on their own work: their %s%s, \"%s\". How it has gone since, "
+                   "or what the team learned from it; never how you came across it. (source: %s)"
+                   % (w["kind"], " (%s)" % w["date"] if w.get("date") else "",
+                      prep.clip(w.get("text"), 90), src))
+    if not work or ctx["step"] != "screen":
+        q = ASK_KIND.get(kind) or next((ASK_FORMAT[f] for f in formats if f in ASK_FORMAT),
+                                       "What does a good week on this team look like?")
+        out.append("  - Ask them: \"%s\"" % q)
+    return out
+
+
+TEAMS_KEY = "teams"            # company_research: {"<team as the pack names it>": [facts]}
+NOT_FOUND_KEY = "not_found"    # company_research: topics searched for with nothing public
+
+
+def _researched(research, topic) -> tuple:
+    """("found", lines), ("none", []) or ("todo", []) for one research topic: a team (as the
+    pack names it) or "interview_process". Claude does the research; the person never has
+    to. "none" is a search that found nothing public, which is an answer too."""
+    research = research or {}
+    default = prep._research_source(research)
+    if topic == "interview_process":
+        facts = prep._facts(research.get("interview_process"), default)
+    else:
+        teams = research.get(TEAMS_KEY) or {}
+        key = next((k for k in teams if what_works._norm(k) == what_works._norm(topic)),
+                   None) if isinstance(teams, dict) else None
+        facts = prep._facts(teams.get(key), default) if key else []
+    if facts:
+        return "found", ["%s (source: %s)" % (f.value, f.source) for f in facts]
+    gone = [_text(x) for x in research.get(NOT_FOUND_KEY) or []]
+    if any(what_works._norm(x) in (what_works._norm(topic), what_works._norm("team:" + topic))
+           for x in gone):
+        return "none", []
+    return "todo", []
+
+
+_RANK_FIRST = re.compile(r"^(?:(?:head|director|vp|svp|evp|vice president|chief|lead|manager|"
+                         r"senior|principal|staff|associate|junior)\s+(?:of\s+)?)+", re.I)
+_ROLE_NOUN = re.compile(r"\s+(?:scientists?|engineers?|analysts?|managers?|leads?|directors?|"
+                        r"partners?|consultants?|specialists?|architects?|developers?|officers?|"
+                        r"heads?)$", re.I)
+
+
+def _team_of(title) -> str:
+    """The team in a title: "Head of Data" is Data, "Data Science Manager" is Data Science,
+    "Associate Partner, Operations Practice" is Operations Practice. "" when it is all rank."""
+    parts = [p.strip() for p in _text(title).split(",") if p.strip()]
+    part = next((p for p in parts[1:] if _DOMAIN.search(p)), parts[0] if parts else "")
+    team = _ROLE_NOUN.sub("", _RANK_FIRST.sub("", part)).strip(" &-")
+    # Only a team that names a field: "Engagement" or "Partner" is rank, not a team.
+    return team if _DOMAIN.search(team) and not re.fullmatch(r"(?:team|panel|office)", team, re.I) \
+        else ""
+
+
+def tailored(ctx, name, title, topics, found, src, formats=()) -> list:
+    """What to do differently for this one interviewer, so they score you higher: which of
+    your own strengths to put first (the ones nearest their work), the story to lead with,
+    what their team works on (researched by Claude and kept in the research cache, never
+    left to the person), and the question that fits who they are and what the round tests.
+    Everything comes from the person's profile and the research: nothing is claimed that
+    the profile does not hold."""
+    out = []
+    step = ctx["step"]
+    found = found or {}
+    if step in STAGE_ANGLE:
+        out.append("  - At this stage they are weighing %s." % STAGE_ANGLE[step])
+    out.append("  - Wants to hear: %s." % WANT[_kind(title)])
+    strengths = [(similar(topics, s_), s_) for s_ in ctx["facts"].get("strengths") or [] if _text(s_)]
+    near = [s_ for score, s_ in sorted(strengths, key=lambda x: -x[0]) if score > 0][:2]
+    if near:
+        out.append("  - Put first, for them: %s (source: %s)" % (
+            "; ".join(prep.clip(x, 110) for x in near), prep._profile_source(ctx["facts"])))
+    story, _score = best_story(topics, ctx["stories"], ())
+    if story:
+        out.append("  - Lead with: %s, the closest of your stories to what they work on "
+                   "(source: %s)" % (story["title"], story["source"]))
+    kind = _kind(title)
+    team = _team_of(re.split(r"\s+(?:at|@|\|)\s+", _text(found.get("headline")) or _text(title),
+                             maxsplit=1)[0])
+    # Someone known only by a title ("two partners", "the hiring manager") has no team to
+    # look up; a named interviewer's team is their title with the rank taken off.
+    if team and name and kind != "screener" and team.lower() != _text(name).lower():
+        state_, lines = _researched(ctx["research"], team)
+        if state_ == "found":
+            out += ["  - Their team (%s): %s" % (prep.clip(team, 60), ln) for ln in lines[:2]]
+        elif state_ == "none":
+            out.append("  - Their team (%s): nothing public found about it; ask them what it "
+                       "owns." % prep.clip(team, 60))
+        else:
+            out.append("  - RESEARCH FIRST (Claude, not you): what \"%s\" works on at %s, from "
+                       "the employer's own pages. The employer-researcher keeps it under `%s` "
+                       "in company_research (or under `%s` when nothing is public), then this "
+                       "is rebuilt." % (team, ctx["company"], TEAMS_KEY, NOT_FOUND_KEY))
+    work = [i for i in found.get("items") or [] if i.get("kind") in _PUBLIC_WORK]
+    out += _ask_them(ctx, kind, formats, work, src)
+    return out
+
+
+# ---------------------------------------------------------------- the format
+
+# The shape of the interview, beside its step. A thirty-minute recruiter call at a
+# consultancy, its case round and a coding round at a product company are three different
+# preparations: what is tested, the questions that come with it, the drills, and what is
+# worth knowing about how this employer runs it. Read from the stage's own words first
+# (outcome.md, --stage, --format), then assumed from the step, the employer and the role,
+# and said to be assumed.
+FORMATS = (
+    ("presentation", re.compile(r"\b(?:presentation|present(?:ing)? back|take[- ]?home|"
+                                r"case study|assignment)\b", re.I)),
+    ("case", re.compile(r"\b(?:case|market[- ]sizing|guesstimate)\b", re.I)),
+    ("coding", re.compile(r"\b(?:cod(?:e|ing)|live programming|pair(?:ing)? programming|"
+                          r"algorithms?|data structures?|leetcode|whiteboard)\b", re.I)),
+    ("behavioural", re.compile(r"\b(?:behaviou?ral|pei|personal experience|competenc\w*|"
+                               r"values|(?:culture|team) fit|fit interview|motivational)\b", re.I)),
+    ("technical", re.compile(r"\b(?:technical|sql|statistic\w*|system design|ml design|"
+                             r"modell?ing|analytics|deep dive)\b", re.I)),
+    ("screen", re.compile(r"\b(?:phone|recruiter|screen\w*|hr|talent|intro\w*)\b", re.I)),
+)
+FORMAT_NAMES = {"presentation": "A presentation", "case": "A case interview",
+                "coding": "A coding interview", "behavioural": "A behavioural interview",
+                "technical": "A technical interview", "screen": "A screen"}
+# What each format tests, the questions it brings beyond the step's, and how to prepare.
+# The person's own material answers them; nothing here is an answer.
+FORMAT_PREP = {
+    "screen": {
+        "tests": "whether the basics hold (where you are, when you could start, pay, work "
+                 "authorization) and whether your story makes sense, usually in twenty to "
+                 "thirty minutes",
+        "questions": (),
+        "hear": "a clear story that matches what they already hold (the same place, dates and "
+                "numbers) and a specific reason for this employer",
+        "drills": ("Say \"tell me about yourself\" in under ninety seconds, out loud, twice.",
+                   "Have the numbers ready: notice, start date, and the band you will name.",
+                   "Two or three questions for them on the process and the team (Ask them), "
+                   "none the website answers.")},
+    "case": {
+        "tests": "how you structure a problem you have not seen, do the maths out loud, and "
+                 "land a recommendation",
+        "questions": (),
+        "hear": "structure before maths, a hypothesis said early, the numbers out loud, and a "
+                "recommendation they could act on",
+        "drills": ("Practise cases out loud and timed, in the style this employer publishes: "
+                   "the mock interview (Step 4) runs them, one at a time.",
+                   "Restate the question and ask one or two clarifying questions before you "
+                   "structure it.",
+                   "Round numbers, and say the maths as you go.",
+                   "End on a recommendation in under a minute, then the risks and the next "
+                   "step.")},
+    "behavioural": {
+        "tests": "evidence of how you behave, one story at a time, with follow-up questions "
+                 "that go deep on a single story",
+        "questions": ("Tell me about a time you changed someone's mind.",
+                      "Tell me about a time you took something on without being asked.",
+                      "Tell me about a time you worked with someone very different from you.",
+                      "Tell me about something you owned that went wrong."),
+        "hear": "specific moments, your own actions said with \"I\", a result in numbers, and "
+                "what you learned",
+        "drills": ("One story per question, known two levels deeper than you will say it: who "
+                   "said what, what you did yourself, what changed.",
+                   "Say \"I\", not \"we\": they score what you did.",
+                   "Expect ten minutes of follow-ups on one story; a thin one runs out.")},
+    "coding": {
+        "tests": "how you solve a problem in code while talking: the approach first, then "
+                 "working code, then tests and complexity",
+        "questions": ("Walk me through some code you're proud of.",
+                      "Tell me about a hard bug you tracked down."),
+        "hear": "the approach before the code, clean working code, edge cases tested, and the "
+                "complexity named",
+        "drills": ("Practise timed problems in the language you will use, talking as you go.",
+                   "Say the approach and its complexity before writing anything.",
+                   "Test with an edge case before you say you are done.")},
+    "technical": {
+        "tests": "depth on your own work: how you did it, the trade-offs, and how you knew it "
+                 "was right",
+        "questions": ("How did you check the result was right?",
+                      "What would you do differently now?"),
+        "hear": "trade-offs you chose on purpose, how you validated the result, and the limits "
+                "you know about",
+        "drills": ("For each project you will mention: the data, the method, the alternative "
+                   "you rejected and why, and the result.",
+                   "Be ready to write a query or reason about a statistic out loud.")},
+    "presentation": {
+        "tests": "how you think and communicate: the choices you made, what you left out, and "
+                 "how you take questions",
+        "questions": ("What would you do with more time?", "What did you leave out, and why?"),
+        "hear": "the answer first, evidence that holds up, and calm, direct handling of "
+                "questions",
+        "drills": ("Lead with the answer, then the evidence.",
+                   "Rehearse to time, with a minute spare.",
+                   "Prepare for the three questions you least want.")},
+}
+_ENGINEERING = re.compile(r"\b(?:engineer\w*|developer|programmer|software|swe|sre|devops)\b",
+                          re.I)
+
+
+def interview_formats(ctx) -> tuple:
+    """([formats], why assumed or ""): the stage's own words first, then an assumption from
+    the step, the employer and the role."""
+    words = " ".join(_text(x) for x in (ctx["stage"], ctx.get("format")))
+    found = [f for f, rx in FORMATS if rx.search(words)]
+    if found:
+        return found, ""
+    step = ctx["step"]
+    if step == "offer":
+        return [], ""
+    if step == "screen":
+        return ["screen"], ""
+    if employer_type(ctx) == "consulting":
+        return ["case", "behavioural"], "a consulting firm's rounds are usually a case and a " \
+                                        "behavioural interview together"
+    if step == "final":
+        return ["behavioural"], "a final round usually turns on motivation and how you work"
+    if _ENGINEERING.search(ctx["role"]):
+        return ["coding"], "an engineering role's technical round is usually code"
+    return ["technical"], "the round after a screen usually goes into how you did the work"
+
+
+def route_lines(ctx) -> list:
+    """How this process started, and what that changes in the room."""
+    ref = referrer_of(ctx)
+    channel = _text((ctx.get("row") or {}).get("channel")).lower()
+    if ref:
+        return ["- Through %s's referral. They know: if asked, say how you know %s in a "
+                "sentence, and do not lead with it." % (ref, ref.split()[0])]
+    if channel == "recruiter":
+        return ["- A recruiter approached you. \"Why are you interested?\" still needs a real "
+                "answer: it is asked as if you had applied."]
+    if ctx.get("process"):
+        return ["- Through a contact, with no application: what they hold came by email or "
+                "through them (What they have been told)."]
+    return ["- You applied: everything you say must match what you sent (What the paper says)."]
+
+
+def format_lines(ctx) -> list:
+    """The format: what it tests, how to prepare, what this employer says about how it runs
+    it (researched by Claude), and how the process started."""
+    formats, assumed = interview_formats(ctx)
+    out = []
+    if assumed:
+        out.append("- Assumed %s: %s. Ask the recruiter what the round involves, then rebuild "
+                   "with --format." % (" and ".join(f for f in formats), assumed))
+    for f in formats:
+        p = FORMAT_PREP[f]
+        out.append("- **%s.** It tests %s. They want to hear %s." % (FORMAT_NAMES[f], p["tests"],
+                                                                      p["hear"]))
+        out += ["  - " + d for d in p["drills"]]
+    state_, lines = _researched(ctx["research"], "interview_process")
+    # What the recruiter or an earlier stage already said about this round (outcome.md) is
+    # the best source there is, and needs no research.
+    fmt = [rx for f, rx in FORMATS if f in formats and f != "screen"]
+    told = [(h, ln) for h, ln in _record(ctx["outcome"])
+            if any(rx.search(ln) for rx in fmt)
+            or (fmt and re.search(r"\b\d+\s*(?:minutes?|mins?|hours?)\b", ln, re.I))]
+    out += ["- What you were told about this round: %s (source: %s/outcome.md)"
+            % (prep.clip(ln, 200), _rel(ctx["folder"])) for _h, ln in told[:2]]
+    if formats == ["screen"]:
+        if state_ == "found":
+            out += ["- What comes after the screen, as %s describes it: %s"
+                    % (ctx["company"], ln) for ln in lines[:2]]
+        elif employer_type(ctx) == "consulting":
+            out.append("- After the screen, a consulting firm's rounds are usually a case and a "
+                       "behavioural interview: start the case drills now, not when the invite "
+                       "comes.")
+    if formats and formats != ["screen"] and not told:
+        if state_ == "found":
+            out += ["- How %s says it runs this: %s" % (ctx["company"], ln) for ln in lines[:3]]
+        elif state_ == "none":
+            out.append("- %s publishes nothing on how it runs this; the drills above stand."
+                       % ctx["company"])
+        else:
+            out.append("- RESEARCH FIRST (Claude, not you): how %s says it runs %s, from its "
+                       "own careers pages. The employer-researcher keeps it as "
+                       "`interview_process` in company_research (or under `%s` when nothing "
+                       "is public), then this is rebuilt."
+                       % (ctx["company"], " and ".join(FORMAT_NAMES[f].lower() for f in formats),
+                          NOT_FOUND_KEY))
+    return out + route_lines(ctx)
+
+
+def where_lines(ctx) -> list:
+    """For someone who moved recently: their area, a briefing Claude researches, and what the
+    question underneath it is. Never a memory of something they have not done: a follow-up
+    question on an invented anecdote is the quickest way to lose the room."""
+    moved = newcomer(ctx)
+    if not moved:
+        return []
+    place = home_place()
+    return [
+        "- You moved recently: you live in %s, since %s (source: profile/person.json). \"How "
+        "are you finding it?\" is friendly, and underneath it they are checking you are settled "
+        "and staying, so an honest line and one specific thing you like answers both. Claude "
+        "researches a short briefing and writes it under %s, each line with its source: the "
+        "neighbourhoods, getting around, food, the weather now, and your field's scene here, so "
+        "you can follow any thread." % (place or "your area", moved, FOUND_OUT[4:]),
+        "- Before the call, do two or three things near you (a walk, a market, a cafe), so every "
+        "anecdote you tell is your own.",
+        "- Anything you do not know yet: \"Still working that out. What would you recommend?\"",
+    ]
+
+
+# How each step's small talk usually opens, so the first minute is not a surprise.
+OPENERS = {
+    "screen": "\"How's your week going?\" and \"Where are you calling from?\"",
+    "technical": "a minute on how your day is going before they start",
+    "final": "how the process has been for you so far, and the journey in if it is on site",
+}
+_SHARED = ("shared employer", "shared school", "same city before")
+
+
+def _lead(ctx) -> str:
+    """The one strength of the person's to put first for this role: their own profile's,
+    nearest the role and the posting."""
+    words = " ".join([ctx["role"], ctx["posting"][:3000]])
+    ranked = sorted(((similar(words, x), x) for x in ctx["facts"].get("strengths") or []
+                     if _text(x)), key=lambda t: -t[0])
+    # With no word in common, the profile's own order stands: it already puts first the
+    # strength nearest the role.
+    return prep.clip(ranked[0][1], 90) if ranked else ""
+
+
+def small_talk_lines(ctx) -> list:
+    """The first minutes, each line doing a job for the rest of the interview: the opener
+    walks into the strength to put first, shared ground makes "why this employer" personal,
+    their news is the bridge to "why us", and a recent move answers the question underneath
+    ("will they stay?"). Everything is true for this person and this call; nothing is
+    invented to fill a silence."""
+    import reading as _reading
+    out = []
+    lead = _lead(ctx)
+    if ctx["step"] in OPENERS:
+        out.append("- The first minute: expect %s. Answer in a sentence, warmly, and ask one "
+                   "back.%s" % (OPENERS[ctx["step"]], (
+                       " If something true from your week is close to the strength to put "
+                       "first for this role (\"%s\"), say that: it walks you straight into "
+                       "it." % lead) if lead else ""))
+    for who in _interviewers(ctx):
+        if not who["name"]:
+            continue
+        cid, found, _row = _reading_of(ctx, who["name"])
+        for _strength, kind, what, _ev in _reading.hooks(found or {}):
+            if kind in _SHARED:
+                out.append("- With %s: %s. If it comes up, it is an easy way in, and it makes "
+                           "\"why %s\" personal rather than generic; never as something you "
+                           "looked up (source: documents/network/%s/reading.json)."
+                           % (who["name"], what, ctx["company"], cid))
+    research = ctx["research"] or {}
+    news = prep._facts(research.get("recent_news") or research.get("news"),
+                       prep._research_source(research))
+    if news:
+        why_us = hooks(ctx)[:1]
+        same = bool(why_us) and why_us[0].value == news[0].value
+        out.append("- If the talk turns to them: %s (source: %s). It is %s, so say it once, "
+                   "where it lands best." % (prep.clip(news[0].value, 160), news[0].source,
+                                             "also your hook for \"Why %s?\"" % ctx["company"]
+                                             if same else "a bridge into \"Why %s?\""
+                                             % ctx["company"]))
+    out += where_lines(ctx)
+    if out:
+        out += ["- Keep it to a minute or two: this is where they decide whether they like "
+                "talking to you, so warm, short, and back to the point.",
+                "- Anything you have not done or do not know, say so: an honest \"not yet\" "
+                "lands better than an invented answer. Never say you have done, seen or been "
+                "somewhere you have not."]
+    return out
+
+
+# ---------------------------------------------------------------- the living document
+
+def conditional_questions(ctx) -> list:
+    """[(question, why)] a screen asks only of some people: a referred candidate, a
+    temporary status, a recent move, a consulting firm's travel."""
+    out = []
+    if ctx["step"] != "screen":
+        return out
+    ref = referrer_of(ctx)
+    if ref:
+        out.append(("How do you know %s?" % ref, "you were referred"))
+    if temporary_status(ctx):
+        out.append(("What about longer term, after your permit?", "your status is temporary"))
+    if newcomer(ctx):
+        out.append(("How are you finding %s?" % (home_place().split(",")[0] or "it here"),
+                    "you moved recently"))
+    if employer_type(ctx) == "consulting":
+        out.append(("Are you willing to travel?", "a consulting firm asks every time"))
+    return out
+
+
+def _owned(text) -> dict:
+    """{section: body lines} for the sections the person writes in, from the last version."""
+    out, cur = {}, None
+    for line in str(text or "").splitlines():
+        m = re.match(r"^## (.+?)\s*$", line)
+        if m:
+            cur = m.group(1) if m.group(1) in OWNED else None
+            if cur:
+                out[cur] = []
+            continue
+        if cur:
+            out[cur].append(line)
+    return out
+
+
+def _answer_blocks(lines) -> dict:
+    """{normalised question: (question, [answer lines])} from the Your answers section."""
+    out, q, body = {}, None, []
+    for line in list(lines or ()) + ["### "]:
+        m = re.match(r"^### (.*)$", line)
+        if m:
+            if q:
+                out[what_works._norm(q)] = (q, body)
+            q, body = m.group(1).strip(), []
+        elif q is not None and not line.startswith(INTENT_MARK):
+            body.append(line)
+    return out
+
+
+def _found_out(text) -> list:
+    """The lines written under Small talk's own heading, kept on every rebuild, whether or
+    not the section still has anything else to say."""
+    m = re.search(r"^" + re.escape(FOUND_OUT) + r"\s*$", str(text or ""), re.M)
+    if not m:
+        return []
+    body = text[m.end():]
+    nxt = re.search(r"^## ", body, re.M)     # the next section; a "#### Food" inside stays
+    lines = [ln.rstrip() for ln in (body[:nxt.start()] if nxt else body).splitlines()
+             if ln.strip() not in (FOUND_EMPTY, "- Nothing yet: each line you add here, with its "
+                                   "source, stays.")]
+    # Blank lines between their groups stay; only the edges are trimmed.
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return lines
+
+
+def _own_words(body) -> list:
+    """The lines of an answer block the person (or the session, for them) wrote: never the
+    marker or the "- From:" lines this file generated, which a rebuild makes afresh."""
+    return [ln for ln in body or () if ln.strip() and TO_WRITE not in ln
+            and not ln.lstrip().startswith(("- From:", "- careful:"))]
+
+
+def answer_lines(ctx, answered) -> list:
+    """Your answers: one block a question, the person's own words kept from the last
+    version, and otherwise what to say it from, marked to be written."""
+    kept = _answer_blocks(_owned(ctx["living"]).get("Your answers"))
+    out = []
+    for q, a in answered:
+        out.append("### %s" % q["question"])
+        checking, hear = intent(q["question"], ctx["company"])
+        if checking:
+            out.append("%s %s. They want to hear: %s." % (INTENT_MARK, checking, hear))
+        old = kept.get(what_works._norm(q["question"]))
+        body = _own_words(old[1] if old else [])
+        if body:
+            out += body
+        else:
+            out.append(TO_WRITE)
+            out += ["- From: %s" % re.sub(r"^Say: ", "", ln) for ln in a["lines"][:3]]
+        out.append("")
+    # An answer written for a question this stage does not list (an earlier stage's, one the
+    # person added, one reworded since) is never dropped: it follows, as they wrote it.
+    asked = {what_works._norm(q["question"]) for q, _a in answered}
+    for key, (q, body) in kept.items():
+        mine = _own_words(body)
+        if key not in asked and mine:
+            out += ["### %s" % q] + mine + [""]
+    return out
+
+
+def check(path) -> list:
+    """[(question, problem)] for the answers in a living document that are not yet fit to
+    say: the first ONE_SCREEN_QUESTIONS must be written, and every written one must read
+    as said (voice_check.spoken_findings). Raw profile wording is never an answer."""
+    text = _read(path)
+    blocks = _answer_blocks(_owned(text).get("Your answers"))
+    # Research the document asks Claude for is part of being ready: the person never sees a
+    # RESEARCH FIRST line, only what it found.
+    out = [("Research", re.sub(r"^\s*-\s*", "", ln).split(". The employer-researcher")[0])
+           for ln in text.splitlines() if "RESEARCH FIRST (Claude" in ln]
+    for i, (q, body) in enumerate(blocks.values()):
+        mine = _own_words(body)
+        if not " ".join(mine).strip():
+            if i < ONE_SCREEN_QUESTIONS:
+                out.append((q, "not written yet"))
+            continue
+        out += [(q, why) for why in prep.unsayable(mine)]
+    return out
+
+
+def stages_mark(ctx) -> str:
+    """The stages this document has been built for, kept in it (open_actions reads it)."""
+    m = _STAGES_MARK.search(ctx["living"] or "")
+    have = [s for s in (m.group(1).split("; ") if m else []) if s]
+    if ctx["stage"] not in have:
+        have.append(ctx["stage"])
+    return "<!-- stages: %s -->" % "; ".join(have)
+
+
+def campaign_offer(ctx) -> str:
+    """The one-time offer of a chat just for this employer, once a stage is booked: "" when
+    it was made before or nothing is booked yet."""
+    booked = any(s["scheduled"] and not s["done"] for s in ctx["stages"])
+    if not booked or os.path.exists(os.path.join(ctx["folder"], CAMPAIGN_FILE)):
+        return ""
+    return ("Want a separate chat just for %s? It keeps the prep in one place and leaves this "
+            "chat for the rest of the search." % ctx["company"])
+
+
+CAMPAIGN_FILE = "campaign.json"
+
+
+def record_campaign(company, role, chat="", declined=False, today=None) -> str:
+    """The person's answer to the campaign chat: {"chat", "started"} or {"declined"}, in the
+    process's folder. The offer is made once; open_actions and the brief read it, and leave
+    an employer with a campaign chat to that chat."""
+    folder = outreach.app_folder(company, role)
+    os.makedirs(folder, exist_ok=True)
+    day = _text(today) or dt.date.today().isoformat()
+    body = {"declined": day} if declined else {"chat": _text(chat), "started": day}
+    path = os.path.join(folder, CAMPAIGN_FILE)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(body, fh, indent=1)
+        fh.write("\n")
+    return path
+
+
+def campaign_chat(folder) -> str:
+    """The campaign chat that owns this process, or "" (none, or the offer declined)."""
+    try:
+        with open(os.path.join(folder, CAMPAIGN_FILE), encoding="utf-8") as fh:
+            return _text(json.load(fh).get("chat"))
+    except (OSError, ValueError, AttributeError):
+        return ""
 
 
 # ---------------------------------------------------------------- the pack
 
 def _section(title, lines, empty) -> list:
+    if title not in SECTIONS:
+        raise ValueError("%r is not one of the pack's SECTIONS" % title)
     return ["## " + title, ""] + (list(lines) if lines else ["- " + empty]) + [""]
 
 
 def pack_markdown(ctx, never_say=None) -> str:
-    """The whole pack, one screen first. `never_say` defaults to the person's phrases."""
+    """The living document for this process, one screen first. `never_say` defaults to the
+    person's phrases. What the person wrote (their answers, the rework, their notes, what
+    they found out about where they live) is carried from the last version."""
     banned = (lambda text: [m.group(0) for _p, rx in never_say for m in rx.finditer(text)]) \
         if never_say is not None else learned.dislikes
     questions = likely_questions(ctx)
@@ -1008,13 +2460,24 @@ def pack_markdown(ctx, never_say=None) -> str:
     one_money, money_lines = money(ctx)
     hook_facts = hooks(ctx)
     donts = do_not_say(ctx, never_say)
+    owned = _owned(ctx["living"])
 
     when = ", ".join(x for x in (ctx["date"], "with " + ctx["with"] if ctx["with"] else "") if x)
-    lines = ["# Interview pack: %s at %s, %s" % (ctx["role"], ctx["company"], ctx["stage"]), "",
-             "%sWritten %s. One screen first, the detail after; every fact carries its source, "
-             "and anything unsourced was left out." % (when + ". " if when else "", ctx["today"]), ""]
+    lines = ["# Interview prep: %s at %s" % (ctx["role"], ctx["company"]), "",
+             "Last updated %s. Next: %s%s. One document for this whole process: change an "
+             "answer here, and it is sent to you again." % (ctx["today"], ctx["stage"],
+                                                            ", " + when if when else ""),
+             "Every fact carries its source, and anything unsourced was left out.",
+             stages_mark(ctx), ""]
 
-    screen = ["**Likely questions, and what to answer with**"]
+    formats, _assumed = interview_formats(ctx)
+    assessing = "; ".join(FORMAT_PREP[f]["tests"] for f in formats) or \
+        STAGE_ANGLE.get(ctx["step"], "")
+    screen = ["**What they are assessing:** %s." % assessing if assessing else "",
+              "**What they want to hear:** %s." % "; ".join(FORMAT_PREP[f]["hear"] for f in formats)
+              if formats else "", ""]
+    screen = [ln for i, ln in enumerate(screen) if ln or (i == 2 and any(screen[:2]))]
+    screen += ["**Likely questions, and what to answer with**"]
     screen += ["%d. %s -> %s" % (i, q["question"], a["short"])
                for i, (q, a) in enumerate(answered[:ONE_SCREEN_QUESTIONS], 1)]
     screen += ["", "**Hooks**"]
@@ -1027,38 +2490,66 @@ def pack_markdown(ctx, never_say=None) -> str:
     # The list of what not to say quotes the very words it warns against, so it is neither
     # flagged for them here nor read by voice_check as something the person will say.
     quoted = [voice_check.QUOTED_OPEN, "**Do not say**"] + donts[:MAX_DO_NOT] + [voice_check.QUOTED_CLOSE]
-    lines += _section(SECTIONS[0], prep._flag_banned(screen, banned) + quoted, "")
+    lines += _section("On one screen", prep._flag_banned(screen, banned) + quoted, "")
+    lines += _section("Your answers", prep._flag_banned(answer_lines(ctx, answered), banned),
+                      "No questions to answer yet.")
+    lines += _section("What they have been told", told_lines(ctx),
+                      "Nothing logged to anyone at %s, and no form on file." % ctx["company"])
+    lines += _section("Who you are meeting", meeting_lines(ctx),
+                      "Nobody named for this stage yet: when the invite names them, rebuild this "
+                      "with --with \"<name, title>\".")
+    lines += _section("The format", format_lines(ctx), "An offer: nothing to drill.")
 
     detail = []
     for q, a in answered:
         detail.append("- **Q.** %s (%s; source: %s)" % (q["question"], q["why"], q["source"]))
+        checking, hear = intent(q["question"], ctx["company"])
+        if checking:
+            detail.append("  - Checking %s. They want to hear %s." % (checking, hear))
         detail += ["  - " + ln for ln in a["lines"]]
-    lines += _section(SECTIONS[1], prep._flag_banned(detail, banned),
+    lines += _section("Likely questions", prep._flag_banned(detail, banned),
                       "No questions: nothing on file to anticipate.")
-    lines += _section(SECTIONS[2], prep._flag_banned(_story_lines(ctx), banned),
+    lines += _section("Stories", prep._flag_banned(_story_lines(ctx), banned),
                       "No STAR stories in profile/%s: write three or four before the interview "
                       "(/setup --section history)." % STORIES_FILE)
-    lines += _section(SECTIONS[3], paper_lines(ctx), "Nothing on file about what was sent.")
-    lines += _section(SECTIONS[4], prep._flag_banned(gap_lines(ctx), banned),
+    lines += _section("What the paper says", paper_lines(ctx), "Nothing on file about what was sent.")
+    lines += _section("Gaps and honest framing", prep._flag_banned(gap_lines(ctx), banned),
                       "No gap the posting names: lead with the matches.")
-    lines += _section(SECTIONS[5], money_lines, prep.NOT_RESEARCHED)
+    lines += _section("Money and eligibility", money_lines, prep.NOT_RESEARCHED)
     company = prep._company_lines(ctx["research"], ctx["today"])
     stale = prep._stale_line(ctx["research"], ctx["today"]) if company else ""
-    lines += _section(SECTIONS[6], company + ([stale] if stale else []),
-                      "%s. Research it before the interview (interview.md Step 2)."
-                      % prep.NOT_RESEARCHED)
-    lines += _section(SECTIONS[7], prep._flag_banned(ask_lines(ctx), banned),
+    lines += _section("The company", company + ([stale] if stale else []),
+                      "RESEARCH FIRST (Claude, not you): %s itself, from its own pages "
+                      "(interview.md Step 2), then this is rebuilt." % ctx["company"])
+    talk = small_talk_lines(ctx)
+    found = _found_out(ctx["living"])
+    lines += _section("Small talk", talk + ["", FOUND_OUT, ""] + (found or [FOUND_EMPTY]),
+                      "")
+    ask = ask_lines(ctx) + ["- Is there anything about my background you'd like me to go into "
+                            "more? (the close: it gives them the last word on any doubt)"]
+    lines += _section("Ask them", prep._flag_banned(ask, banned),
                       "Nothing researched to anchor a question on.")
-    lines += _section(SECTIONS[8], warm_lines(ctx), "Nobody in the contact book at %s."
+    lines += _section("Warm route", warm_lines(ctx), "Nobody in the contact book at %s."
                       % ctx["company"])
-    lines += _section(SECTIONS[9], earlier_lines(ctx), "No earlier stage on record.")
-    lines += _section(SECTIONS[10], ctx["rework"], REWORK_EMPTY)
+    lines += _section("Earlier stages", earlier_lines(ctx), "No earlier stage on record.")
+    lines += _section("To rework", ctx["rework"], REWORK_EMPTY)
+    notes = [ln for ln in owned.get("Notes", []) if ln.strip() != NOTES_EMPTY]
+    while notes and not notes[0].strip():
+        notes.pop(0)
+    while notes and not notes[-1].strip():
+        notes.pop()
+    lines += _section("Notes", notes, NOTES_EMPTY[2:])
     return "\n".join(lines).rstrip() + "\n"
 
 
+def living_path(ctx) -> str:
+    return os.path.join(ctx["folder"], LIVING)
+
+
 def write_pack(ctx, never_say=None) -> str:
-    """Write the pack beside the application and return its path. Rework notes carry over."""
-    path = os.path.join(ctx["folder"], pack_name(ctx["stage"]))
+    """Write the living document beside the application and return its path. What the
+    person wrote in it is kept."""
+    path = living_path(ctx)
     os.makedirs(ctx["folder"], exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(pack_markdown(ctx, never_say))
@@ -1100,9 +2591,12 @@ def add_asked(company, role, stage, question, story="", landed="", note="", date
 
 
 def add_rework(company, role, stage, question, note, date=None, where="mock") -> str:
-    """An answer to work on, appended to the stage's pack under To rework."""
+    """An answer to work on, appended under To rework in the process's living document (or
+    an older stage's pack, where the process predates it)."""
     folder = outreach.app_folder(company, role)
-    path = os.path.join(folder, pack_name(stage))
+    path = os.path.join(folder, LIVING)
+    if not os.path.exists(path):
+        path = os.path.join(folder, pack_name(stage))
     text = _read(path)
     if not text:
         raise LookupError("no pack for %s at %s yet: build it first (pack --write)"
@@ -1125,6 +2619,19 @@ def add_rework(company, role, stage, question, note, date=None, where="mock") ->
 
 # ---------------------------------------------------------------- CLI
 
+def _day(value) -> str:
+    """A date as YYYY-MM-DD, or argparse's own error: a short or reversed date is written to
+    outcome.md and never read back as booked."""
+    if not value:
+        return ""               # argparse runs a default through the type as well
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) and dt.date.fromisoformat(value):
+            return value
+    except ValueError:
+        pass
+    raise argparse.ArgumentTypeError("%r is not a date: write it YYYY-MM-DD" % value)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1132,11 +2639,14 @@ def main(argv=None) -> int:
     p.add_argument("company")
     p.add_argument("--role", default="")
     p.add_argument("--stage", default="", help="as outcome.md names it; default the next booked")
-    p.add_argument("--date", default="")
+    p.add_argument("--date", default="", type=_day)
     p.add_argument("--with", dest="with_", default="", help="who it is with, name or title")
+    p.add_argument("--format", dest="format_", default="",
+                   help="what the round is, when its name does not say: case, coding, "
+                        "behavioural, technical, presentation or screen")
     p.add_argument("--map", default="", help="JSON {question: story title} the session mapped")
     p.add_argument("--write", action="store_true", help="save it beside the application")
-    p.add_argument("--today")
+    p.add_argument("--today", type=_day)
     q = sub.add_parser("asked", help="record a question an interview asked")
     r = sub.add_parser("rework", help="add an answer to work on to the stage's pack")
     for s in (q, r):
@@ -1145,14 +2655,83 @@ def main(argv=None) -> int:
         s.add_argument("--stage", required=True)
         s.add_argument("--question", required=True)
         s.add_argument("--note", default="")
-        s.add_argument("--date")
+        s.add_argument("--date", type=_day)
     q.add_argument("--story", default="")
     q.add_argument("--landed", default="", choices=("",) + what_works.LANDED)
     q.add_argument("--source", default="", help="for a question they were told about, not "
                    "asked: where it came from (the recruiter, a contact, a review site and its link)")
     r.add_argument("--where", default="mock", help="mock, or the real interview")
+    pr = sub.add_parser("process", help="a hiring process with no application (a referral, a "
+                                        "recruiter's call): register it so the pack, /outcome "
+                                        "and the brief can read it")
+    pr.add_argument("company")
+    pr.add_argument("--contact", required=True, help="the contact_id who leads it")
+    pr.add_argument("--role", required=True)
+    pr.add_argument("--stage", default="")
+    pr.add_argument("--date", default="", type=_day)
+    pr.add_argument("--with", dest="with_", default="")
+    pr.add_argument("--format", dest="format_", default="")
+    pr.add_argument("--today", type=_day)
+    cp = sub.add_parser("campaign", help="record the answer to the offer of a chat just for "
+                                         "this employer")
+    cp.add_argument("company")
+    cp.add_argument("--role", default="")
+    who = cp.add_mutually_exclusive_group(required=True)
+    who.add_argument("--yes", metavar="CHAT", help="the campaign chat's title or session id")
+    who.add_argument("--no", action="store_true")
+    ck = sub.add_parser("check", help="are the answers in the living document fit to say: "
+                                      "written, first person, as said rather than written")
+    ck.add_argument("company")
+    ck.add_argument("--role", default="")
     a = ap.parse_args(argv)
     try:
+        if a.cmd == "process":
+            row, folder, added = register_process(a.company, a.contact, a.role, a.stage, a.date,
+                                                  a.with_, today=a.today)
+            print("%s: %s at %s, led by %s; its folder is %s.\n"
+                  % ("registered" if added else "already registered", row["role"], row["company"],
+                     row["contact_person"], _rel(folder)))
+            # One command from a booked call to its document: the prep is built and kept now.
+            ctx = gather(row["company"], row["role"], a.stage, a.date, a.with_, a.today,
+                         format_=a.format_)
+            sys.stdout.write(pack_markdown(ctx))
+            _keep(ctx)
+            if a.stage and not a.date:
+                print("no date given: the stage is on record, but the brief cannot remind you "
+                      "of it until it has one (run this again with --date)")
+            return 0
+        if a.cmd == "campaign":
+            tracker = what_works._csv(person.state("job_search_tracker.csv"))
+            row = _row(a.company, a.role, tracker,
+                       state.load_contacts(person.state("network_contacts.csv")))
+            path = record_campaign(_text(row.get("company")), _text(row.get("role")),
+                                   chat=a.yes or "", declined=a.no)
+            print("recorded in %s%s" % (_rel(path), "; the rest of the search leaves %s to that "
+                                        "chat" % row.get("company") if a.yes else ""))
+            return 0
+        if a.cmd == "check":
+            tracker = what_works._csv(person.state("job_search_tracker.csv"))
+            row = _row(a.company, a.role, tracker,
+                       state.load_contacts(person.state("network_contacts.csv")))
+            path = os.path.join(outreach.app_folder(_text(row.get("company")),
+                                                    _text(row.get("role"))), LIVING)
+            if not os.path.exists(path):
+                print("interview_pack: no %s yet: build it with pack --write" % _rel(path))
+                return 1
+            found = check(path)
+            for q, why in found:
+                print("- %s: %s" % (q, why))
+            todo = [q for q, b in _answer_blocks(_owned(_read(path)).get("Your answers")).values()
+                    if not _own_words(b)]
+            research = sum(1 for q, _w in found if q == "Research")
+            answers = len(found) - research
+            print("; ".join(x for x in (
+                "%d answer(s) not fit to say yet" % answers if answers else "",
+                "%d piece(s) of research still to do" % research if research else "")
+                if x) + "." if found else "Every answer written is fit to say aloud.")
+            if todo and not found:
+                print("Still to write, beyond the first five: %d." % len(todo))
+            return 1 if found else 0
         if a.cmd == "asked":
             path = add_asked(a.company, a.role, a.stage, a.question, a.story, a.landed,
                              a.note, a.date, a.source)
@@ -1160,18 +2739,50 @@ def main(argv=None) -> int:
                   "already in %s for that stage" % "/".join(what_works.BANK))
             return 0
         if a.cmd == "rework":
-            print("added to %s" % _rel(add_rework(a.company, a.role, a.stage, a.question,
-                                                   a.note, a.date, a.where)))
+            # The process's own row names the role, as check and campaign find it.
+            tracker = what_works._csv(person.state("job_search_tracker.csv"))
+            row = _row(a.company, a.role, tracker,
+                       state.load_contacts(person.state("network_contacts.csv")))
+            print("added to %s" % _rel(add_rework(_text(row.get("company")) or a.company,
+                                                   _text(row.get("role")) or a.role, a.stage,
+                                                   a.question, a.note, a.date, a.where)))
             return 0
-        story_map = json.load(open(a.map, encoding="utf-8")) if a.map else {}
-        ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map)
-    except (LookupError, ValueError) as exc:
+        if a.map:
+            with open(a.map, encoding="utf-8") as fh:
+                story_map = json.load(fh)
+            if not isinstance(story_map, dict):
+                raise ValueError("%s holds no {question: story title} object" % a.map)
+        else:
+            story_map = {}
+        ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map,
+                     format_=a.format_)
+        sys.stdout.write(pack_markdown(ctx))
+        if a.write:
+            _keep(ctx)
+    except (LookupError, ValueError, OSError) as exc:
         print("interview_pack: %s" % exc, file=sys.stderr)
         return 1
-    sys.stdout.write(pack_markdown(ctx))
-    if a.write:
-        print("\nwritten: %s" % _rel(write_pack(ctx)))
     return 0
+
+
+def _keep(ctx) -> None:
+    """Write the living document and say what is left before it goes to the person."""
+    path = write_pack(ctx)
+    print("\nwritten: %s" % _rel(path))
+    left = check(path)
+    research = [w for q, w in left if q == "Research"]
+    for line in research:
+        print("research first: %s" % line)
+    if len(left) > len(research):
+        print("not yet fit to say: %d answer(s); write them in the document as you would say "
+              "them, then `interview_pack.py check \"%s\"`"
+              % (len(left) - len(research), ctx["company"]))
+    offer = campaign_offer(ctx)
+    if offer:
+        print("offer once, optionally, at the end of the reply: %s On a yes, automation/"
+              "prompts/campaign.md says how to start it; either way record the answer: "
+              "python3 tools/interview_pack.py campaign \"%s\" --yes \"<the chat's title or "
+              "id>\" | --no" % (offer, ctx["company"]))
 
 
 if __name__ == "__main__":

@@ -72,9 +72,17 @@ Each folder holds:
   the cover letter's verified company fact. Sending it is the candidate's call.
 - **`form_fields.txt`** - answers given to the portal's own questions, so a follow-up or
   a second application does not contradict the first.
-- **`interview_prep_<stage>.md`** - the prep pack for one interview stage, written by
-  `tools/interview_pack.py` when `/interview` runs. One file per stage, so earlier packs
-  stay as history; a rebuild keeps its "To rework" section.
+- **`interview_prep.md`** - the one living prep document for this hiring process, written
+  by `tools/interview_pack.py` when `/interview` runs and rebuilt in place at every stage.
+  What the person writes in it is kept on every rebuild: Your answers, To rework, Notes, and
+  what they found out about where they live. Packs an older version wrote one per stage
+  (`interview_prep_<stage>.md`) stay as history.
+- **`campaign.json`** - the person's answer to the offer of a chat just for this employer:
+  `{"chat", "started"}` or `{"declined"}`. Written once by `interview_pack.py campaign`;
+  `tools/open_actions.py` and the brief leave an employer with a campaign chat to it.
+- A process with no application (a referral that led to a recruiter's call) has a folder
+  too, made by `interview_pack.py process`: `outcome.md` and the living document, and none of
+  the application files above.
 - **`outcome.md`** - written by `/outcome` once there is a result. Later sessions and
   `tools/what_works.py` read it, so the header is fixed:
 

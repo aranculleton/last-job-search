@@ -7,6 +7,8 @@
     "pronouns": {"subject": "they", "object": "them", "possessive": "their"},
     "file_prefix": "Morgan_Ellis",
     "location": "Manchester, UK",
+    "area": "Chorlton, Manchester",
+    "moved": "none",
     "country": "GB",
     "phone": "+44 7700 900123",
     "email": "morgan.ellis@example.com",

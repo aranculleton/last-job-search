@@ -43,6 +43,8 @@ From the normalised data compute:
 
 **Drafted rows are excluded from every statistic below** - they were never submitted. Report the Drafted count on its own, and include it only in the status breakdown.
 
+**So are hiring processes with no application** - rows whose `notes` say `process, no portal application` (a referral that led to a recruiter's call, registered by `tools/interview_pack.py process`). Nothing was submitted, so they are not applications sent and do not belong in the funnel or the rates; report them on their own ("Processes with no application: N"), with their stages, and in the status breakdown.
+
 - **Total applications**
 - **By status bucket:** count per bucket
 - **By sector:** count per unique sector value

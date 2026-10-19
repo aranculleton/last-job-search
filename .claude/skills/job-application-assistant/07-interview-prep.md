@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.3
+framework_version: 1.1.4
 ---
 
 # Interview Preparation Guide
@@ -69,11 +69,13 @@ as approximate. -->
 
 ## Common Tough Questions
 
+An answer can end on a `Suits:` or a `Not for:` line naming the kinds of employer it fits or argues against (consulting, product, bank, public sector, startup). `tools/interview_pack.py` marks a stock answer CAREFUL when it argues against the employer it is about to be said to, "depth over rotating clients" said to a consultancy, and reads untagged answers for the words that would.
+
 ### "Why are you leaving Brindle & Hart Logistics?" / "Why are you looking?"
 > I am not unhappy - the role has given me ownership of the forecasts from the warehouse data feed through to what the planners order. The move is about scope. I have taken demand forecasting about as far as one distribution network allows, and I want a larger or more varied planning problem, with a team that plans over a longer horizon than the week. `[CONFIRM: check this matches your actual reason before using it.]`
 
 ### "Do you have the right to work here, and will you need sponsorship?"
-> Answer both plainly, exactly as the work-authorization facts in `profile/01-candidate-profile.md` record them. Where the profile says no sponsorship is required, the second is a plain no, with no caveat. `[PLACEHOLDER: only if the candidate's status has an expiry date, add the expiry answer here: state the date plainly and say what the plan is, because evasiveness reads worse than the status itself. Delete this note otherwise.]` `[CONFIRM: check the facts against the profile before any interview.]`
+> Answer both plainly, exactly as the work-authorization facts in `profile/01-candidate-profile.md` record them. Where the profile says no sponsorship is required, the second is a plain no, with no caveat. `[PLACEHOLDER: only if the candidate's status has an expiry date, add the answer for when they are asked about it directly. Follow the disclosure rule their profile records: many people say only that they are entitled to work and need no sponsorship, and name the permit or its dates only when asked. Asked, say it plainly and say what the plan is, because evasiveness reads worse than the status itself. Never volunteer it. Delete this note otherwise.]` `[CONFIRM: check the facts against the profile before any interview.]`
 
 ### "Walk me through your career - why these moves?"
 > Each role took on more of the chain than the last: a graduate year forecasting footfall for retail clients at Saltmarsh Analytics, then in-house at Oakmere Foods owning the measurement on stock and suppliers, then Brindle & Hart Logistics owning the forecasts and the data feed behind them. What I am looking for now is a larger planning problem to own. Say it in one breath and move on.
@@ -88,6 +90,8 @@ as approximate. -->
 
 ### "Where do you see yourself in 5 years?"
 > Leading the planning analytics for a network end to end - the forecasts, the data feeds behind them and the relationship with the planners who act on the output - with a small team around it. I would rather go deep on planning than broad across many analytics topics.
+
+Not for: consulting
 
 ### "What's your biggest weakness?"
 > I tend to polish a forecast before showing it to the people who will use it, which delays the feedback that would have improved it. At Brindle & Hart I now share a rough weekly version early and agree the error measure with the planners before I tune anything. It costs a little pride at the start and saves rework later, but I still have to push myself to show work early. `[CONFIRM: check this matches your actual experience before using it.]`

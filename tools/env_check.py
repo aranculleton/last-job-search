@@ -35,6 +35,12 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+import local_path  # noqa: E402
+
+# Look where a person's computer keeps TeX and Bun before saying either is missing: a
+# chat's shell on a Mac lacks /Library/TeX/texbin, and this said "install LaTeX" to
+# someone whose LaTeX compiled both example documents.
+local_path.extend()
 
 HOSTS = (
     ("LinkedIn", "https://www.linkedin.com"),

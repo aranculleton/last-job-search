@@ -147,7 +147,15 @@ def save(company, data, root=None) -> str:
         # only copy of whatever it held.
         with open(target, encoding="utf-8") as fh:
             merged = json.load(fh)
-    merged.update(data or {})
+    data = dict(data or {})
+    # Two keyed collections grow across runs rather than being replaced: the teams one
+    # interview pack asked about, and the topics searched for with nothing public found.
+    for key in ("teams",):
+        if isinstance(merged.get(key), dict) and isinstance(data.get(key), dict):
+            data[key] = {**merged[key], **data[key]}
+    if isinstance(merged.get("not_found"), list) and isinstance(data.get("not_found"), list):
+        data["not_found"] = list(dict.fromkeys(merged["not_found"] + data["not_found"]))
+    merged.update(data)
     merged.setdefault("company", str(company).strip())
     os.makedirs(os.path.dirname(target), exist_ok=True)
     tmp = target + ".tmp"

@@ -210,8 +210,22 @@ caught at once. So between finding and writing there is a read, and
   wherever the session runs. This session never
   fetches LinkedIn itself: its robots.txt disallows every crawler it does not name and a
   profile request answers HTTP 999.
+- **The funnel: fewer, better-spent reads, never faster ones.** A profile read is the
+  scarcest thing a run spends and the one that touches the person's account, and in one
+  session five of seven went on facts a cheaper check held: a request already Pending, a
+  city elsewhere, a role outside the function. So the order is fixed. **Free sources**
+  make the list: search results with the search tool's own summary of each (which often
+  names the place and the employer), and the connections export. **One-page reads**
+  screen it: the sent-invitations list once a session (who already has a request
+  pending, everyone at once) and an employer's People tab (a dozen people's headline,
+  place and degree for one load), both paced and capped like a profile. **A deep read**,
+  their own profile, only then, and only for the few the person will write to that day:
+  at most `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
+  Everyone else is drafted from what the cheaper reads showed, marked as waiting on a
+  read. No change to the funnel may add a page load, shorten the pacing or add a click
+  unless the person sets it in their profile.
 - **The route is chosen, never asked.** `reading.py route` reads which browser the chat
-  has, never where it was started, and says what to do: read the best ten in the browser,
+  has, never where it was started, and says what to do: read the best few in the browser,
   switch it on first, or offer a paste for the best three only (screenshots on a phone, a
   paste on a computer). The person is never told to press a key, click, tap or find
   anything; a path comes from `tools/claude_surfaces.py`, with its official page.
@@ -227,8 +241,9 @@ caught at once. So between finding and writing there is a read, and
   one the whole of this skill runs on, so it is asked once, plainly (the `profile-reads`
   upgrade, and `/setup`), and kept to what a person reading profiles by hand would do:
   only the people public sources left likely and a request goes to that day, each opened
-  once, one at a time with a varied gap around a minute and a half and a longer break
-  after a varying three to seven, each page scrolled to its end at reading pace with
+  once, one at a time with a varied gap around a minute and a half and a longer break of
+  5 to 12 minutes (theirs to change: `PROFILE_READ_BREAK_MINUTES`) after a varying three
+  to seven, each page scrolled to its end at reading pace with
   nothing clicked, and a stop for the day at any check or warning, or at the sign-in page after
   they signed in (`reading.py gate` and `stop`). The first sign-in is theirs to do, in
   the pane, and is a wait rather than a stop (`reading.py signin`). The caps are

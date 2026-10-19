@@ -79,10 +79,18 @@ THREAD_STATUSES = [
     "converted_to_application",
     "gone_cold",             # no reply after a nudge
     "closed",                # explicit no, or we walked away
+    # Set aside before anything was sent: a queued note the person chose not to send,
+    # for now. Never a dead end, so `state.py reopen` brings it back; a closed row is
+    # a real one (they left, they said no, nobody can reach them). Thirty-one rows in
+    # one contact book were closed for "queue dropped; never sent", and a run told
+    # the person their best employers were "already covered" with nobody written to.
+    "dropped",
 ]
 
 OWED_BY_US = {"replied_needs_response"}
-TERMINAL = {"gone_cold", "closed", "converted_to_application"}
+TERMINAL = {"gone_cold", "closed", "converted_to_application", "dropped"}
+# Nothing has gone to them: no message, no request. Who `state.py reopen` may bring back.
+NEVER_SENT = {"not_contacted", "dropped"}
 
 # Platform limits the output has to fit inside. LinkedIn caps connection
 # requests weekly and InMail credits monthly; sending more than the user can

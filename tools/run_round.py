@@ -33,6 +33,7 @@ Every intermediate file is kept in --out so a stage can be re-run alone, and
 every one of them is a JSON list.
 """
 import argparse, datetime, json, os, shutil, subprocess, sys
+import tempfile
 import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -73,28 +74,81 @@ def _stage_budget(cmd, deadline):
     return max(1, min(own, int(deadline - time.monotonic())))
 
 
+class StageTimeout(Exception):
+    """A stage ran past its budget and was stopped."""
+
+
+def _stream(cmd, log, budget):
+    """(exit code, stdout, stderr) for one stage, its stderr passed on as it arrives.
+
+    A stage's output was captured and shown only when it ended, so a chat running a
+    45-minute round in the background could not say how far along it was, or tell
+    a slow round from a hung one. Each stderr line (scrape_wide's progress lines among
+    them) now goes to this process's stderr and to round.log the moment it is written."""
+    import threading
+    with tempfile.TemporaryFile("w+", encoding="utf-8") as out:
+        p = subprocess.Popen(cmd, cwd=ROOT, text=True, stdout=out, stderr=subprocess.PIPE,
+                             encoding="utf-8", errors="replace")
+        lines = []
+
+        def pump():
+            for line in p.stderr:
+                lines.append(line)
+                print(line, end="", file=sys.stderr, flush=True)
+                log.write(line)
+                log.flush()
+
+        th = threading.Thread(target=pump, daemon=True)
+        th.start()
+        try:
+            p.wait(timeout=budget)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+            th.join(5)
+            out.seek(0)
+            raise StageTimeout(out.read() + "".join(lines)) from None
+        th.join(5)
+        out.seek(0)
+        return p.returncode, out.read(), "".join(lines)
+
+
+# What a stage that runs out of time can still keep, by its script's name: called
+# instead of stopping the round, and its return value is the stage's exit code. Kept
+# beside run(), never an argument to it, so anything that stands in for run() (a test,
+# a person's own) keeps working.
+ON_TIMEOUT: dict = {}
+
+
 def run(cmd, log, deadline=None, ok=(0,)):
     """Run one stage; its exit code, which is one of `ok`, or the round stops."""
     print("+", " ".join(cmd), flush=True)
     budget = _stage_budget(cmd, deadline)
+    log.write("\n$ " + " ".join(cmd) + "\n")
+    log.flush()
     try:
-        r = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True,
-                           timeout=budget)
-    except subprocess.TimeoutExpired as e:
-        out = (e.stdout or "") if isinstance(e.stdout, str) else (e.stdout or b"").decode("utf-8", "replace")
-        err = (e.stderr or "") if isinstance(e.stderr, str) else (e.stderr or b"").decode("utf-8", "replace")
-        log.write("\n$ " + " ".join(cmd) + "\n" + out + err
-                  + f"\n[timed out after {budget}s]\n")
+        code, stdout, stderr = _stream(cmd, log, budget)
+    except StageTimeout as e:
+        log.write(str(e)[-20000:] + f"\n[timed out after {budget}s]\n")
         log.flush()
+        on_timeout = ON_TIMEOUT.pop(os.path.basename(cmd[1]) if len(cmd) > 1 else "", None)
+        if on_timeout is not None:
+            print(f"   stage timed out after {budget}s: {os.path.basename(cmd[1])}; "
+                  "keeping what it had found", flush=True)
+            return on_timeout()
         sys.exit(f"stage timed out after {budget}s: {os.path.basename(cmd[1])}. "
                  "A hung portal or fetch would otherwise hold the round until "
                  "the container is reclaimed and the whole search is lost.")
-    log.write("\n$ " + " ".join(cmd) + "\n" + r.stdout + r.stderr)
+
+    import types
+    # stderr is already in the log, line by line
+    r = types.SimpleNamespace(returncode=code, stdout=stdout, stderr="")
+    log.write(r.stdout)
     log.flush()
     if r.returncode not in ok:
         print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
         sys.exit(f"stage failed: {os.path.basename(cmd[1])} (exit {r.returncode})")
-    tail = [l for l in (r.stdout + "\n" + r.stderr).strip().splitlines() if l.strip()][-3:]
+    tail = [l for l in r.stdout.strip().splitlines() if l.strip()][-3:]
     for l in tail:
         print("   ", l)
     return r.returncode
@@ -362,9 +416,12 @@ def main():
         pass
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True, help="directory for this round's files")
-    ap.add_argument("--pages", type=int, default=5)
+    ap.add_argument("--pages", type=int, default=None,
+                    help="default 5 in the cloud and 2 on a person's own computer "
+                         "(scrape_wide.defaults; SCRAPE_PAGES in profile/search.py)")
     ap.add_argument("--jobage", type=int, default=14, help="hard freshness rule, days")
-    ap.add_argument("--workers", type=int, default=10)
+    ap.add_argument("--workers", type=int, default=None,
+                    help="default 10 in the cloud and 4 on their own computer (SCRAPE_WORKERS)")
     ap.add_argument("--top", type=int, default=40, help="shortlist length shown")
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     ap.add_argument("--require", default="0.9",
@@ -398,6 +455,10 @@ def main():
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
     a = ap.parse_args()
+    import scrape_wide
+    pages, workers, _ = scrape_wide.defaults()
+    a.pages = a.pages or pages
+    a.workers = a.workers or workers
     os.makedirs(a.out, exist_ok=True)
     f = lambda n: os.path.join(a.out, n)
     log = open(f("round.log"), "a")
@@ -423,12 +484,29 @@ def main():
         print(f"+ (scrape skipped; {a.from_scraped} -> {scrape_dir}/kept.json)")
     else:
         # scrape_wide's --out is a DIRECTORY holding scraped/kept/dropped.json.
-        if run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
-                "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-                "--workers", str(a.workers)] + (["--alerts", a.alerts] if a.alerts else []),
-               log, deadline, ok=(0, SCRAPE_PARTIAL)) == SCRAPE_PARTIAL:
-            partial = ("more than a quarter of the portal requests failed (round.log names "
-                       "the portals and why), so this round is not a full picture of the market")
+        def keep_what_arrived():
+            # The stage was killed: what it had found is in partial_rows.json, written
+            # as it arrived. Turned into the scrape's files, the round goes on with it
+            # and says so, rather than ending with nothing.
+            nonlocal_partial.append(True)
+            return run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir, "--finish",
+                        "--jobage", str(a.jobage), "--today", a.today],
+                       log, None, ok=(0, SCRAPE_PARTIAL))
+
+        nonlocal_partial: list = []
+        ON_TIMEOUT["scrape_wide.py"] = keep_what_arrived
+        code = run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
+                    "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
+                    "--workers", str(a.workers)]
+                   + (["--alerts", a.alerts] if a.alerts else []),
+                   log, deadline, ok=(0, SCRAPE_PARTIAL))
+        ON_TIMEOUT.pop("scrape_wide.py", None)
+        if code == SCRAPE_PARTIAL:
+            partial = ("the scrape stage ran out of time and kept only what had arrived"
+                       if nonlocal_partial else
+                       "more than a quarter of the portal requests failed, or a portal was "
+                       "stopped short (round.log names the portals and why), so this round is "
+                       "not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
 
     # `--seen` is what stops hydrate paying for postings this search already

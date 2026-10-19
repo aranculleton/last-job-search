@@ -22,7 +22,10 @@ Decide which of these is true, from the tracker and the contact book, and put th
 It is what makes the brief this person's rather than a template:
 
 - **An interview or offer is live**: that leads. Name each process, its next step and date
-  where the tracker has one, and offer `/interview <company>` for the next one.
+  where the tracker has one, and offer `/interview <company>` for the next one. A process
+  with a chat of its own (`open_actions.py` says "handled by its campaign chat") gets one
+  line naming that chat and nothing else: its prep, drafts and drills live there, and two
+  chats preparing the same call contradict each other.
 - **Replies owed to people**: these go cold fastest, so they lead when nothing above does.
 - **Applications out and waiting**: what is due a nudge, and for each live application
   whether anyone at that employer is in the contact book who could get it read.
@@ -45,6 +48,11 @@ It is what makes the brief this person's rather than a template:
    contacts already in the book (no discovery runs here).
 3. Write `documents/network/followup_pack_<today>.md` in the previous pack's layout. If
    nothing is due, write no pack.
+4. **Keep the call preps current**: `python3 tools/network/prep.py --stale-only` rebuilds
+   every prep written before its contact's status, next action or thread changed (answers
+   already rewritten to be said are kept). Say in one line how many it rebuilt, and when
+   one is for a call in the next two days, put it in the three things below. A prep that
+   prints `RESEARCH FIRST` is listed there too, as research to run, never sent on as it is.
 
 ## 2. Since the last brief
 

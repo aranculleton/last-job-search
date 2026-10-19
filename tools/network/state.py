@@ -438,7 +438,7 @@ def first_degree(path=None) -> list:
     import-connections`, it is the one source of who the person is already connected
     with, which no search can see.
     """
-    path = path or person.state("documents", "linkedin", "Connections.csv")
+    path = path or person.local_state("documents", "linkedin", "Connections.csv")
     try:
         with open(path, encoding="utf-8-sig", newline="") as fh:
             lines = fh.read().splitlines()
@@ -579,7 +579,11 @@ def is_acceptance(row) -> bool:
 # request each showed "[nudge] 21bd" in a real contact book, a message nobody
 # could send. Read from the scenario, or from a channel typed as a request.
 REQUEST_SCENARIOS = frozenset({"connection_request", "connection_requested", "connection_note",
-                               "invite", "invitation", "connect_request"})
+                               "invite", "invitation", "connect_request", "request_outside"})
+# A request the person sent from LinkedIn itself, seen later as Pending: whether it
+# carried a note is not known, so it is never taken for a bare request (which would
+# owe a first message on acceptance, perhaps a second one).
+OUTSIDE_SCENARIO = "request_outside"
 # A pending request is worth withdrawing after this long: LinkedIn caps how many
 # can be outstanding, and one nobody accepted in three weeks rarely is.
 REQUEST_WITHDRAW_DAYS = 21
@@ -595,7 +599,8 @@ def is_request(row) -> bool:
 
 def is_bare_request(row) -> bool:
     """A connection request that carried no note: it said nothing."""
-    return is_request(row) and not str(row.get("full_text") or "").strip()
+    return (is_request(row) and not str(row.get("full_text") or "").strip()
+            and _scenario(row) != OUTSIDE_SCENARIO)
 
 
 # A connection request taken back (`withdraw`). Not a message: nothing reached them,
@@ -1003,7 +1008,8 @@ def owed(contacts, threads, today) -> list[dict]:
         # construction instead of by inspection, which is what stops the next
         # person who defers one of these calls from getting the last contact's
         # data on every row.
-        def _action_row(overdue=overdue, base=base, contact=contact, due=due):
+        def _action_row(overdue=overdue, base=base, contact=contact, due=due, msgs=msgs,
+                        status=status, action=action):
             if not overdue:
                 return
             items.append(dict(base,
@@ -1012,7 +1018,12 @@ def owed(contacts, threads, today) -> list[dict]:
                               since=due.isoformat(),
                               business_days=business_days_between(due, today),
                               due=due.isoformat(),
-                              nudges_sent=0))
+                              nudges_sent=0,
+                              # A send past its day with nothing in the log: it may well
+                              # have gone, from the LinkedIn app, where the log never
+                              # hears. Listed as unconfirmed, never as "send now".
+                              unconfirmed=(status == "not_contacted" and not msgs
+                                           and due < today and bool(SEND_ACTION.search(action)))))
 
         if status in NO_NUDGE:
             _action_row()
@@ -1167,6 +1178,308 @@ def _cli_withdraw(argv) -> int:
     return 1 if failed and not done else 0
 
 
+# ---------------------------------------------------------------- sent, dropped, reopened
+
+# A next action that is a send: "Send now: connection note", "send the request".
+SEND_ACTION = re.compile(r"\b(?:send|sent|connection (?:note|request)|request|inmail|"
+                         r"first note|message)\b", re.I)
+
+
+def sent(contacts, threads, contact_id, today, date=None, channel="connection", text="",
+         outside=False, note=True) -> dict:
+    """Record that a note or a request went: the message row, the contact row, and the
+    unsent draft gone. One command for the three steps /network lists, which a person
+    sending from the LinkedIn app left undone: the queue then said "send now" to two
+    people whose profiles already showed Pending.
+
+    `text` is the message as sent. `outside` is a request sent from LinkedIn itself
+    whose words were not seen: logged with no text, so it is never an example of what
+    works. `note=False` is a request with no note. Both lists change in place; the
+    caller saves them. Raises ValueError for a contact not in the book or one already
+    written to.
+    """
+    day = _need_date(date or today, "date")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    rows = [r for r in threads_for(threads, cid) if _direction(r) == "out"]
+    if rows:
+        raise ValueError(f"{contact.get('name') or cid} already has a message logged on "
+                         f"{rows[-1].get('date')}: nothing to record")
+    channel = str(channel or "connection").strip().lower()
+    body = " ".join(str(text or "").split()) if not outside else ""
+    if channel == "connection" and outside:
+        scenario = OUTSIDE_SCENARIO
+    elif channel == "connection":
+        scenario = "connection_note" if (note and body) else "connection_request"
+    else:
+        scenario = "first_message"
+    summary = ("Connection request sent from LinkedIn itself; its words were not seen"
+               if outside else f"First {'note' if channel == 'connection' else channel} sent")
+    row = {"contact_id": cid, "date": day.isoformat(), "direction": "out", "channel": channel,
+           "scenario": scenario, "summary": summary, "full_text": body}
+    threads.append(row)
+    if not str(contact.get("first_contacted") or "").strip():
+        contact["first_contacted"] = day.isoformat()
+    contact["channel"] = channel
+    contact["status"] = "awaiting_reply"
+    if channel == "connection":
+        contact["next_action"] = ("Once they accept: one nudge if no reply. Withdraw the "
+                                  f"request if nobody accepts in {REQUEST_WITHDRAW_DAYS} days")
+    else:
+        contact["next_action"] = "One nudge if no reply"
+    contact["next_action_due"] = add_business_days(day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+    _drop_draft(cid)
+    return row
+
+
+def _drop_draft(contact_id: str) -> bool:
+    """Delete documents/network/<id>/draft.md, the unsent copy, when there is one."""
+    try:
+        import reading
+        path = reading.draft_path(contact_id)
+    except (ImportError, ValueError):
+        return False
+    if os.path.isfile(path):
+        os.remove(path)
+        return True
+    return False
+
+
+def never_messaged(contact, threads) -> bool:
+    """Nothing has gone to them: no message or request in the log, none on the row."""
+    cid = str(contact.get("contact_id") or "").strip()
+    if any(_direction(r) == "out" for r in threads_for(threads, cid)):
+        return False
+    return not str(contact.get("first_contacted") or "").strip()
+
+
+def _note(contact, field, text):
+    contact[field] = "; ".join(x for x in (str(contact.get(field) or "").strip(), text) if x)
+
+
+def drop(contacts, threads, contact_id, today, reason) -> dict:
+    """Set a never-messaged contact aside: status `dropped`, reversible with `reopen`."""
+    today = _need_date(today, "today")
+    contact = already_contacted(contacts, contact_id=str(contact_id or "").strip())
+    if contact is None:
+        raise ValueError(f"no contact {contact_id!r} in the contact book")
+    if not never_messaged(contact, threads):
+        raise ValueError(f"{contact.get('name') or contact_id} has been written to: close the "
+                         "thread with its outcome instead, it is not a draft set aside")
+    why = " ".join(str(reason or "").split()) or "set aside by the person"
+    contact["status"] = "dropped"
+    contact["next_action"], contact["next_action_due"] = "", ""
+    _note(contact, "outcome", f"dropped {today.isoformat()}: {why}")
+    return contact
+
+
+def reopen(contacts, threads, contact_id, today, reason) -> dict:
+    """Bring back a contact nobody has written to: status `not_contacted` again.
+
+    Only someone never messaged. A dropped draft, or one closed before anything went,
+    is a person still worth writing to; anyone who has had a message is not reopened
+    here, because "never surface someone already contacted" holds."""
+    today = _need_date(today, "today")
+    contact = already_contacted(contacts, contact_id=str(contact_id or "").strip())
+    if contact is None:
+        raise ValueError(f"no contact {contact_id!r} in the contact book")
+    if not never_messaged(contact, threads):
+        raise ValueError(f"{contact.get('name') or contact_id} has been written to, so is "
+                         "never surfaced again: reopen is for people nothing went to")
+    why = " ".join(str(reason or "").split())
+    if not why:
+        raise ValueError("reopen needs --reason: why they are worth writing to again")
+    was = contact.get("status") or "not_contacted"
+    contact["status"] = "not_contacted"
+    _note(contact, "notes", f"reopened {today.isoformat()} from {was}: {why}")
+    return contact
+
+
+def close(contacts, contact_id, today, reason, row=None) -> dict:
+    """Close a contact a read ruled out, with the reason, and delete their unsent draft.
+    `row` writes a new closed row for a candidate not in the book yet, so a later run
+    never spends another read on them."""
+    today = _need_date(today, "today")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        if not row:
+            raise ValueError(f"no contact {cid!r} in the contact book")
+        contact = {k: "" for k in schema.CONTACT_COLUMNS}
+        contact.update({k: v for k, v in row.items() if k in schema.CONTACT_COLUMNS})
+        contact["contact_id"] = cid
+        contact["company_key"] = contact.get("company_key") or company_key(contact.get("company"))
+        contacts.append(contact)
+    why = " ".join(str(reason or "").split())
+    if not why:
+        raise ValueError("a close needs its reason")
+    contact["status"] = "closed"
+    contact["next_action"], contact["next_action_due"] = "", ""
+    _note(contact, "outcome", f"skipped after a read {today.isoformat()}: {why}")
+    _drop_draft(cid)
+    return contact
+
+
+def book_at(contacts, threads, company) -> dict:
+    """Who the book already holds at one employer: {"in_book", "never_messaged", "ids"}.
+    Discovery leaves them out, and said nothing; a run then told a person their top
+    employers were covered when nobody there had been written to."""
+    rows = contacts_at(contacts, company)
+    never = [c for c in rows if never_messaged(c, threads)]
+    return {"in_book": len(rows), "never_messaged": len(never),
+            "ids": [c.get("contact_id", "") for c in never]}
+
+
+def where(contacts, terms) -> list:
+    """The contacts matching every term: FIELD=VALUE (equal, ignoring case) or
+    FIELD~WORDS (contains, ignoring case)."""
+    out = list(contacts)
+    for t in terms or ():
+        m = re.match(r"^\s*(\w+)\s*([=~])\s*(.*?)\s*$", str(t))
+        if not m:
+            raise ValueError(f"a --where term is FIELD=VALUE or FIELD~WORDS, not {t!r}")
+        field, op, value = m.group(1), m.group(2), m.group(3).lower()
+        if field == "company":
+            key = company_key(value)
+            out = [c for c in out if (row_company_key(c) == key if op == "=" else
+                                      value in str(c.get("company") or "").lower())]
+            continue
+        out = [c for c in out if (str(c.get(field) or "").strip().lower() == value if op == "="
+                                  else value in str(c.get(field) or "").lower())]
+    return out
+
+
+# Closed rows that were really a queue set aside: never messaged, and the outcome says
+# the note never went. Only those words: a dead end (left, unreachable, declined) stays
+# closed. The upgrade that moves them to `dropped` reads this.
+_DROPPED_WORDS = re.compile(r"\b(?:never sent|not sent|queue dropped|dropped by the candidate|"
+                            r"dropped from the queue|set aside|not sending|unsent)\b", re.I)
+
+
+def closed_but_dropped(contacts, threads) -> list:
+    """Closed contacts nothing went to whose outcome says the note was never sent."""
+    return [c for c in contacts if str(c.get("status") or "").strip() == "closed"
+            and never_messaged(c, threads)
+            and _DROPPED_WORDS.search(" ".join(str(c.get(k) or "") for k in ("outcome", "notes")))]
+
+
+def _cli_sent(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py sent",
+        description="Record that a note or request went: the message, the contact, the draft.")
+    ap.add_argument("contact_ids", nargs="+")
+    ap.add_argument("--date", default="", help="the day it went (default today)")
+    ap.add_argument("--channel", default="connection",
+                    choices=("connection", "inmail", "email", "intro", "message"))
+    ap.add_argument("--text-file", default="", help="the message as sent, with any edits")
+    ap.add_argument("--draft", action="store_true",
+                    help="it went exactly as drafted: log the draft's words")
+    ap.add_argument("--outside", action="store_true",
+                    help="sent from LinkedIn itself, words not seen (a request seen as Pending)")
+    ap.add_argument("--no-note", action="store_true", help="a connection request with no note")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    if a.text_file and len(a.contact_ids) > 1:
+        print("sent: --text-file is one person's message; name one contact")
+        return 1
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    done = 0
+    for cid in a.contact_ids:
+        text = ""
+        if a.text_file:
+            with open(a.text_file, encoding="utf-8") as fh:
+                text = fh.read()
+        elif a.draft:
+            import reading
+            try:
+                with open(reading.draft_path(cid), encoding="utf-8") as fh:
+                    text = fh.read()
+            except OSError:
+                print(f"  not recorded: {cid} has no draft to log")
+                continue
+            if text.startswith(reading.WAITS_ON_A_READ):
+                text = text.split("\n\n", 1)[-1]
+        try:
+            row = sent(contacts, threads, cid, a.today, date=a.date or None, channel=a.channel,
+                       text=text, outside=a.outside, note=not a.no_note)
+        except ValueError as e:
+            print(f"  not recorded: {e}")
+            continue
+        done += 1
+        print(f"  {cid}: {row['summary'].lower()} on {row['date']}; awaiting their reply, "
+              "draft removed")
+    if done:
+        save_threads(threads, a.threads)
+        save_contacts(contacts, a.contacts)
+    print(f"sent: {done} recorded")
+    return 0 if done else 1
+
+
+def _cli_reopen_or_drop(argv, verb) -> int:
+    ap = argparse.ArgumentParser(
+        prog=f"state.py {verb}",
+        description=("Bring back contacts nobody has written to." if verb == "reopen" else
+                     "Set never-messaged contacts aside, reversibly."))
+    ap.add_argument("contact_ids", nargs="*")
+    ap.add_argument("--where", action="append", default=[],
+                    help="FIELD=VALUE or FIELD~WORDS, as many as needed (company=<employer>, "
+                         "outcome~never sent, status=dropped)")
+    ap.add_argument("--reason", default="")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    ids = list(a.contact_ids)
+    if a.where:
+        try:
+            ids += [c["contact_id"] for c in where(contacts, a.where) if c["contact_id"] not in ids]
+        except ValueError as e:
+            print(f"{verb}: {e}")
+            return 1
+    if not ids:
+        print(f"{verb}: name the contact ids, or --where FIELD=VALUE")
+        return 1
+    fn = reopen if verb == "reopen" else drop
+    done, failed = 0, 0
+    for cid in ids:
+        try:
+            c = fn(contacts, threads, cid, a.today, a.reason)
+        except ValueError as e:
+            print(f"  not {verb}ed: {e}" if verb == "reopen" else f"  not dropped: {e}")
+            failed += 1
+            continue
+        done += 1
+        print(f"  {cid} ({c.get('name')}, {c.get('company')}): "
+              + ("not_contacted again" if verb == "reopen" else "dropped, reversible with reopen"))
+    if done and not a.dry_run:
+        save_contacts(contacts, a.contacts)
+    print(f"{verb}: {done} {'would change' if a.dry_run else 'changed'}"
+          + (f", {failed} not" if failed else ""))
+    return 0 if done else 1
+
+
+def _cli_dropped_rows(argv) -> int:
+    """`state.py dropped-rows [--apply]`: closed rows that were a queue set aside."""
+    contacts, threads = load_contacts(), load_threads()
+    rows = closed_but_dropped(contacts, threads)
+    print(f"{len(rows)} closed contact(s) were never written to and say the note never went")
+    for c in rows[:20]:
+        print(f"  {c.get('contact_id')} ({c.get('company')}): {str(c.get('outcome'))[:90]}")
+    if "--apply" in argv and rows:
+        for c in rows:
+            c["status"] = "dropped"
+        save_contacts(contacts)
+        print(f"dropped-rows: {len(rows)} moved from closed to dropped (reversible: "
+              "state.py reopen <id> --reason ...)")
+    return 0
+
+
 # ---------------------------------------------------------------- holds
 
 # A next_action that opens on HOLD or FREEZE is an instruction not to act yet,
@@ -1264,7 +1577,8 @@ def _month_end(day: datetime.date) -> datetime.date:
 
 # A scenario that says the row was the request itself, which settles it
 # whatever came before: an email reply is not a LinkedIn connection.
-_REQUEST_SCENARIOS = frozenset({"connection_request", "connection_note", "invite", "invitation"})
+_REQUEST_SCENARIOS = frozenset({"connection_request", "connection_note", "invite", "invitation",
+                                "request_outside"})
 
 
 # Scenarios that only happen inside a conversation already under way. Such a
@@ -1415,6 +1729,12 @@ def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ["withdraw"]:
         return _cli_withdraw(argv[1:])
+    if argv[:1] == ["sent"]:
+        return _cli_sent(argv[1:])
+    if argv[:1] in (["reopen"], ["drop"]):
+        return _cli_reopen_or_drop(argv[1:], argv[0])
+    if argv[:1] == ["dropped-rows"]:
+        return _cli_dropped_rows(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()

@@ -175,8 +175,9 @@ METHODS: dict[str, dict] = {
                                     "field's words, and STAR examples kept in your profile"),
             (3, "2026-10-15", False, "asks whether you pay for LinkedIn Premium"),
             (4, "2026-10-19", False, "every STAR story ends on a Use for line naming the questions it answers"),
+            (5, "2026-10-19", False, "the interview template's permit answer follows your own disclosure rule, and a stock answer can name the kinds of employer it is not for"),
         ),
-        "fingerprint": "061901b72ed9914c",
+        "fingerprint": "05446dfa33327399",
     },
     # ---- what the build makes over time and keeps
     "prep-docs": {
@@ -202,8 +203,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-19", False, "each document is stamped with the prep that wrote it, and only an older one is rewritten; a tool you lack is never claimed unless you say yes"),
             (9, "2026-10-19", False, "a quote from a reading is cut at a word, never mid-word"),
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
+            (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
         ),
-        "fingerprint": "d84d0c1b1a84b7b3",
+        "fingerprint": "34dd4b0d13b8ea94",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -256,8 +258,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-19", False, "the voice check skips a quoted list of words to avoid, so a document that warns against a phrase is not flagged for it"),
             (20, "2026-10-19", False, "every command prints its usage instead of crashing with no arguments, the voice check reads a never-say phrase however it is punctuated, and your own never-write rules are checked"),
             (21, "2026-10-19", False, "the PDF check's missing-Poppler error gives the winget command on Windows, not Chocolatey"),
+            (22, "2026-10-19", False, "the PDF check finds Poppler where a Mac or Windows installs it, even when the shell's PATH lacks it; the voice check hears short spoken answers as spoken and catches a third-person headline; form answers read a profile with no screening.py"),
         ),
-        "fingerprint": "8928d60f4357ebb3",
+        "fingerprint": "0bdc0be54c7e80d8",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -275,8 +278,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-19", True, "the pack is built by tools/interview_pack.py: sourced, one screen first, the money the form already named, the question bank, warm routes, an offer branch, mock feedback kept, and each skill you said yes to claiming flagged as one to expect a question on"),
             (7, "2026-10-19", True, "a pack finds its application however the role is written (a requisition number in it), reads a hand-written outcome's rounds, finds the referrer from every record, and never tells you to message someone whose row says to leave them be"),
             (8, "2026-10-19", True, "a pack treats waiting on someone's reply as leave them be, says booked only when the round has a date, quotes rows whole or cut at a word, carries every section of a hand-written outcome file, keeps its do-not-say list out of the voice check, and prepares a question you were told about as reported, with its source"),
+            (9, "2026-10-19", True, "one living document per hiring process, a process with no application included: answers written to be said and checked, what each interviewer is assessing and wants to hear, the format, small talk with a purpose, and what the employer's people have been told"),
         ),
-        "fingerprint": "cd3b48d46e33ce20",
+        "fingerprint": "404e3ceab9f1e835",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -290,8 +294,9 @@ METHODS: dict[str, dict] = {
             _first(),
             (2, "2026-10-17", False, "one company-research cache (tools/company_research.py): load, save, the freshness rule in one constant, and the workflow's research stage following the employer researcher"),
             (3, "2026-10-19", False, "a cached finding's age is read the one way every tool reads a date"),
+            (4, "2026-10-19", False, "a site answering 503 has a fallback, a fact known only from a search summary is labelled unread, and teams and how the employer interviews are kept for the pack"),
         ),
-        "fingerprint": "83dc00bdcf53c1ae",
+        "fingerprint": "efea1c5929a0e202",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
@@ -357,8 +362,9 @@ METHODS: dict[str, dict] = {
             (27, "2026-10-19", True, "people are kept only when they are people at the employer: a university's or the employer's own post is not a contact, a first name that spells the employer proves nothing on a name check, the employer before a place is read, a brand line after a job or a dash is the employer, a post naming another of the employer's names counts, and a job is never read as a place; contacts already added are re-checked"),
             (28, "2026-10-19", False, "your connections export is saved from the file or from LinkedIn's whole archive, reading only Connections.csv, and one employer's 1st-degree people can be pasted while it is on its way, each drafted a message with no connection request"),
             (29, "2026-10-19", False, "business days skip your public holidays, employer names with a web address or initials join, and a state file a merge left conflict markers in is refused"),
+            (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
         ),
-        "fingerprint": "3665cab555969142",
+        "fingerprint": "2af56f039bffb699",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -390,8 +396,9 @@ METHODS: dict[str, dict] = {
             (14, "2026-10-19", False, "a comment names the place check's new rhythm, once and then weekly"),
             (15, "2026-10-19", False, "applied by /network itself; several profiles can be pasted at once; a note nobody has read for says so at its top"),
             (16, "2026-10-19", False, "only notes written before notes rested on a reading are redone, and a note written from someone's public work leaves the queue"),
+            (17, "2026-10-19", True, "a batch of queued notes is checked for sentences they share, so notes that all end the same way are written again"),
         ),
-        "fingerprint": "bbb39cea1b2cdddd",
+        "fingerprint": "81648bb3c525028b",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -417,8 +424,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-19", True, "a posting is cut only while today's rules would cut it: relists aged by first sight, a remote role for another country flagged or cut, a region cutting only when it leaves home out, a home city beside a country code read as home, and the pronoun us never a country"),
             (10, "2026-10-19", False, "every employer board openroles reads is a live board, copies of one posting in a round are as old as the oldest, and an internal Workday site is caught at either of Workday's addresses"),
             (11, "2026-10-19", False, "pay is read with no currency mark, by the hour, under a heading, and per place; a posting it now reads below your cut line is cut on its next round, and nothing ruled out before needs looking at again"),
+            (12, "2026-10-19", False, "a hiring process with no application is read as a process, never as an application to the same role"),
         ),
-        "fingerprint": "f990a9b782e40497",
+        "fingerprint": "f2cef002458bdc32",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -472,6 +480,11 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
     "tools/holidays.py": "works out public holidays when a date is counted; writes nothing, and "
                          "a person's own dates live in their search.py PUBLIC_HOLIDAYS",
+    "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "
+                           "runs; keeps nothing",
+    "tools/local_path.sh": "the same, for the shell scripts; keeps nothing",
+    "tools/profile_consistency.py": "reads the profile and names what disagrees; the person "
+                                    "corrects it, through the profile-consistency upgrade",
     ".github/*": "the app's own CI and issue templates",
     "profile.example/*": "the invented example person; a new profile name in it is a profile "
                          "upgrade or a safe default, which tests/test_profile_upgrades.py holds",
