@@ -7,6 +7,9 @@
 #
 #   tools/verify_batch.sh rounds/r1/drafts.json
 #
+# Exit 0 all pass, 1 a finding, 3 nothing failed but the spacing check was
+# skipped because pypdf is unavailable (which is not a pass).
+#
 # Everything about the person (the filename prefix, the employers in resume
 # order with their column codes and minimum bullets, the email and phone the
 # text layer must carry, the pinned skill, the section headings, the document
@@ -33,7 +36,7 @@ prog = prog.replace('"%s"', '"' + "/".join(["%d"] * len(names)) + '"') + "}"
 print(prog)
 PYX
 )
-fail=0; tb=0; n=0; readers=""
+fail=0; tb=0; n=0; readers=""; skipped=0
 printf "%-9s %-4s %-4s %-14s %s\n" ABBR pgs blt "$ROLE_HEADER" flags
 for a in $ABBRS; do
   R="$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.pdf"; C="$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.pdf"
@@ -75,9 +78,15 @@ PYX
   # built with LuaLaTeX and an OpenType font read in pypdf with its city and
   # phone number run together, and would have passed everything else here.
   # Which reader it used is said once at the end: only pypdf catches words run
-  # together, and a fallback to pdftotext passed them without a word.
-  vr=$(python3 "$ROOT/tools/verify_pdf.py" "$R" 2>&1) || p="$p SPACING_RESUME"
-  vc=$(python3 "$ROOT/tools/verify_pdf.py" "$C" 2>&1) || p="$p SPACING_LETTER"
+  # together, and a fallback to pdftotext passed them without a word. So pypdf
+  # is required; exit 3 means it is unavailable, the rest of the text-layer
+  # check runs on pdftotext, and the batch says the spacing check was SKIPPED.
+  vr=$(python3 "$ROOT/tools/verify_pdf.py" --require pypdf "$R" 2>&1); st=$?
+  if [ "$st" -eq 3 ]; then skipped=1; vr=$(python3 "$ROOT/tools/verify_pdf.py" "$R" 2>&1) || p="$p SPACING_RESUME"
+  elif [ "$st" -ne 0 ]; then p="$p SPACING_RESUME"; fi
+  vc=$(python3 "$ROOT/tools/verify_pdf.py" --require pypdf "$C" 2>&1); st=$?
+  if [ "$st" -eq 3 ]; then skipped=1; vc=$(python3 "$ROOT/tools/verify_pdf.py" "$C" 2>&1) || p="$p SPACING_LETTER"
+  elif [ "$st" -ne 0 ]; then p="$p SPACING_LETTER"; fi
   readers="$readers $(printf '%s\n%s\n' "$vr" "$vc" | grep -oE 'extractor: [a-z]+' | cut -d' ' -f2)"
   grep -qF -- "$EMAIL" $VB/vb_r1.txt && grep -qF -- "$PHONE" $VB/vb_r1.txt || p="$p CONTACT"
   [ -z "$PINNED" ] || grep -qF -- "$PINNED" $VB/vb_r1.txt || p="$p NO_PINNED_SKILL"
@@ -151,4 +160,11 @@ echo "=== voice ==="
 python3 "$ROOT/tools/voice_check.py" --soft-ok \
   $(for a in $ABBRS; do echo "$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "VOICE: FAILURES ABOVE"; fail=1; }
-[ $fail -eq 0 ] && echo "BATCH: ALL PASS" || { echo "BATCH: FAILURES ABOVE"; exit 1; }
+if [ "$skipped" = 1 ]; then
+  echo "=== SPACING CHECK SKIPPED ==="
+  echo "pypdf is not available, so words run together were NOT checked on any document."
+  echo "pip3 install pypdf (or pip3 install --upgrade cffi if it is installed) and run this again."
+fi
+[ $fail -eq 0 ] || { echo "BATCH: FAILURES ABOVE"; exit 1; }
+[ "$skipped" = 0 ] || { echo "BATCH: NOT ALL PASS, the spacing check was SKIPPED"; exit 3; }
+echo "BATCH: ALL PASS"
