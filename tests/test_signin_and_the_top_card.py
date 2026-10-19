@@ -103,8 +103,11 @@ def test_after_sign_in_a_sign_in_page_or_a_check_is_a_stop(tmp_path, monkeypatch
     _state(tmp_path, monkeypatch)
     reading.mark_signed_in()
     for text in (LOGIN, CHECK):
+        # A stop is held in this computer's reading ledger as well as the file here, so every
+        # chat on it stops (tools/network/pace.py): starting the next case clears both.
         if os.path.exists(tmp_path.joinpath(*reading.STOP_FILE)):
             os.remove(tmp_path.joinpath(*reading.STOP_FILE))
+        reading.pace.put("stop", {})
         monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(text))
         # Its own exit code, so `read; verdict` can tell a stop from a skip or a wait.
         assert reading.main(["read", "kestrel_achterberg", "-", "--source", "browser",

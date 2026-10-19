@@ -217,13 +217,36 @@ caught at once. So between finding and writing there is a read, and
   make the list: search results with the search tool's own summary of each (which often
   names the place and the employer), and the connections export. **One-page reads**
   screen it: the sent-invitations list once a session (who already has a request
-  pending, everyone at once) and an employer's People tab (a dozen people's headline,
-  place and degree for one load), both paced and capped like a profile. **A deep read**,
-  their own profile, only then, and only for the few the person will write to that day:
-  at most `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
-  Everyone else is drafted from what the cheaper reads showed, marked as waiting on a
-  read. No change to the funnel may add a page load, shorten the pacing or add a click
-  unless the person sets it in their profile.
+  pending, everyone at once) and a people search narrowed to the employer with its Current
+  company filter (a dozen people's headline, place and degree for one load), paced, with caps
+  of their own. A plain keyword search with the employer's name in it is not that filter: for
+  two large employers it returned almost nobody who works there, and it worked for two others
+  only because their people name the employer in their headline. The filtered address is
+  learned once from a search the person narrowed by hand (`reading.py search-url --learn`),
+  never guessed, and the People tab's `?keywords=` address is not used, because LinkedIn drops
+  it on load. **A profile read**, their own page, only then, and only for the few the person
+  will write to that day: as many as the requests that can still go today and three spare,
+  never above `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
+  Read its card first (top card and About, nothing scrolled), which decides most, and deep only
+  where it cannot. Everyone else is drafted from what the cheaper reads showed, marked as
+  waiting on a read. No change to the funnel may add a page load, shorten the pacing or add a
+  click unless the person sets it in their profile.
+- **Every limit is the person's, behind one dial.** `PROFILE_READ_RISK` in
+  `profile/networking.py` picks a preset (`careful`, the default and the pace before the dial;
+  `normal`; `fast`) and every limit derives from it, each overridable on its own
+  (`tools/network/pace.py` holds them in one place with the reason for each; `reading.py
+  limits` prints them). What is known and what is assumed is said there too: no preset is
+  safe, the numbers are a judgement of a person's pace, not a measured rate.
+- **React to signals, not a guess.** Run at a person's pace and watch: a check or CAPTCHA,
+  an "unusual activity" banner, HTTP 999, or the sign-in page after signing in stops the day
+  at once; a page that does not render or loads far slower than usual doubles the next pause,
+  and a second within the hour stops the day. The friction log keeps each, dated, across days,
+  and the pages-an-hour ceiling ramps up only on clean days since the last one (5, then the
+  preset's next steps). The count is one per computer, so every worktree's chat shares it.
+- **Reads never block the chat.** `reading.py next --wait` runs in the background and names
+  who to read once a page may load; the drafts for those already read are shown meanwhile.
+  When the person is at the keyboard, the fast path beats any pace: `reading.py queue --urls`
+  for the addresses, and one paste back.
 - **The route is chosen, never asked.** `reading.py route` reads which browser the chat
   has, never where it was started, and says what to do: read the best few in the browser,
   switch it on first, or offer a paste for the best three only (screenshots on a phone, a

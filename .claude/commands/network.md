@@ -20,9 +20,10 @@ this chat can use, cheapest and safest first:
    person and the employer, likely when it names the person only, unconfirmed otherwise; a
    search cannot prove someone has no profile, and nothing is fetched.
 4. **A read in their own browser**, where this chat has one: first the pages that hold many
-   people at once (the sent-invitations list, an employer's People tab), then the profiles of
-   the best `reading.READS_PER_RUN` (5) only, the people being written to that day, paced
-   (step 5).
+   people at once (the sent-invitations list, a people search narrowed to the employer), then
+   the profiles of the best few only, the people being written to that day: as many as the
+   requests that can still go today and three spare, never above `reading.READS_PER_RUN`,
+   each read as its card when the card decides it, paced (step 5).
 5. **A paste or screenshots from them**, for the best `reading.HAND_TOP` (3) at most, and only
    where there is no browser. It is never how the list is made, and never asked for everyone.
 
@@ -152,13 +153,21 @@ it. LinkedIn is never fetched from a session.
    - **Research papers**, only when `OPENALEX` is on: `python3 tools/network/openalex.py
      "<company>"`. It needs a free key in `OPENALEX_API_KEY` in a cloud session; without
      one it says so, and the run goes on without it.
-   - **LinkedIn's own People tab, in the person's browser**, when the route from step 5 is
-     `browser` (`claude_surfaces.py show linkedin-people-tab`):
-     `https://www.linkedin.com/company/<company>/people/?keywords=<their function>`, one load,
-     behind `reading.py gate --page`, its text piped to `python3 tools/network/reading.py people
-     - --company "<employer>"`. It screens a dozen people for one page (their headline, place,
-     degree, and whether a request is already Pending), the cheap checks a profile read was
-     being spent on. Only the few who pass and will be written to today go to a profile read.
+   - **A people search narrowed to the employer, in the person's browser**, when the route
+     from step 5 is `browser` (`claude_surfaces.py show linkedin-people-at-employer`). Never a
+     plain keyword search with the employer's name in it, which is not the employer filter:
+     for two large employers it returned almost nobody who works there. Never the People
+     tab's `?keywords=` address either, which LinkedIn drops on load. The person narrows one
+     search to the employer (and its place) once, by hand, in their own browser, as
+     `claude_surfaces.py steps linkedin-people-at-employer` says;
+     keep that address with `python3 tools/network/reading.py search-url --company
+     "<employer>" --place "<city>" --learn "<the address>"`, and from then on `search-url
+     --company "<employer>" --place "<city>" --keywords "<their function>"` builds the next
+     one. One load, behind `reading.py gate --page`, its text piped to `python3
+     tools/network/reading.py people - --company "<employer>"`. It screens a dozen people for
+     one page (their headline, place, degree, and whether a request is already Pending), the
+     cheap checks a profile read was being spent on. Only the few who pass and will be
+     written to today go to a profile read.
 
    Measured over two employers in one city on 2026-10-18: the plain query shape
    `queries_for()` now writes ("<employer> <one title> <city>") found 14 people named at the
@@ -210,15 +219,22 @@ it. LinkedIn is never fetched from a session.
    funnel, cheapest first**: free sources make the list (search results with their summaries,
    the connections export); one-page reads screen it (the sent-invitations list once, an
    employer's People tab); and only then a profile read, for the people the person will write
-   to today. Put at most `reading.READS_PER_RUN` (5) by `why_them` on the day's short list,
-   `python3 tools/network/reading.py shortlist <ids, best first>`; it adds to the day's list and
-   never replaces it, refuses past the cap, and takes at most `reading.UNVERIFIED_ON_SHORTLIST`
-   (2) people nothing has placed in a city yet. A browser read refuses anyone not on it.
+   to today. Put the best by `why_them` on the day's short list, `python3
+   tools/network/reading.py shortlist <ids, best first>`. It is sized to the requests that can
+   still go today and three spare, never above `reading.READS_PER_RUN` (5 unless the person
+   set it), and takes at most `reading.UNVERIFIED_ON_SHORTLIST` (2) people nothing has placed
+   in a city yet. It adds to the day's list and refuses past the cap; people read on an
+   earlier day, or past a first note in the contact book, leave it by themselves and are
+   named, and `--remove <id>` takes someone off. A browser read refuses anyone not on it.
    Everyone else is drafted from what the search and the one-page reads showed, and their note
    opens on the WAITS ON A READ line until a later day's read. Score each again after the read, which adds shared history, activity
    and reach, and read the next on the list when one is skipped. With no browser, nobody is
    read: present the list and offer a paste for the best `reading.HAND_TOP` (3) only
-   (`reading.py queue`, which lists those three). Give each candidate its id first
+   (`reading.py queue`, which lists those three). **The fast path, with no automation at
+   all:** when the person is at the keyboard, even with a browser, offer it first: `reading.py
+   queue --urls` prints just the addresses to open; they open each, select all and copy, and
+   send them back in one message with a line of `---` between, which `reading.py paste -`
+   reads. It is faster than a paced read and carries no automation risk. Give each candidate its id first
    (`state.unique_contact_id()`), and record what is read with `tools/network/reading.py`,
    which keeps only what a note could rest on, under
    `documents/network/<contact_id>/reading.json` (`--name` and `--company` for a
@@ -277,22 +293,41 @@ it. LinkedIn is never fetched from a session.
       - **Read only the people a request goes to today.** A read is spent on someone the
         person is about to write to, never on a list for later: `gate` caps the day's reads
         at the connection requests still left today plus three for people a read rules out.
-      - **Before each page**, `python3 tools/network/reading.py gate` (`--page` for a one-page
-        read). It answers `go` with how long to stay on the page, or why not with the clock time
-        of the next page, each with its own exit code: 7 a short wait (the pause after the last
-        page), 8 later today (the hourly cap), 9 tomorrow (the day's cap, the send-day cap, or a
-        stop). A session cannot sleep in the foreground, so wait with `reading.py gate --wait`
-        run in the background: it exits the moment the next page may load (or at `--timeout`,
-        saying when). It holds a varied gap between pages (about a minute and a half, never
-        under 45 seconds), a longer break of 5 to 12 minutes after a varying three to seven, and
-        the caps in `profile/networking.py`: `PROFILE_READS_PER_HOUR` (8 unless they set it),
-        `PROFILE_READS_PER_DAY` (15) and `PROFILE_READ_BREAK_MINUTES` (the break, theirs to set).
-        A one-page read counts like a profile for the pace and the caps. Never open two at once.
-      - **One pass per profile.** Open their `linkedin_url` in a new tab, stay the time
-        `gate` gave, scrolling the same profile down to its end at reading pace so the
-        sections LinkedIn loads late (Experience, Education, Activity) are on the page,
-        clicking nothing, then read the whole page text once, close the tab, and pipe the
-        text to `python3 tools/network/reading.py read <contact_id> - --source browser`. Where
+      - **Reads run off the critical path.** Run `python3 tools/network/reading.py next --wait`
+        in the background (the Bash tool's background mode): it exits when the next page may
+        load, naming who to read and their address, and in the meantime the chat drafts and
+        shows the notes for the people already read, each as soon as its read completes. Never
+        poll a clock, and never sleep in the foreground. When `next` says `done` (exit 12),
+        show any draft not yet shown and tell the person the run is done, with a notification
+        where the session has one.
+      - **Before each page**, `next` (or `python3 tools/network/reading.py gate`, `--page` for a
+        one-page read) answers `go` with how long to stay on the page, or why not with the clock
+        time of the next page, each with its own exit code: 7 a short wait (the pause after the
+        last page), 8 later today (an hourly cap or the ramp), 9 tomorrow (a day's cap, the
+        send-day cap, or a stop). It holds a varied gap between pages, a longer break after a
+        varying few, caps for profiles, for list pages and for all loads together, and a ramp
+        that starts at 5 pages an hour and rises one step for each clean day of reading. Every
+        limit is in `profile/networking.py`, set at once by the dial `PROFILE_READ_RISK`
+        (`careful` unless the person chooses `normal` or `fast`) and each overridable by the
+        person; `reading.py limits` prints every one, its value, where it came from and why.
+        Never open two pages at once.
+      - **Signals, not a guess.** A security check or CAPTCHA, an "unusual activity" banner, an
+        HTTP 999 page, or the sign-in page after they signed in stops the day's reads at once.
+        A page that does not render, or one far slower to load than their recent ones (pass
+        `--load-seconds` when the browser tool times it), doubles the next pause, and a second
+        within the hour stops the day. Each is kept, dated, in the friction log (`reading.py
+        friction`; `friction --kind <kind> --words "<what it showed>"` keeps one the chat saw
+        itself), and a signal puts the ramp back to its first step. The count, the stop and the
+        list are one per computer, shared by every worktree's chat.
+      - **One pass per profile, its card first.** Open their `linkedin_url` in a new tab. A
+        card read (`--mode card`, the default for `next`) stays the time `next` gave on the top
+        card and About, scrolling nothing: their headline, place, current employer and About
+        decide most keep or skip. Read deep (`--mode deep`) only where the card cannot decide
+        or the note needs their Experience or Activity: stay the time given, scrolling the same
+        profile down to its end at reading pace so the sections LinkedIn loads late are on the
+        page. Click nothing, read the whole page text once, close the tab, and pipe the text to
+        `python3 tools/network/reading.py read <contact_id> - --source browser --mode <card or
+        deep>`. Where
         the browser tool can run a script on the page, run `reading.py extractor`'s read-only
         snippet instead and pipe its JSON to `read <contact_id> - --source browser --json`: the
         same text, cut to the sections a reading keeps, never re-typed by hand. It clicks,

@@ -1158,6 +1158,29 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
+    # the careful preset, which is the pace of the release before the dial, value for value.
+    "networking.PROFILE_READ_RISK": "\"careful\": the pace before the dial existed; normal or "
+    "fast only when the person writes it",
+    "networking.PROFILE_PAGES_PER_HOUR": "4 list pages an hour at careful",
+    "networking.PROFILE_PAGES_PER_DAY": "8 list pages a day at careful",
+    "networking.PROFILE_LOADS_PER_HOUR": "8 page loads of any kind an hour at careful, the one "
+    "shared cap there was before page kinds were counted apart",
+    "networking.PROFILE_LOADS_PER_DAY": "15 page loads of any kind a day at careful, as before",
+    "networking.PROFILE_READ_GAP_SECONDS": "45 to 240 seconds between pages at careful, as before",
+    "networking.PROFILE_READ_GAP_MEDIAN": "90 seconds at careful, as before",
+    "networking.PROFILE_READ_BREAK_AFTER": "a break after 3 to 7 pages at careful, as before",
+    "networking.PROFILE_READ_DWELL_SECONDS": "20 to 60 seconds on a page read in full, as before",
+    "networking.PROFILE_READ_CARD_DWELL_SECONDS": "20 to 60 seconds on a card at careful, the "
+    "same as a full read, so nothing is shortened unless the person chooses it",
+    "networking.PROFILE_READS_PER_RUN": "5 people on a day's short list at most, as before, and "
+    "fewer when fewer requests can go that day",
+    "networking.PROFILE_READ_UNPLACED": "2 people nothing has placed yet, as before",
+    "networking.PROFILE_PASTE_TOP": "3 profiles offered for a paste, as before",
+    "networking.PROFILE_READ_FRESH_DAYS": "a reading stands for 30 days, as before",
+    "networking.PROFILE_READ_SKIP_SPARE": "3 reads beyond the requests left today, as before",
+    "networking.PROFILE_READ_RAMP": "5 pages an hour until a clean day of reading, then 8: lower "
+    "than before only on a first day, or after a signal",
     "networking.PROFILE_READ_BREAK_MINUTES": "a break of 5 to 12 minutes, chosen at random, "
                                              "between bursts of browser reads; shortening it "
                                              "raises the risk to their LinkedIn account, so only "
