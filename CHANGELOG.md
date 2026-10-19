@@ -28,6 +28,10 @@ make sense to somebody whose repo just received it.
 - **A resume or letter already sent is never rendered over.** A redraft reused the filename
   of an application already sent, and an archived posting was rewritten each run, or emptied
   when a kept draft was run again. No profile upgrade.
+- **A large employer's Workday board is searched past its second page.** Workday gives a
+  search's count on its first page only, so every title search stopped at 40 postings
+  however many the employer listed. Each now reads on while its titles keep matching. No
+  profile upgrade.
 - **A job a board relists is as old as the first time the search saw it.** Only the board's
   date was read, and a relist gives a new one, so old postings looked fresh and earned the
   freshness bonus. A posting with no date is unknown, never fresh. No profile upgrade.
@@ -177,8 +181,8 @@ make sense to somebody whose repo just received it.
   No profile upgrade.
 - **Several LinkedIn profiles can be pasted in one message.** Each is matched to its waiting
   note and read on its own. No profile upgrade.
-- **A skill your profile says you do not hold is caught wherever it is claimed**, unless you
-  said yes to it for that application. No profile upgrade.
+- **A skill your profile says you do not hold is caught wherever it is claimed, unless you
+  said yes to it for that application.** No profile upgrade.
 - **A letter bullet that repeats the resume word for word is flagged.** No profile upgrade.
 - **A note written before anything was read about the person says so at its top.** It waits
   on a read and is never sent as it stands. No profile upgrade.

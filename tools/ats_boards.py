@@ -735,7 +735,7 @@ def _wd_search(board: _Board, facets: dict, queries=None):
 
     def one(term):
         stems = [w[:5] for w in term.split()]
-        found, errs = [], []
+        found, errs, total = [], [], 0
         for n in range(SEARCH_PAGES):
             data, err = board.page(facets, term, n * PAGE)
             if err or not isinstance(data, dict):
@@ -745,7 +745,11 @@ def _wd_search(board: _Board, facets: dict, queries=None):
             found.extend(posts)
             hits = sum(1 for p in posts
                        if all(s in str(p.get("title") or "").lower() for s in stems))
-            if hits < SATURATED or (n + 1) * PAGE >= int(data.get("total") or 0):
+            # Workday gives the total on the first page only, and 0 on every later one,
+            # so read afresh it stopped every term after its second page: 40 postings at
+            # most, however many the board held.
+            total = total or int(data.get("total") or 0)
+            if not posts or hits < SATURATED or (n + 1) * PAGE >= total:
                 break
         return found, errs
 
