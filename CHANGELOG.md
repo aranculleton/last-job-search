@@ -22,6 +22,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The brief counts every reply someone is waiting for.** A reply owed with no date written
+  beside it was left out, so the brief could open on "0 replies owed" while someone waited,
+  and a nudge whose clock had run was left out the same way. No profile upgrade.
+- **A resume or letter already sent is never rendered over.** A redraft reused the filename
+  of an application already sent, and an archived posting was rewritten each run, or emptied
+  when a kept draft was run again. No profile upgrade.
 - **A job a board relists is as old as the first time the search saw it.** Only the board's
   date was read, and a relist gives a new one, so old postings looked fresh and earned the
   freshness bonus. A posting with no date is unknown, never fresh. No profile upgrade.
@@ -38,6 +44,10 @@ make sense to somebody whose repo just received it.
   Your own triage card still counts as a hard cut. No profile upgrade.
 - **The round's target counts the 0 to 100 score.** It counted ranking order, so a posting
   with no stated salary could never count toward "2 at 75 or more". No profile upgrade.
+- **People are matched to an employer only when their result names it as where they
+  work.** A first name that spelled a one-word employer, an author's name on a post, or a
+  university in a title made someone "likely" there. A networking redo closes any such
+  contact already in the book, with the reason. No profile upgrade.
 - **A wider round searches more pages, never older postings.** Each widening stretched the
   14-day freshness rule to 21 and then 42 days. No profile upgrade.
 - **Postings the screen cuts are recorded, so they are not fetched again.** No profile
@@ -54,10 +64,6 @@ make sense to somebody whose repo just received it.
   upgrade.
 - **The example's pay knockout matches its own cut line.** It knocked out ranges below the
   walk-away figure, which the screen only flags. No profile upgrade.
-
-- **The brief counts every reply someone is waiting for.** A reply owed with no date written
-  beside it was left out, so the brief could open on "0 replies owed" while someone waited,
-  and a nudge whose clock had run was left out the same way. No profile upgrade.
 - **An employer written "Full Name (SHORT)" is one employer with SHORT.** A bracket that
   counted a small word ("of") in its initials, or gave the name's own first words, keyed
   apart from the short name, so a thread and an application at one employer never linked.
@@ -72,10 +78,6 @@ make sense to somebody whose repo just received it.
 - **Your own tests are named when an update breaks them.** After an update lands, the tests
   in your own profile run, and any that pinned how the app worked before is named, with what
   to do. No profile upgrade.
-- **People are matched to an employer only when their result names it as where they
-  work.** A first name that spelled a one-word employer, an author's name on a post, or a
-  university in a title made someone "likely" there. A networking redo closes any such
-  contact already in the book, with the reason. No profile upgrade.
 - **Someone at an employer's ratings or analytics arm, or under its brand line, counts as
   working there.** They were dropped as working somewhere else; a firm you list as separate
   is never joined. No profile upgrade.
@@ -89,9 +91,6 @@ make sense to somebody whose repo just received it.
   a four-line step with no archive, research or saved pack. No profile upgrade.
 - **Interview prep treats postings and pages as data, and never fetches an interviewer's
   LinkedIn.** No profile upgrade.
-- **A resume or letter already sent is never rendered over.** A redraft reused the filename
-  of an application already sent, and an archived posting was rewritten each run, or emptied
-  when a kept draft was run again. No profile upgrade.
 - **Every figure in a cover letter is checked against your profile.** Only the resume's
   were. No profile upgrade.
 - **A resume trimmed to fit keeps the line that best describes each job.** A trim could
@@ -119,16 +118,6 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
-- **Employers your bar excludes by name are dropped before their postings are fetched.** No
-  profile upgrade.
-- **The check that a posting is still open asks as the app, respects switched-off portals
-  and robots.txt, and waits between requests.** It fetched as a browser, LinkedIn
-  included when it was switched off. No profile upgrade.
-- **The drafting check is the grounding auditor itself.** Its own shortened copy of the rules
-  missed that two letters must never share an opening or a closing. No profile upgrade.
-- **A result recorded during a session shapes the next resume at once.** The lift for
-  bullets that reached an interview was read once and kept until the session ended. No
-  profile upgrade.
 - **Applications that have gone quiet are closed for you.** The brief closes each one past
   the chase (45 days, or a week after a second follow-up) as no_response, with a dated note
   on the row, and leaves alone any with an interview, a referral or a "do not chase" at that
@@ -146,6 +135,16 @@ make sense to somebody whose repo just received it.
   each unmerged branch, new commit messages and pull request text for the maintainer's own
   names; nothing has to be kept up to date by hand, and CI's secret is optional. Anyone
   else's repo is unaffected. No profile upgrade.
+- **Employers your bar excludes by name are dropped before their postings are fetched.** No
+  profile upgrade.
+- **The check that a posting is still open asks as the app, respects switched-off portals
+  and robots.txt, and waits between requests.** It fetched as a browser, LinkedIn
+  included when it was switched off. No profile upgrade.
+- **The drafting check is the grounding auditor itself.** Its own shortened copy of the rules
+  missed that two letters must never share an opening or a closing. No profile upgrade.
+- **A result recorded during a session shapes the next resume at once.** The lift for
+  bullets that reached an interview was read once and kept until the session ended. No
+  profile upgrade.
 
 ### Added
 
@@ -162,14 +161,14 @@ make sense to somebody whose repo just received it.
 - **An offer gets a negotiation pack.** Nothing prepared for one before. No profile upgrade.
 - **A letter is addressed to the person the employer names for the role.** Every letter
   went to the hiring team. No profile upgrade.
-- **A skill your profile says you do not hold is caught wherever it is claimed.** No profile
-  upgrade.
-- **A letter bullet that repeats the resume word for word is flagged.** No profile upgrade.
 - **A connection request you withdrew is recorded, and that person is never written to
   again.** Nothing recorded a withdrawal, so the request stayed on the list to withdraw.
   No profile upgrade.
 - **Several LinkedIn profiles can be pasted in one message.** Each is matched to its waiting
   note and read on its own. No profile upgrade.
+- **A skill your profile says you do not hold is caught wherever it is claimed.** No profile
+  upgrade.
+- **A letter bullet that repeats the resume word for word is flagged.** No profile upgrade.
 - **A note written before anything was read about the person says so at its top.** It waits
   on a read and is never sent as it stands. No profile upgrade.
 - **Prep documents say which version wrote them, and only out-of-date ones are rewritten.**

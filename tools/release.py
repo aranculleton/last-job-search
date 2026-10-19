@@ -66,6 +66,10 @@ def _needs(ids: list[str]) -> str:
     return "you" if any(u.needs == "you" for u in found) else "nobody"
 
 
+MAX_PER_GROUP = 8
+CHANGELOG_URL = "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md"
+
+
 def short(notes: str) -> str:
     """The release notes a person reads, from a CHANGELOG section."""
     groups: list[tuple[str, list[str]]] = []
@@ -100,7 +104,12 @@ def short(notes: str) -> str:
         groups[-1][1].append(head)
     out = []
     for group, heads in groups:
-        out += ([f"**{group}**"] if group else []) + [f"- {h}" for h in heads] + [""]
+        # A big release is still a page someone reads: the first few of each kind (the
+        # CHANGELOG puts the ones a person notices first), then a count.
+        shown = heads[:MAX_PER_GROUP]
+        more = len(heads) - len(shown)
+        out += ([f"**{group}**"] if group else []) + [f"- {h}" for h in shown]
+        out += ([f"- And {more} more ({CHANGELOG_URL})."] if more else []) + [""]
     # "Sets it up" only where there is something to set up: a release of fixes alone is
     # simply taken.
     out.append("What to do: nothing. Your next chat takes this update"
