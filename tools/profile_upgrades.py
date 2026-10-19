@@ -495,6 +495,19 @@ def _interview_prep() -> str:
     return ""
 
 
+def _interview_tags() -> str:
+    if not person.exists("07-interview-prep.md"):
+        return ""
+    found = _probe("import interview_pack; print('\\n'.join(interview_pack.untagged()))")
+    bare = [t for t in found.splitlines() if t.strip()]
+    if not bare:
+        return ""
+    return (f"{len(bare)} STAR stor{'y' if len(bare) == 1 else 'ies'} in "
+            "profile/07-interview-prep.md say which questions they answer nowhere, so an "
+            "interview pack cannot match them: " + "; ".join(bare[:3])
+            + (f"; {len(bare) - 3} more" if len(bare) > 3 else ""))
+
+
 def _country() -> str:
     if person.exists("person.json") and not person.get("identity.country", ""):
         return ("person.json has no identity.country: paper size, working week and "
@@ -854,6 +867,12 @@ REGISTRY: tuple[Upgrade, ...] = (
             "/interview working from your own STAR examples",
             _interview_prep, "/setup --section history", "question", "~10 min",
             priority=3),
+    Upgrade("interview-tags", "2026-10-19",
+            "each of your interview stories matched to the questions it answers",
+            _interview_tags, "add one `Use for:` line to each STAR story listed, naming the "
+            "interview questions it answers, read from the story's own words (setup.md's "
+            "history section says how); change nothing else in the file", "edit", "~2 min",
+            priority=2),
     Upgrade("country", "2026-10-14",
             "paper size, working week and market language that follow your country",
             _country, "/setup --section market", "question", "~1 min",

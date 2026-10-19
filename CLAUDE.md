@@ -203,7 +203,7 @@ done
 for p in job_search_tracker.csv network_contacts.csv network_threads.csv \
          job_scraper/seen_jobs.json job_scraper/do_not_target.json \
          documents/cv documents/applications documents/network documents/rounds \
-         cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
+         documents/interview cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
          cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf \
          company_research/*.json upskill/*.md; do
   [ -e "$p" ] && git add -f -- "$p"
@@ -369,7 +369,7 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 
 **Tools run directly, not through a slash command**: `run_round.py`, `job_alerts.py`,
 `stage_picks.py`, `verify_batch.sh`, `record_drafts.py`, `open_actions.py` (`--due`,
-`--company`), `followups.py`, `what_works.py`, `bar.py`, `network/state.py`, `network/reading.py`,
+`--company`), `followups.py` (`--close-quiet`), `what_works.py`, `interview_pack.py`, `bar.py`, `network/state.py`, `network/reading.py`,
 `network/prep.py --all`, `network/profile_facts.py` and `bridges.py`. What each does, its flags and its exit
 codes are in RUNBOOK.md, "Tools run directly". `run_round.py` exits 0 when the yield target is
 met, 2 when it is missed (a thin market) and 1 when a stage broke.
@@ -573,6 +573,8 @@ chat has lost it.
 |---|---|
 | Applied to something, anywhere, including outside this repo | `job_search_tracker.csv`, a new row |
 | An application changed status (interview, offer, rejection, silence) | `job_search_tracker.csv` `status`, via `/outcome` |
+| An interview was booked | that application's `outcome.md`, as a scheduled stage line, via `/outcome` |
+| The questions an interview asked, and which stories landed | `documents/interview/question_bank.csv`, via `/outcome` (`interview_pack.py asked`) |
 | Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
 | Messaged someone, or they replied | `network_threads.csv`, one row per message |
 | A new person worth contacting | `network_contacts.csv` |

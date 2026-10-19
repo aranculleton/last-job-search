@@ -566,3 +566,16 @@ def test_the_sync_block_shows_no_id_or_version_outside_its_brackets(profile):
     said = [re.sub(r"\s*\[[a-z0-9-]+\]$", "", ln) for ln in block.splitlines()
             if ln.startswith("    - ")]
     assert said and not any(re.search(r"\bversion \d|\bmethod-|\bupgrade\b", s) for s in said)
+
+
+def test_a_story_with_no_use_for_line_is_tagged_in_the_background(profile):
+    # An interview pack matches a story to a question by its `Use for:` line; a profile set
+    # up before that line existed has stories no question can reach.
+    u = U.by_id("interview-tags")
+    assert u.needs == "nobody" and u.pending() == ""
+    f = profile / "07-interview-prep.md"
+    f.write_text(f.read_text(encoding="utf-8") + "\n## STAR: an untagged one\n"
+                 "- **Situation:** s.\n- **Task:** t.\n- **Action:** a.\n- **Result:** r.\n",
+                 encoding="utf-8")
+    assert u.pending().startswith("1 STAR story in profile/07-interview-prep.md")
+    assert "An untagged one" in u.pending()

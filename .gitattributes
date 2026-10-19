@@ -4,3 +4,4 @@ job_search_tracker.csv merge=ljs-state
 network_contacts.csv merge=ljs-state
 network_threads.csv merge=ljs-state
 job_scraper/seen_jobs.json merge=ljs-state
+documents/interview/question_bank.csv merge=ljs-state

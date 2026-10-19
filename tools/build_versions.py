@@ -248,7 +248,7 @@ METHODS: dict[str, dict] = {
         "gives": "the prep pack for each interview still running rewritten the current way",
         "run": "for each tracker row at `interview`, /interview <company> again, its pack "
                "written beside the old one",
-        "files": (".claude/commands/interview.md",),
+        "files": (".claude/commands/interview.md", "tools/interview_pack.py"),
         "versions": (
             _first(),
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
