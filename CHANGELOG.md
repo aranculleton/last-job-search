@@ -130,12 +130,13 @@ make sense to somebody whose repo just received it.
   only from a search summary is kept labelled "search summary, not read".
 - **The permit answer in the interview template follows your disclosure rule** instead of
   telling you to state the expiry plainly.
-- **On your own computer**: rounds are gentler by default (fewer pages and workers, a cap on
-  requests to each app portal, all yours to change), installed tools are found on the usual
-  Mac and Windows paths even when the shell's PATH lacks them, `~/texmf` is no longer linked
-  into the repo, `ci_local.sh` uses your virtual environment and says which Python it ran,
-  each chat on one computer works in a folder of its own (`sync_app.py --worktree <name>`),
-  and landing work checks the pull request says merged instead of trusting `gh`'s exit code.
+- **Gentler rounds, and tools found where they are installed, on your own computer**: rounds
+  are gentler by default (fewer pages and workers, a cap on requests to each app portal, all
+  yours to change), installed tools are found on the usual Mac and Windows paths even when
+  the shell's PATH lacks them, `~/texmf` is no longer linked into the repo, `ci_local.sh`
+  uses your virtual environment and says which Python it ran, each chat on one computer works
+  in a folder of its own (`sync_app.py --worktree <name>`), and landing work checks the pull
+  request says merged instead of trusting `gh`'s exit code.
 
 ### Fixed
 
@@ -147,8 +148,9 @@ make sense to somebody whose repo just received it.
   `scrape_wide.py` (`finish()`), so a test of your own that searches its source for
   `rows = list(seen.values())` will not find it there; the employer boards still never
   break a round.
-- **"KEEP" after nothing was read.** A verdict on someone with only public findings said
-  KEEP; it now says NOT READ YET, and every outcome of a read has its own exit code.
+- **Someone nobody has read yet is marked NOT READ YET, never KEEP.** A verdict on someone
+  with only public findings said KEEP; it now says NOT READ YET, and every outcome of a read
+  has its own exit code.
 - **Profile top cards read as they are laid out now**: a mutual-connection line is no longer
   taken as the headline, and a school is no longer taken as where someone lives.
 - **People search keeps the employer from a result title** however it is written ("Director,
