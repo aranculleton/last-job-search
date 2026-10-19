@@ -263,6 +263,17 @@ def _first_sentence(value) -> str:
     return sentences[0] if sentences else ""
 
 
+def clip(text, limit) -> str:
+    """`text` whole when it fits, else cut at the last word that fits, with "...": a cut
+    at a fixed width left "Connecti" in an interview pack."""
+    text = _text(text)
+    if len(text) <= limit:
+        return text
+    head = text[:limit + 1]
+    cut = head.rfind(" ")
+    return (head[:cut] if cut > limit // 2 else text[:limit]).rstrip(",;:. ") + "..."
+
+
 def _short(value, limit=ANCHOR_CHARS) -> str:
     """A fragment short enough to sit inside a question, cut at a word."""
     text = _first_sentence(value) or _text(value)
@@ -424,7 +435,7 @@ def _reading_lines(contact) -> list:
         if kind == "about":
             continue
         line = "- %s%s" % (what[:1].upper() + what[1:],
-                           ': "%s"' % evidence[:160] if evidence else "")
+                           ': "%s"' % clip(evidence, 160) if evidence else "")
         out.append("%s (source: %s)" % (line, src))
     return out
 
@@ -1628,6 +1639,8 @@ def main(argv=None) -> int:
     ap.add_argument("--root", default=STATE_ROOT)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
+    if not (a.contact or a.all or a.stale_only):
+        ap.error("name a contact (their contact_id or name), or --all")
 
     contacts = state.load_contacts(a.contacts)
     if a.all or a.stale_only:

@@ -128,6 +128,8 @@ def fetch(url: str, timeout: int = 20) -> str:
 
 
 def check(statuses: set[str], path: str = TRACKER) -> list[dict]:
+    import csv_store
+    csv_store.refuse_conflicts(path)
     with open(path, newline="", encoding="utf-8") as fh:
         rows = [r for r in csv.DictReader(fh) if (r.get("status") or "").strip() in statuses]
     out = []
@@ -151,6 +153,9 @@ def main() -> int:
     ap.add_argument("--status", action="append", help="tracker status to check (default: drafted)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
+    if not os.path.exists(TRACKER):
+        print("still_open: no job_search_tracker.csv yet, so there is nothing to check")
+        return 0
     got = check(set(a.status or ["drafted"]))
     if a.json:
         print(json.dumps(got, indent=1))

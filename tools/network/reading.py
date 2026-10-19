@@ -335,6 +335,11 @@ def _top(pre: list, before_main: list, name: str = "") -> tuple[str, str, str]:
     # A "Save to PDF" export: name, headline and location sit right before Summary
     # or Experience, after the sidebar sections LinkedIn prints first.
     if len(before_main) == 3:
+        if name and fold(before_main[1]) == fold(name):
+            # No location line: the line before the name, the name, then the headline.
+            # Read as name, headline and location, it made the name the headline and
+            # their job where they live ("based in Head of Data at ...").
+            return before_main[2][:160], "", ""
         return before_main[1][:160], before_main[2][:120], ""
     return "", "", ""
 
@@ -1118,9 +1123,20 @@ def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
             and contact_id in (got.get("ids") or []))
 
 
+def read_recently(reading: dict | None, today: datetime.date | None = None) -> bool:
+    """Was something read about them (their page, or public work kept) within FRESH_DAYS?
+    The same test draft_text uses to decide a note rests on a reading, plus its age: the
+    queue used fresh(), which counts their page alone, so a note rightly written from a
+    talk or a post was listed as waiting on a read for good."""
+    if not has_read(reading):
+        return False
+    age = _days((reading or {}).get("read_on", ""), today or datetime.date.today())
+    return age is None or age <= FRESH_DAYS
+
+
 def queue(contacts: list, today: datetime.date | None = None) -> list:
-    """Contacts with a first note waiting and no fresh reading of their profile, or
-    whose note still says it waits on a read: read since, and not rewritten yet."""
+    """Contacts with a first note waiting and nothing read about them lately, or whose
+    note still says it waits on a read: read since, and not rewritten yet."""
     out = []
     for c in contacts:
         cid = c.get("contact_id", "")
@@ -1128,9 +1144,19 @@ def queue(contacts: list, today: datetime.date | None = None) -> list:
             continue
         if not os.path.isfile(draft_path(cid)):
             continue
-        if not fresh(load(cid), today) or waits_on_read(cid):
+        if waits_on_read(cid) or not read_recently(load(cid), today):
             out.append(c)
     return out
+
+
+def written_the_older_way(contact_id: str) -> bool:
+    """Is their waiting note one written before notes rested on a reading: nothing read
+    about them, and no WAITS ON A READ line? Only those are what the network-notes
+    method redoes. A note the current code wrote is either from a reading or opens on
+    that line, and counting those too told every /network run to rewrite the notes the
+    networking upgrade had just written, a rewrite that needs the very reads it waits on."""
+    return (os.path.isfile(draft_path(contact_id)) and not waits_on_read(contact_id)
+            and not has_read(load(contact_id)))
 
 
 # ------------------------------------------------------------------- drafts

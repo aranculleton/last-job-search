@@ -20,7 +20,30 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Follow-ups skip public holidays.** "Five to seven business days" counted a public
+  holiday as a working day, so a nudge could fall due a day early. Holidays are now
+  worked out by rule for any year: national days for the UK, Ireland, Canada, the US,
+  Australia and New Zealand, and regional days for Canada's provinces, the UK's nations
+  and several US states. Your region is read from where you live. Anywhere the rules do
+  not cover, Claude looks up your country's holidays and keeps them in your profile
+  (`python3 tools/holidays.py` lists them). Profile upgrade: public-holidays.
+- **Your own "never write" rules are checked in every draft.** A rule in your profile
+  such as never write "relocating" was followed only when the drafting model remembered
+  it, and a note that broke it passed every check. The phrases your rules quote are now
+  checked like any phrase you have said never to use, applied by itself on your next
+  update. Profile upgrade: profile-never-say.
+
 ### Changed
+
+- **The set-up that works best is now said plainly: two chats.** One on your computer, for
+  everything you do (job searches, resumes, interview prep and networking), and your brief
+  in the cloud, which follows up for you and arrives even when your computer is off. It is
+  in the README, the start guide, /setup's question about where you work, and the
+  reminder a cloud chat gives on a computer, which no longer offers pasting profiles. If
+  you already said you work on a computer, your next cloud chat tells you once, then
+  weekly while it still applies, whether or not profiles are read in your browser.
 
 - **When your own self-checks need deleting after an update, you are asked in plain words,
   with the answer recommended.** 3.5.1 asked whether to "retire" failing tests, which only a
@@ -29,6 +52,92 @@ make sense to somebody whose repo just received it.
   or "Not now", a plain answer if asked what it means, and the reply to each. Nothing is
   asked when none needs deleting. Only a repo with its own `profile/tests` ever sees it. No
   profile upgrade.
+
+### Fixed
+
+- **An interview pack no longer tells you to message someone whose row says to wait for
+  their reply.** "Wait for his reply", "awaiting her response" and "leave him be" now read
+  as leave them be, like "no action" and HOLD already did, and the pack says the interview
+  is "booked" only when the round has a date; without one it says to tell them once it
+  has a date.
+- **A row or a reading is quoted whole, or cut at a word.** A fixed 140-character cut
+  left a pack quoting a contact's next step as "...Connecti". The networking prep doc
+  had the same cut and has the same fix.
+- **Every section of a hand-written outcome file reaches the pack.** The pack read only a
+  `## Notes` heading, so a file written as one heading per round ("What was learned",
+  "Owed") gave its Earlier stages section nothing. Each item now comes through as one
+  line under its heading: its bold headline, a labelled line whole, or its first
+  sentence, 24 lines at most and the rest counted.
+- **A pack's own "Do not say" list is no longer flagged as something you will say.** It
+  quotes the very phrases it warns against, so the voice check called them seven hard
+  findings and a pack carrying the list could never come back clean. The list is marked
+  as quoted, and `tools/voice_check.py` skips a quoted list; the same words anywhere else
+  are still caught.
+- **A question you were told about, rather than asked, keeps its true source.**
+  `interview_pack.py asked --source "<the recruiter, a contact, a review site>"` records
+  it; the pack prepares it as "reported by" that source, and it never counts as a
+  question asked. The question bank gains a `source` column only when a row has one.
+
+- **People search keeps only people at the employer.** From one person's run:
+  - A university's post naming the employer, the employer's own page and a page on the
+    employer's site were each kept as a contact.
+  - A name check for someone whose first name spells a one-word employer kept them there,
+    though the check finds them by name alone.
+  - "Name - Title - Employer - City" ignored the employer, so somebody at another firm
+    was kept.
+  - A brand line after a job ("Partner, Brand, AI by Parent") or written with a dash was
+    read as another employer, and so was a post naming the employer by its ratings arm or
+    brand line.
+  - A job the list did not know ("Senior Actuary, London") was read as a place.
+  - A "Save to PDF" profile with no location line gave their job as where they live.
+
+  Each is fixed, and contacts already added are checked again in the background.
+- **Notes the networking update writes are no longer flagged for rewriting straight
+  away.** The update writes each new contact's note marked WAITS ON A READ, and the
+  notes check counted any queued note as written the older way, so every /network run
+  began by rewriting the notes just written, which needs the reads they were waiting
+  on. Only a note with nothing read behind it and no such mark is redone now, and a
+  note written from someone's public work leaves the queue.
+- **The steps for your LinkedIn connections match LinkedIn's own help page.** They said to
+  choose "Connections only" and to expect the file in ten minutes. LinkedIn no longer
+  offered that choice, and one person waited for a file that never came. Now:
+  - The steps ask for the larger download, which LinkedIn says arrives within a day, and
+    say so: "anything from about ten minutes to a day".
+  - You attach only Connections.csv. Attach the whole archive and only Connections.csv is
+    read from it, and you are told nothing else was opened
+    (`sources.py import-connections`).
+  - While the file is on its way, you can paste one employer's 1st-degree people, starting
+    where you are interviewing, and each is drafted a message with no connection request.
+    No browser is needed (`sources.py people-paste`).
+- **A step on another company's site is checked before it is given.** Every step printed
+  now carries the day it was checked and its official page, and a stale one tells Claude
+  to check the page first or say it could not. LinkedIn's help pages are never fetched,
+  so the weekly watch puts them to the maintainer by hand once a month instead.
+- **A file a merge left conflict markers in is refused, never read.** After a merge
+  conflict, the contact book's marker lines were read as three contacts and both sides of
+  the conflicted row as two more, nothing said so, and the next save wrote the markers
+  back. Every reader of the tracker, the contact book and the message log now stops and
+  names the file and the line, and nothing is saved over it.
+- **Pay is read however a posting writes it.** A band with no currency mark ("Salary:
+  95-125K", "95,000.00 - 125,000.00 annually"), a band by the hour, and a band under a
+  pay heading on the line above were read as no salary, so the posting skipped the pay
+  cut and the pay score. Given one band per place, the highest was read; the band for
+  your own city or country is read now, so one under your cut line is cut.
+- **A never-say phrase with brackets or parentheses is caught.** "(remote)" or "[sic]"
+  was recorded and never flagged. Names, places and cue words are matched the same way,
+  so a term like C++ works too.
+- **Employer names with a web address or initials join.** "<Name>.com Services LLC", the
+  name some employers post under, joined nothing at <Name>, and "<Initials> Global
+  Ratings" never joined "<Initials> Global".
+- **No command crashes when run with nothing, or asked for help.** Four died on an
+  IndexError, several read "--help" as a company or a message, and two died where there
+  was nothing to read. Each prints its usage or says there is nothing to do.
+- **Nothing that needs your browser is listed as something Claude applies alone.** The
+  notes rewrite was, until 3.4.1; a test now keeps it that way.
+
+The next interview pack for a live interview is written beside the old one by itself
+(build version interview 8), and people already added are re-checked by the networking
+update (networking 27).
 
 ## [3.5.1] - 2026-10-19
 

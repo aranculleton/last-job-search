@@ -106,13 +106,26 @@ def fold(s: str) -> str:
 DUAL = re.compile(r"\s*[|/]\s*")
 
 
+# A web address in an employer's legal name: "<Name>.com Services LLC" is <Name>.
+# Read as punctuation, the ".com" left "<name> com", which joined nothing, and the
+# employer's own postings under that name keyed apart from everything else there.
+DOMAIN = re.compile(r"(?<=[a-z0-9])\.(?:com|net|org|io|ai|co(?:\.uk)?|ca|de|fr|in)(?![a-z0-9])")
+
+
 def _norm(s: str) -> str:
     s = PAREN.sub(" ", fold(s).strip().lower())
+    s = DOMAIN.sub("", s)
     halves = [h for h in DUAL.split(s) if h.strip()]
     if len(halves) > 1:
         s = halves[0]
     s = LEADING_THE.sub("", s)
-    return SPACE.sub(" ", _AND.sub(" ", PUNCT.sub(" ", s))).strip()
+    s = SPACE.sub(" ", _AND.sub(" ", PUNCT.sub(" ", s))).strip()
+    # Initials written with dots or an ampersand are one word: "J.P. Fernhill" is
+    # "JP Fernhill", and "K&M" keys the same however it is written.
+    return _INITIALS.sub(lambda m: m.group(0).replace(" ", ""), s)
+
+
+_INITIALS = re.compile(r"(?<!\S)[a-z0-9](?: [a-z0-9])+(?!\S)")
 
 
 # Alias keys go through the same normalization as the input, or a hyphenated
@@ -266,6 +279,9 @@ def _key(name: str) -> str:
 
 if __name__ == "__main__":
     import sys
+    if not sys.argv[1:] or sys.argv[1] in ("-h", "--help"):
+        print('usage: python3 tools/company_key.py "<employer name>" [...]: the key each joins on')
+        sys.exit(0 if sys.argv[1:] else 2)
     for n in sys.argv[1:]:
         print(f"{n!r} -> {key(n)!r}")
 

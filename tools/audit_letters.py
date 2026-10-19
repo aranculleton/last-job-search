@@ -151,7 +151,7 @@ def role_named(role, opening):
     words = [w for w in re.findall(r"[A-Za-z]+", role) if len(w) > 2 or w.isupper()]
     o = opening.lower()
     if len(words) == 1:
-        return re.search(r"\b" + re.escape(words[0].lower()) + r"\b", o) is not None
+        return re.search(r"(?<!\w)" + re.escape(words[0].lower()) + r"(?!\w)", o) is not None
     return any(f"{words[i].lower()} {words[i+1].lower()}" in o for i in range(len(words) - 1))
 
 
@@ -193,7 +193,7 @@ def audit(a, batch=()):
     # A company called "The Something" used to check for "The", which every
     # letter contains.
     short = R.short_name(a["company"]).split()[0]
-    if not re.search(r"\b" + re.escape(short) + r"\b", body, re.I):
+    if not re.search(r"(?<!\w)" + re.escape(short) + r"(?!\w)", body, re.I):
         flags.append(f"body never names {short}")
     # Zero concessions, not one. Hiring managers and recruiters read a
     # concession as "does not have X, so does not meet the minimum": a reader
@@ -239,6 +239,9 @@ def audit(a, batch=()):
 MAX_BODY_WORDS = 250
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("usage: python3 tools/audit_letters.py <drafts.json>\n\n" + __doc__.strip().split("\n\n")[0])
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     apps = json.load(open(sys.argv[1]))
     bad = 0
     for a in apps:

@@ -95,8 +95,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, a Workday search reads past its second page, a Greenhouse or Lever posting is kept when any place it lists is wanted, and Lever's EU instance is read"),
             (12, "2026-10-19", True, "every hiring system openroles reads is searched (Workable, Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun and ClearCompany besides the first four) and careers sites that publish their jobs for search engines: each target employer's board is looked for again on all of them"),
             (13, "2026-10-19", False, "a private name the board reader no longer has says, in its own error, what that means and where to look; --find says when a board was only guessed from a name, with its size and roles, and reads each board once"),
+            (14, "2026-10-19", False, "a metro name is matched at its edges the way every other name is; nothing to search again"),
         ),
-        "fingerprint": "7090f931ee1d7afe",
+        "fingerprint": "bec86bbb11182c28",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -199,8 +200,10 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-17", True, "the prep document says what was read about them: the history you share and what they have posted"),
             (7, "2026-10-17", False, "one research cache with its freshness rule: stale research, roles open there you scored well, the letter's fact and concessions, and the cache's own cautions in the call prep"),
             (8, "2026-10-19", False, "each document is stamped with the prep that wrote it, and only an older one is rewritten; a tool you lack is never claimed unless you say yes"),
+            (9, "2026-10-19", False, "a quote from a reading is cut at a word, never mid-word"),
+            (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
         ),
-        "fingerprint": "633a1fd22d68fd59",
+        "fingerprint": "d84d0c1b1a84b7b3",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -250,8 +253,10 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-19", False, "an application from any employer board openroles reads is recorded as applied online"),
             (17, "2026-10-19", False, "RUNBOOK says what to do when a person's own tests fail after an update; an application's folder is found when its role carries a requisition number"),
             (18, "2026-10-19", False, "The person is asked in plain words before any of their own failing tests is deleted; wording only, nothing to redo"),
+            (19, "2026-10-19", False, "the voice check skips a quoted list of words to avoid, so a document that warns against a phrase is not flagged for it"),
+            (20, "2026-10-19", False, "every command prints its usage instead of crashing with no arguments, the voice check reads a never-say phrase however it is punctuated, and your own never-write rules are checked"),
         ),
-        "fingerprint": "d7f0589a56545bbe",
+        "fingerprint": "30dbf962fcc140de",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -268,8 +273,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-17", False, "interview research reads the one company-research cache and its freshness rule"),
             (6, "2026-10-19", True, "the pack is built by tools/interview_pack.py: sourced, one screen first, the money the form already named, the question bank, warm routes, an offer branch, mock feedback kept, and each skill you said yes to claiming flagged as one to expect a question on"),
             (7, "2026-10-19", True, "a pack finds its application however the role is written (a requisition number in it), reads a hand-written outcome's rounds, finds the referrer from every record, and never tells you to message someone whose row says to leave them be"),
+            (8, "2026-10-19", True, "a pack treats waiting on someone's reply as leave them be, says booked only when the round has a date, quotes rows whole or cut at a word, carries every section of a hand-written outcome file, keeps its do-not-say list out of the voice check, and prepares a question you were told about as reported, with its source"),
         ),
-        "fingerprint": "bd99593c4f356aaf",
+        "fingerprint": "cd3b48d46e33ce20",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -347,8 +353,11 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-18", False, "the line saying why someone was found names the job a title search looked for, and nothing else: no search operators, never the person's own name"),
             (25, "2026-10-18", True, "people searches spend the budget where people are found: both title searches run first, a name check keeps only that person with the job the page gave them and is capped at three an employer, a post is dated so an old one no longer counts, and AVP, SVP and EVP read as senior"),
             (26, "2026-10-19", True, "people are matched to an employer only where their result names it as where they work, people at its ratings or analytics arm or under its brand line count, and contacts already added on a name alone are re-checked"),
+            (27, "2026-10-19", True, "people are kept only when they are people at the employer: a university's or the employer's own post is not a contact, a first name that spells the employer proves nothing on a name check, the employer before a place is read, a brand line after a job or a dash is the employer, a post naming another of the employer's names counts, and a job is never read as a place; contacts already added are re-checked"),
+            (28, "2026-10-19", False, "your connections export is saved from the file or from LinkedIn's whole archive, reading only Connections.csv, and one employer's 1st-degree people can be pasted while it is on its way, each drafted a message with no connection request"),
+            (29, "2026-10-19", False, "business days skip your public holidays, employer names with a web address or initials join, and a state file a merge left conflict markers in is refused"),
         ),
-        "fingerprint": "3d579f89ea9b28f7",
+        "fingerprint": "3665cab555969142",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -379,8 +388,9 @@ METHODS: dict[str, dict] = {
             (13, "2026-10-19", False, "a comment's example employer is invented"),
             (14, "2026-10-19", False, "a comment names the place check's new rhythm, once and then weekly"),
             (15, "2026-10-19", False, "applied by /network itself; several profiles can be pasted at once; a note nobody has read for says so at its top"),
+            (16, "2026-10-19", False, "only notes written before notes rested on a reading are redone, and a note written from someone's public work leaves the queue"),
         ),
-        "fingerprint": "2d354573e812ff1e",
+        "fingerprint": "bbb39cea1b2cdddd",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -405,8 +415,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-18", False, "the text screen runs on Python 3.9; a pension plan's full and short names key as one employer"),
             (9, "2026-10-19", True, "a posting is cut only while today's rules would cut it: relists aged by first sight, a remote role for another country flagged or cut, a region cutting only when it leaves home out, a home city beside a country code read as home, and the pronoun us never a country"),
             (10, "2026-10-19", False, "every employer board openroles reads is a live board, copies of one posting in a round are as old as the oldest, and an internal Workday site is caught at either of Workday's addresses"),
+            (11, "2026-10-19", False, "pay is read with no currency mark, by the hour, under a heading, and per place; a posting it now reads below your cut line is cut on its next round, and nothing ruled out before needs looking at again"),
         ),
-        "fingerprint": "703eb279fec9f5a5",
+        "fingerprint": "f990a9b782e40497",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -458,6 +469,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     "tools/offline_boards.py": "a test seam: canned board answers inside a test, nothing kept",
     "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
+    "tools/holidays.py": "works out public holidays when a date is counted; writes nothing, and "
+                         "a person's own dates live in their search.py PUBLIC_HOLIDAYS",
     ".github/*": "the app's own CI and issue templates",
     "profile.example/*": "the invented example person; a new profile name in it is a profile "
                          "upgrade or a safe default, which tests/test_profile_upgrades.py holds",
@@ -699,6 +712,8 @@ def behind(name: str, have: dict[str, int] | None = None) -> list[tuple]:
 
 def _tracker_statuses() -> set[str]:
     path = person.state("job_search_tracker.csv")
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, encoding="utf-8", newline="") as fh:
             return {(r.get("status") or "").strip().lower() for r in csv.DictReader(fh)}
@@ -714,9 +729,20 @@ def _has_rows(path: str) -> bool:
         return False
 
 
+def _older_notes() -> bool:
+    """A first note still waiting that was written the older way (network/reading.py
+    written_the_older_way). Any draft at all used to count, so the notes the networking
+    upgrade writes, each opening on WAITS ON A READ, read as made the older way the
+    moment they were written, and every /network run began by rewriting them."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
+    import reading
+    return any(reading.written_the_older_way(os.path.basename(os.path.dirname(f)))
+               for f in glob.glob(person.state("documents", "network", "*", "draft.md")))
+
+
 APPLIES = {
     "prep_docs": lambda: bool(glob.glob(person.state("documents", "network", "*", "prep.md"))),
-    "queued_notes": lambda: bool(glob.glob(person.state("documents", "network", "*", "draft.md"))),
+    "queued_notes": lambda: _older_notes(),
     "unsent_drafts": lambda: "drafted" in _tracker_statuses(),
     "live_interviews": lambda: "interview" in _tracker_statuses(),
     "live_applications": lambda: bool({"drafted", "interview"} & _tracker_statuses()),

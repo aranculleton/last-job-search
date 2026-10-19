@@ -52,6 +52,8 @@ Every session in a person's repo starts with the same five steps, before anythin
    browser of theirs; tools missing on their computer), it prints what to tell them, which
    goes at the end of the reply in its own words: two or three short sentences, and the
    dated steps only if they ask how (`place.py how`). It offers a choice and never makes it.
+   The set-up it recommends to anyone with a computer is two chats: one on their computer
+   for everything they do, networking included, and the brief in the cloud (`place.TWO_CHATS`).
    In the maintainer's own repo the sync also checks the public app for their names
    (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before anything else. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
@@ -502,6 +504,17 @@ Commit these alongside application artefacts:
 ```bash
 git add -f network_contacts.csv network_threads.csv documents/network/
 ```
+
+## A step on another company's site is checked before it is given
+
+Steps that name LinkedIn's, Gmail's, GitHub's or Claude's own screens come from
+`tools/claude_surfaces.json` (`claude_surfaces.py steps <id>`), each headed by the day it was
+checked and its official page. Before giving one, check that page that day: a web search for
+linkedin.com, which no session fetches, and a fetch for the rest. Where the page says
+something else, give what it says and fix the entry. Where it cannot be checked, say "I could
+not check this today" and keep the step short. Never pass on a step about another site from
+memory: a LinkedIn path given unchecked sent a person to an option LinkedIn no longer offered.
+A screen name written outside the registry fails `tests/test_claude_surfaces.py`.
 
 ## Every output is shown, never only filed
 

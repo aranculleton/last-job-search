@@ -281,6 +281,30 @@ def _linkedin_plan() -> str:
     return ""
 
 
+def _profile_never_say() -> str:
+    import learned
+    got = learned.unadopted()
+    if got:
+        return ("profile/CLAUDE.md says never to write " + ", ".join('"%s"' % p for p, _ in got[:4])
+                + (" and more" if len(got) > 4 else "") + ", and nothing checks a draft for it")
+    return ""
+
+
+def _public_holidays() -> str:
+    """Pending where no rules cover the person's country and their own list has no date
+    in the coming year: follow-ups would count every public holiday as a working day."""
+    import datetime
+    import holidays
+    country, _region, extra = holidays._settings()
+    if not country or country in holidays.RULES:
+        return ""
+    year = datetime.date.today().year + 1
+    if any(str(d)[:4] == str(year) for d in extra):
+        return ""
+    return (f"no public holidays on file for {country} for {year} (profile/search.py "
+            "PUBLIC_HOLIDAYS), so follow-ups count them as working days")
+
+
 def _profile_reads() -> str:
     if _missing("networking", "PROFILE_READS"):
         return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
@@ -753,6 +777,23 @@ REGISTRY: tuple[Upgrade, ...] = (
             "one whose alumni reply most first (`python3 tools/network/sources.py` shows the "
             "order), and never the one they work at now; change nothing else", "edit", "~1 min",
             priority=4),
+    Upgrade("public-holidays", "2026-10-19",
+            "follow-ups that skip your country's public holidays, the way offices do",
+            _public_holidays, "look up the person's country's public holidays (and their "
+            "region's, from identity.location) for this year and next on its government's own "
+            "page, and write them as ISO dates in profile/search.py PUBLIC_HOLIDAYS with the "
+            "page's URL in a comment beside them; `python3 tools/holidays.py` then lists them",
+            "research", "~5 min",
+            names=("search.PUBLIC_HOLIDAYS",),
+            conditional=True,
+            priority=3),
+    Upgrade("profile-never-say", "2026-10-19",
+            "every phrase your own rules say never to write caught in every draft, not only "
+            "when the drafting model remembers it",
+            _profile_never_say, "python3 tools/learned.py adopt-profile-rules", "instant",
+            command=("python3", "tools/learned.py", "adopt-profile-rules"),
+            paths=("profile/learned.json",),
+            priority=2),
     Upgrade("work-place", "2026-10-18",
             "told when a chat is in the wrong place for your settings, and where to go instead",
             _work_place, "ask its question with the session's other questions, as written; "
@@ -776,10 +817,16 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=3),
     Upgrade("connections-export", "2026-10-17",
             "every networking run starting from the people you already know",
-            _connections_export, "save the Connections.csv they attach to "
-            "documents/linkedin/Connections.csv, or, if they would rather not, write "
+            _connections_export, "save what they attach with `python3 tools/network/sources.py "
+            "import-connections <file>` (a ZIP is read for Connections.csv alone, and the "
+            "line it prints says so), or, if they would rather not, write "
             "CONNECTIONS_EXPORT = \"declined\" in profile/networking.py and run `python3 "
-            "tools/profile_upgrades.py --no connections-export`", "question", "~2 min",
+            "tools/profile_upgrades.py --no connections-export`. While the file is on its way, "
+            "after giving the steps, offer once, in its words, what `python3 "
+            "tools/network/sources.py while-you-wait` prints: one employer's 1st-degree "
+            "people, pasted, go through `python3 tools/network/sources.py people-paste "
+            "\"<employer>\" <file>`, and the steps for that, if they want them, are `python3 "
+            "tools/claude_surfaces.py steps linkedin-people-at-employer`", "question", "~2 min",
             names=("networking.CONNECTIONS_EXPORT",),
             priority=3,
             needs="you",
@@ -787,8 +834,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             changed="networking now finds people in bulk from any chat, and your own "
                     "connections are the first and strongest place it looks",
             ask="Want me to start from the people you already know on LinkedIn? That means "
-                "downloading one file from LinkedIn, about ten minutes, and I'll walk you "
-                "through it. Yes, or not now?",
+                "requesting one file from LinkedIn, which arrives anything from ten minutes "
+                "to a day later, and I'll walk you through it. Yes, or not now?",
             steps=lambda: "\n".join(_surface_steps("linkedin-connections")
                                     + ["I only read it. Nothing is sent to anyone."]),
             why_ask="People you already know can be messaged directly, with no connection "
@@ -948,6 +995,11 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    "search.HOLIDAY_REGION": "read from identity.location (a province, a UK nation, a US "
+                             "state); with none named, the country's common holidays",
+    "search.HOURS_PER_YEAR": "2,080 hours, a full-time year of 40 hours a week, to read a band "
+                             "stated by the hour as a year's pay; a market that works fewer "
+                             "hours sets its own",
     "networking.PROFILE_READS_PER_DAY": "15 browser reads a day, and never more than the requests "
                                         "that can still go that day plus three; raising it raises "
                                         "the risk to their LinkedIn account",

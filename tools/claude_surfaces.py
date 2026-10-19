@@ -13,6 +13,7 @@ every time it is used, so a session re-checks the page before relying on it.
     python3 tools/claude_surfaces.py check               # stale entries, as warnings (exit 0)
     python3 tools/claude_surfaces.py show <id>           # one entry, its sources and its age
     python3 tools/claude_surfaces.py say <id> [--name N] [--owner O]   # the words a person sees
+    python3 tools/claude_surfaces.py steps <id>          # its steps, dated, for a person who said yes
     python3 tools/claude_surfaces.py sync-docs           # rewrite every marked block from here
     python3 tools/claude_surfaces.py watch [--strict]    # the maintainer's: quotes still on
                                                          # their pages? a newer release?
@@ -73,13 +74,19 @@ def official(e: dict) -> str:
         (s["url"] for s in e.get("sources", ()) if s["url"].startswith("http")), "")
 
 
-def steps(eid: str, reg=None) -> list:
-    """An entry's steps for a person who said yes, one action a line, headed by when they
-    were written and the page to check: never shown before they asked."""
+def steps(eid: str, reg=None, today=None) -> list:
+    """An entry's steps for a person who said yes, one action a line, headed by the day
+    they were checked and the page to check them against: never shown before they asked.
+    Past `stale_after_days` a line for Claude follows: re-check the page before giving
+    them, or say they could not be checked today. Steps about LinkedIn's screens, passed
+    on unchecked, sent a person to an option LinkedIn no longer offered."""
     e = entry(eid, reg)
     page = official(e)
-    head = "At the time of writing" + (f" (official page: {page})" if page else "") + ":"
-    return [head] + [f"{i}. {s}" for i, s in enumerate(e.get("steps", ()), 1)]
+    head = (f"At the time of writing (checked {e['verified_on']}"
+            + (f"; official page: {page}" if page else "") + "):")
+    out = [head] + [f"{i}. {s}" for i, s in enumerate(e.get("steps", ()), 1)]
+    late = warning(e, today, reg)
+    return out + ([late] if late else [])
 
 
 def age(e: dict, today: datetime.date | None = None) -> int:
@@ -204,10 +211,22 @@ def watch(reg: dict | None = None, fetch=None, today=None) -> list:
     unwatchable once, never fetched."""
     reg = reg or load()
     out, pages = [], {}
+    hand = int(reg.get("hand_check_days", 30))
     for e in reg["entries"]:
         for s in e.get("sources", ()):
             url = s["url"]
             if not url.startswith("http"):
+                continue
+            if s.get("fetch") is False:
+                # Never fetched (LinkedIn's pages: robots.txt, and a session never fetches
+                # linkedin.com), so never known to have changed. Each is put to the
+                # maintainer by hand once a month instead, before a person meets the change.
+                n = age(e, today)
+                if n > hand:
+                    out.append((e["id"], f"check by hand: {url} is never fetched "
+                                f"({s.get('why_not_fetched') or 'not fetched'}); last checked "
+                                f"{e['verified_on']}, {n} days ago. Is this still on it: "
+                                f"{s['quote']!r}?"))
                 continue
             try:
                 if url not in pages:
@@ -242,7 +261,7 @@ def watch(reg: dict | None = None, fetch=None, today=None) -> list:
 
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
-    if not argv or argv[0] not in ("check", "show", "say", "sync-docs", "watch"):
+    if not argv or argv[0] not in ("check", "show", "say", "steps", "sync-docs", "watch"):
         print(__doc__.split("\n\n")[2])
         return 2
     cmd, rest = argv[0], argv[1:]
@@ -271,6 +290,9 @@ def main(argv=None) -> int:
         w = warning(e)
         if w:
             print(w, file=sys.stderr)
+        return 0
+    if cmd == "steps":
+        print("\n".join(steps(rest[0])))
         return 0
     if cmd == "sync-docs":
         changed = sync_docs()

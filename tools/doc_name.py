@@ -109,6 +109,8 @@ def is_shouty(name: str) -> bool:
 
 
 def tracker_rows(path: str = TRACKER) -> list[dict]:
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))
@@ -171,5 +173,8 @@ def check_free(name: str, company: str, role: str, rows: list[dict]) -> None:
 
 if __name__ == "__main__":   # pragma: no cover
     import sys
+    if not sys.argv[1:] or sys.argv[1] in ("-h", "--help"):
+        print('usage: python3 tools/doc_name.py "<employer name>" [...]: the name its documents take')
+        sys.exit(0 if sys.argv[1:] else 2)
     for c in sys.argv[1:]:
         print("%-34s -> %s" % (c, suffix(c)))

@@ -141,7 +141,7 @@ WHOLE_WORD = {"aws", "gcp", "aml", "sla", "api", "git", "etl", "elt", "ltv", "qa
 _B = person.module("bullets")
 THEME_CUES.update(getattr(_B, "THEME_CUES", {}))
 WHOLE_WORD |= set(getattr(_B, "CUE_WHOLE_WORD", ()))
-CUE_RE = {theme: [re.compile(r"\b" + re.escape(c) + (r"\b" if c in WHOLE_WORD else ""))
+CUE_RE = {theme: [re.compile(r"(?<!\w)" + re.escape(c) + (r"(?!\w)" if c in WHOLE_WORD else ""))
                   for c in cues]
           for theme, cues in THEME_CUES.items()}
 

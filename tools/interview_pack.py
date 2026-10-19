@@ -41,7 +41,6 @@ three hooks, the money line, what not to say), then the detail.
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import json
 import os
@@ -54,6 +53,7 @@ for _p in (os.path.join(_HERE, "network"), _HERE):
         sys.path.insert(0, _p)
 
 import bridges  # noqa: E402
+import csv_store  # noqa: E402
 import learned  # noqa: E402
 import outreach  # noqa: E402
 import person  # noqa: E402
@@ -62,6 +62,7 @@ import profile_facts  # noqa: E402
 import state  # noqa: E402
 import throttle  # noqa: E402
 import untrusted  # noqa: E402
+import voice_check  # noqa: E402
 import what_works  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 
@@ -85,7 +86,8 @@ MAX_DO_NOT = 4
 MAX_QUESTIONS = 10
 MAX_REQUIREMENTS = 3
 MAX_FORM_LINES = 8
-MAX_NOTES = 8
+MAX_RECORD = 24   # lines of the person's own outcome record
+RECORD_ITEM = 200
 MAX_ASK = 6
 MAX_NEVER_SAY = 5
 MAX_GAP_NOTES = 3
@@ -334,16 +336,65 @@ def _form_answers(text) -> list:
     return out
 
 
-def _notes(text) -> list:
-    """The lines under outcome.md's Notes heading: the person's own record."""
-    m = re.search(r"^##\s*Notes\s*$", str(text or ""), re.M | re.I)
-    if not m:
-        return []
-    body = text[m.end():]
-    nxt = re.search(r"^##\s", body, re.M)
-    body = body[:nxt.start()] if nxt else body
-    return [_text(re.sub(r"^\s*[-*]\s+", "", ln)) for ln in body.splitlines()
-            if _text(ln) and not ln.strip().startswith("<")]
+# The sections of outcome.md that are not the person's own words: the stage checklist,
+# which the Held and Booked lines already carry.
+_RECORD_SKIP = re.compile(r"^interview stages reached$", re.I)
+_RECORD_HEAD = re.compile(r"^(#{2,6})\s+(.+?)\s*$")
+_ITEM = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+")
+_LABEL_LINE = re.compile(r"^\s*\*\*[^*]{1,40}:\*\*")      # "**Who:** ..." starts its own item
+_LEAD = re.compile(r"^\*\*(.+?)\*\*\s*(.*)$")
+
+
+def _gist(item) -> str:
+    """One item of the record as a line: its bold headline when it opens with one ("The
+    referral is confirmed."), the whole item when the bold is a label ("Who: ..."), and
+    otherwise its first sentence."""
+    item = _text(item)
+    m = _LEAD.match(item)
+    if m:
+        lead, rest = m.group(1).strip(), m.group(2).strip()
+        if lead.endswith((".", "!", "?")) and rest:
+            return lead
+        # A label ("Who:") or a headline the sentence runs on from ("Likely shape of the
+        # two rounds**, from ...") is read with the rest.
+        item = (lead + ("" if rest[:1] in ",;:." else " ") + rest).strip()
+    first = re.split(r"(?<=[.!?])\s+(?=[A-Z])", item, maxsplit=1)[0]
+    return prep.clip(first.replace("**", ""), RECORD_ITEM)
+
+
+def _record(text) -> list:
+    """[(heading, line)]: what the person wrote in outcome.md, every section of it.
+
+    The file /outcome writes keeps its notes under one Notes heading; a file written by
+    hand has a heading per round with its own sections ("What was learned", "Owed"), and
+    reading the Notes heading alone left all of that out of the pack. Everything before
+    the first heading (the title and the status) and the stage checklist are skipped."""
+    out, heading, item, skipping = [], "", [], True
+
+    def flush():
+        if item and not skipping:
+            line = _gist(" ".join(item))
+            if line and not line.startswith("<"):
+                out.append((heading, line))
+        item.clear()
+
+    for raw in str(text or "").splitlines():
+        m = _RECORD_HEAD.match(raw)
+        if m:
+            flush()
+            heading = m.group(2).strip()
+            skipping = bool(_RECORD_SKIP.match(heading))
+            continue
+        if not raw.strip() or raw.lstrip().startswith("<"):
+            flush()
+            continue
+        if _ITEM.match(raw) or _LABEL_LINE.match(raw):
+            flush()
+            item.append(_ITEM.sub("", raw).strip())
+        else:
+            item.append(raw.strip())
+    flush()
+    return out
 
 
 def _next_stage(stages) -> dict:
@@ -450,9 +501,12 @@ def likely_questions(ctx) -> list:
     bank_src = "/".join(what_works.BANK)
     group = {
         "map": [],
-        "here": [(r["question"], "asked here before (%s, %s)" % (_text(r.get("stage")) or "a stage",
-                                                              _text(r.get("date")) or "undated"),
-                  bank_src, {}) for r in ctx["bank"]
+        "here": [(r["question"], "%s (%s, %s)" % (
+                      "reported by " + _text(r.get("source")) if _text(r.get("source"))
+                      else "asked here before", _text(r.get("stage")) or "a stage",
+                      _text(r.get("date")) or "undated"),
+                  "%s, recorded in %s" % (_text(r.get("source")), bank_src)
+                  if _text(r.get("source")) else bank_src, {}) for r in ctx["bank"]
                  if company_key(r.get("company")) == k and _text(r.get("question"))],
         "again": [],
         "stage": [(q.format(company=company), "what %s usually asks"
@@ -484,7 +538,8 @@ def likely_questions(ctx) -> list:
                      for g in gaps]
     elsewhere: dict[str, list] = {}
     for r in ctx["bank"]:
-        if company_key(r.get("company")) != k and what_works.stage_step(r.get("stage")) == step:
+        if (company_key(r.get("company")) != k and what_works.stage_step(r.get("stage")) == step
+                and not _text(r.get("source"))):
             elsewhere.setdefault(what_works._norm(r.get("question")), []).append(r)
     group["again"] = [(v[-1]["question"], "asked at %d other employers' %s"
                        % (len(v), what_works.STEP_WORDS.get(step, "interviews")), bank_src, {})
@@ -815,10 +870,15 @@ def ask_lines(ctx) -> list:
 
 
 # A row whose own next step says to leave them be: "Keep warm, no action", "Do not use
-# him to chase ...", or a HOLD or FREEZE.
-_HANDS_OFF = re.compile(r"\bno action\b|\bdo not (?:contact|message|use|chase|nudge)\b|"
-                        r"^\s*(?:HOLD|FREEZE)\b", re.I)
-
+# him to chase ...", a HOLD or FREEZE, or waiting on their reply ("Wait for his reply":
+# the ball is in their court, and a message on top of it is a chase).
+_HANDS_OFF = re.compile(r"\bno action\b|\b(?:do not|don'?t) (?:contact|message|use|chase|nudge)\b|"
+                        r"^\s*(?:HOLD|FREEZE)\b|"
+                        r"\b(?:wait|waiting|await|awaiting)\b(?: (?:for|on))?"
+                        r" (?:(?:his|her|their|a|the) )?(?:reply|response|answer)\b|"
+                        r"\bleave (?:him|her|them) (?:be|alone)\b", re.I)
+# A row's own words, quoted whole up to this length and cut at a word beyond it.
+ROW_QUOTE = 140
 
 def _referred(c, ctx, name) -> bool:
     """Did this contact put the candidate forward for this application? Their status or
@@ -850,6 +910,9 @@ def warm_lines(ctx) -> list:
     here = [c for c in ctx["contacts"] if company_key(c.get("company")) == k]
     names = " ".join(_text(x).lower() for x in [ctx["with"]] + [s["with"] for s in ctx["stages"]])
     out, referrer = [], None
+    # "Booked" only when the stage this pack is for has a date: told to say a round was
+    # booked that had no date yet, the candidate would be telling them something untrue.
+    booked = bool(_text(ctx.get("date")))
     for c in here:
         cid = _text(c.get("contact_id"))
         status = state.effective_status(c, state.threads_for(ctx["threads"], cid))
@@ -860,7 +923,7 @@ def warm_lines(ctx) -> list:
             referrer = referrer or name
         if step and _HANDS_OFF.search(step):
             out.append("- %s%s [%s]: their row says to leave them be for now: \"%s\". "
-                       "(source: %s)" % (name, title, status, step[:140], prep.CONTACTS_SOURCE))
+                       "(source: %s)" % (name, title, status, prep.clip(step, ROW_QUOTE), prep.CONTACTS_SOURCE))
             continue
         if len(name) > 3 and name.lower() in names:
             known = ["documents/network/%s/%s" % (cid, f) for f in ("prep.md", "reading.json")
@@ -869,13 +932,15 @@ def warm_lines(ctx) -> list:
                        "(source: %s)" % (name, title, status, ": reuse " + " and ".join(known)
                                          if known else "", prep.CONTACTS_SOURCE))
         elif _referred(c, ctx, name):
-            then = (" Their row's next step: \"%s\"." % step[:140]) if step else ""
-            out.append("- %s%s put you forward [%s]. Tell them the interview is booked, and "
-                       "thank them after it.%s (source: %s)" % (name, title, status, then,
-                                                                prep.CONTACTS_SOURCE))
+            then = (" Their row's next step: \"%s\"." % prep.clip(step, ROW_QUOTE)) if step else ""
+            tell = ("Tell them the interview is booked, and thank them after it." if booked else
+                    "Tell them once the interview has a date, and thank them after it.")
+            out.append("- %s%s put you forward [%s]. %s%s (source: %s)"
+                       % (name, title, status, tell, then, prep.CONTACTS_SOURCE))
         elif status in throttle.RESPONDED:
-            out.append("- %s%s is already talking to you [%s]: tell them it is booked. "
-                       "(source: %s)" % (name, title, status, prep.CONTACTS_SOURCE))
+            out.append("- %s%s is already talking to you [%s]: %s (source: %s)"
+                       % (name, title, status, "tell them it is booked." if booked else
+                          "tell them once it has a date.", prep.CONTACTS_SOURCE))
     channel = _text(ctx["row"].get("channel"))
     if referrer:
         out.append("- How did you hear about us: through %s. (source: %s)"
@@ -890,7 +955,11 @@ def earlier_lines(ctx) -> list:
     out = ["- %s %s%s (source: %s)" % ("Held:" if s["done"] else "Booked:", s["label"],
                                        " " + s["date"] if s["date"] else "", src)
            for s in ctx["stages"] if s["date"]]
-    out += ["- %s (source: %s)" % (n, src) for n in _notes(ctx["outcome"])[:MAX_NOTES]]
+    record = _record(ctx["outcome"])
+    out += ["- %s%s (source: %s)" % (h + ": " if h and h.lower() != "notes" else "", n, src)
+            for h, n in record[:MAX_RECORD]]
+    if len(record) > MAX_RECORD:
+        out.append("- And %d more in %s." % (len(record) - MAX_RECORD, src))
     out += ["- Earlier pack: %s/%s" % (_rel(ctx["folder"]), f) for f in ctx["earlier"]]
     return out
 
@@ -954,9 +1023,11 @@ def pack_markdown(ctx, never_say=None) -> str:
                                          prep._short(f.value, 110), f.source)
                for f in hook_facts[:HOOKS]] or ["- %s: nothing researched to hang \"why us\" on."
                                                 % prep.NOT_RESEARCHED]
-    screen += ["", "**Money:** %s." % one_money, "", "**Do not say**"]
-    screen += donts[:MAX_DO_NOT]
-    lines += _section(SECTIONS[0], prep._flag_banned(screen, banned), "")
+    screen += ["", "**Money:** %s." % one_money, ""]
+    # The list of what not to say quotes the very words it warns against, so it is neither
+    # flagged for them here nor read by voice_check as something the person will say.
+    quoted = [voice_check.QUOTED_OPEN, "**Do not say**"] + donts[:MAX_DO_NOT] + [voice_check.QUOTED_CLOSE]
+    lines += _section(SECTIONS[0], prep._flag_banned(screen, banned) + quoted, "")
 
     detail = []
     for q, a in answered:
@@ -996,12 +1067,21 @@ def write_pack(ctx, never_say=None) -> str:
 
 # ---------------------------------------------------------------- what came of it
 
-def add_asked(company, role, stage, question, story="", landed="", note="", date=None) -> str:
+def add_asked(company, role, stage, question, story="", landed="", note="", date=None,
+              source="") -> str:
     """One question an interview asked, into the bank. Returns the bank's path, or ""
-    when that employer's stage already has it: /outcome run twice records it once."""
-    landed = _text(landed).lower()
+    when that employer's stage already has it: /outcome run twice records it once.
+
+    `source` is for a question the person was told about rather than asked (the recruiter
+    listed it, a contact who interviewed there, a review site): it names where it came
+    from, and the pack says "reported by" it. Without it, a reported question could only
+    be recorded as one they had been asked."""
+    landed, source = _text(landed).lower(), _text(source)
     if landed and landed not in what_works.LANDED:
         raise ValueError("landed is one of %s, or blank" % ", ".join(what_works.LANDED))
+    if source and landed:
+        raise ValueError("a reported question was not asked, so nothing landed: drop --landed "
+                         "or --source")
     if not _text(question):
         raise ValueError("a question to record is needed")
     path = person.state(*what_works.BANK)
@@ -1009,15 +1089,13 @@ def add_asked(company, role, stage, question, story="", landed="", note="", date
     if any((company_key(r.get("company")), what_works._norm(r.get("stage")),
             what_works._norm(r.get("question"))) == same for r in what_works.bank()):
         return ""
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    new = not os.path.exists(path)
-    with open(path, "a", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=what_works.BANK_COLUMNS)
-        if new:
-            w.writeheader()
-        w.writerow({"date": _text(date) or dt.date.today().isoformat(), "company": _text(company),
-                    "role": _text(role), "stage": _text(stage), "question": _text(question),
-                    "story": _text(story), "landed": landed, "note": _text(note)})
+    # Saved in place (tools/csv_store.py): a bank written before `source` existed gains
+    # the column only when a row has one, and its other rows keep their lines.
+    rows = csv_store.read_rows(path, what_works.BANK_COLUMNS)
+    rows.append({"date": _text(date) or dt.date.today().isoformat(), "company": _text(company),
+                 "role": _text(role), "stage": _text(stage), "question": _text(question),
+                 "story": _text(story), "landed": landed, "note": _text(note), "source": source})
+    csv_store.write_rows(path, rows, what_works.BANK_COLUMNS)
     return path
 
 
@@ -1070,12 +1148,14 @@ def main(argv=None) -> int:
         s.add_argument("--date")
     q.add_argument("--story", default="")
     q.add_argument("--landed", default="", choices=("",) + what_works.LANDED)
+    q.add_argument("--source", default="", help="for a question they were told about, not "
+                   "asked: where it came from (the recruiter, a contact, a review site and its link)")
     r.add_argument("--where", default="mock", help="mock, or the real interview")
     a = ap.parse_args(argv)
     try:
         if a.cmd == "asked":
             path = add_asked(a.company, a.role, a.stage, a.question, a.story, a.landed,
-                             a.note, a.date)
+                             a.note, a.date, a.source)
             print("added to %s" % _rel(path) if path else
                   "already in %s for that stage" % "/".join(what_works.BANK))
             return 0

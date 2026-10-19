@@ -183,6 +183,10 @@ def main() -> int:
     ap.add_argument("--tolerance", type=int, default=DEFAULT_TOLERANCE)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     a = ap.parse_args()
+    if not os.path.isdir(CORPUS):
+        print("score_eval: no screened-postings corpus here (profile/tests/fixtures/"
+              "screened_postings, a person's own), so there is nothing to score")
+        return 0
 
     now = [evaluate(c) for c in cases()]
     if a.update:

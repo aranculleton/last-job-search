@@ -153,3 +153,34 @@ def test_a_note_for_someone_nobody_read_says_it_waits_on_a_read(book, capsys):
                                      "items": [reading.item("talk", "https://example.org/t",
                                                             "Pricing a mutual")]})
     assert not reading.draft_text("kestrel_haldane", "Hi Corwin").startswith("WAITS ON A READ")
+
+
+def test_notes_the_networking_upgrade_writes_are_not_redone_as_older_ones(book):
+    """The networking upgrade writes each new contact's note opening on WAITS ON A READ;
+    the network-notes method counted any draft as made the older way, so every /network
+    run began by rewriting the notes just written, which needs the reads they wait on."""
+    import build_versions
+    assert not any(reading.written_the_older_way(c["contact_id"]) for c in CONTACTS)
+    assert not build_versions.APPLIES["queued_notes"]()
+    # A note from before notes rested on a reading: no line, nothing read. That one is redone.
+    older = book / "documents" / "network" / "kestrel_older" / "draft.md"
+    older.parent.mkdir(parents=True)
+    older.write_text("Hi Rhian, a note from a search result.\n", encoding="utf-8")
+    assert reading.written_the_older_way("kestrel_older")
+    assert build_versions.APPLIES["queued_notes"]()
+
+
+def test_a_note_written_from_their_public_work_leaves_the_queue(book, capsys):
+    reading.save("kestrel_haldane", {"name": "Corwin Haldane", "read_on": TODAY.isoformat(),
+                                     "sources": [{"kind": "public"}],
+                                     "items": [reading.item("talk", "https://example.org/t",
+                                                            "Pricing a mutual")]})
+    note = book / "note.txt"
+    note.write_text("Hi Corwin, your talk on pricing a mutual stayed with me.", encoding="utf-8")
+    assert reading.main(["draft", "kestrel_haldane", str(note)]) == 0
+    capsys.readouterr()
+    queued = [c["contact_id"] for c in reading.queue(CONTACTS, TODAY)]
+    assert "kestrel_haldane" not in queued
+    # Read long enough ago, it is read again before it goes.
+    later = TODAY + datetime.timedelta(days=reading.FRESH_DAYS + 1)
+    assert "kestrel_haldane" in [c["contact_id"] for c in reading.queue(CONTACTS, later)]

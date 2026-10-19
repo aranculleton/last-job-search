@@ -702,7 +702,9 @@ def _british(text) -> list:
     in a Canadian message, "american_spelling" for "behavior" in it or in a
     British one. A name and a quotation keep their own spelling (locale_rules
     says how each is told). "CV" where the profile bans it is reported as british_spelling, the
-    name it has always had. The other banned nouns are document_noun.
+    name it has always had: people's own suites pin it (profile/tests), and renaming a
+    label breaks them for no change in what is caught. The other banned nouns are
+    document_noun.
     """
     # "american_spelling" is not in RULES, and neither is "banned_character" from
     # _dashes: a person's own suite pins RULES against a fixture per rule

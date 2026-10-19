@@ -121,5 +121,8 @@ def keep(company: str | None, posting: str = "", include_unknown: bool = False) 
 
 
 if __name__ == "__main__":  # pragma: no cover
+    if not sys.argv[1:] or sys.argv[1] in ("-h", "--help"):
+        print('usage: python3 tools/sector.py "<employer name>" [...]: the sector on file and why')
+        sys.exit(0 if sys.argv[1:] else 2)
     for name in sys.argv[1:]:
         print("%-28s %-14s %s" % ((name,) + verdict(name)))

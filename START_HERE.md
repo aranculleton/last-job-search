@@ -36,9 +36,14 @@ First, one question: **will you mostly work on a computer, or on your phone or t
 Finding people, searching for jobs and writing work the same everywhere. On a computer, in
 the Claude desktop app, Claude can also read each person's LinkedIn profile before writing to
 them, and your files sit on your disk; a few free tools go on once, and one or two ask for
-your computer's password. On a phone or the web nothing is installed, and you paste the one
-or two profiles that matter most, or reach the chat on your computer from your phone. If you
-have a computer you can use for this, choose the computer: it does more for you.
+your computer's password. On a phone or the web nothing is installed, but profiles cannot be
+read there: you reach the chat on your computer from your phone. If you have a computer you
+can use for this, choose the computer: it does more for you.
+
+**Two chats work best.** One on your computer, for everything you do: job searches, resumes,
+interview prep and networking. And your brief, in the cloud: it follows up for you and
+arrives even when your computer is off. Claude sets the brief up when you say "set up my
+brief".
 
 - **A computer:** go to [On your own computer](#on-your-own-computer) below now, and skip
   the rest of this step.
@@ -126,7 +131,8 @@ sets it up ([automation/README.md](automation/README.md)).
 
 Everything works the same in a chat on your computer in the Claude desktop app, with your
 copy on your own disk, and the desktop app's own browser is where people's LinkedIn profiles
-are read. The brief runs in the cloud, so it arrives when your computer is off. Signed in
+are read. The brief runs in the cloud, so it arrives when your computer is off. So keep two
+chats: this one for everything you do, and the brief's, which Claude makes in step 5. Signed in
 with an Anthropic API key instead of a plan, everything works except the brief: scheduled
 tasks and cloud chats need a paid plan.
 

@@ -1,6 +1,7 @@
 {
   "_about": "Every statement the app makes about the Claude app, Claude Code and where a chat runs: what each surface can do, how to reach it, and how a cloud task is made from a computer. Messages read their words from here (tools/claude_surfaces.py say), docs carry them in marked blocks (sync-docs), and tests/test_claude_surfaces.py fails on a statement outside it. Each entry is dated and sourced; `watch` (the maintainer's, run by .github/workflows/claude-surfaces-watch.yml in the app only) checks each quote is still on its page and flags entries after a new Claude Code release. A path a person follows is written as a destination, 'at the time of writing', with the official page beside it, and never tells them to press, click, tap or find anything.",
   "stale_after_days": 60,
+  "hand_check_days": 30,
   "checked_version": "2.1.302",
   "release_notes": "https://code.claude.com/docs/en/changelog",
   "vocabulary": [
@@ -10,7 +11,9 @@
     "environment menu", "environment selector", "Edit cloud environment",
     "only while the app is open", "lent it a browser", "linked to the person's computer",
     "linked to their computer", "linked to your computer", "Cmd+Shift+B", "Ctrl+Shift+B",
-    "globe icon", "Browser tools"
+    "globe icon", "Browser tools",
+    "Get a copy of your data", "Download your data", "larger download", "Connections filter",
+    "Current company filter"
   ],
   "entries": [
     {
@@ -200,22 +203,42 @@
     },
     {
       "id": "linkedin-connections",
-      "claim": "A LinkedIn member can download a file of their own connections (each one's name, employer, position and the date they connected; an email address only where that person chose to share it) from LinkedIn's data-privacy settings, and a connections-only copy is usually emailed within about ten minutes. This rests on two third-party guides: a session never fetches linkedin.com, so LinkedIn's own help page is the one to check by hand.",
-      "goal": "download your LinkedIn connections",
-      "how": "on LinkedIn, Settings & Privacy, then Data privacy, then Get a copy of your data, with Connections chosen on its own",
+      "claim": "A LinkedIn member can get a file of their own connections (each one's name, employer, position and the date they connected; an email address only where that person chose to share it). It comes in the larger download of their data, which LinkedIn says is emailed within 24 hours, and the link works for 72 hours. The shorter list of items it offers did not include connections when a person tried it on 2026-10-19, so the steps ask for the larger download. Checked through a web search of LinkedIn's own help page: a session never fetches linkedin.com.",
+      "goal": "get your list of LinkedIn connections",
+      "how": "on LinkedIn, Settings & Privacy, then Data privacy, then Get a copy of your data, with the larger download chosen",
       "steps": [
-        "On LinkedIn, open Settings & Privacy, then Data privacy, then Get a copy of your data.",
-        "Choose Connections only and request it. LinkedIn emails you a link, usually within ten minutes.",
-        "Download the file and attach it here."
+        "On LinkedIn, open Settings & Privacy, then Data privacy, then Get a copy of your data (some accounts call it Download your data).",
+        "Choose the larger download, the whole archive, and request it: the shorter list of items may not include your connections. LinkedIn may ask for your password.",
+        "LinkedIn emails you a link anything from about ten minutes to a day later, and it works for 72 hours. Download the ZIP and attach only Connections.csv from inside it: the rest holds your messages and more, which I do not need."
       ],
       "official_page": "https://www.linkedin.com/help/linkedin/answer/50191",
       "sources": [
-        {"url": "https://www.cleverly.co/blog-old/downloading-linkedin-contacts", "quote": "Select \"Connections,\" then click \"Request archive.\""},
-        {"url": "https://www.technipages.com/download-linkedin-data/", "quote": "LinkedIn estimates that your data will be ready for download in ten minutes."}
+        {"url": "https://www.linkedin.com/help/linkedin/answer/50191", "quote": "If you select the larger download, you'll receive an email within 24 hours.", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "observation: one person's request on 2026-10-19", "quote": "The shorter list offered Articles, Invitations, Profile, Recommendations and Registration, and no Connections; nothing arrived after 15 minutes."}
       ],
-      "status": "observed",
+      "status": "documented",
       "verified_on": "2026-10-19",
-      "verified_against": "two third-party guides read 2026-10-19 (dated August 2022 and July 2020); LinkedIn's help page found by a web search and not read, because a session never fetches linkedin.com",
+      "verified_against": "LinkedIn's help page 50191 as a web search returned it on 2026-10-19 (not fetched), and one person's own request that day; the two third-party guides this rested on before (2020 and 2022) promised a connections-only copy in ten minutes, which LinkedIn no longer offered",
+      "ui_sensitive": true
+    },
+    {
+      "id": "linkedin-people-at-employer",
+      "claim": "A LinkedIn member can list the people at one employer they are connected to: a people search, narrowed with its Current company filter and its Connections filter (1st, 2nd or 3rd+). Checked through a web search of LinkedIn's own help pages: a session never fetches linkedin.com.",
+      "goal": "see who you already know at one employer",
+      "how": "on LinkedIn, a people search with its Current company filter set to the employer and its Connections filter set to 1st, then 2nd",
+      "steps": [
+        "On LinkedIn, search for people, and set the Current company filter to the employer and the Connections filter to 1st.",
+        "Copy the list of names and titles, or take a screenshot, and paste it here.",
+        "Then do the same with the Connections filter on 2nd."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/a528043",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a528043", "quote": "you can refine people search by 1st, 2nd, and 3rd+ degree connections by using the Connections filter at the top of your search page", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a566261", "quote": "Current company", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-19",
+      "verified_against": "LinkedIn's help pages a528043 and a566261 as a web search returned them on 2026-10-19 (not fetched)",
       "ui_sensitive": true
     }
   ]

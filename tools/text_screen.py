@@ -108,8 +108,13 @@ def money_parser(cur: str, code: str = ""):
     amount = re.compile(r"(?P<pre>" + mark + r")?\s?(?P<num>" + _NUMBER + r")"
                         r"(?:\s?(?P<mult>" + mult + r"))?(?:\s?(?P<post>" + mark + r"))?")
 
-    def values(sentence: str) -> list[int]:
-        """Every amount in the market's currency in one sentence, in order."""
+    def values(sentence: str, loose: bool = False) -> list[int]:
+        """Every amount in the market's currency in one sentence, in order.
+
+        `loose` also reads a range with no currency on either end ("Salary: 95-125K",
+        "95,000.00 - 125,000.00 annually"), for a sentence that is about pay: most
+        postings write a band that way, and it was read as no salary stated. The
+        caller's bounds keep "5-7 years" and "2020-2024" out."""
         found = []
         for m in amount.finditer(sentence or ""):
             mu = (m.group("mult") or "").lower()
@@ -117,7 +122,9 @@ def money_parser(cur: str, code: str = ""):
             found.append([m, _number(m.group("num")), mu, marked])
         # A range's bare end takes the other end's currency and multiplier.
         for a, b in zip(found, found[1:]):  # noqa: B905  (adjacent pairs)
-            if a[3] == b[3] or not _RANGE_JOIN.fullmatch(sentence[a[0].end():b[0].start()]):
+            if not _RANGE_JOIN.fullmatch(sentence[a[0].end():b[0].start()]):
+                continue
+            if a[3] == b[3] and not (loose and not a[3]):
                 continue
             a[3] = b[3] = True
             if a[2] and not b[2] and b[1] < 1000:
@@ -544,31 +551,73 @@ def entry_years(text: str) -> tuple[int | None, int | None, str]:
     return bars[0][0], bars[-1][0], bars[0][1]
 
 
+# A year of full-time hours, for a band stated by the hour: read as no salary, an hourly
+# posting skipped both the pay cut and the pay score.
+HOURS_PER_YEAR = int(getattr(_S, "HOURS_PER_YEAR", 2080) or 2080)
+# One band of several in a sentence, each with the place it is for: "$58,000 - $66,000
+# (Toronto), $70,000 - $80,000 (New York)". Split at a comma or semicolon followed by a
+# space, which a thousands separator never is.
+_BAND_SPLIT = re.compile(r"[,;]\s+(?=\D{0,40}\d)|\s+(?:and|or)\s+(?=\D{0,40}\d)")
+
+
+def _home(text: str) -> bool:
+    """Does `text` name the person's own place: their metro or their country?"""
+    low = str(text or "").lower()
+    return any(m and str(m).lower() in low for m in _places.METRO) or \
+        bool(_places.HOME_COUNTRY_RX.search(text or ""))
+
+
+def _bands(s: str, loose: bool) -> list:
+    """[(low, high, the part of the sentence that states it)] for each band in it."""
+    hourly = bool(HOURLY.search(s))
+    out = []
+    for part in _BAND_SPLIT.split(s) if len(money_values(s, loose)) > 2 else [s]:
+        vals = money_values(part, loose)
+        if hourly:
+            vals = [v * HOURS_PER_YEAR for v in vals if v < 1000]
+        vals = [v for v in vals if _BOUNDS[0] <= v <= _BOUNDS[1]]
+        if len(vals) >= 2:
+            out.append((min(vals), max(vals), part))
+    return out
+
+
 def salary_range(text: str) -> tuple[int | None, int | None, str]:
-    """(low, high, quote) of the stated pay range, in the market's currency,
+    """(low, high, quote) of the stated pay range, in the market's currency: the band for
+    the person's own place where the posting gives one per place, otherwise the one
     with the highest top.
 
     One parser for both callers. `salary_max()` needs only the top, to flag a
     range under the floor; `tools/bar.py` needs the midpoint, to say whether a
     posting clears the candidate's pay bar, and reading the range twice two
     different ways is how the two would come to disagree about one posting.
+
+    A band with no currency on either end, a band by the hour (annualised at
+    HOURS_PER_YEAR) and a band whose pay label is a heading on the line before it are
+    read too. Given a band per place, the highest was read, so a posting whose band
+    for the person's own city sat under their cut line was never cut.
     """
-    lo = hi = None
-    quote = ""
+    bands = []
     single = (None, None, "")
+    prev = ""
     for s in sentences(text):
-        if not RANGE_CUE.search(s) or HOURLY.search(s) or FOREIGN_CURRENCY.search(s):
+        cue = RANGE_CUE.search(s) or HOURLY.search(s) or (
+            prev and len(prev) <= 60 and RANGE_CUE.search(prev))
+        heading, prev = prev, s
+        if not cue or FOREIGN_CURRENCY.search(s):
             continue
-        vals = [v for v in money_values(s) if _BOUNDS[0] <= v <= _BOUNDS[1]]
-        if len(vals) >= 2 and (hi is None or max(vals) > hi):
-            lo, hi, quote = min(vals), max(vals), s[:220]
-        elif len(vals) < 2 and single[2] == "":
+        found = _bands(s, loose=True)
+        for lo, hi, part in found:
+            bands.append((lo, hi, s[:220], part, heading))
+        if not found and single[2] == "" and not HOURLY.search(s):
             one_lo, one_hi = labelled_value(s)
             if one_lo or one_hi:
                 single = (one_lo, one_hi, s[:220])
-    # A stated range wins; a single labelled figure is read only when there is
-    # no range to read.
-    return (lo, hi, quote) if hi is not None else single
+    if not bands:
+        return single
+    # A stated range wins; a single labelled figure is read only when there is none.
+    home = [b for b in bands if _home(b[3])]
+    lo, hi, quote = (home[0] if home else max(bands, key=lambda b: b[1]))[:3]
+    return lo, hi, quote
 
 
 def salary_max(text: str) -> tuple[int | None, str]:
@@ -743,10 +792,10 @@ def _names_home(s: str) -> bool:
         # A region's short code is read in capitals, like a country code: "on"
         # and "in" are words before they are provinces or states.
         if (re.search(r"(?<![A-Za-z])" + re.escape(r.upper()) + r"(?![A-Za-z])", s)
-                if len(r) <= 3 else re.search(r"\b" + re.escape(r) + r"\b", low)):
+                if len(r) <= 3 else re.search(r"(?<!\w)" + re.escape(r) + r"(?!\w)", low)):
             return True
     for g in _places.METRO:
-        for m in re.finditer(r"\b" + re.escape(g) + r"\b", low):
+        for m in re.finditer(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low):
             after = re.match(r"\s*,\s*([a-z][a-z .]{0,30}?)\s*(?=[,.;:)]|$)", low[m.end():])
             if not after or after.group(1).strip() in _places.REGIONS:
                 return True
@@ -769,7 +818,7 @@ def _abroad_country(s: str):
 def _countries_named(s: str):
     """Every place in the sentence that is one country and not home, as matches."""
     for c in _places.OTHER_COUNTRIES:
-        yield from re.finditer(r"\b" + re.escape(c) + r"\b", s, re.I)
+        yield from re.finditer(r"(?<!\w)" + re.escape(c) + r"(?!\w)", s, re.I)
     yield from _places.COUNTRY_CODES.finditer(s)
 
 
@@ -790,7 +839,7 @@ def residence_cut(text: str) -> str | None:
                    for m in _places.REGION_WORDS.finditer(s)]
         if True in regions:
             continue
-        if reside and (any(re.search(r"\b" + re.escape(c) + r"\b", low)
+        if reside and (any(re.search(r"(?<!\w)" + re.escape(c) + r"(?!\w)", low)
                            for c in _places.OTHER_COUNTRIES)
                        or _abroad_country(s)):
             return s[:220]

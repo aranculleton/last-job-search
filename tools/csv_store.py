@@ -19,7 +19,34 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import sys
+
+
+class Conflicted(RuntimeError):
+    """A state file git left with unresolved merge-conflict markers in it."""
+
+
+_MARKER = re.compile(r"^(?:<{7}|={7}|>{7})(?:[ \t]|\r?$)", re.M)
+
+
+def refuse_conflicts(path: str) -> None:
+    """Raise Conflicted when `path` holds git's merge-conflict markers. Read as rows, the
+    three marker lines became three contacts and both sides of the conflicted row two
+    more, and the next save wrote the markers back."""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return
+    m = _MARKER.search(text)
+    if m:
+        line = text.count("\n", 0, m.start()) + 1
+        raise Conflicted(
+            f"{os.path.basename(path)} has unresolved merge-conflict markers (the first, "
+            f"{m.group(0).strip()!r}, at line {line}), so nothing was read from it or saved "
+            "to it. Keep the right version of each conflicted row, delete the marker lines, "
+            "then run this again.")
 
 
 def header(path: str) -> list[str]:
@@ -33,6 +60,7 @@ def header(path: str) -> list[str]:
 
 def write_rows(path: str, rows, columns) -> None:
     """Write `rows` under the file's own header, `columns` it lacks added at the end."""
+    refuse_conflicts(path)
     parent = os.path.dirname(os.path.abspath(path))
     if parent:
         os.makedirs(parent, exist_ok=True)
@@ -77,6 +105,7 @@ def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:
         if create:
             write_rows(path, [], columns)
         return []
+    refuse_conflicts(path)
     with open(path, newline="", encoding="utf-8") as f:
         reader = csv.reader(f)
         head = [h.strip() for h in next(reader, [])]

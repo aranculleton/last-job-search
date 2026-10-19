@@ -282,3 +282,12 @@ def test_the_listing_tells_the_session_what_to_do(profile):
     text = U.block(U.pending())
     assert "Claude: start a background agent now that follows .claude/commands/upgrade.md" in text
     assert "at most three" in text
+
+
+def test_nothing_claude_applies_alone_needs_the_persons_browser():
+    """A method run in the background, listed as "Claude applies these itself", runs in a
+    chat with no browser of the person's. The network-notes method read profiles "in the
+    browser" and was listed that way until 3.4.1; a method that needs it is `by: "network"`."""
+    for name, m in B.METHODS.items():
+        if m["by"] in ("upgrade", "instant"):
+            assert "browser" not in m["run"].lower(), name

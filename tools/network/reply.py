@@ -1303,6 +1303,10 @@ def nudge_due(threads, today, new_development="") -> dict:
 
 
 def main() -> int:
+    if sys.argv[1:2] in (["-h"], ["--help"]):
+        print('usage: python3 tools/network/reply.py "<their message>" (or on stdin): what kind '
+              "of reply it is, and the evidence")
+        return 0
     text = " ".join(sys.argv[1:]).strip()
     if not text and not sys.stdin.isatty():
         text = sys.stdin.read().strip()

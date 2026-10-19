@@ -63,11 +63,16 @@ def test_a_first_name_that_spells_a_one_word_employer_is_not_a_contact_there():
     # A post is its author's only when the post itself names the employer.
     people = discovery.people_from_results(results, "Wren", today=TODAY)
     assert "Wren Achterberg" not in [p["name"] for p in people]
-    # A name check looks for that name on purpose: the page that named them gave the
-    # employer, so their profile stays as likely as before.
+    # A name check searches "<name> <employer>", which a first name that spells the
+    # employer answers by itself: it proves nothing, and a consultant called by the
+    # employer's name was kept there. A check for any other name keeps them as likely.
     check = _harvest(results[:1], "Wren", kind="profile_check", name="Wren Halloway",
                      known={"title": "Data Consultant", "evidence": "a speaker list"})
-    assert [(p["name"], p["profile_status"]) for p in check["keep"]] == [("Wren Halloway", "likely")]
+    assert check["keep"] == []
+    other = [{"title": "Corwin Haldane - Data Consultant", "url": _url("corwin-c")}]
+    check = _harvest(other, "Wren", kind="profile_check", name="Corwin Haldane",
+                     known={"title": "Data Consultant", "evidence": "a speaker list"})
+    assert [(p["name"], p["profile_status"]) for p in check["keep"]] == [("Corwin Haldane", "likely")]
     # Nobody at the employer came back: the name matches are not a verdict on it.
     only_names = discovery.triage(discovery.people_from_results(results[:1], "Wren", today=TODAY),
                                   today=TODAY, target_company="Wren")
@@ -202,3 +207,66 @@ def test_a_team_title_ranks_on_its_job_not_as_somebody_out_of_market():
     assert by["Rosalind Achterberg"]["location"] == "" and by["Rosalind Achterberg"]["location_unverified"]
     assert by["Corwin Haldane"]["profile_status"] == "verified"
     assert by["Corwin Haldane"]["title"] == "Data Governance Team"
+
+
+# ------------------------------------------------------------ reported from a person's run
+
+def _one(title, url, company="Kestrel Mutual", kind="title_search"):
+    return discovery.people_from_results([{"title": title, "url": url}], company, kind=kind,
+                                         today=TODAY)
+
+
+def test_an_institution_or_the_employer_itself_is_never_a_contact():
+    univ = "https://www.linkedin.com/posts/university-of-larkspur_news-activity-7380000000000000000-AbCd"
+    assert _one("University of Larkspur on LinkedIn: Congratulations to Kestrel Mutual", univ) == []
+    group = "https://www.linkedin.com/posts/kestrel-mutual-group_news-activity-7380000000000000000-AbCd"
+    assert _one("Kestrel Mutual Group on LinkedIn: Kestrel Mutual is hiring", group) == []
+    # "/in/" on the employer's own site is a language path, not a profile.
+    assert _one("Leadership Team - Kestrel Mutual",
+                "https://www.kestrelmutual.example/in/en/leadership") == []
+    assert not discovery.is_person_url("https://www.kestrelmutual.example/in/en/leadership")
+    assert discovery.is_person_url("https://ca.linkedin.com/in/example-person-a")
+
+
+def test_the_employer_before_a_place_is_read():
+    [p] = _one("Rhian Haldane - Head of Data - Fernhill Freight - Manchester", _url("rh"))
+    assert (p["company"], p["title"], p["location"], p["profile_status"]) == \
+        ("Fernhill Freight", "Head of Data", "Manchester", "unconfirmed")
+    assert discovery.triage([p], today=TODAY, target_company="Kestrel Mutual")["keep"] == []
+    [p] = _one("Shirin Example - Kestrel Mutual, Manchester", _url("se"))
+    assert (p["company"], p["location"], p["profile_status"]) == \
+        ("Kestrel Mutual", "Manchester", "verified")
+
+
+@pytest.mark.parametrize("title", ["Tamsin Oyelaran - Partner, Quillfeather, AI by Brannock",
+                                   "Tamsin Oyelaran - Quillfeather – AI by Brannock"])
+def test_a_brand_line_after_a_job_or_a_dash_is_the_employer(title):
+    [p] = _one(title, _url("to"), company="Brannock Quillfeather")
+    assert p["profile_status"] == "verified" and p["company"] == "Brannock Quillfeather"
+
+
+def test_a_post_naming_the_employer_by_another_of_its_names_is_kept():
+    post = _post("example-corwin")
+    [p] = _one("Corwin Haldane on LinkedIn: Fernhill Ratings is hiring", post,
+               company="Fernhill Group")
+    assert p["profile_status"] == "likely"
+    [p] = _one("Corwin Haldane on LinkedIn: Quillfeather, AI by Brannock is hiring", post,
+               company="Brannock Quillfeather")
+    assert p["profile_status"] == "likely"
+
+
+@pytest.mark.parametrize("title,job,place", [
+    ("Shirin Example - Senior Actuary, London", "Senior Actuary", "London"),
+    ("Shirin Example - Staff Nurse, Manchester", "Staff Nurse", "Manchester"),
+    ("Shirin Example - Secretary of State", "Secretary of State", "")])
+def test_a_job_is_never_read_as_a_place(title, job, place):
+    [p] = _one(title, _url("job"))
+    assert (p["title"], p["location"]) == (job, place)
+
+
+def test_a_pdf_export_with_no_location_line_keeps_the_job_as_the_headline():
+    text = ("Contact\nshirin@example.org\nTop Skills\nForecasting\nShirin Example\n"
+            "Head of Data at Kestrel Mutual\nExperience\nKestrel Mutual\nHead of Data\n"
+            "January 2022 - Present (2 years)\n")
+    got = reading.parse(text, name="Shirin Example", company="Kestrel Mutual")
+    assert (got["headline"], got["location"]) == ("Head of Data at Kestrel Mutual", "")

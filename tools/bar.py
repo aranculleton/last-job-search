@@ -137,6 +137,10 @@ def clears(company: str | None, posting: str = "") -> bool:
 
 
 if __name__ == "__main__":  # pragma: no cover
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print('usage: python3 tools/bar.py "<company>" ["<company>" ...]\n\n'
+              + __doc__.strip().split("\n\n")[0])
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     for n in sys.argv[1:]:
         v, why = verdict(n)
         print(f"{n:<34} {v:<9} {why}")

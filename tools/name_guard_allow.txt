@@ -20,3 +20,41 @@ Brackenhollow Mutual    # invented employer, tests/test_copies_of_a_posting_are_
 Head Chef               # a job title, tests/test_every_system_openroles_reads.py
 Acme Careers            # invented employer, tests/test_every_system_openroles_reads.py
 Acme Labs               # invented employer, tests/test_setup_reads_any_person.py
+# Public holidays: tools/holidays.py names them; none is a person.
+Anzac Day                    # a public holiday, tools/holidays.py
+Boxing Day                   # a public holiday, tools/holidays.py
+Canada's Thanksgiving        # a public holiday, tools/holidays.py
+Canada's Victoria Day        # a public holiday, tools/holidays.py
+Cesar Chavez Day             # a public holiday, tools/holidays.py
+Christmas Day                # a public holiday, tools/holidays.py
+Christmas Eve                # a public holiday, tools/holidays.py
+Civic Holiday                # a public holiday, tools/holidays.py
+Columbus Day                 # a public holiday, tools/holidays.py
+Early May                    # a public holiday, tools/holidays.py
+Easter Monday                # a public holiday, tools/holidays.py
+Independence Day             # a public holiday, tools/holidays.py
+King's Birthday              # a public holiday, tools/holidays.py
+Labor Day                    # a public holiday, tools/holidays.py
+Labour Day                   # a public holiday, tools/holidays.py
+Lincoln's Birthday           # a public holiday, tools/holidays.py
+Martin Luther King Jr        # a public holiday, tools/holidays.py
+Memorial Day                 # a public holiday, tools/holidays.py
+National Day                 # a public holiday, tools/holidays.py
+National Patriots' Day       # a public holiday, tools/holidays.py
+Native American Heritage Day # a public holiday, tools/holidays.py
+New Year's Day               # a public holiday, tools/holidays.py
+Patriots' Day                # a public holiday, tools/holidays.py
+Presidents' Day              # a public holiday, tools/holidays.py
+Raise Conflicted        # words in a docstring, tools/csv_store.py
+Reconciliation Day           # a public holiday, tools/holidays.py
+Remembrance Day              # a public holiday, tools/holidays.py
+Saint-Jean-Baptiste Day      # a public holiday, tools/holidays.py
+Salary Range            # a posting's heading, tests/test_pay_is_read_however_a_posting_writes_it.py
+St Andrew's Day              # a public holiday, tools/holidays.py
+St Brigid's Day              # a public holiday, tools/holidays.py
+St Patrick's Day             # a public holiday, tools/holidays.py
+St Stephen's Day             # a public holiday, tools/holidays.py
+Veterans Day                 # a public holiday, tools/holidays.py
+Victoria Day                 # a public holiday, tools/holidays.py
+Waitangi Day                 # a public holiday, tools/holidays.py
+Western Easter Sunday        # a public holiday, tools/holidays.py

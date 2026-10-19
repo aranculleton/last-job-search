@@ -442,6 +442,9 @@ def check_batch(apps, rows=None):
 if __name__ == "__main__":
     # Through the same loader fit_to_page uses, so a kept draft's posting_from is
     # read in: a plain json.load rendered every kept draft untailored.
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("usage: python3 tools/render_application.py <drafts.json>\n\n" + __doc__.strip().split("\n\n")[0])
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     import fit_to_page
     apps, read_in = fit_to_page.load(sys.argv[1])
     check_batch(apps)
