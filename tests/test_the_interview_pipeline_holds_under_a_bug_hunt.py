@@ -259,13 +259,19 @@ def test_a_buyer_is_not_a_recruiter():
     assert P._kind("Sourcing Manager") == "manager"
 
 
-@pytest.mark.parametrize("question,checking", [
-    ("Why Dovecote Freight?", "chose them"), ("Why Now Analytics?", "chose them"),
-    ("I noticed you moved recently?", ""),
-    ("Tell me about a career highlight project.", "did the work yourself"),
+@pytest.mark.parametrize("question,company,checking", [
+    ("Why Dovecote Freight?", "Dovecote Freight", "chose them"),
+    ("Why Now Analytics?", "Now Analytics", "chose them"),
+    ("Why data science?", "Now Analytics", "this work on purpose"),
+    ("Why did you leave Oakmere Foods?", "", "running from something"),
+    ("Tell me about a project that failed.", "", "whether you learn"),
+    ("I noticed you moved recently?", "", ""),
+    ("Tell me about a career highlight project.", "", "did the work yourself"),
+    ("Tell me about your experience with SQL.", "", "as your papers say"),
+    ("What is your experience with SAP?", "", "a gap"),
 ])
-def test_question_patterns_read_whole_words(question, checking):
-    got = P.intent(question, "Now Analytics")[0]
+def test_question_patterns_read_whole_words(question, company, checking):
+    got = P.intent(question, company)[0]
     assert (checking in got) if checking else got == ""
 
 
@@ -348,3 +354,152 @@ def test_the_introduction_is_answered_with_a_name(state):
     qs = {q["question"]: q["answer"] for q in prep.likely_questions(RECRUITER, "", FACTS)}
     assert qs.get("How did the introduction come about?") == "Ivo Vance"
     assert json.dumps(qs)
+
+
+def test_a_rebuild_never_freezes_the_tools_own_words(tmp_path):
+    peer = {"contact_id": "larkspur_retail_castellan", "name": "Juno Castellan",
+            "company": "Larkspur Retail", "title": "Data Analyst", "status": "call_booked"}
+    old = dict(FACTS, work_authorization="UK settled status. No sponsorship required.")
+    prep.write_prep(peer, profile_facts=old, today=TODAY, root=str(tmp_path))
+    new = dict(FACTS, work_authorization="British citizen. No sponsorship required.")
+    path = prep.write_prep(peer, profile_facts=new, today=TODAY, root=str(tmp_path))
+    text = open(path, encoding="utf-8").read()
+    assert "British citizen" in text and "UK settled status" not in text
+
+
+def test_an_old_document_keeps_only_answers_said_in_the_first_person():
+    doc = ("- **Q.** How did the introduction come about?\n  **A.** larkspur_retail_castellan "
+           "(source: c)\n- **Q.** Why are you looking?\n  **A.** I want a bigger planning "
+           "problem to own, honestly. (source: p)\n")
+    kept = prep.said_answers(doc)
+    assert list(kept) == [prep._qkey("Why are you looking?")]
+
+
+def test_an_answer_written_in_two_paragraphs_is_kept_whole():
+    doc = ("- **Q.** Tell me about yourself.\n  **A.** I'm an analyst.\nI like forecasts.\n\n"
+           "    And I like the people who use them.\n- **Q.** Next?\n  **A.** Yes.\n")
+    got = prep.answers_in(doc)[0][1]
+    assert got == "I'm an analyst.\nI like forecasts.\n\nAnd I like the people who use them."
+
+
+def test_a_next_step_due_soon_is_a_call_only_when_it_says_so():
+    contact = {"company": FIRM, "status": "in_conversation", "next_action": "Send the CV",
+               "next_action_due": "2026-10-20"}
+    assert prep.research_needed(contact, {}, today=TODAY) == ""
+    contact["next_action"] = "Coffee chat at 10"
+    assert prep.research_needed(contact, {}, today=TODAY).startswith("RESEARCH FIRST")
+
+
+def test_a_process_never_hides_an_earlier_rejection(state):
+    import followups
+    old = {k: "" for k in record_drafts.HEADER}
+    old.update(date="2026-09-01", company=FIRM, role=ROLE, status="rejected")
+    _write(state / "job_search_tracker.csv", [old], record_drafts.HEADER)
+    _process()
+    rows = _tracker(state)
+    assert not followups.superseded(rows)
+    assert len(what_works.application_cases(rows, TODAY)) == 1
+
+
+def test_a_closed_process_is_not_called_an_application(state):
+    _process()
+    row = dict(_tracker(state)[0], status="rejected")
+    from company_key import key
+    posting = [{"title": ROLE, "company": FIRM, "url": "https://example.com/j/1",
+                "priority": 70, "fit": 80}]
+    _kept, skipped = throttle.throttle(posting, {}, {}, {}, TODAY,
+                                       closed={key(FIRM): [row]})
+    assert skipped and "hiring process for this role" in skipped[0]["skip_reason"]
+    assert "already applied" not in skipped[0]["skip_reason"]
+
+
+def test_a_draft_nobody_sent_is_not_an_application_there():
+    import why
+    contact = {"contact_id": "calder_rook_vance", "name": "Ivo Vance", "company": FIRM,
+               "title": "Associate Partner", "status": "not_contacted"}
+    drafted = {"company": FIRM, "role": ROLE, "status": "drafted"}
+    got = why.why_them(contact, {}, applied=[drafted])
+    assert not any("applied there" in r for _p, r in got["reasons"])
+
+
+# ------------------------------------------------------------ the verification pass
+
+def test_a_declined_referral_is_never_a_referral():
+    no = {"contact_id": "larkspur_okoro", "name": "Ben Okoro", "company": FIRM,
+          "status": "closed", "outcome": "declined: no referral, hiring freeze"}
+    ctx = {"company": FIRM, "contacts": [no], "row": {"notes": ""}, "outcome": ""}
+    assert P.referrer_of(ctx) == ""
+    assert P._said_referral("referral_converted_to_interview")
+
+
+def test_never_moved_means_no_move_is_claimed(monkeypatch):
+    monkeypatch.setattr(P, "_person", lambda d: {"identity.moved": "none"}.get(d, ""))
+    assert P._moved_on() == ""
+    monkeypatch.setattr(P, "_person", lambda d: {"identity.moved": "2026-05"}.get(d, ""))
+    assert P._moved_on() == "2026-05"
+
+
+def test_a_visa_with_no_sponsorship_needed_is_still_a_temporary_status():
+    ctx = {"facts": {"work_authorization": "Graduate visa, valid until 2027, no sponsorship "
+                                           "required until then."}}
+    assert P.temporary_status(ctx)
+
+
+@pytest.mark.parametrize("with_,want", [
+    ("Ama Reyes, Data Science; Ola Berg, Supply Chain Analytics",
+     [("Ama Reyes", "Data Science"), ("Ola Berg", "Supply Chain Analytics")]),
+    ("Lee Marsh, Data & Analytics Manager", [("Lee Marsh", "Data & Analytics Manager")]),
+    ("Dana Okafor (Head of Data)", [("Dana Okafor", "Head of Data")]),
+    ("Dana Okafor - Head of Data", [("Dana Okafor", "Head of Data")]),
+    ("Dr. Ruth Abara", [("Dr. Ruth Abara", "")]),
+    ("Ana de la Cruz", [("Ana de la Cruz", "")]),
+    ("Pat", [("Pat", "")]),
+])
+def test_more_ways_of_writing_who_you_are_meeting(with_, want):
+    assert [(w["name"], w["title"]) for w in P._interviewers({"with": with_})] == want
+
+
+@pytest.mark.parametrize("title,team", [("Head of Data", "Data"),
+                                        ("Data Science Manager", "Data Science"),
+                                        ("Associate Partner, Operations Practice",
+                                         "Operations Practice"),
+                                        ("Engagement Manager", ""), ("Partner", "")])
+def test_a_team_is_the_field_in_a_title(title, team):
+    assert P._team_of(title) == team
+
+
+def test_what_a_software_company_sells_to_is_not_what_it_is():
+    ctx = {"row": {"sector": "Technology"}, "company": "Dovecote Systems",
+           "research": {"summary": "software used by retailers, banks and consulting firms"}}
+    assert P.employer_type(ctx) == "product"
+
+
+def test_a_new_stage_goes_after_the_last_one_held_and_keeps_its_interviewer(state):
+    _process()
+    path = os.path.join(outreach.app_folder(FIRM, ROLE), "outcome.md")
+    text = open(path, encoding="utf-8").read().replace(
+        "- [ ] Recruiter screen (scheduled 2026-10-21)", "- [x] Recruiter screen (2026-10-21)")
+    open(path, "w", encoding="utf-8").write(text)
+    P.main(["process", FIRM, "--contact", "calder_rook_vance", "--role", ROLE,
+            "--stage", "Partner interview", "--date", "2026-11-02", "--with", "Ivo Vance",
+            "--today", TODAY])
+    P.main(["process", FIRM, "--contact", "calder_rook_vance", "--role", ROLE,
+            "--stage", "Partner interview", "--date", "2026-11-04", "--today", TODAY])
+    lines = [ln for ln in open(path, encoding="utf-8").read().splitlines() if ln.startswith("- [")]
+    assert lines[0].startswith("- [x] Recruiter screen")
+    assert lines[1] == "- [ ] Partner interview (scheduled 2026-11-04, with Ivo Vance)"
+
+
+def test_savings_are_not_pay_and_a_band_inside_the_target_is_not_flagged():
+    assert "pay" not in dict(P._said("My forecast released £1.1M of safety stock."))
+    assert not P._differs_from_band("I'm looking for between £52k and £56k base.")
+
+
+def test_an_unsent_form_placeholder_is_never_quoted():
+    ctx = {"form": [("What are your salary expectations?", "[decide: per application]")]}
+    assert P._form_value(ctx, P._PAY_Q) == ("", "")
+
+
+def test_a_strength_on_paper_is_not_framed_as_a_gap():
+    assert "gap" not in P.intent("Tell me about your experience with dbt.")[1]
+    assert "close the gap" in P.intent("What is your experience with SAP?")[1]

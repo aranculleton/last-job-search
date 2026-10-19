@@ -205,7 +205,7 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
         ),
-        "fingerprint": "d3242127220b488f",
+        "fingerprint": "34dd4b0d13b8ea94",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -258,9 +258,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-19", False, "the voice check skips a quoted list of words to avoid, so a document that warns against a phrase is not flagged for it"),
             (20, "2026-10-19", False, "every command prints its usage instead of crashing with no arguments, the voice check reads a never-say phrase however it is punctuated, and your own never-write rules are checked"),
             (21, "2026-10-19", False, "the PDF check's missing-Poppler error gives the winget command on Windows, not Chocolatey"),
-            (22, "2026-10-19", False, "the PDF check finds Poppler where a Mac or Windows installs it, even when the shell's PATH lacks it"),
+            (22, "2026-10-19", False, "the PDF check finds Poppler where a Mac or Windows installs it, even when the shell's PATH lacks it; the voice check hears short spoken answers as spoken and catches a third-person headline; form answers read a profile with no screening.py"),
         ),
-        "fingerprint": "9fc3f24b182da53e",
+        "fingerprint": "0bdc0be54c7e80d8",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -280,7 +280,7 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-19", True, "a pack treats waiting on someone's reply as leave them be, says booked only when the round has a date, quotes rows whole or cut at a word, carries every section of a hand-written outcome file, keeps its do-not-say list out of the voice check, and prepares a question you were told about as reported, with its source"),
             (9, "2026-10-19", True, "one living document per hiring process, a process with no application included: answers written to be said and checked, what each interviewer is assessing and wants to hear, the format, small talk with a purpose, and what the employer's people have been told"),
         ),
-        "fingerprint": "7b09133c0f8323ae",
+        "fingerprint": "404e3ceab9f1e835",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -364,7 +364,7 @@ METHODS: dict[str, dict] = {
             (29, "2026-10-19", False, "business days skip your public holidays, employer names with a web address or initials join, and a state file a merge left conflict markers in is refused"),
             (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
         ),
-        "fingerprint": "deb2f7100153120f",
+        "fingerprint": "2af56f039bffb699",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -424,9 +424,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-19", True, "a posting is cut only while today's rules would cut it: relists aged by first sight, a remote role for another country flagged or cut, a region cutting only when it leaves home out, a home city beside a country code read as home, and the pronoun us never a country"),
             (10, "2026-10-19", False, "every employer board openroles reads is a live board, copies of one posting in a round are as old as the oldest, and an internal Workday site is caught at either of Workday's addresses"),
             (11, "2026-10-19", False, "pay is read with no currency mark, by the hour, under a heading, and per place; a posting it now reads below your cut line is cut on its next round, and nothing ruled out before needs looking at again"),
-            (12, "2026-10-19", False, "a profile with no screening.py still has its band, notice and sponsorship read"),
+            (12, "2026-10-19", False, "a hiring process with no application is read as a process, never as an application to the same role"),
         ),
-        "fingerprint": "0b9f39b7a6049191",
+        "fingerprint": "f2cef002458bdc32",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

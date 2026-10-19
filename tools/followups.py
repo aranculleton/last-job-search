@@ -205,7 +205,10 @@ def superseded(rows: list[dict]) -> dict[int, dict]:
         if not keys[i]:
             continue
         for j in order[n + 1:]:
+            # A process with no application is a new record, never the earlier
+            # application's: it would hide a rejection from every count.
             if (keys[j] == keys[i] and _status(rows[j]) not in throttle.UNSENT
+                    and not throttle.is_process(rows[j])
                     and throttle._same_title(rows[i].get("role"), rows[j].get("role"))):
                 out[id(rows[i])] = rows[j]
                 break

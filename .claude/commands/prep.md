@@ -75,10 +75,13 @@ and the strongest honest framing for it.
 file with the session's file-sending tool (SendUserFile or its equivalent). The file is the
 record; its path alone is never the answer.
 
-**It is rebuilt when the thread moves.** A prep counts as stale when the contact's status,
-next action or its date, or any message with them, changed after it was written, and the
-morning brief runs `python3 tools/network/prep.py --stale-only`, so a prep written while
-waiting for a reply never reaches a booked call still saying "wait".
+**It is rebuilt when anything it rests on moves.** A prep counts as stale when, since it was
+written, the contact's status, next action or its date changed, a message with them was
+logged, the employer's research arrived or changed, the application or process there
+changed, or the call came within two days with nothing researched. The morning brief runs
+`python3 tools/network/prep.py --stale-only`, so a prep written while waiting for a reply
+never reaches a booked call still saying "wait". Answers someone rewrote are kept; what the
+tool wrote is written again from the profile as it is now.
 
 Once per session for prep documents, end with one short line inviting change: "Anything
 about the questions or the depth you'd have different? It sticks from now on." What they

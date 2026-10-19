@@ -108,3 +108,26 @@ def test_research_merges_teams_and_what_was_not_found(tmp_path):
     assert set(data["teams"]) == {"Operations Practice", "Data Platform"}
     assert data["not_found"] == ["interview_process", "team:Data Platform"]
     assert json.dumps(data)
+
+
+def test_a_short_range_is_read_and_research_or_someone_elses_band_is_not(profile):
+    _add(profile, "CLAUDE.md", "- Looking for 110 to 130k.")
+    assert [f["said"] for f in C.findings()] == ["110 to 130k"]
+    clean = profile / "CLAUDE.md"
+    clean.write_text(clean.read_text(encoding="utf-8").replace("- Looking for 110 to 130k.", ""),
+                     encoding="utf-8")
+    _add(profile, "CLAUDE.md", "- Salary norms for senior analysts in Greater Manchester: "
+         "£45,000 - £60,000 (a recruiter's guide).\n"
+         '- The recruiter said "our band is £60,000 to £70,000".')
+    assert C.findings() == []
+
+
+def test_sponsorship_said_both_ways_is_caught_and_never_volunteer_is_the_rule(profile):
+    _add(profile, "CLAUDE.md", "- Sponsorship required from 2027.")
+    assert [f["fact"] for f in C.findings()] == ["sponsorship"]
+    clean = profile / "CLAUDE.md"
+    clean.write_text(clean.read_text(encoding="utf-8").replace("- Sponsorship required from 2027.", ""),
+                     encoding="utf-8")
+    _add(profile, "01-candidate-profile.md", "- Name the visa only when asked directly.")
+    _add(profile, "07-interview-prep.md", "> Never volunteer the expiry.")
+    assert C.findings() == []

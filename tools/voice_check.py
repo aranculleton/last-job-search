@@ -395,7 +395,9 @@ _RESUME_VERB = re.compile(
     r"implements|analy[sz]ed|analy[sz]es|automated|automates|established|spearheaded|"
     r"oversaw|oversees|introduced|grew|grows|increased|partnered|partners|presented|"
     r"presents|supported|supports|identified|validated|validates|onboarded|migrated|"
-    r"rebuilt|mapped|maps|wrote|writes|shipped|ships|scaled|scales|works|worked)\b"
+    r"rebuilt|mapped|maps|wrote|writes|shipped|ships|scaled|scales)\b"
+    # "Works in Python" is a resume line; "Works for me" is an answer.
+    r"|^(?:works|worked)\s+(?:in|with|on|at|across|as)\b"
     # A resume's adjective openers, only as a resume uses them: "Comfortable with SQL" is
     # written, and "Comfortable, yes." is how someone answers.
     r"|^(?:comfortable|experienced|skilled|passionate|proficient)\s+(?:with|in|at|about|"
@@ -403,6 +405,11 @@ _RESUME_VERB = re.compile(
 # An answer this short ("One month.", "Manchester, by the canal.") is said as it stands,
 # with or without an "I" in it.
 SPOKEN_SHORT_WORDS = 15
+# A headline about the person in the third person, however short: "Senior operations analyst
+# with seven years in logistics."
+_HEADLINE = re.compile(r"^(?:[A-Z][\w-]*\s+){0,4}(?:analyst|engineer|scientist|professional|"
+                       r"consultant|manager|specialist|leader|developer|architect|economist)s?\b"
+                       r"[^.]{0,80}\bwith\b", re.I)
 _LABEL_OPENER = re.compile(r"^(?:at|in|for|with|on|from)\s+[^.:!?]{1,40}:\s", re.I)
 
 
@@ -415,12 +422,12 @@ def spoken_findings(answer: str) -> list[str]:
     sents = [x for x in sentences(text) if x.strip()]
     # A clause after a semicolon opens like a sentence: "I'm an analyst; spearheaded ...".
     clauses = [c.strip() for x in sents for c in x.split(";") if c.strip()]
-    if len(text.split()) >= SPOKEN_SHORT_WORDS and \
-            not _FIRST_PERSON_WORD.search(" ".join(sents[:2]) or text):
+    if not _FIRST_PERSON_WORD.search(" ".join(sents[:2]) or text) and (
+            len(text.split()) >= SPOKEN_SHORT_WORDS or _HEADLINE.match(text)):
         out.append("not in the first person: say it as \"I ...\"")
     verbs = [x for x in clauses if _RESUME_VERB.match(x.strip())]
     if verbs:
-        out.append("opens a sentence on a verb with no subject, as a resume line does: \"%s\""
+        out.append("opens a sentence the way a resume line does, with no \"I\": \"%s\""
                    % verbs[0][:60])
     labels = [x for x in sents if _LABEL_OPENER.match(x.strip())]
     if labels:

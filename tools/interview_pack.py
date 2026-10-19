@@ -102,6 +102,7 @@ MAX_FORM_LINES = 8
 MAX_RECORD = 24   # lines of the person's own outcome record
 RECORD_ITEM = 200
 MAX_ASK = 6
+MAX_ASK_SCREEN = 3            # a twenty-minute screen has time for about three
 MAX_NEVER_SAY = 5
 MAX_GAP_NOTES = 3
 # How close a question has to be to a story's `Use for:` tag for the tag to count.
@@ -290,6 +291,24 @@ def similar(a, b) -> float:
     """Shared content words over all content words, 0 to 1."""
     x, y = _words(a), _words(b)
     return len(x & y) / len(x | y) if x and y else 0.0
+
+
+# The words a question means beside the words it says, for matching it to a story's
+# `Use for:` tags: "a project in sixty seconds" is "a project end to end", and "took
+# something on without being asked" is "a time you took initiative".
+_MEANS = (
+    (re.compile(r"\b(?:in (?:sixty|60) seconds|in a minute|briefly|quickly)\b", re.I), " end to end"),
+    (re.compile(r"without being asked|took (?:something|it) on", re.I), " initiative improve a process"),
+    (re.compile(r"changed someone'?s mind|influence|persuad", re.I),
+     " stakeholders getting people to adopt your work"),
+    (re.compile(r"different from you", re.I), " working with commercial teams stakeholders"),
+    (re.compile(r"commercial result|business result", re.I), " analysis changed a business result"),
+)
+
+
+def _match_text(question) -> str:
+    q = _text(question)
+    return q + "".join(extra for rx, extra in _MEANS if rx.search(q))
 
 
 def best_story(question, story_list, bank_rows=()) -> tuple:
@@ -531,8 +550,10 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
         csv_store.write_rows(tracker_path, rows, record_drafts.HEADER)
     elif not is_process(have):
         # Documents were drafted for this role and never sent: the row becomes the process,
-        # so nothing reads it as an application waiting to go, or nudges it.
-        have.update(process)
+        # so nothing reads it as an application waiting to go, or nudges it. Its source
+        # stays: it is the posting's link, and the contact is named beside it.
+        have.update({k_: v for k_, v in process.items()
+                     if k_ != "source" or not _text(have.get("source"))})
         have["notes"] = "; ".join(x for x in (_text(have.get("notes")), note + "; the drafted "
                                               "documents were never sent") if x)
         csv_store.write_rows(tracker_path, rows, record_drafts.HEADER)
@@ -548,11 +569,20 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
                               today, name))
     if _text(stage):
-        line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
-            date, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
-        # The same stage booked again (a new date, a new interviewer) replaces its line.
         same = re.compile(r"^- \[ \] %s(?:\s*\(.*\))?\s*$" % re.escape(stage), re.M | re.I)
         hits = list(same.finditer(text))
+        if not _text(with_) and hits:
+            # Rebooked with a new date only: the interviewer already on the line stays.
+            had = re.search(r",\s*with\s+([^)]*)\)", hits[0].group(0))
+            with_ = had.group(1).strip() if had else ""
+        line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
+            date, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
+        if not hits:
+            # A bare template line for the same step ("Phone screen" when a recruiter screen
+            # is booked) is this stage under another name: it is replaced, never doubled.
+            step = what_works.stage_step(stage)
+            hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)\s*$", text, re.M)
+                    if what_works.stage_step(m.group(1)) == step][:1]
         if hits:
             # The first keeps its place with the new date; any later copies go, line and all.
             for m in reversed(hits[1:]):
@@ -560,8 +590,13 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 text = text[:m.start()] + text[end:]
             text = text[:hits[0].start()] + line + text[hits[0].end():]
         else:
-            text = text.replace("## Interview stages reached\n",
-                                "## Interview stages reached\n%s\n" % line, 1)
+            # A new stage goes after the last one held, so the order stays the order it ran.
+            held = list(re.finditer(r"^- \[[xX]\] .*$", text, re.M))
+            if held:
+                text = text[:held[-1].end()] + "\n" + line + text[held[-1].end():]
+            else:
+                text = text.replace("## Interview stages reached\n",
+                                    "## Interview stages reached\n%s\n" % line, 1)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(text)
     return have, folder, added
@@ -612,9 +647,13 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         "company": company, "role": role, "row": row, "folder": folder, "today": today,
         "stage": stage, "step": what_works.stage_step(stage), "date": date, "with": with_,
         "outcome": outcome, "stages": stages, "posting": posting,
-        "form": _form_answers(_read(os.path.join(folder, "screening_answers.md"))),
-        "form_fields": [ln.rstrip() for ln in _read(os.path.join(folder, "form_fields.txt"))
-                        .splitlines() if ln.strip()],
+        # A process had no form: answers record_drafts wrote for a draft never sent were
+        # never seen by anyone.
+        "form": [] if is_process(row) else
+        _form_answers(_read(os.path.join(folder, "screening_answers.md"))),
+        "form_fields": [] if is_process(row) else
+        [ln.rstrip() for ln in _read(os.path.join(folder, "form_fields.txt")).splitlines()
+         if ln.strip()],
         "outreach_sent": os.path.exists(os.path.join(folder, "outreach.md")),
         "draft": what_works.draft_for(row, what_works.drafts(root)),
         "research": prep.load_research(company, root),
@@ -700,7 +739,8 @@ def likely_questions(ctx) -> list:
                                       r"^(?:(?:proven|strong|solid|demonstrable)\s+)?"
                                       r"experience (?:with|in|of)\s+", "", req, flags=re.I),
                                   "a stated requirement", _text(draft.get("_path")),
-                                  {"evidence": evidence, "evidence_source": _text(draft.get("_path"))}))
+                                  {"evidence": evidence, "req": True,
+                                   "evidence_source": _text(draft.get("_path"))}))
     group["gaps"] = [("What is your experience with %s?" % g["gap"],
                       "the posting asks for it and the profile does not hold it as such",
                       g["source"], {"framing": g["framing"], "gap": True,
@@ -725,7 +765,7 @@ def likely_questions(ctx) -> list:
         "screen": ["map", "here", stage[:3], group["gaps"][:1], stage[3:6], "cond", "format",
                    stage[6:], "reqs", group["gaps"][1:], "again"],
         "technical": ["map", "here", "reqs", "gaps", "format", "stage", "again"],
-        "final": ["map", "here", stage[:1], group["gaps"][:1], "format", stage[1:], "reqs",
+        "final": ["map", "here", stage[:1], group["gaps"][:1], stage[1:], "format", "reqs",
                   group["gaps"][1:], "again"],
         "offer": ["map", "here"],
     }[step if step in STAGE_QUESTIONS else "technical"]
@@ -742,7 +782,9 @@ _PAY_Q = r"\bsalary\b|\bcompensation\b|\bpay\b|\bremuneration\b|\bexpected (?:ba
 def _form_value(ctx, pattern) -> tuple:
     """(question, answer) from the portal's form whose question matches, or ("", "")."""
     rx = re.compile(pattern, re.I)
-    return next(((q, a) for q, a in ctx["form"] if rx.search(q)), ("", ""))
+    # "[decide: ...]" is a field still to fill, never something the form told them.
+    return next(((q, a) for q, a in ctx["form"] if rx.search(q)
+                 and not _text(a).startswith("[")), ("", ""))
 
 
 def answer_for(item, ctx) -> dict:
@@ -761,12 +803,14 @@ def answer_for(item, ctx) -> dict:
         story = next((s for s in ctx["stories"] if s["title"].lower() == _text(mapped).lower()),
                      None)
     how = "mapped"
-    if story is None and not mapped:
-        story, _score = best_story(q, ctx["stories"], ctx["bank"])
-        how = "matched by its Use for tags"
+    # What the letter evidenced comes first: the interviewer read it, and a story that
+    # matches a tag better but tells something else contradicts the paper.
     if story is None and not mapped and item.get("evidence"):
         story = story_for_evidence(item["evidence"], ctx["stories"])
         how = "it carries the letter's evidence"
+    if story is None and not mapped:
+        story, _score = best_story(_match_text(q), ctx["stories"], ctx["bank"])
+        how = "matched by its Use for tags"
     prepared = _answer_for(q, ctx["answers"])
     if prepared is None and re.search(r"why are you leaving", q, re.I):
         # The same reason, asked from the other side: the prepared "why are you looking".
@@ -879,6 +923,13 @@ def answer_for(item, ctx) -> dict:
                                                           if _text((ctx["draft"] or {}).get("p2"))
                                                           else ""),
                 "lines": lines}
+    if item.get("req") and not item.get("evidence") and not story:
+        # The paper claimed nothing here: a story drafted now would claim more than it did.
+        lines.append("The letter named no evidence for this. If your profile holds none, it is "
+                     "a gap: say the nearest true thing plainly, and never a story you do not "
+                     "have (Gaps and honest framing).")
+        return {"kind": "none", "short": "no evidence on paper: the nearest true thing",
+                "lines": lines}
     if item.get("gap") and not item.get("framing"):
         lines.append("No framing recorded (profile skills.py BRIDGES): write one before the "
                      "interview. Say plainly what you do not hold, then the nearest true thing; "
@@ -946,7 +997,8 @@ def paper_lines(ctx) -> list:
         # Nothing was submitted, so nothing a draft argued reached them.
         out.append("- Nothing went in through a portal, so there is no letter or form: what they "
                    "hold is what the messages carried (What they have been told), and any %s "
-                   "sent by email or passed on by the referrer." % _noun())
+                   "sent by email%s." % (_noun(), " or passed on by %s" % referrer_of(ctx)
+                                         if referrer_of(ctx) else ""))
         if files:
             out.append("- Drafted for this role and never sent: %s. Not what they read."
                        % ", ".join(files))
@@ -1126,11 +1178,11 @@ def ask_lines(ctx) -> list:
     cats = _guide_categories()
     for cat in STEP_CATEGORIES.get(ctx["step"], ()):
         for q in [q for q in cats.get(cat, []) if "[" not in q][:2]:
-            if len(out) >= MAX_ASK:
+            if len(out) >= (MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK):
                 break
             out.append("- %s (the guide's \"%s\" list: cut it if the research already answers it)"
                        % (q, cat))
-    return out[:MAX_ASK]
+    return out[:MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK]
 
 
 # A row whose own next step says to leave them be: "Keep warm, no action", "Do not use
@@ -1156,7 +1208,7 @@ def _referred(c, ctx, name) -> bool:
     if _text(c.get("status")) == "referral_in_progress" or (
             _text(c.get("route")).startswith("referral") and not _text(c.get("referred_by"))):
         return True
-    if "referr" in _text(c.get("outcome")).lower():
+    if _said_referral(_text(c.get("outcome"))):
         return True
     linked = _text(c.get("linked_application"))
     if linked and linked == _text(ctx["row"].get("cv_file")):
@@ -1164,9 +1216,21 @@ def _referred(c, ctx, name) -> bool:
     if len(name) > 3:
         text = " ".join([_text(ctx["row"].get("notes")), _text(ctx.get("outcome"))]).lower()
         for m in re.finditer(re.escape(name.lower()), text):
-            if "referr" in text[max(0, m.start() - 80):m.end() + 80]:
+            if _said_referral(text[max(0, m.start() - 80):m.end() + 80]):
                 return True
     return False
+
+
+# "declined: no referral, hiring freeze" is the opposite of a referral, and a pack that read
+# it as one told the candidate to thank someone who had said no.
+_NO_REFERRAL = re.compile(r"\b(?:no|not|never|declin\w*|refus\w*|couldn'?t|can'?t|won'?t|unable|"
+                          r"without)\b[^.;]{0,30}\breferr|\breferr\w*[^.;]{0,25}\b(?:declin\w*|"
+                          r"refus\w*|fell through|not possible|withdrawn)\b", re.I)
+
+
+def _said_referral(text) -> bool:
+    """Does `text` say a referral happened (and not that it was declined)?"""
+    return "referr" in text.lower() and not _NO_REFERRAL.search(text)
 
 
 def warm_lines(ctx) -> list:
@@ -1189,7 +1253,10 @@ def warm_lines(ctx) -> list:
         step = _text(c.get("next_action"))
         if _referred(c, ctx, name):
             referrer = referrer or name
-        if step and _HANDS_OFF.search(step):
+        stale_wait = status in ("replied_needs_response", "in_conversation") and re.search(
+            r"\b(?:wait|waiting|await|awaiting)\b", step, re.I) and not re.search(
+            r"\b(?:HOLD|FREEZE|no action|do not|don'?t)\b", step, re.I)
+        if step and _HANDS_OFF.search(step) and not stale_wait:
             out.append("- %s%s [%s]: their row says to leave them be for now: \"%s\". "
                        "(source: %s)" % (name, title, status, prep.clip(step, ROW_QUOTE), prep.CONTACTS_SOURCE))
             continue
@@ -1309,12 +1376,18 @@ _TEMPORARY = re.compile(r"\b(?:permit|visa|working holiday|temporary|fixed[- ]te
 def temporary_status(ctx) -> bool:
     """Read from the work-authorization facts, with every sentence about sponsorship taken
     out first: "No visa sponsorship required" says nothing about a permit."""
-    said = re.sub(r"[^.]*\bsponsor\w*[^.]*\.?", " ",
-                  _text(ctx["facts"].get("work_authorization")), flags=re.I)
-    return bool(_TEMPORARY.search(said))
+    clauses = re.split(r"[.;,]", _text(ctx["facts"].get("work_authorization")))
+    return any(_TEMPORARY.search(c) for c in clauses if not re.search(r"\bsponsor", c, re.I))
 
 
 MOVED_MONTHS = 12
+
+
+def _moved_on() -> str:
+    """identity.moved when it is a date (YYYY-MM or YYYY-MM-DD), else "": the move-and-area
+    upgrade writes "none" for everyone who has not moved recently."""
+    moved = _person("identity.moved")
+    return moved if re.fullmatch(r"\d{4}-\d{2}(?:-\d{2})?", moved) else ""
 
 
 def newcomer(ctx) -> str:
@@ -1344,7 +1417,7 @@ EMPLOYER_TYPES = (
     ("bank", re.compile(r"\b(?:banks?|banking|insurers?|insurance|asset manage\w*|pension "
                         r"funds?|financial services)\b", re.I)),
     ("startup", re.compile(r"\b(?:start-?up|seed|series [abc]|scale-?up)\b", re.I)),
-    ("product", re.compile(r"\b(?:saas|software|platform|product company|tech company|"
+    ("product", re.compile(r"\b(?:saas|software|platform|product company|tech company|technology|"
                            r"marketplace|app)\b", re.I)),
 )
 
@@ -1363,11 +1436,15 @@ def employer_type(ctx) -> str:
             return "public sector"
     except (ImportError, person.NoProfile, AttributeError):
         pass
-    for text in (ctx["row"].get("sector"),
-                 " ".join(_text(research.get(k)) for k in ("sector", "industry", "type")),
-                 ctx["company"],
-                 " ".join(_text(research.get(k)) for k in ("summary", "what_they_do"))):
-        found = next((t for t, rx in EMPLOYER_TYPES if rx.search(_text(text))), "")
+    sources = (ctx["row"].get("sector"),
+               " ".join(_text(research.get(k)) for k in ("sector", "industry", "type")),
+               ctx["company"],
+               " ".join(_text(research.get(k)) for k in ("summary", "what_they_do")))
+    for i, text in enumerate(sources):
+        # In a summary, what the employer makes comes first: "software used by banks and
+        # consulting firms" is a software company, whoever its customers are.
+        types = EMPLOYER_TYPES if i < 3 else sorted(EMPLOYER_TYPES, key=lambda t: t[0] != "product")
+        found = next((t for t, rx in types if rx.search(_text(text))), "")
         if found:
             return found
     return ""
@@ -1413,8 +1490,10 @@ TOLD_TOPICS = (
     ("notice or start", re.compile(r"\b(?:notice|start(?:ing)? (?:on|in|from|date)|available "
                                    r"(?:from|to start)|could start)\b", re.I)),
     # An amount only beside a currency sign or a word for pay: "250k customers" is not pay.
-    ("pay", re.compile(r"(?:[$£€]\s?\d|\b(?:salary|compensation|base pay|pay of|package|"
-                       r"looking for around|expecting)\b)", re.I)),
+    ("pay", re.compile(r"(?:\b(?:salary|compensation|base pay|pay of|package|"
+                       r"looking for around|expecting)\b|[$£€]\s?\d+(?:[.,]\d+)?\s?k\b|"
+                       r"[$£€]\s?\d{2,3},\d{3}\b(?![^.]{0,40}\b(?:saved|released|revenue|sales|"
+                       r"stock|costs?|budget|worth|turnover|profit|spend|savings)\b))", re.I)),
 )
 
 
@@ -1440,7 +1519,10 @@ def _differs_from_band(sent) -> bool:
     except (AttributeError, getattr(sheet, "MissingFact", LookupError)):
         return False
     for m in pc._RANGE.finditer(sent):
-        if (pc._amount(m.group(1)), pc._amount(m.group(2))) != (low, high):
+        lo, hi = pc._range_of(m)
+        # A narrower band inside the target is the same answer; only one reaching outside it
+        # is a number a recruiter would hold against the one on the form.
+        if lo < low or hi > high:
             return True
     rest = pc._RANGE.sub(" ", sent)
     return any(not low <= pc._amount(m.group(1)) <= high
@@ -1454,7 +1536,7 @@ def told_lines(ctx) -> list:
     here = {_text(c.get("contact_id")): c for c in ctx["contacts"]
             if company_key(c.get("company")) == k}
     out, seen = [], set()
-    moved = _person("identity.moved")
+    moved = _moved_on()
     current = [n for e in ctx["facts"].get("employers") or [] if isinstance(e, dict)
                and "present" in _text(e.get("dates")).lower()
                for n in (_text(e.get("company")),) if n]
@@ -1490,9 +1572,10 @@ def told_lines(ctx) -> list:
             break
     if ctx["process"]:
         out.append("- No documents went through a portal: anything they hold (a %s sent by "
-                   "email, or passed on by the referrer) %s. Check the city and number on it "
-                   "match what you will say." % (_noun(), "is in the messages above" if out
-                                                 else "came outside the message log"))
+                   "email%s) %s. Check the city and number on it match what you will say."
+                   % (_noun(), ", or passed on by %s" % referrer_of(ctx) if referrer_of(ctx)
+                      else "", "is in the messages above" if out
+                      else "came outside the message log"))
     return out
 
 
@@ -1503,9 +1586,10 @@ ANGLES = (
     (prep._SCREENER,
      "the basics and that your story hangs together: location, start date, work "
      "authorization, pay, why this move"),
-    (re.compile(r"\b(?:chief|vp|vice president|director|head|partner|principal)\b", re.I),
+    (re.compile(r"\b(?:chief|vp|vice presidents?|directors?|heads?|partners?|principals?)\b",
+                re.I),
      "judgement and why: what you would do in their first months, and why you"),
-    (re.compile(r"\b(?:manager|lead)\b", re.I),
+    (re.compile(r"\b(?:managers?|leads?)\b", re.I),
      "fit and motivation: how you work with a team like theirs, and what you would own"),
     (re.compile(r".", re.I),
      "depth: how you did the work, the trade-offs, and what you would do differently"),
@@ -1539,18 +1623,45 @@ _ROLE_FIRST = re.compile(r"^(?:head|lead|senior|principal|associate|chief|vp|svp
 _ROLE_LAST = re.compile(r"\b(?:scientists?|engineers?|analysts?|managers?|partners?|"
                         r"recruiters?|directors?|consultants?|leads?|officers?|specialists?|"
                         r"architects?|developers?|team|panel|founders?|ceo|cto|cfo|coo)$", re.I)
-_NAME = re.compile(r"^[A-Z][\w'\-]+(?:\s+[A-Z]\.)?(?:\s+[A-Z][\w'\-]+){1,2}$")
+_NAME = re.compile(r"^[A-Z][\w'\-]+(?:\s+[A-Z]\.)?(?:\s+(?:(?:de|la|le|du|da|di|del|der|den|van|von|"
+                   r"bin|al|el)\s+)*[A-Z][\w'\-]+){0,3}$")
+# Words that make a capitalised pair a team or a field, never a person: "Data Science",
+# "Supply Chain Analytics".
+_DOMAIN = re.compile(r"\b(?:data|science|analytics|engineering|product|marketing|finance|"
+                     r"operations|supply|chain|research|platform|design|sales|strategy|risk|"
+                     r"pricing|technology|security|growth|insights|ml|ai|people|talent|hr|"
+                     r"recruiting|recruitment|legal|commercial|digital|infrastructure|"
+                     r"consulting|practice|team|panel|office|revenue|forecasting|planning|"
+                     r"logistics|customer|payments|fraud|credit|treasury|actuarial|reporting|"
+                     r"economics|quant\w*|bi)\b", re.I)
+_HONORIFIC = re.compile(r"^(?:dr|mr|mrs|ms|mx|prof|professor|sir|dame)\.?\s+", re.I)
+
+
+def _is_name(part) -> bool:
+    bare = _HONORIFIC.sub("", part).strip()
+    return bool(_NAME.match(bare)) and not _ROLE_FIRST.match(bare) and \
+        not _ROLE_LAST.search(bare) and not _DOMAIN.search(bare)
 
 
 def _interviewers(ctx) -> list:
     """[{name, title}] from who this stage is with: each name paired with the title written
-    after it ("Dana Okafor, Head of Data"), a title alone where no name is known."""
+    after it ("Dana Okafor, Head of Data", "Dana Okafor (Head of Data)", "Dana Okafor - Head
+    of Data"), a title alone where no name is known. An "&" or "and" inside a title ("Data &
+    Analytics Manager") stays in it; between two names it separates them."""
     out = []
-    for part in re.split(r"\s*(?:,|;|\band\b|&)\s*", _text(ctx["with"])):
+    for part in re.split(r"\s*[,;]\s*", _text(ctx["with"])):
         part = part.strip()
         if not part:
             continue
-        if _NAME.match(part) and not _ROLE_FIRST.match(part) and not _ROLE_LAST.search(part):
+        m = re.match(r"^(.+?)\s*(?:\((.+)\)|\s[-\u2013]\s(.+))$", part)
+        if m and _is_name(m.group(1).strip()):
+            out.append({"name": m.group(1).strip(), "title": (m.group(2) or m.group(3)).strip()})
+            continue
+        halves = [h.strip() for h in re.split(r"\s+(?:and|&)\s+", part)]
+        if len(halves) > 1 and any(_is_name(h) for h in halves):
+            out += [{"name": h, "title": ""} if _is_name(h) else {"name": "", "title": h}
+                    for h in halves]
+        elif _is_name(part):
             out.append({"name": part, "title": ""})
         elif out and out[-1]["name"] and not out[-1]["title"]:
             out[-1]["title"] = part
@@ -1562,12 +1673,25 @@ def _interviewers(ctx) -> list:
 def _reading_of(ctx, name):
     """(contact_id, reading or None, contact row or None) for one interviewer."""
     import reading as _reading
+    name = _HONORIFIC.sub("", name).strip()
     row = state.already_contacted(ctx["contacts"], name=name, company=ctx["company"])
     cid, found = (_text(row.get("contact_id")), _reading.load(_text(row.get("contact_id")))) \
         if row else ("", None)
     if found is None:
         cid, found = _reading_for(name, ctx["company"])
     return cid, found, row
+
+
+def _said_of(ctx, name) -> list:
+    """What an earlier stage's notes say about this interviewer: "Tom pushed hard on how I
+    validated the forecast" is the question they will come back to."""
+    first = _HONORIFIC.sub("", name).split()[0] if name.split() else ""
+    if len(first) < 3:
+        return []
+    rx = re.compile(r"\b%s\b" % re.escape(first), re.I)
+    return ["  - Last time: %s. Expect them to come back to it; have that answer ready first "
+            "(source: %s/outcome.md)." % (prep.clip(ln, 160).rstrip("."), _rel(ctx["folder"]))
+            for _h, ln in _record(ctx["outcome"]) if rx.search(ln)][:2]
 
 
 def meeting_lines(ctx) -> list:
@@ -1604,8 +1728,10 @@ def meeting_lines(ctx) -> list:
                        % (name, name, ctx["company"]))
         if not found:
             out += tailored(ctx, name, title, " ".join([title, ctx["role"]]), {}, "", formats)
+            out += _said_of(ctx, name)
             continue
         src = "documents/network/%s/reading.json" % cid
+        out += _said_of(ctx, name)
         for _strength, kind, what, ev in _reading.hooks(found)[:3]:
             if kind == "about":
                 continue
@@ -1650,7 +1776,7 @@ INTENT = tuple((re.compile(rx, re.I), checking, hear) for rx, checking, hear in 
      "whether your story is clear and points at this role",
      "about ninety seconds: where you are now, the thread through your roles, and why this "
      "role is the next step"),
-    (r"why are you leaving|why are you looking|^why now\??$",
+    (r"why are you leaving|why are you looking|^why now\??$|why (?:did|would) you (?:leave|go)\b",
      "whether you are running from something, and whether you would stay",
      "a pull towards this kind of work, and nothing negative about your current employer"),
     (r"walk me through your career|career moves|career so far|moves between jobs|"
@@ -1662,14 +1788,20 @@ INTENT = tuple((re.compile(rx, re.I), checking, hear) for rx, checking, hear in 
     (r"commercial|business (?:result|impact)|measurable",
      "whether your work changed a number someone cared about",
      "the number, and who acted on it"),
+    (r"went wrong|mistake|\bfail",
+     "self-awareness, and whether you learn",
+     "your own part owned plainly, what you did next, what you do differently now"),
     (r"project|walk me through",
      "whether you did the work yourself and understand it",
      "the problem, what you did, and the result in numbers, in about a minute"),
-    (r"^why (?!(?:are|do|did|would|should|is|not|now)\b)\S|why do you want to (?:work|join)|"
-     r"why (?:this|our) "
-     r"(?:company|firm|team)",
+    (r"why do you want to (?:work|join)|why (?:this|our) (?:company|firm|team)",
      "whether you chose them, or are applying everywhere",
      "something specific and true about them (the hooks), tied to what you want to do next"),
+    # "Why data science?", "Why consulting?": the field, not the employer.
+    (r"^why (?:this (?:role|field|work|area|career)|data|analytics|consulting|engineering|"
+     r"product|finance|research|[a-z]+ (?:science|engineering|analytics))\b",
+     "whether you chose this work on purpose",
+     "what draws you to it, shown by something you have actually done"),
     (r"salary|\bpay\b|compensation",
      "whether you fit the budget, and whether you will be straightforward about it",
      "a band you can stand behind, the same one they have already heard, said calmly"),
@@ -1697,9 +1829,6 @@ INTENT = tuple((re.compile(rx, re.I), checking, hear) for rx, checking, hear in 
     (r"different from you|conflict|disagree",
      "how you work with people unlike you",
      "respect for their view, what you adapted, and the result"),
-    (r"went wrong|mistake|\bfail",
-     "self-awareness, and whether you learn",
-     "your own part owned plainly, what you did next, what you do differently now"),
     (r"weakness",
      "self-awareness", "a real one, what you do about it, and evidence it is improving"),
     (r"five years|long ?term|after your permit",
@@ -1708,8 +1837,11 @@ INTENT = tuple((re.compile(rx, re.I), checking, hear) for rx, checking, hear in 
     (r"reservations|concerns",
      "whether anything will stop you saying yes",
      "something honest and small, with what would settle it"),
-    (r"experience with|how much .+ have you done",
-     "whether you can do this part of the job",
+    (r"^tell me about your experience with",
+     "whether you can do this part of the job, as your papers say you can",
+     "one specific time you did it, what you did yourself and the result"),
+    (r"^what is your experience with|how much .+ have you done",
+     "whether a gap is a problem",
      "the nearest real thing you have done, plainly, and how fast you would close the gap"),
     (r"result was right|check(?:ed)? |validat",
      "rigour", "how you knew it was right: the test, the baseline, what you would have done if "
@@ -1809,6 +1941,24 @@ def _researched(research, topic) -> tuple:
     return "todo", []
 
 
+_RANK_FIRST = re.compile(r"^(?:(?:head|director|vp|svp|evp|vice president|chief|lead|manager|"
+                         r"senior|principal|staff|associate|junior)\s+(?:of\s+)?)+", re.I)
+_ROLE_NOUN = re.compile(r"\s+(?:scientists?|engineers?|analysts?|managers?|leads?|directors?|"
+                        r"partners?|consultants?|specialists?|architects?|developers?|officers?|"
+                        r"heads?)$", re.I)
+
+
+def _team_of(title) -> str:
+    """The team in a title: "Head of Data" is Data, "Data Science Manager" is Data Science,
+    "Associate Partner, Operations Practice" is Operations Practice. "" when it is all rank."""
+    parts = [p.strip() for p in _text(title).split(",") if p.strip()]
+    part = next((p for p in parts[1:] if _DOMAIN.search(p)), parts[0] if parts else "")
+    team = _ROLE_NOUN.sub("", _RANK_FIRST.sub("", part)).strip(" &-")
+    # Only a team that names a field: "Engagement" or "Partner" is rank, not a team.
+    return team if _DOMAIN.search(team) and not re.fullmatch(r"(?:team|panel|office)", team, re.I) \
+        else ""
+
+
 def tailored(ctx, name, title, topics, found, src, formats=()) -> list:
     """What to do differently for this one interviewer, so they score you higher: which of
     your own strengths to put first (the ones nearest their work), the story to lead with,
@@ -1832,9 +1982,11 @@ def tailored(ctx, name, title, topics, found, src, formats=()) -> list:
         out.append("  - Lead with: %s, the closest of your stories to what they work on "
                    "(source: %s)" % (story["title"], story["source"]))
     kind = _kind(title)
-    team = re.split(r"\s+(?:at|@|\|)\s+", _text(found.get("headline")) or _text(title),
-                    maxsplit=1)[0].strip()
-    if team and kind != "screener" and team.lower() != _text(name).lower():
+    team = _team_of(re.split(r"\s+(?:at|@|\|)\s+", _text(found.get("headline")) or _text(title),
+                             maxsplit=1)[0])
+    # Someone known only by a title ("two partners", "the hiring manager") has no team to
+    # look up; a named interviewer's team is their title with the rank taken off.
+    if team and name and kind != "screener" and team.lower() != _text(name).lower():
         state_, lines = _researched(ctx["research"], team)
         if state_ == "found":
             out += ["  - Their team (%s): %s" % (prep.clip(team, 60), ln) for ln in lines[:2]]
@@ -1886,8 +2038,8 @@ FORMAT_PREP = {
                 "numbers) and a specific reason for this employer",
         "drills": ("Say \"tell me about yourself\" in under ninety seconds, out loud, twice.",
                    "Have the numbers ready: notice, start date, and the band you will name.",
-                   "Two questions for them on the process and the team, none the website "
-                   "answers.")},
+                   "Two or three questions for them on the process and the team (Ask them), "
+                   "none the website answers.")},
     "case": {
         "tests": "how you structure a problem you have not seen, do the maths out loud, and "
                  "land a recommendation",
@@ -1999,11 +2151,24 @@ def format_lines(ctx) -> list:
         out.append("- **%s.** It tests %s. They want to hear %s." % (FORMAT_NAMES[f], p["tests"],
                                                                       p["hear"]))
         out += ["  - " + d for d in p["drills"]]
-    if formats == ["screen"] and employer_type(ctx) == "consulting":
-        out.append("- After the screen, a consulting firm's rounds are usually a case and a "
-                   "behavioural interview: start the case drills now, not when the invite comes.")
-    if formats and formats != ["screen"]:
-        state_, lines = _researched(ctx["research"], "interview_process")
+    state_, lines = _researched(ctx["research"], "interview_process")
+    # What the recruiter or an earlier stage already said about this round (outcome.md) is
+    # the best source there is, and needs no research.
+    fmt = [rx for f, rx in FORMATS if f in formats and f != "screen"]
+    told = [(h, ln) for h, ln in _record(ctx["outcome"])
+            if any(rx.search(ln) for rx in fmt)
+            or (fmt and re.search(r"\b\d+\s*(?:minutes?|mins?|hours?)\b", ln, re.I))]
+    out += ["- What you were told about this round: %s (source: %s/outcome.md)"
+            % (prep.clip(ln, 200), _rel(ctx["folder"])) for _h, ln in told[:2]]
+    if formats == ["screen"]:
+        if state_ == "found":
+            out += ["- What comes after the screen, as %s describes it: %s"
+                    % (ctx["company"], ln) for ln in lines[:2]]
+        elif employer_type(ctx) == "consulting":
+            out.append("- After the screen, a consulting firm's rounds are usually a case and a "
+                       "behavioural interview: start the case drills now, not when the invite "
+                       "comes.")
+    if formats and formats != ["screen"] and not told:
         if state_ == "found":
             out += ["- How %s says it runs this: %s" % (ctx["company"], ln) for ln in lines[:3]]
         elif state_ == "none":
@@ -2164,9 +2329,15 @@ def _found_out(text) -> list:
         return []
     body = text[m.end():]
     nxt = re.search(r"^## ", body, re.M)     # the next section; a "#### Food" inside stays
-    return [ln for ln in (body[:nxt.start()] if nxt else body).splitlines()
-            if ln.strip() and ln.strip() != FOUND_EMPTY
-            and ln.strip() != "- Nothing yet: each line you add here, with its source, stays."]
+    lines = [ln.rstrip() for ln in (body[:nxt.start()] if nxt else body).splitlines()
+             if ln.strip() not in (FOUND_EMPTY, "- Nothing yet: each line you add here, with its "
+                                   "source, stays.")]
+    # Blank lines between their groups stay; only the edges are trimmed.
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return lines
 
 
 def _own_words(body) -> list:

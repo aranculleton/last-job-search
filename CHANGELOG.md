@@ -158,7 +158,10 @@ make sense to somebody whose repo just received it.
 - **The upgrade hand-off between two chats** says plainly which chat applies an update and
   when the other may take over (`profile_upgrades.py --take` at once, when no other chat is
   open).
-- **Interview and call prep bugs found in two independent reviews before release**: a
+- **Interview and call prep bugs found in two independent reviews before release, and a third
+  pass on the fixes**: a declined referral read as a referral; "I made the move" for someone
+  who never moved; a rebuild that kept the tool's own out-of-date wording as if someone had
+  written it; interviewers' names and titles misread; a
   rebuild that dropped answers written for a question not on this stage's list; warning
   lines saved as your answer and doubling; "pay" read inside "payments"; pay compared as text
   rather than amounts; a referrer's id printed where their name belonged; the networking

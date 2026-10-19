@@ -74,3 +74,7 @@ Sourcing Manager        # a job title
 Living Document         # not a name: a heading word pair
 Apple-silicon Mac       # not a name: a kind of computer
 Through Ivo Vance's      # the invented referrer, in a sentence the pack writes
+Ben Okoro               # invented, tests/test_the_interview_pipeline_holds_under_a_bug_hunt.py
+Ama Reyes               # invented, the same test
+Ola Berg                # invented, the same test
+Ruth Abara              # invented, the same test

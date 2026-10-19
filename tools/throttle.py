@@ -915,7 +915,9 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
         elif k and closed and any(_same_title(r.get("title"), c.get("role"))
                                   for c in closed.get(k, [])):
             c = next(c for c in closed[k] if _same_title(r.get("title"), c.get("role")))
-            reason = (f"already applied to this role on {c.get('date') or 'an unrecorded date'} "
+            done = ("already in a hiring process for this role, with no application, from"
+                    if is_process(c) else "already applied to this role on")
+            reason = (f"{done} {c.get('date') or 'an unrecorded date'} "
                       f"({c.get('status')}); a relisted posting is the same job")
         elif k and k in open_apps:
             opens = open_apps[k]

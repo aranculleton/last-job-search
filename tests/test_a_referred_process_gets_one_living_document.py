@@ -258,7 +258,7 @@ def test_an_unnamed_round_at_a_consultancy_is_assumed_and_said_to_be():
     ("Is there anything about my background you'd like me to go into more?", "doubt"),
 ])
 def test_every_common_question_says_what_it_is_checking(question, checking):
-    got, hear = P.intent(question)
+    got, hear = P.intent(question, FIRM)
     assert checking in got and hear
 
 

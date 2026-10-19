@@ -182,11 +182,12 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
     # word with the hiring manager would come through (state.link_to_applications).
     if applied:
         import state
+    import throttle
+    # A draft nobody sent is not an application there.
     live = [a for a in applied if str(a.get("status") or "").strip().lower()
-            not in state.TRACKER_FINAL] if applied else []
+            not in state.TRACKER_FINAL | throttle.UNSENT] if applied else []
     if live:
         a = live[0]
-        import throttle
         done = "a hiring process is live there" if throttle.is_process(a) else "you applied there"
         reasons.append((4, f"{done}: {a.get('role') or 'a role'} ({a.get('status')})"))
 

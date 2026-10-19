@@ -32,23 +32,33 @@ import person  # noqa: E402
 # A money amount: 110,000 or 110000 or 110k, with or without a currency in front.
 _CUR = r"(?:[A-Z]{2,3}\s?\$?|[$£€]|[A-Z]{1,2}\$)?\s?"
 _AMOUNT = r"(\d{2,3}(?:,\d{3})|\d{5,6}|\d{2,3}\s?[kK])\b"
-_RANGE = re.compile(_CUR + _AMOUNT + r"\s*(?:to|-|–|and)\s*" + _CUR + _AMOUNT)
+_RANGE = re.compile(_CUR + _AMOUNT + r"\s*(?:to|-|–|and)\s*" + _CUR + _AMOUNT
+                    # "110 to 130k": the k on the second amount is the first's too
+                    + r"|" + _CUR + r"(\d{2,3})\s*(?:to|-|–)\s*" + _CUR + r"(\d{2,3})\s?[kK]\b")
 _SINGLE = re.compile(_CUR + _AMOUNT)
 # A line about what the person wants, as against what they earn now or what a market pays.
 _TARGET = re.compile(r"\b(?:target\w*|expect\w*|asking|band|looking for|salary|compensation|"
                      r"aim\w*)\b", re.I)
 _NOT_TARGET = re.compile(r"\b(?:current(?:ly)?|base of|earn\w*|market|benchmark|levels\.fyi|"
                          r"glassdoor|posted|posting|range for|median|percentile|offer(?:ed)?|"
-                         r"previous|was paid)\b", re.I)
+                         r"previous|was paid|norms?|guide|survey|typical|average|reported|"
+                         r"their band|our band|band is)\b", re.I)
 _FLOOR = re.compile(r"\b(?:floor|walk[- ]away|minimum|bottom line)\b", re.I)
 _NOTICE = re.compile(r"\bnotice(?: period)?\b(?:\s*(?:is|of|:|\|))?", re.I)
 _DURATION = re.compile(r"\b(\d+|one|two|three|four|six|eight|twelve)\s+(week|month)s?\b", re.I)
 _WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "six": 6, "eight": 8, "twelve": 12}
 _NEEDS = re.compile(r"\b(?:need|needs|require|requires|requiring|will need)\s+(?:visa\s+|work\s+)?"
-                    r"sponsorship\b", re.I)
+                    r"sponsorship\b|\bsponsorship (?:is |will be )?(?:required|needed)\b", re.I)
 _NO_SPONSOR = re.compile(r"\bno (?:visa )?sponsorship\b|\b(?:not|never|don'?t|doesn'?t|won'?t)\s+"
                          r"(?:\w+\s+){0,2}(?:need|require)\w*\s+(?:visa\s+)?sponsorship\b"
                          r"|\bneed no sponsorship\b|\bwithout sponsorship\b", re.I)
+
+
+def _range_of(m) -> tuple:
+    """(low, high) from a _RANGE match, whichever of its two shapes matched."""
+    if m.group(1):
+        return _amount(m.group(1)), _amount(m.group(2))
+    return int(m.group(3)) * 1000, int(m.group(4)) * 1000
 
 
 def _amount(text: str) -> int:
@@ -125,6 +135,12 @@ def findings(unread: list | None = None) -> list[dict]:
             unread.append("sponsorship: %s" % exc)
         sponsor = None
     notice_m = _months(notice) if notice else None
+    # The file that says it, of the two requires_sponsorship() reads.
+    sponsor_src = next((_rel(f) for f in (sheet.CLAUDE_MD, sheet.PROFILE)
+                        if os.path.exists(f) and re.search(
+                            r"no sponsorship required" if sponsor is False
+                            else r"\bsponsorship (?:is )?required\b",
+                            open(f, encoding="utf-8").read(), re.I)), _rel(sheet.CLAUDE_MD))
     texts = {}
     for path in _files():
         try:
@@ -137,6 +153,9 @@ def findings(unread: list | None = None) -> list[dict]:
     if rule:
         for p_, t in texts.items():
             for m in _VOLUNTEER.finditer(t):
+                before = t[max(0, t.rfind("\n", 0, m.start()) + 1):m.start()]
+                if re.search(r"\b(?:never|don'?t|do not|not|avoid)\b[^.]*$", before, re.I):
+                    continue        # "Never volunteer the expiry" is the rule itself
                 out.append({"file": _rel(p_), "line": t.count("\n", 0, m.start()) + 1,
                             "fact": "permit disclosure", "said": m.group(0),
                             "source": "\"%s\" in %s" % (" ".join(rule[1].split())[:90],
@@ -147,7 +166,7 @@ def findings(unread: list | None = None) -> list[dict]:
         # require sponsorship?"), never the person's position: blanked, offsets kept.
         masked = _QUOTED.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
         source_rows = os.path.normpath(path) == evaluation
-        for start, sent in _sentence_spans(text):
+        for start, sent in _sentence_spans(masked):
             i = text.count("\n", 0, start) + 1
             line = text.splitlines()[i - 1].strip() if text.splitlines() else ""
             if source_rows and re.match(r"^\|\s*\*\*(?:Target|Walk-away floor)\*\*", line):
@@ -156,7 +175,7 @@ def findings(unread: list | None = None) -> list[dict]:
                 continue        # a question as a form asks it, not a statement of fact
             if low is not None and _TARGET.search(sent) and not _NOT_TARGET.search(sent):
                 for m in _RANGE.finditer(sent):
-                    a, b = _amount(m.group(1)), _amount(m.group(2))
+                    a, b = _range_of(m)
                     if a >= 1000 and (a, b) != (low, high):
                         out.append({"file": _rel(path), "line": i, "fact": "pay band",
                                     "said": m.group(0).strip(),
@@ -187,11 +206,11 @@ def findings(unread: list | None = None) -> list[dict]:
                 if sponsor is False and need:
                     out.append({"file": _rel(path), "line": i, "fact": "sponsorship",
                                 "said": need.group(0),
-                                "source": "no sponsorship required, in %s" % _rel(sheet.CLAUDE_MD)})
+                                "source": "no sponsorship required, in %s" % sponsor_src})
                 elif sponsor is True and _NO_SPONSOR.search(own):
                     out.append({"file": _rel(path), "line": i, "fact": "sponsorship",
                                 "said": _NO_SPONSOR.search(own).group(0),
-                                "source": "sponsorship required, in %s" % _rel(sheet.CLAUDE_MD)})
+                                "source": "sponsorship required, in %s" % sponsor_src})
     return out
 
 

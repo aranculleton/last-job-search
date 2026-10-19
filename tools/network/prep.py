@@ -1491,15 +1491,21 @@ def _process_lines(contact, application) -> list:
     return out + ([""] if out else [])
 
 
+_A_CALL = re.compile(r"\b(?:call|meeting|meet|chat|coffee|interview|screen|zoom|teams)\b", re.I)
+
+
 def research_needed(contact, company_research, today=None) -> str:
-    """The line /prep must act on before presenting, or "" when there is nothing to do."""
+    """The line /prep must act on before presenting, or "" when there is nothing to do. A
+    call is a booked call, or a next step that names one: "send the CV" due tomorrow is not
+    a call and needs no research first."""
     if company_research:
         return ""
     contact = contact or {}
     today_d = state.as_date(_text(today)) or datetime.date.today()
     due = state.as_date(_text(contact.get("next_action_due")))
     soon = (_text(contact.get("status")) == "call_booked"
-            or (due is not None and 0 <= (due - today_d).days <= RESEARCH_BEFORE_DAYS))
+            or (due is not None and 0 <= (due - today_d).days <= RESEARCH_BEFORE_DAYS
+                and _A_CALL.search(_text(contact.get("next_action")))))
     if not soon or not _text(contact.get("company")):
         return ""
     return ("RESEARCH FIRST: the call is %s and nothing is researched about %s. Claude: run the "
@@ -1590,7 +1596,8 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
         if said:
             item = dict(item, answer=said[0], source=said[1])
         asked.append("- **Q.** %s" % item["question"])
-        answer = _text(item["answer"]).replace("\n", "\n    ")
+        answer = "\n".join("    " + ln if ln else "" for ln in
+                           _text(item["answer"]).split("\n")).strip()
         asked.append("  **A.** %s%s" % (answer, " (source: %s)" % item["source"]
                                          if _text(item["source"]) else ""))
     lines += _section(SECTIONS[5], _flag_banned(asked, banned),
@@ -1680,11 +1687,19 @@ def answers_in(text) -> list:
         if not (mq and ma):
             continue
         body = [ma.group(1)]
-        for more in lines[i + 2:]:
-            if not more.startswith("  ") or not more.strip() or more.lstrip().startswith(
-                    ("- careful:", "**A.**", "- **Q.**")):
+        for j, more in enumerate(lines[i + 2:], i + 2):
+            bare = more.strip()
+            if bare.startswith(("- careful:", "**A.**", "- **Q.**", "#", "<!--")) or \
+                    re.match(r"^- ", more):
                 break
-            body.append(more.strip())
+            if not bare:
+                # A blank line ends the answer unless the person's next paragraph follows.
+                after = next((x for x in lines[j + 1:] if x.strip()), "")
+                if not after or after.lstrip().startswith(("- ", "#", "<!--", "**")):
+                    break
+            body.append(bare)
+        while body and not body[-1]:
+            body.pop()
         a = "\n".join(body)
         m = _SOURCE_TAIL.search(a)
         out.append((mq.group(1), a[:m.start()] if m else a, m.group(1) if m else ""))
@@ -1736,12 +1751,48 @@ def check_answers(text) -> list:
     return out
 
 
+_GENERATED = re.compile(r"^<!-- generated answers: (\{.*\}) -->$", re.M)
+
+
+def _digest(answer) -> str:
+    import hashlib
+    return hashlib.sha1(" ".join(_text(answer).split()).encode("utf-8")).hexdigest()[:10]
+
+
+def generated(contact, application=None, profile_facts=None) -> dict:
+    """{question key: digest} of the answers this file writes for them now: kept beside the
+    version stamp, out of the document's body, so a rebuild can tell the person's rewrites
+    from its own words."""
+    contact = contact or {}
+    role = _text((application or {}).get("role")) or _text(contact.get("role"))
+    return {_qkey(i["question"]): _digest(i["answer"])
+            for i in likely_questions(contact, role, profile_facts)}
+
+
 def said_answers(text) -> dict:
-    """{question key: (answer, source)} for the answers in an earlier version that were
-    rewritten to be said. A rebuild always keeps them, over profile wording and over the
-    pointer to the narrative alike: they are the person's words."""
-    return {_qkey(q): (a, src) for q, a, src in answers_in(text)
-            if a != NARRATIVE_POINTER and fit_to_say(a)}
+    """{question key: (answer, source)} for the answers someone rewrote in an earlier version.
+    A rebuild keeps them, over profile wording and the pointer to the narrative alike: they
+    are the person's words. What this file wrote and nobody touched is never kept, so a
+    corrected profile always reaches the next version: the document records what it wrote
+    (`generated answers`), and only an answer that differs from that is the person's. A
+    document from before that record keeps only answers said in the first person."""
+    m = _GENERATED.search(str(text or ""))
+    try:
+        wrote = json.loads(m.group(1)) if m else None
+    except ValueError:
+        wrote = None
+    out = {}
+    for q, a, src in answers_in(text):
+        key = _qkey(q)
+        if not _text(a) or a == NARRATIVE_POINTER:
+            continue
+        if wrote is not None:
+            if wrote.get(key) != _digest(a):
+                out[key] = (a, src)
+        elif fit_to_say(a) and len(a.split()) >= 6 and \
+                re.search(r"\b(?:I|I'm|I've|I'd|my|me)\b", a):
+            out[key] = (a, src)
+    return out
 
 
 def stamp_of(text) -> int | None:
@@ -1802,8 +1853,11 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
     text = prep_markdown(contact, company_research, application, profile_facts, threads, today,
                          open_roles=open_roles, draft=draft, never_say=never_say, kept=kept)
     with open(path, "w", encoding="utf-8") as f:
+        wrote = generated(contact, application, profile_facts)
         f.write(text + "\n" + stamp_line(as_of(contact, threads, company_research, application,
-                                                today)) + "\n")
+                                                today)) + "\n"
+                + ("<!-- generated answers: %s -->\n" % json.dumps(wrote, sort_keys=True)
+                   if wrote else ""))
     return path
 
 
