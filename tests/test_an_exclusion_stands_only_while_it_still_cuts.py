@@ -10,6 +10,7 @@ judged as today's rules judge it.
 """
 from __future__ import annotations
 
+import pytest
 import os
 import sys
 
@@ -87,3 +88,10 @@ def test_a_ruling_on_a_named_row_of_the_persons_card_stands_while_the_row_does(t
     assert list(e["rests_on"]) == ["triage #5"]
     urls, _ = throttle.ruled_out(json.load(open(path))["seen"])
     assert urls
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")

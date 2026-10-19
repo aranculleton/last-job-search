@@ -7,6 +7,7 @@ fetched, screened and scored, and then skipped as "already ruled out".
 """
 from __future__ import annotations
 
+import pytest
 import json
 import os
 import subprocess
@@ -68,3 +69,10 @@ def test_the_round_passes_it_to_both_and_still_reads_first_sightings(tmp_path, m
     by = {os.path.basename(c[1]): c for c in stages}
     assert "--keep-ruled-out" in by["prefilter.py"] and "--seen" in by["prefilter.py"]
     assert "--keep-ruled-out" in by["throttle.py"]
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")

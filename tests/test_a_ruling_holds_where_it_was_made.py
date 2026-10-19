@@ -7,6 +7,7 @@ the same title at that employer in every other city, the person's own included.
 """
 from __future__ import annotations
 
+import pytest
 import os
 import sys
 
@@ -48,3 +49,10 @@ def test_the_throttle_reads_the_place_too():
     row = {**_job("Cardiff, Wales, United Kingdom"), "priority": 70, "fit": 80}
     kept, skipped = throttle.throttle([row], {}, urls, pairs, "2026-10-14")
     assert skipped and skipped[0]["skip_reason"].startswith("already ruled out")
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")

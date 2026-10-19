@@ -246,6 +246,11 @@ def rescreen_since() -> str:
     a re-run version was decided by the older screen, so it stops blocking and the
     posting is screened again by the current one, in every repo, with nobody asking.
     """
+    # Tests that pin how a ruling holds set LJS_RESCREEN=off: whether a better screen
+    # re-judges it is tests/test_build_versions.py's question, and every real re-run
+    # version would otherwise release the undated rulings their fixtures write.
+    if os.environ.get("LJS_RESCREEN") == "off":
+        return ""
     import build_versions
     return build_versions.last_rerun("screening")
 

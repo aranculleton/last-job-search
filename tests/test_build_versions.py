@@ -236,10 +236,14 @@ def test_screening_is_redone_by_every_round_with_no_upgrade(monkeypatch):
                "https://example.com/b": {"title": "Planner", "company": "Acme",
                                          "status": "excluded", "first_seen": "2026-09-01",
                                          "exclusion_reason": "posting closed"}}
+    # From a screening method with no re-run version yet, whatever the app's own holds.
+    base = dict(B.METHODS["screening"])
+    base["versions"] = tuple(v for v in base["versions"] if not v[2])
+    monkeypatch.setitem(B.METHODS, "screening", base)
     urls, _ = throttle.ruled_out(entries)
     assert len(urls) == 2                                    # no re-run version: both block
-    m = dict(B.METHODS["screening"])
-    m["versions"] = m["versions"] + ((2, "2026-11-01", True, "a better screen"),)
+    m = dict(base)
+    m["versions"] = m["versions"] + ((99, "2026-11-01", True, "a better screen"),)
     monkeypatch.setitem(B.METHODS, "screening", m)
     urls, _ = throttle.ruled_out(entries)
     assert list(urls) == [throttle.norm("https://example.com/b")]   # a fact still blocks

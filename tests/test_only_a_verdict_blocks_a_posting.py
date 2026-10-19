@@ -16,6 +16,7 @@ absent from the employer's external site, so nobody outside could apply.
 """
 from __future__ import annotations
 
+import pytest
 import os
 import sys
 
@@ -116,3 +117,10 @@ def test_workday_itself_is_not_a_reason_to_drop():
                 "https://example.com/Privileged/job/Senior-Supply-Chain-Analyst"):
         ok, why = _decide(url)
         assert ok, (url, why)
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")

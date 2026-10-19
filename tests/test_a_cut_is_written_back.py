@@ -9,6 +9,7 @@ scoring input, never a ruling, and is not recorded.
 """
 from __future__ import annotations
 
+import pytest
 import json
 import os
 import subprocess
@@ -80,3 +81,10 @@ def test_a_round_records_its_cuts_unless_told_not_to_write(tmp_path, monkeypatch
     cmd = _screen_command(tmp_path, monkeypatch, "--seen", seen)
     assert cmd[cmd.index("--seen") + 1] == seen
     assert "--seen" not in _screen_command(tmp_path, monkeypatch, "--no-seen-write")
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")

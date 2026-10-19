@@ -23,6 +23,7 @@ filter. These tests exist to pin that it is:
 """
 from __future__ import annotations
 
+import pytest
 import json
 import os
 import subprocess
@@ -186,3 +187,10 @@ class TestTheRoundWiresItUp(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")
