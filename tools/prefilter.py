@@ -441,7 +441,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False):
     this can only ever drop what the throttle would drop anyway.
     """
     try:
-        from throttle import ruled_out
+        from throttle import ruled_out, ruled_pair
         from throttle import load_do_not_target, referral_holds
         from company_key import key as company_key
         from lookup_score import norm
@@ -468,10 +468,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False):
         n = norm(job.get("url") or "")
         if n and n in urls:
             return urls[n]
-        t = (job.get("title") or "").strip().lower()
-        if t and k and (t, k) in pairs:
-            return pairs[(t, k)]
-        return ""
+        return ruled_pair(pairs, job)
 
     return check
 

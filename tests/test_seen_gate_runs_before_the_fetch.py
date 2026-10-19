@@ -147,14 +147,12 @@ class TestAgainstTheRealSeenFile(unittest.TestCase):
         dropped = 0
         for u, e in self.seen.items():
             job = {"url": e.get("url") or u, "title": e.get("title"),
-                   "company": e.get("company")}
+                   "company": e.get("company"), "location": e.get("location")}
             if not gate(job):
                 continue
             dropped += 1
             n = T.norm(job["url"] or "")
-            t = (job["title"] or "").strip().lower()
-            k = T.key(job["company"])
-            self.assertTrue((n and n in urls) or (t and k and (t, k) in pairs),
+            self.assertTrue((n and n in urls) or T.ruled_pair(pairs, job),
                             f"the early gate dropped {u}, which the throttle keeps")
         # The example's corpus is one excluded posting; a real one runs to
         # hundreds, and a person's own copy of this test holds it to a higher bar.

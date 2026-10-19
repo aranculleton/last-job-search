@@ -426,10 +426,19 @@ def load_seen(path: str = SEEN) -> dict:
     return data
 
 
-def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
-    """URL key -> reason and (title, employer key) -> reason for everything already ruled out."""
+# The place of a ruling that recorded none: it holds for the title at that employer
+# wherever it is posted, as every ruling did before the place was kept.
+ANYWHERE = "*"
+
+
+def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str, str], str]]:
+    """URL key -> reason and (title, employer key, city) -> reason for everything already ruled out.
+
+    The city is part of the key: a ruling on a place or a language in one city
+    blocked the same title at that employer everywhere. Read it with `ruled_pair`.
+    """
     urls: dict[str, str] = {}
-    pairs: dict[tuple[str, str], str] = {}
+    pairs: dict[tuple[str, str, str], str] = {}
     since = rescreen_since()
     import exclude
     rules_now, parts_now = exclude.rules_fingerprint(), exclude.rules_parts()
@@ -478,8 +487,16 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         t = (e.get("title") or "").strip().lower()
         k = key(e.get("company"))
         if t and k:
-            pairs[(t, k)] = why
+            pairs[(t, k, city(e["location"]) if e.get("location") else ANYWHERE)] = why
     return urls, pairs
+
+
+def ruled_pair(pairs: dict, job: dict) -> str:
+    """The reason a posting's title, employer and city were ruled out, or ""."""
+    t, k, c = _posting_key(job.get("title"), job.get("company"), job.get("location"))
+    if not (t and k):
+        return ""
+    return pairs.get((t, k, c)) or pairs.get((t, k, ANYWHERE)) or ""
 
 
 # A posting's own date is the portal's, and a portal relisting a posting gives it a
@@ -799,7 +816,7 @@ def _as_score(value) -> float | None:
 
 
 def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
-             pairs: dict[tuple[str, str], str], today: str,
+             pairs: dict[tuple, str], today: str,
              blocked: dict[str, str] | None = None,
              warm: dict[str, list[dict]] | None = None,
              drafted: dict[str, dict] | None = None,
@@ -814,7 +831,6 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
     for r in rows:
         k = key(r.get("company"))
         n = norm(r.get("url"))
-        pair = ((r.get("title") or "").strip().lower(), k)
         reason = None
         # The candidate's bar (tools/bar.py). Only its hard rules cut here: the
         # sectors and employers the profile excludes (search.py, BAR_*). Every
@@ -832,8 +848,8 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             reason = holds[k]
         elif n and n in urls:
             reason = f"already ruled out, {urls[n]}"
-        elif pair in pairs:
-            reason = f"already ruled out, {pairs[pair]}"
+        elif ruled_pair(pairs, r):
+            reason = f"already ruled out, {ruled_pair(pairs, r)}"
         elif k and closed and any(_same_title(r.get("title"), c.get("role"))
                                   for c in closed.get(k, [])):
             c = next(c for c in closed[k] if _same_title(r.get("title"), c.get("role")))
