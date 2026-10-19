@@ -121,14 +121,15 @@ class NothingInTheHomeDirectory(unittest.TestCase):
                 self.assertIsNone(re.search(r"\bln\b[^\n]*HOME[^\n]*texmf", text), name)
 
     def test_every_compile_in_ci_sets_texmfhome_itself(self):
-        import yaml
+        # Read as text, not with yaml: the Python floor leg installs pytest and nothing
+        # else, and this check is worth running there too. A step starts at its `- `.
+        import re
         with open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8") as fh:
-            ci = yaml.safe_load(fh)
-        compiles = [s for job in ci["jobs"].values() for s in job.get("steps", [])
-                    if any(e in str(s.get("run", "")) for e in ("lualatex ", "xelatex "))]
-        self.assertTrue(compiles)
+            steps = re.split(r"\n(?=\s*- (?:name|uses|run):)", fh.read())
+        compiles = [s for s in steps if re.search(r"\b(?:lualatex|xelatex) -", s)]
+        self.assertGreaterEqual(len(compiles), 2)
         for step in compiles:
-            self.assertIn('export TEXMFHOME="$PWD/texmf"', step["run"], step.get("name"))
+            self.assertIn('export TEXMFHOME="$PWD/texmf"', step, step.strip().splitlines()[0])
         with open(os.path.join(ROOT, "tools", "ci_local.sh"), encoding="utf-8") as fh:
             local = fh.read()
         first = min(local.find("lualatex -"), local.find("xelatex -"))
