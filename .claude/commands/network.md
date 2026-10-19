@@ -46,7 +46,9 @@ it. LinkedIn is never fetched from a session.
    them or drop them. `python3 tools/network/reading.py queue` lists the queued ones with no
    fresh reading of their profile: read them (step 5) and rewrite those notes first. When
    `python3 tools/build_versions.py behind network-notes` prints a line, notes are now written
-   better than when these were: rewrite every queued note from its reading, then
+   better than when some of these were: rewrite each one written the older way (nothing read
+   about them and no WAITS ON A READ line, `reading.written_the_older_way()`) from its
+   reading, then
    `python3 tools/build_versions.py record network-notes`. This is the only place that
    happens, because it needs the people read, which a background agent cannot do.
    **Their own connections, if exported: rung 1.** `python3 tools/network/sources.py

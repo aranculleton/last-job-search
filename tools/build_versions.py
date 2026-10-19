@@ -717,9 +717,20 @@ def _has_rows(path: str) -> bool:
         return False
 
 
+def _older_notes() -> bool:
+    """A first note still waiting that was written the older way (network/reading.py
+    written_the_older_way). Any draft at all used to count, so the notes the networking
+    upgrade writes, each opening on WAITS ON A READ, read as made the older way the
+    moment they were written, and every /network run began by rewriting them."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
+    import reading
+    return any(reading.written_the_older_way(os.path.basename(os.path.dirname(f)))
+               for f in glob.glob(person.state("documents", "network", "*", "draft.md")))
+
+
 APPLIES = {
     "prep_docs": lambda: bool(glob.glob(person.state("documents", "network", "*", "prep.md"))),
-    "queued_notes": lambda: bool(glob.glob(person.state("documents", "network", "*", "draft.md"))),
+    "queued_notes": lambda: _older_notes(),
     "unsent_drafts": lambda: "drafted" in _tracker_statuses(),
     "live_interviews": lambda: "interview" in _tracker_statuses(),
     "live_applications": lambda: bool({"drafted", "interview"} & _tracker_statuses()),
