@@ -28,6 +28,7 @@ import json, os, re, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
 import allocate
+import skills_block
 import bullet_library as LIB
 import untrusted
 import docpaths
@@ -423,6 +424,27 @@ def fit(a):
     return (pages, _lines(resume_pdf(abbr))), lpages
 
 
+def unheld_report(a):
+    """What the draft and its posting ask for that the profile does not hold.
+
+    `skills_block.select()` drops an unheld skill from the tools line silently,
+    which is right for the page and wrong for the person: a drafter who asked
+    for one wrote a claim, and a posting that names one has a real gap, which
+    the letter must bridge (tools/bridges.py) or leave alone, never claim.
+    """
+    out = []
+    asked = skills_block.unheld_requested(a.get("tools", ""))
+    if asked:
+        out.append("tools line asked for skills not held, left off: "
+                   + "; ".join(f"{k} ({v})" for k, v in asked.items()))
+    gaps = {k: v for k, v in skills_block.unheld_requested(a.get("posting", "")).items()
+            if k not in asked}
+    if gaps:
+        out.append("the posting names skills not held (bridge or leave, never claim): "
+                   + ", ".join(gaps))
+    return out
+
+
 def needs_check(resume_pages, letter_pages, words):
     """Whether a fitted application is outside its budgets: the resume off the
     profile's page count, the letter off one page, or the body over its cap.
@@ -476,4 +498,6 @@ if __name__ == "__main__":
         bw = body_words(a)
         flag = "   <-- CHECK" if needs_check(rp, lp, bw) else ""
         print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  letter {lp}p/{bw} body words{flag}")
+        for line in unheld_report(a):
+            print("             " + line)
     save(sys.argv[1], apps, read_in)
