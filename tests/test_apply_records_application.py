@@ -33,7 +33,6 @@ OUTCOME = COMMANDS / "outcome.md"
 GMAIL_SYNC = COMMANDS / "gmail-sync.md"
 HTML_REPORT = COMMANDS / "html-report.md"
 INTERVIEW = COMMANDS / "interview.md"
-NOTION_SYNC = COMMANDS / "notion-sync.md"
 SKILL = REPO / ".claude" / "skills" / "job-application-assistant" / "SKILL.md"
 SCRAPER = REPO / ".claude" / "skills" / "job-scraper" / "SKILL.md"
 DOCS_README = REPO / "documents" / "README.md"
@@ -220,11 +219,6 @@ class DraftedMeansDraftedToEveryReader(unittest.TestCase):
          "the row would keep the drafting date after being proved submitted"),
         (GMAIL_SYNC, "## Step 9: Staleness Check", "Skip `drafted` rows here",
          "an unsent draft reported as a forgotten application"),
-        (NOTION_SYNC, None, "omit when the status is `drafted`",
-         "an 'Applied on' date for a job never applied to"),
-        (NOTION_SYNC, None, "not yet submitted",
-         "page bodies are write-once, so calling drafts 'submitted documents' "
-         "is permanent even after /outcome records the real submission"),
         (SCRAPER, None, "do not add a second row",
          "/scrape would duplicate the row Step 3b just wrote"),
         (APPLY, "### Step 6b: Record the Application", "bare number, 0-100",
@@ -346,11 +340,6 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
          "a status update that rewrites the row would blank the deadline column"),
         (GMAIL_SYNC, "### Step 7a: Write Approved Updates", "preserve every other field",
          "the sync path rewrites the row too - it must carry the same preservation rule"),
-        (NOTION_SYNC, None, "**Deadline precedence: the tracker wins too**",
-         "the tracker's deadline (written from the posting the application was actually "
-         "built on) must override the scraper's stored value"),
-        (NOTION_SYNC, None, "tracker `deadline` column",
-         "the Deadine property must name the tracker column as its source"),
         (SKILL, "### Step 3b: Record the Application", "`deadline` is the application deadline",
          "the /scrape path reaches Step 3b without running /apply Step 0, so it must "
          "still be told what the field is and where it comes from"),
@@ -375,10 +364,6 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
          "Step 4 forbids restructuring the CSV, so without this the header append reads "
          "as a violation of the same command's own rule and an implementer has a "
          "documented reason to skip the migration"),
-        (NOTION_SYNC, None, "never reconcile the two by picking the earlier or later date",
-         "the tracker-wins rule says which source to prefer but does not forbid the "
-         "plausible-looking min() of the two, which syncs a date the user never "
-         "applied against"),
     ]
 
     def test_deadline_survives_every_write(self):
@@ -432,9 +417,6 @@ class ArchiveNameIsOnePathComponent(unittest.TestCase):
         (INTERVIEW, "### 6. Logistics",
          "archive folder derived in Step 1",
          "interview must reuse its canonical read path when writing the prep pack"),
-        (NOTION_SYNC, "## Step 5: Write the Detail Page",
-         "by the **Subfolder naming** rule in `documents/README.md`",
-         "notion-sync otherwise reports that the sanitized local archive is absent"),
         (DOCS_README, "## applications/",
          "If the derived name is empty",
          "dropping untrusted punctuation can produce no component at all, which "

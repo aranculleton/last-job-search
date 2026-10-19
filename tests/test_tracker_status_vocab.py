@@ -21,8 +21,7 @@ They also pin the review findings on the fix itself:
 4. The vocabulary block must not split Step 1's numbered list: section-scoped
    reads of Step 1 must still see items 2-4.
 5. /html-report's bucket map needs a catch-all so no tracker value drops out of
-   the stats silently, and /notion-sync must normalise space forms before
-   writing Status (Notion auto-creates a select option per unique string).
+   the stats silently.
 6. /apply and /interview make status decisions and must anchor them to the
    block, not restate an ad-hoc set.
 
@@ -39,7 +38,6 @@ COMMANDS = REPO / ".claude" / "commands"
 OUTCOME = COMMANDS / "outcome.md"
 GMAIL_SYNC = COMMANDS / "gmail-sync.md"
 HTML_REPORT = COMMANDS / "html-report.md"
-NOTION_SYNC = COMMANDS / "notion-sync.md"
 APPLY = COMMANDS / "apply.md"
 INTERVIEW = COMMANDS / "interview.md"
 
@@ -238,47 +236,6 @@ class ReadersBucketMap(unittest.TestCase):
             "/gmail-sync Step 2 must not restate the space spellings locally - "
             "the vocabulary block is the single source for what counts as final, "
             "and a second local list is what drifted in #298",
-        )
-
-    def test_notion_sync_normalises_status_before_write(self):
-        """Step 4 must map legacy space spellings to canonical before setting
-        Status. Notion auto-creates a select option per unique string, so pushing
-        a space form would give an existing database two options for one status
-        and split closed applications across two filter buckets."""
-        step4_text = section(NOTION_SYNC, "## Step 4: Upsert Database Rows")
-        self.assertIn(
-            "never push a space form",
-            step4_text,
-            "/notion-sync Step 4 must never write a space-form status to Notion",
-        )
-        self.assertIn(
-            "Tracker status vocabulary",
-            step4_text,
-            "/notion-sync Step 4 must map space forms per the /outcome vocabulary block",
-        )
-
-    def test_notion_sync_uses_underscore_status_spellings(self):
-        """Notion Status select options must match canonical tracker spellings
-        so that upserted values are consistent with what /outcome writes."""
-        step3_text = section(NOTION_SYNC, "## Step 3: Load Sync State and Locate the Database")
-        self.assertIn(
-            "no_response",
-            step3_text,
-            "/notion-sync Step 3 must list `no_response` (underscore) as a Status "
-            "option so it matches what /outcome writes to the tracker",
-        )
-        self.assertIn(
-            "offer_declined",
-            step3_text,
-            "/notion-sync Step 3 must list `offer_declined` (underscore) as a Status "
-            "option so it matches what /outcome writes to the tracker",
-        )
-        self.assertNotIn(
-            "no response",
-            step3_text,
-            "/notion-sync Step 3 must not list 'no response' (space) as the primary "
-            "option — Notion creates a distinct select value for each unique string, "
-            "so mixing spellings creates duplicate options in the database",
         )
 
 

@@ -330,7 +330,7 @@ slash. A command and a skill can share a stem; they are not alternatives to each
 | `networking` | `/network` `/reply` `/threads` `/prep` |
 | `upskill` | (none) |
 
-Also `/gmail-sync`, `/notion-sync`, `/html-report` and `/upgrade` (which a session starts
+Also `/gmail-sync`, `/html-report` and `/upgrade` (which a session starts
 itself, CLAUDE.md step 5), which belong to no skill.
 
 **Two things are typed with a slash.** A file in `.claude/commands/` is one. A skill's

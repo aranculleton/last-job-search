@@ -46,8 +46,8 @@ has the full walk-through, and the steps for running it on your own computer ins
 | "Check my email" | Interview invites, offers and rejections from Gmail, recorded once you say yes |
 | "Make me a dashboard" | One page showing every application and how far it got |
 
-It also says what to learn next, copies your pipeline into Notion, reads your LinkedIn job
-alerts and takes your own resume template. Gmail and Notion are connected once, at
+It also says what to learn next, reads your LinkedIn job alerts and takes your own resume
+template. Gmail is connected once, at
 [claude.ai/customize/connectors](https://claude.ai/customize/connectors).
 
 ## Why it works differently

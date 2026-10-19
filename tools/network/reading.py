@@ -915,7 +915,8 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
             # The same words the place check says once, then weekly (tools/place.py): the
             # choice is offered, never made for them, and the setting is not changed.
             owner, name = place.repo()
-            told = place.check(where, "browser", [], True, (), owner, name)
+            # A read was asked for here, so this is the person asking how: the full steps.
+            told = place.check(where, "browser", [], True, (), owner, name, detail=True)
             say = told[0] if told else (f"For the one or two who matter most, send {hand} and "
                                         "I'll do the rest.")
         return {"route": "hand", "browser": "", "usable": False,

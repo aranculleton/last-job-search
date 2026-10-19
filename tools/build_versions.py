@@ -470,7 +470,6 @@ KEEPS_NOTHING: dict[str, str] = {
     ".claude/commands/outcome.md": "records what happened, which a better method does not change",
     ".claude/commands/gmail-sync.md": "its cursor is never committed, so every container reads "
                                       "the mailbox afresh with the current method",
-    ".claude/commands/notion-sync.md": "writes to the person's own Notion on request, nothing here",
     ".claude/commands/html-report.md": "a report derived on request, never kept as state",
     ".claude/commands/threads.md": "a view derived from the message log on every run",
     ".claude/commands/reset.md": "removes state on request",
