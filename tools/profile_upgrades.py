@@ -592,60 +592,6 @@ def _required() -> str:
     return ""
 
 
-# A browser read pace still on a default the app has since lowered. Written in while it
-# was the default (80 a day, 30 an hour), it held a person at the old pace after the app
-# moved to 15 and 8; a pace the person chose themselves is in learned.json and stays.
-OLD_READ_PACE = {"PROFILE_READS_PER_DAY": (80, 15), "PROFILE_READS_PER_HOUR": (30, 8)}
-
-
-def _read_pace_old() -> list[str]:
-    net = _mod("networking")
-    if net is None:
-        return []
-    try:
-        import learned
-        mine = " ".join(learned.locked())
-    except ImportError:
-        mine = ""
-    return [n for n, (old, _) in OLD_READ_PACE.items()
-            if getattr(net, n, None) == old and n not in mine]
-
-
-def _read_pace() -> str:
-    old = _read_pace_old()
-    if not old:
-        return ""
-    return ("profile/networking.py holds the app's old read pace (" + ", ".join(
-        f"{n} = {OLD_READ_PACE[n][0]}" for n in old) + "), written in while it was the "
-        "default; the app now reads at most " + ", ".join(
-        f"{OLD_READ_PACE[n][1]}" + (" a day" if n.endswith("DAY") else " an hour") for n in old)
-        + ", which lowers the risk to your LinkedIn account")
-
-
-def apply_read_pace() -> int:
-    """The read-pace upgrade: each old default in profile/networking.py becomes the
-    current one, and nothing else in the file changes."""
-    old = _read_pace_old()
-    if not old:
-        return 0
-    path = person.path("networking.py")
-    with open(path, encoding="utf-8") as fh:
-        text = fh.read()
-    for n in old:
-        was, now = OLD_READ_PACE[n]
-        text = re.sub(rf"(?m)^({n}\s*=\s*){was}\b", rf"\g<1>{now}", text)
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write(text)
-    # "80" and "15" are the same length: written within the second the file was last
-    # compiled, Python would go on loading the old pace from its cache.
-    cache = os.path.join(os.path.dirname(path), "__pycache__")
-    for f in os.listdir(cache) if os.path.isdir(cache) else ():
-        if f.startswith("networking."):
-            os.remove(os.path.join(cache, f))
-    person._modules.pop(path, None)
-    return 0
-
-
 # A line in the profile that tells a draft to use a phrase the person later said never to
 # use: "in outbound messages say 'I made the move'" stayed in two profile files after the
 # person's never-say for it, so every draft read both. Only a line that prescribes the
@@ -718,11 +664,6 @@ REGISTRY: tuple[Upgrade, ...] = (
             _unknown_portal, "/add-portal to build it again, or take it out of PORTALS",
             "question", "~2 min",
             priority=2),
-    Upgrade("read-pace", "2026-10-18",
-            "browser reads at the app's current pace, not the old default written in earlier",
-            _read_pace, "python3 tools/profile_upgrades.py --apply read-pace", "instant",
-            "a second", command=("python3", "tools/profile_upgrades.py", "--apply", "read-pace"),
-            paths=("profile/networking.py",), priority=2),
     Upgrade("never-said", "2026-10-18",
             "no line in your profile telling a draft to use wording you said never to use",
             _never_said, "for each line listed, rewrite it so it no longer tells a draft to use "
@@ -1192,16 +1133,12 @@ def main(argv: list[str] | None = None) -> int:
                       help="the pending upgrades as JSON, most urgent first (/upgrade reads it)")
     mode.add_argument("--check", metavar="ID",
                       help="one upgrade: 'done', or what is missing; exit 1 while pending")
-    mode.add_argument("--apply", metavar="ID", choices=("read-pace",),
-                      help="run one instant upgrade's own change (the sync does this)")
     mode.add_argument("--no", metavar="ID",
                       help="record the person's no to one question, dated: it is asked again "
                            "when the question changes or after REASK_DAYS")
     a = ap.parse_args(argv)
     if not person.exists():
         return 0                                    # the app, or a repo before /setup
-    if a.apply == "read-pace":
-        return apply_read_pace()
     if a.no:
         p = record_no(a.no)
         print(f"profile_upgrades: their no to {a.no} kept in {os.path.relpath(p, ROOT)}; asked "

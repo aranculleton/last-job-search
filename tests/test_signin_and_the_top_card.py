@@ -39,7 +39,7 @@ New to LinkedIn? Join now
 """
 GUEST = """Rosalind Achterberg
 Head of Pricing Analytics at Kestrel Mutual
-Toronto, Ontario, Canada
+Manchester, England, United Kingdom
 Sign in to view Rosalind's full profile
 Join now
 Sign in
@@ -54,7 +54,7 @@ She/Her
 · 2nd
 Head, Pricing Analytics | Model Governance | Insurance
 Kestrel Mutual · University of Leeds
-Toronto, Ontario, Canada
+Manchester, England, United Kingdom
 · Contact info
 500+ connections
 Connect
@@ -124,7 +124,7 @@ def test_the_headline_is_the_line_under_the_name_not_the_employer_line():
     r = reading.parse(CARD, name="Rosalind Achterberg", company="Kestrel Mutual",
                       source="browser", today=TODAY)
     assert r["headline"] == "Head, Pricing Analytics | Model Governance | Insurance"
-    assert r["location"] == "Toronto, Ontario, Canada"
+    assert r["location"] == "Manchester, England, United Kingdom"
     assert r["current"] == "Kestrel Mutual"            # from the card when Experience is not loaded
     assert (r["degree"], r["reach"]) == ("2nd", "request")
     assert r["items"] and r["items"][0]["date"] == "2026-10-04"

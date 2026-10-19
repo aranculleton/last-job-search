@@ -498,7 +498,7 @@ def parse_result_title(title: str) -> dict:
         # alone once made it a place, so a former CEO kept the employer he had left.
         out["headline"], out["employer"] = (x.strip() for x in last.rsplit(",", 1))
     elif "," in last and _ROLE_WORD.search(last.split(",", 1)[0]):
-        # "Head of Data, Greater Toronto Area": a job and where they are.
+        # "Head of Data, Greater Manchester": a job and where they are.
         out["headline"], out["location"] = (x.strip() for x in last.split(",", 1))
     elif _PLACE_WORDS.search(last):
         out["location"] = last

@@ -260,9 +260,9 @@ def test_letters_after_a_name_come_off_and_a_short_surname_stays():
         assert discovery.parse_result_title(title)["name"] == name, title
     got = discovery.parse_result_title("Gideon Ashworth - Former President and CEO, Kestrel Mutual")
     assert got["headline"] == "Former President and CEO" and got["employer"] == "Kestrel Mutual"
-    assert discovery.parse_result_title("Idris Corrie - Toronto, Ontario, Canada")["location"]
-    got = discovery.parse_result_title("Anna Lee - Head of Data, Greater Toronto Area")
-    assert (got["headline"], got["location"]) == ("Head of Data", "Greater Toronto Area")
+    assert discovery.parse_result_title("Idris Corrie - Manchester, England, United Kingdom")["location"]
+    got = discovery.parse_result_title("Anna Lee - Head of Data, Greater Manchester")
+    assert (got["headline"], got["location"]) == ("Head of Data", "Greater Manchester")
     left = {"company": "Kestrel Mutual"}
     assert discovery.disqualify({**left, "title": "Former President and CEO"}, "Kestrel Mutual")
     for still_here in ("Former teacher turned data scientist at Kestrel Mutual",

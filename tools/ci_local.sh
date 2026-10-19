@@ -106,6 +106,13 @@ if [ -f profile/person.json ]; then
   rm -rf "$LEAK_OUT"
 else
   run "leak scan (what git would commit)" python3 tools/leak_scan.py . --git
+  # A stranger from a real search is on no denylist: a full name the app has never
+  # carried, in what this branch adds, is reported (tools/name_guard.py).
+  if git rev-parse -q --verify origin/master >/dev/null; then
+    run "new names are invented ones" python3 tools/name_guard.py diff origin/master
+  else
+    skip "new names are invented ones" "no origin/master to compare with"
+  fi
 fi
 
 echo

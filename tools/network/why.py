@@ -108,7 +108,7 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
     today = today or dt.date.today()
     reading = reading or {}
     # What was read on their own page outranks the contact book's title, which can
-    # be months old: a stale "Head of Data Enablement" ranked a person as hands-on.
+    # be months old: a stale "Head of Data Platforms" ranked a person as hands-on.
     page = any(s.get("kind") in ("paste", "browser", "pdf", "screenshot")
                for s in reading.get("sources") or [])
     title = ((reading.get("headline") if page else "") or contact.get("title")

@@ -188,7 +188,7 @@ def history() -> dict:
         names += [aka] if isinstance(aka, str) else list(aka)
         # The name as a profile writes it: "Oakmere Foods", not "Oakmere Foods Ltd", and
         # the profile's own aliases for the same employer. Never its leading words:
-        # "Royal Bank" would claim a shared employer with the Royal Bank of Scotland.
+        # "Royal Fernhill" would claim a shared employer with Royal Fernhill Insurance.
         names.append(discovery.search_name(r.get("employer", "")))
         k = company_key.key(r.get("employer", ""))
         names += [a for a, v in company_key.ALIASES.items() if v == k and len(a) > 3]

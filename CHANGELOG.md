@@ -20,7 +20,7 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-## [3.3.0] - 2026-10-18
+## [3.3.0] - 2026-10-19
 
 ### Added
 
@@ -91,9 +91,6 @@ make sense to somebody whose repo just received it.
   "in outbound messages say <the phrase>" stayed after the never-say. Claude rewrites each
   such line in the background, keeping the fact; a sentence of yours that merely contains
   the words is left alone. Profile upgrade: `never-said`.
-- **Profile reads move off the old default pace.** A pace written in while 80 a day and 30
-  an hour were the defaults held people there after the app moved to 15 and 8. It moves to
-  the current one; a pace you chose yourself stays. Profile upgrade: `read-pace`.
 - **The people a run finds are cleaned before any is added.** A real run at one employer,
   before release, kept a former chief executive (a comma made his title read as a place),
   took a post about another company as someone working at the employer searched, cut short
@@ -173,6 +170,17 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Merging a release PR is the release.** The newest CHANGELOG version is tagged and
+  published by the app's own CI, once (`tools/release.py`, `.github/workflows/release.yml`);
+  publishing had been a step on the GitHub website, and a merged release could sit
+  unpublished. No tag is ever moved or deleted. No profile upgrade: it is the app's own.
+- **No real person's name reaches the app.** A name from a real search's results had
+  reached a code comment, a test, a commit message and a pull request description while
+  the leak scan passed, because it only knows the maintainer's own people. The app's CI now
+  reports any full name it has never carried, in what a pull request adds and in its
+  description and commit messages, and runs the leak scan on that text too
+  (`tools/name_guard.py`, `leak_scan.py --text`). Real people are described, never named.
+  No profile upgrade: it checks the app.
 - **Browser reads are paced like a person writing to a few people.** The defaults are 8
   profiles an hour and 15 a day (from 30 and 80), and a day never reads more than the
   connection requests it can still send that day, plus three for people a read rules out.

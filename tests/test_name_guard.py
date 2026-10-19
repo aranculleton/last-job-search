@@ -1,0 +1,96 @@
+"""No real person's name reaches the app, in its files or in the text around them.
+
+On 2026-10-18 names from a real run's search results went into a code comment, a test,
+a commit message and a pull request description, and the leak scan passed them all:
+it knows the maintainer's own people, never the strangers a search turns up. These pin
+the two guards that close that: tools/name_guard.py (a full name the app has never
+carried, in what a change adds or in its PR text) and leak_scan --text (the denylist,
+on a PR description and commit messages). Every name here is invented.
+"""
+import os
+import subprocess
+import sys
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+import leak_scan  # noqa: E402
+import name_guard  # noqa: E402
+
+KNOWN = {"Kestrel", "Mutual", "Head", "Data", "Chief", "Officer", "Then", "Morgan", "Ellis"}
+
+
+def test_a_name_the_app_never_carried_is_found_and_known_words_are_not():
+    assert name_guard.names("took a surname off \"P. Quillon Varga\" here", KNOWN) == [
+        "P. Quillon Varga"]
+    assert name_guard.names("Then Quillon Varga joined", KNOWN) == ["Then Quillon Varga"]
+    assert name_guard.names("Chief Data Officer at Kestrel Mutual", KNOWN) == []
+    assert name_guard.names("Morgan Ellis, the example person", KNOWN) == []
+    assert name_guard.names("one word: Varga, and lower case quillon varga", KNOWN) == []
+    assert name_guard.names("CSV TSV HTTP are acronyms", KNOWN) == []
+
+
+def _repo(tmp_path):
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+               GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com")
+    def git(*a):
+        subprocess.run(["git", "-C", str(tmp_path), *a], check=True, env=env,
+                       capture_output=True)
+    git("init", "-q", "-b", "master")
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "notes.md").write_text("Morgan Ellis works at Kestrel Mutual.\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "base")
+    return git
+
+
+def test_a_change_that_adds_a_real_looking_name_fails_until_it_is_described(tmp_path, monkeypatch):
+    git = _repo(tmp_path)
+    monkeypatch.setattr(name_guard, "ROOT", str(tmp_path))
+    (tmp_path / "notes.md").write_text("Morgan Ellis works at Kestrel Mutual.\n"
+                                       "# the parser cut Quillon Varga to one word\n")
+    git("commit", "-q", "-am", "add a case")
+    assert name_guard.check_diff("master~1") == ["notes.md:2: Quillon Varga"]
+    # Described instead of named: clean.
+    (tmp_path / "notes.md").write_text("Morgan Ellis works at Kestrel Mutual.\n"
+                                       "# the parser cut a short surname\n")
+    git("commit", "-q", "-am", "describe it")
+    assert name_guard.check_diff("master~2") == []
+    # An invented name, added to the allow list on purpose: clean.
+    (tmp_path / "notes.md").write_text("Morgan Ellis works at Kestrel Mutual.\n"
+                                       "# an invented Quillon Varga for the test\n")
+    (tmp_path / "tools" / "name_guard_allow.txt").write_text("Quillon Varga  # invented\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "invented")
+    assert name_guard.check_diff("master~3") == []
+
+
+def test_a_pr_description_and_commit_messages_are_scanned_too(tmp_path, monkeypatch):
+    _repo(tmp_path)
+    monkeypatch.setattr(name_guard, "ROOT", str(tmp_path))
+    body = tmp_path / "body.md"
+    body.write_text("Two surnames restored: Quillon Varga and Morgan Ellis.\n")
+    assert name_guard.check_text([str(body)]) == ["body.md:1: Quillon Varga"]
+    tokens = tmp_path / "tokens"
+    tokens.write_text("Quillon Varga\n")
+    assert leak_scan.main(["--text", str(body), "--tokens", str(tokens)]) == 1
+    body.write_text("Two surnames restored.\n")
+    assert leak_scan.main(["--text", str(body), "--tokens", str(tokens)]) == 0
+
+
+def test_the_apps_ci_and_ci_local_run_both_guards():
+    ci = open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8").read()
+    assert "tools/name_guard.py diff" in ci and "tools/name_guard.py text" in ci
+    assert "tools/leak_scan.py --text" in ci and "--no-merges" in ci
+    # The PR description reaches the shell through env, never inline in the script.
+    assert "PR_BODY: ${{ github.event.pull_request.body }}" in ci
+    assert "${{ github.event.pull_request.body }}\"" not in ci
+    local = open(os.path.join(ROOT, "tools", "ci_local.sh"), encoding="utf-8").read()
+    assert "tools/name_guard.py diff" in local
+
+
+@pytest.mark.parametrize("path", ["tools/openroles/x.py", "texmf/tex/latex/a.sty",
+                                  "tools/name_guard_allow.txt"])
+def test_vendored_files_and_the_allow_list_are_not_read_as_new_names(path):
+    assert name_guard._skipped(path)

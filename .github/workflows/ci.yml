@@ -46,6 +46,9 @@ on:
   push:
     branches: [master]
   pull_request:
+    # "edited": a description changed after the PR opened is checked again (the step
+    # "New names are invented ones" reads it).
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       latex:
@@ -229,6 +232,28 @@ jobs:
         env:
           LJS_LEAK_TOKENS: ${{ secrets.LEAK_TOKENS }}
         run: python tools/leak_scan.py . --git
+
+      - name: New names are invented ones, and PR text carries no person
+        # The leak scan knows the maintainer's own people. A stranger a real search
+        # turned up is not on any list, so tools/name_guard.py reports any full name
+        # the app has never carried, in what this pull request adds and in its
+        # description and commit messages, which are as public as its files: a real
+        # person's name reached all three on 2026-10-18. The leak scan's denylist
+        # runs on the same text. The description reaches the shell through env,
+        # never pasted into the script.
+        if: github.event_name == 'pull_request' && hashFiles('profile/person.json') == ''
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          LJS_LEAK_TOKENS: ${{ secrets.LEAK_TOKENS }}
+        run: |
+          printf '%s\n' "$PR_BODY" > "$RUNNER_TEMP/pr_body.md"
+          git log --no-merges --format=%B "$BASE..HEAD" > "$RUNNER_TEMP/commits.txt"
+          fail=0
+          python tools/name_guard.py diff "$BASE" || fail=1
+          python tools/name_guard.py text "$RUNNER_TEMP/pr_body.md" "$RUNNER_TEMP/commits.txt" || fail=1
+          python tools/leak_scan.py --text "$RUNNER_TEMP/pr_body.md" "$RUNNER_TEMP/commits.txt" || fail=1
+          exit $fail
 
       - name: Typecheck and test every portal CLI
         # Discovered, not hardcoded, so a portal CLI added in a fork (the

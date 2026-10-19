@@ -129,7 +129,9 @@ record it in `profile/`.
 **Before changing any app-owned file, read `MAINTAINING.md`, "Developer rules"**, whichever
 repo the session started in. In short: the change is made in the app, on a branch, and merged
 with CI green; the leak scan passes on the exact tree before anything is pushed, because the
-app is public and so are its branches and history; no example is a disguised person; a change
+app is public and so are its branches and history; no example is a disguised person, and a
+real person a run turns up is described, never named, in code, commits or PR text
+(`tools/name_guard.py`); a change
 an existing user would have to act on is a profile upgrade (`tools/profile_upgrades.py`); and
 a change to a part of the build that leaves something behind is a new version in
 `tools/build_versions.py`. Tests fail on the last two.

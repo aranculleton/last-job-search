@@ -1,0 +1,37 @@
+# Publishes a release when a release PR lands. The newest "## [X.Y.Z] - <date>" section
+# of CHANGELOG.md that has no vX.Y.Z tag yet gets one, on the commit that brought it, with
+# the section as its notes (tools/release.py). Every person's repo follows the newest tag
+# (tools/sync_app.py), so this is the step that ships a release: it used to be a step on
+# the GitHub website that nothing reminded anyone of, and 3.3.0 sat merged and unpublished.
+#
+# It never moves, replaces or deletes a tag: a version already tagged, by hand or by an
+# earlier run, is left alone. Runs only in the public app, where Actions minutes are free;
+# every private copy carries this file and never runs it. The token is the built-in
+# GITHUB_TOKEN, scoped to this repo's contents (a tag and a release).
+
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths: [CHANGELOG.md]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and publish the newest CHANGELOG version
+    if: github.repository == 'aranculleton/last-job-search'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Publish it if it has no tag yet
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/release.py publish

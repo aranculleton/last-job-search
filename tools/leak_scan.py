@@ -34,6 +34,8 @@ name gets.
 
 Usage:
     python3 tools/leak_scan.py <tree> [--tokens FILE] [--allow FILE] [--show]
+    python3 tools/leak_scan.py --text <file>... [--tokens FILE]   # a PR description,
+                                                                  # commit messages
     --show prints the matched token (local use only, never in CI).
 Exit 0 clean, 1 findings, 2 usage.
 """
@@ -184,34 +186,51 @@ def scan(tree: str, tokens, allow, show: bool = False, git: bool = False) -> lis
             if not any(r.match(rel) for r in BINARY_OK):
                 findings.append(f"{rel}: binary file that cannot be scanned and is not allowlisted")
             continue
-        text = data.decode("utf-8", errors="replace")
-        rules = [rx for g, rx in allow if g.match(rel)]
-        # Only the entries whose longest word is somewhere in the file run
-        # at all: a handful, against 1,200 on every line.
-        low = text.lower()
-        file_tokens = [t for k, t in keyed if k in low]
-        kept = []                      # each line after the allowances, for the joined pass
-        for ln, line in enumerate(text.splitlines(), 1):
-            for rx in rules:
-                line = rx.sub(" ", line)
-            kept.append(line)
-            for m in EMAIL.finditer(line):
-                dom = m.group(1).lower()
-                if not any(dom == d or dom.endswith("." + d) for d in SAFE_EMAIL_DOMAINS):
-                    findings.append(f"{rel}:{ln}: email address" + (f" {m.group(0)}" if show else ""))
-            for m in PHONE.finditer(line):
-                digits = re.sub(r"\D", "", m.group(0))
-                if 10 <= len(digits) <= 15 and not FICTION_PHONE.search(m.group(0).strip()):
-                    findings.append(f"{rel}:{ln}: phone number" + (f" {m.group(0)}" if show else ""))
-            for m in LINKEDIN.finditer(line):
-                h = m.group(1)
-                if not PLACEHOLDER_HANDLE.match(h) and not h.startswith(("<", "%", "[")):
-                    findings.append(f"{rel}:{ln}: LinkedIn profile" + (f" {h}" if show else ""))
-            for pat, n in file_tokens:
-                m = pat.search(line)
-                if m:
-                    findings.append(f"{rel}:{ln}: denylist entry {n}" + (f" ({m.group(0)})" if show else ""))
-        findings += _across_lines(rel, kept, file_tokens, show)
+        findings += _scan_text(rel, data.decode("utf-8", errors="replace"),
+                               [rx for g, rx in allow if g.match(rel)], keyed, show)
+    return findings
+
+
+def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
+    """The same checks on text that never sits in the tree: a pull request description,
+    commit messages. A public repo's PR descriptions and history are as public as its
+    files, and a name written there once (2026-10-18) was never scanned."""
+    keyed = [(_key(pat), (pat, n)) for pat, n in tokens]
+    out: list[str] = []
+    for p in paths:
+        with open(p, encoding="utf-8", errors="replace") as fh:
+            out += _scan_text(os.path.basename(p), fh.read(), [], keyed, show)
+    return out
+
+
+def _scan_text(rel: str, text: str, rules, keyed, show: bool) -> list[str]:
+    findings: list[str] = []
+    # Only the entries whose longest word is somewhere in the file run
+    # at all: a handful, against 1,200 on every line.
+    low = text.lower()
+    file_tokens = [t for k, t in keyed if k in low]
+    kept = []                      # each line after the allowances, for the joined pass
+    for ln, line in enumerate(text.splitlines(), 1):
+        for rx in rules:
+            line = rx.sub(" ", line)
+        kept.append(line)
+        for m in EMAIL.finditer(line):
+            dom = m.group(1).lower()
+            if not any(dom == d or dom.endswith("." + d) for d in SAFE_EMAIL_DOMAINS):
+                findings.append(f"{rel}:{ln}: email address" + (f" {m.group(0)}" if show else ""))
+        for m in PHONE.finditer(line):
+            digits = re.sub(r"\D", "", m.group(0))
+            if 10 <= len(digits) <= 15 and not FICTION_PHONE.search(m.group(0).strip()):
+                findings.append(f"{rel}:{ln}: phone number" + (f" {m.group(0)}" if show else ""))
+        for m in LINKEDIN.finditer(line):
+            h = m.group(1)
+            if not PLACEHOLDER_HANDLE.match(h) and not h.startswith(("<", "%", "[")):
+                findings.append(f"{rel}:{ln}: LinkedIn profile" + (f" {h}" if show else ""))
+        for pat, n in file_tokens:
+            m = pat.search(line)
+            if m:
+                findings.append(f"{rel}:{ln}: denylist entry {n}" + (f" ({m.group(0)})" if show else ""))
+    findings += _across_lines(rel, kept, file_tokens, show)
     return findings
 
 
@@ -246,15 +265,26 @@ def _across_lines(rel: str, lines: list[str], tokens, show: bool) -> list[str]:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("tree")
+    ap.add_argument("tree", nargs="?")
+    ap.add_argument("--text", nargs="+", metavar="FILE",
+                    help="scan these files as text instead of a tree: a PR description, "
+                         "commit messages")
     ap.add_argument("--tokens", help="denylist file, one token per line")
     ap.add_argument("--allow", help="extra allowances, path-glob<TAB>regex per line")
     ap.add_argument("--show", action="store_true", help="print matched text (never in CI)")
     ap.add_argument("--git", action="store_true",
                     help="scan only what git would commit (tracked, and new files not ignored)")
     a = ap.parse_args(argv)
-    if not os.path.isdir(a.tree):
-        print(f"leak_scan: no such directory {a.tree}", file=sys.stderr)
+    if a.text:
+        tokens = load_tokens(a.tokens)
+        findings = scan_text(a.text, tokens, show=a.show)
+        for f in findings:
+            print(f)
+        print(f"leak_scan: {len(findings)} finding(s) in {len(a.text)} text file(s); "
+              f"{len(tokens)} denylist entries checked", file=sys.stderr)
+        return 1 if findings else 0
+    if not a.tree or not os.path.isdir(a.tree):
+        print(f"leak_scan: no such directory {a.tree or '(none given)'}", file=sys.stderr)
         return 2
     tokens = load_tokens(a.tokens)
     findings = scan(a.tree, tokens, load_allow(a.allow), show=a.show, git=a.git)

@@ -420,7 +420,7 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
 
 PAGE_PLAIN = """Rosalind Achterberg
 Senior Data Scientist at Kestrel Mutual
-Toronto, Ontario, Canada
+Manchester, England, United Kingdom
 Contact info
 About
 I build pricing models for insurers and teach a weekend course on causal inference for analysts who want to go further than dashboards.

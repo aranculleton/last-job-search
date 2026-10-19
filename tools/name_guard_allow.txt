@@ -1,0 +1,4 @@
+# Invented people and other proper names tools/name_guard.py should not stop on.
+# One per line. Add a name here only when it is invented, or is not a person.
+Shirin Example      # invented, tests/test_the_discovery_ladder.py
+Hal Okonedo         # invented, tests/test_the_discovery_ladder.py
