@@ -469,6 +469,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     "tools/offline_boards.py": "a test seam: canned board answers inside a test, nothing kept",
     "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
+    "tools/holidays.py": "works out public holidays when a date is counted; writes nothing, and "
+                         "a person's own dates live in their search.py PUBLIC_HOLIDAYS",
     ".github/*": "the app's own CI and issue templates",
     "profile.example/*": "the invented example person; a new profile name in it is a profile "
                          "upgrade or a safe default, which tests/test_profile_upgrades.py holds",
