@@ -138,9 +138,14 @@ def test_asset_and_bonus_are_preference_only_in_their_preference_sense():
 
 def test_old_exclusions_the_rules_now_only_rank_are_released():
     assert throttle.is_stale_exclusion("knockout at triage, blocker 2 (years bar above 5): 8+ years")
-    for reason in ("eligibility gate: citizenship stated as a condition",
-                   "knockout at triage, blocker 5: the whole stated range tops out at 38,000",
+    # A range at 38,000 and a stated Master's were pinned here as standing. Today's
+    # screen cuts a range only below the cut line (32,000 for the example) and only
+    # ranks a degree, so both are released and screened again.
+    for reason in ("knockout at triage, blocker 5: the whole stated range tops out at 38,000",
                    "blocker 1: Master's degree is explicitly required"):
+        assert throttle.is_stale_exclusion(reason), reason
+    for reason in ("eligibility gate: citizenship stated as a condition",
+                   "knockout at triage, blocker 5: the whole stated range tops out at 25,000"):
         assert not throttle.is_stale_exclusion(reason), reason
 
 

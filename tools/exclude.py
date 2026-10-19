@@ -333,7 +333,7 @@ def _needs_review(entry) -> bool:
     # These already stop blocking or never did, and a fact about the posting (closed,
     # a duplicate, already applied) is not a ruling to review.
     return not (not reason.strip() or reason.lower().startswith(throttle.RE_EVALUATED)
-                or throttle.QUEUE_DECISION.search(reason) or throttle.is_stale_exclusion(reason)
+                or throttle.QUEUE_DECISION.search(reason) or throttle.is_stale_exclusion(reason, entry)
                 or throttle._NOT_A_VERDICT.search(reason))
 
 

@@ -70,7 +70,13 @@ Only draft unprompted if the user has explicitly said to in that request.
   rests on, so it never resurfaces while that holds. A ruling under the person's screening
   rules lapses when the part it rests on changes (`--rests-on "triage #4"`, or a reason citing
   "blocker 4"; with neither, any change to the rules) and the posting is screened again when
-  next found; one in the person's own words holds until `exclude.py lift`. The gate that enforces
+  next found; one in the person's own words holds until `exclude.py lift`. **An exclusion stands
+  only while today's rules would still cut it** (`throttle.is_stale_exclusion`): one resting on a
+  named part of the person's rules stands while that part does, and any other is judged by its
+  reason. Eligibility, a language, a credential, a different discipline, internal-only and a fact
+  about the posting (closed, a duplicate) stand; a pay reason stands only on a range topping out
+  below `SALARY_CUT_BELOW`; a place only where the location gate still fails the place the entry
+  recorded; a degree, a score or a years bar never. The gate that enforces
   that is `throttle.ruled_out()`, and it runs at **prefilter**, before `hydrate.py` spends an
   HTTP call fetching the body: a large share of everything reaching hydrate is a posting already
   ruled out. `prefilter.py` imports the throttle's own function rather than reimplementing it, so

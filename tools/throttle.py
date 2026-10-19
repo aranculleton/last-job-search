@@ -160,18 +160,22 @@ _STALE_EXCLUSION = re.compile(
 # language, the designations and the role families they will not do) is
 # search.py's STILL_CUTS, and the two are one pattern.
 _STILL_CUTS_CORE = (
-    r"\bcitizen\w*|\bpermanent residen\w*|\bclearance\b"
-    r"|\blanguage gate\b|\bprofessional credential\b"
-    r"|\bresearch (?:ml|scientist|role)\b|\bml engineering or research\b"
-    r"|\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b"
-    r"|\brelocation\b|\bon-?site in\b|\blocation gate\b"
-    # The triage card's own knockouts (10-triage-blockers.md): a stated range
-    # whose maximum is below the floor, and a graduate degree stated as required
-    # where the person's card says so. The person's rules, so they stand.
-    r"|\brange tops out\b|\bwhole (?:stated )?range\b|\bmaximum (?:is |sits )?below\b"
-    r"|\bentire range\b|\brange max\b"
-    r"|\bmaster'?s?\s+(?:degree\s+)?(?:is\s+)?(?:explicitly\s+)?(?:a\s+)?(?:must|required)\b"
-    r"|\bstates a master'?s?\b|\brequires? a master'?s?\b|\bPhD required\b")
+    # Eligibility, a requirement to live elsewhere among it (text_screen's own
+    # "eligibility gate: ..."), and a vacancy open to the employer's own staff.
+    r"\bcitizen\w*|\bpermanent residen\w*|\bclearance\b|\beligibility gate\b"
+    r"|\binternal workday site\b|\bemployer's own staff only\b"
+    r"|\binternal (?:applicants?|candidates?|mobility)(?: only)?\b"
+    # A language required, or a title in another language.
+    r"|\blanguage gate\b|\b(?!degree\b|master|ph\.?d|years?\b)\w+ stated as a requirement\b"
+    r"|\bjob title is in\b"
+    r"|\bfluen\w* in\b|\bbilingual\b"
+    # A professional credential.
+    r"|\bprofessional (?:credential|designation|licen[cs]e)\b"
+    r"|\b(?:accounting|engineering|actuarial) (?:licen[cs]e|designation|qualification|exams?)\b"
+    # A different discipline: research ML, or the profile's own (search.py STILL_CUTS).
+    r"|\bresearch (?:ml|scientist|role)\b|\bml engineering or research\b|\bresearch-grade ml\b"
+    # Facts about the posting, not verdicts.
+    r"|\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b")
 # What is NOT here, deliberately: the name of the stage that wrote the reason
 # ("knockout at triage", "blocker 2", "free text screen") and a years bar. A
 # stage name is not a fact about the posting, and a years bar is a flag under
@@ -179,9 +183,54 @@ _STILL_CUTS_CORE = (
 # card cut at 5+ years, kept blocking roles the current card and screen only
 # rank lower. Released, such a posting goes through the current screen again,
 # which cuts it again if it still cuts.
+#
+# Nor, any more, a degree, a pay range or a place by their wording alone. Today's
+# screen ranks a stated degree, cuts a range only below the cut line and fails a
+# place only by the location gate, and this list cut on all three by their words:
+# "range tops out" matched the screen's own FLAG text for a range above the cut
+# line, and every relocation or on-site reason blocked the same title at that
+# employer whatever the gate now says. Each is judged as today's rules judge it,
+# below.
 _STILL_CUTS = re.compile(
     "|".join([_STILL_CUTS_CORE, *getattr(person.module("search"), "STILL_CUTS", ())]),
     re.I)
+# A range below this is a different job level, the one pay cut today's screen makes
+# (text_screen.py, search.py SALARY_CUT_BELOW).
+SALARY_CUT_BELOW = getattr(person.module("search"), "SALARY_CUT_BELOW", 0) or 0
+_RANGE_REASON = re.compile(r"\brange\b|\bsalary\b|\bpay\b|\bcompensation\b|\btops? out\b"
+                           r"|\bfloor\b|\bcut line\b", re.I)
+_MONEY = r"(\d{1,3}(?:[,.\s]\d{3})+|\d+(?:\.\d+)?)\s?(k\b)?"
+_TOP_CUE = re.compile(r"(?:tops? out at|range max(?:imum)?|max(?:imum)?(?: is| of| at)?|up to)"
+                      r"\s*:?\s*(?:[A-Z]{3}\s?)?[^\w\s]?\s?" + _MONEY, re.I)
+_SPAN = re.compile(_MONEY + r"\s*(?:-|\u2013|to)\s*(?:[A-Z]{3}\s?)?[^\w\s]?\s?" + _MONEY, re.I)
+_LOCATION_REASON = re.compile(r"\brelocat\w*|\bon-?site\b|\blocation\b|\bcommut\w*"
+                              r"|\bbased in\b|\boutside the\b", re.I)
+_DEGREE_REASON = re.compile(r"\bmaster'?s?\b|\bph\.?\s?d\b|\bdoctora\w*|\bdegree\b", re.I)
+
+
+def _amount(num: str, k: str | None) -> int:
+    n = float(re.sub(r"[,\s]|\.(?=\d{3}\b)", "", num))
+    return int(n * 1000) if k else int(n)
+
+
+def range_top(reason: str) -> int | None:
+    """The top of the pay range a reason quotes, or None when it cannot be told."""
+    m = _TOP_CUE.search(reason or "")
+    if m:
+        return _amount(m.group(1), m.group(2))
+    m = _SPAN.search(reason or "")
+    if m:
+        return _amount(m.group(3), m.group(4) or m.group(2))
+    return None
+
+
+def _place_still_fails(entry: dict | None) -> bool:
+    """Does the location gate still fail the place this entry recorded?"""
+    loc = (entry or {}).get("location")
+    if not loc:
+        return False
+    from prefilter import location_verdict
+    return location_verdict(str(loc), str((entry or {}).get("title") or ""))[0] == "FAIL"
 
 
 # Facts about a posting, not verdicts of a method: a better screen does not reopen them.
@@ -211,16 +260,27 @@ def screened_before(entry: dict, since: str) -> bool:
     return not day or day < since
 
 
-def is_stale_exclusion(reason: str) -> bool:
+def is_stale_exclusion(reason: str, entry: dict | None = None) -> bool:
     """Was this ruled out for something the current rules rank rather than cut?
 
-    Order matters. A reason routinely carries both a score and a real cut, and
-    the real cut wins: "scored 40. Core function is dashboard maintenance" is a
-    deal-breaker the profile names, with a number attached.
+    An exclusion stands only while today's rules would still cut it. Order
+    matters. A reason routinely carries both a score and a real cut, and the
+    real cut wins: "scored 40. Core function is dashboard maintenance" is a
+    deal-breaker the profile names, with a number attached. Then a pay reason
+    stands only on a range topping out below the cut line, a place only where
+    the location gate still fails the place the entry recorded (`entry`), and a
+    degree never.
     """
     text = str(reason or "")
     if _STILL_CUTS.search(text):
         return False
+    if _RANGE_REASON.search(text):
+        top = range_top(text)
+        return not (top is not None and top < SALARY_CUT_BELOW)
+    if _LOCATION_REASON.search(text):
+        return not _place_still_fails(entry)
+    if _DEGREE_REASON.search(text):
+        return True
     return bool(_STALE_EXCLUSION.search(text))
 
 
@@ -392,10 +452,15 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         # The person's own call (tools/exclude.py --basis person) holds until they
         # lift it: no better screen and no rule change speaks for them.
         own_call = e.get("basis") == "person"
+        # Resting on named parts of the person's own rules (a blocker row on their
+        # triage card, one gate setting), it stands while those parts do: their card
+        # is today's rule for it, and `exclude.holds` below lapses it the day the part
+        # changes. Anything else is judged by its reason against today's rules.
+        named = isinstance(e.get("rests_on"), dict) and bool(e.get("rests_on"))
         # Scored out under rules that no longer say to cut on a score. The entry
         # stays as the record; it just stops blocking, and the posting is ranked
         # again against the current scoring.
-        if status == "excluded" and not own_call and is_stale_exclusion(reason):
+        if status == "excluded" and not own_call and not named and is_stale_exclusion(reason, e):
             continue
         if (status == "excluded" and not own_call and since and screened_before(e, since)
                 and not _NOT_A_VERDICT.search(reason)):
