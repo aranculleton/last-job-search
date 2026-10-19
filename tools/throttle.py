@@ -515,7 +515,7 @@ _SEEN_DAYS = ("first_seen", "excluded_date", "skipped_date", "rank_date", "last_
 def city(location) -> str:
     """The first place a location names, lower-cased: "Toronto, ON, Canada" is "toronto"."""
     low = _CITY_NOISE.sub(" ", str(location or "").lower())
-    for part in re.split(r"[,|/;]|\s[-–]\s", low):
+    for part in re.split(r"[,|/;]|\s[-\u2013]\s", low):
         part = " ".join(part.split()).strip(" -")
         if part:
             return part
