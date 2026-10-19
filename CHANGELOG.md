@@ -20,6 +20,49 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-19
+
+### Added
+
+- **Every hiring system openroles reads is searched.** Employer boards on Workable,
+  Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun and
+  ClearCompany are read the way Greenhouse, Lever, Ashby and Workday already were. An
+  employer on none of them (iCIMS, Eightfold and others) is read from the job pages its
+  careers site publishes for search engines, where its robots.txt allows it, at most 20
+  pages a round and the rest in later rounds. Your target employers are looked for again
+  on every system, in the background, and each board found is checked to return jobs
+  before it is added. Profile upgrade: method-boards.
+- **`python3 tools/env_check.py --allowlist`** prints every address your search needs, for
+  a custom network setting, and the check tests the addresses your own employers' boards
+  use rather than a fixed three.
+
+### Changed
+
+- **One reader, and no copies of it.** Reading employer boards, the robots.txt rules, the
+  Workday address parser, the list of employer boards and their addresses all come from
+  the vendored openroles 0.2.0, where the app had kept copies of its own that had fallen
+  behind. A posting from any employer board openroles reads counts as live (an employer's
+  own board lists a role while it is open) and as applied to online. No profile upgrade.
+
+### Fixed
+
+- **Every place an employer's posting lists is judged on its own, and the best kept.**
+  Greenhouse and Lever postings were judged on all their places joined into one line, so a
+  role in your city that also listed a US office read as the US one, an on-site role in a
+  city you ruled out slipped through on the strength of a second office, and a remote role
+  whose offices were all abroad read as remote from anywhere. Read against one person's 91
+  employer boards: 176 postings now read better (most a home-city role beside a foreign
+  office), 70 on-site roles in a ruled-out city are cut, and 49 remote roles tied to another
+  country are flagged or cut. Lever postings carry their posted pay, for the salary reader.
+  No profile upgrade.
+- **A role reposted on an employer's board reads as old as it is.** Ashby gives only the
+  date a posting was last published, so a role open for a month and reposted yesterday
+  earned the freshness bonus. Every copy of a posting a round finds (the same title,
+  employer and city, within 30 days) is now as old as the oldest. No profile upgrade.
+- **An internal Workday site is caught at Workday's other address too**
+  (`myworkdaysite.com`), where an internal-only requisition could slip through. No profile
+  upgrade.
+
 ## [3.4.1] - 2026-10-19
 
 ### Fixed

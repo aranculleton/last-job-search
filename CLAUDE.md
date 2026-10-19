@@ -120,8 +120,10 @@ deal-breakers, employers they love or will not touch, how they like to come acro
 asks anyone to name a job board, an ATS, a spelling convention or a config value. Claude does
 that research and writes the profile: which job boards serve their city and field (building
 one with `/add-portal` when it is missing, after checking robots.txt the way
-`tools/robots_check.py` does), which target employers post on Greenhouse, Lever, Ashby or
-Workday (probed the way `tools/ats_boards.py --probe` does), the eligibility and visa wording
+`tools/robots_check.py` does), which target employers post on a hiring system openroles
+reads (Greenhouse, Lever, Ashby, Workday, Personio, Teamtailor and the rest:
+`tools/ats_boards.py --find` tries them all) or on a careers site that publishes its jobs for
+search engines (probed the way `tools/ats_boards.py --probe` does), the eligibility and visa wording
 postings in their country use, salary norms for their role and city, local document
 conventions (resume or CV, page length, spelling), and the market's place names. Everything
 researched is cited and stored in `profile/`.

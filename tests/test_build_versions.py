@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import csv
 import fnmatch
+import datetime as dt
 import json
 import os
 import re
@@ -171,10 +172,12 @@ def test_a_profile_from_the_first_release_redoes_what_got_better(profile):
 
 def test_a_profile_made_after_a_version_is_not_asked_to_redo_it(profile, monkeypatch):
     (profile / B.RECORD).unlink()
-    monkeypatch.setattr(B, "_born", lambda: "2026-10-16")
+    newest = max(v[1] for v in B.METHODS["boards"]["versions"] if v[2])   # the latest re-run
+    after = (dt.date.fromisoformat(newest) + dt.timedelta(days=1)).isoformat()
+    monkeypatch.setattr(B, "_born", lambda: after)
     assert B.behind("boards") == []
     assert U.by_id("method-boards").pending() == ""
-    monkeypatch.setattr(B, "_born", lambda: "2026-10-15")      # same day: redo, to be safe
+    monkeypatch.setattr(B, "_born", lambda: newest)             # same day: redo, to be safe
     assert B.behind("boards")
 
 

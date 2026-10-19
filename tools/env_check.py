@@ -14,15 +14,17 @@ What it reads:
             check), pypdf (the same, and it can be installed but broken: a
             container's system `cryptography` makes it panic in pyo3 until
             `pip3 install --upgrade cffi`), bun (the portal CLIs)
-  hosts     the job boards the app calls, and every board the person has a
-            portal for (the `url:` in its SKILL.md). A proxy that answers
-            CONNECT with 403 or 407 is the environment's network policy: the
-            host goes under Allowed domains. Any other failure is the host or
-            DNS. A host that answers at all, even 401 or 404, is reachable.
+  hosts     the portals the app calls, every portal the person has (the `url:`
+            in its SKILL.md), and every host their employers' boards in
+            profile/boards.py are read from, as openroles names them
+            (`openroles.hosts`, so this file keeps no list of its own). Before
+            any board is on file, the hosts of the three systems most employers
+            use stand in. A proxy that answers CONNECT with 403 or 407 is the
+            environment's network policy: the host goes under Allowed domains.
+            Any other failure is the host or DNS. A host that answers at all,
+            even 401 or 404, is reachable.
 
-Workday has no host to probe until a person has a board on it (every Workday
-site is `<tenant>.<wdN>.myworkdayjobs.com`), so it is probed through the first
-Workday board in profile/boards.py, and otherwise reported as not yet checkable.
+    python3 tools/env_check.py --allowlist   # the domains a custom network policy needs
 """
 from __future__ import annotations
 
@@ -37,10 +39,9 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 HOSTS = (
     ("LinkedIn", "https://www.linkedin.com"),
     ("freehire", "https://freehire.me"),
-    ("Greenhouse", "https://boards-api.greenhouse.io"),
-    ("Lever", "https://api.lever.co"),
-    ("Ashby", "https://api.ashbyhq.com"),
 )
+# Before the person has an employer board on file: the systems most boards are on.
+COMMON = ("greenhouse", "lever", "ashby")
 POLICY = {"403", "407"}
 
 
@@ -85,18 +86,40 @@ def probe(url: str) -> tuple[str, str]:
     return verdict, detail
 
 
-def workday_url() -> str | None:
-    """The first Workday board in the profile, as a URL, or None."""
+def board_hosts() -> list[tuple[str, str]]:
+    """(system, URL) for every host the person's employer boards are read from, each once,
+    named by openroles; the common systems' hosts while no board is on file. Nothing is
+    fetched here: a board's hosts follow from its token."""
+    from openroles import Board, hosts as hosts_of
+    from openroles.models import NAMES
+    from openroles.providers import READERS
     try:
         import ats_boards
-        for kind, token, *_ in getattr(ats_boards, "BOARDS", {}).values():
-            if kind == "workday":
-                host = ats_boards.workday_board(token)
-                if host:
-                    return f"https://{host[0]}"
+        boards = [(kind, token) for kind, token, *_ in getattr(ats_boards, "BOARDS", {}).values()
+                  if kind in READERS]
     except Exception:
-        return None
-    return None
+        boards = []
+    # A system's own API host does not depend on the board, so any name stands in.
+    boards = boards or [(kind, "example") for kind in COMMON]
+    out: list[tuple[str, str]] = []
+    for kind, token in boards:
+        try:
+            found = hosts_of(Board(kind, token))
+        except Exception:
+            continue
+        for host in found:
+            if all(host != u.split("//", 1)[1] for _, u in out):
+                out.append((NAMES.get(kind, kind), f"https://{host}"))
+    return out
+
+
+def allowlist() -> list[str]:
+    """Every domain a custom network policy has to allow for this person's search."""
+    from urllib.parse import urlsplit
+    out = [urlsplit(u).hostname for _, u in hosts() + board_hosts()]
+    if "www.linkedin.com" in out:
+        out.insert(out.index("www.linkedin.com"), "linkedin.com")
+    return list(dict.fromkeys(h for h in out if h))
 
 
 def module_state(name: str) -> bool:
@@ -211,7 +234,11 @@ def _gh_signed_in(have) -> bool:
         return False
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["--allowlist"]:
+        print("\n".join(allowlist()))
+        return 0
     bad = 0
     print("where: " + ("a cloud session" if CLOUD else "this computer"))
 
@@ -245,13 +272,9 @@ def main() -> int:
     for name, url in hosts():
         verdict, detail = probe(url)
         line(f"{name} ({url.split('//')[1]})", verdict == "reachable", detail)
-    wd = workday_url()
-    if wd:
-        verdict, detail = probe(wd)
-        line(f"Workday ({wd.split('//')[1]})", verdict == "reachable", detail)
-    else:
-        print(f"  {'Workday':28} --  no Workday board on file yet; checked once one is "
-              f"added (python3 tools/ats_boards.py --probe)")
+    for name, url in board_hosts():
+        verdict, detail = probe(url)
+        line(f"{name} ({url.split('//')[1]})", verdict == "reachable", detail)
     print()
     print("all good" if not bad else f"{bad} problem(s) above")
     return 1 if bad else 0

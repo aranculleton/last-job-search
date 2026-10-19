@@ -73,7 +73,7 @@ def test_a_crash_inside_the_driver_writes_nothing(tmp_path, monkeypatch):
 def test_env_check_names_python_pytest_and_pyyaml(monkeypatch, capsys):
     import env_check
     monkeypatch.setattr(env_check, "hosts", lambda: [])          # no network in a test
-    monkeypatch.setattr(env_check, "workday_url", lambda: None)
+    monkeypatch.setattr(env_check, "board_hosts", lambda: [])
     env_check.main()
     out = capsys.readouterr().out
     assert "Python 3.9+" in out and "pytest" in out and "pyyaml" in out

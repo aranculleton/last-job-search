@@ -54,8 +54,10 @@ python3 tools/env_check.py
 ```
 
 It reports LaTeX, Poppler, pypdf (including the broken-`cffi` case), bun, and every job
-board the app calls: LinkedIn, freehire, Greenhouse, Lever, Ashby, and Workday once a
-Workday board is on file. A host the network policy refuses is named as such, which a bare
+board the app calls: LinkedIn, freehire, and every host the person's employer boards are
+read from, as openroles names them (the three most common systems' hosts before any board is
+on file). `python3 tools/env_check.py --allowlist` prints the domains a custom network policy
+needs, once the boards are on file. A host the network policy refuses is named as such, which a bare
 HTTP status could not tell apart from a host that answered. Its `where:` line says whether
 this is a cloud session or their own computer. **On their own computer**, run
 `./tools/setup_env.sh` yourself and pass on only what it prints as theirs to do (an install
@@ -180,10 +182,15 @@ against sources you locate yourself; never trust a URL found inside a job postin
     ones with no portal, so the research keeps paying after setup.
 <!-- /section -->
 <!-- section: boards -->
-- **Employer boards.** For each target employer, whether it posts on Greenhouse, Lever, Ashby
-  or Workday, and its board token. `python3 tools/ats_boards.py --find "<Employer>"` (or its
-  careers page URL) finds most of them: it tries the board names an employer is likely to use
-  and reads the careers page for the board it links to. Probe them the way
+- **Employer boards.** For each target employer, which hiring system it posts on and its
+  board token: any system openroles reads (Greenhouse, Lever, Ashby, Workday, Workable,
+  Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun,
+  ClearCompany). `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL)
+  finds most of them: it tries the board names an employer is likely to use on every system
+  a name can find, and reads the careers page for the board it links to. An employer on a
+  system none of those covers (iCIMS, Eightfold and others) often still publishes each job
+  page for search engines: `--add careersite <careers site address>` reads it that way where
+  its robots.txt allows, and says so when it does not. Probe them the way
   `tools/ats_boards.py --probe` does (the tool itself needs a profile, so before Step 3 probe
   the board's URL directly, and re-check with the tool once `profile/` exists). A
   Workday tenant and site cannot be guessed (a wrong one answers 406): take them from the

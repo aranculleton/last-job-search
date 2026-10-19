@@ -577,6 +577,42 @@ def _find(job: dict, urls: dict, pairs: dict) -> tuple[str | None, bool]:
     return hit, False
 
 
+def oldest_copies(rows: list, today: str = "") -> dict:
+    """(title, employer, city) -> the oldest date any copy of that posting in `rows` carries.
+
+    One round finds the same posting more than once: on an aggregator and on the
+    employer's own board, or on two boards. The copies' dates differ, and the newest is
+    often wrong: Ashby publishes no first-posted date, only when a posting was last
+    published, so a role reposted yesterday after a month open reads as new there while
+    its aggregator copy says a month. Every copy is as old as the oldest. Dates within
+    RELIST_WINDOW days only, as for a relist: past it, the same title is more likely a
+    new opening. The date of a copy is its own (`date` or `posted_date`), the day this
+    search first saw it, or the day an alert sent it.
+    """
+    now = as_date(today, iso_only=True) or dt.date.today()
+    since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat()
+    out: dict = {}
+    for job in rows:
+        if not isinstance(job, dict):
+            continue
+        k = _posting_key(job.get("title"), job.get("company"), job.get("location"))
+        if not (k[0] and k[1]):
+            continue
+        for field in ("date", "posted_date", "first_seen", "alert_date"):
+            d = as_date(job.get(field), iso_only=True)
+            if d is None:
+                continue
+            d = d.isoformat()
+            if since <= d <= now.isoformat() and (k not in out or d < out[k]):
+                out[k] = d
+    return out
+
+
+def copy_date(index: dict, job: dict) -> str:
+    """The oldest date a copy of this posting carries in the round, from `oldest_copies`."""
+    return index.get(_posting_key(job.get("title"), job.get("company"), job.get("location")), "")
+
+
 def first_seen(entries: dict, today: str = ""):
     """A function from a posting to the day this search first saw it, or "".
 

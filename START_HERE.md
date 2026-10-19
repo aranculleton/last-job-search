@@ -65,11 +65,13 @@ https://code.claude.com/docs/en/cloud-environments). Checked 2026-10-18.
   apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
   ```
 
-- **The network setting:** the search has to reach job boards. Choose full internet access, or
-  a custom list that keeps the default package managers and adds these allowed domains:
-  `linkedin.com`, `www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`,
-  `api.lever.co`, `api.ashbyhq.com`, `*.myworkdayjobs.com`, and `api.openalex.org` if your
-  field publishes research papers. The details are in
+- **The network setting:** the search has to reach job boards, and every employer's board
+  sits on its own hiring system's address. Choose full internet access, or a custom list
+  that keeps the default package managers and adds, to start with: `linkedin.com`,
+  `www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`, `api.lever.co`,
+  `api.ashbyhq.com`, `*.myworkdayjobs.com`, and `api.openalex.org` if your field publishes
+  research papers. Once Claude has found your employers' boards it tells you any other
+  address they need (`python3 tools/env_check.py --allowlist` lists them all). The details are in
   [the cloud environment docs](https://code.claude.com/docs/en/cloud-environments#network-access).
 
 Save, and start a new session so the settings apply. If you skip this, Claude can still

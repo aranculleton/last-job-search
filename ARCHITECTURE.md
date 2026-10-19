@@ -20,7 +20,7 @@ Seven stages. `tools/run_round.py` runs all of them in order and stops at the sh
 
 | Stage | File | What it decides |
 |---|---|---|
-| scrape | `scrape_wide.py` | every enabled job board, paginated, across the configured locations and title variants, plus employer career boards read straight from the ATS: Greenhouse, Lever, Ashby and Workday sites (`tools/ats_boards.py`, for the employers `profile/boards.py` names) |
+| scrape | `scrape_wide.py` | every enabled job board, paginated, across the configured locations and title variants, plus employer career boards read straight from the ATS, every system the vendored openroles reads, and careers sites that publish their jobs for search engines (`tools/ats_boards.py`, for the employers `profile/boards.py` names) |
 | filter | `prefilter.py` | age, location, title band, and anything already ruled out |
 | fetch | `hydrate.py` | the full posting text, one HTTP call each |
 | screen | `text_screen.py` | knockouts that a quoted sentence settles |

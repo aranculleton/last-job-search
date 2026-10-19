@@ -93,8 +93,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-18", False, "LinkedIn's job search stays on and uses no LinkedIn account; only the person switches it off"),
             (10, "2026-10-19", False, "a docstring's example Workday location is invented"),
             (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, a Workday search reads past its second page, a Greenhouse or Lever posting is kept when any place it lists is wanted, and Lever's EU instance is read"),
+            (12, "2026-10-19", True, "every hiring system openroles reads is searched (Workable, Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun and ClearCompany besides the first four) and careers sites that publish their jobs for search engines: each target employer's board is looked for again on all of them"),
         ),
-        "fingerprint": "edbe9bb2c9d61b80",
+        "fingerprint": "2386ba2d6ef0f2da",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -245,8 +246,9 @@ METHODS: dict[str, dict] = {
             (13, "2026-10-18", False, "fit_to_page runs on Python 3.9"),
             (14, "2026-10-18", False, "RUNBOOK names the people ladder and the Claude surfaces registry"),
             (15, "2026-10-19", True, "a document already sent is never rendered over; a letter's figures are checked; a trimmed resume keeps the line that describes each job; a letter keeps its date, drops legal forms from the employer's name, is addressed to the person the employer names, and is flagged where it repeats the resume; a claimed skill the profile does not hold is caught, a held tool of the same family stands in for one a posting names that the person lacks; and every skill a posting names that the profile does not hold is asked about before drafting, and only a yes puts it on the resume"),
+            (16, "2026-10-19", False, "an application from any employer board openroles reads is recorded as applied online"),
         ),
-        "fingerprint": "1683eb655d01422d",
+        "fingerprint": "ea7dd7e10b1808a8",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -398,8 +400,9 @@ METHODS: dict[str, dict] = {
             (7, "2026-10-17", False, "a ruling lapses only when the part of the rules it rests on changes; restamp keeps the ones that still hold"),
             (8, "2026-10-18", False, "the text screen runs on Python 3.9; a pension plan's full and short names key as one employer"),
             (9, "2026-10-19", True, "a posting is cut only while today's rules would cut it: relists aged by first sight, a remote role for another country flagged or cut, a region cutting only when it leaves home out, a home city beside a country code read as home, and the pronoun us never a country"),
+            (10, "2026-10-19", False, "every employer board openroles reads is a live board, copies of one posting in a round are as old as the oldest, and an internal Workday site is caught at either of Workday's addresses"),
         ),
-        "fingerprint": "60635a7488821390",
+        "fingerprint": "703eb279fec9f5a5",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

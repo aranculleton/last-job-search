@@ -123,15 +123,13 @@ made from a snapshot of it; after that, stable never goes backwards.
 inside the hours their own scheduled tasks run. Until they say, changes wait in
 `[Unreleased]` on master, where only their own copy takes them.
 
-**The number is the session's call, never a question for the maintainer** (the
-maintainer, 2026-10-19). Read what `[Unreleased]` holds: **patch** (3.3.0 to 3.3.1) when
-it is fixes only; **minor** (3.3.0 to 3.4.0) when it adds or changes behaviour a person
-would notice; **major** (3.3.0 to 4.0.0) only when something a person relies on goes away
-or works differently enough that they must learn it again. **Close together, a patch**:
-when the last minor release went out less than a week ago, the next is a patch however
-much it changes, unless it is big enough that a person would want to hear about it on its
-own (the maintainer, 2026-10-19: three minor numbers in one day read as churn, not
-progress). Development keeps its pace; only the numbers slow down. Say the number and the
+**The number is the session's call, never a question for the maintainer**, and it is
+semantic versioning as anyone reading a changelog expects it (the maintainer, 2026-10-19).
+Read what `[Unreleased]` holds: **patch** (3.3.0 to 3.3.1) when it is fixes only; **minor**
+(3.3.0 to 3.4.0) when it adds or changes anything a person would notice; **major** (3.3.0
+to 4.0.0) only when a person has to change their own setup, or something they rely on goes
+away or works differently enough that they must learn it again. The number says what kind
+of change a release is, never how soon it came after the last one. Say the number and the
 reason in one line in the reply.
 
 **How**:

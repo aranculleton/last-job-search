@@ -158,8 +158,10 @@ Only draft unprompted if the user has explicitly said to in that request.
   `python3 tools/portals.py` prints what the next round will search, and the boards
   researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
-  the employers named in `profile/boards.py` straight from their ATS (Greenhouse, Lever,
-  Ashby, Workday), which is how large employers that a portal under-indexes reach a round,
+  the employers named in `profile/boards.py` straight from their ATS (every system the
+  vendored openroles reads: Greenhouse, Lever, Ashby, Workday, Personio, Teamtailor and the
+  rest) or their careers site (`careersite`), which is how large employers that a portal
+  under-indexes reach a round,
   and `scrape_wide.py` calls it, so `run_round.py` needs nothing extra. `--probe` re-checks
   every token. A board whose robots.txt disallows it is refused, and so is SmartRecruiters
   by its API's; the reasons are recorded beside each.
@@ -248,10 +250,11 @@ location and query variant in `profile/search.py`, each board kept to the `crawl
 SKILL.md declares) and writes a prefiltered candidate file.
 Prefer it over hand-rolled per-query calls, and extend `SCRAPE_QUERIES` and `SCRAPE_LOCATIONS` in
 `profile/search.py` rather than improvising.
-It also reads the employer boards in `tools/ats_boards.py` (Greenhouse, Lever, Ashby and
-Workday, which is where many large employers post), so a named target is asked for
-everything it has open instead of being found by keyword. A new employer goes in that map
-only after `python3 tools/ats_boards.py --add <ats> <token>` has seen it return jobs.
+It also reads the employer boards in `profile/boards.py` through `tools/ats_boards.py`
+(every system openroles reads, which is where most employers post, and careers sites that
+publish their jobs for search engines), so a named target is asked for everything it has
+open instead of being found by keyword. A new employer goes in that map only after
+`python3 tools/ats_boards.py --add <ats> <token>` has seen it return jobs.
 
 Run all portal CLI calls in parallel where possible using the Agent tool. Collect all `results` arrays into a single pool for Step 2, keeping each result tagged with its source portal skill (for Step 2 `detail` lookups).
 
