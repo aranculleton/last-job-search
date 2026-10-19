@@ -46,9 +46,10 @@ throttle's own `ruled_out()` either way, imported rather than copied, so the sho
 identical; a large share of everything reaching hydrate used to be in that state. A ruling
 made under the person's screening rules lapses by itself when those rules change, and one
 in their own words holds until `tools/exclude.py lift` takes it off; a scoring setting
-lifts nothing. `--no-seen-read` skips the check at prefilter only: everything ruled out is
-fetched and scored again in the stage files, and the throttle still keeps it off the
-shortlist.
+lifts nothing. `--no-seen-read` skips the check at the prefilter and the throttle alike:
+everything ruled out is fetched, screened and scored again and can reach the shortlist,
+which is what it is for after the rules change. Postings are still aged from when they
+were first seen.
 
 **Read the exit code.** 0 means the yield target was met, 2 means it was missed, 1 means
 a stage actually broke. A thin market and a broken pipeline are different answers.

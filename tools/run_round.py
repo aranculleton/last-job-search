@@ -365,10 +365,10 @@ def main():
     ap.add_argument("--no-seen-write", dest="no_seen_write", action="store_true",
                     help="throttle: do not record skips in seen_jobs.json")
     ap.add_argument("--no-seen-read", dest="no_seen_read", action="store_true",
-                    help="prefilter: do not drop postings already ruled out. The "
-                         "throttle still drops them at the end, so this costs a "
-                         "round's worth of HTTP and buys a re-evaluation of "
-                         "everything previously excluded")
+                    help="drop nothing for a past ruling in seen_jobs.json, at the "
+                         "prefilter or the throttle: everything previously excluded is "
+                         "fetched, screened and scored again, for after the rules change. "
+                         "Postings are still aged from when they were first seen")
     ap.add_argument("--expand", action="store_true",
                     help=f"re-run wider when the yield target is missed, up to "
                          f"{MAX_ROUNDS} rounds")
@@ -425,8 +425,10 @@ def main():
     prefilter = [sys.executable, f"{T}/prefilter.py", scraped, "--out", f("01_prefiltered.json"),
                  "--dropped", f("01_dropped.json"), "--jobage", str(a.jobage),
                  "--today", a.today]
-    if not a.no_seen_read:
-        prefilter += ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
+    # Read even with --no-seen-read: it is also when each posting was first seen.
+    prefilter += ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
+    if a.no_seen_read:
+        prefilter += ["--keep-ruled-out"]
     run(prefilter, log, deadline)
     # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest.
     run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
@@ -451,6 +453,8 @@ def main():
         throttle += ["--seen", a.seen]
     if a.no_seen_write:
         throttle += ["--no-write"]
+    if a.no_seen_read:
+        throttle += ["--keep-ruled-out"]
     run(throttle, log, deadline)
 
     print("\nround summary")

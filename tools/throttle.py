@@ -1042,6 +1042,9 @@ def main() -> int:
     ap.add_argument("--today", default=dt.date.today().isoformat())
     ap.add_argument("--no-write", action="store_true",
                     help="do not record skips in seen_jobs.json")
+    ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
+                    help="skip nothing for a past ruling in seen_jobs.json, so everything "
+                         "previously excluded is scored again (run_round.py --no-seen-read)")
     a = ap.parse_args()
 
     data = json.load(open(a.infile))
@@ -1053,7 +1056,10 @@ def main() -> int:
     company_key.learn(r.get("company") for r in rows)
     open_apps = open_applications(a.tracker)
     seen = load_seen(a.seen)
-    urls, pairs = ruled_out(seen["seen"])
+    # Re-judging everything was the point of --no-seen-read, and the prefilter
+    # honoured it while this applied every past ruling at the end anyway, so a
+    # round with the flag re-scored nothing.
+    urls, pairs = ({}, {}) if a.keep_ruled_out else ruled_out(seen["seen"])
     blocked = load_do_not_target(a.do_not_target, a.today)
     warm = warm_routes(a.contacts)
     kept, skipped = throttle(rows, open_apps, urls, pairs, a.today, blocked, warm,

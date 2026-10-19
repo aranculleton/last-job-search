@@ -428,19 +428,18 @@ def seen_on(seen_path: str, today: _dt.date | None = None):
     return first_seen(entries, (today or _dt.date.today()).isoformat())
 
 
-def already_ruled_out(seen_path: str):
+def already_ruled_out(seen_path: str, keep_ruled_out: bool = False):
     """A predicate over a posting: has this search already ruled it out?
 
     Returns `lambda job -> reason or ""`. A missing or unreadable seen file
-    yields a predicate that never fires, because a cross-run gate that fails
-    closed would silently empty a round.
+    rules nothing out, because a cross-run gate that fails closed would silently
+    empty a round. `keep_ruled_out` reads none of its rulings either, so every
+    posting is judged again (run_round.py --no-seen-read); the live holds below
+    still apply, because they are today's state and not a past ruling.
 
     The decision is `throttle.ruled_out`, imported rather than restated, so
     this can only ever drop what the throttle would drop anyway.
     """
-    entries = _seen_entries(seen_path)
-    if entries is None:
-        return lambda job: ""
     try:
         from throttle import ruled_out
         from throttle import load_do_not_target, referral_holds
@@ -448,7 +447,8 @@ def already_ruled_out(seen_path: str):
         from lookup_score import norm
     except ImportError:
         return lambda job: ""
-    urls, pairs = ruled_out(entries)
+    entries = None if keep_ruled_out else _seen_entries(seen_path)
+    urls, pairs = ruled_out(entries) if entries else ({}, {})
     # The employer-level holds the throttle applies live: a referral in flight,
     # and an employer recorded as having no relevant presence until its review
     # date. ruled_out() no longer reads their old copies in seen_jobs.json,
@@ -499,11 +499,14 @@ def main() -> int:
     ap.add_argument("--seen", default=None,
                     help="seen_jobs.json; also drop postings this search has "
                          "already ruled out, before hydrate pays for their bodies")
+    ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
+                    help="with --seen, drop nothing for a past ruling: everything is "
+                         "judged again (a posting is still aged from its first sighting)")
     a = ap.parse_args()
     today = _dt.date.fromisoformat(a.today) if a.today else _dt.date.today()
 
     rows, was_dict = load_jobs(a.infile)
-    ruled = already_ruled_out(a.seen) if a.seen else (lambda job: "")
+    ruled = already_ruled_out(a.seen, a.keep_ruled_out) if a.seen else (lambda job: "")
     first = seen_on(a.seen, today)
     kept, dropped = [], []
     n_seen = 0
