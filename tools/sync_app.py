@@ -635,6 +635,21 @@ def own_test_failures(root: str | None = None) -> list[tuple[str, str]] | None:
         return out
 
 
+# What the person is asked before any of their own tests is deleted, in words for someone
+# who has never seen a test, with the answer recommended. "Retire 57 tests?" was answerable
+# by a developer and nobody else.
+ASK_TIDY = ("Some self-checks in your setup are out of date after this update. Clear them "
+            "out? Nothing about your job search changes.")
+ASK_ANSWERS = ("Yes (recommended)", "Not now")
+TIDY_MEANS = ("They check that your setup works. A few were written for the old version, so "
+              "they now fail even though nothing is wrong. Clearing them out deletes those and "
+              "updates the rest. Your profile, applications, contacts and documents are not "
+              "touched.")
+TIDY_YES = "Done: your setup is on the new version."
+TIDY_NO = ("No problem. Your setup stays on the version before until you say yes, and "
+           "nothing breaks meanwhile.")
+
+
 def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -> str:
     """What the sync says about the person's own tests the update broke, or ""."""
     if not failures:
@@ -661,10 +676,17 @@ def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -
                      + "; ".join(changed[:6]) + (f"; and {len(changed) - 6} more" if len(changed) > 6 else "")
                      + ". Bring each in line with the CHANGELOG, or report it to the app if the "
                      "change looks wrong.")
-    lines.append("Claude: they are the person's files. Retiring a failing test is their call: "
-                 "ask once, in one line, with the counts above, and say in the PR which you "
-                 "retired and which you rewrote. `python3 tools/sync_app.py --own-tests` says "
-                 "this again at any time.")
+    if gone:
+        lines.append("Claude: they are the person's files, so ask before deleting any. Ask "
+                     f"once, in these words: \"{ASK_TIDY}\" Offer two answers, "
+                     f"\"{ASK_ANSWERS[0]}\" first and \"{ASK_ANSWERS[1]}\" (as buttons where "
+                     f"you can). If they ask what it means: \"{TIDY_MEANS}\" On yes, clear them "
+                     f"out and say \"{TIDY_YES}\" On no, say \"{TIDY_NO}\" Either way, name in "
+                     "the PR which you deleted and which you rewrote.")
+    else:
+        lines.append("Claude: none needs deleting, so there is nothing to ask the person: bring "
+                     "each in line, and name them in the PR.")
+    lines.append("`python3 tools/sync_app.py --own-tests` says this again at any time.")
     return "\n".join(lines)
 
 

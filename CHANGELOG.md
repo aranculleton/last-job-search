@@ -20,6 +20,16 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **When your own self-checks need deleting after an update, you are asked in plain words,
+  with the answer recommended.** 3.5.1 asked whether to "retire" failing tests, which only a
+  developer could answer. Now: "Some self-checks in your setup are out of date after this
+  update. Clear them out? Nothing about your job search changes." with "Yes (recommended)"
+  or "Not now", a plain answer if asked what it means, and the reply to each. Nothing is
+  asked when none needs deleting. Only a repo with its own `profile/tests` ever sees it. No
+  profile upgrade.
+
 ## [3.5.1] - 2026-10-19
 
 ### Fixed
