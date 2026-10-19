@@ -9,6 +9,7 @@ follow the one rule for a path a person follows: the goal first, then the destin
 and never press, click, tap or find. No em dashes, UK spelling, and never a request for
 everyone's screenshots.
 """
+import datetime
 import json
 import re
 import sys
@@ -149,16 +150,32 @@ def test_the_next_step_after_setups_question_moves_them_only_when_true():
     assert "local" not in place.TRADE_OFF.lower() and "cloud" not in place.TRADE_OFF.lower()
 
 
-def test_said_once_per_chat(tmp_path, monkeypatch):
+def test_said_once_then_weekly_while_it_still_applies(tmp_path, monkeypatch):
+    # Said only once, a person who missed it, or who later wanted the right chat, never
+    # heard it again. It comes back after RETELL_DAYS in the same chat, never sooner.
     monkeypatch.setattr(place, "_told_path", lambda: str(tmp_path / "told.json"))
     monkeypatch.setattr(place, "setting", lambda: "browser")
     monkeypatch.setattr(place, "repo", lambda: REPO)
     env = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "remote_desktop",
            "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE1"}
-    first = place.report([], once=True, env=env)
-    assert first.startswith("Place check (Claude: tell the person this once in this chat")
+    day = datetime.date(2026, 10, 19)
+    first = place.report([], once=True, env=env, today=day)
+    assert first.startswith("Place check (Claude: tell the person this at the end of your reply")
+    assert "comes back weekly while it still applies, never more" in first
     assert "never hold back work that does not need it" in first
-    assert place.report([], once=True, env=env) == ""
+    assert place.report([], once=True, env=env, today=day) == ""
+    later = day + datetime.timedelta(days=place.RETELL_DAYS - 1)
+    assert place.report([], once=True, env=env, today=later) == ""
+    week = day + datetime.timedelta(days=place.RETELL_DAYS)
+    assert place.report([], once=True, env=env, today=week).startswith("Place check")
+    assert place.report([], once=True, env=env, today=week) == ""
+    # A record from before dates were kept is said again once, then dated.
+    import json
+    (tmp_path / "told.json").write_text(json.dumps(
+        {"said": {"cse_EXAMPLE1": place._digest(place.check(
+            "desktop-cloud", "browser", [], False, (), *REPO))}}))
+    assert place.report([], once=True, env=env, today=week).startswith("Place check")
+    assert place.report([], once=True, env=env, today=week) == ""
     # A chat that was told an older wording (one open before an update) hears the new one,
     # once, and then nothing again.
     monkeypatch.setattr(place, "FINDING_WORKS", "Finding people works in this chat, still.")

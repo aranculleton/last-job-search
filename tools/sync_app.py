@@ -9,7 +9,7 @@ files but not history. This fetches the app and merges its new commits:
     python3 tools/sync_app.py --adopt    # once, for the repo the app was first built from
     python3 tools/sync_app.py --if-stale # the day's first check: master, then the app; else nothing
     ... --on "<model>"                   # with either: the day's model check after the sync
-    ... --tools "<browser,chrome,enable or none>"   # the place check, said once per chat
+    ... --tools "<browser,chrome,enable or none>"   # the place check, once and then weekly
 
 The rules, enforced here rather than remembered:
 
@@ -518,7 +518,7 @@ def main(argv: list[str]) -> int:
                     help="the model this session runs on: the day's work is checked against it")
     ap.add_argument("--tools", default=None, metavar="LIST",
                     help="the browser tools this chat has (browser, chrome, chrome-off, enable, "
-                         "none): the place check says what to do once per chat")
+                         "none): the place check says what to do, once and then weekly")
     a = ap.parse_args(argv)
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
@@ -558,7 +558,7 @@ def main(argv: list[str]) -> int:
 def place_check(tools: str | None) -> None:
     """Is this chat the right place for what the person set up (tools/place.py)?
 
-    Said once per chat, whatever chat it is: run as its own process from the file
+    Said once, then weekly while it applies, whatever chat it is: run as its own process from the file
     the merge just brought in, like the model check, so it reaches a chat whose
     instructions were loaded before it existed. Never changes a setting.
     """

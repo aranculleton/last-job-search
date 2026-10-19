@@ -114,14 +114,22 @@ overrides either way). So master can move several times a day while everyone els
 what has already run in the maintainer's copy. A first sync takes master, because a repo is
 made from a snapshot of it; after that, stable never goes backwards.
 
-**When**: once the maintainer's copy has run the changes in `[Unreleased]` for a day or two
-without trouble, and never inside the hours their own scheduled tasks run.
+**When**: the maintainer says so, usually in the chat while working ("release it"). Never
+inside the hours their own scheduled tasks run. Until they say, changes wait in
+`[Unreleased]` on master, where only their own copy takes them.
+
+**The number is the session's call, never a question for the maintainer** (the
+maintainer, 2026-10-19). Read what `[Unreleased]` holds: **patch** (3.3.0 to 3.3.1) when
+it is fixes only; **minor** (3.3.0 to 3.4.0) when it adds or changes behaviour a person
+would notice; **major** (3.3.0 to 4.0.0) only when something a person relies on goes away
+or works differently enough that they must learn it again. Say the number and the reason
+in one line in the reply.
 
 **How**:
 
 1. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
-   `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Minor for new
-   behaviour, patch for fixes only. Merge it with CI green.
+   `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Merge it with CI
+   green.
 2. Nothing: merging it is the release. `.github/workflows/release.yml` runs
    `tools/release.py publish`, which tags `vX.Y.Z` on that commit and publishes the
    CHANGELOG section as its notes, once. The tag is what every repo's next sync reads.

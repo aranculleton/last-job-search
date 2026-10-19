@@ -4,8 +4,10 @@
 # (tools/sync_app.py), so this is the step that ships a release: it used to be a step on
 # the GitHub website that nothing reminded anyone of, and 3.3.0 sat merged and unpublished.
 #
-# It never moves, replaces or deletes a tag: a version already tagged, by hand or by an
-# earlier run, is left alone. Runs only in the public app, where Actions minutes are free;
+# The notes are short: one line per change and one on what to do (tools/release.py
+# short); the newest release's notes are rewritten when that changes. It never moves,
+# replaces or deletes a tag: a version already tagged, by hand or by an earlier run, is
+# not tagged again. Runs only in the public app, where Actions minutes are free;
 # every private copy carries this file and never runs it. The token is the built-in
 # GITHUB_TOKEN, scoped to this repo's contents (a tag and a release).
 
@@ -14,7 +16,7 @@ name: Release
 on:
   push:
     branches: [master]
-    paths: [CHANGELOG.md]
+    paths: [CHANGELOG.md, tools/release.py]
 
 permissions:
   contents: write

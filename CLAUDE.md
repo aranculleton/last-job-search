@@ -47,7 +47,7 @@ Every session in a person's repo starts with the same five steps, before anythin
    fetches the app and merges what is new (the newest release; the maintainer's own copy takes
    master), never sends anything back, and ends with the day's model check: what this model
    suits and what wants another, which goes first in the reply when the person's request is
-   one of the latter. Then the place check (`tools/place.py`), once per chat: when this chat
+   one of the latter. Then the place check (`tools/place.py`), once and then weekly while it applies: when this chat
    cannot do what the person set up (profiles read in their browser, from a chat with no
    browser of theirs; tools missing on their computer), it prints what to tell them, which
    goes at the end of the reply in its own words. It offers a choice and never makes it. The app is public, so nothing needs attaching; if it still cannot reach

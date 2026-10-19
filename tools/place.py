@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Is this chat the right place for what the person set up? Checked once per chat.
+"""Is this chat the right place for what the person set up? Said once, then weekly.
 
 Where a chat runs decides what it can do. A cloud chat cannot use the browser on
 the person's computer unless the desktop app lends it one, a phone has no browser
@@ -15,8 +15,10 @@ changes a setting: where it offers a choice, the person makes it.
     python3 tools/place.py next [--works-on computer|phone|both]   # the exact next step
 
 `sync_app.py` runs the check after the day's sync and again in every later chat
-that day, and prints it once per chat (the record of who was told is kept in
-.git, so it is never committed and never dirties the tree).
+that day. A chat hears it once, then again after RETELL_DAYS while it still applies,
+and at once when its words change: told only once, a person who missed it, or who
+later wanted the right chat, never heard it again. The record of who was told is
+kept in .git, so it is never committed and never dirties the tree.
 """
 from __future__ import annotations
 
@@ -247,9 +249,15 @@ def _digest(lines) -> str:
     return hashlib.sha1("\n".join(lines).encode("utf-8")).hexdigest()[:12]
 
 
-def told(chat: str, lines=None) -> bool:
-    """Was this chat told these words already? A chat told an older wording is told the
-    new one once: it is how a chat open before a change hears about it."""
+# Said again in the same chat after this many days while it still applies: often enough
+# that a person who missed it, or who has since come round to the right chat, hears it
+# again; rare enough never to nag. A change in the words is said at once.
+RETELL_DAYS = 7
+
+
+def told(chat: str, lines=None, today: datetime.date | None = None) -> bool:
+    """Was this chat told these words lately? A chat told an older wording is told the new
+    one at once, and the same words again after RETELL_DAYS."""
     try:
         with open(_told_path(), encoding="utf-8") as fh:
             got = json.load(fh)
@@ -258,10 +266,19 @@ def told(chat: str, lines=None) -> bool:
     said = got.get("said") or {}
     if lines is None:
         return chat in said or chat in got.get("chats", [])
-    return said.get(chat) == _digest(lines)
+    rec = said.get(chat)
+    if isinstance(rec, str):          # a record from before the date was kept
+        rec = {"digest": rec, "on": ""}
+    if not isinstance(rec, dict) or rec.get("digest") != _digest(lines):
+        return False
+    try:
+        on = datetime.date.fromisoformat(rec.get("on") or "")
+    except ValueError:
+        return False
+    return ((today or datetime.date.today()) - on).days < RETELL_DAYS
 
 
-def mark_told(chat: str, lines=()) -> None:
+def mark_told(chat: str, lines=(), today: datetime.date | None = None) -> None:
     p = _told_path()
     try:
         with open(p, encoding="utf-8") as fh:
@@ -270,7 +287,8 @@ def mark_told(chat: str, lines=()) -> None:
         got = {}
     said = {k: v for k, v in (got.get("said") or {}).items() if k != chat}
     said = dict(list(said.items())[-49:])
-    said[chat] = _digest(lines)
+    said[chat] = {"digest": _digest(lines),
+                  "on": (today or datetime.date.today()).isoformat()}
     try:
         with open(p, "w", encoding="utf-8") as fh:
             json.dump({"said": said}, fh)
@@ -283,7 +301,8 @@ def this_chat(env=None) -> str:
     return env.get("CLAUDE_CODE_REMOTE_SESSION_ID") or env.get("CLAUDE_CODE_SESSION_ID") or ""
 
 
-def report(tools=None, employer: str = "", once: bool = False, env=None) -> str:
+def report(tools=None, employer: str = "", once: bool = False, env=None,
+           today: datetime.date | None = None) -> str:
     """The check as the sync prints it: "" when there is nothing to say, or already said."""
     chat = this_chat(env)
     where = surface(env)
@@ -297,9 +316,9 @@ def report(tools=None, employer: str = "", once: bool = False, env=None) -> str:
     owner, name = repo()
     lines = check(where, setting(), tools, signed_in_ever(), fixes, owner, name, employer)
     if once and chat:
-        if told(chat, lines):
+        if told(chat, lines, today):
             return ""
-        mark_told(chat, lines)
+        mark_told(chat, lines, today)
     if not lines:
         return ""
     import claude_surfaces
@@ -307,9 +326,10 @@ def report(tools=None, employer: str = "", once: bool = False, env=None) -> str:
             if e.get("how") and claude_surfaces.say(e["id"], name=name, owner=owner)
             and any(claude_surfaces.say(e["id"], name=name, owner=owner) in l for l in lines)]
     warn = [w for w in (claude_surfaces.warning(e) for e in used) if w]
-    return ("Place check (Claude: tell the person this once in this chat, in these words, "
-            "at the end of your reply; never apply a choice for them, and never hold back "
-            "work that does not need it. A [bracketed] condition is yours to test, never said):\n"
+    return ("Place check (Claude: tell the person this at the end of your reply, in these "
+            "words; it comes back weekly while it still applies, never more. Never apply a "
+            "choice for them, and never hold back work that does not need it. A [bracketed] "
+            "condition is yours to test, never said):\n"
             + "\n".join("  " + l.replace("\n", "\n  ") for l in lines)
             + "".join("\n  " + w for w in warn))
 
@@ -322,7 +342,8 @@ def main(argv=None) -> int:
                     help="the browser tools this chat has: browser, chrome, chrome-off, enable, none")
     ap.add_argument("--employer", default="")
     ap.add_argument("--works-on", default="")
-    ap.add_argument("--once", action="store_true", help="say nothing if this chat was told")
+    ap.add_argument("--once", action="store_true",
+                    help="say nothing if this chat was told these words in the last week")
     a = ap.parse_args(argv)
     if a.cmd == "ask":
         print(f"{QUESTION}\n{TRADE_OFF}\n{RECOMMEND}")

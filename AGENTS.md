@@ -1,5 +1,5 @@
 ---
-framework_version: 2.2.1
+framework_version: 2.2.2
 ---
 
 # Agent guidelines
@@ -9,8 +9,8 @@ the ranked shortlist a person picks from, the resume and cover letter written fo
 whatever they pick, the checks those have to pass, and the outreach and tracking around
 them. It is operated by Claude Code, but nothing in the design is Claude-specific below
 the top layer: the pipeline is Python, the portal searches are TypeScript CLIs, and the
-rules are markdown. Another agent runtime (Codex, Gemini CLI, Cursor, Antigravity) can
-drive it by reading the same files.
+rules are markdown. Another agent runtime (ChatGPT Codex, Google's Gemini CLI, the Cursor
+editor, Google Antigravity) can drive it by reading the same files.
 
 This file exists so that a runtime which does not read `CLAUDE.md` still finds the way in.
 It is a pointer, not a second copy. Nothing here is the source of truth for anything.
@@ -62,7 +62,7 @@ it now catches.
 | Rules and methodology | `.claude/` | read by the agent |
 
 The portal CLIs under `.agents/skills/` ship a `SKILL.md` each in the portable format, so
-Codex and Antigravity discover them without help. `/scrape` in
+ChatGPT Codex and Google Antigravity discover them without help. `/scrape` in
 [`.claude/skills/job-scraper/`](.claude/skills/job-scraper/) orchestrates them; a runtime
 without that skill can call `tools/run_round.py`, which does the same thing with no model
 in the loop at all.
@@ -85,7 +85,7 @@ Each has a way through:
 
 `tools/model_guide.py` names Claude models only. Elsewhere the rule it applies still holds:
 the strongest model you have for drafting and the audit, a cheaper one for reading and
-fetching. Gemini CLI reads `GEMINI.md`, which points here.
+fetching. Google's Gemini CLI reads `GEMINI.md`, which points here.
 
 ## State lives in files, not in the conversation
 
