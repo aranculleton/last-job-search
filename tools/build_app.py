@@ -55,8 +55,7 @@ ALLOWED_ORGANIZATIONS = {
     # sentence opening on it is not "corrected". Naming it says nothing about
     # whether anyone applied there.
     "eBay",
-    # Software the app names as a skill a posting asks for. A company of the same name
-    # in a tracker's history made every mention of the tool a finding.
+    # Software the app names as a skill a posting asks for.
     "Docker",
 }
 

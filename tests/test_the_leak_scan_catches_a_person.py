@@ -184,3 +184,14 @@ def test_the_denylist_remembers_a_row_taken_out_of_the_state_files(tmp_path):
     src = open(os.path.join(ROOT, "tools", "build_app.py"), encoding="utf-8").read()
     body = src[src.index("def denylist("):src.index("def main(")]
     assert "_csv(person.state(" not in body and body.count("_csv_ever(person.state(") == 4
+
+
+def test_a_tool_family_entry_is_set_aside_and_nothing_else_in_the_file(tmp_path, monkeypatch):
+    # The families of interchangeable tools name software. A product that shares a word
+    # with a denylisted employer is not a leak there; the same word anywhere else is.
+    t = tmp_path / "tools"
+    t.mkdir()
+    (t / "bridges.py").write_text('FAMILIES = [("store", ("Zorblax", r"\\bzorblax\\b")),]\n'
+                                  "# Zorblax asked for this\n", encoding="utf-8")
+    found = _scan(str(tmp_path), "Zorblax\n", monkeypatch=monkeypatch)
+    assert found == ["tools/bridges.py:2: denylist entry 1"]
