@@ -383,7 +383,7 @@ def referrer_in_lead(text, referrer_name) -> bool:
     bare = " ".join(re.sub(r"\([^)]*\)", " ", full).split())
     if any(form and re.search(re.escape(form), lead, re.I) for form in (full, bare)):
         return True
-    return any(n and re.search(rf"\b{re.escape(n)}\b", lead, re.I)
+    return any(n and re.search(rf"(?<!\w){re.escape(n)}(?!\w)", lead, re.I)
                for n in (given, tone.first_name(bare)))
 
 

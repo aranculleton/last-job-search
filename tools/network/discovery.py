@@ -1202,7 +1202,7 @@ def _own_words() -> set:
 def _other_function_rx():
     own = _own_words()
     words = [w for w in _OTHER_FUNCTION_WORDS if not set(w.split()) & own]
-    return re.compile(r"\b(?:" + "|".join(re.escape(w) for w in words) + r")\b", re.I) \
+    return re.compile(r"(?<!\w)(?:" + "|".join(re.escape(w) for w in words) + r")(?!\w)", re.I) \
         if words else None
 
 

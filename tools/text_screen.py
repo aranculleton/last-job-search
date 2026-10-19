@@ -792,10 +792,10 @@ def _names_home(s: str) -> bool:
         # A region's short code is read in capitals, like a country code: "on"
         # and "in" are words before they are provinces or states.
         if (re.search(r"(?<![A-Za-z])" + re.escape(r.upper()) + r"(?![A-Za-z])", s)
-                if len(r) <= 3 else re.search(r"\b" + re.escape(r) + r"\b", low)):
+                if len(r) <= 3 else re.search(r"(?<!\w)" + re.escape(r) + r"(?!\w)", low)):
             return True
     for g in _places.METRO:
-        for m in re.finditer(r"\b" + re.escape(g) + r"\b", low):
+        for m in re.finditer(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low):
             after = re.match(r"\s*,\s*([a-z][a-z .]{0,30}?)\s*(?=[,.;:)]|$)", low[m.end():])
             if not after or after.group(1).strip() in _places.REGIONS:
                 return True
@@ -818,7 +818,7 @@ def _abroad_country(s: str):
 def _countries_named(s: str):
     """Every place in the sentence that is one country and not home, as matches."""
     for c in _places.OTHER_COUNTRIES:
-        yield from re.finditer(r"\b" + re.escape(c) + r"\b", s, re.I)
+        yield from re.finditer(r"(?<!\w)" + re.escape(c) + r"(?!\w)", s, re.I)
     yield from _places.COUNTRY_CODES.finditer(s)
 
 
@@ -839,7 +839,7 @@ def residence_cut(text: str) -> str | None:
                    for m in _places.REGION_WORDS.finditer(s)]
         if True in regions:
             continue
-        if reside and (any(re.search(r"\b" + re.escape(c) + r"\b", low)
+        if reside and (any(re.search(r"(?<!\w)" + re.escape(c) + r"(?!\w)", low)
                            for c in _places.OTHER_COUNTRIES)
                        or _abroad_country(s)):
             return s[:220]

@@ -129,7 +129,7 @@ def _has(low: str, term: str) -> bool:
 
 def _metro_in(low: str) -> str | None:
     """The first home-metro place named in a lower-cased location, as a word."""
-    return next((g for g in METRO if re.search(r"\b" + re.escape(g) + r"\b", low)), None)
+    return next((g for g in METRO if re.search(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low)), None)
 
 
 # What a remote location says about where the work may be done from. A country
@@ -142,7 +142,7 @@ _REGION_WORDS = re.compile(r"\b(?:europe|european union|emea|apac|latam|latin am
 def _abroad_in_remote(loc: str, low: str) -> tuple[str, str] | None:
     """(the place, "country" or "region") a remote location names that is not home."""
     for c in OTHER_COUNTRIES:
-        if re.search(r"\b" + re.escape(c) + r"\b", low):
+        if re.search(r"(?<!\w)" + re.escape(c) + r"(?!\w)", low):
             return c, "country"
     m = _places.COUNTRY_CODES.search(loc) or re.search(r"\b(?:united states|united kingdom)\b", low)
     if m:
@@ -234,7 +234,7 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     # or absent: a city of the same name in another country is not it.
     if prov in (None, _HOME_REGION):
         for g in METRO:
-            if re.search(r"\b" + re.escape(g) + r"\b", low):
+            if re.search(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low):
                 return "PASS", f"{_METRO} ({g})"
     for o in OUTSIDE:
         if _has(low, o):

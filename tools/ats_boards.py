@@ -125,7 +125,7 @@ PLACES = getattr(_B, "PLACES", None) or re.compile(r"(?!x)x")
 # country (profile/search.py LOCATION, through tools/places.py). PLACES alone missed
 # them: a board's posting in a metro town PLACES did not list ("Bolton", "Wigan")
 # never reached the round, though prefilter passes it.
-_METRO_RX = (re.compile(r"\b(?:%s)\b" % "|".join(re.escape(m) for m in _places.METRO), re.I)
+_METRO_RX = (re.compile(r"(?<!\w)(?:%s)(?!\w)" % "|".join(re.escape(m) for m in _places.METRO), re.I)
              if _places.METRO else re.compile(r"(?!x)x"))
 
 # A location that says the job is remote and names no geography at all.

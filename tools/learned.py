@@ -159,7 +159,10 @@ def never_say() -> list[tuple[str, re.Pattern]]:
         for phrase in r.get("never_say") or ():
             words = [re.escape(w) for w in str(phrase).split()]
             if words:
-                out.append((phrase, re.compile(r"\b" + r"\s+".join(words) + r"\b", re.I)))
+                # Edges that work for a phrase that opens or closes on punctuation: \b
+                # needs a word character there, so "(remote)" or "[sic]" never matched.
+                out.append((phrase, re.compile(r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)",
+                                               re.I)))
     return out
 
 

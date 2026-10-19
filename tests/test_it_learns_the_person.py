@@ -56,6 +56,16 @@ def test_a_never_say_phrase_is_flagged_in_messages_and_documents(profile):
     assert not [v for v in tone.check("Happy to talk next week.") if v.rule == "person_dislikes"]
 
 
+def test_a_never_say_phrase_with_brackets_or_parentheses_is_flagged_too(profile):
+    learned.record("voice", "never these", "never these",
+                   never_say=["(remote)", "[sic]", "C++ guru", "it's a fit"], today="2026-10-19")
+    for text in ("The role is fully (remote) for now.", "As written [sic] by them.",
+                 "A real C++ guru.", "I think it's a fit."):
+        assert learned.dislikes(text), text
+    assert not learned.dislikes("The role is remote for now.")
+    assert not learned.dislikes("A C++ developer.")
+
+
 def test_changing_their_mind_retires_a_rule(profile):
     learned.record("people", "no recruiters", "never surface recruiters", today="2026-10-15")
     learned.retire(1)
