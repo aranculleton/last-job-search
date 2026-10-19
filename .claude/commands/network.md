@@ -301,7 +301,8 @@ it. LinkedIn is never fetched from a session.
         in the background (the Bash tool's background mode): it exits when the next page may
         load, naming who to read and their address, and in the meantime the chat drafts and
         shows the notes for the people already read, each as soon as its read completes. Never
-        poll a clock, and never sleep in the foreground. When `next` says `done` (exit 12),
+        poll a clock, and never sleep in the foreground. When it says `new day` (exit 13), a wait ran
+        past midnight: do what it prints (the day's check, then today's list). When `next` says `done` (exit 12),
         show any draft not yet shown and tell the person the run is done, with a notification
         where the session has one.
       - **Before each page**, `next` (or `python3 tools/network/reading.py gate`, `--page` for a

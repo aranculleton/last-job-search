@@ -636,6 +636,18 @@ def _own_tests() -> str:
     return "; ".join(why)
 
 
+def _runtime_files() -> str:
+    """The reading pace files an older copy kept in documents/network, which change on every
+    read: once committed, every read left the repo dirty and the sync refused to run."""
+    if not person.exists():
+        return ""
+    found = _probe("import reading as r, os, person as p; "
+                   "print(sum(os.path.exists(p.state(*f)) for f in r.RUNTIME_FILES))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d reading file(s) in documents/network that change on every read, so the "
+            "repo is never clean and the sync refuses to run" % n) if n else ""
+
+
 def _campaign_notes() -> str:
     """Notes kept by hand for an employer with a hiring process, from before its living prep
     document existed: what was decided in them is lost to the next chat until it is folded
@@ -1073,6 +1085,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
+    Upgrade("runtime-files", "2026-10-19",
+            "the files that change on every profile read kept out of your repo, so the "
+            "day's update check never stops on them",
+            _runtime_files, "python3 tools/network/reading.py move-runtime", "instant",
+            command=("python3", "tools/network/reading.py", "move-runtime"),
+            paths=("documents/network/.reads_stopped.json", "documents/network/.shortlist.json",
+                   "documents/network/.page_reads.json", "documents/network/.signed_in.json"),
+            priority=1, conditional=True),
     Upgrade("own-tests", "2026-10-19",
             "your own checks kept in line with each update, and the ones that read the app's "
             "code rewritten to check what it does, so an update cannot break them",

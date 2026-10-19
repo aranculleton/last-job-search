@@ -71,6 +71,7 @@ Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     10 not read yet: no page of theirs read, so KEEP cannot be said
     11 the batch of notes is too alike to send
     12 done: nobody left to read on today's short list (`next`)
+    13 new day: a read waiting in the background ran past midnight; today needs its own list
 """
 
 from __future__ import annotations
@@ -96,7 +97,7 @@ from company_key import fold  # noqa: E402
 _NET = person.module("networking") if person.exists("networking.py") else None
 
 EXIT = {"ok": 0, "error": 1, "skip": 3, "signin": 4, "check": 5, "unknown": 6, "wait": 7,
-        "later": 8, "tomorrow": 9, "not_read": 10, "alike": 11, "done": 12}
+        "later": 8, "tomorrow": 9, "not_read": 10, "alike": 11, "done": 12, "new_day": 13}
 
 # "browser", "paste" or "off". Absent means "paste": reading a profile in the
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
@@ -197,6 +198,13 @@ PAGE_KINDS = ("invitations", "people", "search")
 # page before this is a wait for the person; after it, LinkedIn signed them out
 # mid-run, which is a stop. Never a password: only that a signed-in page was seen.
 SIGNIN_FILE = ("documents", "network", ".signed_in.json")
+# These four (the stop, the day's list, the list-page reads, the sign-in) changed on every
+# read. Kept in documents/network, a persistence step that force-added the folder
+# committed them, and from then on every read left the repo dirty: the sync refused to
+# run, and with it the day's update check. They live only in this computer's ledger now
+# (pace.ledger_dir(), outside the repo); the paths stay so an older copy's files are read
+# once and moved (`move_runtime`).
+RUNTIME_FILES = (STOP_FILE, SHORTLIST_FILE, PAGES_FILE, SIGNIN_FILE)
 SIGNIN_URL = "https://www.linkedin.com/login"
 SIGNIN_POLL_SECONDS = 20                # how often the session looks at the pane's address
 SIGNIN_WAIT_MINUTES = 5                 # then it asks again, never gives up silently
@@ -830,11 +838,6 @@ def signed_in_today(today: datetime.date | None = None) -> bool:
 def mark_signed_in(now: datetime.datetime | None = None) -> None:
     now = now or datetime.datetime.now()
     rec = {"date": now.date().isoformat(), "at": now.isoformat(timespec="seconds")}
-    p = person.state(*SIGNIN_FILE)
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
-        json.dump(rec, fh)
-        fh.write("\n")
     pace.put("signed_in", rec)
 
 
@@ -1308,12 +1311,13 @@ def _load(src: dict):
 
 
 def _pages() -> list:
-    try:
-        with open(person.state(*PAGES_FILE), encoding="utf-8") as fh:
-            got = json.load(fh)
-    except (OSError, ValueError):
-        return []
-    return [p for p in (got.get("reads") or []) if isinstance(p, dict)]
+    """Every one-page read on file: this computer's ledger, and the file an older copy of
+    this tool kept in documents/network, until `move-runtime` moves it."""
+    out = list(_json(person.state(*PAGES_FILE)).get("reads") or [])
+    seen = {(p.get("at"), p.get("url")) for p in out if isinstance(p, dict)}
+    out += [p for p in pace.load().get("pages") or []
+            if isinstance(p, dict) and (p.get("at"), p.get("url")) not in seen]
+    return sorted((p for p in out if isinstance(p, dict)), key=lambda p: str(p.get("at") or ""))
 
 
 def _load_seconds_seen() -> list:
@@ -1357,14 +1361,37 @@ def page_read(kind: str, url: str = "", now: datetime.datetime | None = None,
            "people": int(people), "next_gap": gap, "break": brk}
     if load_seconds is not None:
         rec["load_seconds"] = float(load_seconds)
-    keep = [p for p in _pages() if str(p.get("at", ""))[:10] >= (now.date() - datetime.timedelta(days=7)).isoformat()]
-    p = person.state(*PAGES_FILE)
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
-        json.dump({"reads": keep + [rec]}, fh, indent=1)
-        fh.write("\n")
+    week = (now.date() - datetime.timedelta(days=7)).isoformat()
+    pace.update(lambda d: d.__setitem__("pages", [
+        p for p in d.get("pages") or [] if isinstance(p, dict)
+        and str(p.get("at", ""))[:10] >= week] + [rec]))
     note_load(kind, rec["at"], gap, brk, rec["url"], load_seconds, now)
     return rec
+
+
+def move_runtime() -> list:
+    """Move the files an older copy kept in documents/network into this computer's ledger,
+    and delete them. Returns the paths moved."""
+    keys = {STOP_FILE: "stop", SHORTLIST_FILE: "shortlist", SIGNIN_FILE: "signed_in"}
+    moved = []
+    for rel in RUNTIME_FILES:
+        p = person.state(*rel)
+        if not os.path.exists(p):
+            continue
+        got = _json(p)
+        if rel == PAGES_FILE:
+            have = {(x.get("at"), x.get("url")) for x in pace.load().get("pages") or []
+                    if isinstance(x, dict)}
+            extra = [x for x in got.get("reads") or []
+                     if isinstance(x, dict) and (x.get("at"), x.get("url")) not in have]
+            if extra:
+                pace.update(lambda d: d.__setitem__("pages", (d.get("pages") or []) + extra))
+        elif got and str(got.get("date") or "") >= str(
+                (pace.load().get(keys[rel]) or {}).get("date") or ""):
+            pace.put(keys[rel], got)
+        os.remove(p)
+        moved.append(os.path.join(*rel))
+    return moved
 
 
 def last_browser_read() -> datetime.datetime | None:
@@ -1394,13 +1421,8 @@ def _json(path: str) -> dict:
 def _write_stop(reason: str, today: datetime.date | None = None) -> str:
     rec = {"date": (today or datetime.date.today()).isoformat(),
            "reason": " ".join(str(reason or "").split())[:200]}
-    p = person.state(*STOP_FILE)
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
-        json.dump(rec, fh)
-        fh.write("\n")
     pace.put("stop", rec)
-    return p
+    return pace.ledger_dir()
 
 
 def _signal_kind(reason: str) -> str:
@@ -1603,12 +1625,10 @@ def _shortlist_file(today: datetime.date) -> list:
 
 def _save_shortlist(ids: list, today: datetime.date) -> None:
     rec = {"date": today.isoformat(), "ids": list(ids)}
-    p = person.state(*SHORTLIST_FILE)
-    os.makedirs(os.path.dirname(p), exist_ok=True)
-    with open(p, "w", encoding="utf-8") as fh:
-        json.dump(rec, fh)
-        fh.write("\n")
     pace.put("shortlist", rec)
+    old = person.state(*SHORTLIST_FILE)
+    if os.path.exists(old):
+        os.remove(old)          # an older copy's file: the ledger holds the list now
 
 
 def _read_on(contact_id: str, day: str) -> bool:
@@ -2513,6 +2533,8 @@ def main(argv: list | None = None) -> int:
                     help="card: the top card and About, nothing scrolled; deep: scrolled to "
                          "the end, for Experience and Activity")
     sub.add_parser("limits", help="every reading limit, its value, where it came from, and why")
+    sub.add_parser("move-runtime", help="move the reading files an older copy kept in "
+                                        "documents/network into this computer's ledger")
     fr = sub.add_parser("friction", help="the signals LinkedIn showed, and the ramp; or keep one")
     fr.add_argument("--kind", choices=pace.HARD + pace.SOFT, default=None)
     fr.add_argument("--words", default="", help="what it showed, word for word")
@@ -2565,6 +2587,11 @@ def main(argv: list | None = None) -> int:
 
     if a.cmd == "extractor":
         print(EXTRACTOR)
+        return EXIT["ok"]
+    if a.cmd == "move-runtime":
+        moved = move_runtime()
+        print(f"reading: {len(moved)} file(s) moved into this computer's ledger "
+              f"({pace.ledger_dir()})" + (": " + ", ".join(moved) if moved else ""))
         return EXIT["ok"]
     if a.cmd == "limits":
         for line in pace.report():
@@ -2918,6 +2945,18 @@ def _cli_next(a) -> int:
     nxt = next_up(contacts=contacts)
     if nxt is None:
         today = datetime.date.today().isoformat()
+        yday = datetime.date.today() - datetime.timedelta(days=1)
+        left = [i for i in _shortlist_file(yday) if not _read_on(i, yday.isoformat())]
+        if not _shortlist_file(datetime.date.today()) and left:
+            # A read waiting in the background that ran past midnight found a new day with
+            # no list, and stopped saying nothing was left.
+            print(f"new day: yesterday's list ended with {len(left)} not read "
+                  f"({', '.join(left[:5])}). Today needs its own: run the day's check "
+                  "(python3 tools/sync_app.py --if-stale --on \"<this session's model>\"), "
+                  f"then python3 tools/network/reading.py shortlist {' '.join(left[:READS_PER_RUN])}"
+                  " (it sizes today's list to the requests that can go today), then "
+                  "reading.py next --wait again")
+            return EXIT["new_day"]
         done = [i for i in _shortlist_file(datetime.date.today()) if _read_on(i, today)]
         print(f"done: nothing left to read on today's list ({len(done)} read today"
               + (f": {', '.join(done)}" if done else "") + "). Show each draft that is not "

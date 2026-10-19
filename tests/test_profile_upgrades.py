@@ -701,3 +701,20 @@ def test_own_tests_reading_the_apps_code_or_pinning_changed_behaviour_are_kept_i
     sync_app.record_own_tests(str(repo), [(
         "test_reads::test_it", "AttributeError: module 'round_step' has no attribute 'gone'")])
     assert U.by_id("own-tests").pending() == ""
+
+
+def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profile, tmp_path,
+                                                                           monkeypatch):
+    st = tmp_path / "state"
+    (st / "documents" / "network").mkdir(parents=True)
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    monkeypatch.setenv("LJS_LEDGER", str(tmp_path / "ledger"))
+    assert U.by_id("runtime-files").pending() == ""
+    (st / "documents" / "network" / ".shortlist.json").write_text(
+        '{"date": "2026-10-20", "ids": ["bo_venn"]}', encoding="utf-8")
+    assert "1 reading file(s) in documents/network" in U.by_id("runtime-files").pending()
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "reading.py"),
+                        "move-runtime"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert U.by_id("runtime-files").pending() == ""
+    assert '"bo_venn"' in open(tmp_path / "ledger" / "reading-ledger.json").read()
