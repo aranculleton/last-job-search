@@ -76,8 +76,9 @@ It exits 2 and keeps three files it otherwise deletes, with the posting bodies s
 | `06_skipped.json` | what the company throttle and the one-role-per-employer rule removed |
 
 Those are the three places a posting can vanish. `--expand` re-runs wider automatically,
-up to three rounds in all, each with more pages per search and a longer window: from the
-defaults, 10 pages and 21 days, then 30 pages and 42 days. The other widenings (title
+up to three rounds in all, each with more pages per search (from the default 5, then 10,
+then 30) and the same freshness window, which is a gate and never widens. Each wider round
+reuses the bodies the round before it fetched. The other widenings (title
 variants, places, sectors, named employers) are printed as what to try next, not run. If it
 still misses, say so with the count, what was tried and the likely blocker. **Never pad a thin run with sub-60 postings, and never relax a gate or
 the location filter to hit the number.**

@@ -211,16 +211,17 @@ def trim(path, top=KEEP_TOP):
     return max(0, before - os.path.getsize(path))
 
 
-def prune(out_dir, keep=()):
+def prune(out_dir, keep=(), hold=()):
     """Delete the stage files, keeping the round directory, its log, the shortlist and `keep`.
 
     The log is small, is already gitignored as `*.log`, and is the funnel
     record somebody reads when a round looks wrong. The shortlist is what a
-    draft is staged from. Anything named in `keep` is slimmed rather than deleted.
+    draft is staged from. Anything named in `keep` is slimmed rather than deleted,
+    and anything in `hold` is left as it is, for the caller to delete later.
     """
     freed = 0
     for name in os.listdir(out_dir):
-        if name == "round.log":
+        if name == "round.log" or name in hold:
             continue
         path = os.path.join(out_dir, name)
         if name == SHORTLIST:
@@ -246,12 +247,19 @@ def prune(out_dir, keep=()):
 # apart either ignores both or re-runs a pipeline that is working fine.
 EXIT_YIELD_MISSED = 2
 
-# The widenings this script can actually perform. The rest of the documented
-# sequence, more title variants, the remaining priority categories, wider
-# PASS-set locations, adjacent sectors and named employers, lives in
-# scrape_wide's own constants and in judgement, so it is printed as the next
-# thing to do rather than pretended at.
-WIDENINGS = ((2.0, 1.5), (3.0, 2.0))
+# The widenings this script can actually perform: more pages per query. The rest
+# of the documented sequence, more title variants, the remaining priority
+# categories, wider PASS-set locations, adjacent sectors and named employers,
+# lives in scrape_wide's own constants and in judgement, so it is printed as the
+# next thing to do rather than pretended at.
+#
+# Never the freshness rule. Each widening used to stretch --jobage too (14, then
+# 21, then 42), and a posting six weeks old is the most expensive false positive
+# the pipeline has: "never relax a gate to hit the number" covers that one.
+WIDENINGS = (2.0, 3.0)
+# What a widened round reuses from the one before it, so it does not fetch the
+# same bodies again: the hydrated file, held back from the prune until it has run.
+HYDRATED = "02_hydrated.json"
 
 
 def yield_of(path):
@@ -347,6 +355,8 @@ def main():
                     help=f"re-run wider when the yield target is missed, up to "
                          f"{MAX_ROUNDS} rounds")
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
+    ap.add_argument("--hydrate-cache", dest="hydrate_cache", default=None,
+                    help=argparse.SUPPRESS)
     ap.add_argument("--summary-dir", dest="summary_dir", default=None,
                     help="where the compact shortlist is written (default: "
                          "%s under the repo). A test pointing --out at a temp "
@@ -401,8 +411,9 @@ def main():
         prefilter += ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
     run(prefilter, log, deadline)
     # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest.
-    run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f("02_hydrated.json"),
-         "--workers", str(a.workers), "--require", a.require], log, deadline)
+    run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
+         "--workers", str(a.workers), "--require", a.require]
+        + (["--cache", a.hydrate_cache] if a.hydrate_cache else []), log, deadline)
     run([sys.executable, f"{T}/text_screen.py", f("02_hydrated.json"), "--out", f("03_screened.json"),
          "--out-all", f("03_screened_all.json")], log, deadline)
     run([sys.executable, f"{T}/opportunity.py", f("03_screened.json"), "--out", f("04_opportunity.json"),
@@ -443,11 +454,14 @@ def main():
     down = _portals_down(a.out)
     if down:
         print(f"portal health: {', '.join(down)} DOWN (0 results to a deliberately broad probe)")
+    widen = not met and a.expand and a.round < MAX_ROUNDS
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
         # is also read for exactly the three files the MISSED message below
-        # names, so those survive with their posting bodies stripped.
-        freed = prune(a.out, keep=() if met else DIAGNOSTICS)
+        # names, so those survive with their posting bodies stripped. A round
+        # about to widen holds its hydrated bodies back for the next one.
+        freed = prune(a.out, keep=() if met else DIAGNOSTICS,
+                      hold=(HYDRATED,) if widen else ())
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"
               + ("" if met else f"; kept {', '.join(DIAGNOSTICS)} without bodies"))
@@ -461,18 +475,20 @@ def main():
               "directly, then draft.")
         return 0
 
-    if a.expand and a.round < MAX_ROUNDS:
-        pages_x, age_x = WIDENINGS[a.round - 1]
+    if widen:
+        pages_x = WIDENINGS[a.round - 1]
         nxt = f"{a.out.rstrip('/')}_round{a.round + 1}"
         print(f"\nexpanding: round {a.round + 1} of {MAX_ROUNDS}, "
               f"pages {a.pages} -> {int(a.pages * pages_x)}, "
-              f"jobage {a.jobage} -> {int(a.jobage * age_x)} -> {nxt}")
-        return subprocess.call(
+              f"jobage held at {a.jobage} (the freshness rule never widens) -> {nxt}")
+        cache = f(HYDRATED)
+        code = subprocess.call(
             [sys.executable, __file__, "--out", nxt,
              "--pages", str(int(a.pages * pages_x)),
-             "--jobage", str(int(a.jobage * age_x)),
+             "--jobage", str(a.jobage),
              "--workers", str(a.workers), "--top", str(a.top), "--today", a.today,
              "--require", a.require, "--expand", "--round", str(a.round + 1)]
+            + (["--hydrate-cache", cache] if os.path.exists(cache) else [])
             + (["--keep-intermediates"] if a.keep else [])
             + (["--alerts", a.alerts] if a.alerts else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
@@ -480,6 +496,12 @@ def main():
             + (["--seen", a.seen] if a.seen else [])
             + (["--no-seen-write"] if a.no_seen_write else [])
             + (["--no-seen-read"] if a.no_seen_read else []))
+        if not a.keep:
+            try:
+                os.remove(cache)
+            except OSError:
+                pass
+        return code
 
     # CLAUDE.md: "If the target is still missed after 3 rounds, say so
     # explicitly with the count, what was tried, and the likely blocker. Never
