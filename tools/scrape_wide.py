@@ -662,7 +662,7 @@ def main() -> int:
     try:
         from ats_boards import fetch_all as _ats_fetch
         ats_notes: dict[str, str] = {}
-        ats_rows, ats_quiet = _ats_fetch(notes=ats_notes)
+        ats_rows, ats_quiet = _ats_fetch(notes=ats_notes, today=today)
         for r in ats_rows:
             if r.get("url"):
                 seen.setdefault(r["url"], r)

@@ -68,3 +68,22 @@ def test_a_strong_posting_meets_the_target_for_the_example(tmp_path, monkeypatch
     assert fit.main() == 0
     ranked = json.loads(out.read_text())
     assert ranked[0]["priority"] >= 75, ranked[0]
+
+
+def test_the_target_counts_the_score_not_the_order(tmp_path):
+    """The yield target is postings scoring 60+ and 75+: the 0-100 fit.
+
+    It counted `priority`, fit times opportunity. A posting with no stated salary
+    and no date in the last five days topped out at priority 69 for the example,
+    so it could never count toward "2 at 75+", though an unstated salary costs
+    nothing. The ranking order is unchanged; only the count reads the score.
+    """
+    import run_round
+    shortlist = tmp_path / "06_shortlist.json"
+    shortlist.write_text(json.dumps([
+        {"title": "Supply Chain Analyst", "company": "Kestrel Mutual", "fit": 88, "priority": 61},
+        {"title": "Inventory Analyst", "company": "Fernhill Freight", "fit": 79, "priority": 55},
+        {"title": "Data Analyst", "company": "Larkspur Retail", "fit": 64, "priority": 44},
+        {"title": "Planner", "company": "Northgate", "fit": 52, "priority": 70},
+    ]))
+    assert run_round.yield_of(str(shortlist)) == (3, 2)

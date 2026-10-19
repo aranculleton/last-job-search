@@ -43,8 +43,8 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bar  # noqa: E402
-from dates import days_since  # noqa: E402
-from company_key import key  # noqa: E402
+from dates import as_date, days_since  # noqa: E402
+from company_key import key, row_key  # noqa: E402
 from lookup_score import norm  # noqa: E402
 
 import person  # noqa: E402
@@ -160,18 +160,22 @@ _STALE_EXCLUSION = re.compile(
 # language, the designations and the role families they will not do) is
 # search.py's STILL_CUTS, and the two are one pattern.
 _STILL_CUTS_CORE = (
-    r"\bcitizen\w*|\bpermanent residen\w*|\bclearance\b"
-    r"|\blanguage gate\b|\bprofessional credential\b"
-    r"|\bresearch (?:ml|scientist|role)\b|\bml engineering or research\b"
-    r"|\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b"
-    r"|\brelocation\b|\bon-?site in\b|\blocation gate\b"
-    # The triage card's own knockouts (10-triage-blockers.md): a stated range
-    # whose maximum is below the floor, and a graduate degree stated as required
-    # where the person's card says so. The person's rules, so they stand.
-    r"|\brange tops out\b|\bwhole (?:stated )?range\b|\bmaximum (?:is |sits )?below\b"
-    r"|\bentire range\b|\brange max\b"
-    r"|\bmaster'?s?\s+(?:degree\s+)?(?:is\s+)?(?:explicitly\s+)?(?:a\s+)?(?:must|required)\b"
-    r"|\bstates a master'?s?\b|\brequires? a master'?s?\b|\bPhD required\b")
+    # Eligibility, a requirement to live elsewhere among it (text_screen's own
+    # "eligibility gate: ..."), and a vacancy open to the employer's own staff.
+    r"\bcitizen\w*|\bpermanent residen\w*|\bclearance\b|\beligibility gate\b"
+    r"|\binternal workday site\b|\bemployer's own staff only\b"
+    r"|\binternal (?:applicants?|candidates?|mobility)(?: only)?\b"
+    # A language required, or a title in another language.
+    r"|\blanguage gate\b|\b(?!degree\b|master|ph\.?d|years?\b)\w+ stated as a requirement\b"
+    r"|\bjob title is in\b"
+    r"|\bfluen\w* in\b|\bbilingual\b"
+    # A professional credential.
+    r"|\bprofessional (?:credential|designation|licen[cs]e)\b"
+    r"|\b(?:accounting|engineering|actuarial) (?:licen[cs]e|designation|qualification|exams?)\b"
+    # A different discipline: research ML, or the profile's own (search.py STILL_CUTS).
+    r"|\bresearch (?:ml|scientist|role)\b|\bml engineering or research\b|\bresearch-grade ml\b"
+    # Facts about the posting, not verdicts.
+    r"|\bduplicate\b|\bclosed\b|\bexpired\b|\bno longer (?:posted|listed|live)\b")
 # What is NOT here, deliberately: the name of the stage that wrote the reason
 # ("knockout at triage", "blocker 2", "free text screen") and a years bar. A
 # stage name is not a fact about the posting, and a years bar is a flag under
@@ -179,9 +183,54 @@ _STILL_CUTS_CORE = (
 # card cut at 5+ years, kept blocking roles the current card and screen only
 # rank lower. Released, such a posting goes through the current screen again,
 # which cuts it again if it still cuts.
+#
+# Nor, any more, a degree, a pay range or a place by their wording alone. Today's
+# screen ranks a stated degree, cuts a range only below the cut line and fails a
+# place only by the location gate, and this list cut on all three by their words:
+# "range tops out" matched the screen's own FLAG text for a range above the cut
+# line, and every relocation or on-site reason blocked the same title at that
+# employer whatever the gate now says. Each is judged as today's rules judge it,
+# below.
 _STILL_CUTS = re.compile(
     "|".join([_STILL_CUTS_CORE, *getattr(person.module("search"), "STILL_CUTS", ())]),
     re.I)
+# A range below this is a different job level, the one pay cut today's screen makes
+# (text_screen.py, search.py SALARY_CUT_BELOW).
+SALARY_CUT_BELOW = getattr(person.module("search"), "SALARY_CUT_BELOW", 0) or 0
+_RANGE_REASON = re.compile(r"\brange\b|\bsalary\b|\bpay\b|\bcompensation\b|\btops? out\b"
+                           r"|\bfloor\b|\bcut line\b", re.I)
+_MONEY = r"(\d{1,3}(?:[,.\s]\d{3})+|\d+(?:\.\d+)?)\s?(k\b)?"
+_TOP_CUE = re.compile(r"(?:tops? out at|range max(?:imum)?|max(?:imum)?(?: is| of| at)?|up to)"
+                      r"\s*:?\s*(?:[A-Z]{3}\s?)?[^\w\s]?\s?" + _MONEY, re.I)
+_SPAN = re.compile(_MONEY + r"\s*(?:-|\u2013|to)\s*(?:[A-Z]{3}\s?)?[^\w\s]?\s?" + _MONEY, re.I)
+_LOCATION_REASON = re.compile(r"\brelocat\w*|\bon-?site\b|\blocation\b|\bcommut\w*"
+                              r"|\bbased in\b|\boutside the\b", re.I)
+_DEGREE_REASON = re.compile(r"\bmaster'?s?\b|\bph\.?\s?d\b|\bdoctora\w*|\bdegree\b", re.I)
+
+
+def _amount(num: str, k: str | None) -> int:
+    n = float(re.sub(r"[,\s]|\.(?=\d{3}\b)", "", num))
+    return int(n * 1000) if k else int(n)
+
+
+def range_top(reason: str) -> int | None:
+    """The top of the pay range a reason quotes, or None when it cannot be told."""
+    m = _TOP_CUE.search(reason or "")
+    if m:
+        return _amount(m.group(1), m.group(2))
+    m = _SPAN.search(reason or "")
+    if m:
+        return _amount(m.group(3), m.group(4) or m.group(2))
+    return None
+
+
+def _place_still_fails(entry: dict | None) -> bool:
+    """Does the location gate still fail the place this entry recorded?"""
+    loc = (entry or {}).get("location")
+    if not loc:
+        return False
+    from prefilter import location_verdict
+    return location_verdict(str(loc), str((entry or {}).get("title") or ""))[0] == "FAIL"
 
 
 # Facts about a posting, not verdicts of a method: a better screen does not reopen them.
@@ -211,16 +260,27 @@ def screened_before(entry: dict, since: str) -> bool:
     return not day or day < since
 
 
-def is_stale_exclusion(reason: str) -> bool:
+def is_stale_exclusion(reason: str, entry: dict | None = None) -> bool:
     """Was this ruled out for something the current rules rank rather than cut?
 
-    Order matters. A reason routinely carries both a score and a real cut, and
-    the real cut wins: "scored 40. Core function is dashboard maintenance" is a
-    deal-breaker the profile names, with a number attached.
+    An exclusion stands only while today's rules would still cut it. Order
+    matters. A reason routinely carries both a score and a real cut, and the
+    real cut wins: "scored 40. Core function is dashboard maintenance" is a
+    deal-breaker the profile names, with a number attached. Then a pay reason
+    stands only on a range topping out below the cut line, a place only where
+    the location gate still fails the place the entry recorded (`entry`), and a
+    degree never.
     """
     text = str(reason or "")
     if _STILL_CUTS.search(text):
         return False
+    if _RANGE_REASON.search(text):
+        top = range_top(text)
+        return not (top is not None and top < SALARY_CUT_BELOW)
+    if _LOCATION_REASON.search(text):
+        return not _place_still_fails(entry)
+    if _DEGREE_REASON.search(text):
+        return True
     return bool(_STALE_EXCLUSION.search(text))
 
 
@@ -366,10 +426,19 @@ def load_seen(path: str = SEEN) -> dict:
     return data
 
 
-def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]]:
-    """URL key -> reason and (title, employer key) -> reason for everything already ruled out."""
+# The place of a ruling that recorded none: it holds for the title at that employer
+# wherever it is posted, as every ruling did before the place was kept.
+ANYWHERE = "*"
+
+
+def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str, str], str]]:
+    """URL key -> reason and (title, employer key, city) -> reason for everything already ruled out.
+
+    The city is part of the key: a ruling on a place or a language in one city
+    blocked the same title at that employer everywhere. Read it with `ruled_pair`.
+    """
     urls: dict[str, str] = {}
-    pairs: dict[tuple[str, str], str] = {}
+    pairs: dict[tuple[str, str, str], str] = {}
     since = rescreen_since()
     import exclude
     rules_now, parts_now = exclude.rules_fingerprint(), exclude.rules_parts()
@@ -392,10 +461,15 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         # The person's own call (tools/exclude.py --basis person) holds until they
         # lift it: no better screen and no rule change speaks for them.
         own_call = e.get("basis") == "person"
+        # Resting on named parts of the person's own rules (a blocker row on their
+        # triage card, one gate setting), it stands while those parts do: their card
+        # is today's rule for it, and `exclude.holds` below lapses it the day the part
+        # changes. Anything else is judged by its reason against today's rules.
+        named = isinstance(e.get("rests_on"), dict) and bool(e.get("rests_on"))
         # Scored out under rules that no longer say to cut on a score. The entry
         # stays as the record; it just stops blocking, and the posting is ranked
         # again against the current scoring.
-        if status == "excluded" and not own_call and is_stale_exclusion(reason):
+        if status == "excluded" and not own_call and not named and is_stale_exclusion(reason, e):
             continue
         if (status == "excluded" and not own_call and since and screened_before(e, since)
                 and not _NOT_A_VERDICT.search(reason)):
@@ -413,8 +487,106 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         t = (e.get("title") or "").strip().lower()
         k = key(e.get("company"))
         if t and k:
-            pairs[(t, k)] = why
+            pairs[(t, k, city(e["location"]) if e.get("location") else ANYWHERE)] = why
     return urls, pairs
+
+
+def ruled_pair(pairs: dict, job: dict) -> str:
+    """The reason a posting's title, employer and city were ruled out, or ""."""
+    t, k, c = _posting_key(job.get("title"), job.get("company"), job.get("location"))
+    if not (t and k):
+        return ""
+    return pairs.get((t, k, c)) or pairs.get((t, k, ANYWHERE)) or ""
+
+
+# A posting's own date is the portal's, and a portal relisting a posting gives it a
+# new one: LinkedIn's card shows the relist date, so a role first seen a month ago
+# read as posted yesterday and earned the freshness bonus. So seen_jobs.json keeps
+# the day this search first saw each posting, and a posting is as old as the
+# earlier of the two. A relist often comes under a new URL too, so a posting with
+# the same title, employer and city as one seen within this many days is that
+# posting again; past it, the same title is more likely a new opening.
+RELIST_WINDOW = 30
+
+_CITY_NOISE = re.compile(r"\([^)]*\)|\b(?:hybrid|on[- ]?site|in[- ]office|remote|flexible)\b")
+_SEEN_DAYS = ("first_seen", "excluded_date", "skipped_date", "rank_date", "last_seen")
+
+
+def city(location) -> str:
+    """The first place a location names, lower-cased: "Toronto, ON, Canada" is "toronto"."""
+    low = _CITY_NOISE.sub(" ", str(location or "").lower())
+    for part in re.split(r"[,|/;]|\s[-\u2013]\s", low):
+        part = " ".join(part.split()).strip(" -")
+        if part:
+            return part
+    return ""
+
+
+def _posting_key(title, company, location) -> tuple[str, str, str]:
+    return ((title or "").strip().lower(), key(company), city(location))
+
+
+def _days_seen(e: dict) -> list[str]:
+    """Every day an entry records the posting as seen, as ISO dates."""
+    out = []
+    for k in _SEEN_DAYS:
+        d = as_date(e.get(k), iso_only=True)
+        if d:
+            out.append(d.isoformat())
+    return out
+
+
+def _seen_index(entries: dict, today: str = "") -> tuple[dict, dict]:
+    """(normalised URL -> entry key, (title, employer, city) -> entry key).
+
+    The second holds only postings seen within RELIST_WINDOW days of `today`, the
+    one first seen earliest for each.
+    """
+    now = as_date(today, iso_only=True) or dt.date.today()
+    since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat()
+    urls: dict[str, str] = {}
+    pairs: dict[tuple, str] = {}
+    first: dict[str, str] = {}
+    for u, e in entries.items():
+        if not isinstance(e, dict):
+            continue
+        days = _days_seen(e)
+        first[u] = min(days) if days else ""
+        n = norm(e.get("url") or u)
+        if n and n not in urls:
+            urls[n] = u
+        t, k, c = _posting_key(e.get("title"), e.get("company"), e.get("location"))
+        if t and k and days and max(days) >= since:
+            have = pairs.get((t, k, c))
+            if have is None or (first[u] and (not first[have] or first[u] < first[have])):
+                pairs[(t, k, c)] = u
+    return urls, pairs
+
+
+def _find(job: dict, urls: dict, pairs: dict) -> tuple[str | None, bool]:
+    """(the entry key a posting matches, whether by URL)."""
+    n = norm(job.get("url") or "")
+    if n and n in urls:
+        return urls[n], True
+    hit = pairs.get(_posting_key(job.get("title"), job.get("company"), job.get("location")))
+    return hit, False
+
+
+def first_seen(entries: dict, today: str = ""):
+    """A function from a posting to the day this search first saw it, or "".
+
+    By its URL, or as a relist of a posting with the same title, employer and city
+    seen in the last RELIST_WINDOW days. The companion of `ruled_out`: both read
+    seen_jobs.json and only what the scrape already has, so prefilter can age a
+    posting before hydrate fetches it.
+    """
+    urls, pairs = _seen_index(entries, today)
+
+    def of(job: dict) -> str:
+        k, _ = _find(job, urls, pairs)
+        days = _days_seen(entries[k]) if k is not None else []
+        return min(days) if days else ""
+    return of
 
 
 def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, str]:
@@ -433,7 +605,7 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, 
     ignored and reported, rather than quietly suppressing an employer forever.
     """
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return {}
@@ -456,7 +628,7 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, 
 def expired_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> list[str]:
     """Entries whose review_after has passed, so the caller can say so."""
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return []
@@ -556,7 +728,9 @@ def _contacts_by_employer(path: str, statuses: set, rows: list[dict] | None = No
     """
     if rows is None:
         try:
-            with open(path, newline="") as fh:
+            # UTF-8 by name: the platform's default is cp1252 on Windows, and the
+            # contact book holds names it cannot read.
+            with open(path, newline="", encoding="utf-8") as fh:
                 rows = list(csv.DictReader(fh))
         except OSError:
             return {}
@@ -566,7 +740,7 @@ def _contacts_by_employer(path: str, statuses: set, rows: list[dict] | None = No
     for r in rows:
         if _status_of(r, live) not in statuses:
             continue
-        k = key(r.get("company"))
+        k = row_key(r)
         if not k:
             continue
         out.setdefault(k, []).append({
@@ -617,6 +791,10 @@ def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
 
 
 _TITLE_NOISE = re.compile(r"[^a-z0-9]+")
+# A bracket that says how or where a role is posted, not which role it is.
+_TITLE_TAG = re.compile(
+    r"\((?:future opportunities|evergreen|talent pool|remote|hybrid|on[- ]?site|"
+    r"full[- ]time|permanent|[mfwd]/[mfwd]/[mfwd]|all genders)\)", re.I)
 
 
 def _same_title(a, b) -> bool:
@@ -624,17 +802,18 @@ def _same_title(a, b) -> bool:
 
     Compared on letters and digits only, so "Sr. Analyst, Supply Chain" and
     "Senior Analyst, Supply Chain (Future Opportunities)" are not treated as two
-    jobs by a comma. Seniority words are folded for the same reason.
+    jobs by a comma or a posting tag. Seniority words are folded for the same
+    reason. The whole title, never a prefix of it: "Data Analyst" closed matched
+    "Data Analyst, Fraud Strategy", and a skip on a closed application is never
+    looked at again, so the second role was blocked for good.
     """
     def norm(x):
-        x = _TITLE_NOISE.sub(" ", str(x or "").lower())
+        x = _TITLE_NOISE.sub(" ", _TITLE_TAG.sub(" ", str(x or "")).lower())
         x = re.sub(r"\b(sr|snr)\b", "senior", x)
         x = re.sub(r"\b(jr)\b", "junior", x)
         return " ".join(x.split())
     x, y = norm(a), norm(b)
-    if not x or not y:
-        return False
-    return x == y or x.startswith(y) or y.startswith(x)
+    return bool(x) and x == y
 
 
 def _as_score(value) -> float | None:
@@ -644,7 +823,7 @@ def _as_score(value) -> float | None:
 
 
 def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
-             pairs: dict[tuple[str, str], str], today: str,
+             pairs: dict[tuple, str], today: str,
              blocked: dict[str, str] | None = None,
              warm: dict[str, list[dict]] | None = None,
              drafted: dict[str, dict] | None = None,
@@ -659,7 +838,6 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
     for r in rows:
         k = key(r.get("company"))
         n = norm(r.get("url"))
-        pair = ((r.get("title") or "").strip().lower(), k)
         reason = None
         # The candidate's bar (tools/bar.py). Only its hard rules cut here: the
         # sectors and employers the profile excludes (search.py, BAR_*). Every
@@ -677,8 +855,8 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             reason = holds[k]
         elif n and n in urls:
             reason = f"already ruled out, {urls[n]}"
-        elif pair in pairs:
-            reason = f"already ruled out, {pairs[pair]}"
+        elif ruled_pair(pairs, r):
+            reason = f"already ruled out, {ruled_pair(pairs, r)}"
         elif k and closed and any(_same_title(r.get("title"), c.get("role"))
                                   for c in closed.get(k, [])):
             c = next(c for c in closed[k] if _same_title(r.get("title"), c.get("role")))
@@ -794,39 +972,78 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
     return kept, skipped
 
 
-def write_back(path: str, data: dict, skipped: list[dict], today: str) -> int:
-    """Record every throttle/duplicate skip in seen_jobs.json. Returns rows written."""
+# Statuses a round may move to "surfaced" or "skipped": what an earlier round or a
+# hand-added backlog wrote. Never an application, a ranking or an exclusion.
+_ROUND_STATUSES = ("new", "estimated", "skipped", "surfaced")
+
+
+def _sighting(entries: dict, urls: dict, pairs: dict, r: dict, today: str) -> str | None:
+    """The entry for this posting, made or found, with its first and last sighting.
+
+    Found by URL, the entry's `first_seen` is kept and `last_seen` moves to today.
+    Found as a relist under a new URL, a new entry starts from the first sighting
+    of the old one. Not found, a new entry starts today. None for a row with no URL.
+    """
+    u = r.get("url")
+    if not u:
+        return None
+    k, by_url = _find(r, urls, pairs)
+    if k is not None and by_url:
+        e = entries[k]
+        days = _days_seen(e)
+        e.setdefault("first_seen", min(days) if days else today)
+        e["last_seen"] = today
+        return k
+    entry = {
+        "title": r.get("title"), "company": r.get("company"), "url": u,
+        "first_seen": today, "last_seen": today, "posted_date": r.get("date") or None,
+        "deadline": None, "portal": r.get("portal"), "source": "cli",
+        "location": r.get("location"), "location_verdict": r.get("location_verdict"),
+        "fit": r.get("fit"), "opportunity": r.get("opportunity"),
+        "priority": r.get("priority"), "status": "surfaced",
+    }
+    if k is not None:
+        days = _days_seen(entries[k])
+        entry["first_seen"] = min(days) if days else today
+        entry["relisted_from"] = entries[k].get("url") or k
+    entries[u] = entry
+    n = norm(u)
+    if n:
+        urls[n] = u
+    return u
+
+
+def write_back(path: str, data: dict, skipped: list[dict], today: str,
+               kept: list[dict] | tuple = ()) -> int:
+    """Record every skip, and when each posting was first and last seen. Returns skips written.
+
+    Surfaced rows are recorded too, at status "surfaced", so the day a posting was
+    first seen survives it being relisted. They are not "new": /rank reads "new" as
+    a backlog added by hand.
+    """
     entries = data.setdefault("seen", {})
-    index = {norm(u): u for u in entries if norm(u)}
+    urls, pairs = _seen_index(entries, today)
     n = 0
     for r in skipped:
         reason = r["skip_reason"]
-        if reason.startswith("already ruled out"):
+        k = _sighting(entries, urls, pairs, r, today)
+        if k is None or reason.startswith("already ruled out"):
             continue  # it is already recorded; do not rewrite the original reason
-        u = r.get("url")
-        if not u:
-            continue
-        existing = index.get(norm(u))
-        if existing is None:
-            entries[u] = {
-                "title": r.get("title"), "company": r.get("company"), "url": u,
-                "first_seen": today, "posted_date": r.get("date") or None,
-                "deadline": None, "portal": r.get("portal"), "source": "cli",
-                "location": r.get("location"),
-                "location_verdict": r.get("location_verdict"),
-                "fit": r.get("fit"), "opportunity": r.get("opportunity"),
-                "priority": r.get("priority"),
-                "status": "skipped", "skip_reason": reason, "skipped_date": today,
-            }
-            index[norm(u)] = u
-        else:
-            e = entries[existing]
-            # Never downgrade an application or a permanent exclusion to a skip.
-            if (e.get("status") or "new") in ("new", "estimated", "skipped"):
-                e["status"] = "skipped"
-            e["skip_reason"] = reason
-            e["skipped_date"] = today
+        e = entries[k]
+        # Never downgrade an application or a permanent exclusion to a skip.
+        if (e.get("status") or "new") in _ROUND_STATUSES:
+            e["status"] = "skipped"
+        e["skip_reason"] = reason
+        e["skipped_date"] = today
         n += 1
+    for r in kept:
+        k = _sighting(entries, urls, pairs, r, today)
+        if k is None:
+            continue
+        e = entries[k]
+        if (e.get("status") or "new") in _ROUND_STATUSES:
+            e["status"] = "surfaced"
+        r["first_seen"] = e.get("first_seen") or today
     tmp = tempfile.NamedTemporaryFile("w", dir=os.path.dirname(path) or ".",
                                       delete=False, encoding="utf-8", suffix=".tmp")
     with tmp:
@@ -848,9 +1065,13 @@ def main() -> int:
     ap.add_argument("--today", default=dt.date.today().isoformat())
     ap.add_argument("--no-write", action="store_true",
                     help="do not record skips in seen_jobs.json")
+    ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
+                    help="skip nothing for a past ruling in seen_jobs.json, so everything "
+                         "previously excluded is scored again (run_round.py --no-seen-read)")
     a = ap.parse_args()
 
-    data = json.load(open(a.infile))
+    with open(a.infile, encoding="utf-8") as fh:
+        data = json.load(fh)
     rows = list(data.values()) if isinstance(data, dict) else list(data)
     # A posting that gives its employer's short name in brackets teaches the
     # join before any row is keyed, so "Long Name (LN)" and "LN" are one employer
@@ -859,7 +1080,10 @@ def main() -> int:
     company_key.learn(r.get("company") for r in rows)
     open_apps = open_applications(a.tracker)
     seen = load_seen(a.seen)
-    urls, pairs = ruled_out(seen["seen"])
+    # Re-judging everything was the point of --no-seen-read, and the prefilter
+    # honoured it while this applied every past ruling at the end anyway, so a
+    # round with the flag re-scored nothing.
+    urls, pairs = ({}, {}) if a.keep_ruled_out else ruled_out(seen["seen"])
     blocked = load_do_not_target(a.do_not_target, a.today)
     warm = warm_routes(a.contacts)
     kept, skipped = throttle(rows, open_apps, urls, pairs, a.today, blocked, warm,
@@ -872,17 +1096,26 @@ def main() -> int:
         print("do_not_target entries past review_after, no longer suppressing: %s"
               % ", ".join(stale), file=sys.stderr)
 
-    json.dump(kept, open(a.out, "w"), indent=1)
+    # The day each surfaced posting was first seen rides on the shortlist, so a
+    # relisted posting reads as old there too.
+    seen_on = first_seen(seen["seen"], a.today)
+    for r in kept:
+        r["first_seen"] = seen_on(r) or a.today
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(kept, fh, indent=1)
     if a.skipped:
-        json.dump(skipped, open(a.skipped, "w"), indent=1)
-    written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today)
+        with open(a.skipped, "w", encoding="utf-8") as fh:
+            json.dump(skipped, fh, indent=1)
+    written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today, kept)
 
     from collections import Counter
     kinds = Counter(r["skip_reason"].split(":")[0].split(",")[0] for r in skipped)
     print(f"{len(rows)} ranked -> {len(kept)} surfaced, {len(skipped)} skipped "
           f"({dict(kinds)}); {len(open_apps)} employers with an open application; "
           f"{len(blocked)} employers on do_not_target; "
-          f"{written} skips recorded in seen_jobs.json", file=sys.stderr)
+          f"{written} skips recorded in seen_jobs.json"
+          + ("" if a.no_write else f", and when each of the {len(kept)} surfaced was first seen"),
+          file=sys.stderr)
     n_warm = sum(1 for r in kept if r.get("warm_route"))
     if n_warm:
         print(f"{n_warm} surfaced roles have a live contact at that employer",

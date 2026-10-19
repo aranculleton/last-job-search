@@ -333,3 +333,20 @@ def strip_legal_forms(name: str | None) -> str:
 def display_name(name: str | None) -> str:
     """The employer as people write it: brackets and legal forms off, the rest kept."""
     return strip_legal_forms(drop_brackets(name))
+
+
+def row_key(row) -> str:
+    """The employer identity of a contact row.
+
+    Recomputed from the company name, with the stored `company_key` column used
+    only when the name is blank. The column is a convenience for filtering in a
+    spreadsheet, not the authority: `ALIASES` grows, so a key written last month
+    can be stale while the name it came from still resolves correctly. One rule
+    for the contact book's readers: the throttle skipped a row with only the
+    column, so a referral in flight at that employer held nothing back, while
+    tools/network/state.py read the same row as that employer.
+    """
+    k = key(row.get("company"))
+    if k:
+        return k
+    return str(row.get("company_key") or "").strip().lower()

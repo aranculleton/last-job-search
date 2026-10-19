@@ -167,6 +167,32 @@ def _fetch(job: dict, timeout: int) -> dict:
         return {**job, "hydrate_error": f"{type(e).__name__}: {str(e)[:160]}"}
 
 
+def cached_bodies(path: str | None) -> dict[str, str]:
+    """{normalised URL: body} from an earlier round's hydrated file, or {}.
+
+    A widened round (run_round.py --expand) searches deeper and finds mostly the
+    postings the round before it already fetched. Their bodies are reused rather
+    than fetched again; a body that stood in for a failed fetch is not.
+    """
+    if not path:
+        return {}
+    try:
+        with open(path, encoding="utf-8") as fh:
+            rows = json.load(fh)
+        from lookup_score import norm
+    except (OSError, ValueError, ImportError):
+        return {}
+    rows = list(rows.values()) if isinstance(rows, dict) else rows
+    out = {}
+    for r in rows if isinstance(rows, list) else ():
+        if not isinstance(r, dict) or r.get("hydrate_error"):
+            continue
+        n = norm(r.get("url") or "")
+        if n and (r.get("desc") or "").strip():
+            out[n] = r["desc"]
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("infile")
@@ -174,10 +200,21 @@ def main() -> int:
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--require", type=float, default=None,
                     help="fail if the fraction with a description is below this")
+    ap.add_argument("--cache", default=None,
+                    help="an earlier round's hydrated file: its bodies are reused, not fetched")
     a = ap.parse_args()
 
     data = json.load(open(a.infile))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
+    cache = cached_bodies(a.cache)
+    reused = 0
+    if cache:
+        from lookup_score import norm
+        for i, j in enumerate(jobs):
+            body = cache.get(norm(j.get("url") or "") or "")
+            if body and not (j.get("desc") or "").strip():
+                jobs[i] = {**j, "desc": body}
+                reused += 1
     before = sum(1 for j in jobs if (j.get("desc") or "").strip())
     out: list[dict] = []
     with ThreadPoolExecutor(max_workers=a.workers) as ex:
@@ -195,8 +232,9 @@ def main() -> int:
     errors = [j for j in out if j.get("hydrate_error")]
     json.dump(out, open(a.out, "w"), indent=1)
     frac = after / len(out) if out else 0.0
-    print(f"{len(out)} postings: {before} had a description, {after} now do "
-          f"({frac:.0%}); {len(errors)} fetch errors", file=sys.stderr)
+    print(f"{len(out)} postings: {before} had a description"
+          + (f" ({reused} from the round before)" if reused else "")
+          + f", {after} now do ({frac:.0%}); {len(errors)} fetch errors", file=sys.stderr)
     if errors:
         from collections import Counter
         for reason, n in Counter(j["hydrate_error"][:60] for j in errors).most_common(5):

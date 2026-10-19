@@ -10,3 +10,6 @@ Google Antigravity  # a product
 Fernhill Ratings    # invented, tests/test_people_are_matched_by_where_they_work.py
 Brindle's Analytics # invented, tests/test_people_are_matched_by_where_they_work.py
 Brannock Quillfeather  # invented, tests/test_people_are_matched_by_where_they_work.py
+Larkspur Casino Group   # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Northgate Council       # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Wexmoor Council         # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py

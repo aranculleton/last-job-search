@@ -72,6 +72,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import places as _places  # noqa: E402
 import robots_check  # noqa: E402
 from prefilter import location_verdict, title_verdict  # noqa: E402
 
@@ -126,6 +127,13 @@ REFUSED_PROVIDERS: dict[str, tuple[str, str, str]] = {
 # <city>, ...", "US / <country>"), so it is a list of places, not a parser.
 # No profile list means nothing is wanted but a bare "Remote".
 PLACES = getattr(_B, "PLACES", None) or re.compile(r"(?!x)x")
+
+# And the places the person's search already names: the home metro and the home
+# country (profile/search.py LOCATION, through tools/places.py). PLACES alone missed
+# them: a board's posting in a metro town PLACES did not list ("Bolton", "Wigan")
+# never reached the round, though prefilter passes it.
+_METRO_RX = (re.compile(r"\b(?:%s)\b" % "|".join(re.escape(m) for m in _places.METRO), re.I)
+             if _places.METRO else re.compile(r"(?!x)x"))
 
 # A location that says the job is remote and names no geography at all.
 # "Remote" on its own is kept; "Remote - <city>" is caught by PLACES above and
@@ -306,7 +314,8 @@ def _wanted(location: str) -> bool:
     loc = (location or "").strip()
     if not loc:
         return False
-    return bool(PLACES.search(loc) or BARE_REMOTE.match(loc))
+    return bool(PLACES.search(loc) or _METRO_RX.search(loc)
+                or _places.HOME_COUNTRY_RX.search(loc.lower()) or BARE_REMOTE.match(loc))
 
 
 def _with_country(label: str, country: str) -> str:
@@ -870,20 +879,23 @@ def workday(employer: str, token: str, queries=None,
 FETCH = {"greenhouse": greenhouse, "lever": lever, "ashby": ashby, "workday": workday}
 
 
-def fetch_all(boards=None, workers: int = 16,
-              notes: dict | None = None) -> tuple[list[dict], dict[str, str]]:
+def fetch_all(boards=None, workers: int = 16, notes: dict | None = None,
+              today: dt.date | None = None) -> tuple[list[dict], dict[str, str]]:
     """(rows, {employer: why it returned nothing}) across every board.
 
     `notes`, when given, collects what a board that DID return rows left out,
     a Workday body that would not fetch, which is worth saying and is not the
     same thing as a board gone quiet. The worker count is across boards; the
-    politeness budget per host is held in `_request`.
+    politeness budget per host is held in `_request`. `today` dates Workday's
+    "Posted N days ago", so a replayed round (scrape_wide.py --today) dates its
+    postings from its own day and not the day it is replayed.
     """
     boards = BOARDS if boards is None else boards
     rows: list[dict] = []
     quiet: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=workers) as ex:
-        futs = {ex.submit(FETCH[kind], employer, token): employer
+        futs = {(ex.submit(FETCH[kind], employer, token, today=today) if kind == "workday"
+                 else ex.submit(FETCH[kind], employer, token)): employer
                 for employer, (kind, token) in boards.items()}
         for f in as_completed(futs):
             employer = futs[f]

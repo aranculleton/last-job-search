@@ -100,7 +100,7 @@ def test_the_places_are_the_location_gates_own_lists():
 GATE = {
     "PASS": [
         "Remote", "remote", "Remote - UK", "UK (Remote)", "United Kingdom (Remote)",
-        "Remote, United Kingdom", "Remote (EU)", "Remote, Northgate", "Manchester",
+        "Remote, United Kingdom", "Remote, Northgate", "Manchester",
         "Manchester, England, United Kingdom", "Manchester, UK", "Hybrid - Manchester",
         "Manchester | Remote", "Greater Manchester", "Greater Manchester Area",
         "Manchester Area, United Kingdom", "Manchester, NH", "Manchester, NH, US", "Salford",
@@ -116,7 +116,7 @@ GATE = {
         "", "Aylesbury, England, United Kingdom", "Leeds, England, United Kingdom",
         "Liverpool", "Warrington", "Preston, England", "Sheffield", "North West",
         "North West England", "New York, NY", "San Diego, CA", "Austin, TX", "EMEA", "Europe",
-        "Northgate", "Northgate, Wexmoor", "Wexmoor", "Somewhere, Nowhere"],
+        "Northgate", "Northgate, Wexmoor", "Wexmoor", "Somewhere, Nowhere", "Remote (EU)"],
     "FAIL": [
         "Remote, India", "Remote - Germany", "Remote - Canada",
         "Manchester, New Hampshire, United States", "Sale, Australia", "London",
@@ -136,7 +136,13 @@ REMOTE_FAILS = [
     "Cambridge, Massachusetts, United States", "Dublin, Ireland", "Ireland", "Berlin, Germany",
     "Paris, France", "Amsterdam, Netherlands", "Madrid, Spain", "Warsaw, Poland",
     "Bengaluru, India", "Sydney, Australia", "Canada", "New York, United States",
-    "United States", "USA"]
+    "United States", "USA",
+    # Changed on purpose: a country code is read as written, so "US" is the United
+    # States wherever a remote role names it.
+    "Manchester, NH, US"]
+# A region named beside "remote" may or may not take in home, so Tier 2 decides.
+# These passed as remote-from-anywhere until the remote branch read regions.
+REMOTE_FLAGS = ["EMEA", "Europe", "Remote (EU)"]
 # fit.py prices a FLAG by its reason, so those are held to the word.
 FLAG_REASONS = {
     "location not recognized; Tier 2 decides": [
@@ -148,8 +154,9 @@ FLAG_REASONS = {
         "Leeds, England, United Kingdom", "Liverpool", "Preston, England", "Sheffield",
         "Warrington"],
     "no location stated; Tier 2 decides": [""],
+    "remote, but names EU; whether that includes United Kingdom is for Tier 2": ["Remote (EU)"],
 }
-WIDE = [loc for locs in GATE.values() for loc in locs]
+WIDE =[loc for locs in GATE.values() for loc in locs]
 
 
 def test_the_location_gate_gives_what_it_gave():
@@ -158,7 +165,7 @@ def test_the_location_gate_gives_what_it_gave():
             assert prefilter.location_verdict(loc)[0] == verdict, loc
             assert prefilter.location_verdict(loc, "Remote Sensing Analyst")[0] == verdict, loc
     for loc in WIDE:
-        want = "FAIL" if loc in REMOTE_FAILS else "PASS"
+        want = "FAIL" if loc in REMOTE_FAILS else "FLAG" if loc in REMOTE_FLAGS else "PASS"
         assert prefilter.location_verdict(loc, "Remote Data Analyst")[0] == want, loc
     for reason, locs in FLAG_REASONS.items():
         for loc in locs:
@@ -212,4 +219,13 @@ def test_the_residence_cut_gives_what_it_gave():
         for shape in ("Candidates must be based in {}.", "You must live in {} to apply.",
                       "This role is open only to candidates based in {}."):
             text = shape.format(loc) + body
+            if loc in HOME_NATION:
+                # Changed on purpose: the old cut read "ireland" inside "Northern
+                # Ireland" as the Republic. A home nation is home, so living there
+                # is no requirement to live abroad (the location gate still reads it).
+                assert text_screen.residence_cut(text) is None, text
+                continue
             assert text_screen.residence_cut(text) == _old_residence_cut(text), text
+
+
+HOME_NATION = ("Belfast, Northern Ireland", "Northern Ireland")

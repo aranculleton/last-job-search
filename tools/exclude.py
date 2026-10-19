@@ -39,6 +39,7 @@ one's address.
 
 Usage:
     python3 tools/exclude.py add <url> --title "<title>" --company "<company>" --reason "<why>" [--basis person] [--rests-on "<part>"]
+    exclude.add_many([{"url", "reason", "title", "company", "location"}, ...])   # a round's own cuts, one write
     python3 tools/exclude.py lift ["<words in the reason>"] [--url <url>]... [--why "<what changed>"]
     python3 tools/exclude.py review [--full]   # older rulings with no basis, grouped by reason
     python3 tools/exclude.py stamp ["<words>"] [--url <url>]... --basis rules|person [--rests-on "<part>"]
@@ -101,6 +102,11 @@ _SCREEN_WORDING = (
     (re.compile(r"\bjob title is in \w+:", re.I), ("TITLE_LANGUAGE",)),
     (re.compile(r"open to the employer's own staff only", re.I),
      ("INTERNAL_ONLY", "INTERNAL_ONLY_TITLE")),
+    (re.compile(r"eligibility gate: a requirement to live in another country", re.I),
+     ("LOCATION",)),
+    (re.compile(r"eligibility gate: (?!a requirement to live in another country)", re.I),
+     ("ELIGIBILITY", "ENTITLED", "PERMIT_ACCEPTED", "ELIGIBILITY_STATUS_TERMS",
+      "ELIGIBILITY_NOT_BY_PERMIT", "ELIGIBILITY_ALWAYS")),
 )
 
 
@@ -265,29 +271,69 @@ def _stamp_rules(entry: dict, names=(), fp: str = "", parts: dict | None = None)
     entry["rests_on"] = _rests_on(names, parts) if names else ALL
 
 
-def add(url: str, reason: str, title: str = "", company: str = "", basis: str = "rules",
-        today: str = "", path=SEEN, rests_on=()) -> dict:
+def _rule(data: dict, url: str, reason: str, title: str = "", company: str = "",
+          basis: str = "rules", today: str = "", rests_on=(), location: str = "",
+          fp: str = "", parts: dict | None = None, index: dict | None = None) -> dict:
+    """Write one ruling into loaded seen data; `add` and `add_many` share it.
+
+    `index` is {normalised URL: entry key}, for a caller writing many at once.
+    """
     if basis not in BASES:
         raise ValueError(f"basis is one of {', '.join(BASES)}")
     if not reason.strip():
         raise ValueError("a ruling needs its reason: one that cannot say why blocks nothing")
     if rests_on and basis != "rules":
         raise ValueError("only a ruling on the rules rests on a part of them")
-    k = norm(url) or url
-    data = _load(path)
+    n = norm(url) or url
+    # An entry a round already recorded under the raw URL is the same posting.
+    if index is None:
+        index = {norm(u) or u: u for u in data["seen"]}
+    k = index.setdefault(n, n)
     entry = data["seen"].get(k) or {}
+    day = today or dt.date.today().isoformat()
     entry.update({"url": entry.get("url") or url, "title": title or entry.get("title", ""),
                   "company": company or entry.get("company", ""), "status": "excluded",
-                  "exclusion_reason": reason.strip(), "basis": basis,
-                  "excluded_date": today or dt.date.today().isoformat()})
+                  "exclusion_reason": reason.strip(), "basis": basis, "excluded_date": day})
+    # Where it was ruled out: a ruling on a place, or a language, holds there and
+    # not for the same title in another city (tools/throttle.py ruled_out).
+    if location and not entry.get("location"):
+        entry["location"] = location
+    entry.setdefault("first_seen", day)
     if basis == "rules":
-        _stamp_rules(entry, rests_on)
+        _stamp_rules(entry, rests_on, fp, parts)
     else:
         entry.pop("rules", None)
         entry.pop("rests_on", None)
     data["seen"][k] = entry
+    return entry
+
+
+def add(url: str, reason: str, title: str = "", company: str = "", basis: str = "rules",
+        today: str = "", path=SEEN, rests_on=(), location: str = "") -> dict:
+    data = _load(path)
+    entry = _rule(data, url, reason, title, company, basis, today, rests_on, location)
     _save(data, path)
     return entry
+
+
+def add_many(rulings, today: str = "", path=SEEN) -> int:
+    """Record several rules rulings in one write: each a dict with url, reason, and
+    optionally title, company and location. The rest is `add`'s, word for word.
+
+    A round's own cuts (tools/text_screen.py --seen) come in dozens, and `add`
+    reads and writes the whole file for each one.
+    """
+    rulings = [r for r in rulings if r.get("url") and str(r.get("reason") or "").strip()]
+    if not rulings:
+        return 0
+    data = _load(path)
+    fp, parts = rules_fingerprint(), rules_parts()
+    index = {norm(u) or u: u for u in data["seen"]}
+    for r in rulings:
+        _rule(data, r["url"], r["reason"], r.get("title") or "", r.get("company") or "",
+              "rules", today, (), r.get("location") or "", fp, parts, index)
+    _save(data, path)
+    return len(rulings)
 
 
 def _matcher(words: str = "", urls=()):
@@ -333,7 +379,7 @@ def _needs_review(entry) -> bool:
     # These already stop blocking or never did, and a fact about the posting (closed,
     # a duplicate, already applied) is not a ruling to review.
     return not (not reason.strip() or reason.lower().startswith(throttle.RE_EVALUATED)
-                or throttle.QUEUE_DECISION.search(reason) or throttle.is_stale_exclusion(reason)
+                or throttle.QUEUE_DECISION.search(reason) or throttle.is_stale_exclusion(reason, entry)
                 or throttle._NOT_A_VERDICT.search(reason))
 
 

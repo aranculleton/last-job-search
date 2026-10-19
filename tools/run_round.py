@@ -22,7 +22,8 @@ as if it were a file and prefilter's dict to text_screen as if it were a list.
                 the cross-run gate (--seen): anything throttle.ruled_out() would
                 drop at the end is dropped here, before hydrate pays for it
   hydrate       fetch every surviving body; a posting with no text cannot be screened
-  text_screen   stated-fact knockouts (10-triage-blockers.md); flags, never cuts silently
+  text_screen   stated-fact knockouts (10-triage-blockers.md); flags, never cuts silently;
+                its cuts are recorded in seen_jobs.json so no later round fetches them
   opportunity   how good is the job (comp signals, employer, seniority band)
   fit           would they call back (title band, family, stack, years, location)
   throttle      company throttle, one role per employer, cross-run dedupe (the
@@ -72,7 +73,8 @@ def _stage_budget(cmd, deadline):
     return max(1, min(own, int(deadline - time.monotonic())))
 
 
-def run(cmd, log, deadline=None):
+def run(cmd, log, deadline=None, ok=(0,)):
+    """Run one stage; its exit code, which is one of `ok`, or the round stops."""
     print("+", " ".join(cmd), flush=True)
     budget = _stage_budget(cmd, deadline)
     try:
@@ -89,12 +91,20 @@ def run(cmd, log, deadline=None):
                  "the container is reclaimed and the whole search is lost.")
     log.write("\n$ " + " ".join(cmd) + "\n" + r.stdout + r.stderr)
     log.flush()
-    if r.returncode != 0:
+    if r.returncode not in ok:
         print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
         sys.exit(f"stage failed: {os.path.basename(cmd[1])} (exit {r.returncode})")
     tail = [l for l in (r.stdout + "\n" + r.stderr).strip().splitlines() if l.strip()][-3:]
     for l in tail:
         print("   ", l)
+    return r.returncode
+
+
+# scrape_wide exits 2, after writing its files, when more than a quarter of the
+# portal requests failed. The skill says a portal failing is logged and the search
+# continues, and that exit stopped the round as a broken stage, losing what every
+# other request had found. It is a warning the round carries to its summary.
+SCRAPE_PARTIAL = 2
 
 
 # CLAUDE.md, Job Search Behaviour: "Yield target: at least 5 postings scoring
@@ -122,9 +132,12 @@ KEEP_TOP = 60
 SUMMARY_DIR = "documents/rounds"
 # Fields worth keeping. `desc` is deliberately absent: it is the whole reason
 # the stage files are large, and it is on the posting's own page.
+# `first_seen` and `age_days` because the portal's `date` is a relist date as often
+# as not: the age is the earlier of the two.
 SUMMARY_FIELDS = ("priority", "fit", "opportunity", "title", "company", "location",
-                  "date", "url", "portal", "bar", "bar_reason", "warm_route_note",
-                  "outreach_pending_note", "throttle_override_note", "drafted_note")
+                  "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
+                  "warm_route_note", "outreach_pending_note", "throttle_override_note",
+                  "drafted_note")
 
 
 def write_summary(shortlist_path, out_dir, name):
@@ -146,18 +159,25 @@ def write_summary(shortlist_path, out_dir, name):
 
 
 # The files the MISSED message tells you to read. A round that hit its target
-# needs none of them; a round that missed needs all three, because they are the
-# three places a posting can disappear: the free gates, the stated-fact screen,
-# and the throttle.
+# needs none of them; a round that missed needs all of them, because they are the
+# places a posting can disappear: the free gates, the search's own past rulings,
+# the stated-fact screen, and the throttle.
 #
 # They used to be deleted a dozen lines before the message that names them. The
 # advice was printed over an empty directory, and on `--expand` every widened
 # round pruned its own too, so three rounds of diagnosis left nothing to
 # diagnose. What made them big was never the metadata, it was `desc`: the full
 # posting body, capped at BODY_CAP per record and multiplied by a thousand
-# records. Strip that and the three files that answer "where did everything go"
-# cost a few hundred KB between them.
-DIAGNOSTICS = ("01_dropped.json", "03_screened_all.json", "06_skipped.json")
+# records. Strip that and the files that answer "where did everything go" cost
+# a few hundred KB between them.
+#
+# The free gates' drops are the scrape's own: scrape_wide applies the age, place
+# and title gates before it writes kept.json, so they land in 00_scrape/dropped.json.
+# 01_dropped.json holds only what prefilter drops after that, which is what this
+# search had already ruled out. The message named 01_dropped.json for the location
+# and age gates, and the file that answers it was deleted with the rest of 00_scrape.
+SCRAPE_DROPPED = os.path.join("00_scrape", "dropped.json")
+DIAGNOSTICS = (SCRAPE_DROPPED, "01_dropped.json", "03_screened_all.json", "06_skipped.json")
 BODY_FIELD = "desc"
 
 
@@ -208,16 +228,17 @@ def trim(path, top=KEEP_TOP):
     return max(0, before - os.path.getsize(path))
 
 
-def prune(out_dir, keep=()):
+def prune(out_dir, keep=(), hold=()):
     """Delete the stage files, keeping the round directory, its log, the shortlist and `keep`.
 
     The log is small, is already gitignored as `*.log`, and is the funnel
     record somebody reads when a round looks wrong. The shortlist is what a
-    draft is staged from. Anything named in `keep` is slimmed rather than deleted.
+    draft is staged from. Anything named in `keep` is slimmed rather than deleted,
+    and anything in `hold` is left as it is, for the caller to delete later.
     """
     freed = 0
     for name in os.listdir(out_dir):
-        if name == "round.log":
+        if name == "round.log" or name in hold:
             continue
         path = os.path.join(out_dir, name)
         if name == SHORTLIST:
@@ -226,8 +247,18 @@ def prune(out_dir, keep=()):
         if name in keep:
             freed += slim(path)
             continue
+        inner = {k.split(os.sep, 1)[1] for k in keep if k.startswith(name + os.sep)}
         try:
-            if os.path.isdir(path):
+            if os.path.isdir(path) and inner:
+                # A directory one of whose files is kept: that file slimmed, the rest gone.
+                for f in os.listdir(path):
+                    p = os.path.join(path, f)
+                    if f in inner:
+                        freed += slim(p)
+                    elif os.path.isfile(p):
+                        freed += os.path.getsize(p)
+                        os.remove(p)
+            elif os.path.isdir(path):
                 freed += sum(os.path.getsize(os.path.join(path, f))
                              for f in os.listdir(path))
                 shutil.rmtree(path)
@@ -243,22 +274,37 @@ def prune(out_dir, keep=()):
 # apart either ignores both or re-runs a pipeline that is working fine.
 EXIT_YIELD_MISSED = 2
 
-# The widenings this script can actually perform. The rest of the documented
-# sequence, more title variants, the remaining priority categories, wider
-# PASS-set locations, adjacent sectors and named employers, lives in
-# scrape_wide's own constants and in judgement, so it is printed as the next
-# thing to do rather than pretended at.
-WIDENINGS = ((2.0, 1.5), (3.0, 2.0))
+# The widenings this script can actually perform: more pages per query. The rest
+# of the documented sequence, more title variants, the remaining priority
+# categories, wider PASS-set locations, adjacent sectors and named employers,
+# lives in scrape_wide's own constants and in judgement, so it is printed as the
+# next thing to do rather than pretended at.
+#
+# Never the freshness rule. Each widening used to stretch --jobage too (14, then
+# 21, then 42), and a posting six weeks old is the most expensive false positive
+# the pipeline has: "never relax a gate to hit the number" covers that one.
+WIDENINGS = (2.0, 3.0)
+# What a widened round reuses from the one before it, so it does not fetch the
+# same bodies again: the hydrated file, held back from the prune until it has run.
+HYDRATED = "02_hydrated.json"
 
 
 def yield_of(path):
-    """(count scoring 60+, count scoring 75+) on the shortlist."""
+    """(count scoring 60+, count scoring 75+) on the shortlist, by the 0-100 score.
+
+    The score is `fit`. `priority` is only the order (fit times opportunity), and
+    counted as the score a posting with no stated salary and no date in the last
+    five days topped out at 69 for the example profile, so it could never be one of
+    the "2 at 75+" however well it fitted, though an unstated salary costs nothing.
+    A row with no fit, from before fit.py, is counted by its priority.
+    """
     try:
         rows = json.load(open(path))
     except Exception:
         return 0, 0
     rows = rows if isinstance(rows, list) else list(rows.values())
-    scores = [r.get("priority") or 0 for r in rows if isinstance(r, dict)]
+    scores = [(r.get("fit") if r.get("fit") is not None else r.get("priority")) or 0
+              for r in rows if isinstance(r, dict)]
     return sum(1 for s in scores if s >= 60), sum(1 for s in scores if s >= 75)
 
 
@@ -328,14 +374,16 @@ def main():
     ap.add_argument("--no-seen-write", dest="no_seen_write", action="store_true",
                     help="throttle: do not record skips in seen_jobs.json")
     ap.add_argument("--no-seen-read", dest="no_seen_read", action="store_true",
-                    help="prefilter: do not drop postings already ruled out. The "
-                         "throttle still drops them at the end, so this costs a "
-                         "round's worth of HTTP and buys a re-evaluation of "
-                         "everything previously excluded")
+                    help="drop nothing for a past ruling in seen_jobs.json, at the "
+                         "prefilter or the throttle: everything previously excluded is "
+                         "fetched, screened and scored again, for after the rules change. "
+                         "Postings are still aged from when they were first seen")
     ap.add_argument("--expand", action="store_true",
                     help=f"re-run wider when the yield target is missed, up to "
                          f"{MAX_ROUNDS} rounds")
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
+    ap.add_argument("--hydrate-cache", dest="hydrate_cache", default=None,
+                    help=argparse.SUPPRESS)
     ap.add_argument("--summary-dir", dest="summary_dir", default=None,
                     help="where the compact shortlist is written (default: "
                          "%s under the repo). A test pointing --out at a temp "
@@ -355,6 +403,7 @@ def main():
     # smaller of its own budget and what is left of this.
     deadline = time.monotonic() + ROUND_BUDGET_SEC
     scrape_dir = f("00_scrape")
+    partial = ""
 
     if a.from_scraped:
         os.makedirs(scrape_dir, exist_ok=True)
@@ -372,10 +421,12 @@ def main():
         print(f"+ (scrape skipped; {a.from_scraped} -> {scrape_dir}/kept.json)")
     else:
         # scrape_wide's --out is a DIRECTORY holding scraped/kept/dropped.json.
-        run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
-             "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-             "--workers", str(a.workers)] + (["--alerts", a.alerts] if a.alerts else []),
-            log, deadline)
+        if run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
+                "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
+                "--workers", str(a.workers)] + (["--alerts", a.alerts] if a.alerts else []),
+               log, deadline, ok=(0, SCRAPE_PARTIAL)) == SCRAPE_PARTIAL:
+            partial = ("more than a quarter of the portal requests failed (round.log names "
+                       "the portals and why), so this round is not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
 
     # `--seen` is what stops hydrate paying for postings this search already
@@ -386,14 +437,22 @@ def main():
     prefilter = [sys.executable, f"{T}/prefilter.py", scraped, "--out", f("01_prefiltered.json"),
                  "--dropped", f("01_dropped.json"), "--jobage", str(a.jobage),
                  "--today", a.today]
-    if not a.no_seen_read:
-        prefilter += ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
+    # Read even with --no-seen-read: it is also when each posting was first seen.
+    prefilter += ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
+    if a.no_seen_read:
+        prefilter += ["--keep-ruled-out"]
     run(prefilter, log, deadline)
     # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest.
-    run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f("02_hydrated.json"),
-         "--workers", str(a.workers), "--require", a.require], log, deadline)
-    run([sys.executable, f"{T}/text_screen.py", f("02_hydrated.json"), "--out", f("03_screened.json"),
-         "--out-all", f("03_screened_all.json")], log, deadline)
+    run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
+         "--workers", str(a.workers), "--require", a.require]
+        + (["--cache", a.hydrate_cache] if a.hydrate_cache else []), log, deadline)
+    # The screen's cuts go to seen_jobs.json, so the next round drops them before
+    # hydrate fetches them again.
+    run([sys.executable, f"{T}/text_screen.py", f(HYDRATED), "--out", f("03_screened.json"),
+         "--out-all", f("03_screened_all.json"), "--today", a.today]
+        + ([] if a.no_seen_write
+           else ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]),
+        log, deadline)
     run([sys.executable, f"{T}/opportunity.py", f("03_screened.json"), "--out", f("04_opportunity.json"),
          "--top", "100000", "--today", a.today], log, deadline)
     run([sys.executable, f"{T}/fit.py", f("04_opportunity.json"), "--out", f("05_ranked.json"),
@@ -406,6 +465,8 @@ def main():
         throttle += ["--seen", a.seen]
     if a.no_seen_write:
         throttle += ["--no-write"]
+    if a.no_seen_read:
+        throttle += ["--keep-ruled-out"]
     run(throttle, log, deadline)
 
     print("\nround summary")
@@ -418,6 +479,8 @@ def main():
     met = good >= YIELD_60 and strong >= YIELD_75
     print(f"yield: {good} scoring 60+ (target {YIELD_60}), "
           f"{strong} scoring 75+ (target {YIELD_75}) -> {'MET' if met else 'MISSED'}")
+    if partial:
+        print(f"warning: {partial}")
 
     # Write the keeper, then drop the rest. Done before the expansion branch
     # below returns, so every exit path leaves the same small footprint.
@@ -432,11 +495,14 @@ def main():
     down = _portals_down(a.out)
     if down:
         print(f"portal health: {', '.join(down)} DOWN (0 results to a deliberately broad probe)")
+    widen = not met and a.expand and a.round < MAX_ROUNDS
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
-        # is also read for exactly the three files the MISSED message below
-        # names, so those survive with their posting bodies stripped.
-        freed = prune(a.out, keep=() if met else DIAGNOSTICS)
+        # is also read for exactly the files the MISSED message below names, so
+        # those survive with their posting bodies stripped. A round
+        # about to widen holds its hydrated bodies back for the next one.
+        freed = prune(a.out, keep=() if met else DIAGNOSTICS,
+                      hold=(HYDRATED,) if widen else ())
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"
               + ("" if met else f"; kept {', '.join(DIAGNOSTICS)} without bodies"))
@@ -450,18 +516,20 @@ def main():
               "directly, then draft.")
         return 0
 
-    if a.expand and a.round < MAX_ROUNDS:
-        pages_x, age_x = WIDENINGS[a.round - 1]
+    if widen:
+        pages_x = WIDENINGS[a.round - 1]
         nxt = f"{a.out.rstrip('/')}_round{a.round + 1}"
         print(f"\nexpanding: round {a.round + 1} of {MAX_ROUNDS}, "
               f"pages {a.pages} -> {int(a.pages * pages_x)}, "
-              f"jobage {a.jobage} -> {int(a.jobage * age_x)} -> {nxt}")
-        return subprocess.call(
+              f"jobage held at {a.jobage} (the freshness rule never widens) -> {nxt}")
+        cache = f(HYDRATED)
+        code = subprocess.call(
             [sys.executable, __file__, "--out", nxt,
              "--pages", str(int(a.pages * pages_x)),
-             "--jobage", str(int(a.jobage * age_x)),
+             "--jobage", str(a.jobage),
              "--workers", str(a.workers), "--top", str(a.top), "--today", a.today,
              "--require", a.require, "--expand", "--round", str(a.round + 1)]
+            + (["--hydrate-cache", cache] if os.path.exists(cache) else [])
             + (["--keep-intermediates"] if a.keep else [])
             + (["--alerts", a.alerts] if a.alerts else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
@@ -469,6 +537,12 @@ def main():
             + (["--seen", a.seen] if a.seen else [])
             + (["--no-seen-write"] if a.no_seen_write else [])
             + (["--no-seen-read"] if a.no_seen_read else []))
+        if not a.keep:
+            try:
+                os.remove(cache)
+            except OSError:
+                pass
+        return code
 
     # CLAUDE.md: "If the target is still missed after 3 rounds, say so
     # explicitly with the count, what was tried, and the likely blocker. Never
@@ -485,12 +559,17 @@ def main():
         print(f"  *** {', '.join(down)} returned nothing to the pre-flight probe. ***")
         print("  This round is NOT evidence about the market. Fix the portal and "
               "re-run before widening or concluding anything from the count.")
+    if partial:
+        print(f"  *** {partial}. ***")
     print(f"  tried: {a.pages} pages per query, {a.jobage}-day freshness, "
           f"scrape_wide's full query and location set")
+    scrape_dropped = (f"{SCRAPE_DROPPED} for the age, location and title gates, "
+                      if os.path.exists(f(SCRAPE_DROPPED)) else "")
     print(f"  likely blocker: in {a.out}, check 06_skipped.json for what the throttle "
-          "removed, 01_dropped.json for the location and age gates, and "
-          "03_screened_all.json for the stated-fact knockouts. All three were kept "
-          "(without posting bodies) precisely because this round missed.")
+          f"removed, {scrape_dropped}01_dropped.json for what was already ruled out "
+          "or first seen too long ago, and 03_screened_all.json for the stated-fact "
+          "knockouts. Each was kept (without posting bodies) precisely because this "
+          "round missed.")
     print("  widen next, in this order: more title variants, the remaining priority "
           "categories, wider PASS-set locations, adjacent target sectors and named "
           "employers, then the WebSearch fallback.")

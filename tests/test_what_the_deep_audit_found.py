@@ -105,7 +105,12 @@ def test_a_country_code_beside_a_home_region_is_the_country(monkeypatch):
     assert prefilter.location_verdict("Northgate, WX, CA")[0] == "PASS"
     assert prefilter.location_verdict("Austin, TX")[0] == "FAIL"
     assert prefilter.location_verdict("Wexmoor, WX")[0] == "PASS"
-    assert prefilter.location_verdict("Northgate, CA")[0] == "FAIL"       # no region: a state
+    # A home-metro city beside the code is the country too. This was pinned as a
+    # state ("no region: a state"), which is how "<home city>, CA" with no
+    # province failed as on-site in California. A town off the metro list, alone
+    # with the code, is still the state.
+    assert prefilter.location_verdict("Northgate, CA")[0] == "PASS"
+    assert prefilter.location_verdict("Fernhill, CA")[0] == "FAIL"
 
 
 def test_a_refused_permit_and_private_equity_still_cut(monkeypatch):
@@ -133,9 +138,14 @@ def test_asset_and_bonus_are_preference_only_in_their_preference_sense():
 
 def test_old_exclusions_the_rules_now_only_rank_are_released():
     assert throttle.is_stale_exclusion("knockout at triage, blocker 2 (years bar above 5): 8+ years")
-    for reason in ("eligibility gate: citizenship stated as a condition",
-                   "knockout at triage, blocker 5: the whole stated range tops out at 38,000",
+    # A range at 38,000 and a stated Master's were pinned here as standing. Today's
+    # screen cuts a range only below the cut line (32,000 for the example) and only
+    # ranks a degree, so both are released and screened again.
+    for reason in ("knockout at triage, blocker 5: the whole stated range tops out at 38,000",
                    "blocker 1: Master's degree is explicitly required"):
+        assert throttle.is_stale_exclusion(reason), reason
+    for reason in ("eligibility gate: citizenship stated as a condition",
+                   "knockout at triage, blocker 5: the whole stated range tops out at 25,000"):
         assert not throttle.is_stale_exclusion(reason), reason
 
 

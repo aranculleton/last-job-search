@@ -17,6 +17,13 @@ application, and a false "open" costs one look. Closure is only claimed on the
 posting's own top card phrase, because the same words appear in the "similar
 jobs" rail of a live posting.
 
+It asks the way every other fetcher in the app asks: as itself, never as a
+browser; nothing to a portal the person has switched off (tools/portals.py);
+nothing a site's robots.txt disallows (tools/robots_check.py); and no faster
+than a portal's declared crawl-delay. Where one of those says no, the verdict is
+`unknown`, with the reason. It used to send a browser's user agent to every
+page, LinkedIn included when the person had switched LinkedIn off.
+
 Read-only. It changes no file; `/outcome` or the tracker edit is the person's.
 """
 
@@ -29,14 +36,21 @@ import os
 import re
 import subprocess
 import sys
+import time
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import portals  # noqa: E402
+import robots_check  # noqa: E402
 
 TRACKER = person.state("job_search_tracker.csv")
-UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-      "(KHTML, like Gecko) Chrome/124 Safari/537.36")
+# The app's own name, as tools/ats_boards.py sends it.
+UA = "last-job-search/1.0 (personal job search; contact via GitHub)"
+# The hosts of the app's two portals, whose SKILL.md names no `url:`; a person's
+# portal names its own.
+APP_HOSTS = {"linkedin-search": "linkedin.com", "freehire-search": "freehire.me"}
 
 # The phrases a closed posting prints about itself. LinkedIn's is in the top
 # card ("No longer accepting applications"); ATS pages say the job is gone.
@@ -64,9 +78,49 @@ def verdict(html: str) -> str:
     return "open"
 
 
+def _host(url: str) -> str:
+    h = (urlsplit(url or "").hostname or "").lower()
+    return h[4:] if h.startswith("www.") else h
+
+
+def portal_of(url: str) -> str | None:
+    """The installed portal a posting URL belongs to, or None."""
+    host = _host(url)
+    for name in portals.defaults():
+        base = APP_HOSTS.get(name) or _host(portals.url(name))
+        if base and host and (host == base or host.endswith("." + base)):
+            return name
+    return None
+
+
+def blocked(url: str) -> str:
+    """Why this page may not be asked for, or "" when it may."""
+    name = portal_of(url)
+    if name and not portals.is_enabled(name):
+        return f"{name} is switched off (python3 tools/portals.py), so nothing is sent to it"
+    code, why = robots_check.gate(url)
+    return "" if code == 0 else f"robots.txt: {why}"
+
+
+_LAST: dict[str, float] = {}
+
+
+def pace(url: str, sleep=time.sleep, clock=time.monotonic) -> None:
+    """Wait out a portal's declared crawl-delay since the last request to its host."""
+    name = portal_of(url)
+    delay = portals.crawl_delay(name) if name else 0.0
+    host = _host(url)
+    wait = _LAST.get(host, -1e9) + delay - clock()
+    if delay and wait > 0:
+        sleep(wait)
+    _LAST[host] = clock()
+
+
 def fetch(url: str, timeout: int = 20) -> str:
+    """The page, or "" when it could not be had. The gates are the caller's: `blocked`."""
+    pace(url)
     try:
-        out = subprocess.run(["curl", "-sSL", "--max-time", str(timeout), "-A", UA, url],
+        out = subprocess.run(["curl", "-sSL", "--max-time", str(timeout), "-A", UA, "--", url],
                              capture_output=True, text=True, timeout=timeout + 10)
     except (OSError, subprocess.TimeoutExpired):
         return ""
@@ -79,10 +133,16 @@ def check(statuses: set[str], path: str = TRACKER) -> list[dict]:
     out = []
     for r in rows:
         url = (r.get("source") or "").strip()
-        v = verdict(fetch(url)) if url.startswith("http") else "no source url"
+        why = blocked(url) if url.startswith("http") else ""
+        if not url.startswith("http"):
+            v = "no source url"
+        elif why:
+            v = "unknown"
+        else:
+            v = verdict(fetch(url))
         out.append({"company": r.get("company"), "role": r.get("role"), "status": r.get("status"),
                     "date": r.get("date"), "deadline": r.get("deadline") or "", "verdict": v,
-                    "url": url})
+                    "url": url, "why": why})
     return out
 
 
@@ -96,7 +156,8 @@ def main() -> int:
         print(json.dumps(got, indent=1))
         return 0
     for g in got:
-        print(f"{g['verdict']:<14} {g['date']}  {g['company']} | {g['role']}")
+        print(f"{g['verdict']:<14} {g['date']}  {g['company']} | {g['role']}"
+              + (f"  ({g['why']})" if g.get("why") else ""))
     closed = [g for g in got if g["verdict"] == "closed"]
     if closed:
         print(f"\n{len(closed)} closed: close them out with /outcome, or send nothing there.")
