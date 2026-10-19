@@ -65,7 +65,6 @@ def tex_env(base=None):
     return env
 
 
-MAX_LINES = 50
 # 03-writing-style.md: "200-250 words of BODY text". The body is what the
 # candidate wrote; the header, address, date, salutation and signature block
 # are template. Counting the whole PDF inflates the figure by roughly 45 words
@@ -424,6 +423,15 @@ def fit(a):
     return (pages, _lines(resume_pdf(abbr))), lpages
 
 
+def needs_check(resume_pages, letter_pages, words):
+    """Whether a fitted application is outside its budgets: the resume off the
+    profile's page count, the letter off one page, or the body over its cap.
+
+    It was `resume_pages == 1`, so every application of a person whose profile
+    asks for two pages was flagged CHECK however well it fitted."""
+    return not (1 <= resume_pages <= PAGES and letter_pages == 1 and words <= MAX_BODY_WORDS)
+
+
 def load(path):
     """The drafts in `path`, and which of them had their posting read in.
 
@@ -466,6 +474,6 @@ if __name__ == "__main__":
     for a in apps:
         (rp, rl), lp = fit(a)
         bw = body_words(a)
-        flag = "" if (rp == 1 and lp == 1 and bw <= MAX_BODY_WORDS) else "   <-- CHECK"
+        flag = "   <-- CHECK" if needs_check(rp, lp, bw) else ""
         print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  letter {lp}p/{bw} body words{flag}")
     save(sys.argv[1], apps, read_in)
