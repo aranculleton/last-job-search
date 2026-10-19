@@ -89,8 +89,10 @@ def shared_runs(texts, n=6):
 
 def _words(text):
     """Lower-case words with the LaTeX and the punctuation gone, so a letter's
-    "22% to 14%" meets a bullet's "22\\% to 14\\%"."""
-    return " ".join(re.sub(r"[^\w%£$]+", " ", _plain(text).lower()).split())
+    "22% to 14%" meets a bullet's "22\\% to 14\\%". A figure stays one word:
+    "2,400" split in two made "across 2,400 SKUs and 6" a six-word repeat."""
+    words = re.sub(r"[^\w%£$.,]+", " ", _plain(text).lower()).split()
+    return " ".join(w.strip(".,") for w in words if w.strip(".,"))
 
 
 def resume_repeats(a, n=6):

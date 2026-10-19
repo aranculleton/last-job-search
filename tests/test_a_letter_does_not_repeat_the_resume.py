@@ -50,3 +50,8 @@ def test_the_shared_phrase_check_counts_as_verify_batch_did():
     assert set(AU.shared_runs(bullets)) == {"weekly demand forecasts across six depots"}
     with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
         assert "from audit_letters import shared_runs" in fh.read()
+
+
+def test_a_figure_is_one_word():
+    """Five words and a figure split at its comma are not six words of prose."""
+    assert AU.resume_repeats(_letter("Forecasts for depots across 2,400 SKUs and 6 centres.")) == []
