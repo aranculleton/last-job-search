@@ -197,6 +197,26 @@
       "verified_on": "2026-10-18",
       "verified_against": "code.claude.com docs read 2026-10-18",
       "ui_sensitive": true
+    },
+    {
+      "id": "linkedin-connections",
+      "claim": "A LinkedIn member can download a file of their own connections (each one's name, employer, position and the date they connected; an email address only where that person chose to share it) from LinkedIn's data-privacy settings, and a connections-only copy is usually emailed within about ten minutes. This rests on two third-party guides: a session never fetches linkedin.com, so LinkedIn's own help page is the one to check by hand.",
+      "goal": "download your LinkedIn connections",
+      "how": "on LinkedIn, Settings & Privacy, then Data privacy, then Get a copy of your data, with Connections chosen on its own",
+      "steps": [
+        "On LinkedIn, open Settings & Privacy, then Data privacy, then Get a copy of your data.",
+        "Choose Connections only and request it. LinkedIn emails you a link, usually within ten minutes.",
+        "Download the file and attach it here."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/50191",
+      "sources": [
+        {"url": "https://www.cleverly.co/blog-old/downloading-linkedin-contacts", "quote": "Select \"Connections,\" then click \"Request archive.\""},
+        {"url": "https://www.technipages.com/download-linkedin-data/", "quote": "LinkedIn estimates that your data will be ready for download in ten minutes."}
+      ],
+      "status": "observed",
+      "verified_on": "2026-10-19",
+      "verified_against": "two third-party guides read 2026-10-19 (dated August 2022 and July 2020); LinkedIn's help page found by a web search and not read, because a session never fetches linkedin.com",
+      "ui_sensitive": true
     }
   ]
 }

@@ -77,11 +77,15 @@ Return, in this order and nothing else:
 
 1. One line per upgrade applied: what it changed, its commit, and `undo: git revert <sha>`.
 2. One line per upgrade skipped or undone, and why.
-3. The questions for the person: each `needs: "you"` entry's `ask`, and every
-   `[CONFIRM: ...]` now in the profile (`python3 tools/profile_upgrades.py --check
-   unconfirmed-facts` lists them), as plain questions.
+3. The questions for the person: each `needs: "you"` entry's `ask`, word for word, and
+   every `[CONFIRM: ...]` now in the profile (`python3 tools/profile_upgrades.py --check
+   unconfirmed-facts` lists them), as plain questions. Never their `steps` or `why_ask`:
+   the session gives a question's steps only after a yes and its reason only after "why?".
 4. The branch these commits are on, if it is not the session's own.
 
 The session merges the branch, gives the person the lines from 1 at the end of its reply,
-and asks at most three of the questions from 3. Answers go into the profile where their
+and asks at most three of the questions from 3, each short and alone: no list of ids, no
+version numbers, no paragraph. A yes brings that question's steps (five lines at most); a
+"why?" brings its one-sentence reason; a no gets "No problem, I'll ask again in a month."
+and `python3 tools/profile_upgrades.py --no <id>`. Answers go into the profile where their
 markers were, committed like any other profile change.

@@ -50,7 +50,8 @@ Every session in a person's repo starts with the same five steps, before anythin
    one of the latter. Then the place check (`tools/place.py`), once and then weekly while it applies: when this chat
    cannot do what the person set up (profiles read in their browser, from a chat with no
    browser of theirs; tools missing on their computer), it prints what to tell them, which
-   goes at the end of the reply in its own words. It offers a choice and never makes it. The app is public, so nothing needs attaching; if it still cannot reach
+   goes at the end of the reply in its own words: two or three short sentences, and the
+   dated steps only if they ask how (`place.py how`). It offers a choice and never makes it. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
@@ -70,8 +71,12 @@ Every session in a person's repo starts with the same five steps, before anythin
    - **At the end of your reply**, one line per upgrade it applied: what changed and
      `git revert <sha>` to undo it.
    - **What needs the person** ("These need you", unconfirmed facts): ask at most three,
-     plainly, at the end of the session, never at the start; write each answer where its
-     marker was and commit it. The rest wait for the next session.
+     at the end of the session, never at the start, **each as its short plain question
+     first**, as the sync prints it. Detail comes only after a yes (its steps) or a "why?"
+     (one sentence), both in `profile_upgrades.py --plan`; a no gets one line, "No problem,
+     I'll ask again in a month.", and `--no <id>` records it. Never paste a long block, an
+     id, a version number or the word "upgrade". Write each answer where its marker was and
+     commit it. The rest wait for the next session.
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
    - **One chat per update.** Only the chat whose own sync brought an update in applies its
@@ -533,7 +538,7 @@ from now on." Once per kind of output per session, and never in place of the wor
 code, not their settings. When an update would change a setting `learned.py locked`
 lists, `/upgrade` changes nothing. It records `learned.py offer` instead, and the
 person is asked once, with the session's other questions, whether to keep theirs or try
-the new way. A kept choice is offered again after 90 days, saying when it was kept: a no
+the new way. A kept choice is offered again after 30 days, saying when it was kept: a no
 to any question is for now, never for ever (`profile_upgrades.py --no <id>` keeps one,
 dated, and it comes back when the question changes or after `REASK_DAYS`).
 

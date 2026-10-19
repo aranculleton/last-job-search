@@ -44,7 +44,11 @@ it. LinkedIn is never fetched from a session.
    **Drafts queued by an earlier run come first**: contacts at `not_contacted` with a
    `documents/network/<contact_id>/draft.md`. Show them before any new search: send
    them or drop them. `python3 tools/network/reading.py queue` lists the queued ones with no
-   fresh reading of their profile: read them (step 5) and rewrite those notes first.
+   fresh reading of their profile: read them (step 5) and rewrite those notes first. When
+   `python3 tools/build_versions.py behind network-notes` prints a line, notes are now written
+   better than when these were: rewrite every queued note from its reading, then
+   `python3 tools/build_versions.py record network-notes`. This is the only place that
+   happens, because it needs the people read, which a background agent cannot do.
    **Their own connections, if exported: rung 1.** `python3 tools/network/sources.py
    connections "<employer>"` (`sources.from_connections()`) lists the people they already
    know there from `documents/linkedin/Connections.csv`, in their function first, then the

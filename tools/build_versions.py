@@ -26,12 +26,15 @@ fails on one that is unaccounted for.
              the background with no one asking
     instant  the sync itself redoes it (`redo <name>`) and commits it
     round    every round applies it by itself (see throttle.ruled_out)
+    network  every /network run applies it first, in a chat that can read the people
+             it writes to (step 1 there): a background agent in a cloud chat cannot
     you      it needs the person's consent, so it is asked, a few at a time
 
     python3 tools/build_versions.py                   # each method: this repo's version, the app's
     python3 tools/build_versions.py record boards     # this repo now holds the app's boards version
     python3 tools/build_versions.py record --setup    # after a full /setup
     python3 tools/build_versions.py redo prep-docs    # an instant method: redo it and record it
+    python3 tools/build_versions.py behind network-notes  # what is better now; exit 1 if any
     python3 tools/build_versions.py fingerprints      # for a developer adding a version
 """
 
@@ -329,7 +332,7 @@ METHODS: dict[str, dict] = {
         "fingerprint": "905bd9c547049c81",
     },
     "network-notes": {
-        "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
+        "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
         "gives": "every first note still waiting to be sent rewritten from what was read "
                  "about the person, not from a search snippet",
         "run": "python3 tools/network/reading.py queue; for each contact it lists, /network "
@@ -743,6 +746,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if argv[:1] == ["redo"] and len(argv) == 2:
         return redo(argv[1])
+    if argv[:1] == ["behind"] and len(argv) == 2:
+        late = behind(argv[1]) if applies(argv[1]) else []
+        for v in late:
+            print(f"now {v[3]}")
+        return 1 if late else 0
     if argv[:1] == ["record"]:
         rest = argv[1:]
         names = ([n for n, m in METHODS.items() if m.get("setup")] if rest == ["--setup"]

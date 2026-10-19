@@ -142,7 +142,7 @@ def test_versions_count_up_from_the_first_release_and_say_who_redoes_them():
         assert m["versions"][0][1] == B.FIRST_RELEASE
         for _, day, rerun, what in m["versions"]:
             assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) and isinstance(rerun, bool) and what
-        assert m["by"] in ("upgrade", "instant", "round", "you"), name
+        assert m["by"] in ("upgrade", "instant", "round", "network", "you"), name
         assert m["gives"] and m["run"] and m["priority"] in (1, 2, 3, 4), name
         assert m.get("applies") is None or m["applies"] in B.APPLIES, name
         if m["by"] == "instant":
@@ -165,7 +165,8 @@ def test_a_profile_from_the_first_release_redoes_what_got_better(profile):
              if any(v[2] for v in B.METHODS[n]["versions"][1:])}
     assert rerun and rerun <= pending
     why = U.by_id("method-boards").pending()
-    assert "version 1" in why and "boards" in why
+    # Said as what is better now, never as version numbers: this line reaches the person.
+    assert why.startswith("made the older way; now ") and "version" not in why
 
 
 def test_a_profile_made_after_a_version_is_not_asked_to_redo_it(profile, monkeypatch):

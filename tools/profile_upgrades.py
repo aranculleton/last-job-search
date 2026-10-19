@@ -93,7 +93,13 @@ class Upgrade:
     # it is asked, never guessed. Nearly everything is "nobody": a list a person
     # has to read and act on is a list nobody acts on.
     needs: str = "nobody"
+    # A question is asked short and plain first (`ask`: 40 words at most, no jargon, a
+    # yes-or-not-now the person can answer at once). Only a yes brings `steps` (five
+    # lines at most, one action each), and only "why?" brings `why` (one sentence). A
+    # paragraph pasted at someone who never asked for it is what nobody reads.
     ask: str = ""
+    steps: Callable[[], str] | None = None
+    why_ask: str = ""
     # A no is an answer for now, never for ever: a question someone said no to comes
     # back when what it offers has changed (ask_version moves on and `changed` says
     # how) or once REASK_DAYS have passed, saying when they said no (`again()`).
@@ -102,6 +108,12 @@ class Upgrade:
 
 
 # ------------------------------------------------------------------ helpers
+
+def _surface_steps(eid: str) -> list[str]:
+    """A path from the dated, sourced registry (tools/claude_surfaces.json)."""
+    import claude_surfaces
+    return claude_surfaces.steps(eid)
+
 
 def _mod(name: str):
     """profile/<name>.py, or None where there is no profile or no such file."""
@@ -129,7 +141,9 @@ def _missing(module: str, *names: str) -> list[str]:
 # ------------------------------------------------------------------ a no, for now
 
 ASKED_FILE = "asked.json"     # in profile/: {upgrade id: {"no": "YYYY-MM-DD", "version": n}}
-REASK_DAYS = 90
+REASK_DAYS = 30
+# The whole answer to a no: one line, and it is true (REASK_DAYS).
+NO_REPLY = "No problem, I'll ask again in a month."
 
 
 def _asked_path() -> str:
@@ -677,8 +691,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             names=("search.JOB_ALERT_QUERY",),
             priority=3,
             needs="you",
-            ask="Do you get LinkedIn job alerts by email, and should every round read them? It re"
-                "ads only those emails, nothing else in your inbox."),
+            ask="Do you get LinkedIn job alerts by email? I can add those jobs to every search, "
+                "reading only those emails, nothing else in your inbox. Yes, or not now?",
+            why_ask="An alert often names a job before a search finds it."),
     Upgrade("learned-choices", "2026-10-15",
             "app improvements to things you chose, offered rather than imposed",
             _learned_choices, "ask each `python3 tools/learned.py offers` question; record the "
@@ -686,8 +701,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "question", "~1 min",
             priority=3,
             needs="you",
-            ask="An app update would change something you set yourself. Keep yours, or try the "
-                "new way? (python3 tools/learned.py offers lists each one.)"),
+            ask="An update would change something you chose yourself. Want to hear the new way "
+                "and decide, or keep yours for now?"),
     Upgrade("linkedin-plan", "2026-10-15",
             "connection notes and InMail sized to the LinkedIn account you actually have",
             _linkedin_plan, "write LINKEDIN_PLAN = \"free\" or \"premium\" in profile/networking.py "
@@ -695,8 +710,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             names=("networking.LINKEDIN_PLAN",),
             priority=2,
             needs="you",
-            ask="Do you pay for LinkedIn Premium? It decides how long a connection note can be "
-                "and whether InMail is there at all."),
+            ask="Do you pay for LinkedIn Premium?",
+            why_ask="It decides how long your connection messages can be, and whether you can "
+                    "message people you are not connected to."),
     Upgrade("people-sources", "2026-10-17",
             "people found where people in your field are actually named, not only by job title",
             _people_sources, "research and write PEOPLE_SOURCES in profile/networking.py as "
@@ -726,13 +742,15 @@ REGISTRY: tuple[Upgrade, ...] = (
             priority=4),
     Upgrade("work-place", "2026-10-18",
             "told when a chat is in the wrong place for your settings, and where to go instead",
-            _work_place, "ask it with the session's other questions, in the words `python3 "
-            "tools/place.py ask` prints; record the answer with `python3 tools/place.py record "
+            _work_place, "ask its question with the session's other questions, as written; "
+            "the trade-off `python3 tools/place.py ask` prints only if they ask why or are "
+            "unsure; record the answer with `python3 tools/place.py record "
             "computer|phone|both` and give the one line it prints. Change no setting",
             "question", "~1 min",
             priority=4, needs="you",
-            ask="Will you mostly work on a computer, or on your phone or the web? (`python3 "
-                "tools/place.py ask` has the two-sentence trade-off and the recommendation.)"),
+            ask="Will you mostly use this on a computer, or on your phone or the web?",
+            why_ask="Some things, like reading a profile in your own browser, only work in a "
+                    "chat on your computer, so I set things up for where you will be."),
     Upgrade("ruling-parts", "2026-10-17",
             "a change to one of your rules puts back only the postings ruled out by that rule",
             _ruling_parts, "run `python3 tools/exclude.py cite`, then follow `python3 "
@@ -755,11 +773,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             ask_version=2,
             changed="networking now finds people in bulk from any chat, and your own "
                     "connections are the first and strongest place it looks",
-            ask="Networking finds people in bulk from any chat, and the people you already know "
-                "are the best of them. Want every run to start from them? LinkedIn lets you "
-                "download your own connections list (Settings, Data privacy, Get a copy of your "
-                "data, Connections). It arrives by email in about ten minutes; attach the "
-                "Connections.csv here. Claude only reads it, and contacts nobody."),
+            ask="Want me to start from the people you already know on LinkedIn? That means "
+                "downloading one file from LinkedIn, about ten minutes, and I'll walk you "
+                "through it. Yes, or not now?",
+            steps=lambda: "\n".join(_surface_steps("linkedin-connections")
+                                    + ["I only read it. Nothing is sent to anyone."]),
+            why_ask="People you already know can be messaged directly, with no connection "
+                    "request, and they reply far more often than strangers."),
     Upgrade("profile-reads", "2026-10-17",
             "a note to each person built from their own profile, not a search snippet",
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "
@@ -771,14 +791,17 @@ REGISTRY: tuple[Upgrade, ...] = (
             ask_version=2,
             changed="finding people no longer needs any read, and a read is now only of the best "
                     "ten a run finds, paced, in a chat on your computer",
-            ask="Finding people needs no read: the list comes from search results and your own "
-                "connections, in any chat, and uses no LinkedIn account. Before a note goes to "
-                "one of the best ten a run finds, should Claude read their LinkedIn profile in "
-                "your own signed-in browser? That works in a chat on your computer in the Claude "
-                "desktop app. It reads one at a time at a person's pace and clicks nothing, but "
-                "LinkedIn's terms forbid automated access, so the risk is to your account: lower "
-                "with these limits, never nothing. The other way is pasting the profile of the "
-                "one or two who matter most."),
+            ask="Before writing to the best few people a search finds, should I read their "
+                "LinkedIn profiles in your own browser? LinkedIn's terms forbid automated "
+                "access, so that carries some risk to your account. Or you paste one or two. "
+                "Which?",
+            steps=lambda: ("Reading in your browser works in a chat on your computer in the Claude "
+                           "desktop app. I read one profile at a time, at a person's pace, and "
+                           "click nothing: the risk is lower with those limits, never nothing.\n"
+                           "Pasting instead: open their profile, select all, copy, and paste it "
+                           "here."),
+            why_ask="A message that mentions something real about the person gets far more "
+                    "replies than one built from a search result."),
     Upgrade("screen-flags", "2026-10-15",
             "postings from the wrong job family for you flagged, in your field's terms",
             _screen_flags, "/setup --section search", "question", "~5 min",
@@ -860,17 +883,19 @@ REGISTRY: tuple[Upgrade, ...] = (
 # a version this repo predates says what it made should be made again, and the repo
 # holds something that method made. This is what carries a quiet improvement to
 # everyone who set up before it: a better board search, a fixed prep document, a
-# sharper eligibility question. Nobody has to know it happened. Methods a round
-# applies by itself (`by: "round"`) are not listed: there is nothing to run.
+# sharper eligibility question. Nobody has to know it happened. Methods a round or a
+# /network run applies by itself (`by: "round"`, `by: "network"`) are not listed:
+# there is nothing to run, and a chat that cannot do the work (rewriting a note needs
+# the person read, which a cloud chat cannot do) was being told to do it.
 def _method_check(name: str):
     def check() -> str:
         import build_versions as B
         late = B.behind(name)
         if not late or not B.applies(name):
             return ""
-        have = B.recorded().get(name, 1)
-        return (f"your {name} was made by version {have}; version "
-                f"{late[-1][0]} does it better: {late[-1][3]}")
+        # Said in the person's terms: what is better now. A version number means
+        # nothing to them, and this line reaches them.
+        return f"made the older way; now {late[-1][3]}"
     return check
 
 
@@ -878,7 +903,7 @@ def _method_upgrades() -> tuple:
     import build_versions as B
     out = []
     for name, m in B.METHODS.items():
-        if m["by"] == "round":
+        if m["by"] in ("round", "network"):
             continue
         rerun = [v for v in m["versions"] if v[2]]
         instant = m["by"] == "instant"
@@ -971,32 +996,35 @@ def pending() -> list[tuple[Upgrade, str]]:
 
 
 def block(rows: list[tuple[Upgrade, str]]) -> str:
+    """What the sync prints. Each line is written to reach the person as it is: what they
+    gain, and what they do (nothing, or one short question). The id in brackets is for
+    Claude, never for them."""
     if not rows:
         return ""
     alone = [(u, why) for u, why in rows if u.needs == "nobody"]
     yours = [(u, why) for u, why in rows if u.needs != "nobody"]
-    lines = [f"Profile upgrades pending ({len(rows)}):"]
+    lines = [f"Improvements waiting for this repo ({len(rows)}):"]
     if alone:
-        lines.append("  Claude applies these itself, in the background (/upgrade), "
-                     "most urgent first:")
-        for u, why in alone:
-            lines.append(f"    {u.id:20} {u.gives}")
-            lines.append(f"    {'':20}   why: {why}")
+        lines.append("  Claude applies these itself, in the background. Nothing for you to do:")
+        for u, _why in alone:
+            lines.append(f"    - {u.gives[:1].upper() + u.gives[1:]}.  [{u.id}]")
     if yours:
-        lines.append("  These need you (asked at the end of a session, a few at a time):")
+        lines.append("  These need you: one short question each, at the end of a session:")
         for u, why in yours:
-            lines.append(f"    {u.id:20} {u.ask or why}")
+            lines.append(f"    - {u.ask or why}  [{u.id}]")
             if why.startswith("you said no"):
                 # Asked again: the person hears when they said no and what has changed.
-                lines.append(f"    {'':20}   asked again: {why}")
+                lines.append(f"      (asked again: {why})")
     # Said here as well as in CLAUDE.md: the session that runs the sync which brings
     # this in is still reading the CLAUDE.md from before it.
     lines.append("  Claude: "
                  + ("start a background agent now that follows .claude/commands/upgrade.md, "
                     "and carry on with the person's request. " if alone else "")
-                 + "At the end of your reply, give the person "
-                 + ("its one line per change and " if alone else "")
-                 + "at most three of the questions" + (" it returns." if alone else " above."))
+                 + "Never show an id, a version or the word upgrade. At the end of your reply "
+                 + ("give one line per change it made, then " if alone else "")
+                 + "ask at most three questions, each as written, short and alone. Only a yes "
+                 "brings its steps and only \"why?\" its reason (`--plan` has both); a no gets "
+                 f"\"{NO_REPLY}\", and `--no <id>` records it.")
     return "\n".join(lines)
 
 
@@ -1008,16 +1036,18 @@ def line(rows: list[tuple[Upgrade, str]] | None = None) -> str:
     yours = [u.id for u, _ in rows if u.needs != "nobody"]
     parts = []
     if alone:
-        parts.append(f"{len(alone)} Claude applies itself ({', '.join(alone)})")
+        parts.append(f"{len(alone)} Claude applies itself")
     if yours:
-        parts.append(f"{len(yours)} need{'s' if len(yours) == 1 else ''} you ({', '.join(yours)})")
-    return "Profile upgrades: " + "; ".join(parts) + "."
+        parts.append(f"{len(yours)} short question{'s' if len(yours) != 1 else ''} for you")
+    # The ids are for Claude (`--plan`): this line reaches the person.
+    return "Improvements waiting: " + "; ".join(parts) + " (python3 tools/profile_upgrades.py)."
 
 
 def plan(rows: list[tuple[Upgrade, str]] | None = None) -> list[dict]:
     """The pending upgrades as /upgrade works through them, most urgent first."""
     rows = pending() if rows is None else rows
     return [{"id": u.id, "priority": u.priority, "needs": u.needs, "ask": u.ask,
+             "steps": u.steps() if u.steps else "", "why_ask": u.why_ask,
              "gives": u.gives, "why": why, "run": u.run, "cost": u.cost, "time": u.time}
             for u, why in rows]
 
@@ -1142,7 +1172,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.no:
         p = record_no(a.no)
         print(f"profile_upgrades: their no to {a.no} kept in {os.path.relpath(p, ROOT)}; asked "
-              f"again when the question changes or after {REASK_DAYS} days")
+              f"again when the question changes or after {REASK_DAYS} days. Say only: "
+              f"\"{NO_REPLY}\"")
         return 0
     if a.check:
         why = by_id(a.check).pending()
