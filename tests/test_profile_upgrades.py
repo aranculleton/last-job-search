@@ -666,3 +666,38 @@ def test_hand_kept_notes_for_a_process_are_offered_once_to_fold_in(profile, tmp_
         fh.write("## Notes\n\n- Folded in from documents/network/calder_rook_campaign.md on "
                  "2026-10-20.\n")
     assert U.by_id("campaign-notes").pending() == ""
+
+
+def test_own_tests_reading_the_apps_code_or_pinning_changed_behaviour_are_kept_in_line(
+        tmp_path, monkeypatch):
+    import sync_app
+    repo = tmp_path / "repo"
+    (repo / "tools").mkdir(parents=True)
+    (repo / "tools" / "round_step.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+    tests = repo / "profile" / "tests"
+    tests.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setattr(U, "ROOT", str(repo))
+    assert U.by_id("own-tests").pending() == ""                 # nothing of theirs at risk
+    (tests / "test_reads.py").write_text(
+        "import os\nROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))\n"
+        "def test_it():\n"
+        "    src = open(os.path.join(ROOT, 'tools', 'round_step.py')).read()\n"
+        "    assert 'return 1' in src\n", encoding="utf-8")
+    why = U.by_id("own-tests").pending()
+    assert "read the app's code as text" in why and "test_reads.py" in why
+    # Rewritten to run the code and check what it does: nothing left to do.
+    (tests / "test_reads.py").write_text(
+        "import round_step\ndef test_it():\n    assert round_step.run() == 1\n", encoding="utf-8")
+    assert U.by_id("own-tests").pending() == ""
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-qm", "tests"], check=True)
+    # The sync found one checking behaviour the update changed: it is brought in line.
+    sync_app.record_own_tests(str(repo), [("test_reads::test_it", "AssertionError: 2 != 1")])
+    assert "check what an update changed: test_reads::test_it" in U.by_id("own-tests").pending()
+    # One that used a part the update removed is the sync's question to the person, not this.
+    sync_app.record_own_tests(str(repo), [(
+        "test_reads::test_it", "AttributeError: module 'round_step' has no attribute 'gone'")])
+    assert U.by_id("own-tests").pending() == ""

@@ -907,8 +907,37 @@ def own_test_risks(root: str | None = None) -> dict[str, list[str]]:
                             and isinstance(args[1], ast.Constant) and isinstance(args[1].value, str)
                             and private(args[1].value)):
                         found.append(f"{alias[args[0].id]}.{args[1].value}")
+            found += _source_reads(root, tree)
             if found:
                 out[os.path.relpath(path, root)] = sorted(set(found))
+    return out
+
+
+def _source_reads(root: str, tree) -> list[str]:
+    """"the source of tools/<file>" for each app file a test reads as text: an
+    `open(...)`, `.read_text()` or `.read_bytes()` whose path names one. A test that asserts
+    what the code says rather than what it does breaks on any rewrite that keeps the
+    behaviour: one read scrape_wide.py looking for "except Exception" around the boards."""
+    import ast
+    out = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        reads = ((isinstance(f, ast.Attribute) and f.attr in ("read_text", "read_bytes", "open"))
+                 or (isinstance(f, ast.Name) and f.id == "open"))
+        if not reads:
+            continue
+        words = [c.value for c in ast.walk(node) if isinstance(c, ast.Constant)
+                 and isinstance(c.value, str)]
+        for w in words:
+            if not w.endswith(".py"):
+                continue
+            rel = w.replace("\\", "/")
+            rel = rel if rel.startswith("tools/") else "tools/" + rel.rsplit("/", 1)[-1]
+            if os.path.isfile(os.path.join(root, *rel.split("/"))) and (
+                    w.startswith("tools/") or "tools" in words):
+                out.append(f"the source of {rel}")
     return out
 
 
@@ -918,9 +947,10 @@ def own_test_risks_report(risks: dict[str, list[str]]) -> str:
         return ""
     names = sorted({n for v in risks.values() for n in v})
     return (f"Note: {len(risks)} of your own test file(s) reach into private parts of the app "
-            f"({', '.join(names[:5])}{', ...' if len(names) > 5 else ''}): they pass now and break "
-            "when the app changes those parts. Claude: when next working in these files, move them "
-            "onto public names (a job board through tools/offline_boards.py), keeping every "
+            f"or read its source as text ({', '.join(names[:5])}"
+            f"{', ...' if len(names) > 5 else ''}): they pass now and break when the app changes "
+            "those parts. Claude: when next working in these files, move them onto public names "
+            "and what the code does (a job board through tools/offline_boards.py), keeping every "
             "assertion: " + "; ".join(sorted(risks)[:4]) + ("; ..." if len(risks) > 4 else ""))
 
 
@@ -941,6 +971,42 @@ def _mark_path(root: str) -> str:
         os.path.join(gd, OWN_TESTS_MARK) if gd else "")
 
 
+OWN_TESTS_RECORD = "ljs_own_tests.json"
+
+
+def tests_tree(root: str) -> str:
+    """The committed tree of profile/tests: a record is current while this is unchanged."""
+    return _git_out(root, "rev-parse", "HEAD:profile/tests")
+
+
+def record_own_tests(root: str, failures) -> None:
+    """What the last run of the person's own tests found, for the own-tests upgrade: each
+    failing test, its message, and the removed part of the app it names, if any."""
+    mark = _mark_path(root)
+    if not mark or failures is None:
+        return
+    try:
+        with open(os.path.join(os.path.dirname(mark), OWN_TESTS_RECORD), "w",
+                  encoding="utf-8") as fh:
+            json.dump({"tree": tests_tree(root),
+                       "failures": [[n, (m or "")[:300], _gone(root, m)] for n, m in failures]},
+                      fh)
+    except OSError:
+        pass
+
+
+def own_tests_record(root: str) -> dict | None:
+    mark = _mark_path(root)
+    if not mark:
+        return None
+    try:
+        with open(os.path.join(os.path.dirname(mark), OWN_TESTS_RECORD), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return got if isinstance(got, dict) else None
+
+
 def own_tests(root: str | None = None) -> None:
     """After an update lands, the person's own tests (profile/tests), which may have pinned
     how the app worked before: each that now fails is named with why, never left for the
@@ -950,7 +1016,9 @@ def own_tests(root: str | None = None) -> None:
     removed and the sync said nothing, because the copy of this file that ran the sync
     predated the check."""
     root = root or ROOT
-    text = own_tests_report(own_test_failures(root) or [], root)
+    failures = own_test_failures(root)
+    record_own_tests(root, failures)
+    text = own_tests_report(failures or [], root)
     if text:
         print(text)
     mark = _mark_path(root)

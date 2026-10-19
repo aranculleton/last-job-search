@@ -600,6 +600,33 @@ def _process_postings() -> str:
             "CI fails until each has one" % n) if n else ""
 
 
+def _own_tests() -> str:
+    """The person's own tests an update broke by changing what the app does, and the ones
+    that read the app's source as text, which the next rewrite of that file breaks however
+    it behaves. Read from the record the sync's own-tests run leaves; run again only when
+    the tests have changed since. A test that used a part the update removed is the sync's
+    question to the person (deleting their file is theirs to say), not this."""
+    if not os.path.isdir(os.path.join(ROOT, "profile", "tests")):
+        return ""
+    import sync_app
+    why = []
+    rec = sync_app.own_tests_record(ROOT)
+    if rec and rec.get("failures") and rec.get("tree") != sync_app.tests_tree(ROOT):
+        sync_app.record_own_tests(ROOT, sync_app.own_test_failures(ROOT))
+        rec = sync_app.own_tests_record(ROOT)
+    changed = [f[0] for f in (rec or {}).get("failures") or [] if len(f) > 2 and not f[2]]
+    if changed:
+        why.append("%d of your own test(s) check what an update changed: %s"
+                   % (len(changed), "; ".join(changed[:3])))
+    reads = sorted(f for f, v in sync_app.own_test_risks(ROOT).items()
+                   if any(x.startswith("the source of ") for x in v))
+    if reads:
+        why.append("%d of your own test file(s) read the app's code as text, so the next "
+                   "rewrite of that code breaks them however it behaves: %s"
+                   % (len(reads), "; ".join(reads[:3])))
+    return "; ".join(why)
+
+
 def _campaign_notes() -> str:
     """Notes kept by hand for an employer with a hiring process, from before its living prep
     document existed: what was decided in them is lost to the next chat until it is folded
@@ -1037,6 +1064,20 @@ REGISTRY: tuple[Upgrade, ...] = (
             _process_postings, "python3 tools/interview_pack.py postings", "instant",
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
+    Upgrade("own-tests", "2026-10-19",
+            "your own checks kept in line with each update, and the ones that read the app's "
+            "code rewritten to check what it does, so an update cannot break them",
+            _own_tests, "python3 tools/sync_app.py --own-tests lists the failing ones and why; "
+            "python3 tools/sync_app.py --own-test-risks lists the ones that read the app's code. "
+            "For a test that checks behaviour an update changed: bring its expectation in line "
+            "with the CHANGELOG entry that changed it, keeping everything it checks about the "
+            "person's own data; where the change looks wrong for them, leave the test and append "
+            "it to documents/app_bug_reports.md. For a test that reads the app's code as text: "
+            "rewrite it to run the code and check what it does, through the app's public names "
+            "(a job board through tools/offline_boards.py), keeping every assertion's intent. "
+            "Never delete a test or weaken one to pass; a test of a part the update removed is "
+            "the sync's question to the person. Run python3 -m pytest profile/tests -q before "
+            "committing", "edit", "~15 min", priority=2, conditional=True),
     Upgrade("campaign-notes", "2026-10-19",
             "notes you kept by hand for an interview, before its prep document existed, "
             "folded into it so the next chat has them",
@@ -1520,6 +1561,39 @@ def claim(taken: bool = False) -> None:
             pass
 
 
+# What the sync listed, so the plan a background /upgrade reads a few minutes later can
+# say what has happened to each one. The sync listed eleven, the plan held seven, and the
+# chat could not tell whether the other four were done, skipped or lost: they had been
+# done, by an instant upgrade or by another chat, and nothing said so.
+def _listed_path() -> str:
+    return os.path.join(os.path.dirname(_marker()), "ljs-upgrades-listed.json")
+
+
+def remember_listed(rows: list[tuple[Upgrade, str]]) -> None:
+    sha, _when, _app = _sync_head()
+    try:
+        with open(_listed_path(), "w", encoding="utf-8") as fh:
+            json.dump({"sync": sha, "ids": [u.id for u, _ in rows]}, fh)
+    except OSError:
+        pass
+
+
+def _listed_ids() -> list[str]:
+    try:
+        with open(_listed_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return [i for i in (got.get("ids") or []) if isinstance(i, str)] \
+        if isinstance(got, dict) and got.get("sync") == _sync_head()[0] else []
+
+
+def already_in_place(rows: list[tuple[Upgrade, str]]) -> list[str]:
+    """The ids this chat's sync listed that are no longer pending: in place since."""
+    now = {u.id for u, _ in rows}
+    return [i for i in _listed_ids() if i not in now]
+
+
 def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     """Run each pending instant upgrade and commit it on its own. An upgrade that
     touches anything outside its own personal paths is undone, never committed."""
@@ -1606,8 +1680,9 @@ def main(argv: list[str] | None = None) -> int:
         # them again, so the two never meet as a conflict.
         rows = [(u, why) for u, why in rows if u.id not in landed]
         if not a.plan:
-            print(f"Profile upgrades: {len(landed)} already applied on master by another chat "
-                  f"({', '.join(sorted(landed))}): merge master ({MERGE_MASTER}); where one of "
+            print(f"Profile upgrades: {len(landed)} already in place on master, applied by "
+                  f"another chat ({', '.join(sorted(landed))}): merge master ({MERGE_MASTER}); "
+                  "nothing to do for them here; where one of "
                   "their files conflicts, take master's copy, since an upgrade makes the same "
                   "change wherever it runs.")
     if a.after:
@@ -1635,6 +1710,7 @@ def main(argv: list[str] | None = None) -> int:
             for note in run_instant(rows):
                 print(f"profile upgrades: {note}")
             rows = pending()
+            remember_listed(rows)
         if rows and a.line:
             print(f"Profile upgrades: {len(rows)} pending, being applied by another chat "
                   f"until {elsewhere}.")
@@ -1652,8 +1728,12 @@ def main(argv: list[str] | None = None) -> int:
     if a.after:
         claim()
     if a.plan:
-        import json
         print(json.dumps(plan(rows), indent=1))
+        done = sorted(set(already_in_place(rows)) | (landed & set(_listed_ids())))
+        if done:
+            print("Already in place since the sync listed them (an instant one, or another "
+                  f"chat's): {', '.join(done)}. Nothing to do for them; the report says each "
+                  "is already in place.", file=sys.stderr)
         return 0
     if a.line:
         text = line(rows)
@@ -1670,6 +1750,7 @@ def main(argv: list[str] | None = None) -> int:
         for note in run_instant(rows):
             print(f"profile upgrades: {note}")
         rows = pending()
+        remember_listed(rows)
     text = block(rows)
     print(text or "Profile upgrades: none pending.")
     return 0

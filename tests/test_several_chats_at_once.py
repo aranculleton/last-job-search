@@ -341,3 +341,15 @@ def test_a_rebase_takes_the_later_change_too(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     text = open(book).read()
     assert "<<<<<<<" not in text and "in_conversation" in text
+
+
+def test_the_plan_says_which_listed_upgrades_are_already_in_place(tmp_path, monkeypatch, capsys):
+    _repo_with_a_landed_sync(tmp_path, monkeypatch)
+    rows = [(P.REGISTRY[0], "missing"), (P.REGISTRY[1], "missing")]
+    P.remember_listed(rows)                           # what the sync printed
+    monkeypatch.setattr(P, "pending", lambda: rows[:1])   # one done since, by anyone
+    assert P.main(["--plan"]) == 0
+    out = capsys.readouterr()
+    assert [r["id"] for r in json.loads(out.out)] == [rows[0][0].id]
+    assert "Already in place since the sync listed them" in out.err
+    assert rows[1][0].id in out.err and rows[0][0].id not in out.err
