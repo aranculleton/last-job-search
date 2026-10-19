@@ -712,11 +712,18 @@ RESIDE = re.compile(
 # "US residents only". Each passed for somebody living elsewhere. These name the
 # place right beside the restriction, so they are read around the place itself,
 # and only a country counts: a region ("EMEA") may take in the person's own.
+# Between "only" and the place, only words about who is hired or where they are:
+# "we only sell in the US" describes a market, not a requirement.
+_HIRE_WORDS = (r"(?:able|to|can|be|hire|hiring|hires|employ\w*|recruit\w*|consider\w*|"
+               r"accept\w*|candidates?|applicants?|people|those|individuals|residents|"
+               r"located|based|living|open|available|eligible|currently|legally)")
 _BEFORE_PLACE = re.compile(
-    r"(?:\bonly\b(?:\s+[\w-]+){0,4}?\s+(?:in|from|within)"
+    r"(?:\bonly\b(?:\s+" + _HIRE_WORDS + r"){0,4}\s+(?:in|from|within)"
     r"|\bremote\s+(?:with)?in"
     r"|\b(?:restricted|limited)\s+to(?:\s+(?:candidates|applicants|residents)\s+(?:in|of|from))?)"
     r"\s+(?:the\s+)?$", re.I)
+_HOURS = re.compile(r"\s*(?:-\s*)?(?:time\s*zones?|timezones?|business hours|working hours|hours)\b",
+                    re.I)
 _AFTER_PLACE = re.compile(r"^\s*(?:-\s*)?(?:only\b|residents?\s+only\b|(?:residents|citizens)\b"
                           r"(?=[^.;]{0,30}\bonly\b)"
                           r"|based\s+(?:candidates|applicants|people|residents|hires)\s+only\b)",
@@ -767,6 +774,9 @@ def residence_cut(text: str) -> str | None:
                        or _places.abroad_short(s)):
             return s[:220]
         for m in _countries_named(s):
+            # "remote within US time zones" asks for hours, not a home.
+            if _HOURS.match(s[m.end():m.end() + 30]):
+                continue
             if (_BEFORE_PLACE.search(s[max(0, m.start() - 60):m.start()])
                     or _AFTER_PLACE.match(s[m.end():m.end() + 50])):
                 return s[:220]

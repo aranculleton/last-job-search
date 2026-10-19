@@ -100,3 +100,15 @@ def test_a_home_town_beside_another_country_is_that_country():
     for s in ("Candidates must be based in Manchester, NH, US.",
               "Candidates must be based in Sale, Australia."):
         assert text_screen.residence_cut(s + BODY), s
+
+
+def test_only_selling_somewhere_is_a_market_not_a_requirement():
+    for s in ("We only sell in the US and Canada today.",
+              "Our team only works in the US time zone for client calls."):
+        assert text_screen.residence_cut(s + BODY) is None, s
+    assert text_screen.residence_cut("We are only able to hire candidates in Ireland." + BODY)
+
+
+def test_a_time_zone_is_hours_not_a_home():
+    assert text_screen.residence_cut("This role is remote within US time zones." + BODY) is None
+    assert text_screen.residence_cut("Remote within the US, EST hours preferred." + BODY)
