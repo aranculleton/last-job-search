@@ -397,7 +397,8 @@ When they say it did, record it in the same turn, per contact:
 2. **The contact row** (`state.load_contacts()`, then `state.save_contacts()`):
    `first_contacted` that day when it is empty, `channel`, `status` `awaiting_reply`,
    `next_action` (one nudge if no reply; for a connection request, a nudge once they accept,
-   and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days), and
+   and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days, recorded
+   with `python3 tools/network/state.py withdraw <contact_id>` once they have), and
    `next_action_due` `state.add_business_days(<the day it went>, schema.FOLLOWUP_BUSINESS_DAYS)`.
    The morning brief reads that date, so the nudge needs no reminder of its own.
 3. **The draft file**, `documents/network/<contact_id>/draft.md`, is deleted: it was the

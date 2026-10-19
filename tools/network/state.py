@@ -36,6 +36,7 @@ avoid.
 
 Usage:
     python3 tools/network/state.py [--today YYYY-MM-DD]
+    python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
 """
 
 from __future__ import annotations
@@ -640,6 +641,19 @@ def is_bare_request(row) -> bool:
     return is_request(row) and not str(row.get("full_text") or "").strip()
 
 
+# A connection request taken back (`withdraw`). Not a message: nothing reached them,
+# so it is never a reply to wait on, a nudge, a request spent or an opener to learn
+# from. It closes what was waiting on them, and the log says so where the contact row
+# has not caught up. Without it the withdrawal was nowhere: the request stayed listed
+# as one to withdraw, and the person could be found and written to again.
+WITHDRAWN_SCENARIOS = frozenset({"request_withdrawn", "withdrawn_request", "withdrew_request"})
+
+
+def is_withdrawal(row) -> bool:
+    """Is this row a connection request taken back, rather than a message?"""
+    return _direction(row) == "out" and _scenario(row) in WITHDRAWN_SCENARIOS
+
+
 # A call is not a message either. Logged as `channel=call` with `scenario=call_held`
 # after a reply, it read as our message last, so the thread came out
 # `awaiting_reply` and the nudge clock said "30 business days of silence" about a
@@ -729,10 +743,19 @@ def derive_status(threads_for_contact) -> str:
     An acceptance is neither. It moves a thread that is waiting on them to
     `connected_no_reply`, which stays until they actually write, and it answers
     nothing: accepting after writing leaves the reply owed where it was.
+
+    A withdrawn request (`withdraw`) closes a thread that was waiting on them:
+    `closed`, which the log can say only this way. Anything they say after it
+    reopens the thread as a reply owed.
     """
     status = "not_contacted"
     for row in _ordered(threads_for_contact):
         if not _direction(row):
+            continue
+        if is_withdrawal(row):
+            # The request they never accepted is gone, and with it the thread.
+            if status in ("not_contacted", "awaiting_reply"):
+                status = "closed"
             continue
         if is_call(row):
             if call_held(row):
@@ -927,7 +950,8 @@ def _trailing_outbound(msgs) -> int:
     second nudge."""
     n = 0
     for row in reversed(msgs):
-        if is_acceptance(row) or is_bare_request(row) or (is_call(row) and not call_held(row)):
+        if is_acceptance(row) or is_bare_request(row) or is_withdrawal(row) \
+                or (is_call(row) and not call_held(row)):
             continue
         if _direction(row) != "out" or call_held(row):
             break
@@ -1105,6 +1129,87 @@ def owed(contacts, threads, today) -> list[dict]:
     return items
 
 
+# ---------------------------------------------------------------- withdrawing a request
+
+def withdraw(contacts, threads, contact_id, today, reason="") -> dict:
+    """Record a connection request the person took back: a thread row, and the contact closed.
+
+    `owed` lists a request nobody accepted in REQUEST_WITHDRAW_DAYS as one to
+    withdraw, and nothing recorded the withdrawal, so it stayed on that list and the
+    person could be surfaced and written to again. The row is outbound, channel
+    `connection`, scenario `request_withdrawn`, which `derive_status` reads as
+    closed; the contact is closed with the date and the reason in `outcome`, and
+    its next action emptied. Both lists are changed in place; the caller saves them.
+
+    Raises ValueError for a contact not in the book, or with no request waiting on
+    them: one accepted, answered or already withdrawn has nothing to withdraw.
+    """
+    today = _need_date(today, "today")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    rows = [r for r in threads_for(threads, cid) if _direction(r)]
+    pending = request_pending(rows)
+    if pending is None and not rows and channel_of(contact) == "connection" \
+            and str(contact.get("status") or "").strip() == "awaiting_reply":
+        # The request went and its row did not: the contact row is written first.
+        pending = as_date(contact.get("first_contacted")) or datetime.date.min
+    if pending is None:
+        raise ValueError(f"{contact.get('name') or cid} has no connection request waiting to "
+                         "be accepted: nothing to withdraw")
+    waited = (today - pending).days if pending != datetime.date.min else None
+    why = " ".join(str(reason or "").split()) or (
+        f"not accepted in {waited} days" if waited is not None else "not accepted")
+    row = {"contact_id": cid, "date": today.isoformat(), "direction": "out",
+           "channel": "connection", "scenario": "request_withdrawn",
+           "summary": f"Withdrew the connection request: {why}", "full_text": ""}
+    threads.append(row)
+    contact["status"] = "closed"
+    contact["next_action"] = ""
+    contact["next_action_due"] = ""
+    note = f"request withdrawn {today.isoformat()}: {why}"
+    contact["outcome"] = "; ".join(x for x in (str(contact.get("outcome") or "").strip(), note) if x)
+    return row
+
+
+def _cli_withdraw(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py withdraw",
+        description="Record connection requests the person has withdrawn on LinkedIn.")
+    ap.add_argument("contact_ids", nargs="*")
+    ap.add_argument("--all-due", action="store_true",
+                    help="every request /threads lists as one to withdraw")
+    ap.add_argument("--reason", default="")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    ids = list(a.contact_ids)
+    if a.all_due:
+        ids += [i["contact_id"] for i in owed(contacts, threads, a.today)
+                if i["kind"] == "request_pending" and i["contact_id"] not in ids]
+    if not ids:
+        print("withdraw: name the contact ids, or --all-due for every request to withdraw")
+        return 2
+    done, failed = 0, 0
+    for cid in ids:
+        try:
+            row = withdraw(contacts, threads, cid, a.today, a.reason)
+        except ValueError as e:
+            print(f"  not recorded: {e}")
+            failed += 1
+            continue
+        done += 1
+        print(f"  {cid}: {row['summary'].lower()}; closed, and never surfaced again")
+    if done:
+        save_threads(threads, a.threads)
+        save_contacts(contacts, a.contacts)
+    print(f"withdraw: {done} recorded" + (f", {failed} not" if failed else ""))
+    return 1 if failed and not done else 0
+
+
 # ---------------------------------------------------------------- holds
 
 # A next_action that opens on HOLD or FREEZE is an instruction not to act yet,
@@ -1237,7 +1342,7 @@ def connection_requests(contacts, threads) -> set:
     for cid, rows in by_contact.items():
         connected = asked = False
         for row in _ordered(rows):
-            if channel_of(row) != "connection":
+            if channel_of(row) != "connection" or is_withdrawal(row):
                 continue
             if _direction(row) == "in":
                 connected = True
@@ -1349,7 +1454,10 @@ def platform_budget(contacts, threads, today) -> dict:
 # ---------------------------------------------------------------- CLI
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv[:1] == ["withdraw"]:
+        return _cli_withdraw(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()
@@ -1360,7 +1468,7 @@ def main() -> int:
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--tracker", default=TRACKER_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     contacts = load_contacts(a.contacts)
     threads = load_threads(a.threads)
@@ -1372,7 +1480,8 @@ def main() -> int:
         where = f" ({i['company']})" if i["company"] else ""
         print(f"  [{i['kind']:5}] {i['name'] or i['contact_id']}{where} "
               f"{i['business_days']}bd since {i['since'] or 'unknown'}"
-              + {"request_pending": "; not accepted, so nothing can be sent: withdraw it",
+              + {"request_pending": "; not accepted, so nothing can be sent: withdraw it, "
+                                    f"then record it: state.py withdraw {i['contact_id']}",
                  "first_message": "; accepted, nothing said yet: a first message, not a nudge",
                  }.get(i["kind"], ""))
 

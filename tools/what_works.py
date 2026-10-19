@@ -183,8 +183,9 @@ def message_cases(contacts: list[dict], threads: list[dict], today=None) -> list
                 break
             # A bare connection request says nothing, so it neither wins nor
             # loses: on a free account the message follows the acceptance, and
-            # that message is the opener.
+            # that message is the opener. A withdrawn request reached nobody.
             if state._direction(r) == "out" and not state.is_call(r) \
+                    and not state.is_withdrawal(r) \
                     and state._scenario(r) not in state.MID_CONVERSATION and not (
                     state.channel_of(r) == "connection"
                     and not str(r.get("full_text") or "").strip()

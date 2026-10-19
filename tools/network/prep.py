@@ -434,6 +434,8 @@ def _direction_word(row) -> str:
     a second copy of that table here is a copy that drifts, and the drift shows
     up as a thread recap that says the wrong person spoke last.
     """
+    if state.is_withdrawal(row):
+        return "request withdrawn"
     derived = state.derive_status([row])
     if derived == "awaiting_reply":
         return "sent"
