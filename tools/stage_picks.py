@@ -332,6 +332,10 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
             raise SystemExit(f"{p['file']} has no untrusted fence; re-stage it with `stage`")
         d = dict(d, abbr=p["abbr"], posting=posting)
         d.setdefault("company", p["company"])
+        if risks:
+            # What an interviewer could still probe, which the audit found and nothing
+            # kept: the kept draft carries it to the interview pack.
+            d.setdefault("residual_risks", risks)
         drafts.append(d)
     with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8") as fh:
         json.dump(drafts, fh, indent=1)

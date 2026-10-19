@@ -56,12 +56,41 @@ make sense to somebody whose repo just received it.
   a four-line step with no archive, research or saved pack. No profile upgrade.
 - **Interview prep treats postings and pages as data, and never fetches an interviewer's
   LinkedIn.** No profile upgrade.
+- **A resume or letter already sent is never rendered over.** A redraft reused the filename
+  of an application already sent, and an archived posting was rewritten each run, or emptied
+  when a kept draft was run again. No profile upgrade.
+- **Every figure in a cover letter is checked against your profile.** Only the resume's
+  were. No profile upgrade.
+- **A resume trimmed to fit keeps the line that best describes each job.** A trim could
+  leave a role described by an unrelated line. No profile upgrade.
+- **A draft the final check rejected is never rendered.** Keeping it out depended on the
+  checker deleting its own file. No profile upgrade.
+- **An outreach note is checked with its opening line.** The 80-word limit was checked
+  against the body alone, so a note passed while drafting and failed at the end. No profile
+  upgrade.
+- **A check run without the PDF reader that sees run-together words says so.** It fell back
+  to one that cannot, and said all passed. No profile upgrade.
+- **A letter rendered again keeps the date it was written.** No profile upgrade.
+- **The tracker is written in place.** Every line ending was rewritten, a second deadline
+  column could appear, and a declined or respelt application was mismatched. No profile
+  upgrade.
+- **The "already applied?" check and the letter use the employer's everyday name.** "Acme
+  Analytics" missed "Acme Analytics Inc.", and a salutation kept "(UK)". No profile upgrade.
+- **An application on an employer's own job board is recorded as online, not portal.** No
+  profile upgrade.
+- **A two-page resume is no longer flagged for being two pages** where your profile says two.
+  No profile upgrade.
 - **The denylist remembers names taken out of your files.** It reads every past version of
   your tracker, contact book and message log, so a row deleted later is still checked. No
   profile upgrade.
 
 ### Changed
 
+- **The drafting check is the grounding auditor itself.** Its own shortened copy of the rules
+  missed that two letters must never share an opening or a closing. No profile upgrade.
+- **A result recorded during a session shapes the next resume at once.** The lift for
+  bullets that reached an interview was read once and kept until the session ended. No
+  profile upgrade.
 - **Applications that have gone quiet are closed for you.** The brief closes each one past
   the chase (45 days, or a week after a second follow-up) as no_response, with a dated note
   on the row, and leaves alone any with an interview, a referral or a "do not chase" at that
@@ -93,6 +122,11 @@ make sense to somebody whose repo just received it.
   pack at that employer leads with them, and `what_works.py brief interviews` shows how far
   applications get. No profile upgrade.
 - **An offer gets a negotiation pack.** Nothing prepared for one before. No profile upgrade.
+- **A letter is addressed to the person the employer names for the role.** Every letter
+  went to the hiring team. No profile upgrade.
+- **A skill your profile says you do not hold is caught wherever it is claimed.** No profile
+  upgrade.
+- **A letter bullet that repeats the resume word for word is flagged.** No profile upgrade.
 - **A connection request you withdrew is recorded, and that person is never written to
   again.** Nothing recorded a withdrawal, so the request stayed on the list to withdraw.
   No profile upgrade.

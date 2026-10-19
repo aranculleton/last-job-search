@@ -375,6 +375,11 @@ def write(a, meta, today):
     # posting is named, not copied: committed posting text lives only inside
     # the fence above, and fit_to_page reads it back through that fence.
     kept = {k: v for k, v in a.items() if k not in ("posting", "posting_from")}
+    # What the score rested on: the round's shortlist is pruned away, and the interview
+    # pack (tools/interview_pack.py) reads fit_why's deductions weeks later.
+    for k in ("fit", "fit_why", "bar", "bar_reason"):
+        if meta.get(k) not in (None, "", []) and k not in kept:
+            kept[k] = meta[k]
     if os.path.exists(os.path.join(d, "job_posting.md")):
         kept["posting_from"] = "job_posting.md"
     with open(os.path.join(d, "draft.json"), "w", encoding="utf-8") as f:

@@ -81,3 +81,12 @@ def test_the_audit_stage_is_the_grounding_auditor():
         agent = fh.read()
     for rule in ("Reserve Experience", "rule 9", "Audit a fixed version"):
         assert rule in agent
+
+
+def test_what_the_audit_left_open_rides_with_the_draft(tmp_path):
+    # The interview pack reads what an interviewer could still probe from the kept draft;
+    # nothing kept it before.
+    rd = _round(tmp_path, {"kestrel": {"verdict": "pass", "draft": DRAFT, "changes": [],
+                                       "residual_risks": ["no direct pricing ownership"]}})
+    drafts, _, _ = stage_picks.assemble(rd)
+    assert drafts[0]["residual_risks"] == ["no direct pricing ownership"]

@@ -64,3 +64,15 @@ def test_rendering_a_kept_draft_keeps_its_date_and_never_copies_its_posting(tmp_
     assert after["letter_date"] == "4 March 2026"
     [letter] = (tmp_path / "cover_letters").glob("*.tex")
     assert "\\currentdate{4 March 2026}" in letter.read_text(encoding="utf-8")
+
+
+def test_the_kept_draft_keeps_what_its_score_rested_on(tmp_path, monkeypatch):
+    # The round's shortlist is pruned away; the interview pack reads the score's reasons
+    # from the kept draft, weeks later.
+    monkeypatch.setattr(outreach.person, "state", lambda *parts: str(tmp_path.joinpath(*parts)))
+    meta = {"fit": 81, "fit_why": ["+ demand forecasting", "- no SAP"], "bar": "pay"}
+    folder = outreach.write(_draft(), meta, "2026-03-04")
+    with open(os.path.join(folder, "draft.json"), encoding="utf-8") as fh:
+        kept = json.load(fh)[0]
+    assert kept["fit"] == 81 and kept["fit_why"] == ["+ demand forecasting", "- no SAP"]
+    assert kept["bar"] == "pay" and "bar_reason" not in kept
