@@ -358,10 +358,10 @@ def _title_groups(titles, mode):
     return [TITLE_SETS[g][:MAX_TITLES_PER_QUERY] for g in MODE_TITLE_GROUPS[mode]]
 
 
-_LEGAL_TAIL = re.compile(
-    r"[\s,.]+(?:limited|ltd|plc|llc|llp|lp|inc|incorporated|corp|corporation|company|co|"
-    r"gmbh|ag|s\.?a\.?|s\.?p\.?a\.?|b\.?v\.?|n\.?v\.?|pty|pte|oy|ab|as|a/s|sas|srl|kk)\.?$",
-    re.I)
+# "Company" and a bare "Co" are left off a profile as often as a legal form,
+# though only the search drops them: never after "&" or "and", where they are
+# the name.
+_COMPANY_TAIL = re.compile(r"[\s,.]+(?:company|co)\.?$", re.I)
 
 
 def search_name(company):
@@ -369,13 +369,14 @@ def search_name(company):
 
     A shortlist carries the legal name, "Fernhill Freight Services Limited
     (UK)", and quoted whole that phrase is on almost no profile. The legal form
-    and a bracketed qualifier come off; the case and the rest of the name stay.
+    and a bracketed qualifier come off (company_key.display_name, the list the
+    salutation uses); the case and the rest of the name stay.
     """
-    s = re.sub(r"\([^)]*\)", " ", str(company or ""))
-    s = " ".join(s.split())
+    import company_key as _ck
+    s = _ck.display_name(company)
     while True:
-        cut = _LEGAL_TAIL.sub("", s).strip(" ,.")
-        if cut == s or not cut:
+        cut = _COMPANY_TAIL.sub("", s).strip(" ,.")
+        if cut == s or not cut or _ck.JOINED_END.search(cut):
             return s
         s = cut
 

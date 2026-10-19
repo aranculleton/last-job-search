@@ -123,43 +123,31 @@ SENT_SPLIT = re.compile(r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\betc\.)(?<!\
 def split_sentences(text):
     return [x for x in SENT_SPLIT.split((text or "").strip()) if x]
 
-LEGAL_SUFFIX = re.compile(
-    r",?\s+(?:"
-    # A compound form comes off whole: "Co., Ltd." and "Pvt Ltd" are one
-    # suffix, and stripping only the last word left "Acme Co" and "Acme Pvt".
-    # "Co" on its own is never a suffix: "Tamworth & Co." is the name.
-    r"(?:co\.?,?|pvt\.?|private|pte\.?)\s+(?:ltd|limited)|sdn\.?\s+bhd|"
-    r"inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|plc|p\.l\.c|"
-    r"llp|lp|l\.p|s\.a|n\.v|b\.v|bv|s\.p\.a|spa|s\.a\.s|sas|s\.r\.l|srl|"
-    r"gmbh|pty|ag|ab|oy|nv|sa|se|kk|"
-    # Ireland's company types: designated activity, limited by guarantee,
-    # unlimited, and the Irish-language Teoranta. ULC is Canada's unlimited.
-    r"dac|clg|uc|ulc|teoranta|teo"
-    r")\.?$", re.I)
+# The legal forms are company_key's, one list shared with the people search.
 # "Group", "Holdings" and "Company" are part of the name, not a legal suffix:
-# Harbour Group is Harbour Group. Only entity types come off.
+# Harbour Group is Harbour Group. Only entity types come off. The letter audit
+# reads LEGAL_SUFFIX to catch one left on a salutation.
+LEGAL_SUFFIX = company_key.LEGAL_FORM
 
 
 def strip_legal(name):
     """The name with every trailing legal form removed, one at a time:
     "Acme Pty Ltd" is Acme, not "Acme Pty"."""
-    prev, name = None, (name or "").strip()
-    while name != prev:
-        prev, name = name, LEGAL_SUFFIX.sub("", name).strip(" ,")
-    return name
+    return company_key.strip_legal_forms(name)
 
 
 def short_name(company):
     """The name a person would use: "Acme", "Harbour Group", "Northwind".
 
-    The legal suffix comes off. A leading "The" comes off. "Group" comes off
-    only when it was part of the legal entity ("The Northwind Group Limited"
-    is the entity; the brand is Northwind), never from a brand that carries
-    it ("Harbour Group" stays Harbour Group). Shared by the salutation, the letter
+    A bracketed qualifier and the legal suffix come off ("Acme Analytics Inc.
+    (UK)" is Acme Analytics). A leading "The" comes off. "Group" comes off only
+    when it was part of the legal entity ("The Northwind Group Limited" is the
+    entity; the brand is Northwind), never from a brand that carries it
+    ("Harbour Group" stays Harbour Group). Shared by the salutation, the letter
     audit and the outreach note so all three agree on what the company is called.
     """
-    name = (company or "").strip()
-    stripped = strip_legal(name).strip(" ,.")
+    name = company_key.drop_brackets(company)
+    stripped = company_key.display_name(name).strip(" ,.")
     if stripped != name.strip(" ,."):
         stripped = re.sub(r"\s+(group|holdings)$", "", stripped, flags=re.I)
     return re.sub(r"^the\s+", "", stripped, flags=re.I).strip(" ,.")
