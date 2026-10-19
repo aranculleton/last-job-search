@@ -153,7 +153,7 @@ review cycle again; a rejected angle here costs fifteen lines.
    tools/verify_batch.sh "$SCRATCH/apply/drafts.json"
    python3 tools/outreach.py "$SCRATCH/apply/drafts.json" "$SCRATCH/apply/apps_in.json"
    ```
-   `check_claims` reports 0 errors and `verify_batch.sh` exits 0, or the finding is fixed in the draft object and rendered again: never by hand-editing the `.tex` (`05-cv-templates.md`). `outreach.py` writes `job_posting.md`, `outreach.md` and the kept `draft.json` under `documents/applications/<slug>/`.
+   `check_claims` reports 0 errors and `verify_batch.sh` exits 0, or the finding is fixed in the draft object and rendered again: never by hand-editing the `.tex` (`05-cv-templates.md`). Exit 3 is not a finding: pypdf is unavailable and the spacing check was skipped, so install it (`pip3 install pypdf`) and run the batch again. `outreach.py` writes `job_posting.md`, `outreach.md` and the kept `draft.json` under `documents/applications/<slug>/`.
 4. **Read both PDFs by eye** against Step 5b's list, and run Step 6.0's three guards.
 5. **Record it**: `python3 tools/record_drafts.py "$SCRATCH/apply/drafts.json" "$SCRATCH/apply/apps_in.json"` writes the tracker row by Step 6b's rules, and `screening_answers.md`.
 

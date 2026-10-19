@@ -151,7 +151,10 @@ posting until one page, then grows back the strongest absent one that still fits
 `verify_batch.sh` runs, must report every letter clean. `verify_batch.sh` exits non-zero
 on any finding and checks pages, chronology, section order, bullets per employer, contact
 details as literal text, duplicated phrasing, em and en dashes, the document nouns the profile
-bans (`person.json` `documents.banned_nouns`), and the ATS text layer. The resume's filename
+bans (`person.json` `documents.banned_nouns`), the ATS text layer (read with pypdf, which alone
+sees words run together: without it the batch exits 3 and says the spacing check was SKIPPED),
+every figure in each letter against the profile (`check_numbers.py --drafts`), and a letter
+bullet that repeats a resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
 `cv/<Prefix>_CV_<ABBR>`; the globs here cover both.
 
