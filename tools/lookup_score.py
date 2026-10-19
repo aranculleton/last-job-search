@@ -39,6 +39,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+from company_key import key as company_key  # noqa: E402
 
 SEEN = person.state("job_scraper", "seen_jobs.json")
 TRACKER = person.state("job_search_tracker.csv")
@@ -123,12 +124,16 @@ def find(key: str | None, company: str | None, title: str | None) -> tuple[str, 
         # company-only call has no title to disambiguate at all. So this path
         # returns a match ONLY when exactly one entry survives, and refuses
         # outright when it is ambiguous.
-        co = company.lower().strip()
+        #
+        # The employer is compared by its key, as every other reader of the
+        # state does: "Acme Analytics" missed a score stored under "Acme
+        # Analytics Inc.", and /apply then paid to derive it a second time.
+        co = company_key(company)
         hits = []
         for url, rec in seen.items():
             if not isinstance(rec, dict):
                 continue
-            if (rec.get("company") or "").lower().strip() != co:
+            if not co or company_key(rec.get("company")) != co:
                 continue
             if title:
                 t, rt = title.lower().strip(), (rec.get("title") or "").lower().strip()
@@ -152,14 +157,19 @@ class Ambiguous(Exception):
 
 
 def tracker_rows_for(key: str | None, company: str | None) -> list[dict]:
+    """Every tracker row for this posting, or for this employer under any form
+    of its name. This is the check /apply relies on before drafting, and a raw
+    name comparison said nothing about an application to "Acme Analytics Inc."
+    when asked about "Acme Analytics"."""
     if not os.path.exists(TRACKER):
         return []
+    co = company_key(company) if company else ""
     out = []
-    with open(TRACKER) as fh:
+    with open(TRACKER, newline="", encoding="utf-8") as fh:
         for row in csv.DictReader(fh):
             if key and norm(row.get("source")) == key:
                 out.append(row)
-            elif company and (row.get("company") or "").lower() == company.lower():
+            elif co and company_key(row.get("company")) == co:
                 out.append(row)
     return out
 

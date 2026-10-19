@@ -18,16 +18,16 @@ could go in above 100 on a 0-100 scale, or ten points under its fit, and
 nobody could tell from the row. This writes `fit`, and
 keeps priority and opportunity in the notes where they are labelled.
 
-The rules it keeps, from Step 6b: match company and role case-insensitively;
-update an open match rather than duplicating it and never move it backwards;
-append beside a final one; never reorder or restructure the CSV; never touch
-another row; never write `seen_jobs.json`.
+The rules it keeps, from Step 6b: match company and role the way the rest of
+the app does (one employer key, one title rule); update an open match rather
+than duplicating it and never move it backwards; append beside a final one;
+never reorder or restructure the CSV; never touch another row; never write
+`seen_jobs.json`.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import json
 import os
@@ -36,21 +36,41 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import outreach  # noqa: E402
+import csv_store  # noqa: E402
 import docpaths  # noqa: E402
 import person  # noqa: E402
+from company_key import key as company_key  # noqa: E402
+from throttle import FINAL, _same_title  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACKER = person.state("job_search_tracker.csv")
 HEADER = ["date", "company", "sector", "role", "role_type", "channel", "status",
           "contact_person", "fit_rating", "notes", "cv_file", "cover_letter_file",
           "source", "deadline"]
-# The Final statuses of /outcome's tracker status vocabulary, legacy spellings included.
-FINAL = {"hired", "rejected", "no_response", "no response", "offer_declined",
-         "offer declined", "withdrawn"}
+# A final status is throttle.FINAL, imported rather than copied: the copy that
+# lived here lacked `declined`, so a declined row read as open and a new draft
+# for the same role overwrote its outcome. The match is the throttle's too: one
+# employer key ("Acme Analytics" is "Acme Analytics Inc.") and one title rule
+# ("Sr. Analyst" is "Senior Analyst"), where a raw lower-case comparison
+# appended a second row for an application already on file.
+
+# Where a posting from an employer's own applicant tracking system is applied
+# to: their careers page, which /apply Step 6b calls `online`. The keys of
+# tools/ats_boards.py FETCH (a test pins them equal).
+EMPLOYER_BOARDS = frozenset({"greenhouse", "lever", "ashby", "workday"})
 
 
-def _same(a: str, b: str) -> bool:
-    return (a or "").strip().lower() == (b or "").strip().lower()
+def _same_application(row: dict, new: dict) -> bool:
+    return (company_key(row.get("company")) == company_key(new["company"])
+            and _same_title(row.get("role"), new["role"]))
+
+
+def _channel(portal) -> str:
+    """`online` for an employer's own board, `portal` for a job board, "" when unknown."""
+    portal = str(portal or "").strip().lower()
+    if portal in ("", "pasted"):    # /apply's posting from no board: the person's call
+        return ""
+    return "online" if portal in EMPLOYER_BOARDS else "portal"
 
 
 def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
@@ -80,8 +100,7 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
     return {
         "date": today, "company": draft["company"], "sector": draft.get("sector", ""),
         "role": draft["role"], "role_type": draft.get("role_type", ""),
-        # "pasted" is /apply's posting from no board: how it is sent is the person's call.
-        "channel": "portal" if meta.get("portal") not in (None, "", "pasted") else "",
+        "channel": _channel(meta.get("portal")),
         "status": "drafted",
         "contact_person": "",
         "fit_rating": "" if fit is None else str(int(round(float(fit)))),
@@ -95,20 +114,18 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
 
 def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: str = "",
            path: str = TRACKER) -> list[tuple[str, dict]]:
-    """Apply the batch to the tracker. Returns [(action, row)] with action added/updated."""
-    try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            rows = list(csv.DictReader(fh))
-            header = rows and list(rows[0].keys()) or HEADER
-    except OSError:
-        rows, header = [], HEADER
-    if header[-1] != "deadline":
-        header = header + ["deadline"]
+    """Apply the batch to the tracker. Returns [(action, row)] with action added/updated.
+
+    Written through tools/csv_store.py: the file's own columns and line ending
+    are kept, so one new row is one changed line. A plain DictWriter rewrote
+    every "\\n" as "\\r\\n", and after a column added by hand it appended a
+    second `deadline`.
+    """
+    rows = csv_store.read_rows(path, HEADER)
     done = []
     for d in drafts:
         new = _row_for(d, metas.get(d["abbr"].upper(), {}), today, round_name)
-        open_match = next((r for r in rows if _same(r.get("company"), new["company"])
-                           and _same(r.get("role"), new["role"])
+        open_match = next((r for r in rows if _same_application(r, new)
                            and (r.get("status") or "").strip().lower() not in FINAL), None)
         if open_match is None:
             rows.append(new)
@@ -125,11 +142,7 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             open_match["date"] = today
         open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | redrafted").strip(" |")
         done.append(("updated", open_match))
-    with open(path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=header, extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") or "" for k in header})
+    csv_store.write_rows(path, rows, HEADER)
     return done
 
 
