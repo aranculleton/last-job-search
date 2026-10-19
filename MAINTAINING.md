@@ -21,9 +21,14 @@ These apply whenever the change is to the app, whichever repo the session starte
 - **Nothing reaches the app until the leak scan has passed on the exact tree being pushed,
   branches included**: a public repo's branches are public, and its history is permanent. From
   the maintainer's own repo, `python3 tools/build_app.py <dir> --tokens-out <dir>/tokens`
-  writes the denylist from their profile; then `python3 tools/leak_scan.py <app checkout>
-  --tokens <dir>/tokens` scans the app checkout with it. The app's CI scans again with the
-  `LEAK_TOKENS` secret, but CI only sees what is already public, so the local scan is the gate.
+  writes the denylist from their profile and the whole git history of their tracker, contact
+  book and message log (a row taken out still names someone real); then `python3
+  tools/leak_scan.py <app checkout> --tokens <dir>/tokens` scans the app checkout with it.
+  That local scan is the gate. After a change lands, the maintainer's own repo checks the
+  public app by itself on every sync (`tools/app_watch.py`): each branch not yet merged, new
+  commit messages and pull request text, against that same denylist, and a finding goes first
+  in the reply. Nothing is maintained by hand: the `LEAK_TOKENS` secret the app's CI can read
+  is optional, and without it CI still runs the structural checks.
 - **A real person a run turns up is described, never named**: not in code, a comment, a
   test, a CHANGELOG line, a commit message or a pull request description. "A former chief
   executive", "a short surname cut off". Search results, a test chat's report and a

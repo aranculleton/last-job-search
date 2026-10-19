@@ -549,10 +549,27 @@ def main(argv: list[str]) -> int:
     rc = sync()
     if rc == 0:
         _record_check()
+        app_watch()
         upgrades("--after-sync")
         model_check(a.on)
         place_check(a.tools)
     return rc
+
+
+def app_watch() -> None:
+    """In the maintainer's own repo only: the public app checked for this repo's names
+    (tools/app_watch.py), once a day with the sync. Anyone else's repo prints nothing.
+    A finding goes first in the reply; it never changes the sync's exit code."""
+    script = os.path.join(ROOT, "tools", "app_watch.py")
+    if not os.path.isfile(script):
+        return
+    try:
+        r = subprocess.run([sys.executable, script], cwd=ROOT, text=True,
+                           capture_output=True, timeout=300)
+        if (r.stdout or "").strip():
+            print(r.stdout.rstrip())
+    except (OSError, subprocess.TimeoutExpired):
+        print("App watch: did not finish in five minutes; the next sync tries again.")
 
 
 def place_check(tools: str | None) -> None:

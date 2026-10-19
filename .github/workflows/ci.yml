@@ -226,7 +226,9 @@ jobs:
         # Only in the app: a person's repo carries profile/ on purpose, and its
         # own ci_local.sh scans the app tree it would contribute. Without the
         # secret the structural checks still run (personal paths, emails, phone
-        # numbers, LinkedIn handles); LEAK_TOKENS adds the names, one per line.
+        # numbers, LinkedIn handles); LEAK_TOKENS, if set, adds names, one per line.
+        # It is optional: the maintainer's own repo checks the app for its names on
+        # every sync (tools/app_watch.py), with nothing kept up to date by hand.
         # The log prints an entry's number, never the entry.
         if: hashFiles('profile/person.json') == ''
         env:

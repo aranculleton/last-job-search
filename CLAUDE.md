@@ -51,7 +51,9 @@ Every session in a person's repo starts with the same five steps, before anythin
    cannot do what the person set up (profiles read in their browser, from a chat with no
    browser of theirs; tools missing on their computer), it prints what to tell them, which
    goes at the end of the reply in its own words: two or three short sentences, and the
-   dated steps only if they ask how (`place.py how`). It offers a choice and never makes it. The app is public, so nothing needs attaching; if it still cannot reach
+   dated steps only if they ask how (`place.py how`). It offers a choice and never makes it.
+   In the maintainer's own repo the sync also checks the public app for their names
+   (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before anything else. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing

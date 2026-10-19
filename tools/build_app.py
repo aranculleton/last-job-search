@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import re
@@ -54,6 +55,9 @@ ALLOWED_ORGANIZATIONS = {
     # sentence opening on it is not "corrected". Naming it says nothing about
     # whether anyone applied there.
     "eBay",
+    # Software the app names as a skill a posting asks for. A company of the same name
+    # in a tracker's history made every mention of the tool a finding.
+    "Docker",
 }
 
 
@@ -84,6 +88,46 @@ def _csv(path: str) -> list[dict]:
             return list(csv.DictReader(fh))
     except OSError:
         return []
+
+
+def _csv_ever(path: str) -> list[dict]:
+    """Every row the file holds now and every row any committed version of it held.
+
+    A row taken out of the tracker (a draft never sent, scrubbed on 2026-10-15) still
+    names a real employer and is still in this repo's history; a denylist built from
+    today's file alone had forgotten it, and only an older copy kept by hand still
+    caught it. Read through one `git cat-file --batch`, so a long history costs one
+    process, not one per version.
+    """
+    rows = _csv(path)
+    folder = os.path.dirname(path) or "."
+    top = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"],
+                         capture_output=True, text=True)
+    if top.returncode != 0:
+        return rows
+    root = top.stdout.strip()
+    rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(os.sep, "/")
+    log = subprocess.run(["git", "-C", root, "log", "--format=%H", "--", rel],
+                         capture_output=True, text=True)
+    revs = log.stdout.split() if log.returncode == 0 else []
+    if not revs:
+        return rows
+    batch = subprocess.run(["git", "-C", root, "cat-file", "--batch"],
+                           input="".join(f"{r}:{rel}\n" for r in revs).encode(),
+                           capture_output=True)
+    out, data = list(rows), batch.stdout
+    while data:
+        head, _, data = data.partition(b"\n")
+        parts = head.split()
+        if len(parts) < 3 or parts[1] != b"blob":       # "<rev>:<path> missing", a deletion
+            continue
+        size = int(parts[2])
+        blob, data = data[:size], data[size + 1:]
+        try:
+            out += list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace"))))
+        except csv.Error:
+            continue
+    return out
 
 
 def _school(education_tex: str) -> list[str]:
@@ -268,7 +312,7 @@ def denylist() -> list[str]:
         m = re.search(r" of ([A-Z]\w+)$", s)
         if m:
             add(m.group(1))
-    for row in _csv(person.state("network_contacts.csv")):
+    for row in _csv_ever(person.state("network_contacts.csv")):
         name = (row.get("name") or "").strip()
         if len(name.split()) >= 2:
             out.extend(name_forms(name))
@@ -287,15 +331,15 @@ def denylist() -> list[str]:
             add(row["email"].strip())
     # Threads name their person by contact_id, which is itself a name slug
     # ("firstname_lastname"); the contacts file holds the names.
-    ids = {(r.get("contact_id") or "").strip() for r in _csv(person.state("network_contacts.csv"))}
-    ids |= {(r.get("contact_id") or "").strip() for r in _csv(person.state("network_threads.csv"))}
+    ids = {(r.get("contact_id") or "").strip() for r in _csv_ever(person.state("network_contacts.csv"))}
+    ids |= {(r.get("contact_id") or "").strip() for r in _csv_ever(person.state("network_threads.csv"))}
     out += sorted(i for i in ids if "_" in i)
-    for row in _csv(person.state("job_search_tracker.csv")):
+    for row in _csv_ever(person.state("job_search_tracker.csv")):
         company = (row.get("company") or "").strip()
-        if company and company not in ALLOWED_ORGANIZATIONS:
-            for form in company_forms(company):
-                if form not in ALLOWED_ORGANIZATIONS:
-                    add("=" + form)
+        forms = company_forms(company) if company else []
+        if forms and not set(forms) & ALLOWED_ORGANIZATIONS:
+            for form in forms:
+                add("=" + form)
         cp = (row.get("contact_person") or "").strip()
         if len(cp.split()) >= 2:
             out.extend(name_forms(cp))
