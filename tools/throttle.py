@@ -605,7 +605,7 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, 
     ignored and reported, rather than quietly suppressing an employer forever.
     """
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return {}
@@ -628,7 +628,7 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, 
 def expired_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> list[str]:
     """Entries whose review_after has passed, so the caller can say so."""
     try:
-        with open(path) as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
     except (OSError, ValueError):
         return []
@@ -728,7 +728,9 @@ def _contacts_by_employer(path: str, statuses: set, rows: list[dict] | None = No
     """
     if rows is None:
         try:
-            with open(path, newline="") as fh:
+            # UTF-8 by name: the platform's default is cp1252 on Windows, and the
+            # contact book holds names it cannot read.
+            with open(path, newline="", encoding="utf-8") as fh:
                 rows = list(csv.DictReader(fh))
         except OSError:
             return {}
@@ -1068,7 +1070,8 @@ def main() -> int:
                          "previously excluded is scored again (run_round.py --no-seen-read)")
     a = ap.parse_args()
 
-    data = json.load(open(a.infile))
+    with open(a.infile, encoding="utf-8") as fh:
+        data = json.load(fh)
     rows = list(data.values()) if isinstance(data, dict) else list(data)
     # A posting that gives its employer's short name in brackets teaches the
     # join before any row is keyed, so "Long Name (LN)" and "LN" are one employer
@@ -1098,9 +1101,11 @@ def main() -> int:
     seen_on = first_seen(seen["seen"], a.today)
     for r in kept:
         r["first_seen"] = seen_on(r) or a.today
-    json.dump(kept, open(a.out, "w"), indent=1)
+    with open(a.out, "w", encoding="utf-8") as fh:
+        json.dump(kept, fh, indent=1)
     if a.skipped:
-        json.dump(skipped, open(a.skipped, "w"), indent=1)
+        with open(a.skipped, "w", encoding="utf-8") as fh:
+            json.dump(skipped, fh, indent=1)
     written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today, kept)
 
     from collections import Counter
