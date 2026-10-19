@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-10-19
+
 ### Added
 
 - **Interview prep for a process with no application.** A referral that led to a recruiter's
