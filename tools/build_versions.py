@@ -94,8 +94,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", False, "a docstring's example Workday location is invented"),
             (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, a Workday search reads past its second page, a Greenhouse or Lever posting is kept when any place it lists is wanted, and Lever's EU instance is read"),
             (12, "2026-10-19", True, "every hiring system openroles reads is searched (Workable, Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun and ClearCompany besides the first four) and careers sites that publish their jobs for search engines: each target employer's board is looked for again on all of them"),
+            (13, "2026-10-19", False, "a private name the board reader no longer has says, in its own error, what that means and where to look"),
         ),
-        "fingerprint": "2386ba2d6ef0f2da",
+        "fingerprint": "04266871335d03c3",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -247,8 +248,9 @@ METHODS: dict[str, dict] = {
             (14, "2026-10-18", False, "RUNBOOK names the people ladder and the Claude surfaces registry"),
             (15, "2026-10-19", True, "a document already sent is never rendered over; a letter's figures are checked; a trimmed resume keeps the line that describes each job; a letter keeps its date, drops legal forms from the employer's name, is addressed to the person the employer names, and is flagged where it repeats the resume; a claimed skill the profile does not hold is caught, a held tool of the same family stands in for one a posting names that the person lacks; and every skill a posting names that the profile does not hold is asked about before drafting, and only a yes puts it on the resume"),
             (16, "2026-10-19", False, "an application from any employer board openroles reads is recorded as applied online"),
+            (17, "2026-10-19", False, "RUNBOOK says what to do when a person's own tests fail after an update"),
         ),
-        "fingerprint": "ea7dd7e10b1808a8",
+        "fingerprint": "8ec10041b4ae1ff2",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

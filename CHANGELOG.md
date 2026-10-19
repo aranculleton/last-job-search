@@ -20,7 +20,7 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
-## [3.6.0] - 2026-10-19
+## [3.5.1] - 2026-10-19
 
 ### Fixed
 
