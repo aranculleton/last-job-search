@@ -20,6 +20,21 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Follow-ups skip public holidays.** "Five to seven business days" counted a public
+  holiday as a working day, so a nudge could fall due a day early. Holidays are now
+  worked out by rule for any year: national days for the UK, Ireland, Canada, the US,
+  Australia and New Zealand, and regional days for Canada's provinces, the UK's nations
+  and several US states. Your region is read from where you live. Anywhere the rules do
+  not cover, Claude looks up your country's holidays and keeps them in your profile
+  (`python3 tools/holidays.py` lists them). Profile upgrade: public-holidays.
+- **Your own "never write" rules are checked in every draft.** A rule in your profile
+  such as never write "relocating" was followed only when the drafting model remembered
+  it, and a note that broke it passed every check. The phrases your rules quote are now
+  checked like any phrase you have said never to use, applied by itself on your next
+  update. Profile upgrade: profile-never-say.
+
 ### Changed
 
 - **The set-up that works best is now said plainly: two chats.** One on your computer, for
@@ -98,12 +113,31 @@ make sense to somebody whose repo just received it.
   now carries the day it was checked and its official page, and a stale one tells Claude
   to check the page first or say it could not. LinkedIn's help pages are never fetched,
   so the weekly watch puts them to the maintainer by hand once a month instead.
+- **A file a merge left conflict markers in is refused, never read.** After a merge
+  conflict, the contact book's marker lines were read as three contacts and both sides of
+  the conflicted row as two more, nothing said so, and the next save wrote the markers
+  back. Every reader of the tracker, the contact book and the message log now stops and
+  names the file and the line, and nothing is saved over it.
+- **Pay is read however a posting writes it.** A band with no currency mark ("Salary:
+  95-125K", "95,000.00 - 125,000.00 annually"), a band by the hour, and a band under a
+  pay heading on the line above were read as no salary, so the posting skipped the pay
+  cut and the pay score. Given one band per place, the highest was read; the band for
+  your own city or country is read now, so one under your cut line is cut.
+- **A never-say phrase with brackets or parentheses is caught.** "(remote)" or "[sic]"
+  was recorded and never flagged. Names, places and cue words are matched the same way,
+  so a term like C++ works too.
+- **Employer names with a web address or initials join.** "<Name>.com Services LLC", the
+  name some employers post under, joined nothing at <Name>, and "<Initials> Global
+  Ratings" never joined "<Initials> Global".
+- **No command crashes when run with nothing, or asked for help.** Four died on an
+  IndexError, several read "--help" as a company or a message, and two died where there
+  was nothing to read. Each prints its usage or says there is nothing to do.
 - **Nothing that needs your browser is listed as something Claude applies alone.** The
   notes rewrite was, until 3.4.1; a test now keeps it that way.
 
-No profile upgrade: the next interview pack for a live interview is written beside the
-old one by itself (build version interview 8), and people already added are re-checked
-by the networking update (networking 27).
+The next interview pack for a live interview is written beside the old one by itself
+(build version interview 8), and people already added are re-checked by the networking
+update (networking 27).
 
 ## [3.5.1] - 2026-10-19
 
