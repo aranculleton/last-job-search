@@ -46,7 +46,11 @@ def write_rows(path: str, rows, columns) -> None:
     except OSError:
         first, head = "", []
     fields = [k for k in dict.fromkeys(head) if k] or list(columns)
-    added = [c for c in columns if c not in fields]
+    # A column the file lacks joins it only once a row has something to put in it. Added
+    # empty, it rewrote every row: saving one new contact was a 460-line change to a
+    # 229-row contact book. A reader fills a missing column with blanks either way.
+    added = [c for c in columns if c not in fields
+             and (not head or any(str(r.get(c) or "").strip() for r in rows))]
     if head and added:
         # Once per file: after this save the header has them.
         print(f"state: {os.path.basename(path)} gains column(s) {', '.join(added)}, added "

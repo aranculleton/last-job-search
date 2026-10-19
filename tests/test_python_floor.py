@@ -92,10 +92,15 @@ def test_a_new_column_goes_on_the_end_and_rows_keep_their_fields(tmp_path, capsy
     path = tmp_path / "network_contacts.csv"
     path.write_text("contact_id,name,status,my_note\nfen_1,Tamsin Oyelaran,awaiting_reply,hi\n")
     rows = state._read_csv(str(path), ["contact_id", "name", "found_via", "status"])
+    # Nothing in the new column yet: the file is left as it was (one save was a 460-line
+    # change to a 229-row book when the empty column went on every row).
+    state._write_csv(str(path), rows, ["contact_id", "name", "found_via", "status"])
+    assert path.read_text().splitlines()[0] == "contact_id,name,status,my_note"
+    rows[0]["found_via"] = "export"
     state._write_csv(str(path), rows, ["contact_id", "name", "found_via", "status"])
     lines = path.read_text().splitlines()
     assert lines[0] == "contact_id,name,status,my_note,found_via"
-    assert lines[1] == "fen_1,Tamsin Oyelaran,awaiting_reply,hi,"
+    assert lines[1] == "fen_1,Tamsin Oyelaran,awaiting_reply,hi,export"
     assert "gains column(s) found_via" in capsys.readouterr().err
 
 

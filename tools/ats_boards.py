@@ -593,21 +593,65 @@ def probe(boards=None) -> dict[str, str]:
     return out
 
 
-def find(target: str) -> list[tuple[str, str, int, str | None]]:
-    """[(kind, token, rows in range, why it returned none)] for an employer's name or careers page.
+# A board guessed from a company's name with fewer roles than this is more often a small
+# organisation that took the name first than the employer's own board.
+SMALL_BOARD = 10
 
-    How a board gets into the map in the first place. openroles finds it: it tries
-    the board names an employer is likely to use on every system a name can find, or
-    reads a careers page for the board it links to. Workday cannot be guessed from a
-    name: give its careers site URL. Each board found is then read the way a round
-    reads it, so the count is what a round would get.
+
+def find(target: str) -> list[dict]:
+    """The boards behind an employer's name or careers page, each read the way a round reads it.
+
+    {kind, token, in_range, why, how, open, titles}. `how` is how it was found: "named"
+    (a board URL or ats:token), "linked" (the careers page links to it) or "guessed"
+    (a board with a name the employer might use exists). A guess is not the employer's
+    until their own careers page says so: guessing two large employers' short names on
+    every system openroles reads found three-role boards belonging to strangers, and they
+    were presented as the employers' own. `titles` is a few of its roles, for that check.
     """
     from openroles import detect
+    from openroles.discover import parse
+    target = target.strip()
+    how = ("named" if parse(target) else
+           "linked" if re.match(r"^(https?://|www\.)|^[a-z0-9-]+(\.[a-z0-9-]+)+/", target, re.I)
+           else "guessed")
     out = []
     for board in detect(target):
-        rows, err = FETCH[board.ats](target, board.token)
-        out.append((board.ats, board.token, len(rows), err))
+        if board.ats in ("workday", "careersite") or board.ats in DETAILED:
+            rows, err = FETCH[board.ats](target, board.token)
+            total, titles = len(rows), [r["title"] for r in rows[:4]]
+        else:                                   # one read: every role, then the ones in range
+            try:
+                jobs, err = READERS[board.ats].fetch(board.token), None
+            except BoardError as e:
+                jobs, err = [], str(e).split(": ", 1)[-1]
+            rows, total, titles = _rows(target, jobs), len(jobs), [j.title for j in jobs[:4]]
+        out.append({"kind": board.ats, "token": board.token, "in_range": len(rows), "why": err,
+                    "how": how, "open": total, "titles": titles})
     return out
+
+
+def _find_lines(target: str, found: list[dict]) -> list[str]:
+    """What --find prints: a map entry for a board the employer's own page or URL names,
+    and for a guess the evidence to check it against, with the entry held back."""
+    lines = []
+    for b in found:
+        head = f"{b['kind']}/{b['token']}: {b['open']} open, {b['in_range']} in range"
+        lines.append(head + (f" [{b['why']}]" if b["why"] else ""))
+        entry = f'"<Employer>": ("{b["kind"]}", "{b["token"]}"),'
+        if b["how"] != "guessed":
+            lines.append(f"  found: {'named' if b['how'] == 'named' else 'linked from that page'}")
+            lines.append(f"  map entry: {entry}")
+            continue
+        small = b["open"] < SMALL_BOARD
+        lines.append(f"  found: guessed from the name {target!r}; nothing yet shows it is theirs"
+                     + (f", and {b['open']} role(s) is small for an employer's own board" if small
+                        else ""))
+        if b["titles"]:
+            lines.append("  its roles include: " + "; ".join(b["titles"]))
+        lines.append("  confirm it on the employer's own careers page (--find <that page's "
+                     "address> finds the board it links to); once confirmed, the map entry is "
+                     + entry)
+    return lines
 
 
 def main() -> int:
@@ -623,9 +667,8 @@ def main() -> int:
 
     if a.find:
         found = find(a.find)
-        for kind, token, in_range, err in found:
-            print(f"{kind}/{token}: {in_range} in-range job(s)" + (f" [{err}]" if err else ""))
-            print(f'  map entry: "<Employer>": ("{kind}", "{token}"),')
+        for line in _find_lines(a.find, found):
+            print(line)
         if not found:
             print(f"ats_boards: no {_systems()} board found for {a.find!r}; "
                   "for Workday, give the careers site's URL", file=sys.stderr)

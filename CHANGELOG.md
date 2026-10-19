@@ -32,6 +32,23 @@ make sense to somebody whose repo just received it.
   a removed private name means; and `python3 tools/sync_app.py --own-tests` says it at any
   time. A test using a part of the app the update removed is told apart from one pinning
   behaviour that changed, and retiring one is asked once. No profile upgrade.
+- **An interview pack finds the application however its role is written.** A role
+  carrying its requisition number, "Data Scientist II (R_1234567)", sent it to a folder
+  that did not exist, and it built the pack from nothing. When no folder matches, it now
+  names the employer's folders instead. No profile upgrade.
+- **A hand-written outcome file gives the pack its stages.** A heading per round with its
+  date is read as well as a checklist, and once every stage on record is held the next is
+  the next round, not a phone screen. No profile upgrade.
+- **The pack finds the person who referred you, and leaves alone anyone whose row says
+  to.** A referral recorded in a contact's outcome, or named in the application's notes,
+  counts; a row that says no action, HOLD or FREEZE is shown in its own words, never with
+  a message to send. No profile upgrade.
+- **Saving one contact changes one line.** A column the file lacked was added to every
+  row, so one new contact rewrote a 229-row contact book. No profile upgrade.
+- **The board finder says when a board was only guessed from a name.** Guessing a short
+  company name on every system found small boards belonging to other organisations,
+  presented as the employer's own. A guess now shows its size and some of its roles, and waits for the
+  employer's own careers page to confirm it. No profile upgrade.
 
 ### Added
 

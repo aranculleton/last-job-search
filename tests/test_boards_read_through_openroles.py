@@ -15,13 +15,34 @@ import openroles  # noqa: E402
 from openroles import Board  # noqa: E402
 
 
-def test_find_reads_each_board_it_detects_the_way_a_round_would(monkeypatch):
+def test_find_reads_each_board_it_detects_the_way_a_round_would(monkeypatch, boards_web):
     monkeypatch.setattr(openroles, "detect", lambda target: [Board("lever", "fernhill")])
-    monkeypatch.setitem(ats_boards.FETCH, "lever",
-                        lambda employer, token: ([{"id": "lv-1"}], None))
-    assert ats_boards.find("Fernhill Freight") == [("lever", "fernhill", 1, None)]
+    boards_web.routes["api.lever.co/v0/postings/fernhill"] = [
+        {"id": "a", "text": "Analyst", "hostedUrl": "u", "createdAt": 0,
+         "categories": {"location": "Manchester, England, United Kingdom"}},
+        {"id": "b", "text": "Driver", "hostedUrl": "u2", "createdAt": 0,
+         "categories": {"location": "Austin, TX"}}]
+    [found] = ats_boards.find("Fernhill Freight")
+    assert (found["kind"], found["token"], found["open"], found["in_range"], found["how"]) == (
+        "lever", "fernhill", 2, 1, "guessed")
+    assert found["titles"] == ["Analyst", "Driver"]
+    assert len(boards_web.calls) == 1                     # the board is read once
     from openroles import _http
     assert _http.USER_AGENT == ats_boards.UA and "Claude-User" in _http.AGENTS
+
+
+def test_a_guessed_board_is_not_presented_as_the_employers(monkeypatch):
+    # Guessing two large employers' short names on every system found three-role boards belonging to
+    # other organisations, and --find printed each with a map entry as if it were theirs.
+    guess = {"kind": "recruitee", "token": "acme", "in_range": 0, "why": None, "how": "guessed",
+             "open": 3, "titles": ["Demand Planner", "Data Analyst (Sample)"]}
+    lines = ats_boards._find_lines("Acme", [guess])
+    assert "guessed from the name 'Acme'" in lines[1] and "3 role(s) is small" in lines[1]
+    assert "Data Analyst (Sample)" in lines[2]
+    assert not any(line.strip().startswith("map entry:") for line in lines)
+    assert "once confirmed" in lines[-1]
+    linked = dict(guess, how="linked", open=240)
+    assert any(line.strip().startswith("map entry:") for line in ats_boards._find_lines("x", [linked]))
 
 
 def test_a_lever_body_carries_its_requirement_lists(boards_web):

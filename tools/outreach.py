@@ -94,6 +94,18 @@ def _abbr_on_file(company, role):
     return ""
 
 
+# A requisition number written into the role by the tracker or a board:
+# "Data Scientist II (R_1234567)", "Analyst [JR166447]", "Planner - REQ-20931".
+_REF = re.compile(r"\s*(?:[\(\[]\s*(?:req(?:uisition)?|job|ref|id)?\s*[#:]?\s*[A-Za-z]{0,4}[-_ ]?"
+                  r"\d{4,}[\w-]*\s*[\)\]]|[-\u2013|]\s*(?:req(?:uisition)?\s*[#:]?\s*)?"
+                  r"[A-Za-z]{0,4}[-_]?\d{4,}\w*)\s*$", re.I)
+
+
+def without_ref(role) -> str:
+    """The role with a trailing requisition number taken off, else unchanged."""
+    return _REF.sub("", str(role or "")).strip() or str(role or "")
+
+
 def app_folder(company, role, abbr=""):
     """The folder one application lives in (documents/README.md, Subfolder naming).
 
@@ -103,21 +115,38 @@ def app_folder(company, role, abbr=""):
     there wins: the full name, then the name without the abbreviation, then the
     one folder for this company and role under any abbreviation. Otherwise the
     full name, which is the rule.
+
+    A role carrying its requisition number, "Data Scientist II (R_1234567)", is also
+    looked for without it: the folder was named before the number was written into the
+    tracker, and the interview pack built itself from an empty folder.
     """
     base = person.state("documents", "applications")
     abbr = abbr or _abbr_on_file(company, role)
     stem = slug(company, role)
     full = slug(company, role, abbr) if abbr else stem
-    for name in (full, stem):
+    bare = without_ref(role)
+    plain = slug(company, bare) if bare != role else stem
+    for name in dict.fromkeys((full, stem, plain)):
         if os.path.isdir(os.path.join(base, name)):
             return os.path.join(base, name)
     try:
-        hits = [d for d in sorted(os.listdir(base))
-                if d.startswith(stem + "_") and "_" not in d[len(stem) + 1:]
+        hits = [d for d in sorted(os.listdir(base)) for st in dict.fromkeys((stem, plain))
+                if d.startswith(st + "_") and "_" not in d[len(st) + 1:]
                 and os.path.isdir(os.path.join(base, d))]
     except OSError:
         hits = []
     return os.path.join(base, hits[0] if len(hits) == 1 else full)
+
+
+def employer_folders(company) -> list[str]:
+    """Every application folder at this employer, by name."""
+    base = person.state("documents", "applications")
+    try:
+        prefix = slug(company, "") + "_"
+        return sorted(d for d in os.listdir(base)
+                      if d.startswith(prefix) and os.path.isdir(os.path.join(base, d)))
+    except (OSError, ValueError):
+        return []
 
 
 def _plain(s):
