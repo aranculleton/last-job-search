@@ -430,17 +430,26 @@ def unheld_report(a):
     `skills_block.select()` drops an unheld skill from the tools line silently,
     which is right for the page and wrong for the person: a drafter who asked
     for one wrote a claim, and a posting that names one has a real gap, which
-    the letter must bridge (tools/bridges.py) or leave alone, never claim.
+    the letter must bridge (tools/bridges.py) or leave alone, unless the person said yes
+    to it for this application (tools/stage_picks.py consent).
     """
     out = []
-    asked = skills_block.unheld_requested(a.get("tools", ""))
+    # A skill the person said yes to for this posting is theirs to claim, and on the page.
+    yes = [str(x) for x in a.get("consented_skills") or []]
+
+    def theirs(k):
+        return any(re.search(skills_block.NOT_HELD[k][0], y, re.I) for y in yes)
+    asked = {k: v for k, v in skills_block.unheld_requested(a.get("tools", "")).items()
+             if not theirs(k)}
+    if yes:
+        out.append("on the page with the person's yes: " + ", ".join(yes))
     if asked:
         out.append("tools line asked for skills not held, left off: "
                    + "; ".join(f"{k} ({v})" for k, v in asked.items()))
     gaps = {k: v for k, v in skills_block.unheld_requested(a.get("posting", "")).items()
-            if k not in asked}
+            if k not in asked and not theirs(k)}
     if gaps:
-        out.append("the posting names skills not held (bridge or leave, never claim): "
+        out.append("the posting names skills not held, and the person said no or was not asked: "
                    + ", ".join(gaps))
     return out
 

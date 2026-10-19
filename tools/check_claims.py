@@ -89,7 +89,8 @@ def app_rules() -> dict:
     if unheld:
         r["unheld-skill"] = ("ERROR", "unheld-skill", unheld,
                              "A skill profile/skills.py NOT_HELD says the candidate does not "
-                             "hold. Omitting a skill is honest; claiming an unheld one is not.")
+                             "hold, and they were not asked about it for this application. "
+                             "Only their yes puts one on a document (stage_picks.py consent).")
     r["duplicated-word"] = ("ERROR", "duplicated-word", r"\b([^\W\d_]{3,})\s+\1\b",
                             "A word is repeated. Usually an editing slip.")
     r["unsupported-connective"] = (
@@ -100,12 +101,40 @@ def app_rules() -> dict:
     return r
 
 
-def unheld_pattern() -> str:
-    """One pattern for every skill the profile's skills.py NOT_HELD lists, or ""."""
+def unheld_pattern(except_for=()) -> str:
+    """One pattern for every skill the profile's skills.py NOT_HELD lists, or "", leaving
+    out any the person said yes to for this document (`except_for`)."""
     if not person.exists("skills.py"):
         return ""
-    pats = [pat for pat, _ in getattr(person.module("skills"), "NOT_HELD", {}).values() if pat]
+    pats = [pat for pat, _ in getattr(person.module("skills"), "NOT_HELD", {}).values()
+            if pat and not any(re.search(pat, y, re.I) for y in except_for)]
     return "|".join(f"(?:{p})" for p in pats)
+
+
+# The person's answers about skills their profile does not hold, asked before the
+# draft (tools/stage_picks.py consent), travel in the document's own header, so a
+# check of the file needs nothing else: a yes is theirs to claim, a no is flagged.
+_YES = "Claimed with the candidate's yes"
+_NO = "The candidate said no to"
+
+
+def consent_header(yes=(), no=()) -> str:
+    """The header lines that record the person's answers, or "" when there are none."""
+    out = ""
+    for label, names in ((_YES, yes), (_NO, no)):
+        names = [re.sub(r"\s+", " ", str(n)).strip() for n in names or () if str(n).strip()]
+        if names:
+            out += f"% {label}: {', '.join(names)}\n"
+    return out
+
+
+def read_consent(raw: str) -> tuple[list[str], list[str]]:
+    """(yes, no) from a document's header."""
+    got = {}
+    for label in (_YES, _NO):
+        m = re.search(r"^%+\s*" + re.escape(label) + r":\s*(.+)$", raw, re.M)
+        got[label] = [n.strip() for n in m.group(1).split(",") if n.strip()] if m else []
+    return got[_YES], got[_NO]
 
 
 # Rules that warn rather than fail on a cover letter. Read by check().
@@ -175,9 +204,14 @@ def check(path: str) -> list[tuple[str, str, str, str]]:
     text = strip_latex(raw)
     findings = []
     letter = is_letter(path)
+    yes, no = read_consent(raw)
     for sev, name, pat, why in CHECKS:
         if letter:
             sev = LETTER_SEVERITY.get(name, sev)
+        if name == "unheld-skill" and yes:
+            pat = unheld_pattern(except_for=yes)
+            if not pat:
+                continue
         for m in re.finditer(pat, text, re.I | re.S):
             snippet = re.sub(r"\s+", " ", m.group(0))[:110]
             findings.append((sev, name, snippet, why))
@@ -185,6 +219,12 @@ def check(path: str) -> list[tuple[str, str, str, str]]:
         for m in re.finditer(pat, text, re.I):
             findings.append(("ERROR", "figure-drift",
                              re.sub(r"\s+", " ", m.group(0))[:80], why))
+    # A warning, not an error: the word can also sit inside work the profile does hold.
+    for n in no:
+        for m in re.finditer(r"(?<!\w)" + re.escape(n) + r"(?!\w)", text, re.I):
+            findings.append(("WARN", "declined-skill", m.group(0),
+                             "The candidate said no to claiming this for this application. "
+                             "Take it out unless it describes work the profile does hold."))
     return findings
 
 

@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 import resume_gen as gen          # templates/resume_gen.py, the committed copy
 from resume_gen import resume, letter
 import skills_block
+import check_claims
 import bullet_library as LIBRARY
 import allocate
 import doc_name
@@ -358,6 +359,11 @@ def build(a):
     if derived and derived != abbr:
         a["abbr"] = abbr = derived
     contact = str(a.get("contact_person") or "").strip()
+    # The person's answers about the skills their profile does not hold, asked before
+    # the draft (stage_picks.py consent): each yes prints on the skills line, and both
+    # go into the documents' header, where check_claims.py reads them.
+    yes = [str(x).strip() for x in a.get("consented_skills") or [] if str(x).strip()]
+    no = [str(x).strip() for x in a.get("declined_skills") or [] if str(x).strip()]
     d = dict(
         abbr=abbr, company=a["company"], role=a["role"],
         summary=summary,
@@ -369,7 +375,7 @@ def build(a):
             clean(a.get("tools", "")),
             context=" ".join([summary] + [b for j in jobs if j["employer"] not in _NO_SKILLS
                                           for b in j["bullets"]]),
-            posting=a.get("posting", ""), company=a["company"])),
+            posting=a.get("posting", ""), company=a["company"], consented=yes)),
         p1=clean(a["p1"]), p2=clean(a["p2"]), lead=clean(a["lead"]),
         # rstrip(": ") left a trailing period, and the template appends a
         # colon, so a bullet label could render ".:" on a one-page document.
@@ -401,6 +407,7 @@ def build(a):
     # The requisition the letter answers, kept with it (the .tex header) and in
     # the tracker's notes; record_drafts.py writes it there.
     d["req_id"] = str(a.get("req_id") or "").strip()
+    d["consent"] = check_claims.consent_header(yes, no)
     return d
 
 

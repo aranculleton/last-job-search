@@ -311,9 +311,19 @@ stages the one posting):
 
 ```bash
 python3 tools/stage_picks.py stage "$SCRATCH/r1" "Acme::Demand Planning" 4 7     # picks.json, apps_in.json, fenced postings
+python3 tools/stage_picks.py consent "$SCRATCH/r1" acme --yes Looker --no Spark   # the person's answers
 # Workflow draft-applications with args {today, round_dir, picks: <picks.json>}
 python3 tools/stage_picks.py assemble "$SCRATCH/r1"                              # drafts.json
 ```
+
+**A skill a posting names that the profile does not hold is the person's call, every time**,
+even one they once said they lack: `stage` prints one short question per pick, asked as
+written (the reason only if they ask why), and `consent` records each answer. Read the
+posting too, and ask the same way about any other skill it names that the profile lacks and
+the question missed. A yes is for that application: it prints on the skills line as the
+posting spells it. Where they say they hold it generally, that is a fact: write it into
+`01-candidate-profile.md` and `skills.py` `ITEMS` (out of `NOT_HELD`) in the same turn. The
+workflow drafts nothing and `assemble` assembles nothing while a question waits.
 
 Then RUNBOOK.md step 3. `stage` **never reuses a name another application was sent under**:
 a second role at an employer gets a role token (`Acme_DemandPlanning`), and `fit_to_page.py`
@@ -407,7 +417,9 @@ the yield target is met (at least 5 postings at 60+, 2 of them 75+); then presen
 table, highest first, with the scores, the salary read, deadlines, referral links, a
 clickable apply link on every row and what needs checking. **Stop there and ask** which to
 take forward: draft nothing unless that request asked for it, and before drafting anything,
-ask whether they have already applied and record the answer.
+ask whether they have already applied and record the answer, and ask about every skill a
+posting names that their profile does not hold (staging prints the question; only their yes
+puts one on the page).
 
 **Rank down, do not cut.** The hard cuts are only the ones no framing survives: an
 eligibility bar the profile cannot clear, a language requirement, a professional credential

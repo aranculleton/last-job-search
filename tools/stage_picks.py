@@ -20,7 +20,17 @@ belongs to a different application.
 
     python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...]
     python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N]
+    python3 tools/stage_picks.py consent <round_dir> <pick> --yes A B --no C
     python3 tools/stage_picks.py assemble <round_dir>
+
+**Every skill a posting names that the profile does not hold is asked about first.**
+`stage` prints one short question per pick (`bridges.unheld_asked`), and nothing is
+drafted until `consent` records each answer. A yes puts it on this resume's skills line,
+named as the posting spells it; a no keeps it off every document. Both travel with the
+draft and are written into the documents' own header, which `check_claims.py` reads. The
+app used to decide this alone, and left the tool off: only the person knows whether they
+use it and never said, learned it since, or judge they can back it up, and the word left
+off can be the one an applicant tracking system screens on.
 
 `single` is /apply's way in: one posting that came from no round, staged exactly
 as a round's pick is, so a single application is drafted, rendered and verified by
@@ -37,8 +47,9 @@ A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
 `stage` writes, under <round_dir>:
     picks/NN_<slug>.md   the posting, fenced by tools/untrusted.py, with the
                          shortlist's scores and routing notes above the fence
-    picks.json           [{file, company, role, slug, abbr}], the `args.picks`
-                         of the saved draft-applications workflow
+    picks.json           [{file, company, role, slug, abbr, ask_first}], the
+                         `args.picks` of the saved draft-applications workflow;
+                         `consent` adds skills_yes and skills_no
     apps_in.json         the shortlist rows with `abbr`, for tools/outreach.py
 
 `assemble` reads each `<round_dir>/audit_<slug>.json` the workflow's audit stage
@@ -257,6 +268,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             s = f"{s}_{n}"
         seen_slugs.add(s)
         r = dict(r, desc=posting_text(r, round_dir, s, fetch))
+        asks = to_ask(r["desc"])
         path = os.path.join(round_dir, "picks", f"{n:02d}_{s}.md")
         head = [
             f"# {r['company']} | {r['title']}", "",
@@ -271,18 +283,108 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             f"- warm_route_note: {r.get('warm_route_note') or ''}",
             f"- outreach_pending_note: {r.get('outreach_pending_note') or ''}",
             f"- throttle_override_note: {r.get('throttle_override_note') or ''}",
+            f"- ask the person first: {_listed(asks) or 'nothing'}",
             "",
         ]
         with open(path, "w", encoding="utf-8") as fh:
             fh.write("\n".join(head) + "\n" + untrusted.fence(r.get("desc") or "") + "\n")
         staged.append({"file": path, "company": r["company"], "role": r["title"],
-                       "slug": s, "abbr": abbr})
+                       "slug": s, "abbr": abbr, "ask_first": [x["skill"] for x in asks],
+                       "ask_beside": {x["skill"]: x["have"][:1] for x in asks if x["have"]}})
         apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr))
     with open(os.path.join(round_dir, "picks.json"), "w", encoding="utf-8") as fh:
         json.dump(staged, fh, indent=1)
     with open(os.path.join(round_dir, "apps_in.json"), "w", encoding="utf-8") as fh:
         json.dump(apps_in, fh, indent=1)
     return staged
+
+
+def to_ask(posting: str) -> list[dict]:
+    """The skills this posting names that the profile does not hold: bridges.unheld_asked."""
+    import bridges
+    return bridges.unheld_asked(posting)
+
+
+def _listed(asks) -> str:
+    return ", ".join(x["skill"] + (f" (you list {x['have'][0]})" if x.get("have") else "")
+                     for x in asks)
+
+
+def _and(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+# Said only when the person asks why: one sentence.
+WHY_ASK = ("An applicant tracking system can screen on the exact word, so leaving one off can "
+           "cost the interview, and claiming one you cannot back up can cost it later; only you "
+           "know which it is.")
+
+
+def question(pick: dict) -> str:
+    """The one short question for a pick, or "" when there is nothing to ask."""
+    names = unanswered(pick)
+    if not names:
+        return ""
+    beside = pick.get("ask_beside") or {}
+    shown = [n + (f" (you list {beside[n][0]})" if beside.get(n) else "") for n in names]
+    one = len(names) == 1
+    return (f"{pick['company']} asks for {_and(shown)}, which your profile doesn't list. "
+            f"Can you claim {'it' if one else 'any of them'} and back {'it' if one else 'them'} "
+            f"up in an interview? {'A yes puts it' if one else 'Each yes goes'} on this resume; "
+            f"{'a no keeps it off' if one else 'each no stays off'}.")
+
+
+def _fold(names) -> set[str]:
+    return {str(n).strip().casefold() for n in names or () if str(n).strip()}
+
+
+def unanswered(pick: dict) -> list[str]:
+    """The skills a pick still waits on the person for. A pick staged before this step
+    has no ask_first at all, and is read from its posting so it cannot slip through."""
+    asked = pick.get("ask_first")
+    if asked is None:
+        try:
+            with open(pick["file"], encoding="utf-8") as fh:
+                asked = [x["skill"] for x in to_ask(untrusted.unfence(fh.read()))]
+        except OSError:
+            asked = []
+    done = _fold(pick.get("skills_yes")) | _fold(pick.get("skills_no"))
+    return [n for n in asked if n.casefold() not in done]
+
+
+def _which(staged: list[dict], which: str) -> dict:
+    w = _norm(which)
+    hits = [p for p in staged if w in (_norm(p["slug"]), _norm(p["abbr"]))]
+    hits = hits or [p for p in staged if w and w in _norm(p["company"])]
+    if len(hits) != 1:
+        raise SystemExit(f"consent: {which!r} matched {len(hits)} picks; use the slug or abbr "
+                         "stage printed")
+    return hits[0]
+
+
+def consent(round_dir: str, which: str, yes=(), no=()) -> dict:
+    """Record the person's answers for one pick in picks.json, and return the pick.
+
+    A yes and a no for the same skill is refused. A skill the posting names that the
+    tool did not list (one the session saw reading it) is taken as given."""
+    path = os.path.join(round_dir, "picks.json")
+    with open(path, encoding="utf-8") as fh:
+        staged = json.load(fh)
+    p = _which(staged, which)
+    both = _fold(yes) & _fold(no)
+    if both:
+        raise SystemExit(f"consent: both yes and no for {', '.join(sorted(both))}")
+    spelled = {n.casefold(): n for n in p.get("ask_first") or []}
+    for key, got in (("skills_yes", yes), ("skills_no", no)):
+        other = "skills_no" if key == "skills_yes" else "skills_yes"
+        keep = [n for n in p.get(key) or [] if n.casefold() not in _fold(got) | _fold(
+            yes if key == "skills_no" else no)]
+        new = [spelled.get(str(n).strip().casefold(), str(n).strip()) for n in got if str(n).strip()]
+        p[key] = list(dict.fromkeys(keep + new))
+        p[other] = [n for n in p.get(other) or [] if n.casefold() not in _fold(got)]
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(staged, fh, indent=1)
+    return p
 
 
 def _audited(got) -> tuple[str, dict | None, list[str]]:
@@ -300,6 +402,12 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
     """(drafts, picks with no audited draft, picks the audit rejected, with why)."""
     with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
         staged = json.load(fh)
+    waiting = [f"{p['company']}: {', '.join(unanswered(p))}" for p in staged if unanswered(p)]
+    if waiting:
+        raise SystemExit("assemble: the person has not been asked about every skill their "
+                         "profile does not list, so nothing is assembled:\n  "
+                         + "\n  ".join(waiting) + "\nAsk them, record it with "
+                         "`stage_picks.py consent`, and draft again: the drafter needs the answers.")
     drafts, missing, rejected = [], [], []
     for p in staged:
         path = os.path.join(round_dir, f"audit_{p['slug']}.json")
@@ -332,6 +440,12 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
             raise SystemExit(f"{p['file']} has no untrusted fence; re-stage it with `stage`")
         d = dict(d, abbr=p["abbr"], posting=posting)
         d.setdefault("company", p["company"])
+        # The person's answers, kept with the draft (draft.json) and written into the
+        # documents' header: the skills line prints each yes, check_claims reads both.
+        if p.get("skills_yes"):
+            d["consented_skills"] = list(p["skills_yes"])
+        if p.get("skills_no"):
+            d["declined_skills"] = list(p["skills_no"])
         if risks:
             # What an interviewer could still probe, which the audit found and nothing
             # kept: the kept draft carries it to the interview pack.
@@ -341,6 +455,20 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
         json.dump(drafts, fh, indent=1)
         fh.write("\n")
     return drafts, missing, rejected
+
+
+def _report(staged: list[dict], round_dir: str) -> None:
+    for p in staged:
+        print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
+    asks = [(p, question(p)) for p in staged if question(p)]
+    if asks:
+        print("\nASK THE PERSON FIRST, before any drafting (each question as written; "
+              "why, only if they ask: " + WHY_ASK + "):")
+        for p, q in asks:
+            print(f"  [{p['slug']}] {q}")
+        print("Record each answer: python3 tools/stage_picks.py consent "
+              f"{round_dir} <slug> --yes <skill> ... --no <skill> ...")
+    print(f"\nargs for the draft-applications workflow: {os.path.join(round_dir, 'picks.json')}")
 
 
 def main() -> int:
@@ -364,9 +492,21 @@ def main() -> int:
     one.add_argument("--location", default="")
     one.add_argument("--fit", type=int, help="the 0-100 fit /apply Step 1 scored")
     one.add_argument("--deadline", default="")
+    c = sub.add_parser("consent", help="record the person's answers for one pick")
+    c.add_argument("round_dir")
+    c.add_argument("pick", help="the slug or abbr stage printed, or the company")
+    c.add_argument("--yes", nargs="*", default=[], help="skills they will claim and back up")
+    c.add_argument("--no", nargs="*", default=[], help="skills that stay off")
     a = sub.add_parser("assemble")
     a.add_argument("round_dir")
     args = ap.parse_args()
+    if args.cmd == "consent":
+        p = consent(args.round_dir, args.pick, args.yes, args.no)
+        print(f"{p['company']}: yes {', '.join(p.get('skills_yes') or []) or '(none)'}; "
+              f"no {', '.join(p.get('skills_no') or []) or '(none)'}")
+        left = unanswered(p)
+        print(f"still to ask: {', '.join(left)}" if left else "nothing left to ask for this pick")
+        return 0
     if args.cmd == "single":
         with open(args.posting_file, encoding="utf-8") as fh:
             body = fh.read()
@@ -376,14 +516,10 @@ def main() -> int:
             row["fit"] = args.fit
         if args.deadline:
             row["deadline"] = args.deadline
-        for p in stage(args.round_dir, ["1"], shortlist=[row]):
-            print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
-        print(f"\nargs for the draft-applications workflow: {os.path.join(args.round_dir, 'picks.json')}")
+        _report(stage(args.round_dir, ["1"], shortlist=[row]), args.round_dir)
         return 0
     if args.cmd == "stage":
-        for p in stage(args.round_dir, args.picks):
-            print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
-        print(f"\nargs for the draft-applications workflow: {os.path.join(args.round_dir, 'picks.json')}")
+        _report(stage(args.round_dir, args.picks), args.round_dir)
         return 0
     drafts, missing, rejected = assemble(args.round_dir)
     print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")

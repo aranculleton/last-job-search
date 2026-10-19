@@ -118,13 +118,19 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **You decide whether a skill your profile doesn't list goes on the resume.** Before anything
+  is drafted, each skill a posting names that your profile doesn't hold is asked about in one
+  short question, including any you said before you don't have. A yes puts it on that
+  resume's skills line as the posting spells it, and the interview pack flags it as one to
+  expect a question on; a no keeps it off every document. Nothing is drafted until you've
+  answered. No profile upgrade.
 - **Applications that have gone quiet are closed for you.** The brief closes each one past
   the chase (45 days, or a week after a second follow-up) as no_response, with a dated note
   on the row, and leaves alone any with an interview, a referral or a "do not chase" at that
   employer. A reply after that goes in with `/outcome` as usual. No profile upgrade.
 - **A tool you hold counts for a near-identical one a posting asks for.** Power BI for
   Tableau, AWS for Azure, Xero for QuickBooks, in any field: the score treats it as a near
-  match and the resume shows the tool you hold, never the one you lack. Only bridges written
+  match and the resume shows the tool you hold, and the one asked for only if you say yes. Only bridges written
   into your own profile did this before. One step only: a stand-in is never used to bridge
   anything else. No profile upgrade.
 - **Questions come one short line at a time.** Each is 40 words at most, in plain words; its
@@ -171,8 +177,8 @@ make sense to somebody whose repo just received it.
   No profile upgrade.
 - **Several LinkedIn profiles can be pasted in one message.** Each is matched to its waiting
   note and read on its own. No profile upgrade.
-- **A skill your profile says you do not hold is caught wherever it is claimed.** No profile
-  upgrade.
+- **A skill your profile says you do not hold is caught wherever it is claimed**, unless you
+  said yes to it for that application. No profile upgrade.
 - **A letter bullet that repeats the resume word for word is flagged.** No profile upgrade.
 - **A note written before anything was read about the person says so at its top.** It waits
   on a read and is never sent as it stands. No profile upgrade.

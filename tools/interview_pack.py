@@ -673,6 +673,11 @@ def gap_lines(ctx) -> list:
     out += ["- The grounding audit said an interviewer could probe: %s (source: %s)"
             % (_text(r), src) for r in list(draft.get("residual_risks") or [])[:MAX_GAP_NOTES]
             if _text(r)]
+    # Skills the profile does not list that they said yes to claiming on this application:
+    # the resume names them, so the interview may well ask.
+    out += ["- You said yes to claiming %s on this application: expect a question on it, with a "
+            "real example ready (source: %s)" % (_text(k), src)
+            for k in draft.get("consented_skills") or [] if _text(k)]
     return out
 
 

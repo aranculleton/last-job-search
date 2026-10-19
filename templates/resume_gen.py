@@ -32,7 +32,7 @@ _H = _DOC["headings"]
 
 RESUME_HEAD = r"""%% {noun_title} - {name}
 %% Tailored for: {company} - {role}
-%% Compile with: lualatex {fname}.tex
+{consent}%% Compile with: lualatex {fname}.tex
 
 \documentclass[11pt,{paper},sans]{{moderncv}}
 \moderncvstyle{{banking}}
@@ -137,7 +137,7 @@ CERTIFICATIONS = r"""
 
 LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Cover Letter - {company}, {role}{req}
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{consent}%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[{letter_paper}]{{cover}}
 \usepackage{{fancyhdr}}
@@ -259,6 +259,7 @@ def resume(a):
         "certifications": me["certifications"],
     }
     body = (RESUME_HEAD.format(company=a["company"], role=a["role"],
+                               consent=a.get("consent", ""),
                                fname=docpaths.resume_stem(a["abbr"]), **me)
             + "".join(sections[k] for k in section_order())
             + RESUME_END)
@@ -308,6 +309,7 @@ def letter(a):
     req = str(a.get("req_id") or "").strip()
     body = LETTER.format(company=a["company"], role=a["role"],
                          req=f" (requisition {req})" if req else "",
+                         consent=a.get("consent", ""),
                          letter_paper="" if paper == "letterpaper" else paper,
                          salutation=a.get("salutation", f"{a['company']}{suffix}"),
                          letter_date=a.get("letter_date") or _long_date(),

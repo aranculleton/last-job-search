@@ -62,7 +62,9 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
 
 5. **When the candidate replies with picks** (in this chat): record any "already applied"
    answers in the tracker, then `./tools/setup_env.sh` (LaTeX this time), stage the picks
-   with `tools/stage_picks.py`, run the saved `draft-applications` workflow, assemble, render
+   with `tools/stage_picks.py`. When it prints questions about skills a posting names that the
+   profile does not hold, ask them, all in one message and word for word, and wait: record
+   each answer with `stage_picks.py consent`. Then run the saved `draft-applications` workflow, assemble, render
    with `tools/fit_to_page.py`, run `tools/check_claims.py` and `tools/verify_batch.sh` until
    clean, write outreach notes and kept drafts with `tools/outreach.py`, record the tracker
    rows with `tools/record_drafts.py`, and land everything per `_common.md` and CLAUDE.md's

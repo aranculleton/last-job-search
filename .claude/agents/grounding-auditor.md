@@ -37,6 +37,9 @@ the move was complete.
    names that stay confidential, how to state where the candidate lives, sponsorship), no gap
    volunteered in a letter (use `tools/bridges.py` for the honest neighbour), and rule 9 of
    `03-writing-style.md` (no two letters share an opening or a closing sentence).
+5. **The person's answers.** A skill the profile does not hold that they said yes to for this
+   application (the brief, or the document's header line "Claimed with the candidate's yes")
+   is their consent, not a grounding defect. One they said no to, named anywhere, is a defect.
 
 ## Audit a fixed version
 

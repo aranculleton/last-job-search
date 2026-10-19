@@ -77,7 +77,7 @@ _MISSING = [(rx, {"asked": why, "verdict": GAP, "note": ""})
 # Power BI, Azure and AWS, Xero and QuickBooks. Only a person's own BRIDGES covered
 # this, so a field /setup never wrote one for docked the posting in full and left the
 # held tool off the resume. The held tool is what is shown and said; the one asked
-# for is never claimed. A profile adds its field's own in skills.py FAMILIES, same
+# for goes on a document only with the person's yes (unheld_asked, below). A profile adds its field's own in skills.py FAMILIES, same
 # shape: (what the family is, (name, pattern), (name, pattern), ...).
 FAMILIES = [
     ("dashboard tool", ("Power BI", r"\bpower\s?bi\b"), ("Tableau", r"\btableau\b"),
@@ -136,8 +136,65 @@ def family_bridges(text, skip=frozenset()):
                 out.append(Assessment(name, BRIDGE, tuple(have),
                                       f"{have[0]} is the {fam} I work in.",
                                       f"near: the same kind of tool ({fam}); show {have[0]}, "
-                                      f"never claim {name}"))
+                                      f"and {name} only with the person's yes"))
     return out
+
+
+def unheld_asked(text):
+    """Every skill the text names that the profile does not hold, in the text's own
+    spelling (what an applicant tracking system screens on), each as
+    {"skill", "have", "why"}: the held tools it sits beside, and why it is not held.
+
+    Nothing here decides whether it goes on a document. The person is asked about each
+    one before anything is drafted (tools/stage_picks.py), because only they know: they
+    may use it and never said, have learned it since saying they could not, or judge
+    they can back it up. Left off unasked, it can be the word an ATS screen fails on.
+    """
+    text = text or ""
+    out = {}
+
+    def add(name, have=(), why=""):
+        name = re.sub(r"\s+", " ", str(name)).strip(" .,;:()")
+        if not name or _held(name):
+            return
+        got = out.setdefault(name.casefold(), {"skill": name, "have": [], "why": why})
+        got["have"] += [h for h in have if h not in got["have"]]
+        got["why"] = got["why"] or why
+
+    def spelled(rx):
+        return list(dict.fromkeys(m.group(0) for m in rx.finditer(text)))
+
+    for a in family_bridges(text):
+        add(a.asked, a.have, f"not on the profile; the same kind of tool as {a.have[0]}")
+    for rx, e in _COMPILED:
+        if e["verdict"] != HELD:
+            for s in spelled(rx):
+                add(s, e.get("have") or (), e.get("note", "") or "not held, by the profile's own map")
+    for pat, why in getattr(_SKILLS, "NOT_HELD", {}).values():
+        if pat:
+            for s in spelled(re.compile(pat, re.I)):
+                add(s, (), why)
+    for rx, _pts, why in (getattr(person.module("search"), "FIT_MISSING", None) or ()):
+        for s in spelled(rx):
+            add(s, (), why or "the fit score docks it as not held")
+    low = text.casefold()
+    return sorted(out.values(), key=lambda x: (low.find(x["skill"].casefold()), x["skill"]))
+
+
+def held_beside(name):
+    """The held tools a skill sits beside: its family's, or the profile's bridge for it."""
+    for _fam, members in _FAMILY_RX:
+        if any(rx.search(name) for _, rx in members):
+            have = []
+            for other, rx in members:
+                if not rx.search(name):
+                    have += [h for h in _held(other) if h not in have]
+            if have:
+                return have
+    for rx, e in _COMPILED:
+        if rx.search(name) and e.get("have"):
+            return list(e["have"])
+    return []
 
 
 # A gap asked for as a preference ranks the role down; it is never a reason not to

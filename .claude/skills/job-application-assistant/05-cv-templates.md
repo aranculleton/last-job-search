@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.8
+framework_version: 2.1.9
 ---
 
 # Resume Templates and Tailoring Guide
@@ -414,6 +414,9 @@ The block is also topped up from the rest of the page: anything the summary or a
 selected bullet already states may appear on the skills line, which
 keeps a planning resume from omitting forecasting. Nothing is invented; the
 block can never claim more than the page does. The profile's `PINNED` item always prints.
+A skill the profile does not hold prints only when the person said yes to it for this
+posting, asked before drafting (`tools/stage_picks.py consent`): as the posting spells it,
+beside the held tool it sits next to, and never trimmed.
 
 **Six parser fixes from an ATS audit, all in the template.** A labelled
 `Summary` heading (heading-anchored parsers drop text before the first heading). Employer
