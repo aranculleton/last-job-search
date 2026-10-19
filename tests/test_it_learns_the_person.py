@@ -135,3 +135,36 @@ def test_a_later_never_say_overrules_an_earlier_rule_that_prescribes_the_phrase(
     assert "signs off with 'cheers'" not in got           # overruled, kept as history
     assert "never 'cheers'" in got and "three sentences at most" in got   # they agree: both stand
     assert len(learned.load()) == 3 and len(learned.superseded()) == 1
+
+
+RULES_MD = """# The person
+
+- **Location:** Larkspur. Never write "moving to Larkspur", "relocating" or "currently moving"
+  anywhere; the line is "I made the move".
+- The word is "CV", never "resume" (a banned noun, checked already).
+- Keep the informal self-description ("growth hacker") out of formal documents.
+- In their words: *"never say I'm passionate"* about anything.
+"""
+
+
+def test_the_profiles_own_never_write_rules_are_checked_in_every_draft(profile):
+    (profile / "CLAUDE.md").write_text(RULES_MD, encoding="utf-8")
+    assert [p for p, _ in learned.profile_never_phrases()] == [
+        "moving to Larkspur", "relocating", "currently moving"]
+    assert U.by_id("profile-never-say").pending().startswith(
+        'profile/CLAUDE.md says never to write "moving to Larkspur"')
+    assert tone.check("I am relocating to Larkspur next month.") == [] or not any(
+        v.rule == "person_dislikes" for v in tone.check("I am relocating to Larkspur next month."))
+    assert learned.adopt_profile_rules(today="2026-10-19") == [
+        "moving to Larkspur", "relocating", "currently moving"]
+    assert any(v.rule == "person_dislikes" for v in tone.check("I am relocating to Larkspur."))
+    assert any(f["rule"] == "person-dislikes" for f in voice_check.check(
+        "I am currently moving to the city and keen to start."))
+    assert U.by_id("profile-never-say").pending() == ""
+    # Adopted once; a phrase they later retire is never adopted again.
+    assert learned.adopt_profile_rules() == []
+    learned.retire(1)
+    assert learned.unadopted() == []
+    # A banned document noun is a word choice, not a spelling.
+    found = {v.rule for v in tone.check("I have attached my resume for context.")}
+    assert "document_noun" in found and "british_spelling" not in found

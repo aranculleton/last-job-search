@@ -166,6 +166,65 @@ def never_say() -> list[tuple[str, re.Pattern]]:
     return out
 
 
+# A phrase the profile's own rules (profile/CLAUDE.md) say never to write: quoted, in
+# the clause a "never" opens ("Never write \"moving to <City>\", \"relocating\" or ...").
+# Written there as prose, such a rule was followed only when the drafting model read
+# it, and compose.validate passed a note that broke it. Adopted as a never-say phrase,
+# every check reads it.
+_NEVER_CUE = re.compile(r"\b(?:never|do not (?:write|say|use)|don't (?:write|say|use))\b", re.I)
+_QUOTED = re.compile(r'(?<![*\w])"([^"\n]{1,60})"(?![*\w])'
+                     r"|(?<![*\w])\u201c([^\u201d\n]{1,60})\u201d(?![*\w])")
+_CLAUSE_END = re.compile(r"[;:(]|\.(?:\s|$)|\n\s*\n|\bbut\b|\bthe line is\b|\binstead\b", re.I)
+PROFILE_RULES = "CLAUDE.md"
+MAX_PHRASE_WORDS = 6
+
+
+def profile_never_phrases(text: str | None = None) -> list[tuple[str, str]]:
+    """[(phrase, the words that rule it out)] from profile/CLAUDE.md, in order, once each.
+    A quote in italics is the person's own words reported, never a phrase to ban, and
+    the document nouns the profile bans (documents.banned_nouns) are checked already."""
+    if text is None:
+        try:
+            with open(person.path(PROFILE_RULES), encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, person.NoProfile):
+            return []
+    nouns = {str(n).lower() for n in person.get("documents.banned_nouns", []) or []}
+    out, seen = [], set()
+    for m in _NEVER_CUE.finditer(text):
+        rest = text[m.end():m.end() + 240]
+        end = _CLAUSE_END.search(rest)
+        clause = rest[:end.start()] if end else rest
+        for q in _QUOTED.finditer(clause):
+            phrase = (q.group(1) or q.group(2)).strip()
+            low = phrase.lower()
+            if (not re.search(r"[A-Za-z]", phrase) or len(phrase.split()) > MAX_PHRASE_WORDS
+                    or low in seen or low in nouns):
+                continue
+            seen.add(low)
+            out.append((phrase, " ".join((m.group(0) + clause).split())))
+    return out
+
+
+def unadopted() -> list[tuple[str, str]]:
+    """The profile's never-write phrases not yet a never-say phrase. One the person
+    retired counts as handled: their retiring it is the newer word."""
+    have = {str(p).lower() for r in load() for p in r.get("never_say") or ()}
+    return [(p, why) for p, why in profile_never_phrases() if p.lower() not in have]
+
+
+def adopt_profile_rules(today: str | None = None) -> list[str]:
+    """Record each unadopted phrase, one entry per rule it came from. Returns them."""
+    by_rule: dict[str, list[str]] = {}
+    for phrase, why in unadopted():
+        by_rule.setdefault(why, []).append(phrase)
+    for why, phrases in by_rule.items():
+        record("documents", why, "never write " + ", ".join('"%s"' % p for p in phrases)
+               + " (a rule in profile/CLAUDE.md)", applied_to=["profile/CLAUDE.md"],
+               never_say=phrases, today=today)
+    return [p for ps in by_rule.values() for p in ps]
+
+
 def dislikes(text: str) -> list[str]:
     """The phrases in `text` the person has said never to use."""
     return [m.group(0) for _, rx in never_say() for m in rx.finditer(str(text or ""))]
@@ -309,6 +368,7 @@ def main(argv=None) -> int:
     d = sub.add_parser("decide")
     d.add_argument("n", type=int)
     d.add_argument("choice", choices=("keep", "switch"))
+    sub.add_parser("adopt-profile-rules")
     o = sub.add_parser("offer")
     o.add_argument("--setting", required=True)
     o.add_argument("--new", required=True)
@@ -339,6 +399,10 @@ def main(argv=None) -> int:
     elif a.cmd == "offers":
         for n, o in offers():
             print(f"{n}. {question(o)}")
+    elif a.cmd == "adopt-profile-rules":
+        got = adopt_profile_rules()
+        print("learned: checked from now on: " + ", ".join('"%s"' % p for p in got) if got
+              else "learned: every never-write phrase in profile/CLAUDE.md is checked already")
     elif a.cmd == "offer":
         o = offer(a.setting, a.new, a.why, a.version)
         print(f"offered: {question(o)}")

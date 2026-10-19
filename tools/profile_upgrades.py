@@ -281,6 +281,15 @@ def _linkedin_plan() -> str:
     return ""
 
 
+def _profile_never_say() -> str:
+    import learned
+    got = learned.unadopted()
+    if got:
+        return ("profile/CLAUDE.md says never to write " + ", ".join('"%s"' % p for p, _ in got[:4])
+                + (" and more" if len(got) > 4 else "") + ", and nothing checks a draft for it")
+    return ""
+
+
 def _profile_reads() -> str:
     if _missing("networking", "PROFILE_READS"):
         return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
@@ -753,6 +762,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             "one whose alumni reply most first (`python3 tools/network/sources.py` shows the "
             "order), and never the one they work at now; change nothing else", "edit", "~1 min",
             priority=4),
+    Upgrade("profile-never-say", "2026-10-19",
+            "every phrase your own rules say never to write caught in every draft, not only "
+            "when the drafting model remembers it",
+            _profile_never_say, "python3 tools/learned.py adopt-profile-rules", "instant",
+            command=("python3", "tools/learned.py", "adopt-profile-rules"),
+            paths=("profile/learned.json",),
+            priority=2),
     Upgrade("work-place", "2026-10-18",
             "told when a chat is in the wrong place for your settings, and where to go instead",
             _work_place, "ask its question with the session's other questions, as written; "
