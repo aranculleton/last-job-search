@@ -118,7 +118,7 @@ def test_a_test_reaching_into_private_parts_is_noted_before_it_breaks(tmp_path):
 def test_the_error_itself_says_what_a_removed_private_name_means():
     import ats_boards
     try:
-        ats_boards._ROBOTS
+        _ = ats_boards._ROBOTS
     except AttributeError as e:
         text = str(e)
     assert text.startswith("module 'ats_boards' has no attribute '_ROBOTS'")
