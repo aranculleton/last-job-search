@@ -276,6 +276,11 @@ This is the copy scoring reads.
 ### 5. Write `profile/07-interview-prep.md`
 Three or four STAR examples from their real achievements, in their words, plus answers to the
 hard questions their history invites. Stubs marked `[CONFIRM]` where details are missing.
+Every story ends on a `Use for:` line naming, in quotes, the interview questions it answers
+("Tell me about a model you built", "How do you handle conflicting numbers"): it is how
+`tools/interview_pack.py` matches a story to a likely question, and a story without one is
+reached by no question. Each hard answer sits under the question as its heading, in quotes,
+with the answer as a `>` quote below it. `profile.example/07-interview-prep.md` shows the shape.
 <!-- /section -->
 
 <!-- section: search -->
