@@ -188,10 +188,10 @@ def test_the_sync_runs_the_check_in_every_chat_not_only_the_days_first():
 
 
 def test_an_existing_brief_is_found_by_its_registry_or_prompt_never_its_title():
-    reg = {"routines": [{"key": "morning_brief", "name": "Job search: brief (Mon and Thu)",
+    reg = {"routines": [{"key": "morning_brief", "name": "Job search: twice-weekly digest",
                          "trigger_id": "trig_EXAMPLE1",
                          "prompt_file": "automation/prompts/morning_brief.md"}]}
-    listing = [{"id": "trig_EXAMPLE1", "name": "Job search: brief (Mon and Thu)", "prompt": ""}]
+    listing = [{"id": "trig_EXAMPLE1", "name": "Job search: twice-weekly digest", "prompt": ""}]
     got = routines.existing_brief(reg, listing)
     assert got["state"] == "registered" and "never create a second" in got["say"]
     assert routines.existing_brief(reg, [])["state"] == "registered"

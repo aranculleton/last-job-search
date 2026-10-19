@@ -148,8 +148,8 @@ make sense to somebody whose repo just received it.
   interactive terminal. Now it makes the brief itself where its chat has the tool for routines,
   and otherwise asks you once, in the registry's words, to make it in the cloud.
 - **"Set up my brief" never makes a second brief.** An existing one is found by your registry
-  or by its own stored prompt, never its title, so a brief called "Job search: brief (Mon and
-  Thu)" is found as surely as one called "morning brief" (`routines.py brief`). From your
+  or by its own stored prompt, never its title, so a brief under a title of its own is
+  found as surely as one called "morning brief" (`routines.py brief`). From your
   computer it says the brief runs in the cloud and needs nothing there, and it never makes a
   desktop task, which would run only while the app is open. `claude --cloud` is used only
   where the terminal version is installed: the desktop app alone may not provide it.
