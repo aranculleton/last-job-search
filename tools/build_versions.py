@@ -255,8 +255,9 @@ METHODS: dict[str, dict] = {
             (18, "2026-10-19", False, "The person is asked in plain words before any of their own failing tests is deleted; wording only, nothing to redo"),
             (19, "2026-10-19", False, "the voice check skips a quoted list of words to avoid, so a document that warns against a phrase is not flagged for it"),
             (20, "2026-10-19", False, "every command prints its usage instead of crashing with no arguments, the voice check reads a never-say phrase however it is punctuated, and your own never-write rules are checked"),
+            (21, "2026-10-19", False, "the PDF check's missing-Poppler error gives the winget command on Windows, not Chocolatey"),
         ),
-        "fingerprint": "30dbf962fcc140de",
+        "fingerprint": "8928d60f4357ebb3",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

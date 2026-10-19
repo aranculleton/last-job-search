@@ -187,7 +187,7 @@ The default extractor is **pypdf** (`pip install pypdf`, BSD, no Poppler needed)
 
 - macOS: `brew install poppler` (`./tools/setup_env.sh` does it when Homebrew is there)
 - Debian/Ubuntu: `apt install poppler-utils`
-- Windows: `choco install poppler`
+- Windows: `winget install oschwartz10612.Poppler` (winget comes with Windows 10 and 11)
 
 `pdftotext -layout` must also pass `-enc UTF-8`. Without Poppler, `tools/verify_pdf.py` and
 `tools/verify_batch.sh` stop with an error naming `pdftotext`: install it. Only when a session

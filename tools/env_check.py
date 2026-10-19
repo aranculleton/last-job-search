@@ -153,8 +153,8 @@ def _install(what: str) -> str:
         return {"latex": "install it once: brew install --cask mactex-no-gui (SETUP.md, Local machine)",
                 "poppler": "./tools/setup_env.sh installs it (brew install poppler)"}[what]
     if sys.platform.startswith("win"):
-        return {"latex": "install MiKTeX once (SETUP.md, Local machine)",
-                "poppler": "choco install poppler"}[what]
+        return {"latex": "install it once: winget install MiKTeX.MiKTeX (SETUP.md, Local machine)",
+                "poppler": "winget install oschwartz10612.Poppler"}[what]
     return "install it once (SETUP.md, Local machine)"
 
 
