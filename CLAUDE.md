@@ -52,6 +52,8 @@ Every session in a person's repo starts with the same five steps, before anythin
    browser of theirs; tools missing on their computer), it prints what to tell them, which
    goes at the end of the reply in its own words: two or three short sentences, and the
    dated steps only if they ask how (`place.py how`). It offers a choice and never makes it.
+   The set-up it recommends to anyone with a computer is two chats: one on their computer
+   for everything they do, networking included, and the brief in the cloud (`place.TWO_CHATS`).
    In the maintainer's own repo the sync also checks the public app for their names
    (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before anything else. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL

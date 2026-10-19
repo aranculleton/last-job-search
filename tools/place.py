@@ -43,10 +43,18 @@ TRADE_OFF = (
     "Finding people, searching for jobs and writing work the same everywhere. On a computer, "
     "in the Claude desktop app, Claude can also read each person's LinkedIn profile before "
     "writing to them, and your files sit on your disk; a few free tools go on once, and one or "
-    "two ask for your computer's password. On a phone or the web nothing is installed, and you "
-    "paste the one or two profiles that matter most, or reach the chat on your computer from "
-    "your phone.")
+    "two ask for your computer's password. On a phone or the web nothing is installed, but "
+    "profiles cannot be read there: you reach the chat on your computer from your phone.")
 RECOMMEND = "If you have a computer you can use for this, choose the computer: it does more for you."
+# The set-up that works for nearly everyone with a computer, said where a person decides
+# where to work (/setup's question, its next step) and in the check a cloud chat on a
+# computer gives. Told only "a computer does more", people kept every chat in the cloud and
+# found out at their first networking run that profiles cannot be read there.
+TWO_CHATS = ("Two chats work best. One on your computer, for everything you do: job searches, "
+             "resumes, interview prep and networking. And your brief, in the cloud: it follows "
+             "up for you and arrives even when your computer is off.")
+SHORT_TWO_CHATS = ("Two chats work best: one on your computer for everything you do, and your "
+                   "brief in the cloud. Ask me how to move.")
 
 # The one line a chat with no browser of the person's says about reading. Finding
 # people never needs it (tools/network/sources.py, the ladder), so the line says what
@@ -82,8 +90,8 @@ SIGN_IN_ONCE = ("The first time a profile is read, LinkedIn's sign-in page opens
 # and two URLs at the end of every reply was the part nobody read.
 SHORT_REMOTE = ("Finding people works here. Reading their profiles before writing to them needs "
                 "a chat on your computer, which you can also use from your phone.")
-SHORT_CLOUD = ("Finding people works here. Reading their profiles before writing to them needs "
-               "a chat on your computer: this one cannot reach your browser.")
+SHORT_CLOUD = ("Finding people works here, but reading their profiles before writing to them "
+               "needs a chat on your computer.")
 SHORT_LOCAL = ("Finding people works here. Reading their profiles before writing to them needs "
                "a browser this chat can use, such as the Claude desktop app's own.")
 SHORT_PASTE = "Or paste the one or two who matter most. Ask me how if you want to move."
@@ -166,8 +174,10 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
             if not signed_in and have & {"browser", "enable"}:
                 out.append(SIGN_IN_ONCE if detail else SHORT_SIGN_IN)
         elif not detail:
-            line = ({"phone": SHORT_REMOTE, "web": SHORT_REMOTE, "local": SHORT_LOCAL}
-                    .get(where, SHORT_CLOUD) + " " + SHORT_PASTE)
+            line = ({"phone": SHORT_REMOTE + " " + SHORT_PASTE,
+                     "web": SHORT_REMOTE + " " + SHORT_PASTE,
+                     "local": SHORT_LOCAL + " Ask me how."}
+                    .get(where, SHORT_CLOUD + " " + SHORT_TWO_CHATS))
             out.append(line if have is not None else IF_NO_BROWSER + line)
         else:
             if where in ("phone", "web"):
@@ -181,8 +191,8 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
                         f"in Chrome reads them in your own Chrome. {_say('chrome', owner, name, False)}"
                         f" {PASTE_TOP}")
             else:
-                line = (f"{FINDING_WORKS} {CLOUD_LINK_NOT} {_continue_locally(owner, name, then)} "
-                        f"{PASTE_TOP}")
+                line = (f"{FINDING_WORKS} {CLOUD_LINK_NOT} {TWO_CHATS} "
+                        f"{_continue_locally(owner, name, then)}")
             out.append(line if have is not None else IF_NO_BROWSER + line)
     if where == "local" and fixes:
         lines = ["This computer is missing a few things. Each is one command; I run the ones "
@@ -200,13 +210,15 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
 def next_step(works_on: str, where: str, owner: str = "", name: str = "my-job-search") -> str:
     """The exact next step after /setup's question, for where this chat runs."""
     if works_on == "computer" and where != "local":
-        return _continue_locally(owner, name, "set me up")
+        return TWO_CHATS + " " + _continue_locally(owner, name, "set me up")
     if works_on == "phone" and where == "local":
         return (f"Carry on here. On your phone, open claude.ai/code (or the Claude app's Code "
                 f"tab) and choose {name}: both work on your copy on GitHub.")
     if works_on == "both":
-        return ("Carry on here. Chats on your computer and on your phone or the web work on "
-                "the same copy on GitHub, so start one wherever you are.")
+        return (TWO_CHATS + " Both work on the same copy on GitHub, and from your phone you "
+                "can use the chat on your computer.")
+    if works_on == "computer":
+        return "Carry on here: this is the right place. " + TWO_CHATS
     return "Carry on here: this is the right place."
 
 

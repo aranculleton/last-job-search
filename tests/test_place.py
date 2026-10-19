@@ -59,7 +59,8 @@ def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
                "Claude desktop app" in said and "the folder my-job-search" in said
         assert "github.com/example-owner/my-job-search, choose Code, then Open with GitHub " \
                "Desktop" in said
-        assert said.endswith(place.PASTE_TOP)                  # offered, for the few only
+        # The set-up that works, said plainly; no paste offered to a person at a computer.
+        assert place.TWO_CHATS in said and place.PASTE_TOP not in said
     # Not knowing the chat's tools, it asks the chat to look before it says anything.
     said = _say("desktop-cloud", "browser", [])
     unsure = _say("desktop-cloud", "browser", None)
@@ -140,7 +141,8 @@ def test_nothing_missing_says_nothing():
 def test_the_next_step_after_setups_question_moves_them_only_when_true():
     for where in ("web", "desktop-cloud", "phone"):
         step = place.next_step("computer", where, *REPO)
-        assert step.startswith("Continue this in a chat on your computer. At the time of writing")
+        assert step.startswith(place.TWO_CHATS + " Continue this in a chat on your computer. "
+                               "At the time of writing")
         assert 'say "set me up"' in step
         _clean(step)
     for answer, where in (("computer", "local"), ("phone", "web"), ("phone", "phone"),
@@ -243,7 +245,10 @@ def test_what_every_chat_says_unasked_is_two_or_three_short_sentences_and_no_lin
                     assert "http" not in said and "At the time of writing" not in said
                     assert said.count(". ") + said.count(": ") <= 4
     short = place.check("desktop-cloud", "browser", [], False, (), *REPO)
-    assert short == [place.SHORT_CLOUD + " " + place.SHORT_PASTE]
-    assert "Ask me how" in place.SHORT_PASTE
+    assert short == [place.SHORT_CLOUD + " " + place.SHORT_TWO_CHATS]
+    assert "Ask me how" in place.SHORT_TWO_CHATS and "paste" not in short[0].lower()
+    # Two chats, said wherever the person decides where to work.
+    for answer, where in (("computer", "local"), ("both", "web"), ("computer", "web")):
+        assert place.TWO_CHATS in place.next_step(answer, where, *REPO)
     # The steps are all still there for the person who asks.
     assert "At the time of writing:" in _say("desktop-cloud", "browser", [])

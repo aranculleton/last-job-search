@@ -20,6 +20,22 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **The set-up that works best is now said plainly: two chats.** One on your computer, for
+  everything you do (job searches, resumes, interview prep and networking), and your brief
+  in the cloud, which follows up for you and arrives even when your computer is off. It is
+  in the README, the start guide, /setup's question about where you work, and the
+  reminder a cloud chat gives on a computer, which no longer offers pasting profiles.
+
+- **When your own self-checks need deleting after an update, you are asked in plain words,
+  with the answer recommended.** 3.5.1 asked whether to "retire" failing tests, which only a
+  developer could answer. Now: "Some self-checks in your setup are out of date after this
+  update. Clear them out? Nothing about your job search changes." with "Yes (recommended)"
+  or "Not now", a plain answer if asked what it means, and the reply to each. Nothing is
+  asked when none needs deleting. Only a repo with its own `profile/tests` ever sees it. No
+  profile upgrade.
+
 ### Fixed
 
 - **An interview pack no longer tells you to message someone whose row says to wait for
@@ -71,16 +87,6 @@ make sense to somebody whose repo just received it.
 No profile upgrade: the next interview pack for a live interview is written beside the
 old one by itself (build version interview 8), and people already added are re-checked
 by the networking update (networking 27).
-
-### Changed
-
-- **When your own self-checks need deleting after an update, you are asked in plain words,
-  with the answer recommended.** 3.5.1 asked whether to "retire" failing tests, which only a
-  developer could answer. Now: "Some self-checks in your setup are out of date after this
-  update. Clear them out? Nothing about your job search changes." with "Yes (recommended)"
-  or "Not now", a plain answer if asked what it means, and the reply to each. Nothing is
-  asked when none needs deleting. Only a repo with its own `profile/tests` ever sees it. No
-  profile upgrade.
 
 ## [3.5.1] - 2026-10-19
 

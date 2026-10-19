@@ -30,8 +30,10 @@ charge of what goes out.
    and give it access to your new copy only.
 3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
 
-Claude asks you plain questions about yourself and does the rest. [START_HERE.md](START_HERE.md)
-has the full walk-through, and the steps for running it on your own computer instead.
+Claude asks you plain questions about yourself and does the rest. If you have a computer,
+**two chats work best**: one on your computer for everything you do, networking included,
+and your brief in the cloud, which follows up for you even when your computer is off.
+[START_HERE.md](START_HERE.md) walks you through both.
 
 ## What you can say to it
 
