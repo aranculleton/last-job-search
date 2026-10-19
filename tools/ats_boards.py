@@ -84,6 +84,10 @@ from prefilter import location_verdict, title_verdict  # noqa: E402
 # then made on the title alone and nothing says so.
 GREENHOUSE = "https://boards-api.greenhouse.io/v1/boards/{token}/jobs?content=true"
 LEVER = "https://api.lever.co/v0/postings/{token}?mode=json"
+# An account on Lever's EU instance answers only here; the global host gives it the same
+# {"ok": false} as a bad token. Lever's postings-api README names both hosts.
+LEVER_EU = "https://api.eu.lever.co/v0/postings/{token}?mode=json"
+LEVER_EU_HOST = "api.eu.lever.co"
 # `includeCompensation` puts the posted pay band in the same response. Most
 # postings state no salary, and when one does it is the only number
 # the salary flag in text_screen.py can act on.
@@ -379,14 +383,47 @@ def _choose(labels, title: str = "", remote: bool = False) -> tuple[str, str]:
 
 # ---------------------------------------------------------------- greenhouse
 
+def _first_wanted(primary: str, others) -> str | None:
+    """The location to record for a posting that lists several, or None when none is
+    wanted: the primary as it stands when it is wanted, else the first wanted other
+    place, put in front of the primary so later gates read it first."""
+    if _wanted(primary):
+        return primary
+    for o in others:
+        o = str(o or "").strip()
+        if o and _wanted(o):
+            return f"{o}; {primary}" if primary and primary.lower() != o.lower() else o
+    return None
+
+
+def _office_places(j: dict) -> list[str]:
+    """A Greenhouse job's offices, by location and then name (content=true carries them)."""
+    out = []
+    for o in j.get("offices") or []:
+        if isinstance(o, dict):
+            out += [str(o.get(k) or "").strip() for k in ("location", "name")]
+    return [x for x in out if x]
+
+
+def _lever_places(j: dict) -> list[str]:
+    """Every location a Lever posting lists (categories.allLocations, the primary among them)."""
+    out = []
+    for o in (j.get("categories") or {}).get("allLocations") or []:
+        out.append(str((o.get("location") or o.get("name") or "") if isinstance(o, dict) else o or ""))
+    return [x.strip() for x in out if str(x).strip()]
+
+
 def greenhouse(employer: str, token: str) -> tuple[list[dict], str | None]:
     data = _get(GREENHOUSE.format(token=token))
     if not isinstance(data, dict) or "jobs" not in data:
         return [], "no jobs key in the response"
     out = []
     for j in data.get("jobs") or []:
-        loc = ((j.get("location") or {}).get("name") or "").strip()
-        if not _wanted(loc):
+        # A posting's location can be "Hybrid" or a time zone with the city recorded
+        # only under its offices, and it was skipped for naming nowhere wanted.
+        loc = _first_wanted(((j.get("location") or {}).get("name") or "").strip(),
+                            _office_places(j))
+        if loc is None:
             continue
         out.append({
             "id": f"gh-{j.get('id')}",
@@ -424,14 +461,19 @@ def _lever_body(j: dict) -> str | None:
 
 def lever(employer: str, token: str) -> tuple[list[dict], str | None]:
     data = _get(LEVER.format(token=token))
+    if not isinstance(data, list) and robots_allows(LEVER_EU_HOST, [f"/v0/postings/{token}"])[0]:
+        data = _get(LEVER_EU.format(token=token))
     if not isinstance(data, list):
         # Lever answers a bad token with {"ok": false, ...} rather than a 404,
         # which len() would happily report as "2 jobs".
         return [], "not a posting list (probably a bad board token)"
     out = []
     for j in data:
-        loc = ((j.get("categories") or {}).get("location") or "").strip()
-        if not _wanted(loc):
+        # The primary location only, before: "New York" with Toronto among its others
+        # was skipped.
+        loc = _first_wanted(((j.get("categories") or {}).get("location") or "").strip(),
+                            _lever_places(j))
+        if loc is None:
             continue
         out.append({
             "id": f"lv-{j.get('id')}",

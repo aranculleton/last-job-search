@@ -34,6 +34,10 @@ make sense to somebody whose repo just received it.
   search's count on its first page only, so every title search stopped at 40 postings
   however many the employer listed. Each now reads on while its titles keep matching. No
   profile upgrade.
+- **An employer's posting is kept when any place it lists is yours.** Greenhouse and Lever
+  postings were judged on their first location alone, so one listed as "Hybrid" or another
+  city, with your city among its offices or other locations, was dropped. An employer on
+  Lever's EU instance is read too; its board read as empty. No profile upgrade.
 - **A job a board relists is as old as the first time the search saw it.** Only the board's
   date was read, and a relist gives a new one, so old postings looked fresh and earned the
   freshness bonus. A posting with no date is unknown, never fresh. No profile upgrade.

@@ -92,9 +92,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-18", False, "Workday details read on Python 3.9, a Mac's own python3"),
             (9, "2026-10-18", False, "LinkedIn's job search stays on and uses no LinkedIn account; only the person switches it off"),
             (10, "2026-10-19", False, "a docstring's example Workday location is invented"),
-            (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, and a Workday search reads past its second page"),
+            (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, a Workday search reads past its second page, a Greenhouse or Lever posting is kept when any place it lists is wanted, and Lever's EU instance is read"),
         ),
-        "fingerprint": "3ba2ffb2f154be11",
+        "fingerprint": "edbe9bb2c9d61b80",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
