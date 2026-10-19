@@ -12,7 +12,8 @@ export const meta = {
 // Args: {today: 'YYYY-MM-DD', round_dir: '<abs path>', picks: [{file, company, role, slug, abbr}],
 //        repo?: '<abs path of the repository root>' (default: the working directory)}
 // `picks` is round_dir/picks.json as written by `python3 tools/stage_picks.py stage`.
-// Each audit stage writes round_dir/audit_<slug>.json; afterwards run
+// Each audit stage writes round_dir/audit_<slug>.json, the whole audit with its
+// verdict (assemble renders a pass or a fixed draft and reports a reject); afterwards run
 // `python3 tools/stage_picks.py assemble <round_dir>` to get drafts.json, then
 // RUNBOOK.md step 3 (fit_to_page, check_claims, verify_batch, outreach).
 //
@@ -154,8 +155,9 @@ Audit, and fix what you find directly in the returned draft:
 3. The writing rules in 03-writing-style.md (especially rules 6, 7 and 8) and these hard rules: ${HARD_RULES}
 4. Targeting: each stated requirement is addressed by evidence or an honest bridge, using the posting's own terms where truthfully applicable. The hook in p1 is about the employer's problem.
 5. Budgets: summary 40 to 48 words; body (p1 + p2 + lead + p4 + bullet texts) 200 to 250 words; outreach_body under 80 words with its opening line, naming one of the candidate's employers.
-Then write the corrected draft as a one-element JSON list to ${scratch}/audit_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/audit_${pick.slug}.json then python3 tools/outreach.py --check-note "<the outreach_body>". Fix every finding and re-run until clean; put its final output in voice_check.
-verdict: pass (no change needed), fixed (defects corrected), or reject (cannot be made truthful and targeted; explain in residual_risks). On reject, delete ${scratch}/audit_${pick.slug}.json, so assemble reports the posting as having no draft instead of rendering one you rejected. Touch no repository file.`,
+Then write the corrected draft as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json then python3 tools/outreach.py --check-note "<the outreach_body>". Fix every finding and re-run until clean; put its final output in voice_check.
+verdict: pass (no change needed), fixed (defects corrected), or reject (cannot be made truthful and targeted; explain in residual_risks).
+Last, write the whole audit you return (verdict, draft, changes, residual_risks, voice_check) as one JSON object to ${scratch}/audit_${pick.slug}.json, a reject included: tools/stage_picks.py assemble renders only a pass or a fixed draft, and reports a reject with its residual_risks. Touch no repository file.`,
     { label: `audit:${pick.company}`, phase: 'Audit', schema: AUDIT_SCHEMA }).then(a => ({ pick, research: prev.research, first_draft: prev.draft, audit: a })),
 )
 

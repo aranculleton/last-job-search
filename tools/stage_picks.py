@@ -42,9 +42,12 @@ A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
     apps_in.json         the shortlist rows with `abbr`, for tools/outreach.py
 
 `assemble` reads each `<round_dir>/audit_<slug>.json` the workflow's audit stage
-writes (a one-element list holding the corrected draft) and writes
-`<round_dir>/drafts.json` with the posting text and the abbreviation filled in.
-A pick with no audited draft is reported, never silently dropped.
+writes (the whole audit: verdict, corrected draft, changes and residual risks)
+and writes `<round_dir>/drafts.json` with the posting text and the abbreviation
+filled in. A draft the audit rejected is never rendered: it is reported with
+the audit's reasons. A pick with no audited draft is reported, never silently
+dropped. An older audit file holding the corrected draft alone, as a
+one-element list, is still read.
 """
 
 from __future__ import annotations
@@ -282,10 +285,22 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
     return staged
 
 
-def assemble(round_dir: str) -> tuple[list[dict], list[str]]:
+def _audited(got) -> tuple[str, dict | None, list[str]]:
+    """(verdict, draft, residual risks) from an audit file, in either shape."""
+    got = got[0] if isinstance(got, list) and got else got
+    if not isinstance(got, dict):
+        return "", None, []
+    if "verdict" in got or isinstance(got.get("draft"), dict):
+        return (str(got.get("verdict") or "").strip().lower(), got.get("draft"),
+                [str(x) for x in got.get("residual_risks") or []])
+    return "", got, []
+
+
+def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
+    """(drafts, picks with no audited draft, picks the audit rejected, with why)."""
     with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
         staged = json.load(fh)
-    drafts, missing = [], []
+    drafts, missing, rejected = [], [], []
     for p in staged:
         path = os.path.join(round_dir, f"audit_{p['slug']}.json")
         try:
@@ -294,7 +309,17 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str]]:
         except (OSError, json.JSONDecodeError):
             missing.append(p["company"])
             continue
-        d = got[0] if isinstance(got, list) else got
+        verdict, d, risks = _audited(got)
+        # The audit is the last read before anything reaches an employer. A
+        # reject used to rely on the auditor deleting its own file, and one it
+        # left behind was rendered like any other draft.
+        if verdict == "reject":
+            rejected.append(f"{p['company']} | {p['role']}"
+                            + (f": {'; '.join(risks)}" if risks else ""))
+            continue
+        if not isinstance(d, dict):
+            missing.append(p["company"])
+            continue
         with open(p["file"], encoding="utf-8") as fh:
             text = fh.read()
         posting = untrusted.unfence(text)
@@ -311,7 +336,7 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str]]:
     with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8") as fh:
         json.dump(drafts, fh, indent=1)
         fh.write("\n")
-    return drafts, missing
+    return drafts, missing, rejected
 
 
 def main() -> int:
@@ -356,12 +381,13 @@ def main() -> int:
             print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
         print(f"\nargs for the draft-applications workflow: {os.path.join(args.round_dir, 'picks.json')}")
         return 0
-    drafts, missing = assemble(args.round_dir)
+    drafts, missing, rejected = assemble(args.round_dir)
     print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")
+    if rejected:
+        print("REJECTED BY THE AUDIT, not rendered:\n  " + "\n  ".join(rejected))
     if missing:
         print("NO AUDITED DRAFT for: " + ", ".join(missing))
-        return 1
-    return 0
+    return 1 if (missing or rejected) else 0
 
 
 if __name__ == "__main__":
