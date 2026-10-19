@@ -21,7 +21,9 @@ TEXT = """# Changelog
 
 ### Added
 
-- **Something new.** It does a thing.
+- **Something new.** It does a thing at great length, over several lines, the way a
+  CHANGELOG entry does. Profile upgrade: method-networking.
+- **A question for you.** It asks once. Profile upgrade: `connections-export`.
 
 ## [3.2.5] - 2026-10-18
 
@@ -68,3 +70,33 @@ def test_the_workflow_runs_only_in_the_app_and_never_moves_a_tag():
     for never in ("--force", "tag -d", "release delete", "push --delete", "--clobber",
                   ":refs/tags", "push --tags", "tag -f"):
         assert never not in wf and never not in src, never
+
+
+def test_the_notes_a_person_reads_are_one_line_per_change_and_one_on_what_to_do():
+    notes = release.short(release.sections(TEXT)[0]["notes"])
+    lines = notes.splitlines()
+    assert lines[0] == "**New**"
+    assert "- Something new. (set up for you)" in lines
+    assert "- A question for you. (Claude asks you once)" in lines
+    assert "at great length" not in notes and "Profile upgrade" not in notes
+    assert lines[-1] == ("What to do: nothing. Your next chat takes this update and sets it up, "
+                         "and asks you 1 short question once.")
+
+
+def test_a_released_versions_notes_are_rewritten_and_its_tag_never_touched(monkeypatch):
+    calls = []
+
+    class Done:
+        def __init__(self, out=""):
+            self.returncode, self.stdout, self.stderr = 0, out, ""
+
+    def fake(args):
+        calls.append(args)
+        return Done("the old wall of text") if args[:2] == ["release", "view"] else Done()
+    monkeypatch.setattr(release, "_gh", fake)
+    monkeypatch.setattr(release, "tags", lambda: ["v3.3.0", "v3.2.5"])
+    sample = release.sections(TEXT)
+    monkeypatch.setattr(release, "sections", lambda text=None: sample)
+    assert release.publish() == 0
+    assert [c[:2] for c in calls] == [["release", "view"], ["release", "edit"]]
+    assert not any(c[:2] == ["release", "create"] for c in calls)

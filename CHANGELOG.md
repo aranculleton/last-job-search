@@ -20,6 +20,17 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Release notes are short.** One line per change, a few words where it needs you, and one
+  line on what to do; the CHANGELOG keeps the detail. No profile upgrade: it is the app's
+  own.
+- **A chat in the wrong place says so again after a week** while it still applies, and at
+  once when the advice changes; never more often. It had said so once and never again, so
+  someone who missed it never heard it twice. No profile upgrade.
+- **Other agent tools are named so anyone recognises them:** ChatGPT Codex, Google's Gemini
+  CLI, the Cursor editor and Google Antigravity. No profile upgrade.
+
 ## [3.3.0] - 2026-10-19
 
 ### Added

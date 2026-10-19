@@ -16,8 +16,9 @@ charge of what goes out.
 - Claude Code, which comes with a paid Claude plan. On your own computer an Anthropic API
   key works instead and you pay only for what you use, often cheaper if you search now and
   then, but the scheduled brief and cloud chats need a plan.
-  - Another agent tool (Codex, Gemini CLI, Cursor)? The core works in any agent that can
-    read files and run commands; [AGENTS.md](AGENTS.md) covers the Claude Code parts.
+  - Another agent tool (ChatGPT Codex, Google's Gemini CLI, the Cursor editor)? The core
+    works in any agent that can read files and run commands; [AGENTS.md](AGENTS.md) covers
+    the Claude Code parts.
 - About fifteen minutes. No coding.
 
 ## Get started

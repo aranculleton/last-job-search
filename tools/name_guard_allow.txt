@@ -4,3 +4,6 @@ Shirin Example      # invented, tests/test_the_discovery_ladder.py
 Hal Okonedo         # invented, tests/test_the_discovery_ladder.py
 Quillon Varga       # invented, tests/test_name_guard.py
 Pell Ansgar         # invented, tests/test_name_guard.py
+ChatGPT Codex       # a product: OpenAI's coding agent
+Google's Gemini     # a product: Google's Gemini CLI
+Google Antigravity  # a product

@@ -14,8 +14,8 @@ public, and that scan only runs on the maintainer's side. If you have a fix, put
 issue (a diff, or a link to your branch) and it will be brought in, with credit in the
 changelog.
 
-**Running it in another agent tool?** Forks that adapt it to Codex, Gemini CLI, Cursor or
-anything else are welcome. Post the link in [Ports to other agent tools](https://github.com/aranculleton/last-job-search/discussions/41) and it will
+**Running it in another agent tool?** Forks that adapt it to ChatGPT Codex, Google's
+Gemini CLI, the Cursor editor or anything else are welcome. Post the link in [Ports to other agent tools](https://github.com/aranculleton/last-job-search/discussions/41) and it will
 be listed there. [AGENTS.md](AGENTS.md) is the place to start.
 
 **A security problem?** Read [SECURITY.md](SECURITY.md) first; it says how to report one.

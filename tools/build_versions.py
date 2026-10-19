@@ -355,8 +355,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-18", False, "the route offers the move to the desktop app or a paste when a cloud chat has no browser, in the place check's words"),
             (12, "2026-10-18", False, "a browser read is for the day's short list only, a paste is offered for the best three, and the route says what works in this chat"),
             (13, "2026-10-19", False, "a comment's example employer is invented"),
+            (14, "2026-10-19", False, "a comment names the place check's new rhythm, once and then weekly"),
         ),
-        "fingerprint": "b4a2f6bb5a3976c5",
+        "fingerprint": "ba71bfe1e76602a6",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -514,7 +515,7 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "nothing in a person's repo, and its watch runs in the app only",
     "tools/claude_surfaces.json": "the registry of what Claude's surfaces can do, dated and "
                                   "sourced: the app's words, read in place, never copied",
-    "tools/place.py": "says once per chat whether the chat suits the person's settings; its one "
+    "tools/place.py": "says, once and then weekly, whether the chat suits the person's settings; its one "
                       "record, profile/place.json, is /setup's question and the work-place upgrade's",
     "tools/setup_env.sh": "sets up the container, which is new every session",
 }
