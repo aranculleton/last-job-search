@@ -78,3 +78,4 @@ Ben Okoro               # invented, tests/test_the_interview_pipeline_holds_unde
 Ama Reyes               # invented, the same test
 Ola Berg                # invented, the same test
 Ruth Abara              # invented, the same test
+Far Town                # invented place, tests/test_a_paced_board_sends_what_matters_first.py
