@@ -63,6 +63,74 @@ REGION_CODES = re.compile(r"(?<![A-Za-z])(?:EU|EMEA|APAC|LATAM)(?![A-Za-z])")
 ABROAD_WORDS = re.compile(r"\b(?:united states|united kingdom|europe)\b", re.I)
 
 
+# Which countries each region a posting names takes in, so a requirement to live in a
+# region cuts only somebody whose country is outside it. "Must be based in EMEA" cut a
+# candidate in the UK, which is in EMEA, and "based in North America" reads the same for
+# one in Canada. A country in none of these lists is unknown: such a region never cuts.
+_EU = ("austria belgium bulgaria croatia cyprus czechia czech republic denmark estonia "
+       "finland france germany greece hungary ireland italy latvia lithuania luxembourg "
+       "malta netherlands poland portugal romania slovakia slovenia spain sweden")
+_EUROPE_MORE = ("united kingdom uk great britain britain england scotland wales northern "
+                "ireland norway switzerland iceland liechtenstein serbia ukraine albania bosnia "
+                "montenegro north macedonia moldova andorra monaco san marino kosovo")
+_MIDDLE_EAST_AFRICA = ("turkey israel united arab emirates uae saudi arabia qatar kuwait bahrain "
+                       "oman jordan lebanon egypt south africa nigeria kenya ghana morocco "
+                       "tunisia ethiopia rwanda uganda tanzania senegal")
+_NORTH_AMERICA = "united states usa us canada mexico"
+_LATAM = ("mexico brazil argentina chile colombia peru uruguay paraguay bolivia ecuador "
+          "venezuela costa rica panama guatemala dominican republic")
+_APAC = ("australia new zealand india china japan singapore south korea korea hong kong "
+         "taiwan philippines indonesia malaysia thailand vietnam pakistan bangladesh sri lanka")
+
+
+def _members(*groups: str) -> tuple:
+    """Country names in a group, longest first so "northern ireland" reads before "ireland"."""
+    names = set()
+    for g in groups:
+        words = g.split()
+        i = 0
+        while i < len(words):
+            # Multi-word names are written joined in the lists above only where they are
+            # one country; read greedily against a known set of two- and three-word names.
+            for n in (3, 2, 1):
+                cand = " ".join(words[i:i + n])
+                if n == 1 or cand in _MULTI:
+                    names.add(cand)
+                    i += n
+                    break
+    return tuple(sorted(names, key=len, reverse=True))
+
+
+_MULTI = {"czech republic", "united kingdom", "great britain", "northern ireland",
+          "north macedonia", "san marino", "united arab emirates", "saudi arabia",
+          "south africa", "united states", "costa rica", "dominican republic",
+          "new zealand", "south korea", "hong kong", "sri lanka"}
+REGION_MEMBERS = {
+    "eu": _members(_EU), "european union": _members(_EU),
+    "europe": _members(_EU, _EUROPE_MORE),
+    "emea": _members(_EU, _EUROPE_MORE, _MIDDLE_EAST_AFRICA),
+    "north america": _members(_NORTH_AMERICA),
+    "americas": _members(_NORTH_AMERICA, _LATAM), "the americas": _members(_NORTH_AMERICA, _LATAM),
+    "latam": _members(_LATAM), "latin america": _members(_LATAM),
+    "apac": _members(_APAC), "asia pacific": _members(_APAC), "asia-pacific": _members(_APAC),
+}
+REGION_WORDS = re.compile(r"(?<![A-Za-z])(?:EU|EMEA|APAC|LATAM)(?![A-Za-z])|\b(?:european union|"
+                          r"europe|north america|(?:the )?americas|latin america|"
+                          r"asia[ -]pacific)\b", re.I)
+
+
+def region_includes_home(region: str):
+    """True when the region takes in the person's home country, False when it does not,
+    None when that cannot be told (no home country, or one this table does not place)."""
+    members = REGION_MEMBERS.get(str(region or "").strip().lower())
+    if members is None or HOME_COUNTRY_RX is _NEVER:
+        return None
+    if any(HOME_COUNTRY_RX.search(m) for m in members):
+        return True
+    placed = any(HOME_COUNTRY_RX.search(m) for ms in REGION_MEMBERS.values() for m in ms)
+    return False if placed else None
+
+
 def abroad_short(sentence: str):
     """The first shorthand for somewhere abroad in `sentence`, as a match, or None."""
     s = sentence or ""

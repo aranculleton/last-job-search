@@ -9,4 +9,4 @@ from `01-candidate-profile.md`, `04-job-evaluation.md` and the Deal-breakers in 
 | 2 | Language | Welsh as essential |
 | 3 | Credential | an actuarial or chartered-accountancy qualification as required |
 | 4 | Location | on-site outside the North West, with no remote option |
-| 5 | Pay | a whole stated range below £42,000 |
+| 5 | Pay | a whole stated range below £32,000 (the cut line; below the £42,000 walk-away it is a flag) |

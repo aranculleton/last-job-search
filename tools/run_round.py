@@ -134,7 +134,9 @@ SUMMARY_DIR = "documents/rounds"
 # the stage files are large, and it is on the posting's own page.
 # `first_seen` and `age_days` because the portal's `date` is a relist date as often
 # as not: the age is the earlier of the two.
-SUMMARY_FIELDS = ("priority", "fit", "opportunity", "title", "company", "location",
+# fit_why rides along: the reasons behind the score, which an interview pack reads weeks
+# later, after the round's own files are pruned.
+SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company", "location",
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "outreach_pending_note", "throttle_override_note",
                   "drafted_note")

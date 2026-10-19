@@ -23,6 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import prefilter  # noqa: E402
+import places  # noqa: E402
 import text_screen  # noqa: E402
 
 BODY = " You will build planning models in SQL and Python for the North West network."
@@ -112,3 +113,22 @@ def test_only_selling_somewhere_is_a_market_not_a_requirement():
 def test_a_time_zone_is_hours_not_a_home():
     assert text_screen.residence_cut("This role is remote within US time zones." + BODY) is None
     assert text_screen.residence_cut("Remote within the US, EST hours preferred." + BODY)
+
+
+def test_a_region_cuts_only_when_it_leaves_home_out(monkeypatch):
+    """"Must be based in EMEA" cut a candidate in the UK, which EMEA takes in. A region
+    cuts only when the person's country is outside it; one it cannot place never cuts."""
+    import re
+    body = " You will build planning models in SQL and Python."
+    cut = lambda s: bool(text_screen.residence_cut(s + body))  # noqa: E731
+    assert not cut("Candidates should be based in EMEA.")
+    assert not cut("You must be based in Europe or the US.")
+    assert cut("You must be located in the EU.") and cut("Candidates must be based in APAC.")
+    # The same sentences for somebody in Canada.
+    monkeypatch.setattr(places, "HOME_COUNTRY_RX", re.compile(r"\bcanada\b"))
+    assert not cut("Candidates must be based in North America.")
+    assert cut("Candidates must be based in Europe.")
+    assert places.region_includes_home("the Americas") is True
+    # A home the table cannot place: no region cuts.
+    monkeypatch.setattr(places, "HOME_COUNTRY_RX", re.compile(r"\batlantis\b"))
+    assert places.region_includes_home("EMEA") is None and not cut("Must be based in EMEA.")

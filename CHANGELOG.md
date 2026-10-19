@@ -22,6 +22,39 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A job a board relists is as old as the first time the search saw it.** Only the board's
+  date was read, and a relist gives a new one, so old postings looked fresh and earned the
+  freshness bonus. A posting with no date is unknown, never fresh. No profile upgrade.
+- **A remote job open only to people in another country is not shown as remote for you.**
+  "Remote (US only)" and "we only hire in the United States" passed, while "join us in the
+  office" was cut as a requirement to live abroad. No profile upgrade.
+- **A region a posting requires cuts only when your country is outside it.** "Must be based
+  in EMEA" cut a candidate in the UK, which EMEA takes in; "North America" reads the same
+  for Canada. No profile upgrade.
+- **"Toronto, CA" is Toronto.** A home city beside a country code, with no province, was
+  read as California. No profile upgrade.
+- **An old exclusion blocks a posting only while today's rules would still cut it.** A
+  degree, a range above the cut line or a place since reread kept a posting out for good.
+  Your own triage card still counts as a hard cut. No profile upgrade.
+- **The round's target counts the 0 to 100 score.** It counted ranking order, so a posting
+  with no stated salary could never count toward "2 at 75 or more". No profile upgrade.
+- **A wider round searches more pages, never older postings.** Each widening stretched the
+  14-day freshness rule to 21 and then 42 days. No profile upgrade.
+- **Postings the screen cuts are recorded, so they are not fetched again.** No profile
+  upgrade.
+- **A round that misses keeps, and names, the file showing what the place and age checks
+  removed.** No profile upgrade.
+- **Re-judging past exclusions re-judges them.** The last step of the round still applied
+  every past exclusion. No profile upgrade.
+- **A ruling in one city no longer blocks the same job title elsewhere, and a closed
+  application blocks that role only.** "Data Analyst" blocked "Data Analyst, Fraud
+  Strategy". No profile upgrade.
+- **One portal failing some of its searches no longer stops the round.** No profile upgrade.
+- **A referral in progress holds, however the contact row names the employer.** No profile
+  upgrade.
+- **The example's pay knockout matches its own cut line.** It knocked out ranges below the
+  walk-away figure, which the screen only flags. No profile upgrade.
+
 - **The brief counts every reply someone is waiting for.** A reply owed with no date written
   beside it was left out, so the brief could open on "0 replies owed" while someone waited,
   and a nudge whose clock had run was left out the same way. No profile upgrade.
@@ -86,6 +119,11 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Employers your bar excludes by name are dropped before their postings are fetched.** No
+  profile upgrade.
+- **The check that a posting is still open asks as the app, respects switched-off portals
+  and robots.txt, and waits between requests.** It fetched as a browser, LinkedIn
+  included when it was switched off. No profile upgrade.
 - **The drafting check is the grounding auditor itself.** Its own shortened copy of the rules
   missed that two letters must never share an opening or a closing. No profile upgrade.
 - **A result recorded during a session shapes the next resume at once.** The lift for

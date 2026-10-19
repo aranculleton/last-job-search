@@ -199,9 +199,11 @@ RESIDENCE = [
     ("You must be located in the EU.", True),
     ("Must be based in one of our hub countries (US, UK, Spain, Kenya and Ghana).", False),
     ("You need to be based within commuting distance of Manchester.", False),
-    ("Candidates should be based in EMEA.", True),
+    # Changed on purpose: EMEA and Europe take in the UK, the example's home, so living
+    # there is no requirement to live abroad (tools/places.py REGION_MEMBERS).
+    ("Candidates should be based in EMEA.", False),
     ("Candidates must be based in APAC or LATAM.", True),
-    ("We need to be based in Europe for this role.", True),
+    ("We need to be based in Europe for this role.", False),
     ("Candidates must be based in Dublin, Ireland.", True),
     ("Candidates must be based in Sale, Australia.", True),
     ("Candidates must be based in Manchester, NH, US.", True),
@@ -219,7 +221,7 @@ def test_the_residence_cut_gives_what_it_gave():
         for shape in ("Candidates must be based in {}.", "You must live in {} to apply.",
                       "This role is open only to candidates based in {}."):
             text = shape.format(loc) + body
-            if loc in HOME_NATION:
+            if loc in HOME_NATION or loc in ("EMEA", "Europe"):
                 # Changed on purpose: the old cut read "ireland" inside "Northern
                 # Ireland" as the Republic. A home nation is home, so living there
                 # is no requirement to live abroad (the location gate still reads it).

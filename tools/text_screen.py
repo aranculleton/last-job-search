@@ -753,6 +753,19 @@ def _names_home(s: str) -> bool:
     return False
 
 
+def _abroad_country(s: str):
+    """A country, not a region, written as shorthand in the sentence ("US", "the United
+    States"): abroad_short less the regions, which region_includes_home decides."""
+    m = _places.abroad_short(s)
+    while m is not None and _places.REGION_WORDS.fullmatch(m.group(0)):
+        rest = s[m.end():]
+        m2 = _places.abroad_short(rest)
+        if m2 is None:
+            return None
+        s, m = rest, m2
+    return m
+
+
 def _countries_named(s: str):
     """Every place in the sentence that is one country and not home, as matches."""
     for c in _places.OTHER_COUNTRIES:
@@ -769,9 +782,19 @@ def residence_cut(text: str) -> str | None:
         if _names_home(s):
             continue
         low = s.lower()
+        # A region cuts only when it leaves home out: "based in EMEA" cut somebody in the
+        # UK, which EMEA takes in. A list with a region that takes home in ("Europe or the
+        # US") is a list that includes them; one the table cannot place is the location
+        # gate's to flag, never a cut.
+        regions = [_places.region_includes_home(m.group(0))
+                   for m in _places.REGION_WORDS.finditer(s)]
+        if True in regions:
+            continue
         if reside and (any(re.search(r"\b" + re.escape(c) + r"\b", low)
                            for c in _places.OTHER_COUNTRIES)
-                       or _places.abroad_short(s)):
+                       or _abroad_country(s)):
+            return s[:220]
+        if reside and regions and all(r is False for r in regions):
             return s[:220]
         for m in _countries_named(s):
             # "remote within US time zones" asks for hours, not a home.
