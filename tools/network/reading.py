@@ -697,6 +697,162 @@ def _current(exp: list) -> str:
     return ""
 
 
+# A place line under a role's dates: "Toronto, Ontario, Canada · Hybrid", "Remote".
+_WORK_MODE = re.compile(r"\s*[·•]\s*(?:on-?site|hybrid|remote)\s*$", re.I)
+
+
+def _entries(exp: list, most: int = 6) -> list:
+    """[{employer, title, dates, place}] for their Experience, most recent first, read
+    from the lines a profile page gives: a role's title and employer sit just above its
+    dates, its place just below. Only what they wrote under Experience; nothing inferred."""
+    lines = [x for x in exp if not _NOISE.match(x)]
+    out = []
+    group = ""
+    for i, line in enumerate(lines):
+        if i + 1 < len(lines) and _TENURE.match(lines[i + 1]) and not _DATES.search(line):
+            group = line                           # several roles under one employer
+        if not _DATES.search(line) or len(line) > 90:
+            continue
+        above = [x for x in lines[max(0, i - 2):i] if not _TENURE.match(x)]
+        employer, title = "", ""
+        for x in reversed(above):
+            m = _EMPLOYMENT.match(x)
+            if m and not employer:
+                employer = m.group(1).strip()
+            elif not title and x != employer:
+                title = x
+        if not employer:
+            employer = group or (above[-1] if len(above) > 1 else "")
+            if employer == title:
+                title = above[0] if len(above) > 1 else ""
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        place = ""
+        if nxt and len(nxt) < 80 and not _DATES.search(nxt) and (
+                "," in nxt or _WORK_MODE.search(nxt) or fold(nxt).strip() in ("remote",)):
+            place = _WORK_MODE.sub("", nxt).strip()
+        out.append({"employer": employer[:120], "title": title[:120],
+                    "dates": line[:60], "place": place[:80]})
+        if len(out) >= most:
+            break
+    return out
+
+
+def _city(place: str) -> str:
+    return fold(str(place or "").split(",")[0]).strip().lower()
+
+
+def place_note(reading: dict) -> str:
+    """"" or a caution: their top card names one place and their current role another.
+    A top card said Toronto while the current role's own place read Waterloo, Ontario."""
+    top = reading.get("location") or ""
+    exp = reading.get("experience") or []
+    now = next((e for e in exp if "present" in str(e.get("dates") or "").lower()), None)
+    where = (now or {}).get("place") or ""
+    if not top or not where or "remote" in where.lower() or _city(top) == _city(where):
+        return ""
+    if _city(top) in fold(where).lower() or _city(where) in fold(top).lower():
+        return ""
+    role = now.get("employer") or "the first entry"
+    return (f"their top card says {top}, but their current role ({role}) is in {where}: "
+            "check where they work before writing")
+
+
+# The kinds of employer a career moves between, read from an employer's name and the
+# title held there. Coarse on purpose: a parallel is offered for the person to judge,
+# marked inferred, never asserted.
+SECTORS = (
+    ("consulting", r"consult|advisory|deloitte|accenture|mckinsey|\bbain\b|\bbcg\b|kpmg|pwc|"
+                   r"ernst|\bey\b|slalom|capgemini|oliver wyman|quantumblack"),
+    ("banking and finance", r"\bbank|capital\b|financ|fintech|insur|asset management|invest|"
+                            r"pension|credit|lending|payments?\b|wealth|money\b"),
+    ("sports", r"sport|football|athletic|\bleague\b|\bfc\b|\bnba\b|\bnfl\b|\bnhl\b|\bmlb\b"),
+    ("media", r"media|broadcast|\bnews|\bradio\b|television|\btv\b|publishing|entertainment"),
+    ("public sector", r"government|council|ministry|department of|\bnhs\b|city of|"
+                      r"public health|\bagency\b"),
+    ("academia", r"universit|college|institute of|research (?:centre|center)|\bphd\b|"
+                 r"postdoc|lecturer|professor"),
+    ("travel", r"airline|airways|aviation|airport|travel|hotel"),
+    ("retail", r"retail|stores?\b|supermarket|grocer|e-?commerce"),
+    ("logistics", r"logistic|freight|shipping|supply chain|warehous"),
+    ("tech", r"software|\btech|\blabs?\b|\bai\b|platform|saas|cloud|google|amazon|microsoft|"
+             r"\bmeta\b|apple|shopify|uber|spotify|startup|product manager"),
+)
+
+
+def sector(employer: str, title: str = "") -> str:
+    text = f"{employer} {title}".lower()
+    for name, rx in SECTORS:
+        if re.search(rx, text):
+            return name
+    return ""
+
+
+def _my_path() -> list:
+    """The candidate's own path, most recent first: [(employer, sector)]."""
+    out = []
+    for r in getattr(_roles(), "ROLES", ()) or ():
+        out.append((str(r.get("employer") or ""), sector(r.get("employer", ""), r.get("title", ""))))
+    return out
+
+
+def path_parallels(reading: dict) -> list:
+    """[{"kind": "INFERRED", "text", "evidence"}]: where their career runs alongside the
+    candidate's, from their Experience. A reason to write that is about them, never a
+    generic fit: they moved into where they are now from the kind of employer the
+    candidate is at, or from one the candidate also came from. Inferred from what they
+    listed, so a note hedges it once ("it looks like ...")."""
+    exp = reading.get("experience") or []
+    if len(exp) < 2:
+        return []
+    mine = _my_path()
+    if not mine:
+        return []
+    now_mine = mine[0][1]
+    past_mine = {s for _e, s in mine[1:] if s}
+    theirs = [(e.get("employer") or "", sector(e.get("employer", ""), e.get("title", "")))
+              for e in exp]
+    here, here_sector = theirs[0]
+    out, seen = [], set()
+    for emp, sec in theirs[1:]:
+        if not sec or sec == here_sector or sec in seen:
+            continue
+        if sec == now_mine:
+            out.append({"kind": "INFERRED", "evidence": f"{emp} before {here}",
+                        "text": f"they moved into {here or 'their current role'} from "
+                                f"{sec} ({emp}), the move the candidate is hoping to make "
+                                f"from {sec}"})
+            seen.add(sec)
+        elif sec in past_mine:
+            out.append({"kind": "INFERRED", "evidence": emp,
+                        "text": f"they also came through {sec} ({emp}), as the candidate did"})
+            seen.add(sec)
+    return out[:3]
+
+
+# Who they and the person both know, as the page prints it: "Followed by Ana Rook",
+# "Ana Rook is a mutual connection", "Ana Rook, Bo Venn and 3 other mutual connections".
+_MUTUAL = re.compile(
+    r"^(?:followed by\s+(?P<f>.+?)|(?P<m>.+?)\s+(?:is a|are)\s+mutual connections?|"
+    r"(?P<o>.+?)\s+and\s+\d+\s+other\s+mutual connections?)\s*$", re.I)
+
+
+def mutuals(lines: list) -> list:
+    """The names a page gives as mutual connections or followers, in page order. Offered
+    to the person as a hook to confirm ("mention them?"), never asserted in a note."""
+    out = []
+    for line in lines[:80]:
+        m = _MUTUAL.match(str(line or "").strip())
+        if not m:
+            continue
+        names = m.group("f") or m.group("m") or m.group("o") or ""
+        names = re.sub(r",?\s+and\s+\d+\s+others?\b.*$", "", names, flags=re.I)
+        for n in re.split(r",\s*|\s+and\s+", names):
+            n = n.strip(" .")
+            if 2 <= len(n.split()) <= 4 and n not in out and not re.search(r"\d", n):
+                out.append(n)
+    return out[:5]
+
+
 def parse(text: str, *, name: str = "", company: str = "", source: str = "paste",
           url: str = "", today: datetime.date | None = None) -> dict:
     """A reading from a profile page's text: copied, read in a browser, or a Save-to-PDF.
@@ -716,14 +872,18 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
     items = (_posts(secs.get("activity", []), today, name)
              + _titled(secs.get("featured", []), "featured", 2)
              + _titled(secs.get("publications", []), "publication", 2))
-    return {
+    out = {
         "name": name, "company": company, "read_on": today.isoformat(),
         "sources": [{"kind": source, "url": url, "date": today.isoformat()}],
         "headline": headline, "location": location, "about": about,
         "current": _current_employer(headline, secs.get("experience", []), org),
         "degree": degree, "reach": reach,
         "shared": _shared(secs), "items": items,
+        "experience": _entries(secs.get("experience", [])),
+        "mutuals": mutuals(pre),
     }
+    out["parallels"] = path_parallels(out)
+    return out
 
 
 # The About is kept whole for grounding (grounded(), and the fenced reading a draft is
@@ -906,6 +1066,9 @@ def merge(old: dict | None, new: dict) -> dict:
     out = dict(old)
     for k in ("headline", "location", "about", "current", "degree", "reach"):
         out[k] = new.get(k) or old.get(k, "")
+    for k in ("experience", "mutuals", "parallels"):
+        if new.get(k) or k not in out:
+            out[k] = new.get(k) or old.get(k) or []
     if any(s.get("kind") in PAGE_SOURCES for s in new.get("sources", [])):
         out["shared"] = new.get("shared") or old.get("shared", {})
     out["sources"] = old.get("sources", []) + new.get("sources", [])
@@ -963,6 +1126,9 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
         if "not recognized" in why_loc and not discovery._same_market(loc, discovery.HOME_CITY):
             return True, (f"caution: based in {loc}, a place your search does not name; check "
                           f"they work in {discovery.HOME_CITY} before writing")
+    note = place_note(reading)
+    if note:
+        return True, "caution: " + note
     return True, ""
 
 
@@ -2422,6 +2588,15 @@ def _show(reading: dict) -> None:
         print("  nothing personal to rest a note on yet: paste their profile, or add a finding")
     for strength, kind, what, ev in hs[:6]:
         print(f"  [{strength}] {kind}: {what}" + (f'\n        "{_clip(ev, 150)}"' if ev else ""))
+    for par in reading.get("parallels") or []:
+        print(f"  [INFERRED] path parallel: {par['text']}\n        a reason to write that is "
+              "about them: hedge it once in the note (\"it looks like ...\")")
+    if reading.get("mutuals"):
+        print(f"  mutual connections on the page: {', '.join(reading['mutuals'])}. Ask the "
+              "person \"mention <name>?\" before using one; never say how well they know them")
+    note = place_note(reading)
+    if note:
+        print(f"  caution: {note}")
 
 
 def _clip(text: str, n: int) -> str:
@@ -2431,6 +2606,48 @@ def _clip(text: str, n: int) -> str:
         return text
     cut = text[:n].rsplit(" ", 1)[0].rstrip(" ,;:")
     return (cut or text[:n]) + "…"
+
+
+def channel_for(reading: dict) -> str:
+    """How they can be written to, from the buttons their page shows: "inmail" where only
+    Message shows and they are not connected (an open profile, or a credit), "message"
+    for a first-degree connection, "connection" where Connect shows, else ""."""
+    reach, degree = reading.get("reach") or "", reading.get("degree") or ""
+    if reach == "message":
+        return "message" if degree == "1st" else "inmail"
+    if reach.startswith("request"):
+        return "connection"
+    return ""
+
+
+def set_channel(contact_id: str, reading: dict, today: datetime.date | None = None) -> str:
+    """Put the channel the page allows on a contact nobody has written to yet, and say what
+    it costs. A card with only Message was read as reach "message", and nothing set the
+    contact's channel or counted the credit it spends (2026-10-20). Returns the line said."""
+    import state
+    channel = channel_for(reading)
+    if not channel:
+        return ""
+    contacts = state.load_contacts()
+    c = state.already_contacted(contacts, contact_id=contact_id)
+    if c is None or str(c.get("status") or "not_contacted") not in schema_never_sent():
+        return ""
+    if str(c.get("channel") or "") == channel:
+        return ""
+    c["channel"] = channel
+    state.save_contacts(contacts)
+    if channel != "inmail":
+        return f"channel: {channel}, from what their page shows"
+    b = state.platform_budget(contacts, state.load_threads(),
+                              (today or datetime.date.today()).isoformat())
+    return (f"channel: an InMail (only Message shows and you are not connected). Credits: "
+            f"{b['inmails_left']} of {b['inmails_limit']} left this month; one goes when it is "
+            "sent (state.py sent --channel inmail --subject \"...\")")
+
+
+def schema_never_sent() -> set:
+    import schema
+    return set(schema.NEVER_SENT)
 
 
 def _skip_hint(contact_id: str, why: str) -> str:
@@ -2908,6 +3125,10 @@ def main(argv: list | None = None) -> int:
               else f"verdict: SKIP: {why} (read the next person instead)")
         if not keep:
             print(_skip_hint(a.contact_id, why))
+        else:
+            line = set_channel(a.contact_id, reading)
+            if line:
+                print(line)
         if source == "browser":
             at = datetime.datetime.now() + datetime.timedelta(seconds=new["sources"][0]["next_gap"])
             print(f"pace: the next page at {at:%H:%M:%S} at the earliest "
