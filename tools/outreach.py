@@ -78,6 +78,8 @@ def slug(company, role, abbr=""):
 def _abbr_on_file(company, role):
     """The abbreviation the tracker's row for this application was written under."""
     import csv
+    import csv_store
+    csv_store.refuse_conflicts(person.state("job_search_tracker.csv"))
     try:
         with open(person.state("job_search_tracker.csv"), newline="", encoding="utf-8") as fh:
             rows = list(csv.DictReader(fh))

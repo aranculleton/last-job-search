@@ -136,6 +136,8 @@ NO_RECIPIENT = ("no recipient on file: find the recruiter or hiring manager firs
 
 
 def _rows(path: str = TRACKER) -> list[dict]:
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))
@@ -569,4 +571,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"followups: {e}", file=sys.stderr)
+        raise SystemExit(1)

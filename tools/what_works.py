@@ -99,6 +99,8 @@ def _date(value):
 
 
 def _csv(path: str) -> list[dict]:
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))
@@ -736,4 +738,9 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"what_works: {e}", file=sys.stderr)
+        raise SystemExit(1)

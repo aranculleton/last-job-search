@@ -1473,4 +1473,9 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"state: {e}", file=sys.stderr)
+        raise SystemExit(1)

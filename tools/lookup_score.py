@@ -163,6 +163,8 @@ def tracker_rows_for(key: str | None, company: str | None) -> list[dict]:
     when asked about "Acme Analytics"."""
     if not os.path.exists(TRACKER):
         return []
+    import csv_store
+    csv_store.refuse_conflicts(TRACKER)
     co = company_key(company) if company else ""
     out = []
     with open(TRACKER, newline="", encoding="utf-8") as fh:

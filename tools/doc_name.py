@@ -109,6 +109,8 @@ def is_shouty(name: str) -> bool:
 
 
 def tracker_rows(path: str = TRACKER) -> list[dict]:
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))

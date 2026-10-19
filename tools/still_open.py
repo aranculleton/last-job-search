@@ -128,6 +128,8 @@ def fetch(url: str, timeout: int = 20) -> str:
 
 
 def check(statuses: set[str], path: str = TRACKER) -> list[dict]:
+    import csv_store
+    csv_store.refuse_conflicts(path)
     with open(path, newline="", encoding="utf-8") as fh:
         rows = [r for r in csv.DictReader(fh) if (r.get("status") or "").strip() in statuses]
     out = []

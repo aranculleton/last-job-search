@@ -705,6 +705,8 @@ def behind(name: str, have: dict[str, int] | None = None) -> list[tuple]:
 
 def _tracker_statuses() -> set[str]:
     path = person.state("job_search_tracker.csv")
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, encoding="utf-8", newline="") as fh:
             return {(r.get("status") or "").strip().lower() for r in csv.DictReader(fh)}

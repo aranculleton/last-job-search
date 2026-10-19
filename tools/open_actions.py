@@ -116,6 +116,8 @@ INTERVIEW_RANK = len(KIND_ORDER) - 1
 
 
 def _tracker(path=TRACKER):
+    import csv_store
+    csv_store.refuse_conflicts(path)
     try:
         with open(path, newline="", encoding="utf-8") as fh:
             return list(csv.DictReader(fh))
@@ -514,4 +516,9 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"open_actions: {e}", file=sys.stderr)
+        raise SystemExit(1)
