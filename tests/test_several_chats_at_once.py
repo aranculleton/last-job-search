@@ -130,3 +130,54 @@ def test_a_chat_that_did_not_bring_it_plans_nothing(tmp_path, monkeypatch, capsy
     monkeypatch.setattr(P, "pending", lambda: [(P.REGISTRY[0], "missing")])
     P.main(["--plan"])
     assert json.loads(capsys.readouterr().out) == []
+
+
+def _two_chats_one_update(tmp_path):
+    """The app, a person's repo, and two chats that each synced the same app commit in a
+    commit of their own, a minute apart, before either landed."""
+    app, origin = str(tmp_path / "app"), str(tmp_path / "origin")
+    a, b = str(tmp_path / "a"), str(tmp_path / "b")
+    subprocess.run(["git", "init", "-q", "-b", "master", app], check=True)
+    _git(app, "commit", "-q", "--allow-empty", "-m", "app 3.8.0")
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "master", origin], check=True)
+    subprocess.run(["git", "clone", "-q", origin, a], check=True, capture_output=True)
+    _git(a, "commit", "-q", "--allow-empty", "-m", "the person's start")
+    _git(a, "push", "-q", "origin", "HEAD:master")
+    subprocess.run(["git", "clone", "-q", origin, b], check=True, capture_output=True)
+    for i, chat in enumerate((a, b)):
+        _git(chat, "fetch", "-q", app, "master")
+        # A minute apart: two real chats never make the same commit, though a fast test can.
+        when = "2026-10-20T08:0%d:00" % i
+        subprocess.run(["git", "-C", chat, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "merge", "-q", "--no-ff", "--allow-unrelated-histories", "FETCH_HEAD",
+                        "-m", "Sync from the app: 1 new commit(s)"], capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+    return a, b
+
+
+def test_two_chats_that_synced_the_same_update_do_not_both_apply_it(tmp_path, monkeypatch):
+    a, b = _two_chats_one_update(tmp_path)
+    monkeypatch.setattr(P, "ROOT", b)
+    P.claim()                                         # chat b claimed it, as its sync does
+    assert P.owner_elsewhere() == ""                  # nothing has landed: b's to do
+    # Chat a lands its sync, and applies an upgrade on master.
+    _git(a, "commit", "-q", "--allow-empty", "-m", "Profile upgrade: move-and-area")
+    _git(a, "push", "-q", "origin", "HEAD:master")
+    _git(b, "fetch", "-q", "origin")
+    # b's claim no longer holds: the same update reached master through a first.
+    assert P.owner_elsewhere() != ""
+    assert P.done_on_master() == {"move-and-area"}
+    # Checked right before it starts, an upgrade on master is merged, never made again.
+    assert P.main(["--check", "move-and-area"]) == 0
+    # The person's word that no other chat is open hands them over anyway.
+    P.claim(taken=True)
+    assert P.owner_elsewhere() == ""
+
+
+def test_a_chat_whose_own_sync_landed_first_keeps_the_update(tmp_path, monkeypatch):
+    a, _b = _two_chats_one_update(tmp_path)
+    _git(a, "push", "-q", "origin", "HEAD:master")
+    _git(a, "fetch", "-q", "origin")
+    monkeypatch.setattr(P, "ROOT", a)
+    P.claim()
+    assert P.owner_elsewhere() == "" and P.done_on_master() == set()

@@ -254,14 +254,21 @@ def hard_answers(path=None) -> list:
         answer = _text(re.sub(r"`?\[CONFIRM:[^\]]*\]`?", "", answer).replace("**", ""))
         # "Suits: product, bank" and "Not for: consulting": the employers a stock answer is
         # for. Untagged, an answer is read for words that argue against the employer.
-        tags = {}
+        tags, use_for = {}, []
         for ln in body:
-            m = re.match(r"^\s*(suits|not for)\s*:\s*(.+)$", ln, re.I)
+            m = re.match(r"^\s*(suits|not for)\s*:\s*(.+)$", _flat(ln), re.I)
             if m:
                 tags[m.group(1).lower()] = tuple(t.strip().lower() for t in m.group(2).split(",")
                                                  if t.strip())
+            m = _USE_FOR.match(_flat(ln))
+            if m:
+                use_for = _tags(m.group(1))
+        # A heading can hold several wordings of one question: '"Why are you leaving <the
+        # current employer>?" / "Why are you looking?"'. Each is matched on its own.
+        alternatives = [_text(q) for q in _QUOTED.findall(heading)] or [heading.strip("\"“” ")]
         out.append({"question": heading.strip("\"“” "), "answer": answer,
                     "confirm": confirm, "source": _repo_rel(path),
+                    "alternatives": alternatives, "use_for": use_for,
                     "suits": tags.get("suits", ()), "not_for": tags.get("not for", ())})
     return out
 
@@ -344,10 +351,86 @@ def story_for_evidence(evidence, story_list) -> dict | None:
     return best if top >= EVIDENCE_MATCH else None
 
 
-def _answer_for(question, answers) -> dict | None:
-    hits = [(similar(question, a["question"]), a) for a in answers]
-    hits = [h for h in hits if h[0] >= 0.5]
-    return max(hits, key=lambda h: h[0])[1] if hits else None
+def _unnamed(text, names) -> str:
+    """`text` with these employer names taken out: "Why are you leaving <their current
+    employer>?" is the same question as "Why are you leaving your current role?", and the
+    name in the heading kept the two apart."""
+    for n in sorted({_text(x) for x in names if _text(x)}, key=len, reverse=True):
+        text = re.sub(r"(?<!\w)%s(?!\w)" % re.escape(n), " ", str(text or ""), flags=re.I)
+    return _text(text)
+
+
+def _answer_for(question, answers, names=(), company="", fits=None) -> dict | None:
+    """The stock answer for `question`: by any wording its heading holds or its `Use for:`
+    tags, with employer names taken out of both, and by meaning for the questions only the
+    person can answer (motive): "Why are you looking?" answers "Why are you leaving your
+    current role?". Where several answer it, one that fits this employer (`fits`) is taken
+    before one that would work against it."""
+    kind = motive(question, company)
+    hits = []
+    for a in answers:
+        top = 0.0
+        for alt in list(a.get("alternatives") or [a["question"]]) + list(a.get("use_for") or []):
+            score = similar(_unnamed(question, names), _unnamed(alt, names))
+            if kind and motive(alt, company) == kind:
+                score = max(score, 0.75)
+            top = max(top, score)
+        if top >= 0.5:
+            hits.append((bool(fits(a)) if fits else True, top, a))
+    return max(hits, key=lambda h: (h[0], h[1]))[2] if hits else None
+
+
+# The questions only the person can answer: why they are leaving, why each move, why this
+# employer, where they are heading. Dates and employers say when someone moved, never why,
+# and a pack that said "draft one from the profile, facts only" had a session invent the
+# reasons. (kind, the question's words, what Claude asks the person, the Use for: tags the
+# answer is kept under.) `{company}` is the employer the pack is for.
+MOTIVES = (
+    ("leaving", r"\bwhy (?:are you |do you want to |would you )?(?:leav\w*|looking|move on)\b|"
+                r"\bwhy now\b|\breasons? for leaving\b|\bwhy (?:are you )?(?:on the market|open "
+                r"to (?:a )?(?:move|new))",
+     "In your own words, why are you looking to leave {current} now? One or two real reasons, "
+     "and what you want more of.",
+     "why are you leaving; why are you looking; why now"),
+    ("moves", r"\bmoves? between jobs\b|\bwalk me through your (?:career|cv|resume|background)\b|"
+              r"\bwhy did you (?:leave|move)\b|\bcareer (?:story|path|moves)\b|\b(?:so many|the) "
+              r"moves\b",
+     "What made you take each move{moves}? A line each, in your own words.",
+     "walk me through your career; the moves between jobs; why did you leave"),
+    ("why_us", r"^why (?:this (?:company|firm|team)|us|join us|{company})\b|\bwhy (?:do you want|"
+               r"would you like) to (?:work|join)\b|\bwhat (?:attracts|draws) you\b|"
+               r"\bwhy (?:are you )?interested\b",
+     "What draws you to {company} in particular, beyond what anyone could read on its website?",
+     "why this company; why do you want to work here"),
+    ("future", r"\bfive years\b|\b5 years\b|\bwhere do you see yourself\b|\blong[- ]term "
+               r"(?:goals?|plans?)\b|\bcareer goals?\b",
+     "Where do you want to be in a few years? A sentence or two, in your own words.",
+     "where do you see yourself in five years; long-term goals"),
+)
+# What /interview asks before anything is written for one of these, and what `check` holds on.
+ASK_MARK = "ASK YOU FIRST (Claude asks, once):"
+
+
+def motive(question, company="") -> str:
+    """The kind of motivation question this is (MOTIVES), or ""."""
+    q = _text(question)
+    for kind, rx, _ask, _tags in MOTIVES:
+        rx = rx.replace("{company}", re.escape(_text(company)) if _text(company) else r"\b\B")
+        if re.search(rx, q, re.I):
+            return kind
+    return ""
+
+
+def motive_ask(kind, ctx) -> str:
+    """The one plain question Claude asks the person for a motivation answer."""
+    ask = next(a for k, _rx, a, _t in MOTIVES if k == kind)
+    employers = [_text(e.get("company")) for e in ctx["facts"].get("employers") or []
+                 if isinstance(e, dict) and _text(e.get("company"))]
+    current = [_text(e.get("company")) for e in ctx["facts"].get("employers") or []
+               if isinstance(e, dict) and "present" in _text(e.get("dates")).lower()]
+    return ask.format(company=ctx["company"], current=current[0] if current else "where you are",
+                      moves=" (%s)" % ", then ".join(reversed(employers[:4])) if len(employers) > 1
+                      else "")
 
 
 # ---------------------------------------------------------------- the application
@@ -493,8 +576,66 @@ def _next_stage(stages, today="") -> dict:
     return {"label": "Round %d" % (len(stages) + 1), "date": "", "with": ""} if stages else {}
 
 
+# A process came through a person, not a portal, so its posting may not be held at all. Its
+# folder still gets a job_posting.md, as every application folder has one: one without it
+# turned the person's own CI red on the app's folder test, and they could not land work.
+POSTING_NOT_HELD = "The posting's text is not held yet."
+
+
+def write_posting(folder, company, role, posting="", source="", today="") -> str:
+    """job_posting.md for a process: the posting's text, fenced, when `posting` is a file
+    holding it; its link when `posting` (or the row's source) is one; and a line saying the
+    text is not held. Kept once it holds text. Returns "written", "kept" or "replaced"."""
+    path = os.path.join(folder, "job_posting.md")
+    had = _read(path)
+    if had and (POSTING_NOT_HELD not in had or not _text(posting)):
+        return "kept"
+    text, url = "", ""
+    posting = _text(posting)
+    if re.match(r"https?://", posting):
+        url = posting
+    elif posting:
+        if not os.path.isfile(posting):
+            raise ValueError("--posting %r is neither a link nor a file holding the posting's "
+                             "text" % posting)
+        text = _read(posting)
+    if not url and re.match(r"https?://", _text(source)):
+        url = _text(source)
+    lines = ["# %s - %s" % (role, company), ""]
+    if url:
+        lines.append("- **Source:** %s" % url)
+    lines += ["- **Retrieved:** %s, for a hiring process with no application"
+              % (_text(today) or dt.date.today().isoformat()), ""]
+    if text.strip():
+        lines.append(untrusted.fence(text, label="job posting"))
+    else:
+        lines.append("%s This process came through a person, not a portal. When the posting is "
+                     "found, keep its text: python3 tools/interview_pack.py process \"%s\" "
+                     "--contact <who leads it> --role \"%s\" --posting <a file holding it>"
+                     % (POSTING_NOT_HELD, company, role))
+    os.makedirs(folder, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines).rstrip() + "\n")
+    return "replaced" if had else "written"
+
+
+def missing_postings(tracker=None) -> list:
+    """[(company, role, folder)] for every process whose folder has no job_posting.md: the
+    ones registered before process wrote it."""
+    tracker = what_works._csv(person.state("job_search_tracker.csv")) if tracker is None \
+        else tracker
+    out = []
+    for r in tracker:
+        if not is_process(r):
+            continue
+        folder = outreach.app_folder(_text(r.get("company")), _text(r.get("role")))
+        if os.path.isdir(folder) and not os.path.exists(os.path.join(folder, "job_posting.md")):
+            out.append((_text(r.get("company")), _text(r.get("role")), folder))
+    return out
+
+
 def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
-                     contacts=None) -> tuple:
+                     contacts=None, posting="") -> tuple:
     """Make a hiring process with no application something every reader can see: a
     tracker row (PROCESS_NOTE) and its folder with an outcome.md, the booked stage on it
     when given. Returns (row, folder, added). Run twice, it changes nothing."""
@@ -559,6 +700,7 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
         csv_store.write_rows(tracker_path, rows, record_drafts.HEADER)
     folder = outreach.app_folder(company, role)
     os.makedirs(folder, exist_ok=True)
+    write_posting(folder, company, _text(role), posting, have.get("source"), today)
     out = os.path.join(folder, "outcome.md")
     text = _read(out)
     screen_first = bool(_text(stage)) and what_works.stage_step(stage) == "screen"
@@ -640,12 +782,19 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         same = [s for s in stages if s["label"].lower() == stage.lower()]
         if same:
             date, with_ = date or same[0]["date"], with_ or same[0]["with"]
-    posting = untrusted.unfence(_read(os.path.join(folder, "job_posting.md")))
+    assumed = ""
+    if not _text(with_):
+        with_ = assumed = _lead_interviewer({"company": company, "row": row}, contacts, stage)
+    raw = _read(os.path.join(folder, "job_posting.md"))
+    # A process's placeholder is not a posting: nothing in it may be read as a requirement.
+    posting = "" if POSTING_NOT_HELD in raw and "BEGIN-UNTRUSTED-" not in raw \
+        else untrusted.unfence(raw)
     threads = state.load_threads(os.path.join(root, "network_threads.csv")) \
         if threads is None else threads
     return {
         "company": company, "role": role, "row": row, "folder": folder, "today": today,
         "stage": stage, "step": what_works.stage_step(stage), "date": date, "with": with_,
+        "with_assumed": assumed,
         "outcome": outcome, "stages": stages, "posting": posting,
         # A process had no form: answers record_drafts wrote for a draft never sent were
         # never seen by anyone.
@@ -811,11 +960,12 @@ def answer_for(item, ctx) -> dict:
     if story is None and not mapped:
         story, _score = best_story(_match_text(q), ctx["stories"], ctx["bank"])
         how = "matched by its Use for tags"
-    prepared = _answer_for(q, ctx["answers"])
-    if prepared is None and re.search(r"why are you leaving", q, re.I):
-        # The same reason, asked from the other side: the prepared "why are you looking".
-        prepared = _answer_for("Why are you looking?", ctx["answers"])
-    why_us = bool(re.search(r"^why %s" % re.escape(ctx["company"]), q, re.I))
+    names = [ctx["company"]] + [_text(e.get("company")) for e in facts.get("employers") or []
+                                if isinstance(e, dict)]
+    prepared = _answer_for(q, ctx["answers"], names, ctx["company"],
+                           fits=lambda a: not against_employer(a, ctx))
+    kind = motive(q, ctx["company"])
+    why_us = kind == "why_us"
     if item.get("framing"):
         lines.append("Say: %s (source: %s)" % (item["framing"], item["source"]))
     if item.get("evidence"):
@@ -848,10 +998,14 @@ def answer_for(item, ctx) -> dict:
     elif re.search(r"where are you based|how are you finding", q, re.I):
         if home_place():
             lines.append("You live in %s (source: profile/person.json)" % home_place())
-        if newcomer(ctx):
-            lines.append("You moved there %s: see Small talk, and tell nothing you have not "
-                         "done." % newcomer(ctx))
-    elif re.search(r"moves between jobs|walk me through your career", q, re.I):
+        since = newcomer(ctx)
+        if since == JUST_ARRIVED:
+            lines.append("You have just arrived (source: profile/person.json): say that, with "
+                         "no date or month, and see Small talk.")
+        elif since:
+            lines.append("You have lived there %s (source: profile/person.json): see Small "
+                         "talk, and tell nothing you have not done." % since)
+    elif kind == "moves":
         moves = ["%s (%s)" % (_text(e.get("company")), _text(e.get("dates")))
                  for e in facts.get("employers") or [] if isinstance(e, dict) and _text(e.get("company"))]
         if moves:
@@ -901,14 +1055,16 @@ def answer_for(item, ctx) -> dict:
             prepared["answer"], prepared["source"],
             " Marked CONFIRM in the file: check it is still true first." if prepared["confirm"]
             else ""))
-        etype = employer_type(ctx)
-        against = argues_against(prepared["answer"], etype) if etype not in prepared.get("suits", (etype,)) \
-            or etype in prepared.get("not_for", ()) else ""
-        if etype and (against or etype in prepared.get("not_for", ())):
-            lines.append("CAREFUL: this argues against a %s employer%s, and %s is one. Rewrite it "
-                         "from your real reasons for this one before you say it."
-                         % (etype, " (\"%s\")" % against if against else " (its Not for: line)",
-                            ctx["company"]))
+        careful = against_employer(prepared, ctx)
+        if careful:
+            lines.append("CAREFUL: %s. Rewrite it from your real reasons for %s before you say "
+                         "it." % (careful, ctx["company"]))
+    elif kind and not story:
+        # Their reasons are theirs: asked, never drafted from dates and employers.
+        lines.insert(0, "%s \"%s\" Nothing on file can supply the reasons. Their answer is kept "
+                        "for every later employer: python3 tools/interview_pack.py motive \"%s\" "
+                        "--answer \"<their words>\" [--suits <kinds> --not-for <kinds>]"
+                        % (ASK_MARK, motive_ask(kind, ctx), q))
     if story:
         lines.append("Story: %s (%s; source: %s)" % (story["title"], how, story["source"]))
     elif mapped:
@@ -917,7 +1073,12 @@ def answer_for(item, ctx) -> dict:
     if story:
         return {"kind": "story", "short": "story: %s" % story["title"], "lines": lines}
     if prepared:
-        return {"kind": "prepared", "short": "prepared answer, below", "lines": lines}
+        return {"kind": "prepared", "short": "prepared answer, below%s"
+                % (": CAREFUL" if any(ln.startswith("CAREFUL:") for ln in lines) else ""),
+                "lines": lines}
+    if kind:
+        return {"kind": "ask", "short": "ask you first: your reasons, in your words",
+                "lines": lines}
     if why_us:
         return {"kind": "say", "short": "a hook below" + (", and what the letter told them"
                                                           if _text((ctx["draft"] or {}).get("p2"))
@@ -972,8 +1133,14 @@ def do_not_say(ctx, never_say=None) -> list:
     """Lines: the research's prohibitions, the credentials not held, the banned phrases."""
     research = ctx["research"] or {}
     default = prep._research_source(research)
-    out = ["- Do not say: %s (source: %s)" % (f.value, f.source)
-           for f in prep._facts(research.get("do_not_claim"), default)]
+    # A stock answer that works against this employer, whether or not this stage asks its
+    # question: a five-year answer of "product companies rather than more consulting" was
+    # one follow-up away at a consultancy, and nothing flagged it.
+    out = ["- Not as it stands: your answer to \"%s\": %s. Rewrite it for %s before it comes "
+           "up (source: %s)" % (a["question"], why, ctx["company"], a["source"])
+           for a in ctx["answers"] for why in [against_employer(a, ctx)] if why]
+    out += ["- Do not say: %s (source: %s)" % (f.value, f.source)
+            for f in prep._facts(research.get("do_not_claim"), default)]
     out += ["- Careful: %s (source: %s)" % (f.value, f.source)
             for f in prep._facts(research.get("cautions"), default)]
     for g in ctx["gaps_hard"]:
@@ -1169,20 +1336,91 @@ def _guide_categories() -> dict:
     return out
 
 
+# What a recruiter screen is for, from the candidate's side: the process. Its interviewer
+# owns the timeline and the format, and seldom the work.
+PROCESS_QUESTIONS = (
+    "What are the stages from here, and roughly how long does it take?",
+    "What does the next round involve: a case, a technical interview, a take-home?",
+)
+TRAVEL_QUESTION = "How much travel does the role involve, and where?"
+# Notes that say one employer has more than one posting for the role.
+_SIBLING_WORDS = re.compile(r"\b(?:two|both|2|several|multiple|another|second) (?:live )?"
+                            r"(?:postings?|roles|openings?|reqs?|requisitions?|positions?|"
+                            r"listings?|ads?)\b|\bwhich (?:team|posting|req|requisition)\b", re.I)
+
+
+def _same_employer(a, b) -> bool:
+    """Is employer key `b` this employer or an arm of it ("<employer> Labs")? By the first
+    two words that are not filler, or the one word of a one-word name."""
+    wa = [w for w in a.split() if w not in ("the", "of", "and")]
+    wb = [w for w in b.split() if w not in ("the", "of", "and")]
+    n = min(2, len(wa), len(wb))
+    return bool(n) and wa[:n] == wb[:n]
+
+
+def sibling_postings(ctx) -> list:
+    """[(what, source)]: the other postings for this role at this employer or an arm of it,
+    from the jobs the search has seen and the tracker, and what the contact notes say. A
+    pack for an employer with two live postings for one title (its main team and its Labs
+    arm) never asked which the call was for."""
+    k = company_key(ctx["company"])
+    found, urls = [], set()
+    try:
+        seen = throttle.load_seen(person.state("job_scraper", "seen_jobs.json")).get("seen") or {}
+    except (OSError, ValueError):
+        seen = {}
+    for url, e in seen.items():
+        if not isinstance(e, dict) or not _same_employer(k, company_key(e.get("company"))):
+            continue
+        if throttle._same_title(ctx["role"], e.get("title")) and url not in urls:
+            urls.add(url)
+            found.append(("%s, %s%s" % (_text(e.get("title")), _text(e.get("company")),
+                                        " (%s)" % _text(e.get("location")) if _text(e.get("location"))
+                                        else ""), "job_scraper/seen_jobs.json"))
+    if len(found) < 2:
+        found = []
+    notes = [(_text(c.get(f)), prep.CONTACTS_SOURCE) for c in _here(ctx).values()
+             for f in ("next_action", "notes", "outcome")]
+    notes += [(_text(ctx["row"].get("notes")), prep.TRACKER_SOURCE),
+              (_text(ctx.get("outcome")), "%s/outcome.md" % _rel(ctx["folder"]))]
+    for text, src in notes:
+        m = _SIBLING_WORDS.search(text)
+        if m:
+            start = max(0, text.rfind(".", 0, m.start()) + 1)
+            found.append(("\"%s\"" % prep.clip(text[start:].strip(), 140), src))
+            break
+    return found
+
+
 def ask_lines(ctx) -> list:
+    """The questions to ask them. Which team the call is for comes first when there is more
+    than one posting for the role; a screen asks about the process (its stages, the next
+    round's format, travel where the work travels); then what the research anchors."""
+    cap = MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK
+    first, out = [], []
+    siblings = sibling_postings(ctx)
+    if siblings:
+        first.append("- Which team is this %s for? There is more than one posting for it: %s."
+                     % (ctx["stage"].lower() if ctx["stage"] else "call",
+                        "; ".join("%s (source: %s)" % (w, s) for w, s in siblings[:3])))
+    if ctx["step"] == "screen":
+        out += ["- %s (a screen is where the process is asked about)" % q
+                for q in PROCESS_QUESTIONS]
+        if employer_type(ctx) == "consulting":
+            out.append("- %s (a consulting firm's work usually travels)" % TRAVEL_QUESTION)
     # prep.py anchors its last question on the role and names the contact book,
     # where a call's role comes from; here it is the tracker's.
-    out = ["- %s (source: %s)" % (q["question"], prep.TRACKER_SOURCE
-                                  if q["anchor"] == ctx["role"] else q["source"])
-           for q in prep.questions_for_them(ctx["research"], ctx["role"])]
+    out += ["- %s (source: %s)" % (q["question"], prep.TRACKER_SOURCE
+                                   if q["anchor"] == ctx["role"] else q["source"])
+            for q in prep.questions_for_them(ctx["research"], ctx["role"])]
     cats = _guide_categories()
     for cat in STEP_CATEGORIES.get(ctx["step"], ()):
         for q in [q for q in cats.get(cat, []) if "[" not in q][:2]:
-            if len(out) >= (MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK):
+            if len(out) >= cap:
                 break
             out.append("- %s (the guide's \"%s\" list: cut it if the research already answers it)"
                        % (q, cat))
-    return out[:MAX_ASK_SCREEN if ctx["step"] == "screen" else MAX_ASK]
+    return first + out[:cap]
 
 
 # A row whose own next step says to leave them be: "Keep warm, no action", "Do not use
@@ -1210,6 +1448,14 @@ def _referred(c, ctx, name) -> bool:
         return True
     if _said_referral(_text(c.get("outcome"))):
         return True
+    # Named in another contact's `referred_by` at this employer: the recruiter's row said who
+    # routed the resume, and the referrer, whose own row was waiting on a reply, was left out.
+    cid = _text(c.get("contact_id"))
+    for other in (ctx.get("contacts") or ()):
+        by = _text(other.get("referred_by"))
+        if other is not c and by and company_key(other.get("company")) == company_key(
+                ctx["company"]) and (by == cid or (len(name) > 3 and by.lower() == name.lower())):
+            return True
     linked = _text(c.get("linked_application"))
     if linked and linked == _text(ctx["row"].get("cv_file")):
         return True
@@ -1238,16 +1484,16 @@ def warm_lines(ctx) -> list:
     A row that says to leave someone be is shown with its own words, never with a
     message to send: one said "Keep warm, no action" and the pack told the candidate to
     tell him the interview was booked."""
-    k = company_key(ctx["company"])
-    here = [c for c in ctx["contacts"] if company_key(c.get("company")) == k]
+    here = list(_here(ctx).values())
     names = " ".join(_text(x).lower() for x in [ctx["with"]] + [s["with"] for s in ctx["stages"]])
     out, referrer = [], None
     # "Booked" only when the stage this pack is for has a date: told to say a round was
     # booked that had no date yet, the candidate would be telling them something untrue.
     booked = bool(_text(ctx.get("date")))
+    lead = _lead_id(ctx)
     for c in here:
         cid = _text(c.get("contact_id"))
-        status = state.effective_status(c, state.threads_for(ctx["threads"], cid))
+        status = _status_for(c, ctx)
         name = state.person_name(c.get("name")) or _text(c.get("name"))
         title = ", " + _text(c.get("title")) if _text(c.get("title")) else ""
         step = _text(c.get("next_action"))
@@ -1268,10 +1514,21 @@ def warm_lines(ctx) -> list:
                                          if known else "", prep.CONTACTS_SOURCE))
         elif _referred(c, ctx, name):
             then = (" Their row's next step: \"%s\"." % prep.clip(step, ROW_QUOTE)) if step else ""
-            tell = ("Tell them the interview is booked, and thank them after it." if booked else
-                    "Tell them once the interview has a date, and thank them after it.")
-            out.append("- %s%s put you forward [%s]. %s%s (source: %s)"
-                       % (name, title, status, tell, then, prep.CONTACTS_SOURCE))
+            # The networking skill's rule for a referrer: thanks once, nothing asked of them,
+            # and then no update until there is an outcome, unless they ask.
+            stage = _text(ctx.get("stage")) or "interview"
+            word = stage[:1].lower() + stage[1:]
+            led = "%s %s%s" % ("an" if word[:1] in "aeiou" else "a", word,
+                               " on %s" % ctx["date"] if booked else "")
+            out.append("- %s%s put you forward [%s]. If you have not thanked them yet, once: "
+                       "thanks, that it led to %s, and that nothing is needed from them. Then "
+                       "no update until there is an outcome, unless they ask.%s (source: %s)"
+                       % (name, title, status, led, then, prep.CONTACTS_SOURCE))
+        elif status == "call_booked" or (cid and cid == lead and prep.is_recruiter(c)
+                                         and status in throttle.RESPONDED):
+            # Whoever booked the stage already knows it is booked.
+            out.append("- %s%s booked this [%s]: nothing is owed to them before the call. "
+                       "(source: %s)" % (name, title, status, prep.CONTACTS_SOURCE))
         elif status in throttle.RESPONDED:
             out.append("- %s%s is already talking to you [%s]: %s (source: %s)"
                        % (name, title, status, "tell them it is booked." if booked else
@@ -1355,6 +1612,30 @@ def _person(dotted) -> str:
         return ""
 
 
+def _lead_id(ctx) -> str:
+    """The contact_id of whoever leads this process (the tracker row's `contact:<id>`), or
+    "" for an application."""
+    src = _text((ctx.get("row") or {}).get("source"))
+    return src.split(":", 1)[1].strip() if src.startswith("contact:") else ""
+
+
+def _lead_interviewer(ctx, contacts, stage) -> str:
+    """Who a recruiter screen is with when nobody was named: the recruiter who leads the
+    process or booked the call, as "<name>, <title>", or "". A process registered with its
+    recruiter as the lead still said "Nobody named for this stage yet"."""
+    if what_works.stage_step(stage) != "screen" or not is_process(ctx["row"]):
+        return ""
+    k, lead = company_key(ctx["company"]), _lead_id(ctx)
+    here = [c for c in contacts if company_key(c.get("company")) == k]
+    pick = [c for c in here if _text(c.get("contact_id")) == lead] + \
+        [c for c in here if _text(c.get("status")) == "call_booked"]
+    c = next((c for c in pick if prep.is_recruiter(c)), None)
+    if c is None:
+        return ""
+    name = state.person_name(c.get("name")) or _text(c.get("name"))
+    return ", ".join(x for x in (name, _text(c.get("title"))) if x)
+
+
 def referrer_of(ctx) -> str:
     """The name of whoever put the candidate forward for this process, or ""."""
     k = company_key(ctx["company"])
@@ -1383,22 +1664,73 @@ def temporary_status(ctx) -> bool:
 MOVED_MONTHS = 12
 
 
+# identity.moved: when they moved (YYYY-MM or YYYY-MM-DD), or "by YYYY-MM-DD" where the
+# profile only confirms they were there by a date ("in <city>, confirmed 2026-09-16"). The
+# upgrade that writes it had only the exact forms, wrote a CONFIRM marker for a profile that
+# held a confirmed-by date, and the small talk for a call the next day was left out.
+_MOVED = re.compile(r"(by\s+)?(\d{4}-\d{2}(?:-\d{2})?)", re.I)
+_MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August",
+           "September", "October", "November", "December")
+FEW_WEEKS = 56          # days: "for a few weeks" up to here, "since <month>" beyond
+
+
+# Someone whose own answer to "how long have you been here?" is "I've just arrived", with no
+# date or month, ever (their rule, kept in learned.json, or identity.moved itself).
+JUST_ARRIVED = "just arrived"
+_JUST_RULE = re.compile(r"\bjust arrived\b", re.I)
+
+
+def _just_arrived_rule() -> bool:
+    """Has the person said to say only that they have just arrived?"""
+    if _person("identity.moved").lower() == JUST_ARRIVED:
+        return True
+    try:
+        return any(_JUST_RULE.search(" ".join(_text(r.get(k)) for k in ("rule", "said")))
+                   for r in learned.entries())
+    except (OSError, ValueError, person.NoProfile):
+        return False
+
+
 def _moved_on() -> str:
-    """identity.moved when it is a date (YYYY-MM or YYYY-MM-DD), else "": the move-and-area
-    upgrade writes "none" for everyone who has not moved recently."""
+    """identity.moved when it says when, or that they have just arrived, else "": the
+    move-and-area upgrade writes "none" for everyone who has not moved recently. Where the
+    person's own rule is to say only that they have just arrived, that is what this says."""
     moved = _person("identity.moved")
-    return moved if re.fullmatch(r"\d{4}-\d{2}(?:-\d{2})?", moved) else ""
+    if moved.lower() == JUST_ARRIVED:
+        return JUST_ARRIVED
+    if not _MOVED.fullmatch(moved):
+        return ""
+    return JUST_ARRIVED if _just_arrived_rule() else moved
+
+
+def _since(moved, today) -> str:
+    """How long they have lived there, said as a person would: "for a few weeks" or "since
+    May 2026", from identity.moved; "" when it says no date."""
+    m = _MOVED.fullmatch(_text(moved))
+    if not m:
+        return ""
+    when = state.as_date(m.group(2) + ("-01" if len(m.group(2)) == 7 else ""))
+    if when is None:
+        return ""
+    if (today - when).days <= FEW_WEEKS:
+        return "for a few weeks"
+    return "since %s %d" % (_MONTHS[when.month - 1], when.year)
 
 
 def newcomer(ctx) -> str:
-    """The month the person moved, when it was within MOVED_MONTHS (person.json
-    identity.moved), else ""."""
+    """How long the person has lived where they live ("for a few weeks", "since May 2026"),
+    when they moved within MOVED_MONTHS (person.json identity.moved), else "". A
+    confirmed-by date counts: they had moved by then. JUST_ARRIVED where that is all they
+    say: no date and no month is printed for them, anywhere."""
+    if _person("identity.moved").lower() == JUST_ARRIVED:
+        return JUST_ARRIVED
     moved = _person("identity.moved")
-    when = state.as_date(moved + ("-01" if re.fullmatch(r"\d{4}-\d{2}", moved) else ""))
+    m = _MOVED.fullmatch(moved)
+    when = state.as_date(m.group(2) + ("-01" if len(m.group(2)) == 7 else "")) if m else None
     today = state.as_date(ctx["today"]) or dt.date.today()
     if when is None or (today - when).days > MOVED_MONTHS * 31 or when > today:
         return ""
-    return moved
+    return JUST_ARRIVED if _just_arrived_rule() else _since(moved, today)
 
 
 def home_place() -> str:
@@ -1473,6 +1805,27 @@ def argues_against(answer, etype) -> str:
     return m.group(0) if m else ""
 
 
+def against_employer(prepared, ctx) -> str:
+    """Why a stock answer would work against this employer, or "": its `Not for:` line names
+    this kind of employer, its `Suits:` line names only others, or (untagged) its own words
+    argue against it."""
+    etype = employer_type(ctx)
+    if not etype:
+        return ""
+    suits, not_for = prepared.get("suits") or (), prepared.get("not_for") or ()
+    if etype in not_for:
+        return "its Not for: line names %s employers, and %s is one" % (etype, ctx["company"])
+    if suits:
+        # Tagged for this kind of employer, the person has said it fits: their word stands.
+        return "" if etype in suits else (
+            "it was written for %s employers (its Suits: line), and %s is a %s employer"
+            % (", ".join(suits), ctx["company"], etype))
+    against = argues_against(prepared["answer"], etype)
+    return ("it argues against a %s employer (\"%s\"), and %s is one" % (etype, against,
+                                                                         ctx["company"])
+            if against else "")
+
+
 # What the people at this employer have been told, by topic. A recruiter screen checks
 # location and start date first, and the referrer had been told by message five weeks
 # before that the candidate was "moving" and "currently at a UK consultancy", while the
@@ -1529,22 +1882,70 @@ def _differs_from_band(sent) -> bool:
                for m in pc._SINGLE.finditer(rest) if pc._amount(m.group(1)) >= 1000)
 
 
+def _here(ctx) -> dict:
+    """{contact_id: row} for everyone in the contact book at this employer, by company_key,
+    the one join every section uses."""
+    k = company_key(ctx["company"])
+    return {_text(c.get("contact_id")): c for c in ctx["contacts"]
+            if k and company_key(c.get("company")) == k and _text(c.get("contact_id"))}
+
+
+# What only the person can know, written on the row, and which the message log cannot
+# derive: a call booked, a referral in flight. On the row it wins (CLAUDE.md, Networking):
+# a recruiter whose last message booked the screen read as owed a reply, and the pack told
+# the candidate to "tell them it is booked", to the one person who booked it.
+STORED_WINS = frozenset({"call_booked", "referral_in_progress"})
+
+
+def _status_for(c, ctx) -> str:
+    stored = _text(c.get("status"))
+    if stored in STORED_WINS:
+        return stored
+    return state.effective_status(c, state.threads_for(ctx["threads"],
+                                                       _text(c.get("contact_id"))))
+
+
 def told_lines(ctx) -> list:
     """Every message to anyone at this employer, and what the form said, on the topics a
-    screen checks first, each with a line where it disagrees with the profile now."""
-    k = company_key(ctx["company"])
-    here = {_text(c.get("contact_id")): c for c in ctx["contacts"]
-            if company_key(c.get("company")) == k}
+    screen checks first, each with a line where it disagrees with the profile now.
+
+    What was read is said first, contact by contact, so an empty section is never silent:
+    a message logged with a summary and no text (one said "moving to <city>" weeks after
+    the move) is flagged, never passed over, and a contact with nothing logged is named."""
+    here = _here(ctx)
     out, seen = [], set()
     moved = _moved_on()
     current = [n for e in ctx["facts"].get("employers") or [] if isinstance(e, dict)
                and "present" in _text(e.get("dates")).lower()
                for n in (_text(e.get("company")),) if n]
+    sent_to = {cid: [] for cid in here}
     for r in ctx["threads"]:
         cid = _text(r.get("contact_id"))
-        if cid not in here or _text(r.get("direction")).lower() not in ("out", "outbound", "sent"):
-            continue
+        if cid in here and state._direction(r) == "out":
+            sent_to[cid].append(r)
+    for cid, c in here.items():
+        name = state.person_name(c.get("name")) or _text(c.get("name"))
+        title = ", " + _text(c.get("title")) if _text(c.get("title")) else ""
+        dates = sorted(_text(r.get("date")) or "undated" for r in sent_to[cid])
+        out.append("- Read: %s%s [%s]: %s (source: %s)" % (
+            name, title, _status_for(c, ctx),
+            "%d message(s) from you, %s" % (len(dates), ", ".join(dates)) if dates
+            else "nothing from you logged", prep.THREADS_SOURCE))
+    rows = sorted((r for rs in sent_to.values() for r in rs), key=lambda r: _text(r.get("date")))
+    for r in rows:
+        cid = _text(r.get("contact_id"))
         name = state.person_name(here[cid].get("name")) or _text(here[cid].get("name"))
+        if not _text(r.get("full_text")):
+            if state.is_bare_request(r):
+                continue        # a connection request with no note said nothing
+            out.append("- %s, to %s: text not logged%s: check what this said about where you "
+                       "are, notice and pay. Add it: python3 tools/network/state.py text %s "
+                       "--date %s --text-file <the message as sent> (source: %s)" % (
+                           _text(r.get("date")) or "undated", name,
+                           " (logged as \"%s\")" % prep.clip(r.get("summary"), 80)
+                           if _text(r.get("summary")) else "", cid,
+                           _text(r.get("date")) or "<its date>", prep.THREADS_SOURCE))
+            continue
         for topic, sent in _said(r.get("full_text")):
             key = (topic, sent.lower())
             if key in seen:
@@ -1556,8 +1957,11 @@ def told_lines(ctx) -> list:
             if topic == "where you are" and moved and re.search(
                     r"\b(?:moving (?:to|from|over|here)|relocating|move to|will be in)\b",
                     sent, re.I):
+                # What to say is theirs: a sentence written here was on one person's list of
+                # words never to use.
                 out.append("  - DIFFERS: they were told you were moving; your profile says you "
-                           "moved (%s). Say \"I made the move\" plainly if it comes up." % moved)
+                           "live there now (%s). If it comes up, say plainly where you live now, "
+                           "in your own words." % moved)
             if topic == "current employer" and current and not any(
                     _text(n).split()[0].lower() in sent.lower() for n in current if _text(n)):
                 out.append("  - CHECK: your profile's current employer is %s; say it the same "
@@ -1574,7 +1978,8 @@ def told_lines(ctx) -> list:
         out.append("- No documents went through a portal: anything they hold (a %s sent by "
                    "email%s) %s. Check the city and number on it match what you will say."
                    % (_noun(), ", or passed on by %s" % referrer_of(ctx) if referrer_of(ctx)
-                      else "", "is in the messages above" if out
+                      else "", "is in the messages above" if any(_text(r.get("full_text"))
+                                                                  for r in rows)
                       else "came outside the message log"))
     return out
 
@@ -1704,6 +2109,10 @@ def meeting_lines(ctx) -> list:
     import reading as _reading
     formats, _assumed = interview_formats(ctx)
     out = []
+    if ctx.get("with_assumed"):
+        out.append("- Assumed: %s leads this process, and a recruiter screen is with the "
+                   "recruiter. If the invite names someone else, rebuild with --with "
+                   "\"<name, title>\". (source: %s)" % (ctx["with_assumed"], prep.CONTACTS_SOURCE))
     for who in _interviewers(ctx):
         name, given = who["name"], who["title"]
         if not name:
@@ -2138,6 +2547,36 @@ def route_lines(ctx) -> list:
     return ["- You applied: everything you say must match what you sent (What the paper says)."]
 
 
+# How long a round is and how it is held: what a recruiter says when booking one.
+_SHAPE = re.compile(r"\b\d+\s*(?:minutes?|mins?|hours?)\b|\b(?:virtual|video call|in person|"
+                    r"on[- ]?site|teams|zoom|google meet|by phone|phone call)\b", re.I)
+# A technical round by its own words; what_works.stage_step calls anything unnamed technical.
+_TECH_STAGE = re.compile(r"\b(?:technical|case|coding|take[- ]?home|pairing|second round|"
+                         r"round (?:2|two))\b", re.I)
+
+
+def _stage_named(text) -> str:
+    """The step a line or heading names, or "" when it names none."""
+    for step, rx in what_works._STEP_RX:
+        if rx.search(text or ""):
+            return step
+    return "technical" if _TECH_STAGE.search(text or "") else ""
+
+
+def _for_this_stage(ctx, heading, line) -> bool:
+    """Is this line of outcome.md about the stage being prepared? The line's own words
+    first, then its heading's: by the stage's name, else by the step either names. A line
+    under no stage at all is not this one's."""
+    label = what_works._norm(ctx["stage"])
+    for text in (line, heading):
+        if label and label in what_works._norm(text):
+            return True
+        named = _stage_named(text)
+        if named:
+            return named == ctx["step"]
+    return False
+
+
 def format_lines(ctx) -> list:
     """The format: what it tests, how to prepare, what this employer says about how it runs
     it (researched by Claude), and how the process started."""
@@ -2153,11 +2592,12 @@ def format_lines(ctx) -> list:
         out += ["  - " + d for d in p["drills"]]
     state_, lines = _researched(ctx["research"], "interview_process")
     # What the recruiter or an earlier stage already said about this round (outcome.md) is
-    # the best source there is, and needs no research.
+    # the best source there is, and needs no research. Only what was said about this round:
+    # the technical round's pack quoted the screen's "virtual, 30 minutes" as its own.
     fmt = [rx for f, rx in FORMATS if f in formats and f != "screen"]
     told = [(h, ln) for h, ln in _record(ctx["outcome"])
-            if any(rx.search(ln) for rx in fmt)
-            or (fmt and re.search(r"\b\d+\s*(?:minutes?|mins?|hours?)\b", ln, re.I))]
+            if _for_this_stage(ctx, h, ln)
+            and (any(rx.search(ln) for rx in fmt) or _SHAPE.search(ln))]
     out += ["- What you were told about this round: %s (source: %s/outcome.md)"
             % (prep.clip(ln, 200), _rel(ctx["folder"])) for _h, ln in told[:2]]
     if formats == ["screen"]:
@@ -2193,12 +2633,13 @@ def where_lines(ctx) -> list:
         return []
     place = home_place()
     return [
-        "- You moved recently: you live in %s, since %s (source: profile/person.json). \"How "
+        "- You moved recently: you live in %s, %s (source: profile/person.json). \"How "
         "are you finding it?\" is friendly, and underneath it they are checking you are settled "
         "and staying, so an honest line and one specific thing you like answers both. Claude "
         "researches a short briefing and writes it under %s, each line with its source: the "
         "neighbourhoods, getting around, food, the weather now, and your field's scene here, so "
-        "you can follow any thread." % (place or "your area", moved, FOUND_OUT[4:]),
+        "you can follow any thread." % (place or "your area", "and have just arrived"
+                                        if moved == JUST_ARRIVED else moved, FOUND_OUT[4:]),
         "- Before the call, do two or three things near you (a walk, a market, a cafe), so every "
         "anecdote you tell is your own.",
         "- Anything you do not know yet: \"Still working that out. What would you recommend?\"",
@@ -2388,11 +2829,63 @@ def check(path) -> list:
     for i, (q, body) in enumerate(blocks.values()):
         mine = _own_words(body)
         if not " ".join(mine).strip():
-            if i < ONE_SCREEN_QUESTIONS:
+            # A motivation question waits on the person's own reasons, wherever it falls.
+            if any(ASK_MARK in ln for ln in body):
+                out.append(("Ask", q))
+            elif i < ONE_SCREEN_QUESTIONS:
                 out.append((q, "not written yet"))
             continue
         out += [(q, why) for why in prep.unsayable(mine)]
     return out
+
+
+ANSWERS_HEADING = "## Your reasons, in your own words"
+
+
+def write_motive(question, answer, use_for=(), suits=(), not_for=(), path=None) -> str:
+    """Keep the person's own answer to a motivation question in profile/07-interview-
+    prep.md, where every later pack at every employer reads it (hard_answers): the
+    question as its heading, their words as said, `Use for:` with the other wordings it
+    answers, and `Suits:`/`Not for:` with the kinds of employer it fits, which the pack
+    checks against each employer. An answer already kept for the same question is
+    replaced in place. Returns the file's path."""
+    question, answer = _text(question), _text(answer)
+    if not question or not answer:
+        raise ValueError("a question and the person's own answer are both needed")
+    kinds = {k for k, _rx in EMPLOYER_TYPES}
+    for label, given in (("--suits", suits), ("--not-for", not_for)):
+        bad = [x for x in given if x not in kinds]
+        if bad:
+            raise ValueError("%s takes kinds of employer the pack can tell apart (%s), not %s"
+                             % (label, ", ".join(sorted(kinds)), ", ".join(bad)))
+    kind = motive(question)
+    tags = list(use_for) or [t.strip() for t in next(
+        (t for k, _rx, _a, t in MOTIVES if k == kind), "").split(";") if t.strip()]
+    body = ["", "> " + answer, ""]
+    if tags:
+        body.append("Use for: %s" % "; ".join('"%s"' % t for t in tags))
+    if suits:
+        body.append("Suits: %s" % ", ".join(suits))
+    if not_for:
+        body.append("Not for: %s" % ", ".join(not_for))
+    path = path or person.path(STORIES_FILE)
+    text = _read(path)
+    lines = text.splitlines()
+    want = what_works._norm(question)
+    at = next((i for i, ln in enumerate(lines) if _HEADING.match(ln)
+               and what_works._norm(_HEADING.match(ln).group(2).strip("\"“” ")) == want), None)
+    if at is not None:
+        level = len(_HEADING.match(lines[at]).group(1))
+        end = next((j for j in range(at + 1, len(lines)) if _HEADING.match(lines[j])
+                    and len(_HEADING.match(lines[j]).group(1)) <= level), len(lines))
+        lines[at + 1:end] = body + [""]
+    else:
+        if ANSWERS_HEADING not in lines:
+            lines += ["", ANSWERS_HEADING]
+        lines += ["", '### "%s"' % question] + body
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines).rstrip() + "\n")
+    return path
 
 
 def stages_mark(ctx) -> str:
@@ -2462,7 +2955,9 @@ def pack_markdown(ctx, never_say=None) -> str:
     donts = do_not_say(ctx, never_say)
     owned = _owned(ctx["living"])
 
-    when = ", ".join(x for x in (ctx["date"], "with " + ctx["with"] if ctx["with"] else "") if x)
+    when = ", ".join(x for x in (ctx["date"], "with " + ctx["with"] + (
+        " (assumed: the recruiter who leads it)" if ctx.get("with_assumed") else "")
+        if ctx["with"] else "") if x)
     lines = ["# Interview prep: %s at %s" % (ctx["role"], ctx["company"]), "",
              "Last updated %s. Next: %s%s. One document for this whole process: change an "
              "answer here, and it is sent to you again." % (ctx["today"], ctx["stage"],
@@ -2493,12 +2988,18 @@ def pack_markdown(ctx, never_say=None) -> str:
     lines += _section("On one screen", prep._flag_banned(screen, banned) + quoted, "")
     lines += _section("Your answers", prep._flag_banned(answer_lines(ctx, answered), banned),
                       "No questions to answer yet.")
-    lines += _section("What they have been told", told_lines(ctx),
-                      "Nothing logged to anyone at %s, and no form on file." % ctx["company"])
-    lines += _section("Who you are meeting", meeting_lines(ctx),
+    # What was said to them is quoted as it was sent; only what this file tells the person
+    # to do about it is checked against the words they never use.
+    told = told_lines(ctx)
+    lines += _section("What they have been told", [ln for t in told for ln in (
+        prep._flag_banned([t], banned) if t.startswith("  - ") else [t])],
+                      "Nobody at %s is in your contact book and no form is on file: nothing they "
+                      "were told is on record." % ctx["company"])
+    lines += _section("Who you are meeting", prep._flag_banned(meeting_lines(ctx), banned),
                       "Nobody named for this stage yet: when the invite names them, rebuild this "
                       "with --with \"<name, title>\".")
-    lines += _section("The format", format_lines(ctx), "An offer: nothing to drill.")
+    lines += _section("The format", prep._flag_banned(format_lines(ctx), banned),
+                      "An offer: nothing to drill.")
 
     detail = []
     for q, a in answered:
@@ -2515,7 +3016,8 @@ def pack_markdown(ctx, never_say=None) -> str:
     lines += _section("What the paper says", paper_lines(ctx), "Nothing on file about what was sent.")
     lines += _section("Gaps and honest framing", prep._flag_banned(gap_lines(ctx), banned),
                       "No gap the posting names: lead with the matches.")
-    lines += _section("Money and eligibility", money_lines, prep.NOT_RESEARCHED)
+    lines += _section("Money and eligibility", prep._flag_banned(money_lines, banned),
+                      prep.NOT_RESEARCHED)
     company = prep._company_lines(ctx["research"], ctx["today"])
     stale = prep._stale_line(ctx["research"], ctx["today"]) if company else ""
     lines += _section("The company", company + ([stale] if stale else []),
@@ -2523,14 +3025,14 @@ def pack_markdown(ctx, never_say=None) -> str:
                       "(interview.md Step 2), then this is rebuilt." % ctx["company"])
     talk = small_talk_lines(ctx)
     found = _found_out(ctx["living"])
-    lines += _section("Small talk", talk + ["", FOUND_OUT, ""] + (found or [FOUND_EMPTY]),
-                      "")
+    lines += _section("Small talk", prep._flag_banned(talk, banned) + ["", FOUND_OUT, ""]
+                      + (found or [FOUND_EMPTY]), "")
     ask = ask_lines(ctx) + ["- Is there anything about my background you'd like me to go into "
                             "more? (the close: it gives them the last word on any doubt)"]
     lines += _section("Ask them", prep._flag_banned(ask, banned),
                       "Nothing researched to anchor a question on.")
-    lines += _section("Warm route", warm_lines(ctx), "Nobody in the contact book at %s."
-                      % ctx["company"])
+    lines += _section("Warm route", prep._flag_banned(warm_lines(ctx), banned),
+                      "Nobody in the contact book at %s." % ctx["company"])
     lines += _section("Earlier stages", earlier_lines(ctx), "No earlier stage on record.")
     lines += _section("To rework", ctx["rework"], REWORK_EMPTY)
     notes = [ln for ln in owned.get("Notes", []) if ln.strip() != NOTES_EMPTY]
@@ -2544,6 +3046,73 @@ def pack_markdown(ctx, never_say=None) -> str:
 
 def living_path(ctx) -> str:
     return os.path.join(ctx["folder"], LIVING)
+
+
+# Notes kept by hand for an employer before its living document existed: a campaign file in
+# documents/network, a call prep written by hand. /interview read neither, so what was
+# decided in them (where to say they are based for this employer, the reasons for each move)
+# was lost to the next chat. A file is folded in once, and says so in the document's Notes.
+FOLDED = "Folded in from"
+_NOTE_WORDS = re.compile(r"\b(?:campaign|prep|call|screen|interview|notes?|process|plan)\b", re.I)
+# What the tools themselves write; never hand-kept.
+_WRITTEN = frozenset({"outcome.md", "job_posting.md", "outreach.md", "screening_answers.md",
+                      LIVING, "prep.md", "draft.md"})
+
+
+# First words too common to stand for one employer on their own in a file name.
+_GENERIC = frozenset("""bank banks data group global capital consulting royal national first new
+city united digital tech labs health the insurance financial services partners""".split())
+
+
+def _names_employer(filename, key) -> bool:
+    """Does a file name name this employer? By its first word when that word is its own
+    ("fernhill_call_prep.md" for Fernhill Freight), by its first two when the first is
+    common ("royal" alone is not Royal Bank)."""
+    words = re.sub(r"[^a-z0-9]+", " ", os.path.splitext(filename)[0].lower()).split()
+    want = [w for w in key.split() if w not in ("the", "of", "and")]
+    if not want:
+        return False
+    if want[0] in _GENERIC or len(want[0]) < 4:
+        return len(want) > 1 and want[0] in words and want[1] in words
+    return want[0] in words
+
+
+def handkept_notes(tracker=None, contacts=None) -> list:
+    """[{company, role, path, living}] for every hand-kept note about an employer with a live
+    hiring process that its living document has not folded in yet: a file in documents/network
+    that names the employer, one in a contact's folder there for someone at it, or one beside
+    the process that no tool wrote."""
+    import glob
+    tracker = what_works._csv(person.state("job_search_tracker.csv")) if tracker is None \
+        else tracker
+    contacts = state.load_contacts(person.state("network_contacts.csv")) \
+        if contacts is None and os.path.exists(person.state("network_contacts.csv")) \
+        else (contacts or [])
+    top = glob.glob(person.state("documents", "network", "*.md"))
+    out = []
+    for r in tracker:
+        if not is_process(r) or _text(r.get("status")).lower() in throttle.FINAL:
+            continue
+        company, role = _text(r.get("company")), _text(r.get("role"))
+        k = company_key(company)
+        folder = outreach.app_folder(company, role)
+        living = _read(os.path.join(folder, LIVING))
+        named = [p for p in top if _NOTE_WORDS.search(os.path.basename(p).replace("_", " "))
+                 and _names_employer(os.path.basename(p), k)]
+        mine = [c for c in contacts if company_key(c.get("company")) == k]
+        for c in mine:
+            named += glob.glob(person.state("documents", "network",
+                                            _text(c.get("contact_id")) or "-", "*.md"))
+        named += glob.glob(os.path.join(folder, "*.md"))
+        for p in sorted(set(named)):
+            base = os.path.basename(p)
+            if base in _WRITTEN or base.startswith("interview_prep_"):
+                continue
+            if "%s %s" % (FOLDED, _rel(p)) in living:
+                continue
+            out.append({"company": company, "role": role, "path": _rel(p),
+                        "living": _rel(os.path.join(folder, LIVING))})
+    return out
 
 
 def write_pack(ctx, never_say=None) -> str:
@@ -2671,7 +3240,13 @@ def main(argv=None) -> int:
     pr.add_argument("--date", default="", type=_day)
     pr.add_argument("--with", dest="with_", default="")
     pr.add_argument("--format", dest="format_", default="")
+    pr.add_argument("--posting", default="", help="the posting: a file holding its text, or its "
+                                                  "link; without it the folder says it is not "
+                                                  "held yet")
     pr.add_argument("--today", type=_day)
+    po = sub.add_parser("postings", help="give every process folder that has none a "
+                                         "job_posting.md (registered before process wrote one)")
+    po.add_argument("--today", type=_day)
     cp = sub.add_parser("campaign", help="record the answer to the offer of a chat just for "
                                          "this employer")
     cp.add_argument("company")
@@ -2683,11 +3258,35 @@ def main(argv=None) -> int:
                                       "written, first person, as said rather than written")
     ck.add_argument("company")
     ck.add_argument("--role", default="")
+    mo = sub.add_parser("motive", help="keep the person's own answer to a motivation question "
+                                       "(why leaving, the moves, why this employer, where next) "
+                                       "in profile/07-interview-prep.md, for every employer")
+    mo.add_argument("question")
+    mo.add_argument("--answer", required=True, help="their words, as they said them")
+    mo.add_argument("--use-for", default="", help="other wordings it answers, ;-separated")
+    mo.add_argument("--suits", default="", help="kinds of employer it fits, comma-separated")
+    mo.add_argument("--not-for", dest="not_for", default="",
+                    help="kinds of employer it must not be said to, comma-separated")
     a = ap.parse_args(argv)
     try:
+        if a.cmd == "motive":
+            split = lambda v, sep: [x.strip().lower() for x in v.split(sep) if x.strip()]  # noqa: E731
+            path = write_motive(a.question, a.answer, [x.strip() for x in a.use_for.split(";")
+                                                       if x.strip()],
+                                split(a.suits, ","), split(a.not_for, ","))
+            print("kept in %s: every later pack, at every employer, uses it and checks it "
+                  "against the employer" % _repo_rel(path))
+            return 0
+        if a.cmd == "postings":
+            done = missing_postings()
+            for company, role, folder in done:
+                write_posting(folder, company, role, today=a.today)
+                print("written: %s/job_posting.md" % _rel(folder))
+            print("postings: %d process folder(s) given a job_posting.md" % len(done))
+            return 0
         if a.cmd == "process":
             row, folder, added = register_process(a.company, a.contact, a.role, a.stage, a.date,
-                                                  a.with_, today=a.today)
+                                                  a.with_, today=a.today, posting=a.posting)
             print("%s: %s at %s, led by %s; its folder is %s.\n"
                   % ("registered" if added else "already registered", row["role"], row["company"],
                      row["contact_person"], _rel(folder)))
@@ -2724,8 +3323,10 @@ def main(argv=None) -> int:
             todo = [q for q, b in _answer_blocks(_owned(_read(path)).get("Your answers")).values()
                     if not _own_words(b)]
             research = sum(1 for q, _w in found if q == "Research")
-            answers = len(found) - research
+            asks = sum(1 for q, _w in found if q == "Ask")
+            answers = len(found) - research - asks
             print("; ".join(x for x in (
+                "%d question(s) to ask you first: your own reasons" % asks if asks else "",
                 "%d answer(s) not fit to say yet" % answers if answers else "",
                 "%d piece(s) of research still to do" % research if research else "")
                 if x) + "." if found else "Every answer written is fit to say aloud.")
@@ -2773,10 +3374,13 @@ def _keep(ctx) -> None:
     research = [w for q, w in left if q == "Research"]
     for line in research:
         print("research first: %s" % line)
-    if len(left) > len(research):
+    asks = [w for q, w in left if q == "Ask"]
+    for line in asks:
+        print("ask the person first, once, in the plain words the document gives: %s" % line)
+    if len(left) > len(research) + len(asks):
         print("not yet fit to say: %d answer(s); write them in the document as you would say "
               "them, then `interview_pack.py check \"%s\"`"
-              % (len(left) - len(research), ctx["company"]))
+              % (len(left) - len(research) - len(asks), ctx["company"]))
     offer = campaign_offer(ctx)
     if offer:
         print("offer once, optionally, at the end of the reply: %s On a yes, automation/"

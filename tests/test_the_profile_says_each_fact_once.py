@@ -131,3 +131,13 @@ def test_sponsorship_said_both_ways_is_caught_and_never_volunteer_is_the_rule(pr
     _add(profile, "01-candidate-profile.md", "- Name the visa only when asked directly.")
     _add(profile, "07-interview-prep.md", "> Never volunteer the expiry.")
     assert C.findings() == []
+
+
+def test_a_posting_cut_line_in_the_screening_rules_is_not_a_pay_band(profile):
+    """A triage row holds a posting's stated range against a knockout line: "a range topping
+    out between 41,000 and 43,999 is ranked down, not cut" is no band of the person's."""
+    _add(profile, "10-triage-blockers.md", "| 9 | Pay | a salary range topping out between "
+         "41,000 and 43,999 is ranked down, not cut |")
+    _add(profile, "01-candidate-profile.md", "- A stated salary range whose top is under "
+         "40,000 is cut.")
+    assert C.findings() == []

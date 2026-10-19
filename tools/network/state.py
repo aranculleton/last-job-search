@@ -37,6 +37,7 @@ avoid.
 Usage:
     python3 tools/network/state.py [--today YYYY-MM-DD]
     python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
+    python3 tools/network/state.py text <contact_id> --date YYYY-MM-DD --text-file <file>
 """
 
 from __future__ import annotations
@@ -1365,6 +1366,50 @@ def closed_but_dropped(contacts, threads) -> list:
             and _DROPPED_WORDS.search(" ".join(str(c.get(k) or "") for k in ("outcome", "notes")))]
 
 
+def fill_text(threads, contact_id, date, text) -> dict:
+    """Put the words of a message already logged with no text into its row: the one
+    outbound row to this contact on this date that has none. An interview pack could not
+    say what a referrer had been told, because the message was logged as a summary."""
+    text = str(text or "").strip()
+    if not text:
+        raise ValueError("no text to add")
+    rows = [r for r in threads if str(r.get("contact_id") or "").strip() == contact_id
+            and _direction(r) == "out" and str(r.get("date") or "").strip() == date]
+    empty = [r for r in rows if not str(r.get("full_text") or "").strip()]
+    if not rows:
+        raise ValueError(f"no message to {contact_id} on {date} is logged")
+    if not empty:
+        raise ValueError(f"the message to {contact_id} on {date} already has its text")
+    if len(empty) > 1:
+        raise ValueError(f"{len(empty)} messages to {contact_id} on {date} have no text: "
+                         "add it to the right one by hand")
+    empty[0]["full_text"] = text
+    return empty[0]
+
+
+def _cli_text(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py text",
+        description="Add the words of a message logged with no text (its summary only).")
+    ap.add_argument("contact_id")
+    ap.add_argument("--date", required=True, help="the day it went, as logged")
+    ap.add_argument("--text-file", required=True, help="the message as it was sent")
+    ap.add_argument("--threads", default="")
+    a = ap.parse_args(argv)
+    path = a.threads or person.state("network_threads.csv")
+    with open(a.text_file, encoding="utf-8") as fh:
+        text = fh.read()
+    threads = load_threads(path)
+    try:
+        fill_text(threads, a.contact_id, a.date, text)
+    except ValueError as e:
+        print(f"text: not added: {e}")
+        return 1
+    save_threads(threads, path)
+    print(f"text: added to the message to {a.contact_id} on {a.date}")
+    return 0
+
+
 def _cli_sent(argv) -> int:
     ap = argparse.ArgumentParser(
         prog="state.py sent",
@@ -1731,6 +1776,8 @@ def main(argv=None) -> int:
         return _cli_withdraw(argv[1:])
     if argv[:1] == ["sent"]:
         return _cli_sent(argv[1:])
+    if argv[:1] == ["text"]:
+        return _cli_text(argv[1:])
     if argv[:1] in (["reopen"], ["drop"]):
         return _cli_reopen_or_drop(argv[1:], argv[0])
     if argv[:1] == ["dropped-rows"]:

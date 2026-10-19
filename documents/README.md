@@ -81,8 +81,9 @@ Each folder holds:
   `{"chat", "started"}` or `{"declined"}`. Written once by `interview_pack.py campaign`;
   `tools/open_actions.py` and the brief leave an employer with a campaign chat to it.
 - A process with no application (a referral that led to a recruiter's call) has a folder
-  too, made by `interview_pack.py process`: `outcome.md` and the living document, and none of
-  the application files above.
+  too, made by `interview_pack.py process`: `outcome.md`, the living document and a
+  `job_posting.md` (the posting's text when `--posting` gives it, else a line saying it is
+  not held yet), and none of the other application files above.
 - **`outcome.md`** - written by `/outcome` once there is a result. Later sessions and
   `tools/what_works.py` read it, so the header is fixed:
 

@@ -288,7 +288,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
                                                                  "connections-export", "work-place",
-                                                                 "profile-consistency"}
+                                                                 "profile-consistency",
+                                                                 "campaign-notes"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -298,6 +299,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert "computer, or on your phone or the web" in U.by_id("work-place").ask
     # Two answers to what a recruiter checks first: only the person knows which is true.
     assert "you pick the right one" in U.by_id("profile-consistency").ask
+    # Their own notes are folded into the prep document only on their yes.
+    assert "Can I fold them into it" in U.by_id("campaign-notes").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):
@@ -609,3 +612,57 @@ def test_a_story_with_no_use_for_line_is_tagged_in_the_background(profile):
                  encoding="utf-8")
     assert u.pending().startswith("1 STAR story in profile/07-interview-prep.md")
     assert "An untagged one" in u.pending()
+
+
+def _process_state(tmp_path, monkeypatch):
+    """A state root holding one hiring process with no application, as 3.7.0 registered it:
+    its folder and outcome.md, and no job_posting.md. Invented employer and contact."""
+    import csv
+    import outreach
+    import record_drafts
+    st = tmp_path / "state"
+    st.mkdir()
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    row = {k: "" for k in record_drafts.HEADER}
+    row.update(date="2026-10-19", company="Calder & Rook Consulting", role="Operations Analyst",
+               status="interview", channel="referral", source="contact:calder_rook_vance",
+               notes="process, no portal application: led by Ivo Vance")
+    with open(st / "job_search_tracker.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=record_drafts.HEADER)
+        w.writeheader()
+        w.writerow(row)
+    folder = outreach.app_folder(row["company"], row["role"])
+    os.makedirs(folder)
+    with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Outcome: Calder & Rook Consulting - Operations Analyst\n")
+    return st, folder
+
+
+def test_a_process_folder_with_no_posting_is_given_one(profile, tmp_path, monkeypatch):
+    _st, folder = _process_state(tmp_path, monkeypatch)
+    assert "1 hiring process folder(s) with no job_posting.md" in \
+        U.by_id("process-postings").pending()
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "interview_pack.py"),
+                        "postings"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    text = open(os.path.join(folder, "job_posting.md"), encoding="utf-8").read()
+    assert "not held yet" in text and "--posting" in text
+    assert U.by_id("process-postings").pending() == ""
+
+
+def test_hand_kept_notes_for_a_process_are_offered_once_to_fold_in(profile, tmp_path,
+                                                                    monkeypatch):
+    st, folder = _process_state(tmp_path, monkeypatch)
+    assert U.by_id("campaign-notes").pending() == ""            # nothing kept by hand
+    net = st / "documents" / "network"
+    net.mkdir(parents=True)
+    (net / "calder_rook_campaign.md").write_text("Say I am based in Manchester.\n",
+                                                  encoding="utf-8")
+    (net / "open_actions.md").write_text("Everything owed.\n", encoding="utf-8")   # not theirs
+    why = U.by_id("campaign-notes").pending()
+    assert "documents/network/calder_rook_campaign.md" in why and "open_actions" not in why
+    # Folded in: the process's document says so in its Notes, and it is not asked again.
+    with open(os.path.join(folder, "interview_prep.md"), "w", encoding="utf-8") as fh:
+        fh.write("## Notes\n\n- Folded in from documents/network/calder_rook_campaign.md on "
+                 "2026-10-20.\n")
+    assert U.by_id("campaign-notes").pending() == ""

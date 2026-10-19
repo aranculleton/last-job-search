@@ -546,8 +546,16 @@ def _move_and_area() -> str:
         return ""
     ident = person.data("person").get("identity") or {}
     missing = [k for k in ("moved", "area") if k not in ident]
-    return ("person.json has no identity.%s: an interview pack cannot tell whether you moved "
-            "recently, or where you live" % " or identity.".join(missing)) if missing else ""
+    if missing:
+        return ("person.json has no identity.%s: an interview pack cannot tell whether you moved "
+                "recently, or where you live" % " or identity.".join(missing))
+    # A marker where the date goes: the first version of this upgrade had no form for a
+    # profile that only confirms they were there by a date, and wrote one.
+    moved = str(ident.get("moved") or "").strip()
+    if not re.fullmatch(r"none|just arrived|(?:by\s+)?\d{4}-\d{2}(?:-\d{2})?", moved, re.I):
+        return ("person.json identity.moved is %r, not a date or \"none\": the interview pack's "
+                "small talk for someone who moved recently stays off" % moved[:60])
+    return ""
 
 
 def _work_auth_employer() -> str:
@@ -581,6 +589,33 @@ def _interview_tags() -> str:
             "profile/07-interview-prep.md say which questions they answer nowhere, so an "
             "interview pack cannot match them: " + "; ".join(bare[:3])
             + (f"; {len(bare) - 3} more" if len(bare) > 3 else ""))
+
+
+def _process_postings() -> str:
+    """A process folder with no job_posting.md: 3.7.0's `process` wrote none, and the app's
+    folder test then failed the person's own CI, so they could not land work."""
+    found = _probe("import interview_pack as p; print(len(p.missing_postings()))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d hiring process folder(s) with no job_posting.md: the folder check in your own "
+            "CI fails until each has one" % n) if n else ""
+
+
+def _campaign_notes() -> str:
+    """Notes kept by hand for an employer with a hiring process, from before its living prep
+    document existed: what was decided in them is lost to the next chat until it is folded
+    in."""
+    if not person.exists():
+        return ""
+    found = _probe("import json, interview_pack as p; print(json.dumps(p.handkept_notes()))")
+    try:
+        rows = json.loads(found) if found else []
+    except ValueError:
+        return ""
+    if not rows:
+        return ""
+    return ("%d note file(s) kept by hand for a hiring process that its prep document has not "
+            "folded in: %s" % (len(rows), "; ".join("%s (%s)" % (r["path"], r["company"])
+                                                      for r in rows[:3])))
 
 
 def _profile_consistency() -> str:
@@ -997,6 +1032,27 @@ REGISTRY: tuple[Upgrade, ...] = (
                 "first. Can I show you which, so you pick the right one?",
             why_ask="A form, a letter and an interview pack each read one of them, and a "
                     "recruiter remembers whichever they heard first."),
+    Upgrade("process-postings", "2026-10-19",
+            "every hiring process folder holds a job_posting.md, so your own checks stay green",
+            _process_postings, "python3 tools/interview_pack.py postings", "instant",
+            command=("python3", "tools/interview_pack.py", "postings"),
+            paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
+    Upgrade("campaign-notes", "2026-10-19",
+            "notes you kept by hand for an interview, before its prep document existed, "
+            "folded into it so the next chat has them",
+            _campaign_notes, "python3 -c \"import sys; sys.path[:0]=['tools','tools/network']; "
+            "import json, interview_pack as p; print(json.dumps(p.handkept_notes(), indent=1))\""
+            " lists each file and its prep document. For each, after a yes: build the document "
+            "if it is missing (interview_pack.py pack \"<employer>\" --write); put each answer "
+            "the file holds under its question in Your answers, and each decision in Notes, as "
+            "it is written there; a fact about the person goes to profile/01-candidate-profile.md "
+            "instead, and a stock answer to profile/07-interview-prep.md (interview_pack.py "
+            "motive); then add to Notes \"- Folded in from <path> on <date>.\" Leave the file "
+            "where it is", "question", "~5 min", priority=2, needs="you", conditional=True,
+            ask="You kept notes for an interview before its prep document existed. Can I fold "
+                "them into it, so the next chat has them?",
+            why_ask="What was decided in them, like where you say you are based or why you "
+                    "moved, is otherwise lost to the next chat."),
     Upgrade("dropped-rows", "2026-10-19",
             "people you set aside before writing, kept apart from real dead ends and easy to "
             "reopen",
@@ -1013,9 +1069,12 @@ REGISTRY: tuple[Upgrade, ...] = (
     Upgrade("move-and-area", "2026-10-19",
             "honest small talk prepared for an interview when you moved recently",
             _move_and_area, "read profile/01-candidate-profile.md and profile/CLAUDE.md; write "
-            "person.json identity.moved as YYYY-MM when they record a move in the last year "
-            "(else \"none\") and identity.area as the neighbourhood and city they give (else "
-            "the location); invent nothing", "edit", "~1 min",
+            "person.json identity.moved as YYYY-MM or YYYY-MM-DD when they record when they moved "
+            "in the last year, as \"by YYYY-MM-DD\" when the profile only confirms they were "
+            "there by a date (\"in <city>, confirmed <date>\"), as \"just arrived\" when their "
+            "own rule (learned.py brief interview) is to say only that, with no date, else "
+            "\"none\"; and identity.area as the neighbourhood and city they give (else the "
+            "location); invent nothing", "edit", "~1 min",
             names=("person.json:identity.moved", "person.json:identity.area"), priority=3),
     Upgrade("work-auth-employer", "2026-10-19",
             "recruiters hear your work authorization in your own employer-facing words",
@@ -1265,6 +1324,7 @@ def _changed() -> set[str]:
 # when the person says no other chat is open.
 OWNER_MINUTES = 20
 SYNC_SUBJECT = "^Sync from the app: "
+MERGE_MASTER = "git fetch origin master && git merge origin/master"
 
 
 def _marker() -> str:
@@ -1272,13 +1332,78 @@ def _marker() -> str:
     return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), "ljs-upgrade-owner")
 
 
+MASTER = "refs/remotes/origin/master"
+
+
+def _personal_repo() -> bool:
+    """A person's own repo, with its profile at the root: the only place another chat's work
+    can be waiting on master. The app (and its tests) never fetches from here."""
+    return os.path.isdir(os.path.join(ROOT, "profile"))
+
+
+def fetch_master() -> None:
+    """origin/master as it is now, so what another chat landed is seen before this one starts
+    the same work. Best effort: offline, the last fetch stands."""
+    try:
+        subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", "master"],
+                       capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def done_on_master() -> set[str]:
+    """The upgrades another chat applied and landed on master that this chat does not hold
+    yet: a `Profile upgrade: <id>` commit on origin/master that HEAD does not contain. Two
+    chats once applied the same four upgrades and the same own-test fixes, and merging
+    master conflicted on five files with the same intent."""
+    if _git("rev-parse", "-q", "--verify", MASTER).returncode != 0:
+        return set()
+    out = _git("log", "--format=%s", f"HEAD..{MASTER}", "--grep=^Profile upgrade: ").stdout
+    return {ln.split(":", 1)[1].strip() for ln in out.splitlines()
+            if ln.startswith("Profile upgrade: ") and ln.split(":", 1)[1].strip()}
+
+
+def _landed_elsewhere(sha: str, parents: list[str]) -> int:
+    """When another chat's sync brought the same update onto master first, the time its sync
+    was made; else 0. Both chats sync the same app commit, each in its own commit: the one
+    on master owns it, whichever chat claimed it locally."""
+    app = parents[1] if len(parents) > 1 else ""
+    if not app or _git("rev-parse", "-q", "--verify", MASTER).returncode != 0:
+        return 0
+    if _git("merge-base", "--is-ancestor", sha, MASTER).returncode == 0:
+        return 0                                    # this chat's own sync is the one landed
+    if _git("merge-base", "--is-ancestor", app, MASTER).returncode != 0:
+        return 0                                    # master does not carry this update yet
+    for ln in _git("log", "--merges", "--format=%H %ct %P", f"--grep={SYNC_SUBJECT}",
+                   MASTER).stdout.splitlines():
+        f = ln.split()
+        if len(f) >= 3 and app in f[2:]:
+            return int(f[1])
+    return 0
+
+
 def owner_elsewhere(now: float | None = None) -> str:
     """"" when this chat owns the pending upgrades, else the time another chat's turn ends."""
     import time
-    r = _git("log", "-1", "--format=%H %ct", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.split()
-    if len(r) != 2:
+    r = _git("log", "-1", "--format=%H %ct %P", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.split()
+    if len(r) < 2:
         return ""
     sha, when = r[0], int(r[1])
+    try:
+        with open(_marker(), encoding="utf-8") as f:
+            if f.read().strip() == "taken " + sha:
+                return ""                           # handed over by --take: no other chat open
+    except OSError:
+        pass
+    # Checked before this chat's own claim: two chats that synced the same update a minute
+    # apart each claimed it, and both applied it. The one whose sync reached master first
+    # owns it.
+    theirs = _landed_elsewhere(sha, r[2:])
+    if theirs:
+        ends = theirs + OWNER_MINUTES * 60
+        if (now if now is not None else time.time()) >= ends:
+            return ""
+        return time.strftime("%H:%M UTC", time.gmtime(ends))
     try:
         with open(_marker(), encoding="utf-8") as f:
             if f.read().strip() == sha:
@@ -1296,14 +1421,16 @@ def owner_elsewhere(now: float | None = None) -> str:
     return time.strftime("%H:%M UTC", time.gmtime(ends))
 
 
-def claim() -> None:
+def claim(taken: bool = False) -> None:
     """Mark the update this chat's sync brought in as this chat's, for its background
-    /upgrade too: worktrees share the git directory the marker lives in."""
+    /upgrade too: worktrees share the git directory the marker lives in. `taken` is the
+    person's word that no other chat is open (--take), which outranks a sync another chat
+    landed first."""
     r = _git("log", "-1", "--format=%H", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.strip()
     if r:
         try:
             with open(_marker(), "w", encoding="utf-8") as f:
-                f.write(r + "\n")
+                f.write(("taken " if taken else "") + r + "\n")
         except OSError:
             pass
 
@@ -1370,15 +1497,34 @@ def main(argv: list[str] | None = None) -> int:
               f"\"{NO_REPLY}\"")
         return 0
     if a.take:
-        claim()
+        claim(taken=True)
         print("profile_upgrades: this chat owns the pending upgrades now; apply them "
               "(`profile_upgrades.py --plan`, then /upgrade in the background)")
         return 0
     if a.check:
+        # Right before an upgrade starts, master is checked: another chat may have landed it.
+        if _personal_repo():
+            fetch_master()
+        if a.check in done_on_master():
+            print(f"done on master by another chat: merge it ({MERGE_MASTER}), never apply "
+                  "it again here")
+            return 0
         why = by_id(a.check).pending()
         print(why or "done")
         return 1 if why else 0
+    if _personal_repo() and (a.after or a.plan):
+        fetch_master()
     rows = pending()
+    landed = done_on_master() if rows else set()
+    if landed:
+        # Applied by another chat and on master already: this chat merges them, never makes
+        # them again, so the two never meet as a conflict.
+        rows = [(u, why) for u, why in rows if u.id not in landed]
+        if not a.plan:
+            print(f"Profile upgrades: {len(landed)} already applied on master by another chat "
+                  f"({', '.join(sorted(landed))}): merge master ({MERGE_MASTER}); where one of "
+                  "their files conflicts, take master's copy, since an upgrade makes the same "
+                  "change wherever it runs.")
     if a.after:
         import merge_state
         merge_state.install(ROOT)
@@ -1404,10 +1550,11 @@ def main(argv: list[str] | None = None) -> int:
         elif rows:
             print(f"Profile upgrades: {len(rows)} pending. They belong to another chat on this "
                   f"repo, the one whose sync brought this update in, until {elsewhere}: this chat "
-                  f"got the update by merging master. Claude: start nothing and ask nothing about "
-                  f"them; after {elsewhere} the next sync hands them to this chat. If the person "
-                  "says no other chat is open, take them now: python3 tools/profile_upgrades.py "
-                  "--take")
+                  f"got the update by merging master, or synced it after that chat's sync landed. "
+                  f"Claude: start nothing and ask nothing about them; merge master first "
+                  f"({MERGE_MASTER}). After {elsewhere} the next sync hands what is still pending "
+                  "to this chat. If the person says no other chat is open, take them now: "
+                  "python3 tools/profile_upgrades.py --take")
         else:
             print("Profile upgrades: none pending.")
         return 0

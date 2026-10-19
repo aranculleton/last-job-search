@@ -20,6 +20,68 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Your reasons are asked, never written for you.** Why you are leaving or looking, why each
+  move, why this employer, where you are heading: dates and employers cannot say why, and the
+  prep used to say "draft one from the profile, facts only". Where no answer of yours covers
+  one, the document asks you once, in one plain question, and your answer is kept in
+  `profile/07-interview-prep.md` (`interview_pack.py motive`), with the other wordings it
+  answers (`Use for:`) and the kinds of employer it fits (`Suits:`, `Not for:`), for every
+  later employer. The prep check waits until it is answered.
+- **What was read, and what was never logged.** "What they have been told" now starts with
+  each person at the employer and every message to them, by date, and flags a message logged
+  with no text: check what it said about where you are, notice and pay. `state.py text
+  <contact> --date <date> --text-file <file>` adds the words afterwards.
+- **"Which team is this for?"** asked first when the employer has more than one posting for
+  the role (seen in the search, or said in your notes), and a recruiter screen asks about the
+  process: the stages, the next round's format, travel where the work travels.
+- **Notes you kept by hand are folded in, on your yes.** A campaign file or a call prep you
+  wrote for an employer before its prep document existed is found, and you are asked once
+  whether to fold it in, so what was decided in it reaches the next chat. Profile upgrade:
+  campaign-notes.
+
+### Changed
+
+- **Your stock answers are found, and checked against the employer.** A heading that names
+  your current employer ("Why are you leaving <employer>?"), holds two wordings, or is
+  reached through its `Use for:` line now answers the question, and is flagged CAREFUL when
+  its `Not for:` or `Suits:` line, or its own words, work against this employer. One that
+  fits is taken before one that does not, and one that would hurt here is listed under what
+  not to say even when this stage does not ask its question.
+- **The warm route reads what you wrote on the row.** A call booked or a referral in flight,
+  stored on the contact, wins over the message log: nothing is owed to the person who booked
+  the stage. Whoever put you forward is listed, found through the recruiter's `referred_by`
+  too, with the referrer's rule: thanks once, then no update until there is an outcome,
+  unless they ask. Before, the prep said to tell them the interview was booked. That is what
+  changes in a test of your own that expects "Tell them the interview is booked".
+- **A recruiter screen with nobody named is assumed to be with the recruiter** who leads the
+  process or booked it, and the document says it assumed so.
+- **"Just arrived", or "by <date>", is enough for the small talk about a move.** Where your
+  own rule is to say only that you have just arrived, no date or month is printed anywhere.
+  Profile upgrade: move-and-area (it writes either, where it had written a CONFIRM marker).
+- **Every hiring process folder holds a `job_posting.md`**: the posting's text with
+  `process --posting <file>`, else a line saying it is not held yet, which nothing reads as a
+  requirement. Without one, the app's folder check failed your own CI. Profile upgrade:
+  process-postings (instant).
+- **One chat applies an update's upgrades, even when two synced it.** Master is checked
+  before a chat is told to start, and again before each upgrade: one another chat already
+  landed is merged, never made twice, and the sync says so. The chat whose sync reached master
+  first owns the rest; `--take` still hands them over when no other chat is open. RUNBOOK.md,
+  "Two chats applied the same profile upgrade", says what to do if it happens anyway.
+
+### Fixed
+
+- **No sentence you never use is put in your mouth.** The prep said `Say "I made the move"`
+  where a message disagreed with your profile, a phrase on one person's never-say list. Every
+  section the prep writes is now checked against your list; what was said to someone is
+  quoted as it was sent.
+- **A round's format is quoted only for that round.** The technical round's prep quoted the
+  screen's "virtual, 30 minutes".
+- **A posting's cut line is not your pay band.** The consistency check read a screening
+  rule ("a range topping out between ... is ranked down, not cut") as a band that disagreed
+  with your target.
+
 ## [3.7.0] - 2026-10-19
 
 ### Added

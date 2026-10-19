@@ -88,9 +88,12 @@ Every session in a person's repo starts with the same five steps, before anythin
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
    - **One chat per update.** Only the chat whose own sync brought an update in applies its
-     upgrades and asks its questions. Any other chat open on the repo is told they belong to
-     another chat until a time 20 minutes on, and starts nothing and asks nothing; after
-     that its next sync hands them over. When the person says no other chat is open,
+     upgrades and asks its questions; where two chats synced the same update, the one whose
+     sync reached master first. Master is checked before any chat is told to start, and
+     again before each upgrade: one another chat landed is merged, never made twice. Any
+     other chat open on the repo is told they belong to another chat until a time 20
+     minutes on, and starts nothing and asks nothing; after that its next sync hands them
+     over. When the person says no other chat is open,
      `python3 tools/profile_upgrades.py --take` hands them over at once. So the chat that
      brought the update in lands that sync on master promptly, before its other work.
 

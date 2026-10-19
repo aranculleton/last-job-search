@@ -341,8 +341,11 @@ def test_hooks_are_sourced_and_old_research_says_so(app):
 
 def test_a_referrer_is_told_and_a_known_interviewer_is_reused(app):
     warm = _section(_pack(), "Warm route")
+    # The networking skill's rule for a referrer: thanks once, then no update until there is
+    # an outcome, unless they ask (3.7.0 told the candidate to report the booking).
     assert warm[0].startswith("- Hal Okonedo, Transport Analyst put you forward "
-                              "[referral_in_progress]. Tell them the interview is booked")
+                              "[referral_in_progress]. If you have not thanked them yet, once")
+    assert "no update until there is an outcome, unless they ask" in warm[0]
     assert any(ln.startswith("- Shirin Example, Head of Planning is interviewing you and is in "
                              "your contact book [in_conversation]: reuse documents/network/"
                              "fernhill_freight_example/prep.md") for ln in warm)

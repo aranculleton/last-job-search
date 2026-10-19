@@ -28,7 +28,9 @@ For each `needs: "nobody"` entry, until the budget is spent:
 
 0. `python3 tools/profile_upgrades.py --check <id>` first: an upgrade done earlier in this
    list can have done this one too (`boards` and `method-boards` both run the boards
-   section). If it prints `done`, skip it.
+   section), and another chat may have landed it on master since the plan was made (it
+   checks master each time). If it prints `done`, skip it; `done on master` means merge
+   master instead, never apply it again here.
 1. Do its `run` on its own: the `/setup` section it names, run alone on the existing
    profile (setup.md, "Run for a profile upgrade"); `/add-portal`; or the edit it
    describes. Touch nothing else in the profile.
