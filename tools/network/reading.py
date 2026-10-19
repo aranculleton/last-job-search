@@ -1856,8 +1856,9 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
     more", then the next card. Taking the first line after Withdraw as the next name
     named every later card after the note above it. So a card is the two lines before
     its "Sent" line, its name and its headline, and whatever sits between the last
-    Withdraw and those two (to the fold, when there is one) is a note, never kept: it is
-    the person's own words, and nobody's name.
+    Withdraw and those two (to the fold, when there is one) is the note of the card
+    above it, never a name: kept on that card as `note` (`note_cut` where the page folds
+    it), so a send recorded from this page logs the words the person wrote.
     """
     today = today or datetime.date.today()
     out, block = [], []
@@ -1866,6 +1867,9 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
         if m:
             people = [x for x in block if not _INVITE_NOISE.match(x) and not _NOISE.match(x)
                       and not _CARD_SKIP.search(x)]
+            if len(people) > 2 and out and "note" not in out[-1]:
+                # A note with no fold: its lines run on into the next card's two.
+                out[-1]["note"], out[-1]["note_cut"] = " ".join(people[:-2])[:1000], False
             if people:
                 if m.group(1):
                     when = today - datetime.timedelta(days=0 if m.group(1).lower() == "today" else 1)
@@ -1878,7 +1882,12 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
             block = []
             continue
         if _MORE_LINE.match(line):
-            block = []                  # a note's preview ends here: the next card starts
+            # A note's preview ends here, cut by the page: the card above it wrote it, and
+            # the next card starts.
+            words = [x for x in block if not _INVITE_NOISE.match(x) and not _NOISE.match(x)]
+            if words and out and "note" not in out[-1]:
+                out[-1]["note"], out[-1]["note_cut"] = " ".join(words)[:1000], True
+            block = []
             continue
         if _INVITE_NOISE.match(line):
             if line.lower() == "withdraw":
@@ -3021,7 +3030,7 @@ def _cli_invitations(a) -> int:
         return EXIT["check"]
     cards = invitations(text)
     total = invitations_total(text)
-    rec = page_read("invitations", a.url, now, people=len(cards))
+    rec = page_read("invitations", a.url, now, people=len(cards), load_seconds=a.load_seconds)
     contacts = state.load_contacts()
     threads = state.load_threads()
     got = match_invitations(cards, contacts, threads=threads, total=total)
@@ -3036,7 +3045,8 @@ def _cli_invitations(a) -> int:
         if a.record:
             try:
                 state.sent(contacts, threads, c["contact_id"], datetime.date.today(),
-                           date=card["sent"], outside=True)
+                           date=card["sent"], outside=True, text=card.get("note", ""),
+                           preview=bool(card.get("note_cut")))
                 done += 1
                 line += ": recorded as sent, draft removed"
             except ValueError as e:
@@ -3081,7 +3091,7 @@ def _cli_people(a) -> int:
         print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped for today")
         return EXIT["check"]
     people = people_page(text, a.company)
-    rec = page_read("people", a.url, now, people=len(people))
+    rec = page_read("people", a.url, now, people=len(people), load_seconds=a.load_seconds)
     contacts = state.load_contacts()
     # Counted apart: every card was counted as at the employer, people elsewhere too.
     count = {w: sum(1 for p in people if p.get("where") == w) for w in ("at", "elsewhere", "unknown")}

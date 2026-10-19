@@ -38,6 +38,10 @@ Usage:
     python3 tools/network/state.py [--today YYYY-MM-DD]
     python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
     python3 tools/network/state.py text <contact_id> --date YYYY-MM-DD --text-file <file>
+    python3 tools/network/state.py sent <contact_id>... (--text-file <file> | --draft | --no-note |
+        --outside) [--channel inmail --subject "..."] [--date YYYY-MM-DD]
+    python3 tools/network/state.py resent <contact_id> [--text-file <file>] [--date ...] [--subject ...]
+    python3 tools/network/state.py unsend <contact_id>
 """
 
 from __future__ import annotations
@@ -1186,18 +1190,30 @@ SEND_ACTION = re.compile(r"\b(?:send|sent|connection (?:note|request)|request|in
                          r"first note|message)\b", re.I)
 
 
+# Why the words are required. The message that drew a reply from a senior reader within
+# three hours reached the log days later, pasted in by the person, and every earlier one
+# that drew a reply was logged as "approach" with no text: what_works.py can learn
+# nothing from a message it cannot read.
+NEEDS_TEXT = ("the words that went are needed, so this message can teach what works: "
+              "--text-file <file> with the message as sent (edits included), or --draft if it "
+              "went exactly as drafted; a request with no note: --no-note")
+NEEDS_SUBJECT = "an InMail's subject is needed too: --subject \"<the subject as sent>\""
+
+
 def sent(contacts, threads, contact_id, today, date=None, channel="connection", text="",
-         outside=False, note=True) -> dict:
+         outside=False, note=True, subject="", preview=False) -> dict:
     """Record that a note or a request went: the message row, the contact row, and the
     unsent draft gone. One command for the three steps /network lists, which a person
     sending from the LinkedIn app left undone: the queue then said "send now" to two
     people whose profiles already showed Pending.
 
-    `text` is the message as sent. `outside` is a request sent from LinkedIn itself
-    whose words were not seen: logged with no text, so it is never an example of what
-    works. `note=False` is a request with no note. Both lists change in place; the
-    caller saves them. Raises ValueError for a contact not in the book or one already
-    written to.
+    `text` is the message as sent, required unless it is a request with no note
+    (`note=False`); an InMail needs its `subject` too. `outside` is a request sent from
+    LinkedIn itself: logged with the note the invitations page showed when there was one
+    (`preview` when the page cut it at "show more"), and with no text when its words were
+    not seen, so it is never an example of what works. Both lists change in place; the
+    caller saves them. Raises ValueError for a contact not in the book, one already
+    written to, or a send with its words missing.
     """
     day = _need_date(date or today, "date")
     cid = str(contact_id or "").strip()
@@ -1209,17 +1225,29 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
         raise ValueError(f"{contact.get('name') or cid} already has a message logged on "
                          f"{rows[-1].get('date')}: nothing to record")
     channel = str(channel or "connection").strip().lower()
-    body = " ".join(str(text or "").split()) if not outside else ""
-    if channel == "connection" and outside:
+    body = " ".join(str(text or "").split())
+    subject = " ".join(str(subject or "").split())
+    if not outside:
+        if not body and (channel != "connection" or note):
+            raise ValueError(NEEDS_TEXT)
+        if channel == "inmail" and not subject:
+            raise ValueError(NEEDS_SUBJECT)
+    if channel == "connection" and outside and body:
+        scenario = "connection_note"
+        summary = ("Connection request with a note, sent from LinkedIn itself; the note as the "
+                   "invitations page showed it" + (", cut where the page folds it" if preview
+                                                    else ""))
+    elif channel == "connection" and outside:
         scenario = OUTSIDE_SCENARIO
+        summary = "Connection request sent from LinkedIn itself; its words were not seen"
     elif channel == "connection":
         scenario = "connection_note" if (note and body) else "connection_request"
+        summary = "First note sent"
     else:
         scenario = "first_message"
-    summary = ("Connection request sent from LinkedIn itself; its words were not seen"
-               if outside else f"First {'note' if channel == 'connection' else channel} sent")
+        summary = f"First {channel} sent"
     row = {"contact_id": cid, "date": day.isoformat(), "direction": "out", "channel": channel,
-           "scenario": scenario, "summary": summary, "full_text": body}
+           "scenario": scenario, "summary": summary, "full_text": body, "subject": subject}
     threads.append(row)
     if not str(contact.get("first_contacted") or "").strip():
         contact["first_contacted"] = day.isoformat()
@@ -1246,6 +1274,89 @@ def _drop_draft(contact_id: str) -> bool:
         os.remove(path)
         return True
     return False
+
+
+def _first_out(threads, cid) -> int | None:
+    rows = [i for i, r in enumerate(threads)
+            if str(r.get("contact_id") or "").strip() == cid and _direction(r) == "out"]
+    return rows[-1] if rows else None
+
+
+def resent(contacts, threads, contact_id, today, text="", date=None, subject="") -> dict:
+    """Correct the last message logged to them: it went on another day, or with other words.
+    A chat that recorded a batch as sent, then heard one went later or with edits, had to
+    edit the thread and contact rows by hand (date, text, first contact, follow-up due).
+    Returns {"row", "before"} (the row as it is now, the text it replaced)."""
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    i = _first_out(threads, cid)
+    if i is None:
+        raise ValueError(f"nothing is logged as sent to {contact.get('name') or cid}: "
+                         "record it with state.py sent")
+    if not str(text or "").strip() and not date and not subject:
+        raise ValueError("name what changed: --text-file, --date or --subject")
+    row = threads[i]
+    before = row.get("full_text") or ""
+    old_day = row.get("date")
+    if str(text or "").strip():
+        row["full_text"] = " ".join(str(text).split())
+        if row.get("scenario") == OUTSIDE_SCENARIO:
+            row["scenario"] = "connection_note"
+    if subject:
+        row["subject"] = " ".join(str(subject).split())
+    if date:
+        day = _need_date(date, "date")
+        row["date"] = day.isoformat()
+        firsts = [r for r in threads if str(r.get("contact_id") or "").strip() == cid
+                  and _direction(r) == "out"]
+        if str(contact.get("first_contacted") or "") in ("", old_day) or len(firsts) == 1:
+            contact["first_contacted"] = min(as_date(r.get("date")) or day
+                                             for r in firsts).isoformat()
+        if str(contact.get("status") or "") == "awaiting_reply":
+            contact["next_action_due"] = add_business_days(
+                day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+    return {"row": row, "before": before}
+
+
+def unsend(contacts, threads, contact_id, today) -> dict:
+    """The person says it did not go: the last message logged to them comes off the log,
+    and the note goes back to their draft so the queue offers it again. Only a message
+    nothing came back to: a reply after it means it went."""
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    i = _first_out(threads, cid)
+    if i is None:
+        raise ValueError(f"nothing is logged as sent to {contact.get('name') or cid}")
+    row = threads[i]
+    later = [r for r in threads[i + 1:] if str(r.get("contact_id") or "").strip() == cid
+             and _direction(r) == "in"]
+    if later:
+        raise ValueError(f"{contact.get('name') or cid} replied after it ({later[0].get('date')}),"
+                         " so it went: correct it with state.py resent instead")
+    del threads[i]
+    left = [r for r in threads if str(r.get("contact_id") or "").strip() == cid
+            and _direction(r) == "out"]
+    if not left:
+        contact["first_contacted"] = ""
+        contact["status"] = "not_contacted"
+        contact["next_action"] = "Send: the note in their draft"
+        contact["next_action_due"] = ""
+    else:
+        contact["next_action_due"] = add_business_days(
+            as_date(left[-1].get("date")) or _need_date(today, "today"),
+            schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+    restored = ""
+    if row.get("full_text"):
+        try:
+            import reading
+            restored = reading.write_draft(cid, row["full_text"], contact.get("name") or "")
+        except (ImportError, OSError, ValueError):
+            restored = ""
+    return {"row": row, "draft": restored}
 
 
 def never_messaged(contact, threads) -> bool:
@@ -1424,6 +1535,7 @@ def _cli_sent(argv) -> int:
     ap.add_argument("--outside", action="store_true",
                     help="sent from LinkedIn itself, words not seen (a request seen as Pending)")
     ap.add_argument("--no-note", action="store_true", help="a connection request with no note")
+    ap.add_argument("--subject", default="", help="an InMail's subject as sent")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
@@ -1438,6 +1550,7 @@ def _cli_sent(argv) -> int:
         if a.text_file:
             with open(a.text_file, encoding="utf-8") as fh:
                 text = fh.read()
+            _learn_edit(cid, text)
         elif a.draft:
             import reading
             try:
@@ -1450,7 +1563,7 @@ def _cli_sent(argv) -> int:
                 text = text.split("\n\n", 1)[-1]
         try:
             row = sent(contacts, threads, cid, a.today, date=a.date or None, channel=a.channel,
-                       text=text, outside=a.outside, note=not a.no_note)
+                       text=text, outside=a.outside, note=not a.no_note, subject=a.subject)
         except ValueError as e:
             print(f"  not recorded: {e}")
             continue
@@ -1461,7 +1574,87 @@ def _cli_sent(argv) -> int:
         save_threads(threads, a.threads)
         save_contacts(contacts, a.contacts)
     print(f"sent: {done} recorded")
+    if done and a.draft and len(a.contact_ids) > 1:
+        print("Ask the person once: did any of these go with edits, or on another day? For "
+              "each that did: python3 tools/network/state.py resent <id> --text-file <the "
+              "words as sent> [--date YYYY-MM-DD]. The edit is recorded as their preference.")
+    if done and a.channel == "inmail":
+        b = platform_budget(contacts, threads, a.today)
+        print(f"InMail credits: {b['inmails_left']} of {b['inmails_limit']} left this month")
     return 0 if done else 1
+
+
+def _learn_edit(cid: str, sent_text: str, draft: str | None = None) -> None:
+    """The person's own edit to a draft, recorded as a reaction by itself."""
+    if draft is None:
+        try:
+            import reading
+            with open(reading.draft_path(cid), encoding="utf-8") as fh:
+                draft = fh.read()
+            if draft.startswith(reading.WAITS_ON_A_READ):
+                draft = draft.split("\n\n", 1)[-1]
+        except (ImportError, OSError, ValueError):
+            return
+    try:
+        import learned
+        e = learned.record_edit(draft, sent_text, where=f"to {cid}")
+    except (ImportError, SystemExit, OSError):
+        return
+    if e:
+        print(f"  learned from the edit: {e['rule'][:200]}")
+
+
+def _cli_resent(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py resent",
+        description="Correct the message logged to them: another day, other words, a subject.")
+    ap.add_argument("contact_id")
+    ap.add_argument("--text-file", default="", help="the words as they went")
+    ap.add_argument("--date", default="", help="the day it went")
+    ap.add_argument("--subject", default="")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    text = ""
+    if a.text_file:
+        with open(a.text_file, encoding="utf-8") as fh:
+            text = fh.read()
+    try:
+        got = resent(contacts, threads, a.contact_id, a.today, text=text, date=a.date or None,
+                     subject=a.subject)
+    except ValueError as e:
+        print(f"resent: not changed: {e}")
+        return 1
+    save_threads(threads, a.threads)
+    save_contacts(contacts, a.contacts)
+    if text and got["before"]:
+        _learn_edit(a.contact_id, text, draft=got["before"])
+    print(f"resent: {a.contact_id}: the message of {got['row']['date']} now holds what went")
+    return 0
+
+
+def _cli_unsend(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py unsend",
+        description="It did not go: take the last message to them off the log, note back to draft.")
+    ap.add_argument("contact_id")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    try:
+        got = unsend(contacts, threads, a.contact_id, a.today)
+    except ValueError as e:
+        print(f"unsend: not changed: {e}")
+        return 1
+    save_threads(threads, a.threads)
+    save_contacts(contacts, a.contacts)
+    print(f"unsend: {a.contact_id}: the message of {got['row'].get('date')} is off the log"
+          + ("; its words are back in their draft" if got["draft"] else ""))
+    return 0
 
 
 def _cli_reopen_or_drop(argv, verb) -> int:
@@ -1778,6 +1971,10 @@ def main(argv=None) -> int:
         return _cli_sent(argv[1:])
     if argv[:1] == ["text"]:
         return _cli_text(argv[1:])
+    if argv[:1] == ["resent"]:
+        return _cli_resent(argv[1:])
+    if argv[:1] == ["unsend"]:
+        return _cli_unsend(argv[1:])
     if argv[:1] in (["reopen"], ["drop"]):
         return _cli_reopen_or_drop(argv[1:], argv[0])
     if argv[:1] == ["dropped-rows"]:

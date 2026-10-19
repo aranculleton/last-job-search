@@ -544,6 +544,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/followups.py": "a view derived from the tracker on every run",
     "tools/still_open.py": "a check run on demand; keeps nothing",
     "tools/network/state.py": "a view derived from the contact book and log on every run",
+    "tools/network/pace.py": "how fast reads go and the count of pages loaded, kept per "
+                             "computer outside the repo; nothing in the person's repo",
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
     "tools/scrape_wide.py": "runs every round afresh",
     "tools/hydrate.py": "runs every round afresh",

@@ -113,10 +113,24 @@ def _data() -> dict:
     return data if isinstance(data, dict) else {"entries": data}
 
 
-def _save(rows: list[dict], offers_: list[dict] | None = None) -> None:
+_EXAMPLE = os.path.realpath(os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), "profile.example"))
+
+
+def _writable() -> str:
+    """Where a record goes, or SystemExit: never before /setup, and never into the app's
+    example person, which the app's own tests read and a tool run there would change."""
     path = _path()
     if not path:
         raise SystemExit("learned: no profile; nothing can be recorded before /setup")
+    if os.path.realpath(path).startswith(_EXAMPLE + os.sep):
+        raise SystemExit("learned: profile.example is the app's example person; nothing is "
+                         "recorded there")
+    return path
+
+
+def _save(rows: list[dict], offers_: list[dict] | None = None) -> None:
+    path = _writable()
     data = {"entries": rows, "offers": offers_ if offers_ is not None else all_offers()}
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
@@ -601,7 +615,7 @@ def skip(said: str, why: str, today: str | None = None) -> dict:
     data = _data()
     row = {"date": today or dt.date.today().isoformat(), "said": str(said or "").strip(),
            "why": " ".join(str(why).split())}
-    path = _path()
+    path = _writable()
     if path:
         data.setdefault("skipped", []).append(row)
         data.setdefault("entries", load())
