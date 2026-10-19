@@ -79,4 +79,5 @@ def test_a_pull_request_description_is_checked(tmp_path, monkeypatch):
 
 def test_the_sync_runs_it_after_every_successful_sync():
     src = open(os.path.join(ROOT, "tools", "sync_app.py"), encoding="utf-8").read()
-    assert "_record_check()\n        app_watch()\n" in src
+    body = src[src.index("    rc = sync()\n    if rc == 0:"):src.index("def own_tests")]
+    assert "_record_check()" in body and "app_watch()" in body

@@ -499,6 +499,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/convert_salary_excel.py": "a lookup's data converter, run on demand",
     "tools/leak_scan.py": "development tooling",
     "tools/name_guard.py": "development tooling: checks what the app carries, keeps nothing",
+    "tools/app_watch.py": "checks the public app from the maintainer's repo; keeps only a "
+                          "note in .git of what it has read",
     "tools/release.py": "publishes the app's releases from its own CI; keeps nothing in a repo",
     "tools/name_guard_allow.txt": "the name guard's list of invented names; keeps nothing",
     "tools/build_app.py": "development tooling",

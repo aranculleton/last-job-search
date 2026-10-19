@@ -546,14 +546,44 @@ def main(argv: list[str]) -> int:
         return rc
     if a.adopt:
         return adopt()
+    before = git("rev-parse", "HEAD", check=False).stdout.strip()
     rc = sync()
     if rc == 0:
         _record_check()
+        if git("rev-parse", "HEAD", check=False).stdout.strip() != before:
+            own_tests()
         app_watch()
         upgrades("--after-sync")
         model_check(a.on)
         place_check(a.tools)
     return rc
+
+
+def own_tests() -> None:
+    """After an update lands, the person's own tests (profile/tests), which may have pinned
+    how the app worked before: one that now fails is named, never left for the next
+    ci_local.sh run to find. A person's copy of an old discovery test asserted the old
+    search shape for days after the app changed it, and nothing said so."""
+    tests = os.path.join(ROOT, "profile", "tests")
+    if not os.path.isdir(tests):
+        return
+    try:
+        r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+                            "--tb=no", "-rf", tests], cwd=ROOT, text=True,
+                           capture_output=True, timeout=180)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    if r.returncode not in (1,):            # 0 clean; 5 none collected; anything else not a failure
+        return
+    failed = [ln.split(" ", 1)[1].split(" - ", 1)[0] for ln in r.stdout.splitlines()
+              if ln.startswith("FAILED ")]
+    if failed:
+        print(f"Your own tests: {len(failed)} now fail after this update, likely pinning how "
+              "the app worked before: " + "; ".join(failed[:6])
+              + (f"; and {len(failed) - 6} more" if len(failed) > 6 else "")
+              + ". Claude: they are the person's files: bring each in line with the app's new "
+              "behaviour (CHANGELOG says what changed), or remove one the app now covers, "
+              "and say which in one line.")
 
 
 def app_watch() -> None:

@@ -127,8 +127,12 @@ inside the hours their own scheduled tasks run. Until they say, changes wait in
 maintainer, 2026-10-19). Read what `[Unreleased]` holds: **patch** (3.3.0 to 3.3.1) when
 it is fixes only; **minor** (3.3.0 to 3.4.0) when it adds or changes behaviour a person
 would notice; **major** (3.3.0 to 4.0.0) only when something a person relies on goes away
-or works differently enough that they must learn it again. Say the number and the reason
-in one line in the reply.
+or works differently enough that they must learn it again. **Close together, a patch**:
+when the last minor release went out less than a week ago, the next is a patch however
+much it changes, unless it is big enough that a person would want to hear about it on its
+own (the maintainer, 2026-10-19: three minor numbers in one day read as churn, not
+progress). Development keeps its pace; only the numbers slow down. Say the number and the
+reason in one line in the reply.
 
 **How**:
 

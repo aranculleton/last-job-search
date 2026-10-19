@@ -311,8 +311,8 @@ def _notice_day(day: datetime.date) -> datetime.date:
     into a push notification may run on weekdays only, and a stop falling on a
     Saturday would then never be said at all.
     """
-    weekend = frozenset(getattr(person.module("search"), "WEEKEND", (5, 6)))
-    while day.weekday() in weekend:
+    # state.WEEKEND: the profile's working week, and a weekend when there is no profile.
+    while day.weekday() in state.WEEKEND:
         day += datetime.timedelta(days=1)
     return day
 

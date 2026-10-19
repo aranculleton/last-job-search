@@ -61,9 +61,9 @@ ROOT = os.path.dirname(_HERE)
 TRACKER = person.state("job_search_tracker.csv")
 OUT_MD = person.state("documents", "network", "open_actions.md")
 
-# Tracker statuses that mean the application is finished.
-FINAL = {"hired", "rejected", "no_response", "no response", "offer_declined",
-         "offer declined", "withdrawn", "declined"}
+# Tracker statuses that mean the application is finished: the throttle's set, so the
+# two never drift (a copy elsewhere lost "declined" once).
+FINAL = throttle.FINAL
 
 # How close an employer is to an outcome. Higher sorts first, because the list
 # is read top-down and the thing nearest a decision is the thing worth the next
