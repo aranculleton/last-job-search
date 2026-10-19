@@ -778,6 +778,8 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
 BUSINESS_LINE = frozenset({"ratings", "analytics", "data", "services", "solutions", "digital",
                            "labs", "ai", "research", "insights", "intelligence", "technology",
                            "technologies", "consulting", "advisory"})
+# Words for an employer's reach, which company_key drops only at the end of a name.
+_SCOPE_WORDS = frozenset({"global", "international", "worldwide"})
 # "<Brand>, <what it does> by <Parent>": one employer, written as its brand and its parent,
 # which a person may file as "<Parent> <Brand>".
 _BRAND_LINE = re.compile(r"^\s*([^,]+?)\s*,\s*(?:[^,]*?\s)?by\s+([^,]+?)\s*$", re.I)
@@ -803,7 +805,10 @@ def _same_key(a: str, b: str) -> bool:
     if _company_key.SEPARATE.match(ka) or _company_key.SEPARATE.match(kb):
         return False
     short, long_ = sorted((ka.split(), kb.split()), key=len)
-    return long_[:len(short)] == short and all(w in BUSINESS_LINE for w in long_[len(short):])
+    # "<Name> Global Ratings" against "<Name> Global": the key drops a trailing "global"
+    # and keeps the business line, so the word sits between them and joined nothing.
+    return long_[:len(short)] == short and all(w in BUSINESS_LINE | _SCOPE_WORDS
+                                               for w in long_[len(short):])
 
 
 def same_employer(a: str, b: str) -> bool:
