@@ -33,7 +33,7 @@ TODAY = datetime.date(2026, 10, 18)
 
 
 def _url(handle):
-    return f"https://www.linkedin.com/in/example-{handle}"
+    return "https://www.linkedin.com/in/example-person-" + handle
 
 
 def _post(handle, day=datetime.date(2026, 10, 10)):
