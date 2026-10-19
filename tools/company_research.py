@@ -43,6 +43,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
+from dates import as_date  # noqa: E402
 
 DIR = "company_research"
 # Research older than this is a lead to re-confirm, not a fact to repeat. Every
@@ -84,20 +85,20 @@ def path(company, root=None) -> str | None:
 
 
 def _as_date(value) -> dt.date:
-    if isinstance(value, dt.datetime):
-        return value.date()
-    if isinstance(value, dt.date):
-        return value
-    if value:
-        return dt.date.fromisoformat(str(value)[:10])
-    return dt.date.today()
+    """`value` as a date, today when it is empty. Read by tools/dates.py, which reads
+    the same on every Python: fromisoformat took "20261017" on 3.11 and not on 3.9."""
+    if not value:
+        return dt.date.today()
+    d = as_date(value, iso_only=True)
+    if d is None:
+        raise ValueError(f"not a date: {value!r}")
+    return d
 
 
 def age_days(data, today=None) -> int | None:
     """Days since `fetched_date`, or None when the file carries no readable date."""
-    try:
-        fetched = dt.date.fromisoformat(str((data or {}).get("fetched_date") or "").strip()[:10])
-    except ValueError:
+    fetched = as_date(str((data or {}).get("fetched_date") or "").strip(), iso_only=True)
+    if fetched is None:
         return None
     return (_as_date(today) - fetched).days
 
