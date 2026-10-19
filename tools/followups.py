@@ -32,6 +32,7 @@ Each is now a rule, next to the code it governs:
   stop         two nudges met with silence, or SILENCE_DAYS since it went
 
     python3 tools/followups.py [--today YYYY-MM-DD]
+    python3 tools/followups.py --close-quiet [--dry-run]   # the brief runs this
 """
 
 from __future__ import annotations
@@ -310,8 +311,8 @@ def _notice_day(day: datetime.date) -> datetime.date:
     into a push notification may run on weekdays only, and a stop falling on a
     Saturday would then never be said at all.
     """
-    weekend = frozenset(getattr(person.module("search"), "WEEKEND", (5, 6)))
-    while day.weekday() in weekend:
+    # state.WEEKEND: the profile's working week, and a weekend when there is no profile.
+    while day.weekday() in state.WEEKEND:
         day += datetime.timedelta(days=1)
     return day
 
@@ -447,8 +448,47 @@ def stop_line(it: dict) -> str:
     """The one-off notice for an application that has gone quiet."""
     why = ("two follow-ups and no reply" if it.get("sent", 0) >= MAX_NUDGES
            else "%d days since it went and no reply" % it["age"])
-    return ("%s - %s, applied %s: %s. Stop chasing it; /outcome closes it as no_response."
+    return ("%s - %s, applied %s: %s. Stop chasing it; the brief closes it as no_response."
             % (it["company"], it["role"] or "role not recorded", it["date"], why))
+
+
+# The note a closed row carries, so the close is dated, says why and says how to undo it.
+CLOSED_NOTE = ("%s: closed as no_response, %s (followups.py --close-quiet). "
+               "If they reply after all, /outcome records it.")
+
+
+def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
+                write: bool = True, holds: dict | None = None) -> list[dict]:
+    """Close every application that has gone quiet as `no_response`, with a dated note.
+
+    A row sat at `applied` for months after the chase ended: nothing wrote the close,
+    because that waited on somebody running /outcome about silence, which is the one
+    thing nobody notices. The throttle already stops counting such a row; this records
+    what the throttle assumed. A row is left open while anything says it may still be
+    alive: an interview or offer at that employer, a referral in flight there, or a
+    DO NOT CHASE note in force. Returns the review entries it closed (or would close).
+    """
+    import csv_store  # the tracker's shared reader and writer: columns and line endings kept
+    today = today or datetime.date.today()
+    rows = csv_store.read_rows(path)
+    if not rows:
+        return []
+    holds = throttle.referral_holds() if holds is None else holds
+    running = live_processes(rows, superseded(rows))
+    gone = [it for it in review(rows, today, holds=holds)
+            if it["state"] == "quiet" and it["key"] not in holds and it["key"] not in running
+            and not not_chased(it["row"].get("notes"), today)]
+    if not gone or not write:
+        return gone
+    for it in gone:
+        r = it["row"]
+        why = ("two follow-ups and no reply" if it["sent"] >= MAX_NUDGES
+               else "no reply in %d days" % it["age"])
+        r["status"] = "no_response"
+        note = CLOSED_NOTE % (today.isoformat(), why)
+        r["notes"] = ((r.get("notes") or "").rstrip() + " | " + note).strip(" |")
+    csv_store.write_rows(path, rows, csv_store.header(path))
+    return gone
 
 
 def when(it: dict) -> str:
@@ -497,8 +537,8 @@ def render(items: list[dict], today: datetime.date) -> list[str]:
     if held:
         lines.append("%d held." % len(held))
     if quiet:
-        lines.append("%d gone quiet in all and no longer chased; /outcome closes each as "
-                     "no_response." % len(quiet))
+        lines.append("%d gone quiet in all and no longer chased; `followups.py --close-quiet` "
+                     "closes them as no_response, and the brief runs it." % len(quiet))
     return lines
 
 
@@ -510,8 +550,19 @@ def main() -> int:
         pass
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--today", default=datetime.date.today().isoformat())
+    ap.add_argument("--close-quiet", action="store_true",
+                    help="close every application gone quiet as no_response, with a dated note")
+    ap.add_argument("--dry-run", action="store_true", help="with --close-quiet: list, write nothing")
     a = ap.parse_args()
     today = datetime.date.fromisoformat(a.today)
+    if a.close_quiet:
+        gone = close_quiet(today=today, write=not a.dry_run)
+        verb = "would close" if a.dry_run else "closed"
+        print("%s %d gone quiet as no_response%s" % (
+            verb, len(gone), ": " + "; ".join("%s (%s, applied %s)" % (
+                it["company"], it["role"] or "role not recorded", it["date"]) for it in gone)
+            if gone else ""))
+        return 0
     items = review(_rows(), today, warm=throttle.warm_routes(), holds=throttle.referral_holds())
     print("\n".join(render(items, today)).lstrip("\n"))
     return 0

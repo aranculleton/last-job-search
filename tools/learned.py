@@ -214,7 +214,7 @@ def all_offers() -> list[dict]:
 # Keeping their own way is an answer for now, never for ever: a kept choice is offered
 # again once this many days have passed (tools/profile_upgrades.py REASK_DAYS, the same
 # rule every question follows), saying when they kept it. A switch is final: it is theirs.
-REOFFER_DAYS = 90
+REOFFER_DAYS = 30
 
 
 def offers(today: dt.date | None = None) -> list[tuple[int, dict]]:

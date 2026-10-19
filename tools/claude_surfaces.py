@@ -66,8 +66,20 @@ def entry(eid: str, reg: dict | None = None) -> dict:
 
 
 def official(e: dict) -> str:
-    """The first official page an entry rests on: never a skill or an observation."""
-    return next((s["url"] for s in e.get("sources", ()) if s["url"].startswith("http")), "")
+    """The official page for an entry: its own `official_page` where its sources are not
+    the product's own pages (LinkedIn's help, which no session fetches), else the first
+    page it rests on, never a skill or an observation."""
+    return e.get("official_page") or next(
+        (s["url"] for s in e.get("sources", ()) if s["url"].startswith("http")), "")
+
+
+def steps(eid: str, reg=None) -> list:
+    """An entry's steps for a person who said yes, one action a line, headed by when they
+    were written and the page to check: never shown before they asked."""
+    e = entry(eid, reg)
+    page = official(e)
+    head = "At the time of writing" + (f" (official page: {page})" if page else "") + ":"
+    return [head] + [f"{i}. {s}" for i, s in enumerate(e.get("steps", ()), 1)]
 
 
 def age(e: dict, today: datetime.date | None = None) -> int:

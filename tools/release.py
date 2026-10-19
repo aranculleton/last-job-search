@@ -66,10 +66,14 @@ def _needs(ids: list[str]) -> str:
     return "you" if any(u.needs == "you" for u in found) else "nobody"
 
 
+MAX_PER_GROUP = 8
+CHANGELOG_URL = "https://github.com/aranculleton/last-job-search/blob/master/CHANGELOG.md"
+
+
 def short(notes: str) -> str:
     """The release notes a person reads, from a CHANGELOG section."""
     groups: list[tuple[str, list[str]]] = []
-    asks = 0
+    asks = set_up = 0
     entries: list[tuple[str, str]] = []           # (group, the entry's whole text)
     group = ""
     for line in notes.splitlines():
@@ -93,14 +97,23 @@ def short(notes: str) -> str:
             asks += 1
             head += " (Claude asks you once)"
         elif need == "nobody":
+            set_up += 1
             head += " (set up for you)"
         if not groups or groups[-1][0] != group:
             groups.append((group, []))
         groups[-1][1].append(head)
     out = []
     for group, heads in groups:
-        out += ([f"**{group}**"] if group else []) + [f"- {h}" for h in heads] + [""]
-    out.append("What to do: nothing. Your next chat takes this update and sets it up"
+        # A big release is still a page someone reads: the first few of each kind (the
+        # CHANGELOG puts the ones a person notices first), then a count.
+        shown = heads[:MAX_PER_GROUP]
+        more = len(heads) - len(shown)
+        out += ([f"**{group}**"] if group else []) + [f"- {h}" for h in shown]
+        out += ([f"- And {more} more ({CHANGELOG_URL})."] if more else []) + [""]
+    # "Sets it up" only where there is something to set up: a release of fixes alone is
+    # simply taken.
+    out.append("What to do: nothing. Your next chat takes this update"
+               + (" and sets it up" if asks or set_up else "")
                + (f", and asks you {asks} short question{'s' if asks != 1 else ''} once."
                   if asks else "."))
     return "\n".join(out)

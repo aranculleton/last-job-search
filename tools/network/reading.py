@@ -41,6 +41,8 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py add <contact_id> --kind talk --url URL --date YYYY-MM-DD --text "..."
     python3 tools/network/reading.py show <contact_id>      # what a note can rest on, best first
     python3 tools/network/reading.py queue                  # drafts waiting with no fresh reading
+    python3 tools/network/reading.py paste <file|->         # several profiles in one paste, split by ---
+    python3 tools/network/reading.py draft <contact_id> <file|->   # a note to draft.md, marked if unread
 """
 
 from __future__ import annotations
@@ -685,7 +687,6 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     next in a round. Keeps them when unsure: a wrong skip costs a good contact.
     """
     import discovery
-    from company_key import key as company_key
     company = company or reading.get("company", "")
     headline = reading.get("headline", "")
     posts = " ".join(i.get("text", "") for i in reading.get("items", [])
@@ -698,7 +699,9 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     if reading.get("reach") == "pending":
         return False, "a connection request to them is already pending"
     current = reading.get("current", "")
-    if company and current and company_key(current) != company_key(company) \
+    # The employer under another of its names ("<Name> Ratings", "<Brand>, AI by
+    # <Parent>") is where they were found, not somewhere they moved to.
+    if company and current and not discovery.same_employer(current, company) \
             and not _has(company, headline) and not _has(company, current):
         return False, f"has moved on: their current employer is {current}, not {company}"
     loc = reading.get("location", "")
@@ -915,7 +918,8 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
             # The same words the place check says once, then weekly (tools/place.py): the
             # choice is offered, never made for them, and the setting is not changed.
             owner, name = place.repo()
-            told = place.check(where, "browser", [], True, (), owner, name)
+            # A read was asked for here, so this is the person asking how: the full steps.
+            told = place.check(where, "browser", [], True, (), owner, name, detail=True)
             say = told[0] if told else (f"For the one or two who matter most, send {hand} and "
                                         "I'll do the rest.")
         return {"route": "hand", "browser": "", "usable": False,
@@ -1115,20 +1119,172 @@ def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
 
 
 def queue(contacts: list, today: datetime.date | None = None) -> list:
-    """Contacts with a first note waiting and no fresh reading of their profile."""
+    """Contacts with a first note waiting and no fresh reading of their profile, or
+    whose note still says it waits on a read: read since, and not rewritten yet."""
     out = []
     for c in contacts:
         cid = c.get("contact_id", "")
         if (c.get("status") or "not_contacted") != "not_contacted" or not cid:
             continue
-        if not os.path.isfile(person.state(*DIR, cid, "draft.md")):
+        if not os.path.isfile(draft_path(cid)):
             continue
-        if not fresh(load(cid), today):
+        if not fresh(load(cid), today) or waits_on_read(cid):
             out.append(c)
     return out
 
 
+# ------------------------------------------------------------------- drafts
+
+# The first line of a note written for someone nobody has read. A first note rests on
+# what was read about them (compose.first_note(reading=) refuses one that does not),
+# and the networking upgrade and a /network run with no browser both write notes from
+# search results alone, which then sat in the queue looking ready to send. The line
+# says so where anyone opening the draft sees it, and `queue` lists the draft until a
+# note written from a reading replaces it.
+WAITS_ON_A_READ = "WAITS ON A READ"
+
+
+def draft_path(contact_id: str) -> str:
+    return os.path.join(os.path.dirname(path(contact_id)), "draft.md")
+
+
+def has_read(reading: dict | None) -> bool:
+    """Was anything read about them: their own page, or a public finding kept?"""
+    return _page_read(reading) or bool((reading or {}).get("items"))
+
+
+def waits_on_read(contact_id: str) -> bool:
+    """Does their waiting draft still open on the WAITS ON A READ line?"""
+    try:
+        with open(draft_path(contact_id), encoding="utf-8") as fh:
+            return fh.readline().startswith(WAITS_ON_A_READ)
+    except OSError:
+        return False
+
+
+def draft_text(contact_id: str, note: str, name: str = "") -> str:
+    """The draft file for a first note: the note, under the WAITS ON A READ line when
+    nothing has been read about them."""
+    note = str(note or "").strip()
+    if has_read(load(contact_id)):
+        return note + "\n"
+    who = name or "them"
+    return (f"{WAITS_ON_A_READ}: nothing was read about {who}, so this note rests on the "
+            "search result only and is not sent as it stands. Read their profile (a paste, "
+            f"or the browser: python3 tools/network/reading.py read {contact_id} <file>), then "
+            "rewrite it from what was read with compose.first_note(..., reading=) and "
+            f"python3 tools/network/reading.py draft {contact_id} <file>.\n\n{note}\n")
+
+
+def write_draft(contact_id: str, note: str, name: str = "") -> str:
+    """Write documents/network/<contact_id>/draft.md (draft_text) and return its path."""
+    p = draft_path(contact_id)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        fh.write(draft_text(contact_id, note, name))
+    return p
+
+
+# ------------------------------------------------------------ several in one paste
+
+# One paste holding several profiles: the person opens each to send the request and
+# copies them into one message. Between two profiles, a line of three or more dashes
+# (or underscores, or equals signs). Each piece is parsed on its own, so a wrong tab
+# is refused for that profile alone (parse()'s name check), never saved under somebody.
+PASTE_SEPARATOR = re.compile(r"^[ \t]*(?:-{3,}|_{3,}|={3,})[ \t]*$", re.M)
+
+
+def split_paste(text: str) -> list:
+    """The profiles in one paste, in order; a paste with no separator is one profile."""
+    return [p.strip() for p in PASTE_SEPARATOR.split(str(text or "")) if p.strip()]
+
+
+def _word_in(word: str, text: str) -> bool:
+    return re.search(r"(?<!\w)" + re.escape(word) + r"(?!\w)", text) is not None
+
+
+def match_paste(pieces: list, contacts: list) -> list:
+    """[(piece, contact or None, why)]: each pasted profile matched to one contact.
+
+    A profile matches when the top of its page (before its first section, never
+    LinkedIn's column of other people) carries the contact's whole name, or their
+    surname with their employer named on the page. Two contacts it could equally be,
+    or none, leave it unmatched with the reason; a contact is matched at most once.
+    """
+    import discovery
+    import state
+    out, used = [], set()
+    for piece in pieces:
+        lines = _clean_lines(piece)
+        pre, secs, _ = _sections(lines)
+        top = fold(" ".join(pre[:60] or lines[:60])).lower()
+        page = fold(" ".join(pre + [x for v in secs.values() for x in v])).lower()
+        scored = []
+        for c in contacts:
+            cid = c.get("contact_id", "")
+            words = [w for w in fold(state.person_name(c.get("name"))).lower().split() if len(w) > 1]
+            if not cid or cid in used or not words or not _word_in(words[-1], top):
+                continue
+            company = discovery.search_name(c.get("company") or "").lower()
+            at = bool(company) and _has(company, page)
+            full = all(_word_in(w, top) for w in words)
+            if full or at:
+                scored.append((int(full) + int(at), c))
+        best = max((n for n, _ in scored), default=0)
+        tops = [c for n, c in scored if n == best]
+        if len(tops) == 1:
+            used.add(tops[0]["contact_id"])
+            out.append((piece, tops[0], ""))
+        elif tops:
+            out.append((piece, None, "could be " + " or ".join(
+                f"{c.get('name')} ({c['contact_id']})" for c in tops)))
+        else:
+            out.append((piece, None, "names nobody whose note waits on a read"))
+    return out
+
+
 # ----------------------------------------------------------------------- CLI
+
+def _paste(text: str, source: str = "paste", today: datetime.date | None = None) -> int:
+    """Read several pasted profiles at once: each matched to a queued contact, parsed
+    on its own, saved; then which matched, which did not, and what to do next."""
+    import state
+    pieces = split_paste(text)
+    waiting = queue(state.load_contacts(), today)
+    print(f"reading: {len(pieces)} profile(s) in the paste, {len(waiting)} note(s) waiting on a read")
+    read, skipped = [], []
+    for i, (piece, c, why) in enumerate(match_paste(pieces, waiting), 1):
+        head = _clip(next(iter(_clean_lines(piece)), ""), 60)
+        if c is None:
+            print(f"  {i}. not matched (\"{head}\"): {why}")
+            continue
+        try:
+            new = parse(piece, name=c.get("name", ""), company=c.get("company", ""),
+                        source=source, url=c.get("linkedin_url", ""), today=today)
+        except ValueError as e:
+            print(f"  {i}. not read (\"{head}\"): {e}")
+            continue
+        save(c["contact_id"], merge(load(c["contact_id"]), new))
+        keep, why_ = verdict(load(c["contact_id"]), c.get("company", ""))
+        print(f"  {i}. {c.get('name')} ({c['contact_id']}): read; "
+              + ("KEEP" + (f" ({why_})" if why_ else "") if keep else f"SKIP: {why_}"))
+        (read if keep else skipped).append(c)
+    rest = [c for c in waiting if c not in read and c not in skipped]
+    if rest:
+        print("  still waiting on a read: " + ", ".join(
+            f"{c.get('name')} ({c['contact_id']})" for c in rest))
+    if read:
+        print("next: rewrite each note read above from its reading, `reading.py show <id>` for "
+              "what it can rest on, then compose.first_note(..., reading=reading.load(<id>)), "
+              "reading.same_ground() across them, and `reading.py draft <id> <file>`; show "
+              "each new note in the reply")
+    if skipped:
+        print("next: close each SKIP with its reason (status closed), so they are never written to")
+    if not read and not skipped:
+        print("next: nothing matched; paste each profile under a line of --- and check the "
+              "names against `reading.py queue`")
+    return 0 if read or skipped else 1
+
 
 def _contact(contact_id: str, name: str = "", company: str = "") -> dict:
     """The contact row, or the candidate a /network run is reading before it writes state."""
@@ -1184,6 +1340,14 @@ def main(argv: list | None = None) -> int:
     a_.add_argument("--company", default="")
     s = sub.add_parser("show")
     s.add_argument("contact_id")
+    pa = sub.add_parser("paste", help="one paste holding several profiles, each matched to "
+                                      "a contact whose note waits on a read")
+    pa.add_argument("file", help="the paste, or - for stdin; profiles split by a line of ---")
+    pa.add_argument("--source", choices=("paste", "screenshot"), default="paste")
+    dr = sub.add_parser("draft", help="write a first note to the contact's draft.md, marked "
+                                      "WAITS ON A READ when nothing was read about them")
+    dr.add_argument("contact_id")
+    dr.add_argument("file", help="the note, or - for stdin")
     qu = sub.add_parser("queue", help="drafts waiting with no fresh reading")
     qu.add_argument("--top", type=int, default=HAND_TOP,
                     help="how many to offer a paste for: the best few, never everyone")
@@ -1270,11 +1434,27 @@ def main(argv: list | None = None) -> int:
               + (f", {max(0, READS_PER_DAY - reads_today())} browser read(s) left today"
                  if PROFILE_READS == "browser" else ""))
         if waiting:
-            print(f"offer a paste for these {len(top)} only, the best by why-them; the rest go "
-                  "as they are, from what the search found:")
+            print(f"offer a paste for these {len(top)} only, the best by why-them, several in "
+                  "one message with a line of --- between them (`reading.py paste`); the rest "
+                  "keep the line at the top of their draft saying each waits on a read:")
         for i, c in enumerate(top, 1):         # numbered, so a reply can say "1 and 3"
             print(f"  {i}. {c.get('name')} ({c.get('company')}) {c.get('linkedin_url') or ''}"
                   f"  [{c['contact_id']}]")
+        return 0
+    if a.cmd == "paste":
+        text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+        return _paste(text, a.source)
+    if a.cmd == "draft":
+        note = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+        if not note.strip():
+            raise SystemExit("reading: draft needs the note's text")
+        import state
+        row = next((c for c in state.load_contacts() if c.get("contact_id") == a.contact_id), {})
+        p = write_draft(a.contact_id, note, row.get("name", ""))
+        print(f"reading: saved {os.path.relpath(p, person.state())}"
+              + ("" if has_read(load(a.contact_id)) else
+                 f"; nothing read about {row.get('name') or a.contact_id} yet, so it opens "
+                 f"on {WAITS_ON_A_READ} and reading.py queue lists it"))
         return 0
     if a.cmd == "verdict":
         found = load(a.contact_id)

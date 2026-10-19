@@ -152,6 +152,25 @@ def _asked_for(posting):
     return frozenset(item for _, item, pat in ITEMS if re.search(pat, posting, re.I))
 
 
+def _standing_in(posting):
+    """Held items that stand in for a tool the posting asks for and the person does not
+    hold, from the same family (tools/bridges.py): Power BI for a Tableau posting, AWS
+    for an Azure one. Left off, the resume showed neither, though the person does the
+    same work in the one they hold. The tool asked for is never printed."""
+    if not posting:
+        return frozenset()
+    try:
+        import bridges
+    except Exception:          # no profile to read: nothing stands in
+        return frozenset()
+    out = set()
+    for a in bridges.assess(posting):
+        if a.verdict == bridges.BRIDGE and bridges.strength_of(a.asked) == "near":
+            for h in a.have:
+                out.update(i for _, i, pat in ITEMS if i == h or re.search(pat, h, re.I))
+    return frozenset(out)
+
+
 def _from_posting(sel, posting):
     """Add a held skill this posting asks for by name.
 
@@ -174,11 +193,12 @@ def _from_posting(sel, posting):
     """
     if not posting:
         return sel
+    standing = _standing_in(posting)
     for cat, item, pat in ITEMS:
         line = MERGE.get(cat, cat)
         if item in sel.get(line, []):
             continue
-        if re.search(pat, posting, re.I):
+        if re.search(pat, posting, re.I) or item in standing:
             sel.setdefault(line, []).append(item)
     return sel
 
@@ -205,6 +225,8 @@ def _rank(sel, posting, context, company=""):
     if not posting and not context:
         return {c: sorted(v, key=lambda i: (i not in ANCHORS, i in SECONDARY))
                 for c, v in sel.items()}
+    standing = _standing_in(posting)
+
     def tier(item):
         pat = next(p for c, i, p in ITEMS if i == item)
         # A secondary skill never outranks a primary one. The candidate's
@@ -215,7 +237,7 @@ def _rank(sel, posting, context, company=""):
         if item in ANCHORS:
             return -1 + ANCHORS.index(item) * 0.1
         secondary = item in SECONDARY
-        named = bool(posting and re.search(pat, posting, re.I))
+        named = bool(posting and re.search(pat, posting, re.I)) or item in standing
         evidenced = bool(context and re.search(pat, context, re.I))
         # A flat +3 for a secondary put a posting-named secondary BELOW a
         # primary the posting never mentioned, and the per-line cap then cut it
@@ -240,20 +262,39 @@ def _rank(sel, posting, context, company=""):
                 continue
             if company and re.search(pat, company, re.I):
                 continue
-            if re.search(pat, posting, re.I):
+            if re.search(pat, posting, re.I) or item in standing:
                 sel.setdefault(line, []).append(item)
     # A secondary skill the posting never mentions has no business on the page:
     # it costs a line the primary skills should have and it invites a question
     # about the weakest thing on the resume.
     if posting:
         sel = {c: [i for i in v
-                   if i not in SECONDARY
+                   if i not in SECONDARY or i in standing
                    or re.search(next(p for _, it, p in ITEMS if it == i), posting, re.I)]
                for c, v in sel.items()}
     return {c: sorted(v, key=tier) for c, v in sel.items()}
 
 
-def _final(tools, context, posting="", company=""):
+def _consent_line(name):
+    """(line, held item it follows) for a skill the person said yes to: beside the held
+    tool it stands next to (tools/bridges.py), else at the end of the last line."""
+    try:
+        import bridges
+        beside = bridges.held_beside(name)
+    except Exception:          # no profile to read: no neighbour
+        beside = []
+    for h in beside:
+        for cat, item, pat in ITEMS:
+            if item == h or re.search(pat, h, re.I):
+                return MERGE.get(cat, cat), item
+    return _labels()[-1][0], None
+
+
+def _yes(consented):
+    return list(dict.fromkeys(str(c).strip() for c in consented or () if str(c).strip()))
+
+
+def _final(tools, context, posting="", company="", consented=()):
     """Tailor's picks first, context top-ups after, capped per line, the
     profile's pinned item guaranteed. The cap keeps the tooling line to one
     rendered line: uncapped, it wraps onto a second with Jira and Confluence,
@@ -268,17 +309,28 @@ def _final(tools, context, posting="", company=""):
     if company:
         own = {item for _, item, pat in ITEMS if re.search(pat, company, re.I)}
         sel = {c: [i for i in v if i not in own or i in picked.get(c, [])] for c, v in sel.items()}
+    # What the person said yes to claiming for this posting (tools/stage_picks.py consent):
+    # printed as the posting spells it, beside the held tool it sits next to, and never
+    # trimmed. Only their yes puts a skill the profile does not hold on the page.
+    yes = _yes(consented)
+    for name in yes:
+        if any(name.casefold() == i.casefold() for v in sel.values() for i in v):
+            continue
+        line, after = _consent_line(name)
+        items = sel.setdefault(line, [])
+        items.insert(items.index(after) + 1 if after in items else len(items), name)
+    keep = set(ANCHORS) | set(yes)
     # The per-line cap, taking the item this employer never asked for rather
     # than whatever happens to be last. A blind head-slice ran before the
     # token trim below could weigh anything, so two postings each asking for
     # two named tools lost them here, while tools neither posting mentions
     # stayed.
-    asked_here = _asked_for(posting)
+    asked_here = _asked_for(posting) | set(yes)
 
     def _trim_line(items, cap):
         items = list(items)
         while len(items) > cap:
-            drop = max((i for i in range(len(items)) if items[i] not in ANCHORS),
+            drop = max((i for i in range(len(items)) if items[i] not in keep),
                        key=lambda i: (items[i] not in asked_here, i), default=None)
             if drop is None:
                 break
@@ -306,7 +358,7 @@ def _final(tools, context, posting="", company=""):
     # screened on are the ones that go.
     def _weakest():
         cands = [(cat, i) for cat in sel for i in range(len(sel[cat]))
-                 if sel[cat][i] not in ANCHORS
+                 if sel[cat][i] not in keep
                  and len(sel[cat]) > MIN_PER_CATEGORY.get(cat, 1)]
         if not cands:
             return None
@@ -327,20 +379,31 @@ def _final(tools, context, posting="", company=""):
     if item not in sel.get(line, []):
         sel.setdefault(line, [])
         if len(sel[line]) >= MAX_PER_LINE.get(line, 6):
-            sel[line] = sel[line][:-1]
+            last = [i for i in range(len(sel[line])) if sel[line][i] not in yes]
+            if last:
+                sel[line].pop(last[-1])
         sel[line].append(item)
     return sel
 
 
-def render(tools, context="", posting="", company=""):
+# A skill the person said yes to is the posting's spelling, not an inventory item
+# written for LaTeX, so it is escaped on the way out.
+_TEX = {"&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_", "$": r"\$"}
+
+
+def render(tools, context="", posting="", company="", consented=()):
     """LaTeX for the Skills block."""
-    sel = _final(tools, context, posting, company)
-    return "\n".join("\\blockline{%s}{%s}" % (label, ", ".join(sel[cat]))
+    sel = _final(tools, context, posting, company, consented)
+    yes = set(_yes(consented))
+
+    def tex(i):
+        return "".join(_TEX.get(ch, ch) for ch in i) if i in yes else i
+    return "\n".join("\\blockline{%s}{%s}" % (label, ", ".join(tex(i) for i in sel[cat]))
                      for cat, label in _labels()
                      if len(sel.get(cat, [])) >= MIN_PER_CATEGORY.get(cat, 1))
 
 
-def lines(tools, context="", posting="", company=""):
+def lines(tools, context="", posting="", company="", consented=()):
     """Plain-text preview, for tests and for measuring the page budget."""
-    sel = _final(tools, context, posting, company)
+    sel = _final(tools, context, posting, company, consented)
     return [f"{label}: {', '.join(sel[cat])}" for cat, label in _labels() if sel.get(cat)]

@@ -53,6 +53,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from company_key import key as company_key  # noqa: E402
 from text_screen import entry_years, money_values, salary_range  # noqa: E402
+from prefilter import age_days as _age_days, posted_age  # noqa: E402
 import person  # noqa: E402
 
 # --------------------------------------------------------------------------
@@ -308,16 +309,15 @@ def score(job: dict, today: dt.date | None = None) -> dict:
         else:
             pts -= 18; why.append(f"-18 stated top of band {CUR}{hi:,}, below the floor")
 
-    d = job.get("date")
-    if d:
-        try:
-            age = ((today or dt.date.today()) - dt.date.fromisoformat(str(d)[:10])).days
-            if age <= 2:
-                pts += 6; why.append("+6 posted in the last 2 days")
-            elif age <= 5:
-                pts += 3; why.append("+3 posted this week")
-        except ValueError:
-            pass
+    # Fresh only on the portal's own date, and only as fresh as the first time this
+    # search saw the posting: a relist carries a new portal date, and a month-old
+    # posting relisted yesterday earned +6. No date, or a date in the future, is
+    # unknown, never fresh.
+    age = _age_days(job, today or dt.date.today()) if posted_age(job, today) is not None else None
+    if age is not None and 0 <= age <= 2:
+        pts += 6; why.append("+6 posted in the last 2 days")
+    elif age is not None and 0 <= age <= 5:
+        pts += 3; why.append("+3 posted this week")
 
     if len(body) < 400:
         pts -= 5

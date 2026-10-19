@@ -30,8 +30,14 @@ that reason (see `followups.py`).
 A scheduled routine runs it in a fresh session and pastes the top into a push
 notification, so the first five lines stand alone: the counts, then one line
 each for overdue people, overdue applications, due today, and held. It reads
-no network and nothing but the three state files and the outreach notes, and
-the same files and `--today` always print the same text.
+no network and nothing but the three state files, the outreach notes and each
+live application's outcome.md, and the same files and `--today` always print
+the same text.
+
+An interview booked in outcome.md (`- [ ] Phone screen (scheduled 2026-03-14,
+with Head of Planning)`, as /outcome writes it) is on the list twice over: due
+today once it is `PREP_WINDOW_DAYS` away with no `interview_prep_*.md` for that
+stage in the folder, and after it, while no thank-you note sits there.
 
     python3 tools/open_actions.py                 # everything owed, grouped
     python3 tools/open_actions.py --company acme  # one employer
@@ -52,8 +58,10 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "network"))
 
 import followups                                     # noqa: E402
+import outreach                                      # noqa: E402
 import person                                        # noqa: E402
 import throttle                                      # noqa: E402
+import what_works                                    # noqa: E402
 from company_key import key as company_key            # noqa: E402
 from network import state                             # noqa: E402
 
@@ -61,9 +69,9 @@ ROOT = os.path.dirname(_HERE)
 TRACKER = person.state("job_search_tracker.csv")
 OUT_MD = person.state("documents", "network", "open_actions.md")
 
-# Tracker statuses that mean the application is finished.
-FINAL = {"hired", "rejected", "no_response", "no response", "offer_declined",
-         "offer declined", "withdrawn", "declined"}
+# Tracker statuses that mean the application is finished: the throttle's set, so the
+# two never drift (a copy elsewhere lost "declined" once).
+FINAL = throttle.FINAL
 
 # How close an employer is to an outcome. Higher sorts first, because the list
 # is read top-down and the thing nearest a decision is the thing worth the next
@@ -98,6 +106,13 @@ KIND_ORDER = {"reply": 0, "action_due": 1, "nudge": 2,
               # A request still pending and a first message owed after an
               # acceptance used to be listed as nudges; they keep a nudge's place.
               "first_message": 2, "request_pending": 2}
+
+# An interview booked in outcome.md: its pack is due once it is this close, and
+# a thank-you is owed for this long after it, then the list lets it go. It sorts
+# before the follow-up nudges: the date is fixed and somebody is expecting them.
+PREP_WINDOW_DAYS = 7
+THANKS_DAYS = 7
+INTERVIEW_RANK = len(KIND_ORDER) - 1
 
 
 def _tracker(path=TRACKER):
@@ -191,6 +206,13 @@ def render(entries, today, only_live=True):
             lines.append("- application: **%s** %s (%s)%s"
                          % (a.get("status", "?"), a.get("role", "?"), a.get("date", "?"),
                             ", gone quiet, not chased" if quiet else ""))
+            _folder, files, stages = _stages(a)
+            for st in stages:
+                if not st["done"] and st["date"] and st["date"] >= str(today):
+                    lines.append("  - booked: %s %s%s%s" % (
+                        st["label"] or "interview", st["date"],
+                        ", with " + st["with"] if st["with"] else "",
+                        "" if _has_pack(files, st) else ", no pack yet"))
         for a in e["applications"]:
             if id(a) in live_ids:
                 continue
@@ -239,6 +261,78 @@ def render(entries, today, only_live=True):
 # ---------------------------------------------------------------- --due
 
 
+def _stages(row):
+    """(the application's folder, its files, its outcome.md stages), each empty when absent."""
+    folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+    try:
+        files = os.listdir(folder)
+        with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
+            return folder, files, what_works.outcome_stages(fh.read())
+    except OSError:
+        return folder, [], []
+
+
+def _has_pack(files, stage) -> bool:
+    """A pack is on file for this stage: an interview_prep_<stage>.md of the same step."""
+    return any(f.startswith("interview_prep_") and f.endswith(".md")
+               and what_works.stage_step(f[15:-3].replace("_", " ")) == stage["step"]
+               for f in files)
+
+
+def _thanked(files, held_on) -> bool:
+    """A thank-you or follow-up note dated on or after the interview is in the folder."""
+    for f in files:
+        if f.startswith(("followup_", "thank_you_")):
+            d = state.as_date(f)
+            if d and d >= held_on:
+                return True
+    return False
+
+
+def interview_items(tracker, today):
+    """The interview half of the due list, from each live application's outcome.md.
+
+    A booked stage with no pack, from PREP_WINDOW_DAYS before it (due today,
+    because the pack is wanted before the day), and a stage that has been and
+    gone with no thank-you on file, for THANKS_DAYS after it.
+    """
+    today = state.as_date(today)
+    items = []
+    for row in tracker:
+        status = (row.get("status") or "").strip().lower()
+        if status in FINAL or status in throttle.UNSENT or not status:
+            continue
+        _folder, files, stages = _stages(row)
+        company = (row.get("company") or "").strip()
+        role = (row.get("role") or "").strip() or "role not recorded"
+        for st in stages:
+            held_on = state.as_date(st["date"])
+            if not held_on:
+                continue
+            days = (held_on - today).days
+            what = "%s, %s%s" % (st["label"] or "interview", st["date"],
+                                 ", with " + st["with"] if st["with"] else "")
+            if not st["done"] and 0 <= days <= PREP_WINDOW_DAYS and not _has_pack(files, st):
+                when = ("today" if days == 0 else "tomorrow" if days == 1
+                        else "in %d days" % days)
+                what = "interview %s (%s), no pack yet: /interview %s" % (when, what, company)
+                due, late = today, 0
+            elif days < 0 and -days <= THANKS_DAYS and not _thanked(files, held_on):
+                what = ("thank-you not logged after the %s: /outcome %s records the stage "
+                        "and drafts one" % (what, company))
+                due = held_on + dt.timedelta(days=1)
+                late = (today - due).days
+            else:
+                continue
+            items.append({
+                "half": "application", "key": company_key(company), "rank": INTERVIEW_RANK,
+                "name": "%s (%s)" % (company, role if len(role) <= 40 else role[:37] + "..."),
+                "who": "%s - %s" % (company, role), "due": due.isoformat(), "late": late,
+                "what": what, "to": "", "text": "", "held": [], "quiet": False,
+                "kind": "interview"})
+    return items
+
+
 def _stored_draft(contact) -> str:
     """The message waiting in a contact's notes. Everything after "| DRAFT:" is it."""
     notes = str(contact.get("notes") or "")
@@ -248,9 +342,11 @@ def _stored_draft(contact) -> str:
 def due_items(contacts, threads, tracker, today, docs=None):
     """Everything due today or overdue in both halves, plus what a hold is keeping back.
 
-    Contacts: every `next_action_due` on or before today on a thread that is
-    not finished, which is the set `state.owed` already carries a due action
-    on, so the rule lives there once. Applications: every follow-up
+    Contacts: everything `state.owed` lists, which is only ever what is owed
+    now (a reply the moment they answer, a nudge once its clock has run, a
+    date the person set on themselves), so the rule lives there once. Each is
+    dated by the person's own `next_action_due` where there is one, else by
+    when it fell owed, else today. Applications: every follow-up
     `followups.review` finds due or held, and a gone-quiet notice on its one
     day. Unsorted; `render_due` orders it.
     """
@@ -258,10 +354,11 @@ def due_items(contacts, threads, tracker, today, docs=None):
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     items = []
     for o in state.owed(contacts, threads, today):
-        if not o["next_action_due"]:
-            continue
+        # A reply nobody put a date on is owed all the same. Reading only
+        # next_action_due dropped it, and the brief's first line said
+        # "0 replies owed" while someone sat waiting for an answer.
         c = by_id.get(o["contact_id"], {})
-        due = state.as_date(o["next_action_due"])
+        due = state.as_date(o["next_action_due"] or o.get("due")) or today
         name = o["name"] or o["contact_id"]
         who = name + "".join(", " + x for x in (c.get("title"), o["company"]) if x)
         items.append({
@@ -288,7 +385,7 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "to": followups.to_line(n) if n["state"] == "due" else "",
             "text": followups.body(n) if n["state"] == "due" else "",
             "held": list(n["held"]), "quiet": quiet, "ready": bool(n["message"])})
-    return items
+    return items + interview_items(tracker, today)
 
 
 def _urgency(i):
@@ -323,7 +420,7 @@ def render_due(items, today):
     # is made of.
     replies = sum(1 for i in over + now if i.get("kind") == "reply")
     queued = sum(1 for i in over + now if i.get("status") == "not_contacted")
-    no_one = sum(1 for i in apps if not i.get("ready"))
+    no_one = sum(1 for i in apps if not i.get("ready") and i.get("kind") != "interview")
     head = [
         "%s: %d overdue, %d due today, %d blocked by holds%s (%d replies owed, "
         "%d first messages queued, %d application follow-ups with no recipient)"

@@ -142,7 +142,7 @@ def test_versions_count_up_from_the_first_release_and_say_who_redoes_them():
         assert m["versions"][0][1] == B.FIRST_RELEASE
         for _, day, rerun, what in m["versions"]:
             assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) and isinstance(rerun, bool) and what
-        assert m["by"] in ("upgrade", "instant", "round", "you"), name
+        assert m["by"] in ("upgrade", "instant", "round", "network", "you"), name
         assert m["gives"] and m["run"] and m["priority"] in (1, 2, 3, 4), name
         assert m.get("applies") is None or m["applies"] in B.APPLIES, name
         if m["by"] == "instant":
@@ -165,7 +165,8 @@ def test_a_profile_from_the_first_release_redoes_what_got_better(profile):
              if any(v[2] for v in B.METHODS[n]["versions"][1:])}
     assert rerun and rerun <= pending
     why = U.by_id("method-boards").pending()
-    assert "version 1" in why and "boards" in why
+    # Said as what is better now, never as version numbers: this line reaches the person.
+    assert why.startswith("made the older way; now ") and "version" not in why
 
 
 def test_a_profile_made_after_a_version_is_not_asked_to_redo_it(profile, monkeypatch):
@@ -235,10 +236,14 @@ def test_screening_is_redone_by_every_round_with_no_upgrade(monkeypatch):
                "https://example.com/b": {"title": "Planner", "company": "Acme",
                                          "status": "excluded", "first_seen": "2026-09-01",
                                          "exclusion_reason": "posting closed"}}
+    # From a screening method with no re-run version yet, whatever the app's own holds.
+    base = dict(B.METHODS["screening"])
+    base["versions"] = tuple(v for v in base["versions"] if not v[2])
+    monkeypatch.setitem(B.METHODS, "screening", base)
     urls, _ = throttle.ruled_out(entries)
     assert len(urls) == 2                                    # no re-run version: both block
-    m = dict(B.METHODS["screening"])
-    m["versions"] = m["versions"] + ((2, "2026-11-01", True, "a better screen"),)
+    m = dict(base)
+    m["versions"] = m["versions"] + ((99, "2026-11-01", True, "a better screen"),)
     monkeypatch.setitem(B.METHODS, "screening", m)
     urls, _ = throttle.ruled_out(entries)
     assert list(urls) == [throttle.norm("https://example.com/b")]   # a fact still blocks

@@ -7,3 +7,12 @@ Pell Ansgar         # invented, tests/test_name_guard.py
 ChatGPT Codex       # a product: the ChatGPT coding agent
 Google's Gemini     # a product: Google's Gemini CLI
 Google Antigravity  # a product
+Fernhill Ratings    # invented, tests/test_people_are_matched_by_where_they_work.py
+Brindle's Analytics # invented, tests/test_people_are_matched_by_where_they_work.py
+Brannock Quillfeather  # invented, tests/test_people_are_matched_by_where_they_work.py
+Larkspur Casino Group   # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Northgate Council       # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Wexmoor Council         # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Placeholder         # a word that opened a commit subject ("Placeholder LinkedIn links"), not a name
+Looker Studio       # a product: Google's dashboard tool
+Azure Data Factory  # a product: Microsoft's data pipeline service

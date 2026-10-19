@@ -91,6 +91,10 @@ ALLOW = (
     ("**", r"aranculleton/openroles(?![-\w])"),
     # Unmodified TeX Live packages carry their CTAN authors' public addresses.
     ("texmf/**", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"),
+    # The families of interchangeable tools name software, not employers: only each
+    # ("Product", r"pattern") entry is set aside, and every comment and other line in
+    # the file is still read.
+    ("tools/bridges.py", r'\("[^"\n]{1,40}", r"[^"\n]*"\)'),
 )
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "venv"}

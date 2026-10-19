@@ -20,6 +20,188 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-10-19
+
+### Fixed
+
+- **The brief counts every reply someone is waiting for.** A reply owed with no date written
+  beside it was left out, so the brief could open on "0 replies owed" while someone waited,
+  and a nudge whose clock had run was left out the same way. No profile upgrade.
+- **A resume or letter already sent is never rendered over.** A redraft reused the filename
+  of an application already sent, and an archived posting was rewritten each run, or emptied
+  when a kept draft was run again. No profile upgrade.
+- **A large employer's Workday board is searched past its second page.** Workday gives a
+  search's count on its first page only, so every title search stopped at 40 postings
+  however many the employer listed. Each now reads on while its titles keep matching. No
+  profile upgrade.
+- **An employer's posting is kept when any place it lists is yours.** Greenhouse and Lever
+  postings were judged on their first location alone, so one listed as "Hybrid" or another
+  city, with your city among its offices or other locations, was dropped. An employer on
+  Lever's EU instance is read too; its board read as empty. No profile upgrade.
+- **A job a board relists is as old as the first time the search saw it.** Only the board's
+  date was read, and a relist gives a new one, so old postings looked fresh and earned the
+  freshness bonus. A posting with no date is unknown, never fresh. No profile upgrade.
+- **A remote job open only to people in another country is not shown as remote for you.**
+  "Remote (US only)" and "we only hire in the United States" passed, while "join us in the
+  office" was cut as a requirement to live abroad. No profile upgrade.
+- **A region a posting requires cuts only when your country is outside it.** "Must be based
+  in EMEA" cut a candidate in the UK, which EMEA takes in; "North America" reads the same
+  for Canada. No profile upgrade.
+- **"Toronto, CA" is Toronto.** A home city beside a country code, with no province, was
+  read as California. No profile upgrade.
+- **An old exclusion blocks a posting only while today's rules would still cut it.** A
+  degree, a range above the cut line or a place since reread kept a posting out for good.
+  Your own triage card still counts as a hard cut. No profile upgrade.
+- **The round's target counts the 0 to 100 score.** It counted ranking order, so a posting
+  with no stated salary could never count toward "2 at 75 or more". No profile upgrade.
+- **People are matched to an employer only when their result names it as where they
+  work.** A first name that spelled a one-word employer, an author's name on a post, or a
+  university in a title made someone "likely" there. A networking redo closes any such
+  contact already in the book, with the reason. No profile upgrade.
+- **A wider round searches more pages, never older postings.** Each widening stretched the
+  14-day freshness rule to 21 and then 42 days. No profile upgrade.
+- **Postings the screen cuts are recorded, so they are not fetched again.** No profile
+  upgrade.
+- **A round that misses keeps, and names, the file showing what the place and age checks
+  removed.** No profile upgrade.
+- **Re-judging past exclusions re-judges them.** The last step of the round still applied
+  every past exclusion. No profile upgrade.
+- **A ruling in one city no longer blocks the same job title elsewhere, and a closed
+  application blocks that role only.** "Data Analyst" blocked "Data Analyst, Fraud
+  Strategy". No profile upgrade.
+- **One portal failing some of its searches no longer stops the round.** No profile upgrade.
+- **A referral in progress holds, however the contact row names the employer.** No profile
+  upgrade.
+- **The example's pay knockout matches its own cut line.** It knocked out ranges below the
+  walk-away figure, which the screen only flags. No profile upgrade.
+- **An employer written "Full Name (SHORT)" is one employer with SHORT.** A bracket that
+  counted a small word ("of") in its initials, or gave the name's own first words, keyed
+  apart from the short name, so a thread and an application at one employer never linked.
+  No profile upgrade.
+- **The PDF check says which reader read the text layer.** Only one of the two can see words
+  run together; when it was missing the check passed without saying half of it had not
+  run. No profile upgrade.
+- **Rewriting first notes no longer shows up as work a chat cannot do.** It needs each
+  person read, so it now happens inside a networking run, in a chat that can read them;
+  finding people no longer makes it look overdue, and a chat with no browser is never told
+  to do it. No profile upgrade.
+- **Your own tests are named when an update breaks them.** After an update lands, the tests
+  in your own profile run, and any that pinned how the app worked before is named, with what
+  to do. No profile upgrade.
+- **Someone at an employer's ratings or analytics arm, or under its brand line, counts as
+  working there.** They were dropped as working somewhere else; a firm you list as separate
+  is never joined. No profile upgrade.
+- **"Data @ <Employer>" is a job at that employer, and a title with a comma is a place only
+  when it names one.** The first was read as an employer called "Data @ <Employer>" and the
+  second as a location. No profile upgrade.
+- **What works counts each application once, and finds the draft it was sent with.** An
+  "applied" row followed by an "interview" row for the same role counted as one loss and one
+  win, and a draft was never matched by its short name. No profile upgrade.
+- **"Help me prepare for an interview" gets the full interview pack.** A second way in had
+  a four-line step with no archive, research or saved pack. No profile upgrade.
+- **Interview prep treats postings and pages as data, and never fetches an interviewer's
+  LinkedIn.** No profile upgrade.
+- **Every figure in a cover letter is checked against your profile.** Only the resume's
+  were. No profile upgrade.
+- **A resume trimmed to fit keeps the line that best describes each job.** A trim could
+  leave a role described by an unrelated line. No profile upgrade.
+- **A draft the final check rejected is never rendered.** Keeping it out depended on the
+  checker deleting its own file. No profile upgrade.
+- **An outreach note is checked with its opening line.** The 80-word limit was checked
+  against the body alone, so a note passed while drafting and failed at the end. No profile
+  upgrade.
+- **A check run without the PDF reader that sees run-together words says so.** It fell back
+  to one that cannot, and said all passed. No profile upgrade.
+- **A letter rendered again keeps the date it was written.** No profile upgrade.
+- **The tracker is written in place.** Every line ending was rewritten, a second deadline
+  column could appear, and a declined or respelt application was mismatched. No profile
+  upgrade.
+- **The "already applied?" check and the letter use the employer's everyday name.** "Acme
+  Analytics" missed "Acme Analytics Inc.", and a salutation kept "(UK)". No profile upgrade.
+- **An application on an employer's own job board is recorded as online, not portal.** No
+  profile upgrade.
+- **A two-page resume is no longer flagged for being two pages** where your profile says two.
+  No profile upgrade.
+- **The denylist remembers names taken out of your files.** It reads every past version of
+  your tracker, contact book and message log, so a row deleted later is still checked. No
+  profile upgrade.
+
+### Changed
+
+- **You decide whether a skill your profile doesn't list goes on the resume.** Before anything
+  is drafted, each skill a posting names that your profile doesn't hold is asked about in one
+  short question, including any you said before you don't have. A yes puts it on that
+  resume's skills line as the posting spells it, and the interview pack flags it as one to
+  expect a question on; a no keeps it off every document. Nothing is drafted until you've
+  answered. No profile upgrade.
+- **Applications that have gone quiet are closed for you.** The brief closes each one past
+  the chase (45 days, or a week after a second follow-up) as no_response, with a dated note
+  on the row, and leaves alone any with an interview, a referral or a "do not chase" at that
+  employer. A reply after that goes in with `/outcome` as usual. No profile upgrade.
+- **A tool you hold counts for a near-identical one a posting asks for.** Power BI for
+  Tableau, AWS for Azure, Xero for QuickBooks, in any field: the score treats it as a near
+  match and the resume shows the tool you hold, and the one asked for only if you say yes. Only bridges written
+  into your own profile did this before. One step only: a stand-in is never used to bridge
+  anything else. No profile upgrade.
+- **Questions come one short line at a time.** Each is 40 words at most, in plain words; its
+  steps follow only a yes and its reason only a "why?", and a no gets one line. The LinkedIn
+  steps for your connections are dated and sourced like every other path. No profile upgrade.
+- **A no is asked again after 30 days, not 90.** A kept choice comes back on the same day
+  count. No profile upgrade.
+- **The place message is two or three sentences.** The dated steps and links come only
+  when you ask how. No profile upgrade.
+- **Waiting improvements are described by what you gain.** No ids, no version numbers. No
+  profile upgrade.
+- **The maintainer's own repo checks the public app by itself.** Every sync there scans
+  each unmerged branch, new commit messages and pull request text for the maintainer's own
+  names; nothing has to be kept up to date by hand, and CI's secret is optional. Anyone
+  else's repo is unaffected. No profile upgrade.
+- **Employers your bar excludes by name are dropped before their postings are fetched.** No
+  profile upgrade.
+- **The check that a posting is still open asks as the app, respects switched-off portals
+  and robots.txt, and waits between requests.** It fetched as a browser, LinkedIn
+  included when it was switched off. No profile upgrade.
+- **The drafting check is the grounding auditor itself.** Its own shortened copy of the rules
+  missed that two letters must never share an opening or a closing. No profile upgrade.
+- **A result recorded during a session shapes the next resume at once.** The lift for
+  bullets that reached an interview was read once and kept until the session ended. No
+  profile upgrade.
+
+### Added
+
+- **Interview packs are built by a tool, sourced, one screen first.** Five likely questions
+  each with the story or answer to use, three hooks, the money your application form already
+  named, what not to say; then the detail. It was put together by hand, so an unsourced fact
+  or a banned phrase could reach an interview. Your stories are matched to questions by a
+  `Use for:` line, added for you to any story without one. Profile upgrade: interview-tags.
+- **A booked interview shows on the due list, with a thank-you reminder after it.** There
+  was nowhere to write a booked stage. No profile upgrade.
+- **The questions interviews asked, and the stories that landed, go into one bank.** The next
+  pack at that employer leads with them, and `what_works.py brief interviews` shows how far
+  applications get. No profile upgrade.
+- **An offer gets a negotiation pack.** Nothing prepared for one before. No profile upgrade.
+- **A letter is addressed to the person the employer names for the role.** Every letter
+  went to the hiring team. No profile upgrade.
+- **A connection request you withdrew is recorded, and that person is never written to
+  again.** Nothing recorded a withdrawal, so the request stayed on the list to withdraw.
+  No profile upgrade.
+- **Several LinkedIn profiles can be pasted in one message.** Each is matched to its waiting
+  note and read on its own. No profile upgrade.
+- **A skill your profile says you do not hold is caught wherever it is claimed, unless you
+  said yes to it for that application.** No profile upgrade.
+- **A letter bullet that repeats the resume word for word is flagged.** No profile upgrade.
+- **A note written before anything was read about the person says so at its top.** It waits
+  on a read and is never sent as it stands. No profile upgrade.
+- **Prep documents say which version wrote them, and only out-of-date ones are rewritten.**
+  Rewriting every one rewrote hundreds of files and made one for every contact. No profile
+  upgrade.
+
+### Removed
+
+- **Notion sync.** Nothing used it, and copying the pipeline to another service is not part
+  of the search. A sync file it left in your repo stays yours and private. No profile
+  upgrade.
+
 ## [3.4.0] - 2026-10-19
 
 ### Fixed

@@ -7,6 +7,9 @@
 #
 #   tools/verify_batch.sh rounds/r1/drafts.json
 #
+# Exit 0 all pass, 1 a finding, 3 nothing failed but the spacing check was
+# skipped because pypdf is unavailable (which is not a pass).
+#
 # Everything about the person (the filename prefix, the employers in resume
 # order with their column codes and minimum bullets, the email and phone the
 # text layer must carry, the pinned skill, the section headings, the document
@@ -33,7 +36,7 @@ prog = prog.replace('"%s"', '"' + "/".join(["%d"] * len(names)) + '"') + "}"
 print(prog)
 PYX
 )
-fail=0; tb=0; n=0
+fail=0; tb=0; n=0; readers=""; skipped=0
 printf "%-9s %-4s %-4s %-14s %s\n" ABBR pgs blt "$ROLE_HEADER" flags
 for a in $ABBRS; do
   R="$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.pdf"; C="$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.pdf"
@@ -74,8 +77,17 @@ PYX
   # verify_pdf.py reads with pypdf first and fails words run together. A resume
   # built with LuaLaTeX and an OpenType font read in pypdf with its city and
   # phone number run together, and would have passed everything else here.
-  python3 "$ROOT/tools/verify_pdf.py" "$R" >/dev/null 2>&1 || p="$p SPACING_RESUME"
-  python3 "$ROOT/tools/verify_pdf.py" "$C" >/dev/null 2>&1 || p="$p SPACING_LETTER"
+  # Which reader it used is said once at the end: only pypdf catches words run
+  # together, and a fallback to pdftotext passed them without a word. So pypdf
+  # is required; exit 3 means it is unavailable, the rest of the text-layer
+  # check runs on pdftotext, and the batch says the spacing check was SKIPPED.
+  vr=$(python3 "$ROOT/tools/verify_pdf.py" --require pypdf "$R" 2>&1); st=$?
+  if [ "$st" -eq 3 ]; then skipped=1; vr=$(python3 "$ROOT/tools/verify_pdf.py" "$R" 2>&1) || p="$p SPACING_RESUME"
+  elif [ "$st" -ne 0 ]; then p="$p SPACING_RESUME"; fi
+  vc=$(python3 "$ROOT/tools/verify_pdf.py" --require pypdf "$C" 2>&1); st=$?
+  if [ "$st" -eq 3 ]; then skipped=1; vc=$(python3 "$ROOT/tools/verify_pdf.py" "$C" 2>&1) || p="$p SPACING_LETTER"
+  elif [ "$st" -ne 0 ]; then p="$p SPACING_LETTER"; fi
+  readers="$readers $(printf '%s\n%s\n' "$vr" "$vc" | grep -oE 'extractor: [a-z]+' | cut -d' ' -f2)"
   grep -qF -- "$EMAIL" $VB/vb_r1.txt && grep -qF -- "$PHONE" $VB/vb_r1.txt || p="$p CONTACT"
   [ -z "$PINNED" ] || grep -qF -- "$PINNED" $VB/vb_r1.txt || p="$p NO_PINNED_SKILL"
   # Skills sits between Professional Experience and Education; the old range
@@ -83,16 +95,15 @@ PYX
   sed -n "/^$H_SKILLS/,/^$H_EDUCATION/{/^$H_EDUCATION/d;p}" $VB/vb_r.txt | grep -q '[()]' && p="$p SKILLPARENS"
   [ "$(grep -E '^ *•' $VB/vb_r.txt | sed 's/^ *• *//' | cut -c1-45 | sort | uniq -d | wc -l)" = 0 ] || p="$p DUPBULLET"
   [ -z "$BANNED_NOUNS" ] || ! grep -qiE "\\b($BANNED_NOUNS)\\b" $VB/vb_r.txt $VB/vb_c.txt || p="$p $BANNED_FLAG"
-  shared=$(python3 - "$VB/vb_r.txt" "$H_EXPERIENCE" "$H_EDUCATION" <<'PYX'
+  # Six words in a row shared by two bullets: audit_letters.shared_runs, which
+  # also reads each letter's bullets against the resume's.
+  shared=$(python3 - "$VB/vb_r.txt" "$H_EXPERIENCE" "$H_EDUCATION" "$ROOT/tools" <<'PYX'
 import re, sys
+sys.path.insert(0, sys.argv[4])
+from audit_letters import shared_runs
 t=open(sys.argv[1]).read()
 bul=[re.sub(r"\s+"," ",b).strip() for b in re.split(r"\n\s*• ", "\n"+t.split(sys.argv[2],1)[1].split(sys.argv[3],1)[0])[1:]]
-runs={}
-for i,b in enumerate(bul):
-    w=b.lower().split()
-    for j in range(len(w)-5):
-        runs.setdefault(" ".join(w[j:j+6]),set()).add(i)
-print(sum(1 for k,v in runs.items() if len(v)>1))
+print(len(shared_runs(bul)))
 PYX
 )
   [ "$shared" = 0 ] || p="$p SHARED_PHRASE($shared)"
@@ -108,6 +119,11 @@ PYX
   [ -n "$p" ] && fail=1
 done
 echo "mean bullets: $((tb/n))"
+used=$(echo $readers | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ $//')
+case " $used " in
+  *" pdftotext "*) echo "text layer read with: ${used:-nothing} (pdftotext fallback: words run together are NOT caught; pip3 install pypdf, or pip3 install --upgrade cffi if it is installed)" ;;
+  *) echo "text layer read with: ${used:-nothing}" ;;
+esac
 echo "=== claims ==="
 # The pipeline's exit status is the last command's, so a failing check hid
 # behind grep|head and the script said ALL PASS over letters carrying
@@ -126,11 +142,12 @@ echo "=== numbers ==="
 # This is the general case for the kind of claim that can be checked
 # mechanically: every number in the resume must exist in the profile.
 #
-# RESUMES ONLY, and deliberately. A cover letter carries verified company facts
-# ("a 40-year lease", "12,345 daily deliveries") which are not the
-# candidate's claims about themselves and are checked against an independently
-# located source instead. Running this over the letters reports dozens of them.
-python3 "$ROOT/tools/check_numbers.py" \
+# The letters are read from the drafts, not the .tex: a cover letter carries
+# verified company facts ("a 40-year lease", "12,345 daily deliveries") which
+# are not the candidate's claims about themselves, and only the draft knows
+# which paragraph holds them. `--drafts` checks the summary, the opening, the
+# bullets and the close, and allows the figures in p2 and in the posting.
+python3 "$ROOT/tools/check_numbers.py" --drafts "$DRAFTS" \
   $(for a in $ABBRS; do echo "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "NUMBERS: FAILURES ABOVE"; fail=1; }
 echo "=== voice ==="
@@ -142,4 +159,11 @@ echo "=== voice ==="
 python3 "$ROOT/tools/voice_check.py" --soft-ok \
   $(for a in $ABBRS; do echo "$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "VOICE: FAILURES ABOVE"; fail=1; }
-[ $fail -eq 0 ] && echo "BATCH: ALL PASS" || { echo "BATCH: FAILURES ABOVE"; exit 1; }
+if [ "$skipped" = 1 ]; then
+  echo "=== SPACING CHECK SKIPPED ==="
+  echo "pypdf is not available, so words run together were NOT checked on any document."
+  echo "pip3 install pypdf (or pip3 install --upgrade cffi if it is installed) and run this again."
+fi
+[ $fail -eq 0 ] || { echo "BATCH: FAILURES ABOVE"; exit 1; }
+[ "$skipped" = 0 ] || { echo "BATCH: NOT ALL PASS, the spacing check was SKIPPED"; exit 3; }
+echo "BATCH: ALL PASS"

@@ -50,7 +50,10 @@ Every session in a person's repo starts with the same five steps, before anythin
    one of the latter. Then the place check (`tools/place.py`), once and then weekly while it applies: when this chat
    cannot do what the person set up (profiles read in their browser, from a chat with no
    browser of theirs; tools missing on their computer), it prints what to tell them, which
-   goes at the end of the reply in its own words. It offers a choice and never makes it. The app is public, so nothing needs attaching; if it still cannot reach
+   goes at the end of the reply in its own words: two or three short sentences, and the
+   dated steps only if they ask how (`place.py how`). It offers a choice and never makes it.
+   In the maintainer's own repo the sync also checks the public app for their names
+   (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before anything else. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
@@ -70,8 +73,12 @@ Every session in a person's repo starts with the same five steps, before anythin
    - **At the end of your reply**, one line per upgrade it applied: what changed and
      `git revert <sha>` to undo it.
    - **What needs the person** ("These need you", unconfirmed facts): ask at most three,
-     plainly, at the end of the session, never at the start; write each answer where its
-     marker was and commit it. The rest wait for the next session.
+     at the end of the session, never at the start, **each as its short plain question
+     first**, as the sync prints it. Detail comes only after a yes (its steps) or a "why?"
+     (one sentence), both in `profile_upgrades.py --plan`; a no gets one line, "No problem,
+     I'll ask again in a month.", and `--no <id>` records it. Never paste a long block, an
+     id, a version number or the word "upgrade". Write each answer where its marker was and
+     commit it. The rest wait for the next session.
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
    - **One chat per update.** Only the chat whose own sync brought an update in applies its
@@ -196,7 +203,7 @@ done
 for p in job_search_tracker.csv network_contacts.csv network_threads.csv \
          job_scraper/seen_jobs.json job_scraper/do_not_target.json \
          documents/cv documents/applications documents/network documents/rounds \
-         cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
+         documents/interview cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
          cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf \
          company_research/*.json upskill/*.md; do
   [ -e "$p" ] && git add -f -- "$p"
@@ -304,9 +311,19 @@ stages the one posting):
 
 ```bash
 python3 tools/stage_picks.py stage "$SCRATCH/r1" "Acme::Demand Planning" 4 7     # picks.json, apps_in.json, fenced postings
+python3 tools/stage_picks.py consent "$SCRATCH/r1" acme --yes Looker --no Spark   # the person's answers
 # Workflow draft-applications with args {today, round_dir, picks: <picks.json>}
 python3 tools/stage_picks.py assemble "$SCRATCH/r1"                              # drafts.json
 ```
+
+**A skill a posting names that the profile does not hold is the person's call, every time**,
+even one they once said they lack: `stage` prints one short question per pick, asked as
+written (the reason only if they ask why), and `consent` records each answer. Read the
+posting too, and ask the same way about any other skill it names that the profile lacks and
+the question missed. A yes is for that application: it prints on the skills line as the
+posting spells it. Where they say they hold it generally, that is a fact: write it into
+`01-candidate-profile.md` and `skills.py` `ITEMS` (out of `NOT_HELD`) in the same turn. The
+workflow drafts nothing and `assemble` assembles nothing while a question waits.
 
 Then RUNBOOK.md step 3. `stage` **never reuses a name another application was sent under**:
 a second role at an employer gets a role token (`Acme_DemandPlanning`), and `fit_to_page.py`
@@ -325,7 +342,7 @@ slash. A command and a skill can share a stem; they are not alternatives to each
 | `networking` | `/network` `/reply` `/threads` `/prep` |
 | `upskill` | (none) |
 
-Also `/gmail-sync`, `/notion-sync`, `/html-report` and `/upgrade` (which a session starts
+Also `/gmail-sync`, `/html-report` and `/upgrade` (which a session starts
 itself, CLAUDE.md step 5), which belong to no skill.
 
 **Two things are typed with a slash.** A file in `.claude/commands/` is one. A skill's
@@ -362,7 +379,7 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
 
 **Tools run directly, not through a slash command**: `run_round.py`, `job_alerts.py`,
 `stage_picks.py`, `verify_batch.sh`, `record_drafts.py`, `open_actions.py` (`--due`,
-`--company`), `followups.py`, `what_works.py`, `bar.py`, `network/state.py`, `network/reading.py`,
+`--company`), `followups.py` (`--close-quiet`), `what_works.py`, `interview_pack.py`, `bar.py`, `network/state.py`, `network/reading.py`,
 `network/prep.py --all`, `network/profile_facts.py` and `bridges.py`. What each does, its flags and its exit
 codes are in RUNBOOK.md, "Tools run directly". `run_round.py` exits 0 when the yield target is
 met, 2 when it is missed (a thin market) and 1 when a stage broke.
@@ -400,7 +417,9 @@ the yield target is met (at least 5 postings at 60+, 2 of them 75+); then presen
 table, highest first, with the scores, the salary read, deadlines, referral links, a
 clickable apply link on every row and what needs checking. **Stop there and ask** which to
 take forward: draft nothing unless that request asked for it, and before drafting anything,
-ask whether they have already applied and record the answer.
+ask whether they have already applied and record the answer, and ask about every skill a
+posting names that their profile does not hold (staging prints the question; only their yes
+puts one on the page).
 
 **Rank down, do not cut.** The hard cuts are only the ones no framing survives: an
 eligibility bar the profile cannot clear, a language requirement, a professional credential
@@ -533,7 +552,7 @@ from now on." Once per kind of output per session, and never in place of the wor
 code, not their settings. When an update would change a setting `learned.py locked`
 lists, `/upgrade` changes nothing. It records `learned.py offer` instead, and the
 person is asked once, with the session's other questions, whether to keep theirs or try
-the new way. A kept choice is offered again after 90 days, saying when it was kept: a no
+the new way. A kept choice is offered again after 30 days, saying when it was kept: a no
 to any question is for now, never for ever (`profile_upgrades.py --no <id>` keeps one,
 dated, and it comes back when the question changes or after `REASK_DAYS`).
 
@@ -566,6 +585,8 @@ chat has lost it.
 |---|---|
 | Applied to something, anywhere, including outside this repo | `job_search_tracker.csv`, a new row |
 | An application changed status (interview, offer, rejection, silence) | `job_search_tracker.csv` `status`, via `/outcome` |
+| An interview was booked | that application's `outcome.md`, as a scheduled stage line, via `/outcome` |
+| The questions an interview asked, and which stories landed | `documents/interview/question_bank.csv`, via `/outcome` (`interview_pack.py asked`) |
 | Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
 | Messaged someone, or they replied | `network_threads.csv`, one row per message |
 | A new person worth contacting | `network_contacts.csv` |

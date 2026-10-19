@@ -737,9 +737,10 @@ def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = F
     parts = ", ".join(f"{KINDS[k].label if k in KINDS else k} {n}" for k, n in tried.items())
     more = []
     if not have_connections:
-        more.append("your LinkedIn connections (LinkedIn sends the export by email in "
-                    "about ten minutes: Settings, Data privacy, Get a copy of your data, "
-                    "Connections), so I start from people you already know")
+        # The path itself is dated and sourced in tools/claude_surfaces.json
+        # (linkedin-connections), given when they say yes, never pasted unasked.
+        more.append("your LinkedIn connections, so I start from people you already know: "
+                    "one file from LinkedIn, about ten minutes, and I'll walk you through it")
     if browser:
         more.append("each employer's People tab, read in your own browser at the same pace "
                     "as profiles")

@@ -23,8 +23,10 @@ the work is split:
    filters, so they are screened, scored and throttled like every other posting.
 
 A posting LinkedIn shows as closed is dropped, and the count says so. The
-email's date stands in for the posting date, which the posting page does not
-give; an alert goes out within a day or two of the posting.
+posting page gives no posting date, and the email's date is not one: LinkedIn
+sends an alert for a relisted posting too. So it is kept as `alert_date`, the
+day the posting was known to exist, which ages it (tools/prefilter.py
+`age_days`) and never makes it fresh.
 
 If the person has switched linkedin-search off, nothing is fetched: reading
 their alerts is not a reason to send LinkedIn the requests they turned off.
@@ -75,15 +77,15 @@ def day(value) -> str:
     text: the age gate cannot parse it and would let the posting through."""
     import datetime as dt
     from email.utils import parsedate_to_datetime
+    from dates import as_date
     s = str(value or "").strip()
     if not s:
         return ""
     if re.fullmatch(r"\d{12,14}", s):
         return dt.datetime.fromtimestamp(int(s) / 1000, dt.timezone.utc).date().isoformat()
-    try:
-        return dt.date.fromisoformat(s[:10]).isoformat()
-    except ValueError:
-        pass
+    iso = as_date(s, iso_only=True)
+    if iso:
+        return iso.isoformat()
     try:
         return parsedate_to_datetime(s).date().isoformat()
     except (TypeError, ValueError, IndexError):
@@ -124,9 +126,11 @@ def detail(jid: str, timeout: int = 60) -> tuple[dict | None, str | None]:
 
 
 def row(jid: str, date: str, d: dict) -> dict:
+    """One posting. `date` is the alert's, kept apart from the posting's own (none)."""
     return {"id": jid, "title": d.get("title"), "company": d.get("company"),
             "url": f"https://www.linkedin.com/jobs/view/{jid}",
-            "location": d.get("location"), "date": date, "portal": "linkedin",
+            "location": d.get("location"), "date": d.get("date") or None,
+            "alert_date": date or None, "portal": "linkedin",
             "desc": (d.get("description") or "")[:BODY_CAP] or None, "source": "job alert"}
 
 

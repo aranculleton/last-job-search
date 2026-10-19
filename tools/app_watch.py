@@ -1,0 +1,264 @@
+#!/usr/bin/env python3
+"""The public app, checked for the maintainer's own data, from the maintainer's own repo.
+
+The app is public, so anything personal pushed to it is public at once, branches and
+history included. Two gates stand in front of it: the leak scan a session runs before
+every push (MAINTAINING.md), and the app's CI. CI could only check names through a
+LEAK_TOKENS secret somebody had to rebuild and paste in by hand, so it fell behind: on
+2026-10-19 it still knew employers the maintainer's own list had since forgotten, and
+a list nobody maintains will fall behind again.
+
+This needs no secret and no one. It runs in the maintainer's repo (the one whose GitHub
+owner is the app's), where the names are: every sync of that repo builds the denylist
+from the profile and the whole history of its state files (tools/build_app.py), fetches
+the app's branches, and scans what changed since it last looked: every branch's files,
+the commit messages, and the pull requests' titles and descriptions. Nothing is changed
+anywhere. A finding is printed for Claude to put in front of the person before anything
+else; a clean check says so in one line.
+
+    python3 tools/app_watch.py            # what sync_app.py runs; a no-op in anyone else's repo
+    python3 tools/app_watch.py --all      # everything again, not only what changed
+
+Exit 0 clean or not the maintainer's repo, 1 with findings, 2 when the app could not be
+reached. What it has scanned is remembered in .git/ljs-app-watch.json, never committed.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import urllib.request
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)
+sys.path.insert(0, HERE)
+
+APP_URL = "https://github.com/aranculleton/last-job-search"
+API = "https://api.github.com/repos/aranculleton/last-job-search/pulls?state=all&sort=updated&direction=desc&per_page=50"
+REFS = "refs/ljs-app-watch/"
+STATE = "ljs-app-watch.json"
+UA = {"User-Agent": "last-job-search-app-watch/1 (+https://github.com/aranculleton/last-job-search)",
+      "Accept": "application/vnd.github+json"}
+
+
+def _git(*args: str, input: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True,
+                          input=input)
+
+
+def app_url() -> str:
+    return os.environ.get("LJS_APP_URL") or APP_URL
+
+
+def _owner(url: str) -> str:
+    url = url.strip().removesuffix(".git").rstrip("/")
+    parts = url.replace(":", "/").split("/")
+    return parts[-2].lower() if len(parts) >= 2 else ""
+
+
+def is_maintainers() -> bool:
+    """This repo is the maintainer's own: its GitHub owner is the app's, and it is not the
+    app itself. Only that repo holds the names the app must never carry."""
+    origin = _git("remote", "get-url", "origin")
+    if origin.returncode != 0:
+        return False
+    mine, app = origin.stdout.strip().removesuffix(".git").rstrip("/"), app_url().rstrip("/")
+    return bool(_owner(mine)) and _owner(mine) == _owner(app) and mine.lower() != app.lower() \
+        and os.path.isdir(os.path.join(ROOT, "profile"))
+
+
+def _state_path() -> str:
+    d = _git("rev-parse", "--git-common-dir").stdout.strip() or ".git"
+    return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), STATE)
+
+
+def _load() -> dict:
+    try:
+        with open(_state_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _save(state: dict) -> None:
+    try:
+        with open(_state_path(), "w", encoding="utf-8") as fh:
+            json.dump(state, fh, indent=1, sort_keys=True)
+    except OSError:
+        pass
+
+
+def fetch() -> dict[str, str] | None:
+    """Every branch of the app, into a namespace of its own: {branch: sha}, or None."""
+    r = _git("fetch", "--quiet", "--no-tags", "--prune", app_url(), f"+refs/heads/*:{REFS}*")
+    if r.returncode != 0:
+        return None
+    out = _git("for-each-ref", "--format=%(refname) %(objectname)", REFS).stdout.split("\n")
+    return {line.split()[0][len(REFS):]: line.split()[1] for line in out if line.strip()}
+
+
+def _blobs(sha: str) -> dict[str, str]:
+    """{path: blob sha} for every file in a commit's tree."""
+    out = subprocess.run(["git", "-C", ROOT, "ls-tree", "-r", "-z", sha],
+                         capture_output=True).stdout.decode("utf-8", errors="replace")
+    blobs = {}
+    for entry in out.split("\0"):
+        meta, _, path = entry.partition("\t")
+        parts = meta.split()
+        if len(parts) == 3 and parts[1] == "blob":
+            blobs[path] = parts[2]
+    return blobs
+
+
+def _files_findings(files: dict[str, str], tokens) -> list[str]:
+    """Scan these {path: blob} as one tree: each written out at its own path, so the
+    path checks (a personal path, a binary) see what they would in a checkout."""
+    import leak_scan
+    if not files:
+        return []
+    with tempfile.TemporaryDirectory() as d:
+        cat = subprocess.run(["git", "-C", ROOT, "cat-file", "--batch"],
+                             input="".join(f"{b}\n" for b in files.values()).encode(),
+                             capture_output=True).stdout
+        for path in files:
+            head, _, cat = cat.partition(b"\n")
+            size = int(head.split()[2]) if len(head.split()) == 3 else 0
+            data, cat = cat[:size], cat[size + 1:]
+            full = os.path.join(d, path)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "wb") as fh:
+                fh.write(data)
+        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True)
+
+
+def _text_findings(label: str, text: str, tokens) -> list[str]:
+    import leak_scan
+    # The app's own owner and name are public, in its address and in every line GitHub
+    # writes for a merge ("Merge pull request #7 from <owner>/<branch>"); a file's copy
+    # of the address is allowed the same way (leak_scan ALLOW).
+    owner = _owner(app_url())
+    if owner:
+        text = re.sub(rf"(?<![\w.-]){re.escape(owner)}/", " /", text, flags=re.I)
+    if not text.strip():
+        return []
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, label)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(text)
+        return leak_scan.scan_text([path], tokens, show=True)
+
+
+def _pull_requests(since: str) -> tuple[list[dict], str]:
+    """The app's pull requests updated after `since` (an ISO time), newest first, and ""
+    or why they could not be read. Public data, read with no account."""
+    try:
+        req = urllib.request.Request(API, headers=UA)
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            got = json.loads(resp.read().decode("utf-8"))
+    except Exception as exc:  # noqa: BLE001  unreachable is reported, never fatal
+        return [], f"pull request text not checked ({type(exc).__name__})"
+    return [p for p in got if str(p.get("updated_at") or "") > since], ""
+
+
+def watch(everything: bool = False) -> tuple[list[str], str]:
+    """(findings, summary). Findings name where, with the matched text: this runs only in
+    the maintainer's private repo, for the maintainer."""
+    import build_app
+    import leak_scan
+    denylist = build_app.denylist()
+    digest = hashlib.sha1("\n".join(denylist).encode("utf-8")).hexdigest()[:16]
+    with tempfile.NamedTemporaryFile("w", suffix=".tokens", delete=False, encoding="utf-8") as fh:
+        fh.write("\n".join(denylist) + "\n")
+        tok_path = fh.name
+    try:
+        tokens = leak_scan.load_tokens(tok_path)
+    finally:
+        os.unlink(tok_path)
+    heads = fetch()
+    if heads is None:
+        return [], f"the app could not be reached at {app_url()}"
+    # A branch already merged into master adds nothing master's history does not hold,
+    # and that history is permanent: what is worth knowing today is what is new.
+    master = heads.get("master", "")
+    heads = {b: s for b, s in heads.items() if b == "master" or not master
+             or _git("merge-base", "--is-ancestor", s, master).returncode != 0}
+    state = _load()
+    fresh = everything or state.get("tokens") != digest
+    seen = set() if fresh else set(state.get("blobs") or [])
+    old_tips = [] if fresh else [s for s in state.get("tips") or []
+                                 if _git("cat-file", "-e", s).returncode == 0]
+    findings: list[str] = []
+    # Every file any branch holds, each distinct one read once: the branches share
+    # nearly all of them, and a tree takes seconds.
+    todo: dict[str, tuple[str, str]] = {}
+    queued: set[str] = set()
+    for branch, sha in sorted(heads.items()):
+        for path, blob in _blobs(sha).items():
+            if blob not in seen and blob not in queued:
+                queued.add(blob)
+                todo[f"{branch}\0{path}"] = (blob, branch)
+    by_branch: dict[str, dict[str, str]] = {}
+    for key, (blob, branch) in todo.items():
+        by_branch.setdefault(branch, {})[key.split("\0", 1)[1]] = blob
+    for branch, files in sorted(by_branch.items()):
+        findings += [f"branch {branch}: {f}" for f in _files_findings(files, tokens)]
+    seen |= {b for b, _ in todo.values()}
+    # Commit messages new since the last look, on any branch, scanned as one text.
+    new = _git("rev-list", *heads.values(), "--not", *old_tips).stdout.split() if heads else []
+    commits = len(new)
+    if new:
+        log = _git("log", "--no-walk=unsorted", "--format=%H%x00%B%x01", *new).stdout
+        lines, owner = [], []
+        for entry in log.split("\x01"):
+            if "\x00" not in entry:
+                continue
+            c, msg = entry.strip("\n").split("\x00", 1)
+            for ln in msg.splitlines() or [""]:
+                lines.append(ln)
+                owner.append(c)
+        for f in _text_findings("messages", "\n".join(lines), tokens):
+            n = int(f.split(":", 2)[1]) if f.split(":", 2)[1].isdigit() else 1
+            findings.append(f"commit {owner[n - 1][:12]} message: {f.split(': ', 1)[-1]}")
+    since = "" if fresh else str(state.get("prs_since") or "")
+    prs, unread = _pull_requests(since)
+    for p in prs:
+        text = f"{p.get('title') or ''}\n{p.get('body') or ''}"
+        findings += [f"pull request #{p.get('number')}: {f.split(': ', 1)[-1]}"
+                     for f in _text_findings("pr", text, tokens)]
+    newest = max([str(p.get("updated_at") or "") for p in prs] + [since])
+    _save({"tokens": digest, "blobs": sorted(seen), "tips": sorted(set(heads.values())),
+           "prs_since": newest if not unread else since})
+    summary = (f"{len(heads)} branch(es), {len(todo)} new file version(s), {commits} commit "
+               f"message(s) and {len(prs)} pull request(s) checked against {len(denylist)} "
+               "entries from this repo" + (f"; {unread}" if unread else ""))
+    return findings, summary
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if not is_maintainers():
+        return 0
+    findings, summary = watch(everything="--all" in argv)
+    if summary.startswith("the app could not be reached"):
+        print(f"App watch: {summary}; checked again on the next sync.")
+        return 2
+    if findings:
+        print(f"APP LEAK: {len(findings)} finding(s) of this person's own data in the public app. "
+              "Claude: before anything else, tell the person exactly this, and change nothing "
+              "in the app without them:")
+        for f in findings[:40]:
+            print(f"  - {f}")
+        if len(findings) > 40:
+            print(f"  - and {len(findings) - 40} more (python3 tools/app_watch.py --all)")
+        return 1
+    print(f"App watch: clean ({summary}).")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

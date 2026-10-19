@@ -159,3 +159,39 @@ def test_git_mode_scans_what_would_be_committed_and_nothing_else(tmp_path, monke
     monkeypatch.setenv("LJS_LEAK_TOKENS", "Zorblax Quux")
     found = leak_scan.scan(t, leak_scan.load_tokens(None), leak_scan.load_allow(None), git=True)
     assert [f.split(":")[0] for f in found] == ["new_notes.md"]
+
+
+def test_the_denylist_remembers_a_row_taken_out_of_the_state_files(tmp_path):
+    """A draft never sent was scrubbed from a tracker, and a denylist built from today's
+    file alone forgot the employer it named, while the repo's history still held it."""
+    import subprocess
+    import build_app
+
+    def git(*a):
+        subprocess.run(["git", "-C", str(tmp_path), "-c", "user.name=t", "-c",
+                        "user.email=t@example.com", *a], check=True, capture_output=True)
+    git("init", "-q")
+    tracker = tmp_path / "job_search_tracker.csv"
+    tracker.write_text("company,role\nFernhill Freight,Analyst\nLarkspur Retail,Analyst\n")
+    git("add", "-A")
+    git("commit", "-qm", "two drafts")
+    tracker.write_text("company,role\nLarkspur Retail,Analyst\n")
+    git("commit", "-qam", "one scrubbed")
+    assert [r["company"] for r in build_app._csv(str(tracker))] == ["Larkspur Retail"]
+    ever = {r["company"] for r in build_app._csv_ever(str(tracker))}
+    assert ever == {"Fernhill Freight", "Larkspur Retail"}
+    # Every state file the denylist reads, it reads with its history.
+    src = open(os.path.join(ROOT, "tools", "build_app.py"), encoding="utf-8").read()
+    body = src[src.index("def denylist("):src.index("def main(")]
+    assert "_csv(person.state(" not in body and body.count("_csv_ever(person.state(") == 4
+
+
+def test_a_tool_family_entry_is_set_aside_and_nothing_else_in_the_file(tmp_path, monkeypatch):
+    # The families of interchangeable tools name software. A product that shares a word
+    # with a denylisted employer is not a leak there; the same word anywhere else is.
+    t = tmp_path / "tools"
+    t.mkdir()
+    (t / "bridges.py").write_text('FAMILIES = [("store", ("Zorblax", r"\\bzorblax\\b")),]\n'
+                                  "# Zorblax asked for this\n", encoding="utf-8")
+    found = _scan(str(tmp_path), "Zorblax\n", monkeypatch=monkeypatch)
+    assert found == ["tools/bridges.py:2: denylist entry 1"]

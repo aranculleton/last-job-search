@@ -28,7 +28,12 @@ only, ever. `compose.validate()` refuses check-in wording ("just checking in",
 "bumping this", "did you get a chance"): a nudge carries something new to answer.
 
 **Requests to withdraw** (`request_pending`): a connection request nobody accepted in
-21 days. Nothing can be sent; say so and suggest withdrawing it.
+21 days. Nothing can be sent; say so and suggest withdrawing it. When they say they have
+withdrawn it on LinkedIn, record it in the same turn:
+`python3 tools/network/state.py withdraw <contact_id>...` (`--all-due` for every one
+listed here). It logs a `request_withdrawn` row the derived status reads as closed and
+closes the contact with the date and why, so the request leaves this list and the person
+is never surfaced or written to again. Commit the two CSVs.
 
 **Gone cold** third, as a list to close out rather than chase.
 

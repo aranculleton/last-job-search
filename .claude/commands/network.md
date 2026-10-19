@@ -44,7 +44,11 @@ it. LinkedIn is never fetched from a session.
    **Drafts queued by an earlier run come first**: contacts at `not_contacted` with a
    `documents/network/<contact_id>/draft.md`. Show them before any new search: send
    them or drop them. `python3 tools/network/reading.py queue` lists the queued ones with no
-   fresh reading of their profile: read them (step 5) and rewrite those notes first.
+   fresh reading of their profile: read them (step 5) and rewrite those notes first. When
+   `python3 tools/build_versions.py behind network-notes` prints a line, notes are now written
+   better than when these were: rewrite every queued note from its reading, then
+   `python3 tools/build_versions.py record network-notes`. This is the only place that
+   happens, because it needs the people read, which a background agent cannot do.
    **Their own connections, if exported: rung 1.** `python3 tools/network/sources.py
    connections "<employer>"` (`sources.from_connections()`) lists the people they already
    know there from `documents/linkedin/Connections.csv`, in their function first, then the
@@ -280,6 +284,11 @@ it. LinkedIn is never fetched from a session.
         in the images: never fill a gap, guess a cut-off line or carry over anything from
         a second person's profile in the same screenshot.
 
+      Several at once is one paste with a line of `---` between profiles:
+      `python3 tools/network/reading.py paste <file|->` matches each to a queued contact by
+      name and employer, reads each on its own, and says which matched, which did not, and
+      which notes to rewrite.
+
       They open the profile anyway to send the request, so this costs seconds, and the
       note is rewritten from it in the same turn. This is the route that works wherever
       the session runs, web and phone included, with nothing of theirs at risk.
@@ -339,9 +348,12 @@ it. LinkedIn is never fetched from a session.
    signal for tier 1, `linkedin_url`, the channel, and
    `linked_application` where `state.link_to_applications()` finds one. Each id from
    `state.unique_contact_id(name, company, contacts, linkedin_url=...)`. **Write each
-   draft to `documents/network/<contact_id>/draft.md`** and commit it with the
+   draft to `documents/network/<contact_id>/draft.md`** with
+   `python3 tools/network/reading.py draft <contact_id> <file|->`, and commit it with the
    contacts: a draft that lives only in the chat is gone when the session ends, and the
-   next run would skip the contact as already queued.
+   next run would skip the contact as already queued. A note for someone nothing was
+   read about opens on a `WAITS ON A READ` line, so `reading.py queue` lists it and nobody
+   sends it as it stands; it is rewritten from a reading the same way.
 
 ## Present
 
@@ -397,7 +409,8 @@ When they say it did, record it in the same turn, per contact:
 2. **The contact row** (`state.load_contacts()`, then `state.save_contacts()`):
    `first_contacted` that day when it is empty, `channel`, `status` `awaiting_reply`,
    `next_action` (one nudge if no reply; for a connection request, a nudge once they accept,
-   and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days), and
+   and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days, recorded
+   with `python3 tools/network/state.py withdraw <contact_id>` once they have), and
    `next_action_due` `state.add_business_days(<the day it went>, schema.FOLLOWUP_BUSINESS_DAYS)`.
    The morning brief reads that date, so the nudge needs no reminder of its own.
 3. **The draft file**, `documents/network/<contact_id>/draft.md`, is deleted: it was the

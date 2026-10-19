@@ -241,8 +241,9 @@ def test_a_field_the_scoring_vocabulary_was_not_written_for(profile):
 
 def test_the_round_line_says_what_claude_applies_and_what_needs_you(profile):
     _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
-    assert U.line() == ("Profile upgrades: 1 Claude applies itself (boards); "
-                        "1 needs you (job-alerts).")
+    # Plain words only: an id or a version number reaches the person as jargon.
+    assert U.line() == ("Improvements waiting: 1 Claude applies itself; 1 short question for "
+                        "you (python3 tools/profile_upgrades.py).")
 
 
 # ------------------------------------------------------------------ nobody has to ask
@@ -264,7 +265,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
     # Only the person can download their own connections; Claude never touches LinkedIn.
-    assert "contacts nobody" in U.by_id("connections-export").ask
+    assert U.by_id("connections-export").steps().endswith("Nothing is sent to anyone.")
     # Where they will mostly work is theirs to say; nothing in a profile answers it.
     assert "computer, or on your phone or the web" in U.by_id("work-place").ask
 
@@ -301,8 +302,8 @@ def test_the_sync_block_splits_what_claude_does_from_what_needs_you(profile):
     _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
     block = U.block(U.pending())
     alone, yours = block.split("These need you")
-    assert "boards" in alone and "Claude applies these itself" in alone
-    assert "job-alerts" in yours and "inbox" in yours
+    assert "[boards]" in alone and "Claude applies these itself" in alone
+    assert "[job-alerts]" in yours and "inbox" in yours
 
 
 def _read(*parts):
@@ -481,16 +482,18 @@ def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
     assert why.startswith("you said no before, and it has changed since: networking now finds")
     U.record_no(u.id, today)
     assert U.again(u.id, u.ask_version, u.changed, today) == ""
-    assert U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=89)) == ""
+    assert U.again(u.id, u.ask_version, u.changed,
+                   today + dt.timedelta(days=U.REASK_DAYS - 1)) == ""
     later = U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=U.REASK_DAYS))
-    assert later.startswith("you said no on 2026-10-18, 90 days ago")
+    assert later.startswith("you said no on 2026-10-18, 30 days ago")
     # A no from before this was kept, to a question that has not changed ("not now" to
     # job alerts three days earlier): held until REASK_DAYS after the question shipped,
     # never asked again the day the upgrade lands.
     a = U.by_id("job-alerts")
     assert a.ask_version == 1 and U.again(a.id, a.ask_version, a.changed, today) == ""
     added = dt.date.fromisoformat(a.added)
-    assert U.again(a.id, a.ask_version, a.changed, added + dt.timedelta(days=89)) == ""
+    assert U.again(a.id, a.ask_version, a.changed,
+                   added + dt.timedelta(days=U.REASK_DAYS - 1)) == ""
     assert U.again(a.id, a.ask_version, a.changed,
                    added + dt.timedelta(days=U.REASK_DAYS)) == (
         "you said no before; it is asked once more in case that has changed")
@@ -519,3 +522,60 @@ def test_a_profile_line_telling_drafts_to_use_a_forbidden_phrase_is_found(profil
     got = u.pending()
     assert "profile/13-positioning.md:1 ('cheers')" in got and u.needs == "nobody"
     assert ":2 " not in got and ":3 " not in got
+
+
+# ------------------------------------------------------------------ asked short
+
+# Words a person would not know, or would have to look up, in the first thing they are asked.
+_JARGON = re.compile(r"\b(?:csv|export(?:ed)?|in bulk|upgrade|pending|version|round|method|"
+                     r"inmail|python3?|profile/|\.py|\.json|ats)\b|[`/]", re.I)
+
+
+def test_every_question_is_short_and_plain_with_its_detail_kept_for_a_yes():
+    """A question is asked as one short plain question; the steps come only after a yes and
+    the reason only after "why?". A paragraph pasted at someone is what nobody reads."""
+    for u in U.REGISTRY:
+        if u.needs != "you" or u.id == "unconfirmed-facts":   # its questions are the markers
+            continue
+        assert u.ask, u.id
+        assert len(u.ask.split()) <= 40, (u.id, len(u.ask.split()))
+        assert u.ask.rstrip().endswith("?"), u.id
+        assert not _JARGON.search(u.ask), (u.id, _JARGON.search(u.ask).group(0))
+        assert "\u2014" not in u.ask + u.why_ask
+        if u.why_ask:
+            assert u.why_ask.count(". ") == 0 and u.why_ask.endswith("."), u.id   # one sentence
+        if u.steps:
+            lines = u.steps().splitlines()
+            assert 1 < len(lines) <= 5, (u.id, len(lines))
+            assert not set(lines) & set(u.ask.splitlines())                       # kept apart
+    steps = U.by_id("connections-export").steps().splitlines()
+    assert steps[0].startswith("At the time of writing (official page: https://")
+    assert steps[-1] == "I only read it. Nothing is sent to anyone."
+    assert U.NO_REPLY == "No problem, I'll ask again in a month." and U.REASK_DAYS == 30
+
+
+def test_a_kept_choice_and_a_no_come_back_on_the_same_day_count():
+    import learned
+    assert learned.REOFFER_DAYS == U.REASK_DAYS
+
+
+def test_the_sync_block_shows_no_id_or_version_outside_its_brackets(profile):
+    (profile / "build_versions.json").unlink(missing_ok=True)
+    _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
+    block = U.block(U.pending())
+    said = [re.sub(r"\s*\[[a-z0-9-]+\]$", "", ln) for ln in block.splitlines()
+            if ln.startswith("    - ")]
+    assert said and not any(re.search(r"\bversion \d|\bmethod-|\bupgrade\b", s) for s in said)
+
+
+def test_a_story_with_no_use_for_line_is_tagged_in_the_background(profile):
+    # An interview pack matches a story to a question by its `Use for:` line; a profile set
+    # up before that line existed has stories no question can reach.
+    u = U.by_id("interview-tags")
+    assert u.needs == "nobody" and u.pending() == ""
+    f = profile / "07-interview-prep.md"
+    f.write_text(f.read_text(encoding="utf-8") + "\n## STAR: an untagged one\n"
+                 "- **Situation:** s.\n- **Task:** t.\n- **Action:** a.\n- **Result:** r.\n",
+                 encoding="utf-8")
+    assert u.pending().startswith("1 STAR story in profile/07-interview-prep.md")
+    assert "An untagged one" in u.pending()

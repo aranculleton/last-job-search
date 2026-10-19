@@ -41,6 +41,7 @@ PERSONAL = (
     "network_threads.csv",
     "job_scraper/seen_jobs.json",
     "job_scraper/do_not_target.json",
+    # Left by the removed /notion-sync in a repo that used it: still theirs.
     "job_scraper/notion_sync.json",
     "documents/**",
     "company_research/*.json",

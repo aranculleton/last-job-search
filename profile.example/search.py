@@ -15,7 +15,7 @@ import re
 # ---------------------------------------------------------------------------
 CURRENCY_SYMBOL = "£"
 CURRENCY_CODE = "GBP"          # how a pay band is written when it names no currency
-SALARY_FLOOR = 42_000          # walk-away: a stated range whose top is below this is cut
+SALARY_FLOOR = 42_000          # walk-away: a stated range whose top is below this is flagged
 SALARY_TARGET = 48_000
 SALARY_HIGH = 65_000
 SALARY_PLAUSIBLE = (18_000, 250_000)

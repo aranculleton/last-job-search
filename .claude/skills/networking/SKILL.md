@@ -416,7 +416,10 @@ See `02-reply-playbook.md` for the full scenario table.
 Until a connection request is accepted there is nowhere to write, so it is never
 nudged. `state.owed()` lists it as `request_pending` once it has waited
 `state.REQUEST_WITHDRAW_DAYS` (21 days): withdraw it, because LinkedIn caps how many
-can be outstanding and one nobody accepted in three weeks rarely is. Someone who
+can be outstanding and one nobody accepted in three weeks rarely is. Once the person has,
+`state.py withdraw <contact_id>` records it: a `request_withdrawn` row, which the derived
+status reads as closed, and the contact closed with the date and why, so nobody writes
+to them again. Someone who
 accepted a request that carried **no note** has been told nothing, so what is owed is
 a first message (`first_message`), written with `compose.first_note()`, never a nudge.
 A call or meeting logged in the thread (`channel` call, phone, teams..., or

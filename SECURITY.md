@@ -78,12 +78,8 @@ Ranked roughly by how bad it would be:
   facts (`tools/build_app.py`, `tools/leak_scan.py`); the app's CI runs the same scan on
   every push.
 - **Nothing is sent.** No command in this repo submits an application, sends a message or
-  emails a person. `/notion-sync`, when a person sets it up, copies each tracked job's
-  title, company, score, status, deadline, channel, posting URL, the resume and letter
-  filenames and the tracker's dated notes to their own Notion database, and a new job page
-  also names any contacts at that employer with where the conversation stands (the
-  shortlist's warm-route notes); no document content is uploaded anywhere. Every artifact
-  stops at a file on disk and waits for a human.
+  emails a person, and nothing is copied to any outside service. Every artifact stops at a
+  file on disk and waits for a human.
 - **Secrets are not in the repo.** `salary_data.json` (licensed third-party data) and
   `gmail_sync/state.json` (a sync cursor) stay uncommitted. No API keys are stored here;
   the portal CLIs hit public endpoints.

@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.3
+framework_version: 1.5.4
 ---
 
 # Job Application Assistant
@@ -46,10 +46,8 @@ When the user provides a job posting (URL or text), follow this workflow:
 - This step exists here because `/scrape` Step 5 routes straight into this skill. Without it, that path writes two documents and records nothing.
 
 ### Step 4: Interview Preparation
-- Follow the method in `07-interview-prep.md`, with the person's own STAR examples from `profile/07-interview-prep.md`
-- Prepare STAR-format answers for likely questions
-- Identify role-specific talking points
-- Draft questions the candidate should ask the interviewer
+- Follow **`/interview`** (`.claude/commands/interview.md`) exactly, every step: the application's archive, the research, the person's learned rules and stories, the pack `tools/interview_pack.py` builds and saves beside the application, and the mock interview. It is stated there once so the two paths cannot drift, the same way Step 3b defers to `/apply` Step 6b.
+- A request in passing ("help me prepare for an interview at [company]") is the same request: it gets the same pack, never a shorter one written here.
 
 ---
 
@@ -84,5 +82,5 @@ The user may also ask for individual steps without the full workflow:
 - "Evaluate this job posting" - Step 1 only
 - "Write a CV for [company]" - Step 2 only
 - "Write a cover letter for [role] at [company]" - Step 3 only
-- "Help me prepare for an interview at [company]" - Step 4 only
+- "Help me prepare for an interview at [company]" - Step 4 only, which is `/interview <company>`
 - "What jobs should I look for?" - Career strategy discussion using profile + evaluation framework

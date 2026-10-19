@@ -121,8 +121,14 @@ The plan is at most fifteen lines and names:
 5. **The honest gaps.** Which stated requirements are missed, and which single one (at most) the
    cover letter concedes under rule 8. Often the answer is none.
 
-Then ask, in one message:
+Then stage it now (Step 2.1) and ask, in one message:
 > "Here's the plan. Have you already applied to this one, anywhere? If not: draft it, or adjust the angle first?"
+
+followed by the question staging printed about the skills the posting names that their profile
+does not hold, word for word (the reason only if they ask why). It is asked every time, even for
+a skill they once said they lack: only they know whether they use it and never said, learned it
+since, or can back it up, and the word left off can be the one an ATS screens on. Read the
+posting too, and ask the same way about any other skill it names that the profile lacks.
 
 The tracker knows only what was recorded here (CLAUDE.md, "Never assume the tracker is
 complete"). A yes is recorded as a tracker row at `applied` with the date they give, and
@@ -143,8 +149,12 @@ review cycle again; a rejected angle here costs fifteen lines.
        --posting-file "$SCRATCH/apply/posting.txt" --url "<posting URL>" --location "<location>" \
        --fit <the Step 1 score> --deadline "<YYYY-MM-DD, if stated>"
    ```
-   It picks the filename, never one another application was sent under, and writes `picks.json` and `apps_in.json`.
-2. **Research, draft and audit.** Run the saved `draft-applications` workflow with `{today, round_dir: "$SCRATCH/apply", picks: <the contents of picks.json>}`. It researches the employer from its own pages (sonnet), drafts the draft object on the strongest model after reading the learned and what-works briefs, and has a grounding audit on the strongest model correct it. Where the Workflow tool is not available, do the same three stages by hand: the `employer-researcher` subagent, then the draft object yourself under the workflow's drafting prompt (the fields and budgets in `.claude/workflows/draft-applications.js`), then the `grounding-auditor` subagent, writing its corrected draft to `$SCRATCH/apply/audit_<slug>.json` as a one-element list.
+   It picks the filename, never one another application was sent under, writes `picks.json` and `apps_in.json`, and prints the skills question Step 1 asks. Record each answer before anything else:
+   ```bash
+   python3 tools/stage_picks.py consent "$SCRATCH/apply" <slug> --yes <skill> ... --no <skill> ...
+   ```
+   A yes is for this application: it prints on the skills line as the posting spells it. Where they say they hold it generally, that is a fact: write it into `01-candidate-profile.md` and `skills.py` `ITEMS` (out of `NOT_HELD`) in the same turn. The workflow drafts nothing while a question waits.
+2. **Research, draft and audit.** Run the saved `draft-applications` workflow with `{today, round_dir: "$SCRATCH/apply", picks: <the contents of picks.json>}`. It researches the employer from its own pages (sonnet), drafts the draft object on the strongest model after reading the learned and what-works briefs, and has a grounding audit on the strongest model correct it. Where the Workflow tool is not available, do the same three stages by hand: the `employer-researcher` subagent, then the draft object yourself under the workflow's drafting prompt (the fields and budgets in `.claude/workflows/draft-applications.js`), then the `grounding-auditor` subagent, writing its whole audit (verdict, corrected draft, changes, residual risks) to `$SCRATCH/apply/audit_<slug>.json` as one JSON object. `assemble` renders only a `pass` or a `fixed` draft and reports a `reject` with its reasons.
 3. **Assemble, render, verify, keep.**
    ```bash
    python3 tools/stage_picks.py assemble "$SCRATCH/apply"
@@ -153,7 +163,7 @@ review cycle again; a rejected angle here costs fifteen lines.
    tools/verify_batch.sh "$SCRATCH/apply/drafts.json"
    python3 tools/outreach.py "$SCRATCH/apply/drafts.json" "$SCRATCH/apply/apps_in.json"
    ```
-   `check_claims` reports 0 errors and `verify_batch.sh` exits 0, or the finding is fixed in the draft object and rendered again: never by hand-editing the `.tex` (`05-cv-templates.md`). `outreach.py` writes `job_posting.md`, `outreach.md` and the kept `draft.json` under `documents/applications/<slug>/`.
+   `check_claims` reports 0 errors and `verify_batch.sh` exits 0, or the finding is fixed in the draft object and rendered again: never by hand-editing the `.tex` (`05-cv-templates.md`). Exit 3 is not a finding: pypdf is unavailable and the spacing check was skipped, so install it (`pip3 install pypdf`) and run the batch again. `outreach.py` writes `job_posting.md`, `outreach.md` and the kept `draft.json` under `documents/applications/<slug>/`.
 4. **Read both PDFs by eye** against Step 5b's list, and run Step 6.0's three guards.
 5. **Record it**: `python3 tools/record_drafts.py "$SCRATCH/apply/drafts.json" "$SCRATCH/apply/apps_in.json"` writes the tracker row by Step 6b's rules, and `screening_answers.md`.
 
@@ -164,6 +174,8 @@ Then go to **Step 6** and present. Steps 2H to 5 and 6b's manual row are for a c
 ## Step 2H: DRAFTER - Draft by hand (a custom template only)
 
 You already have `01-candidate-profile.md` and `04-job-evaluation.md` in context from Step 1. **Do not re-read them.**
+
+The answers to Step 1's skills question hold here too: each yes goes on the skills line as the posting spells it, and a no goes nowhere. Put them in both documents' header comments as `% Claimed with the candidate's yes: A, B` and `% The candidate said no to: C` (only the lines that have names), where `check_claims.py` reads them.
 
 Read only the reference files you do not yet have:
 - `.claude/skills/job-application-assistant/03-writing-style.md`

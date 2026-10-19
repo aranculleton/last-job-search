@@ -51,6 +51,10 @@ It is what makes the brief this person's rather than a template:
 - Applications sent, replies received, interviews, offers and rejections, counted from the
   tracker and `network_threads.csv` between the last brief's date and today.
 - Applications drafted but not marked sent for more than 7 days: ask whether they went.
+- Applications gone quiet: `python3 tools/followups.py --close-quiet` closes each one past the
+  chase (45 days, or a week after a second follow-up) as no_response, with a dated note, and
+  leaves alone any with an interview, a referral or a "DO NOT CHASE" at that employer. Name
+  what it closed in one line, and say a reply after all goes in with `/outcome`.
 - Results to record: anything the person mentioned elsewhere that the tracker does not have
   yet, and a line asking for outcomes with `/outcome`.
 - `python3 tools/what_works.py brief search`: one line, only when it reports a clear

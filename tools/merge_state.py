@@ -41,6 +41,7 @@ KEYS = {
     "job_search_tracker.csv": ("date", "company", "role"),
     "network_contacts.csv": ("contact_id",),
     "network_threads.csv": None,
+    "question_bank.csv": None,          # documents/interview/: a log, rows only added
 }
 # Free text that both sides may have added to: kept from both, never a conflict.
 NOTES = {"notes"}

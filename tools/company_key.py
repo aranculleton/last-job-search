@@ -178,11 +178,40 @@ def _own_initialism(name: str) -> str:
     """
     m = _INITIALISM.search(str(name or ""))
     if not m:
-        return ""
+        return _own_short_word(name)
     short = re.sub(r"[^A-Za-z]", "", m.group(1)).lower()
-    words = [w for w in re.findall(r"[A-Za-z]+", str(name)[:m.start()]) if w.lower() not in _MINOR]
-    initials = "".join(w[0] for w in words).lower()
-    return short if len(short) >= 2 and initials == short else ""
+    words = [w.lower() for w in re.findall(r"[A-Za-z]+", str(name)[:m.start()])]
+    return short if len(short) >= 2 and _initials_of(short, words) else ""
+
+
+_BRACKET_END = re.compile(r"^(.*\S)\s*\(\s*([^()]{2,40}?)\s*\)\s*$")
+
+
+def _own_short_word(name: str) -> str:
+    """The short name in a closing bracket when it is the name's own first words:
+    "Brindle Hart Capital Partners (Brindle Hart)". Never a listing detail such as
+    "(UK)" or "(Contract)", which is not how the name starts."""
+    m = _BRACKET_END.match(str(name or ""))
+    if not m:
+        return ""
+    short, long_ = _norm(m.group(2)), _norm(m.group(1))
+    if not short or short in _MINOR or not long_.startswith(short + " "):
+        return ""
+    return short
+
+
+def _initials_of(short: str, words: list[str]) -> bool:
+    """Whether `short` is the words' initials, each small word ("of", "the") either
+    counted or not: "Northgate of Fernhill Pension Plan" is NFPP and NOFPP alike. Only
+    small words may be skipped, so "(UK)" or "(Remote)" never passes for a name."""
+    if not short:
+        return not any(w not in _MINOR for w in words)
+    if not words:
+        return False
+    w, rest = words[0], words[1:]
+    if w[0] == short[0] and _initials_of(short[1:], rest):
+        return True
+    return w in _MINOR and _initials_of(short, rest)
 
 
 # Short name -> the long name's key, learned from every "Long Name (LN)" seen:
@@ -252,3 +281,72 @@ def _learn_from_state() -> None:
 
 
 _learn_from_state()
+
+
+# ------------------------------------------------------------------ the name people write
+#
+# Not the join key: the employer as a letter, a note or a people search writes
+# it, with its case, its "&" and the rest of its name kept, and the legal form
+# and a bracketed qualifier off. The salutation and the outreach note
+# (render_application.short_name) and the people search (discovery.search_name)
+# each kept a list of their own, and each had fixes the other lacked: the search
+# turned "Tamworth & Co." into "Tamworth &", the salutation kept "(UK)" and
+# "AS", and "ULC" and "Pvt Ltd" came off only one of them. One list now; each
+# caller keeps its own rule about Group, Company and Holdings.
+
+# A compound form comes off whole: "Co., Ltd." and "Pvt Ltd" are one suffix,
+# and stripping only the last word left "Acme Co" and "Acme Pvt".
+_COMPOUND_FORM = re.compile(
+    r",?\s+(?:(?:co\.?,?|pvt\.?|private|pte\.?)\s+(?:ltd|limited)|sdn\.?\s+bhd)\.?$", re.I)
+# "Co" alone is never one: "Tamworth & Co." is the name. Ireland's DAC, CLG, UC
+# and Teoranta, Canada's ULC, and the Nordic AS and A/S are.
+_SINGLE_FORM = re.compile(
+    r",?\s+(?:inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|plc|p\.l\.c|"
+    r"llp|lp|l\.p|s\.a|n\.v|b\.v|bv|s\.p\.a|spa|s\.a\.s|sas|s\.r\.l|srl|"
+    r"gmbh|pty|pte|ag|ab|as|a/s|oy|nv|sa|se|kk|dac|clg|uc|ulc|teoranta|teo)\.?$", re.I)
+LEGAL_FORM = re.compile(_COMPOUND_FORM.pattern + "|" + _SINGLE_FORM.pattern, re.I)
+# A cut that leaves the name ending on a joining word took part of the name:
+# "Tamworth & Co., Ltd." is "Tamworth & Co.", never "Tamworth &".
+JOINED_END = re.compile(r"(?:&|\b(?:and|of|the|for|de|du|des|y|et))$", re.I)
+
+
+def drop_brackets(name: str | None) -> str:
+    """The name without a bracketed qualifier: "Acme Bank (UK)" is Acme Bank."""
+    s = " ".join(PAREN.sub(" ", str(name or "")).split())
+    return s or str(name or "").strip()
+
+
+def strip_legal_forms(name: str | None) -> str:
+    """The name with every trailing legal form removed, one at a time:
+    "Acme Pty Ltd" is Acme, not "Acme Pty"."""
+    name = str(name or "").strip()
+    while True:
+        for rx in (_COMPOUND_FORM, _SINGLE_FORM):
+            cut = rx.sub("", name).strip(" ,")
+            if cut != name and cut and not JOINED_END.search(cut):
+                name = cut
+                break
+        else:
+            return name
+
+
+def display_name(name: str | None) -> str:
+    """The employer as people write it: brackets and legal forms off, the rest kept."""
+    return strip_legal_forms(drop_brackets(name))
+
+
+def row_key(row) -> str:
+    """The employer identity of a contact row.
+
+    Recomputed from the company name, with the stored `company_key` column used
+    only when the name is blank. The column is a convenience for filtering in a
+    spreadsheet, not the authority: `ALIASES` grows, so a key written last month
+    can be stale while the name it came from still resolves correctly. One rule
+    for the contact book's readers: the throttle skipped a row with only the
+    column, so a referral in flight at that employer held nothing back, while
+    tools/network/state.py read the same row as that employer.
+    """
+    k = key(row.get("company"))
+    if k:
+        return k
+    return str(row.get("company_key") or "").strip().lower()

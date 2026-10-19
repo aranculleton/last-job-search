@@ -1255,6 +1255,9 @@ def nudge_due(threads, today, new_development="") -> dict:
 
     if not rows:
         return dict(base, reason="nothing has been sent on this thread yet")
+    if state.is_withdrawal(rows[-1]):
+        return dict(base, reason=("the connection request was withdrawn: nothing reached them, "
+                                  "and the thread is closed"))
     if state.request_pending(rows) is not None:
         return dict(base, reason=("the connection request has not been accepted, so there is "
                                   "nowhere to send a nudge: wait, or withdraw it after %d days"

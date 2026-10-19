@@ -707,17 +707,102 @@ RESIDE = re.compile(
     r"|\b(?:candidates|applicants) (?:must|should) (?:reside|be based|be located|live)\b", re.I)
 
 
+# The same requirement in the words of who is hired rather than where they must
+# live: "we only hire in the United States", "this role is remote within the US",
+# "US residents only". Each passed for somebody living elsewhere. These name the
+# place right beside the restriction, so they are read around the place itself,
+# and only a country counts: a region ("EMEA") may take in the person's own.
+# Between "only" and the place, only words about who is hired or where they are:
+# "we only sell in the US" describes a market, not a requirement.
+_HIRE_WORDS = (r"(?:able|to|can|be|hire|hiring|hires|employ\w*|recruit\w*|consider\w*|"
+               r"accept\w*|candidates?|applicants?|people|those|individuals|residents|"
+               r"located|based|living|open|available|eligible|currently|legally)")
+_BEFORE_PLACE = re.compile(
+    r"(?:\bonly\b(?:\s+" + _HIRE_WORDS + r"){0,4}\s+(?:in|from|within)"
+    r"|\bremote\s+(?:with)?in"
+    r"|\b(?:restricted|limited)\s+to(?:\s+(?:candidates|applicants|residents)\s+(?:in|of|from))?)"
+    r"\s+(?:the\s+)?$", re.I)
+_HOURS = re.compile(r"\s*(?:-\s*)?(?:time\s*zones?|timezones?|business hours|working hours|hours)\b",
+                    re.I)
+_AFTER_PLACE = re.compile(r"^\s*(?:-\s*)?(?:only\b|residents?\s+only\b|(?:residents|citizens)\b"
+                          r"(?=[^.;]{0,30}\bonly\b)"
+                          r"|based\s+(?:candidates|applicants|people|residents|hires)\s+only\b)",
+                          re.I)
+
+
+def _names_home(s: str) -> bool:
+    """Does the sentence name the person's own country, region or metro as a place?
+
+    A metro town counts only bare or followed by a home region or country:
+    "Manchester, NH" and "Sale, Australia" are somewhere else.
+    """
+    low = s.lower()
+    if _places.HOME_COUNTRY_RX.search(low):
+        return True
+    for r in _places.REGIONS:
+        # A region's short code is read in capitals, like a country code: "on"
+        # and "in" are words before they are provinces or states.
+        if (re.search(r"(?<![A-Za-z])" + re.escape(r.upper()) + r"(?![A-Za-z])", s)
+                if len(r) <= 3 else re.search(r"\b" + re.escape(r) + r"\b", low)):
+            return True
+    for g in _places.METRO:
+        for m in re.finditer(r"\b" + re.escape(g) + r"\b", low):
+            after = re.match(r"\s*,\s*([a-z][a-z .]{0,30}?)\s*(?=[,.;:)]|$)", low[m.end():])
+            if not after or after.group(1).strip() in _places.REGIONS:
+                return True
+    return False
+
+
+def _abroad_country(s: str):
+    """A country, not a region, written as shorthand in the sentence ("US", "the United
+    States"): abroad_short less the regions, which region_includes_home decides."""
+    m = _places.abroad_short(s)
+    while m is not None and _places.REGION_WORDS.fullmatch(m.group(0)):
+        rest = s[m.end():]
+        m2 = _places.abroad_short(rest)
+        if m2 is None:
+            return None
+        s, m = rest, m2
+    return m
+
+
+def _countries_named(s: str):
+    """Every place in the sentence that is one country and not home, as matches."""
+    for c in _places.OTHER_COUNTRIES:
+        yield from re.finditer(r"\b" + re.escape(c) + r"\b", s, re.I)
+    yield from _places.COUNTRY_CODES.finditer(s)
+
+
 def residence_cut(text: str) -> str | None:
     """The sentence requiring the candidate to live in a country that is not theirs."""
     for s in sentences(text):
-        if not RESIDE.search(s):
+        reside = RESIDE.search(s)
+        if not reside and not re.search(r"\bonly\b|\bremote\b|\brestricted\b|\blimited\b", s, re.I):
+            continue
+        if _names_home(s):
             continue
         low = s.lower()
-        if _places.HOME_COUNTRY_RX.search(low):
+        # A region cuts only when it leaves home out: "based in EMEA" cut somebody in the
+        # UK, which EMEA takes in. A list with a region that takes home in ("Europe or the
+        # US") is a list that includes them; one the table cannot place is the location
+        # gate's to flag, never a cut.
+        regions = [_places.region_includes_home(m.group(0))
+                   for m in _places.REGION_WORDS.finditer(s)]
+        if True in regions:
             continue
-        if (any(re.search(r"\b" + re.escape(c) + r"\b", low) for c in _places.OTHER_COUNTRIES)
-                or _places.ABROAD_SHORT.search(low)):
+        if reside and (any(re.search(r"\b" + re.escape(c) + r"\b", low)
+                           for c in _places.OTHER_COUNTRIES)
+                       or _abroad_country(s)):
             return s[:220]
+        if reside and regions and all(r is False for r in regions):
+            return s[:220]
+        for m in _countries_named(s):
+            # "remote within US time zones" asks for hours, not a home.
+            if _HOURS.match(s[m.end():m.end() + 30]):
+                continue
+            if (_BEFORE_PLACE.search(s[max(0, m.start() - 60):m.start()])
+                    or _AFTER_PLACE.match(s[m.end():m.end() + 50])):
+                return s[:220]
     return None
 
 
@@ -833,11 +918,25 @@ def main() -> int:
     ap.add_argument("infile")
     ap.add_argument("--out", help="survivors, for the next stage")
     ap.add_argument("--out-all", dest="out_all", help="every record with its verdict")
+    ap.add_argument("--seen", default=None,
+                    help="seen_jobs.json: record each cut there (tools/exclude.py), so the "
+                         "next round drops it before hydrate fetches it again")
+    ap.add_argument("--today", default="", help="YYYY-MM-DD for the record; defaults to today")
     a = ap.parse_args()
     jobs = load_jobs(a.infile)
     out = [screen(j) for j in jobs]
     keep = [j for j in out if j["text_screen"] != "cut"]
     cut = [j for j in out if j["text_screen"] == "cut"]
+    # Every posting ruled out is written back, with its reason and what it rests
+    # on, or each round fetched and screened the same cuts again. Cuts only: a
+    # flag is a scoring input and never a ruling.
+    recorded = 0
+    if a.seen and cut:
+        import exclude
+        recorded = exclude.add_many(
+            [{"url": j.get("url"), "reason": "; ".join(j["cuts"]), "title": j.get("title"),
+              "company": j.get("company"), "location": j.get("location")} for j in cut],
+            today=a.today, path=a.seen)
     # --out is what the next stage extracts, so it holds SURVIVORS only. It
     # used to hold every record tagged with its verdict, which meant a caller
     # that forgot to filter paid a model to re-read postings this stage had
@@ -850,7 +949,8 @@ def main() -> int:
     for j in cut:
         print(f"CUT  {(j.get('company') or '')[:26]:26} {(j.get('title') or '')[:38]:38} {j['cuts'][0][:70]}")
     print(f"\n{len(jobs)} screened, {len(keep)} survive, {len(cut)} cut on a quoted stated fact "
-          f"(0 model tokens)", file=sys.stderr)
+          f"(0 model tokens)" + (f"; {recorded} recorded in {os.path.basename(a.seen)}"
+                                 if a.seen else ""), file=sys.stderr)
     return 0
 
 

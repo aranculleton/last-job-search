@@ -70,7 +70,11 @@ def test_each_posting_is_filled_from_its_own_page():
     r = rows[0]
     assert r["title"] == "Demand Planning Analyst" and r["company"] == "Wrenfield Freight"
     assert r["url"] == "https://www.linkedin.com/jobs/view/4012345678"
-    assert (r["portal"], r["date"], r["source"]) == ("linkedin", "2026-10-11", "job alert")
+    # The alert's date is not the posting's: LinkedIn alerts on a relisted posting
+    # too, and read as `date` a month-old posting looked fresh. It is kept apart,
+    # and the posting page gives no date of its own.
+    assert (r["portal"], r["date"], r["alert_date"], r["source"]) == (
+        "linkedin", None, "2026-10-11", "job alert")
     assert r["desc"].startswith("The whole posting")
     assert left["4098765432"].startswith("closed")
     assert "no title" in left["4011112222"]
@@ -120,6 +124,8 @@ def test_a_number_in_the_slug_is_not_the_id():
     ("1792134000000", "2026-10-16"),
     ("not a date", ""),
     ("", ""),
+    # Read by Python 3.11's fromisoformat and refused by 3.9's: never read, on any.
+    ("20261011", ""),
 ])
 def test_email_dates_of_every_shape_become_a_day(raw, want):
     assert job_alerts.day(raw) == want

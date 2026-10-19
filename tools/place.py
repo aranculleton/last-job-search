@@ -76,6 +76,25 @@ SIGN_IN_ONCE = ("The first time a profile is read, LinkedIn's sign-in page opens
                 "after that, until LinkedIn signs you out.")
 
 
+# What a chat with no browser of the person's says by default: two or three short
+# sentences and no links. The steps, with their dated paths and official pages, come only
+# when the person asks how or says they want to move (`place.py how`): a block of 150 words
+# and two URLs at the end of every reply was the part nobody read.
+SHORT_REMOTE = ("Finding people works here. Reading their profiles before writing to them needs "
+                "a chat on your computer, which you can also use from your phone.")
+SHORT_CLOUD = ("Finding people works here. Reading their profiles before writing to them needs "
+               "a chat on your computer: this one cannot reach your browser.")
+SHORT_LOCAL = ("Finding people works here. Reading their profiles before writing to them needs "
+               "a browser this chat can use, such as the Claude desktop app's own.")
+SHORT_PASTE = "Or paste the one or two who matter most. Ask me how if you want to move."
+SHORT_LINK_NOW = ("This chat reads profiles in the Claude desktop app's browser on your "
+                  "computer while the app stays open. Anthropic's documentation does not "
+                  "describe this yet, so it may change.")
+SHORT_SIGN_IN = ("The first time, LinkedIn's sign-in page opens in the desktop app's browser: "
+                 "sign in there yourself, once.")
+SHORT_WORDS = 60     # the most any one default message may run to (tests/test_place.py)
+
+
 BRIEF_LOCAL = ("Your brief runs in the cloud, so it arrives when your computer is off. "
                "Nothing to do on your computer.")
 
@@ -124,12 +143,15 @@ def _continue_locally(owner: str, name: str, then: str) -> str:
 
 
 def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(),
-          owner: str = "", name: str = "my-job-search", employer: str = "") -> list:
-    """What to tell the person, once, about this chat's place. [] when it is right.
+          owner: str = "", name: str = "my-job-search", employer: str = "",
+          detail: bool = False) -> list:
+    """What to tell the person about this chat's place. [] when it is right.
 
     `tools` is the browser tools this chat has (browser, chrome, chrome-off, enable),
     or None when unknown, which asks the chat to look before it says anything.
-    `fixes` is env_check.local_fixes(): what this computer is missing.
+    `fixes` is env_check.local_fixes(): what this computer is missing. By default each
+    message is two or three short sentences with no links; `detail` gives the steps,
+    each path dated with its official page, for a person who asked how.
     """
     out = []
     have = None if tools is None else {str(t).lower() for t in tools} & BROWSERS
@@ -140,9 +162,13 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
         # cloud-linked-browser), and where a chat was started is not documented.
         if have:
             if where != "local" and have & {"browser", "enable"}:
-                out.append(CLOUD_LINK_NOW)
+                out.append(CLOUD_LINK_NOW if detail else SHORT_LINK_NOW)
             if not signed_in and have & {"browser", "enable"}:
-                out.append(SIGN_IN_ONCE)
+                out.append(SIGN_IN_ONCE if detail else SHORT_SIGN_IN)
+        elif not detail:
+            line = ({"phone": SHORT_REMOTE, "web": SHORT_REMOTE, "local": SHORT_LOCAL}
+                    .get(where, SHORT_CLOUD) + " " + SHORT_PASTE)
+            out.append(line if have is not None else IF_NO_BROWSER + line)
         else:
             if where in ("phone", "web"):
                 line = (f"{FINDING_WORKS} The chat on your computer can do the reading, and you "
@@ -327,16 +353,18 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
             and any(claude_surfaces.say(e["id"], name=name, owner=owner) in l for l in lines)]
     warn = [w for w in (claude_surfaces.warning(e) for e in used) if w]
     return ("Place check (Claude: tell the person this at the end of your reply, in these "
-            "words; it comes back weekly while it still applies, never more. Never apply a "
-            "choice for them, and never hold back work that does not need it. A [bracketed] "
-            "condition is yours to test, never said):\n"
+            "words; it comes back weekly while it still applies, never more. If they ask how, "
+            "or say they want to move, give them what `python3 tools/place.py how` prints. "
+            "Never apply a choice for them, and never hold back work that does not need it. A "
+            "[bracketed] condition is yours to test, never said):\n"
             + "\n".join("  " + l.replace("\n", "\n  ") for l in lines)
             + "".join("\n  " + w for w in warn))
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("cmd", nargs="?", default="check", choices=("check", "ask", "record", "next"))
+    ap.add_argument("cmd", nargs="?", default="check",
+                    choices=("check", "how", "ask", "record", "next"))
     ap.add_argument("answer", nargs="?", default="")
     ap.add_argument("--tools", default=None,
                     help="the browser tools this chat has: browser, chrome, chrome-off, enable, none")
@@ -356,6 +384,12 @@ def main(argv=None) -> int:
         print(next_step(a.works_on or works_on() or "both", surface(), *repo()))
         return 0
     tools = None if a.tools is None else [t for t in a.tools.split(",") if t.strip() not in ("", "none")]
+    if a.cmd == "how":
+        owner, name = repo()
+        lines = check(surface(), setting(), tools, signed_in_ever(), (), owner, name,
+                      a.employer, detail=True)
+        print("\n".join(lines) or "place: this chat is the right place")
+        return 0
     out = report(tools, a.employer, a.once)
     print(out or "place: this chat is the right place")
     return 0

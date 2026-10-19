@@ -42,8 +42,10 @@ def _clean(text: str) -> None:
     assert not re.search(r"(?:for|of) (?:each|every) (?:person|profile)|everyone's", text, re.I)
 
 
-def _say(where, setting, tools, signed_in=True, fixes=()):
-    out = place.check(where, setting, tools, signed_in, fixes, *REPO)
+def _say(where, setting, tools, signed_in=True, fixes=(), detail=True):
+    """The steps a person who asked how is given (`place.py how`); `detail=False` is what
+    every chat says unasked."""
+    out = place.check(where, setting, tools, signed_in, fixes, *REPO, detail=detail)
     for line in out:
         _clean(line)
     return "\n".join(out)
@@ -178,7 +180,7 @@ def test_said_once_then_weekly_while_it_still_applies(tmp_path, monkeypatch):
     assert place.report([], once=True, env=env, today=week) == ""
     # A chat that was told an older wording (one open before an update) hears the new one,
     # once, and then nothing again.
-    monkeypatch.setattr(place, "FINDING_WORKS", "Finding people works in this chat, still.")
+    monkeypatch.setattr(place, "SHORT_CLOUD", "Finding people works in this chat, still.")
     assert "still." in place.report([], once=True, env=env)
     assert place.report([], once=True, env=env) == ""
     assert place.report([], once=True, env={**env, "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE2"})
@@ -226,3 +228,22 @@ def test_an_existing_brief_is_found_by_its_registry_or_prompt_never_its_title():
                                           "prompt": "something else"}])
     assert named["state"] == "ask"
     assert routines.existing_brief({}, [])["state"] == "none"
+
+
+def test_what_every_chat_says_unasked_is_two_or_three_short_sentences_and_no_links():
+    """A block of 150 words and two URLs at the end of a reply was the part nobody read.
+    Unasked it is short; the dated steps come only when the person asks how."""
+    for where in ("desktop-cloud", "web", "phone", "unknown", "local"):
+        for tools in ([], ["enable"], None):
+            for signed_in in (True, False):
+                for line in place.check(where, "browser", tools, signed_in, (), *REPO):
+                    said = line.replace(place.IF_NO_BROWSER, "")
+                    _clean(said)
+                    assert len(said.split()) <= place.SHORT_WORDS, (where, tools, said)
+                    assert "http" not in said and "At the time of writing" not in said
+                    assert said.count(". ") + said.count(": ") <= 4
+    short = place.check("desktop-cloud", "browser", [], False, (), *REPO)
+    assert short == [place.SHORT_CLOUD + " " + place.SHORT_PASTE]
+    assert "Ask me how" in place.SHORT_PASTE
+    # The steps are all still there for the person who asks.
+    assert "At the time of writing:" in _say("desktop-cloud", "browser", [])

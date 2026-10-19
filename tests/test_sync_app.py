@@ -468,3 +468,22 @@ def test_a_release_names_every_change_not_its_first_lines():
         "Rounds read Kestrel Mutual's board.", "A no is for now.",
         "A plain entry with no headline"]
     assert sync_app.headlines(["  only a reworded line"]) == ["  only a reworded line"]
+
+
+def test_a_persons_own_test_the_update_broke_is_named(tmp_path, monkeypatch, capsys):
+    # A person's copy of an old test asserted the old search shape for days after the app
+    # changed it, and nothing said so until ci_local.sh failed on something else.
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app
+    tests = tmp_path / "profile" / "tests"
+    tests.mkdir(parents=True)
+    (tests / "test_mine.py").write_text("def test_old_shape():\n    assert 1 == 2\n\n"
+                                        "def test_still_true():\n    assert True\n")
+    monkeypatch.setattr(sync_app, "ROOT", str(tmp_path))
+    sync_app.own_tests()
+    out = capsys.readouterr().out
+    assert out.startswith("Your own tests: 1 now fail after this update")
+    assert "test_old_shape" in out and "test_still_true" not in out
+    (tests / "test_mine.py").write_text("def test_still_true():\n    assert True\n")
+    sync_app.own_tests()
+    assert capsys.readouterr().out == ""

@@ -26,12 +26,15 @@ fails on one that is unaccounted for.
              the background with no one asking
     instant  the sync itself redoes it (`redo <name>`) and commits it
     round    every round applies it by itself (see throttle.ruled_out)
+    network  every /network run applies it first, in a chat that can read the people
+             it writes to (step 1 there): a background agent in a cloud chat cannot
     you      it needs the person's consent, so it is asked, a few at a time
 
     python3 tools/build_versions.py                   # each method: this repo's version, the app's
     python3 tools/build_versions.py record boards     # this repo now holds the app's boards version
     python3 tools/build_versions.py record --setup    # after a full /setup
     python3 tools/build_versions.py redo prep-docs    # an instant method: redo it and record it
+    python3 tools/build_versions.py behind network-notes  # what is better now; exit 1 if any
     python3 tools/build_versions.py fingerprints      # for a developer adding a version
 """
 
@@ -89,8 +92,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-18", False, "Workday details read on Python 3.9, a Mac's own python3"),
             (9, "2026-10-18", False, "LinkedIn's job search stays on and uses no LinkedIn account; only the person switches it off"),
             (10, "2026-10-19", False, "a docstring's example Workday location is invented"),
+            (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, a Workday search reads past its second page, a Greenhouse or Lever posting is kept when any place it lists is wanted, and Lever's EU instance is read"),
         ),
-        "fingerprint": "b34dbd1d150f34ff",
+        "fingerprint": "edbe9bb2c9d61b80",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -108,8 +112,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-17", False, "the browser-read question says it reads only the people a search surfaced, at a person's pace"),
             (6, "2026-10-17", False, "the browser-read question names screenshots as the way that works on a phone"),
             (7, "2026-10-18", False, "the profile-reads question says finding people never needs a read, and that a read is for the best ten a run finds"),
+            (8, "2026-10-19", False, "skills.py may list the tools a field treats as interchangeable (FAMILIES); the app's own list applies without it"),
         ),
-        "fingerprint": "4e000e0488ba35e5",
+        "fingerprint": "214fc1cce51145ba",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -166,15 +171,18 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", True, "role headings the tools can read, bullet themes cued in your "
                                     "field's words, and STAR examples kept in your profile"),
             (3, "2026-10-15", False, "asks whether you pay for LinkedIn Premium"),
+            (4, "2026-10-19", False, "every STAR story ends on a Use for line naming the questions it answers"),
         ),
-        "fingerprint": "3c0025451dbe90f5",
+        "fingerprint": "061901b72ed9914c",
     },
     # ---- what the build makes over time and keeps
     "prep-docs": {
         "by": "instant", "priority": 3, "applies": "prep_docs",
         "gives": "every call-prep document rewritten by the current prep",
         "run": "python3 tools/build_versions.py redo prep-docs",
-        "command": ("python3", "tools/network/prep.py", "--all"),
+        # Only what an older prep wrote: --all rewrote every document, hundreds in one
+        # repo, and created one for every contact who never had a call.
+        "command": ("python3", "tools/network/prep.py", "--stale-only"),
         "paths": ("documents/network/*",),
         "files": ("tools/network/prep.py", "tools/network/profile_facts.py", "tools/bridges.py",
                   ".claude/commands/prep.md"),
@@ -188,8 +196,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (6, "2026-10-17", True, "the prep document says what was read about them: the history you share and what they have posted"),
             (7, "2026-10-17", False, "one research cache with its freshness rule: stale research, roles open there you scored well, the letter's fact and concessions, and the cache's own cautions in the call prep"),
+            (8, "2026-10-19", False, "each document is stamped with the prep that wrote it, and only an older one is rewritten; a tool you lack is never claimed unless you say yes"),
         ),
-        "fingerprint": "e3516d5fd7fde125",
+        "fingerprint": "633a1fd22d68fd59",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -235,15 +244,16 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-17", False, "rulings name the blocker or gate they rest on (rank, the scraper skill); the day's sync carries the model check"),
             (13, "2026-10-18", False, "fit_to_page runs on Python 3.9"),
             (14, "2026-10-18", False, "RUNBOOK names the people ladder and the Claude surfaces registry"),
+            (15, "2026-10-19", True, "a document already sent is never rendered over; a letter's figures are checked; a trimmed resume keeps the line that describes each job; a letter keeps its date, drops legal forms from the employer's name, is addressed to the person the employer names, and is flagged where it repeats the resume; a claimed skill the profile does not hold is caught, a held tool of the same family stands in for one a posting names that the person lacks; and every skill a posting names that the profile does not hold is asked about before drafting, and only a yes puts it on the resume"),
         ),
-        "fingerprint": "68b573e016285c37",
+        "fingerprint": "1683eb655d01422d",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
         "gives": "the prep pack for each interview still running rewritten the current way",
         "run": "for each tracker row at `interview`, /interview <company> again, its pack "
                "written beside the old one",
-        "files": (".claude/commands/interview.md",),
+        "files": (".claude/commands/interview.md", "tools/interview_pack.py"),
         "versions": (
             _first(),
             (2, "2026-10-15", False, "reads what the person has taught it (tools/learned.py) before drafting, flags the phrases they never want, their wording replaces the defaults, and every output is shown in the reply"),
@@ -251,8 +261,9 @@ METHODS: dict[str, dict] = {
                                     "was written, instead of starting a second one"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "interview research reads the one company-research cache and its freshness rule"),
+            (6, "2026-10-19", True, "the pack is built by tools/interview_pack.py: sourced, one screen first, the money the form already named, the question bank, warm routes, an offer branch, mock feedback kept, and each skill you said yes to claiming flagged as one to expect a question on"),
         ),
-        "fingerprint": "763dc5371f1991d6",
+        "fingerprint": "b9f9400ab4b468fc",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -265,8 +276,9 @@ METHODS: dict[str, dict] = {
         "versions": (
             _first(),
             (2, "2026-10-17", False, "one company-research cache (tools/company_research.py): load, save, the freshness rule in one constant, and the workflow's research stage following the employer researcher"),
+            (3, "2026-10-19", False, "a cached finding's age is read the one way every tool reads a date"),
         ),
-        "fingerprint": "f19ff1d4a8ed0970",
+        "fingerprint": "83dc00bdcf53c1ae",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
@@ -275,8 +287,11 @@ METHODS: dict[str, dict] = {
                "ladder only: their connections there (`sources.py connections`), the two plain "
                "title searches from `discovery.queries_for()` run through `sources.py harvest`, "
                "and a profile check from the results; add only people not already in the book, "
-               "with their evidence and profile status, as not_contacted with drafts. No profile "
-               "is read in the background and nothing is sent",
+               "with their evidence and profile status, as not_contacted, each draft written with "
+               "`reading.py draft` (it waits on a read). Then re-check every not_contacted "
+               "contact a search found against today's matching (`discovery.same_employer`, "
+               "`discovery.profile_status`): close any it would not keep, with the reason in "
+               "`outcome`. No profile is read in the background and nothing is sent",
         "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py",
@@ -325,11 +340,12 @@ METHODS: dict[str, dict] = {
                  "ranks below a known title"),
             (24, "2026-10-18", False, "the line saying why someone was found names the job a title search looked for, and nothing else: no search operators, never the person's own name"),
             (25, "2026-10-18", True, "people searches spend the budget where people are found: both title searches run first, a name check keeps only that person with the job the page gave them and is capped at three an employer, a post is dated so an old one no longer counts, and AVP, SVP and EVP read as senior"),
+            (26, "2026-10-19", True, "people are matched to an employer only where their result names it as where they work, people at its ratings or analytics arm or under its brand line count, and contacts already added on a name alone are re-checked"),
         ),
-        "fingerprint": "905bd9c547049c81",
+        "fingerprint": "3d579f89ea9b28f7",
     },
     "network-notes": {
-        "by": "upgrade", "priority": 2, "applies": "queued_notes", "time": "~10 min",
+        "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
         "gives": "every first note still waiting to be sent rewritten from what was read "
                  "about the person, not from a search snippet",
         "run": "python3 tools/network/reading.py queue; for each contact it lists, /network "
@@ -356,8 +372,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-18", False, "a browser read is for the day's short list only, a paste is offered for the best three, and the route says what works in this chat"),
             (13, "2026-10-19", False, "a comment's example employer is invented"),
             (14, "2026-10-19", False, "a comment names the place check's new rhythm, once and then weekly"),
+            (15, "2026-10-19", False, "applied by /network itself; several profiles can be pasted at once; a note nobody has read for says so at its top"),
         ),
-        "fingerprint": "ba71bfe1e76602a6",
+        "fingerprint": "2d354573e812ff1e",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -380,8 +397,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-17", False, "a ruling in the person's own words is never lifted by a better screen or a scoring rule, only by them"),
             (7, "2026-10-17", False, "a ruling lapses only when the part of the rules it rests on changes; restamp keeps the ones that still hold"),
             (8, "2026-10-18", False, "the text screen runs on Python 3.9; a pension plan's full and short names key as one employer"),
+            (9, "2026-10-19", True, "a posting is cut only while today's rules would cut it: relists aged by first sight, a remote role for another country flagged or cut, a region cutting only when it leaves home out, a home city beside a country code read as home, and the pronoun us never a country"),
         ),
-        "fingerprint": "578c5c0def157845",
+        "fingerprint": "60635a7488821390",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -420,8 +438,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", False, "no em dashes in the report it writes, and an invented "
                                     "example in place of a real one"),
             (3, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
+            (4, "2026-10-19", False, "no longer points at the removed Notion sync"),
         ),
-        "fingerprint": "5a83d707fcbda92d",
+        "fingerprint": "5f54c98c7e8293ba",
     },
 }
 
@@ -467,7 +486,6 @@ KEEPS_NOTHING: dict[str, str] = {
     ".claude/commands/outcome.md": "records what happened, which a better method does not change",
     ".claude/commands/gmail-sync.md": "its cursor is never committed, so every container reads "
                                       "the mailbox afresh with the current method",
-    ".claude/commands/notion-sync.md": "writes to the person's own Notion on request, nothing here",
     ".claude/commands/html-report.md": "a report derived on request, never kept as state",
     ".claude/commands/threads.md": "a view derived from the message log on every run",
     ".claude/commands/reset.md": "removes state on request",
@@ -497,6 +515,9 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/convert_salary_excel.py": "a lookup's data converter, run on demand",
     "tools/leak_scan.py": "development tooling",
     "tools/name_guard.py": "development tooling: checks what the app carries, keeps nothing",
+    "tools/app_watch.py": "checks the public app from the maintainer's repo; keeps only a "
+                          "note in .git of what it has read",
+    "tools/csv_store.py": "reads and writes a state CSV in place; keeps nothing",
     "tools/release.py": "publishes the app's releases from its own CI; keeps nothing in a repo",
     "tools/name_guard_allow.txt": "the name guard's list of invented names; keeps nothing",
     "tools/build_app.py": "development tooling",
@@ -743,6 +764,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if argv[:1] == ["redo"] and len(argv) == 2:
         return redo(argv[1])
+    if argv[:1] == ["behind"] and len(argv) == 2:
+        late = behind(argv[1]) if applies(argv[1]) else []
+        for v in late:
+            print(f"now {v[3]}")
+        return 1 if late else 0
     if argv[:1] == ["record"]:
         rest = argv[1:]
         names = ([n for n, m in METHODS.items() if m.get("setup")] if rest == ["--setup"]

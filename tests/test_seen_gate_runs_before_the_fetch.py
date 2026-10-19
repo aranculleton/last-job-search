@@ -23,6 +23,7 @@ filter. These tests exist to pin that it is:
 """
 from __future__ import annotations
 
+import pytest
 import json
 import os
 import subprocess
@@ -147,14 +148,12 @@ class TestAgainstTheRealSeenFile(unittest.TestCase):
         dropped = 0
         for u, e in self.seen.items():
             job = {"url": e.get("url") or u, "title": e.get("title"),
-                   "company": e.get("company")}
+                   "company": e.get("company"), "location": e.get("location")}
             if not gate(job):
                 continue
             dropped += 1
             n = T.norm(job["url"] or "")
-            t = (job["title"] or "").strip().lower()
-            k = T.key(job["company"])
-            self.assertTrue((n and n in urls) or (t and k and (t, k) in pairs),
+            self.assertTrue((n and n in urls) or T.ruled_pair(pairs, job),
                             f"the early gate dropped {u}, which the throttle keeps")
         # The example's corpus is one excluded posting; a real one runs to
         # hundreds, and a person's own copy of this test holds it to a higher bar.
@@ -174,7 +173,9 @@ class TestTheRoundWiresItUp(unittest.TestCase):
     def test_the_escape_hatch_reaches_an_expanded_round(self):
         """--expand re-invokes this script; a flag it drops is a flag that lies."""
         src = (ROOT / "tools" / "run_round.py").read_text(encoding="utf-8")
-        expansion = src.split("return subprocess.call(", 1)[1]
+        # The widened round's call, which now also clears the bodies it handed on
+        # after it returns, so it is no longer the return statement itself.
+        expansion = src.split("subprocess.call(", 1)[1]
         self.assertIn('"--no-seen-read"', expansion)
 
     def test_prefilter_accepts_the_flag(self):
@@ -186,3 +187,10 @@ class TestTheRoundWiresItUp(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@pytest.fixture(autouse=True)
+def _no_rescreen(monkeypatch):
+    """These pin how a ruling holds. Whether a better screen re-judges it is
+    tests/test_build_versions.py's, so the app's own re-run versions are held off."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")
