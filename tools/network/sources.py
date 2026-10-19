@@ -822,20 +822,63 @@ _PROFILE_LINK = re.compile(r"https?://(?:[a-z]{2,3}\.)?linkedin\.com/in/[^\s)>\]
 # What a search result's card says that is neither their job nor where they are.
 _CARD_NOISE = re.compile(r"^(?:view\b.*\bprofile|message|connect|follow|following|pending|"
                          r"send inmail|status is \w+|.*\bmutual connections?\b|current:|past:|"
-                         r"summary:|skills:|open to work|provides services|premium|\d+ followers?)",
+                         r"summary:|skills:|open to work|provides services|premium|\d+ followers?|"
+                         # The page's own links and buttons: "View full list" was read as a
+                         # person on every people-search page (2026-10-19).
+                         r"view full list$|(?:see|show|view) all\b|load more$|show more results$|"
+                         r"try premium\b|learn more$|dismiss$|next$|previous$|"
+                         r"are these results helpful\b)",
                          re.I)
+# LinkedIn's own cards on a people-search page, never a person: "Looking to get hired?"
+# with its list of jobs and employers, ending "View full list", a Premium offer, an ad.
+# A card runs from its first line to its last ("View full list", "See all"), or stops
+# before the next person's card (a degree beside a name), and never runs past
+# _PROMO_MAX lines: with no end in sight only its first line is dropped, so a real card
+# is never swallowed.
+_PROMO_START = re.compile(r"^(?:looking to get hired\b.*|are you (?:looking|hiring)\b.*|"
+                          r"jobs where you\b.*|try premium\b.*|(?:reactivate|unlock) premium\b.*|"
+                          r"get hired faster\b.*|promoted|sponsored|people you may know|"
+                          r"people also viewed)$", re.I)
+_PROMO_END = re.compile(r"^(?:view full list|(?:see|show|view) all\b.*|see more jobs|"
+                        r"try (?:it )?(?:for )?free\b.*|learn more|dismiss)$", re.I)
+_PROMO_MAX = 15
+
+
+def _promo_lines(lines: list) -> set:
+    """Indices of `lines` inside LinkedIn's own cards (_PROMO_START to _PROMO_END)."""
+    out, i = set(), 0
+    while i < len(lines):
+        if not _PROMO_START.match(lines[i]):
+            i += 1
+            continue
+        end = i + 1
+        for j in range(i + 1, min(len(lines), i + 1 + _PROMO_MAX)):
+            if _PROMO_END.match(lines[j]):
+                end = j + 1
+                break
+            m = _DEGREE.search(lines[j])
+            if m:
+                # A person's card: theirs starts at the name, the line before a degree
+                # written on its own line, or this line when it carries both.
+                end = j - 1 if not lines[j][:m.start()].strip(" \u2022\u00b7-") else j
+                break
+        out.update(range(i, max(end, i + 1)))
+        i = max(end, i + 1)
+    return out
 
 
 def people_paste(text: str, company: str, degree: str = "") -> list:
     """[{name, title, location, linkedin_url, degree}] from a paste of LinkedIn's people
     search for one employer, or a screenshot of it written out the same way. `degree`
-    is for a paste that carries none, such as one filtered to 1st already."""
+    is for a paste that carries none, such as one filtered to 1st already. LinkedIn's
+    own cards on the page (_PROMO_START) are never read as people."""
     import discovery
     lines = [ln.strip() for ln in str(text or "").splitlines()]
+    lines = [ln for ln in lines if ln]
+    promo = _promo_lines(lines)
+    lines = [ln for i, ln in enumerate(lines) if i not in promo]
     out, cur, want = [], None, ""
     for ln in lines:
-        if not ln:
-            continue
         link = _PROFILE_LINK.search(ln)
         if link:
             if cur is not None and not cur["linkedin_url"]:

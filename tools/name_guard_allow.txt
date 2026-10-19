@@ -79,3 +79,13 @@ Ama Reyes               # invented, the same test
 Ola Berg                # invented, the same test
 Ruth Abara              # invented, the same test
 Far Town                # invented place, tests/test_a_paced_board_sends_what_matters_first.py
+Sales Executive         # a job title, tests/test_a_long_networking_session_reads_its_pages_right.py
+Account Executive       # a job title, the same test
+Business Development Manager  # a job title, the same test
+Machine Learning        # a field of work, not a name
+Strategic Partnerships Director  # a job title, the same test
+Go-To-Market Lead       # a job title, the same test
+Customer Success Manager  # a job title, the same test and tools/network/discovery.py
+Business Intelligence Lead  # a job title, the same test
+Committee Member        # a job title, the same test
+Northgate Pricing Society  # invented organisation, the same test

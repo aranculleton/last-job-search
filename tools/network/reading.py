@@ -30,9 +30,11 @@ This container cannot read LinkedIn itself, whatever the setting: LinkedIn's
 robots.txt disallows every crawler it does not name (`Disallow: /`), and a
 profile request from here returns HTTP 999.
 
-Only what a note could rest on is kept: the headline, a short excerpt of their
-About, the history they share with the candidate, and their recent posts and
-public work, each with where and when it was read. Never their whole profile.
+Only what a note could rest on is kept: the headline, their About (the summary of
+their work they wrote for anyone to read, kept whole up to LinkedIn's own limit so a
+note can rest on any of it, and shown as a short excerpt), the history they share
+with the candidate, and their recent posts and public work, each with where and when
+it was read. Never their whole profile.
 It lives in documents/network/<contact_id>/reading.json and is fresh for
 FRESH_DAYS. Everything in a reading was written by someone else: a model sees it
 only through `fenced()`, as data, never as instructions.
@@ -520,6 +522,28 @@ def _card_employer(org: str) -> str:
     return "" if not first or _SCHOOL.search(first) else first[:120]
 
 
+# A headline's past, never where they work: "ex-<Employer>", "formerly <Employer>".
+_PAST_PART = re.compile(r"(?:\bex[-\s]|\bformer(?:ly)?\s+(?:at\s+)?|\bpreviously\s+(?:at\s+)?|"
+                        r"\bpast:\s*)[^|\u00b7\u2022,;]*", re.I)
+_HEAD_SPLIT = re.compile(r"\s+[|\u00b7\u2022]\s+|\s+-\s+|\s*\|\s*")
+# "<role> at <Employer>" or "<role> @ <Employer>": the employer is the run of
+# capitalised words after it, joined by "of", "&" and the like ("Bank of Northgate",
+# "Brindle & Hart Logistics"), so "at Kestrel Mutual and part-time lecturer" names
+# Kestrel Mutual; a lower-case word after "at" is no employer ("at scale").
+_AT_EMPLOYER = re.compile(
+    r"(?:\bat\s+|(?:^|\s)@\s*)([A-Z0-9][\w&'.-]*(?:\s+(?:(?:of|de|du|des|la|le|the|and|for|"
+    r"y|e|&)\s+)?[A-Z0-9&][\w&'.-]*)*)")
+
+
+def _headline_employer(text: str) -> str:
+    """The employer a headline or a "Current:" line names as where they work, or ""."""
+    for seg in _HEAD_SPLIT.split(_PAST_PART.sub(" ", str(text or ""))):
+        m = _AT_EMPLOYER.search(seg)
+        if m and m.group(1).strip(" .-"):
+            return m.group(1).strip(" .-")[:120]
+    return ""
+
+
 def _posts(lines: list, today: datetime.date, name: str = "") -> list:
     """Their posts and reposts, dated, newest first as the page lists them.
 
@@ -680,7 +704,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
     pre, secs, before_main = _sections(lines)
     headline, location, org = _top(pre, before_main, name)
     degree, reach = _reach(pre)
-    about = _clip(" ".join(x for x in secs.get("about", []) if not _NOISE.match(x)), ABOUT_CHARS)
+    about = _clip(" ".join(x for x in secs.get("about", []) if not _NOISE.match(x)), ABOUT_KEEP)
     items = (_posts(secs.get("activity", []), today, name)
              + _titled(secs.get("featured", []), "featured", 2)
              + _titled(secs.get("publications", []), "publication", 2))
@@ -688,10 +712,38 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
         "name": name, "company": company, "read_on": today.isoformat(),
         "sources": [{"kind": source, "url": url, "date": today.isoformat()}],
         "headline": headline, "location": location, "about": about,
-        "current": _current(secs.get("experience", [])) or _card_employer(org),
+        "current": _current_employer(headline, secs.get("experience", []), org),
         "degree": degree, "reach": reach,
         "shared": _shared(secs), "items": items,
     }
+
+
+# The About is kept whole for grounding (grounded(), and the fenced reading a draft is
+# written from), up to LinkedIn's own limit for it. Cut to its first ABOUT_CHARS, the
+# part that mattered (a remit spanning pricing and revenue intelligence) was lost and a
+# note had to ground on weaker words (2026-10-19). It is the summary they wrote of their
+# work for anyone to read; shown, it is cut to a line (hooks), and the verdict reads its
+# first ABOUT_CHARS, as it always did.
+ABOUT_KEEP = 2600
+
+
+def _current_employer(headline: str, experience: list, org: str) -> str:
+    """Where they work now: the first Experience entry, else the employer the headline
+    names, else the top card's organisation line.
+
+    The card's first organisation badge was taken as the employer for someone whose
+    headline named a large employer: the badge was an industry body (2026-10-19). A
+    badge is never preferred to the headline, and an Experience entry listed first
+    (a side role at that body) gives way to the employer the headline names when that
+    employer is in their Experience too.
+    """
+    import discovery
+    head = _headline_employer(headline)
+    exp = _current(experience)
+    if head and exp and not discovery.same_employer(head, exp) \
+            and any(_has(head, x) for x in experience):
+        return head
+    return exp or head or _card_employer(org)
 
 
 def _names_them(name: str, lines: list) -> bool:
@@ -879,7 +931,8 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     headline = reading.get("headline", "")
     posts = " ".join(i.get("text", "") for i in reading.get("items", [])
                      if i.get("kind") in ("post", "repost") and (_item_days(i.get("date", ""), datetime.date.today()) or 0) <= 90)
-    person_ = {"title": headline, "headline": headline, "about": reading.get("about", ""),
+    person_ = {"title": headline, "headline": headline,
+               "about": _clip(reading.get("about", ""), ABOUT_CHARS),
                "activity": posts, "company": company, "location": reading.get("location", "")}
     why = discovery.disqualify(person_, target_company=company)
     if why:
@@ -1780,21 +1833,39 @@ def write_draft(contact_id: str, note: str, name: str = "") -> str:
 _SENT_AGE = re.compile(r"^sent\s+(?:(today|yesterday)|(\d{1,3})\s+(minute|hour|day|week|month|year)s?\s+ago)\b",
                        re.I)
 _INVITE_NOISE = re.compile(
-    r"^(?:withdraw|manage invitations?|received|sent|people(?:\s*\(\d+\))?|pages|events|"
+    r"^(?:withdraw|manage invitations?|received|sent|people(?:\s*\(\d[\d,]*\))?|pages|events|"
     r"newsletters|all|grow|catch up|my network|invitations?|load more|show more|"
     r"view (?:.+'s )?profile|.+'s profile (?:picture|photo)|previous|next|page \d+ of \d+|"
     r"\d+ (?:people|invitations?)|you have no sent invitations?.*)$", re.I)
 
 
+# The fold under a note's preview: everything above it, back to the Withdraw before
+# it, is the note that went with the card above.
+_MORE_LINE = re.compile(r"^(?:\u2026|\.\.\.)?\s*(?:see|show)\s+more$", re.I)
+# The list's own count, "People (425)": how many requests are pending in all.
+_INVITE_TOTAL = (re.compile(r"^(?:people|sent)\s*\((\d[\d,]*)\)$", re.I),
+                 re.compile(r"^(\d[\d,]*)\s+(?:people|invitations?)$", re.I))
+
+
 def invitations(text: str, today: datetime.date | None = None) -> list:
     """[{name, headline, sent}] from the sent-invitations page's text, in page order.
-    `sent` is the day the request went, as near as "Sent 2 weeks ago" says."""
+    `sent` is the day the request went, as near as "Sent 2 weeks ago" says: the latest
+    day it can mean, so a card is never taken for newer than it is.
+
+    A request sent with a note lists the note's preview after Withdraw, then "...show
+    more", then the next card. Taking the first line after Withdraw as the next name
+    named every later card after the note above it. So a card is the two lines before
+    its "Sent" line, its name and its headline, and whatever sits between the last
+    Withdraw and those two (to the fold, when there is one) is a note, never kept: it is
+    the person's own words, and nobody's name.
+    """
     today = today or datetime.date.today()
     out, block = [], []
     for line in _clean_lines(text):
         m = _SENT_AGE.match(line)
         if m:
-            people = [x for x in block if not _INVITE_NOISE.match(x) and not _NOISE.match(x)]
+            people = [x for x in block if not _INVITE_NOISE.match(x) and not _NOISE.match(x)
+                      and not _CARD_SKIP.search(x)]
             if people:
                 if m.group(1):
                     when = today - datetime.timedelta(days=0 if m.group(1).lower() == "today" else 1)
@@ -1802,9 +1873,12 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
                     unit = {"minute": "m", "hour": "h", "day": "d", "week": "w", "month": "mo",
                             "year": "y"}[m.group(3).lower()]
                     when = datetime.date.fromisoformat(_age_date(int(m.group(2)), unit, today))
-                out.append({"name": people[0][:120], "headline": (people[1] if len(people) > 1 else "")[:160],
-                            "sent": when.isoformat()})
+                name, headline = (people[-2], people[-1]) if len(people) > 1 else (people[0], "")
+                out.append({"name": name[:120], "headline": headline[:160], "sent": when.isoformat()})
             block = []
+            continue
+        if _MORE_LINE.match(line):
+            block = []                  # a note's preview ends here: the next card starts
             continue
         if _INVITE_NOISE.match(line):
             if line.lower() == "withdraw":
@@ -1814,19 +1888,108 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
     return out
 
 
-def match_invitations(cards: list, contacts: list) -> dict:
-    """{"pending": [(card, contact)], "unknown": [card], "gone": [contact]}.
+def invitations_total(text: str) -> int | None:
+    """How many requests the list says are pending in all ("People (425)"), or None.
+    The tab's own count first; "425 people" only where the page has no tab count."""
+    lines = _clean_lines(text)[:40]
+    for rx in _INVITE_TOTAL:
+        m = next((m for m in map(rx.match, lines) if m), None)
+        if m:
+            return int(m.group(1).replace(",", ""))
+    return None
+
+
+# Letters after a name, however a card writes them ("Ph. D.", "PhD", "M.B.A.", "CFA").
+# Two letters or fewer only in capitals or with dots: a two-letter surname such as
+# "Ma" stays a surname.
+_POSTNOMINALS = frozenset("""phd dphil md mba msc mres mphil meng bsc bcomm ba bs ma ms mpa mph
+llb llm jd cfa cpa cma cfp pmp frm cissp peng ceng pe esq acca aca fca fcca cima acma caia
+csm psm fia fsa asa cipd mcipd frsa rn jr sr ii iii iv""".split())
+_HONORIFIC_WORDS = frozenset({"mr", "mrs", "ms", "miss", "mx", "dr", "prof", "professor", "sir"})
+_PRONOUN_WORDS = frozenset({"he", "him", "his", "she", "her", "hers", "they", "them", "their",
+                            "theirs", "ze", "zir", "xe", "xem", "any", "pronouns"})
+
+
+def _bare_word(token: str) -> str:
+    return re.sub(r"[\W_]+", "", fold(token).lower())
+
+
+def _postnominal(tokens: list) -> bool:
+    joined = "".join(tokens)
+    bare = re.sub(r"[\W_]+", "", fold(joined))
+    low = bare.lower()
+    if low not in _POSTNOMINALS:
+        return False
+    return len(low) > 2 or bare.isupper() or "." in joined
+
+
+def _name_parts(name: str):
+    """({the given names they may go by}, surname) from a name as a card or the contact
+    book writes it, or None when it is not a first and last name.
+
+    A card wrote a name with a middle name, a nickname in brackets and "Ph. D." after it
+    ("Tamsin Rhian (Wren) Oyelaran, Ph. D.") where the contact book had the nickname and
+    the surname ("Wren Oyelaran"), and the exact match the list used never saw them as
+    one person. So: a nickname in brackets is a given name they go by (a pronoun in
+    brackets is not), letters after the name go however they are dotted or spaced, an
+    honorific goes, and a middle name is neither a given name to match on nor the
+    surname. A part after a comma is letters after the name ("Oyelaran, PhD, PMP") or
+    not a name at all, so it is left out.
+    """
+    raw = fold(str(name or ""))
+    nicks = []
+    for inner in re.findall(r"\(([^)]*)\)", raw):
+        words = [_bare_word(w) for w in inner.split() if _bare_word(w)]
+        if (not words or "/" in inner or set(words) <= _PRONOUN_WORDS
+                or words[0] in ("nee", "born", "formerly")):
+            continue
+        nicks.append(words[0])
+    s = re.sub(r"\([^)]*\)", " ", raw)
+    s = re.split(r"\s+[|\u2013\u2014\u00b7\u2022-]\s+", s)[0]
+    tokens = [t for t in s.split(",")[0].split() if _bare_word(t)]
+    while tokens and _bare_word(tokens[0]) in _HONORIFIC_WORDS:
+        tokens.pop(0)
+    while len(tokens) > 2:
+        for k in (3, 2, 1):
+            if len(tokens) - k >= 2 and _postnominal(tokens[-k:]):
+                del tokens[-k:]
+                break
+        else:
+            break
+    if len(tokens) < 2:
+        return None
+    return {_bare_word(tokens[0]), *nicks}, _bare_word(tokens[-1])
+
+
+def same_person(a: str, b: str) -> bool:
+    """Do two written names name one person: the same surname, and a given name one of
+    them goes by in common (the first name, or a nickname in brackets)?"""
+    pa, pb = _name_parts(a), _name_parts(b)
+    return bool(pa and pb and pa[1] == pb[1] and pa[0] & pb[0])
+
+
+def match_invitations(cards: list, contacts: list, threads: list | None = None,
+                      total: int | None = None) -> dict:
+    """{"pending": [(card, contact)], "unknown": [card], "gone": [contact],
+    "unchecked": [contact], "oldest": the oldest loaded card's day, "complete": bool}.
 
     pending: a card whose name is a contact the log has not heard went (a request sent
     from LinkedIn itself). gone: a request the log has as waiting that the page no
-    longer lists (accepted, or withdrawn there): told, never written."""
+    longer lists (accepted, or withdrawn there): told, never written.
+
+    The page loads about ten of the list (one session: ten of 425), newest first. A
+    request missing from the loaded part is gone only when it went after the oldest
+    card loaded, which is where the loaded part ends; one that went on or before that
+    day is `unchecked`, never gone: the page says nothing about it. Every one of the
+    415 not loaded had been reported as no longer pending. `total` is the list's own
+    count (invitations_total); when every card is loaded, every request is checked.
+    """
     import state
-    by_name: dict = {}
-    for c in contacts:
-        by_name.setdefault(state._match_name(c.get("name")), []).append(c)
+    parts = [(c, _name_parts(c.get("name"))) for c in contacts]
     pending, unknown, listed = [], [], set()
     for card in cards:
-        rows = by_name.get(state._match_name(card["name"]), [])
+        want = _name_parts(card["name"])
+        rows = [c for c, p in parts if want and p and p[1] == want[1] and p[0] & want[0]]
         if len(rows) > 1:
             rows = [c for c in rows if _has(c.get("company") or "", card["headline"])] or rows[:0]
         if len(rows) != 1:
@@ -1836,48 +1999,132 @@ def match_invitations(cards: list, contacts: list) -> dict:
         listed.add(c.get("contact_id"))
         if (c.get("status") or "not_contacted") in ("not_contacted", "dropped"):
             pending.append((card, c))
-    gone = []
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    if threads is None:
+        threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    oldest = min((c["sent"] for c in cards if c.get("sent")), default="")
+    complete = total is not None and total <= len(cards)
+    edge = datetime.date.fromisoformat(oldest) if oldest else None
+    gone, unchecked = [], []
     for c in contacts:
         cid = c.get("contact_id")
         if cid in listed:
             continue
         rows = [r for r in state.threads_for(threads, cid) if state._direction(r)]
-        if state.request_pending(rows) is not None:
+        when = state.request_pending(rows)
+        if when is None:
+            continue
+        if complete or (edge is not None and when > edge):
             gone.append(c)
-    return {"pending": pending, "unknown": unknown, "gone": gone}
+        else:
+            unchecked.append(c)
+    return {"pending": pending, "unknown": unknown, "gone": gone, "unchecked": unchecked,
+            "oldest": oldest, "complete": complete}
+
+
+# What a people-search card says about where someone works now: LinkedIn's
+# "Current: <role> at <employer>" line under the headline.
+_CURRENT_LINE = re.compile(r"^current:\s*(.+)$", re.I)
+
+
+def _employer_names(company: str) -> list:
+    """The employer as people write it: its name, the name without a legal suffix, and
+    the profile's aliases for it (employers.py COMPANY_ALIASES)."""
+    import company_key
+    import discovery
+    k = company_key.key(company)
+    names = [company, discovery.search_name(company)]
+    names += [a for a, v in company_key.ALIASES.items() if v == k and len(a) > 1]
+    return list(dict.fromkeys(n for n in (x.strip() for x in names) if n))
+
+
+def _said(name: str, text: str) -> bool:
+    """`name` in `text` as whole words, in any case: a profile's alias is stored in
+    lower case ("kmu") and a headline writes it in capitals ("KMU")."""
+    n = fold(name).strip().lower()
+    return bool(n) and re.search(r"(?<!\w)" + re.escape(n) + r"(?!\w)",
+                                 fold(text).lower()) is not None
+
+
+def card_where(person_: dict, company: str) -> tuple[str, str]:
+    """("at" | "elsewhere" | "unknown", the employer the card names) for one card.
+
+    A people search for an employer returns people at other employers too, and the
+    one-page read screened nobody by employer: every card passed, and the command
+    counted them all as at the employer. The card's "Current:" line decides first,
+    then the headline: the employer it names as where they work ("<role> at <X>",
+    "<role> @ <X>"), or the employer itself named anywhere in it, never in the past
+    ("ex-<X>"). A card that says neither, or names another employer beside it, is
+    "unknown", which a deep read settles: a wrong "elsewhere" loses a good contact.
+    """
+    import discovery
+    names = _employer_names(company)
+    for text in (person_.get("current_line", ""), person_.get("title", "")):
+        if not text:
+            continue
+        now = _PAST_PART.sub(" ", text)
+        emp = _headline_employer(text)
+        if emp and (discovery.same_employer(emp, company) or discovery._target_in(emp, company)):
+            return "at", emp
+        named = any(_said(n, now) for n in names) or discovery._names_employer(now, company)
+        if emp:
+            return ("unknown", "") if named else ("elsewhere", emp)
+        if named:
+            return "at", company
+    return "unknown", ""
 
 
 def people_page(text: str, company: str) -> list:
-    """[{name, title, location, degree, reach, linkedin_url}] from an employer's People
-    tab or a people search, read once: a dozen people's headline, place and degree for
-    one page load. `reach` is "pending" where the card shows a request already sent."""
+    """[{name, title, location, degree, reach, linkedin_url, where, employer}] from an
+    employer's People tab or a people search, read once: a dozen people's headline,
+    place and degree for one page load. `reach` is "pending" where the card shows a
+    request already sent; `where` is card_where()'s answer."""
     import sources
     people = sources.people_paste(text, company)
     lines = _clean_lines(text)
+    promo = sources._promo_lines(lines)
+    starts, at = [], 0
     for p in people:
-        p["reach"] = ""
-        try:
-            i = next(n for n, x in enumerate(lines) if x.startswith(p["name"]))
-        except StopIteration:
-            continue
-        for x in lines[i + 1:i + 9]:
-            low = x.strip().lower()
-            if low == "pending":
-                p["reach"] = "pending"
-                break
-            if low in ("connect", "message", "follow"):
-                p["reach"] = {"connect": "request", "message": "message",
-                              "follow": "request under More"}[low]
-                break
+        i = next((n for n in range(at, len(lines))
+                  if n not in promo and lines[n].startswith(p["name"])), None)
+        starts.append(i)
+        at = i + 1 if i is not None else at
+    for n, p in enumerate(people):
+        p["reach"], p["current_line"] = "", ""
+        i = starts[n]
+        if i is not None:
+            stop = next((s for s in starts[n + 1:] if s is not None), len(lines))
+            for x in lines[i + 1:min(i + 9, stop)]:
+                low = x.strip().lower()
+                if low == "pending":
+                    p["reach"] = "pending"
+                    break
+                if low in ("connect", "message", "follow"):
+                    p["reach"] = {"connect": "request", "message": "message",
+                                  "follow": "request under More"}[low]
+                    break
+            p["current_line"] = next((m.group(1) for m in (_CURRENT_LINE.match(x)
+                                                           for x in lines[i + 1:stop]) if m), "")
+        p["where"], p["employer"] = card_where(p, company)
     return people
 
 
 def screen(person_: dict, company: str) -> tuple[bool, str]:
-    """The cheap check on what a one-page read showed: (still worth a deep read, why not)."""
+    """The cheap check on what a one-page read showed: (still worth a deep read, why not).
+    A card that names another employer as where they work is out; one that names none
+    is kept, with that said, because a wrong skip costs a good contact."""
+    where, employer = person_.get("where"), person_.get("employer", "")
+    if where is None:
+        where, employer = card_where(person_, company)
+    # A request already pending is said first: it is recorded as sent, never closed.
+    if where == "elsewhere" and person_.get("reach") != "pending":
+        return False, f"works elsewhere: the card names {employer}, not {company}"
     provisional = {"headline": person_.get("title", ""), "location": person_.get("location", ""),
                    "reach": person_.get("reach", ""), "current": "", "items": [], "about": ""}
-    return verdict(provisional, company)
+    keep, why = verdict(provisional, company)
+    if keep and where == "unknown":
+        why = "; ".join(x for x in (why, f"the card does not say where they work: the deep "
+                                         f"read checks it is {company}") if x)
+    return keep, why
 
 
 def from_list(contact_id: str, person_: dict, company: str, url: str = "",
@@ -2159,11 +2406,19 @@ def _clip(text: str, n: int) -> str:
 
 def _skip_hint(contact_id: str, why: str) -> str:
     """What to run after a SKIP: a request already pending is recorded as sent, never
-    closed; anything else closes the contact with its reason and removes the draft."""
+    closed; anything else closes the contact with its reason and removes the draft.
+
+    The command is printed whole, the reason quoted for the shell so it runs as printed
+    whatever the reason holds, and it says it is run once the person has confirmed
+    nothing else is needed from them: a skip is final, and a contact closed is never
+    surfaced again."""
     if "already pending" in why:
         return (f"next: a request already went, from LinkedIn itself: python3 "
                 f"tools/network/state.py sent {contact_id} --outside")
-    return f'next: python3 tools/network/reading.py skip {contact_id} --reason "{why}"'
+    import shlex
+    return ("next, once the person has confirmed nothing else is needed from them: python3 "
+            f"tools/network/reading.py skip {contact_id} --reason {shlex.quote(why)} "
+            "(closes them with the reason and removes their draft)")
 
 
 def _gate_line(g: dict, now: datetime.datetime) -> str:
@@ -2765,12 +3020,15 @@ def _cli_invitations(a) -> int:
         print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped for today")
         return EXIT["check"]
     cards = invitations(text)
+    total = invitations_total(text)
     rec = page_read("invitations", a.url, now, people=len(cards))
     contacts = state.load_contacts()
-    got = match_invitations(cards, contacts)
-    print(f"invitations: {len(cards)} request(s) pending on the page; the next page at "
-          f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
     threads = state.load_threads()
+    got = match_invitations(cards, contacts, threads=threads, total=total)
+    print(f"invitations: {len(cards)} request(s) pending on the page"
+          + (f", {len(cards)} of {total} loaded" if total is not None and total > len(cards) else "")
+          + f"; the next page at "
+          f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
     done = 0
     for card, c in got["pending"]:
         line = (f"  sent outside the app: {c.get('name')} ({c.get('company')}), pending since "
@@ -2793,6 +3051,16 @@ def _cli_invitations(a) -> int:
     for c in got["gone"]:
         print(f"  no longer pending: {c.get('name')} ({c.get('company')}) [{c['contact_id']}]: "
               "accepted, or withdrawn on LinkedIn; their profile or the person says which")
+    if got["unchecked"]:
+        # Ten loaded of 425 had every other request reported as gone (2026-10-19).
+        shown = got["unchecked"][:5]
+        loaded = f"{len(cards)} of {total}" if total is not None else f"the {len(cards)} loaded"
+        print(f"  not checked: {len(got['unchecked'])} request(s) the log has as waiting went "
+              f"on or before the oldest one loaded ({got['oldest'] or 'none loaded'}); only "
+              f"{loaded} are on the page, newest first, so whether theirs is still pending is "
+              "not known: "
+              + ", ".join(f"{c.get('name')} [{c['contact_id']}]" for c in shown)
+              + (" ..." if len(got["unchecked"]) > len(shown) else ""))
     if got["unknown"]:
         print(f"  {len(got['unknown'])} other pending request(s) to people not in the contact book")
     return EXIT["ok"]
@@ -2815,19 +3083,26 @@ def _cli_people(a) -> int:
     people = people_page(text, a.company)
     rec = page_read("people", a.url, now, people=len(people))
     contacts = state.load_contacts()
-    print(f"people: {len(people)} at {a.company} on the page; the next page at "
+    # Counted apart: every card was counted as at the employer, people elsewhere too.
+    count = {w: sum(1 for p in people if p.get("where") == w) for w in ("at", "elsewhere", "unknown")}
+    print(f"people: {len(people)} on the page: {count['at']} at {a.company}, "
+          f"{count['elsewhere']} elsewhere, {count['unknown']} where the card does not say; "
+          f"the next page at "
           f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
     for p in people:
         keep, why = screen(p, a.company)
         row = state.already_contacted(contacts, name=p["name"], company=a.company,
                                       linkedin_url=p.get("linkedin_url"))
         tag = f"[{row['contact_id']}]" if row else "[not in the book]"
-        if row and (row.get("status") or "not_contacted") in ("not_contacted", "dropped"):
+        waiting = bool(row) and (row.get("status") or "not_contacted") in ("not_contacted", "dropped")
+        if waiting:
             from_list(row["contact_id"], p, a.company, a.url)
         print(f"  {'deep read' if keep else 'out'}: {p['name']}, {p.get('title') or '?'}"
               f"{', ' + p['location'] if p.get('location') else ''}"
               f"{' (' + p['degree'] + ')' if p.get('degree') else ''} {tag}"
-              + ("" if keep else f": {why}"))
+              + (f": {why}" if why else ""))
+        if waiting and not keep:
+            print("    " + _skip_hint(row["contact_id"], why))
     print("next: shortlist only the few you will write to today, best first (`reading.py "
           "shortlist`); the rest are drafted from what the page showed and marked as waiting "
           "on a read")

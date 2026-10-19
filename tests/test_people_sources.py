@@ -202,7 +202,10 @@ def test_the_shape_follows_the_person():
     assert compose.shape_for("Director of Data Science", shared) == "brief"
     talk = {"items": [{"kind": "talk", "text": "Forecasting fresh food demand"}]}
     assert compose.shape_for("Data Scientist", talk) == "their_work"
-    assert compose.shape_for("Data Scientist", {}) == "brief"
+    # A peer with nothing shared and nothing of theirs gets the standard note, not the
+    # senior reader's 220 (changed 2026-10-19: a peer could not fit one specific line).
+    assert compose.shape_for("Data Scientist", {}) == "shared"
+    assert compose.shape_for("Director of Data Science", {}) == "brief"
 
 
 def test_the_default_shape_is_the_note_it_always_was():

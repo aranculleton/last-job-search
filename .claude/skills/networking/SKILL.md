@@ -183,6 +183,11 @@ Run alumni modes before cold modes for any company where both are possible.
 - **Revenue roles dressed as technical.** Solutions Architect, Field Engineering,
   Cloud & AI Specialist, Technical Account Manager, Client Partner, Head of
   Industry. They are customer-facing sales and do not hire for technical teams.
+  So are sales, account, business development, go-to-market, partnerships and
+  customer success roles ("Data & AI Sales Executive"), unless the title's own role
+  is in the person's function: "Senior Data Scientist, Go-To-Market" and "Analytics
+  Manager, Partnerships" are kept. The skip says what it found ("an industry head, a
+  sales and partnerships role").
 - **Wrong office function.** Verify the city houses the function before
   searching. Record "no relevant presence" when it does not.
 - **Name collisions.** Acme the AI lab is not Acme Health. Verify
@@ -276,10 +281,12 @@ caught at once. So between finding and writing there is a read, and
   the risk to their account; it does not remove it, because the terms forbid automated
   access at any pace. Never call this route safe.
 
-What a reading keeps is what a note could rest on: their headline, a short excerpt of
-their About, the history they share with the candidate (an employer, a school, a city,
-each with the line that shows it), and their recent posts and public work, dated and
-sourced. Never their whole profile, and never anything from the "People also viewed"
+What a reading keeps is what a note could rest on: their headline, their About (the
+summary of their work they wrote for anyone to read, kept whole up to LinkedIn's own
+limit so a note can rest on any part of it, and shown as a short excerpt), the history
+they share with the candidate (an employer, a school, a city, each with the line that
+shows it), and their recent posts and public work, dated and sourced. Never their whole
+profile, never anything personal, and never anything from the "People also viewed"
 column, which is other people. A pasted page that does not carry the contact's name is
 refused, because a note built on the wrong person's profile is worse than a generic one.
 
@@ -296,7 +303,9 @@ One shape for everyone is how a batch comes out alike, and the length that suits
 peer is the length a senior reader ignores. `compose.shape_for()` chooses from who
 they are and what was read, and `first_note(shape=)` holds it:
 
-- **shared**: shared history leads (an employer, a school, a city). The default.
+- **shared**: shared history leads (an employer, a school, a city). The default, and
+  what a peer gets when nothing is shared and nothing of theirs leads: the standard
+  note at the plan's limit, never the senior reader's 220.
 - **their_work**: their talk, post, paper or code leads, with no opener before it.
 - **brief**: a senior reader. The true line, who you are and the ask; no question,
   under 220 characters.

@@ -51,7 +51,10 @@ it. LinkedIn is never fetched from a session.
    clicked), behind `reading.py gate --page`, and pipe its text to
    `python3 tools/network/reading.py invitations - --record`. Anyone the person sent a request
    to from the LinkedIn app is recorded as sent (`state.py sent <id> --outside`) and their draft
-   removed, so the queue stops saying "send now" to someone already Pending. Without a browser,
+   removed, so the queue stops saying "send now" to someone already Pending. The page loads
+   only the newest few of the list, so a request the log has as waiting is called no longer
+   pending only when it went after the oldest card loaded; one sent before that is listed as
+   not checked, and is never taken for accepted. Without a browser,
    a queued send whose day has passed with nothing logged is listed as UNCONFIRMED (`open_actions
    --due`): ask whether it went, and record it with `state.py sent <id>` if it did.
    **"Already in the book" is not "already written to."** `harvest` prints, per employer, how
@@ -166,8 +169,9 @@ it. LinkedIn is never fetched from a session.
      one. One load, behind `reading.py gate --page`, its text piped to `python3
      tools/network/reading.py people - --company "<employer>"`. It screens a dozen people for
      one page (their headline, place, degree, and whether a request is already Pending), the
-     cheap checks a profile read was being spent on. Only the few who pass and will be
-     written to today go to a profile read.
+     cheap checks a profile read was being spent on, and says apart who the cards place at the
+     employer, who elsewhere (out) and who they do not place (kept, for the profile read to
+     settle). Only the few who pass and will be written to today go to a profile read.
 
    Measured over two employers in one city on 2026-10-18: the plain query shape
    `queries_for()` now writes ("<employer> <one title> <city>") found 14 people named at the
@@ -358,7 +362,8 @@ it. LinkedIn is never fetched from a session.
       YET (exit 10) when nothing of their own page was read, whatever public findings say. A
       snippet can be months old, and the page shows that someone has moved on, is based
       elsewhere, holds a role the search filters out, or already has a request pending. A skip
-      is recorded with the command it prints: `reading.py skip <contact_id> --reason "<why>"`
+      is recorded with the command it prints, once the person has confirmed nothing else is
+      needed from them: `reading.py skip <contact_id> --reason "<why>"`
       closes them with the reason and removes their draft, so they never surface again. A
       request already Pending is not a skip but a send: `state.py sent <contact_id> --outside`.
       The next person is read in their place. When the people kept run out before the batch is full, run
