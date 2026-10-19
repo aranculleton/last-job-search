@@ -63,3 +63,21 @@ def test_the_workflow_writes_the_verdict_with_the_draft():
     audit = text.split("phase: 'Audit'", 1)[0].rsplit("agent(", 1)[1]
     assert "the whole audit you return (verdict, draft" in audit
     assert "delete ${scratch}/audit_" not in audit
+
+
+def test_the_audit_stage_is_the_grounding_auditor():
+    """The research stage reads its agent file; the audit stage wrote Reviewer A
+    inline instead, without the auditor's rule 9 (no shared openings or
+    closings), its Reserve Experience check or its fixed-version rule."""
+    with open(os.path.join(ROOT, ".claude", "workflows", "draft-applications.js"),
+              encoding="utf-8") as fh:
+        text = fh.read()
+    audit = text.split("phase: 'Audit'", 1)[0].rsplit("agent(", 1)[1]
+    assert "Read .claude/agents/grounding-auditor.md first" in audit
+    assert "Reviewer A" not in audit
+    assert "voice_check.py --corpus" in audit and "check_numbers.py --drafts" in audit
+    with open(os.path.join(ROOT, ".claude", "agents", "grounding-auditor.md"),
+              encoding="utf-8") as fh:
+        agent = fh.read()
+    for rule in ("Reserve Experience", "rule 9", "Audit a fixed version"):
+        assert rule in agent
