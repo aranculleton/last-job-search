@@ -59,7 +59,6 @@ import outreach  # noqa: E402
 import person  # noqa: E402
 import prep  # noqa: E402
 import profile_facts  # noqa: E402
-import screening_answers  # noqa: E402
 import state  # noqa: E402
 import throttle  # noqa: E402
 import untrusted  # noqa: E402
@@ -71,6 +70,8 @@ GUIDES = os.path.join(ROOT, ".claude", "skills", "job-application-assistant")
 APP_GUIDE = os.path.join(GUIDES, "07-interview-prep.md")
 APP_EVALUATION = os.path.join(GUIDES, "04-job-evaluation.md")
 STORIES_FILE = "07-interview-prep.md"
+# The salary table screening_answers.py reads, named the same way it names it.
+EVALUATION = person.file("evaluation", "04-job-evaluation.md")
 
 SECTIONS = ("On one screen", "Likely questions", "Stories", "What the paper says",
             "Gaps and honest framing", "Money and eligibility", "The company", "Ask them",
@@ -661,11 +662,25 @@ def gap_lines(ctx) -> list:
     return out
 
 
+def _screening():
+    """tools/screening_answers.py, or None for a profile with no screening.py.
+
+    Imported here rather than at the top: it reads the profile's screening.py as
+    it loads, and a pack with no money facts is still a pack.
+    """
+    try:
+        import screening_answers
+        return screening_answers
+    except Exception:
+        return None
+
+
 def _band():
     """(target line, floor) from the salary table, or ("", None) when there is none."""
+    sheet = _screening()
     try:
-        floor, low, high = screening_answers.salary_band()
-    except screening_answers.MissingFact:
+        floor, low, high = sheet.salary_band()
+    except Exception:       # no sheet, or screening_answers.MissingFact: no table to read
         return "", None
     cur = prep._CURRENCY_CODE
     return ("%s%s to %s" % (cur + " " if cur else "", "{:,}".format(low), "{:,}".format(high)),
@@ -674,9 +689,9 @@ def _band():
 
 def _offer_lines() -> list:
     """Total compensation and the caveats, from the person's evaluation rubric."""
-    mine = _read(screening_answers.EVALUATION)
+    mine = _read(EVALUATION)
     out = []
-    for text, src in ((mine, _repo_rel(screening_answers.EVALUATION)),
+    for text, src in ((mine, _repo_rel(EVALUATION)),
                       (_read(APP_EVALUATION), _repo_rel(APP_EVALUATION))):
         m = re.search(r"Always report total compensation[^\n]*", text)
         if m:
@@ -686,7 +701,7 @@ def _offer_lines() -> list:
     for item in re.findall(r"^\s*\d+\.\s+(.*)$", m.group(1), re.M) if m else ():
         if "[PLACEHOLDER" not in item:
             out.append("- Caveat: %s (source: %s)" % (_text(item.replace("**", "")),
-                                                      _repo_rel(screening_answers.EVALUATION)))
+                                                      _repo_rel(EVALUATION)))
     if not out:
         out.append("- Total compensation, not base: bonus, pension or retirement match and "
                    "health benefits (source: %s)" % _repo_rel(APP_EVALUATION))
@@ -708,19 +723,19 @@ def money(ctx) -> tuple:
     if target:
         lines.append("- Your target band: %s. Walk-away floor %s: keep it to yourself. "
                      "(source: %s)" % (target, "{:,}".format(floor),
-                                       _repo_rel(screening_answers.EVALUATION)))
+                                       _repo_rel(EVALUATION)))
     else:
         lines.append("- Your band: %s, no salary table in %s. Ask their range rather than quote "
                      "a number you cannot source." % (prep.NOT_RESEARCHED,
-                                                       _repo_rel(screening_answers.EVALUATION)))
+                                                       _repo_rel(EVALUATION)))
     lines.append("- Market band:")
     lines += ["  " + ln for ln in prep.comp_band(
         ctx["role"], "", "", prep._comp_sources(ctx["research"], ctx["row"]))]
     try:
-        sponsor = "needed" if screening_answers.requires_sponsorship() else "not needed"
+        sponsor = "needed" if _screening().requires_sponsorship() else "not needed"
         lines.append("- Sponsorship: %s. Say it plainly, with no caveat. (source: %s)"
                      % (sponsor, prep.PROFILE_SOURCE))
-    except screening_answers.MissingFact:
+    except Exception:       # the profile does not say, and this is never guessed
         pass
     if ctx["step"] == "offer":
         lines += _offer_lines()
