@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-10-19
+
 ### Fixed
 
 - **The app's own tests pass in your repo, whatever your notes say.** Two tests read every
