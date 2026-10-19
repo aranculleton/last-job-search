@@ -1,5 +1,5 @@
 """Render tailored-application JSON into resume + cover letter .tex via gen.py."""
-import sys, json, re
+import sys, re
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "templates"))
@@ -123,43 +123,31 @@ SENT_SPLIT = re.compile(r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\betc\.)(?<!\
 def split_sentences(text):
     return [x for x in SENT_SPLIT.split((text or "").strip()) if x]
 
-LEGAL_SUFFIX = re.compile(
-    r",?\s+(?:"
-    # A compound form comes off whole: "Co., Ltd." and "Pvt Ltd" are one
-    # suffix, and stripping only the last word left "Acme Co" and "Acme Pvt".
-    # "Co" on its own is never a suffix: "Tamworth & Co." is the name.
-    r"(?:co\.?,?|pvt\.?|private|pte\.?)\s+(?:ltd|limited)|sdn\.?\s+bhd|"
-    r"inc|incorporated|llc|l\.l\.c|ltd|limited|corp|corporation|plc|p\.l\.c|"
-    r"llp|lp|l\.p|s\.a|n\.v|b\.v|bv|s\.p\.a|spa|s\.a\.s|sas|s\.r\.l|srl|"
-    r"gmbh|pty|ag|ab|oy|nv|sa|se|kk|"
-    # Ireland's company types: designated activity, limited by guarantee,
-    # unlimited, and the Irish-language Teoranta. ULC is Canada's unlimited.
-    r"dac|clg|uc|ulc|teoranta|teo"
-    r")\.?$", re.I)
+# The legal forms are company_key's, one list shared with the people search.
 # "Group", "Holdings" and "Company" are part of the name, not a legal suffix:
-# Harbour Group is Harbour Group. Only entity types come off.
+# Harbour Group is Harbour Group. Only entity types come off. The letter audit
+# reads LEGAL_SUFFIX to catch one left on a salutation.
+LEGAL_SUFFIX = company_key.LEGAL_FORM
 
 
 def strip_legal(name):
     """The name with every trailing legal form removed, one at a time:
     "Acme Pty Ltd" is Acme, not "Acme Pty"."""
-    prev, name = None, (name or "").strip()
-    while name != prev:
-        prev, name = name, LEGAL_SUFFIX.sub("", name).strip(" ,")
-    return name
+    return company_key.strip_legal_forms(name)
 
 
 def short_name(company):
     """The name a person would use: "Acme", "Harbour Group", "Northwind".
 
-    The legal suffix comes off. A leading "The" comes off. "Group" comes off
-    only when it was part of the legal entity ("The Northwind Group Limited"
-    is the entity; the brand is Northwind), never from a brand that carries
-    it ("Harbour Group" stays Harbour Group). Shared by the salutation, the letter
+    A bracketed qualifier and the legal suffix come off ("Acme Analytics Inc.
+    (UK)" is Acme Analytics). A leading "The" comes off. "Group" comes off only
+    when it was part of the legal entity ("The Northwind Group Limited" is the
+    entity; the brand is Northwind), never from a brand that carries it
+    ("Harbour Group" stays Harbour Group). Shared by the salutation, the letter
     audit and the outreach note so all three agree on what the company is called.
     """
-    name = (company or "").strip()
-    stripped = strip_legal(name).strip(" ,.")
+    name = company_key.drop_brackets(company)
+    stripped = company_key.display_name(name).strip(" ,.")
     if stripped != name.strip(" ,."):
         stripped = re.sub(r"\s+(group|holdings)$", "", stripped, flags=re.I)
     return re.sub(r"^the\s+", "", stripped, flags=re.I).strip(" ,.")
@@ -369,6 +357,7 @@ def build(a):
     derived = final_abbr(a)
     if derived and derived != abbr:
         a["abbr"] = abbr = derived
+    contact = str(a.get("contact_person") or "").strip()
     d = dict(
         abbr=abbr, company=a["company"], role=a["role"],
         summary=summary,
@@ -391,7 +380,11 @@ def build(a):
         # Every other field goes through clean(); this one did not, so an
         # ampersand or percent in a company name reached the .tex raw. A
         # bare % eats the rest of the line, silently.
-        salutation=clean(salutation(a["company"])) + _SALUTATION_SUFFIX,
+        # A person the research found named for this role on the employer's
+        # own pages is addressed by name (draft-applications.js says when);
+        # otherwise the team, which every letter used to get.
+        salutation=(clean(contact) if contact
+                    else clean(salutation(a["company"])) + _SALUTATION_SUFFIX),
         # `concession` is the drafter's note about WHERE the concession sits
         # ("conceded in one sentence mid-letter in p2"). It was being prepended
         # to the closing paragraph and shipped in letters. It is metadata.
@@ -399,6 +392,15 @@ def build(a):
     )
     if a.get("edu") in gen.EDU_DETAILS and gen.EDU_DETAILS[a["edu"]] != gen.EDU_STD:
         d["edu"] = gen.EDU_DETAILS[a["edu"]]
+    # The letter's date is the day it was first rendered, kept in the draft so a
+    # re-render from the kept draft.json (a renderer fix reaching an unsent
+    # application) prints the date the letter was written, not the day of the fix.
+    if not str(a.get("letter_date") or "").strip():
+        a["letter_date"] = gen._long_date()
+    d["letter_date"] = a["letter_date"]
+    # The requisition the letter answers, kept with it (the .tex header) and in
+    # the tracker's notes; record_drafts.py writes it there.
+    d["req_id"] = str(a.get("req_id") or "").strip()
     return d
 
 
@@ -434,7 +436,7 @@ if __name__ == "__main__":
     # Through the same loader fit_to_page uses, so a kept draft's posting_from is
     # read in: a plain json.load rendered every kept draft untailored.
     import fit_to_page
-    apps, _ = fit_to_page.load(sys.argv[1])
+    apps, read_in = fit_to_page.load(sys.argv[1])
     check_batch(apps)
     for a in apps:
         d = build(a)
@@ -446,6 +448,6 @@ if __name__ == "__main__":
     # by abbr, and outreach.py names the application folder with it. A draft
     # that leaves the naming to doc_name.py has no abbr to give them, and both
     # tools died on KeyError: 'abbr' rather than deriving it a second time.
-    with open(sys.argv[1], "w") as fh:
-        json.dump(apps, fh, indent=1)
-        fh.write("\n")
+    # Saved as fit_to_page saves, so a kept draft's posting, read in through its
+    # fence, is never written back into draft.json outside it.
+    fit_to_page.save(sys.argv[1], apps, read_in)

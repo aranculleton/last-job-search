@@ -81,6 +81,15 @@ def app_rules() -> dict:
         r["unsupported-status"] = ("ERROR", "unsupported-status", status.pattern,
                                    "A status the profile does not hold: "
                                    + str(getattr(net, "UNSUPPORTED_WHY", "") or "check it"))
+    # A skill the profile records as not held (skills.py NOT_HELD). The skills
+    # block can never print one, but a summary, a letter or a hand edit can, and
+    # nothing read for it. On a letter it is a warning: naming the posting's
+    # requirement to bridge it is allowed, if rarely wise (rule 8).
+    unheld = unheld_pattern()
+    if unheld:
+        r["unheld-skill"] = ("ERROR", "unheld-skill", unheld,
+                             "A skill profile/skills.py NOT_HELD says the candidate does not "
+                             "hold. Omitting a skill is honest; claiming an unheld one is not.")
     r["duplicated-word"] = ("ERROR", "duplicated-word", r"\b([^\W\d_]{3,})\s+\1\b",
                             "A word is repeated. Usually an editing slip.")
     r["unsupported-connective"] = (
@@ -89,6 +98,24 @@ def app_rules() -> dict:
         "Asserts two things happened together. The profile rarely supports that; "
         "check it does before keeping the phrase.")
     return r
+
+
+def unheld_pattern() -> str:
+    """One pattern for every skill the profile's skills.py NOT_HELD lists, or ""."""
+    if not person.exists("skills.py"):
+        return ""
+    pats = [pat for pat, _ in getattr(person.module("skills"), "NOT_HELD", {}).values() if pat]
+    return "|".join(f"(?:{p})" for p in pats)
+
+
+# Rules that warn rather than fail on a cover letter. Read by check().
+LETTER_SEVERITY = {"unheld-skill": "WARN"}
+
+
+def is_letter(path: str) -> bool:
+    """A cover letter, by its folder or its name (<Prefix>_Cover_Letter_<ABBR>)."""
+    return (os.path.basename(os.path.dirname(os.path.abspath(path))) == "cover_letters"
+            or "cover_letter" in os.path.basename(path).lower())
 
 
 def _assemble():
@@ -147,7 +174,10 @@ def check(path: str) -> list[tuple[str, str, str, str]]:
     raw = open(path, encoding="utf-8").read()
     text = strip_latex(raw)
     findings = []
+    letter = is_letter(path)
     for sev, name, pat, why in CHECKS:
+        if letter:
+            sev = LETTER_SEVERITY.get(name, sev)
         for m in re.finditer(pat, text, re.I | re.S):
             snippet = re.sub(r"\s+", " ", m.group(0))[:110]
             findings.append((sev, name, snippet, why))

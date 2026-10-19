@@ -4,6 +4,12 @@
 Text-layer extraction tries pypdf (BSD, optional `pip install pypdf`) first,
 then Poppler `pdftotext` if pypdf is missing, raises, or returns zero
 extractable characters. Poppler remains the fallback.
+
+`--require pypdf` refuses the fallback. Only pypdf sees a text layer whose words
+run together (pdftotext infers the spaces), so a check that fell back passed
+exactly the failure it exists for. With pypdf unavailable it exits
+EXIT_NO_READER, distinct from a finding, so a caller can say the spacing check
+was skipped rather than passed.
 """
 
 import argparse
@@ -15,6 +21,15 @@ from pathlib import Path
 
 class VerificationError(Exception):
     """Raised when a generated PDF does not satisfy its checks."""
+
+
+class ReaderUnavailable(VerificationError):
+    """The extractor the caller required cannot run here."""
+
+
+# Exit status when --require names a reader this machine does not have: not a
+# finding about the PDF, and not a pass either.
+EXIT_NO_READER = 3
 
 
 def run_tool(command):
@@ -180,6 +195,18 @@ def _extract_pypdf(pdf_path):
     return text, pages
 
 
+def pypdf_available():
+    """Whether pypdf imports. The same broad guard as `_extract_pypdf`, for the
+    same reason: a broken `cryptography` panics inside pyo3 on import."""
+    try:
+        import pypdf  # noqa: F401
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except BaseException:
+        return False
+    return True
+
+
 def _extract_pdftotext(pdf_path):
     text = run_tool(["pdftotext", "-layout", "-enc", "UTF-8", str(pdf_path), "-"])
     # Always call pdfinfo here so the fallback path returns a page count
@@ -188,22 +215,34 @@ def _extract_pdftotext(pdf_path):
     return text, pages
 
 
-def extract_text_layer(pdf_path):
-    """Extract ATS-readable text. Returns (text, pages, extractor_name)."""
+def extract_text_layer(pdf_path, require=None):
+    """Extract ATS-readable text. Returns (text, pages, extractor_name).
+
+    With `require="pypdf"` there is no fallback: ReaderUnavailable when pypdf
+    cannot be imported, and a VerificationError when it reads no text.
+    """
+    if require == "pypdf" and not pypdf_available():
+        raise ReaderUnavailable(
+            "pypdf is not available, so words run together cannot be checked: "
+            "pip3 install pypdf, or pip3 install --upgrade cffi if it is installed")
     pypdf_result = _extract_pypdf(pdf_path)
     if pypdf_result is not None:
         text, pages = pypdf_result
         return text, pages, "pypdf"
+    if require == "pypdf":
+        raise VerificationError("pypdf read no text from this PDF, so an ATS reading the "
+                                "way it does sees nothing (extractor: pypdf)")
     text, pages = _extract_pdftotext(pdf_path)
     return text, pages, "pdftotext"
 
 
-def verify_pdf(pdf_path, expected_pages=None, min_chars=1, required_text=(), dump_text=None):
+def verify_pdf(pdf_path, expected_pages=None, min_chars=1, required_text=(), dump_text=None,
+               require=None):
     pdf_path = Path(pdf_path)
     if not pdf_path.is_file():
         raise VerificationError(f"PDF does not exist: {pdf_path}")
 
-    extracted_text, actual_pages, extractor = extract_text_layer(pdf_path)
+    extracted_text, actual_pages, extractor = extract_text_layer(pdf_path, require)
 
     # Write dump *before* the checks so a failed verification still leaves a .txt
     if dump_text is not None:
@@ -264,6 +303,11 @@ def build_parser():
         type=Path,
         help="write the extracted text layer to this path (UTF-8)",
     )
+    parser.add_argument(
+        "--require",
+        choices=("pypdf",),
+        help="read with this extractor only; exit %d when it is unavailable" % EXIT_NO_READER,
+    )
     return parser
 
 
@@ -276,7 +320,11 @@ def main(argv=None):
             args.min_chars,
             args.contains,
             dump_text=args.dump_text,
+            require=args.require,
         )
+    except ReaderUnavailable as exc:
+        print(f"Skipped: {args.pdf}: {exc}", file=sys.stderr)
+        return EXIT_NO_READER
     except VerificationError as exc:
         print(f"Error: {args.pdf}: {exc}", file=sys.stderr)
         return 1

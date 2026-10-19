@@ -26,7 +26,9 @@ the move was complete.
    was located independently of the posting.
 3. **The rules that are enforced in code**, run rather than eyeballed:
    - `python3 tools/check_claims.py <files>` for documents
-   - `python3 tools/check_numbers.py <resume.tex>`
+   - `python3 tools/check_numbers.py <resume.tex>`, and `--drafts <drafts.json>` for a
+     letter (its summary, opening, bullets and close; the figures in p2 and the posting are
+     allowed)
    - `python3 tools/voice_check.py <file>` (or `--json <file.json>` for a draft object)
    - for a networking message, `tools/network/compose.py`'s `validate()` with the right kind
 4. **The rules that are not**: the spelling variant in `profile/person.json`

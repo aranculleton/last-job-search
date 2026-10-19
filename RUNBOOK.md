@@ -113,7 +113,9 @@ For each chosen posting, write one draft object; the fields are in
 `tools/render_application.py` `build()`. In short: `abbr`, `company`, `role`, `summary`
 (40 to 48 words, identity first), `tools` (the stack the posting names that the profile
 supports), `p1` / `p2` / `lead` / `p4` (200 to 250 body words between them), `cl_bullets`,
-and `posting` (the full text).
+and `posting` (the full text). `contact_person` (the recruiter or hiring manager the employer's
+own page names for this role, never a name from anywhere else) addresses the letter to them,
+and `req_id` reaches the tracker's notes; both stay empty when the research found none.
 
 **`cl_bullets` is a list of dicts**, `{"label": ..., "text": ...}`, not a list of pairs.
 `build()` turns them into the `(label, text)` tuples the template wants, so the tuple
@@ -149,7 +151,10 @@ posting until one page, then grows back the strongest absent one that still fits
 `verify_batch.sh` runs, must report every letter clean. `verify_batch.sh` exits non-zero
 on any finding and checks pages, chronology, section order, bullets per employer, contact
 details as literal text, duplicated phrasing, em and en dashes, the document nouns the profile
-bans (`person.json` `documents.banned_nouns`), and the ATS text layer. The resume's filename
+bans (`person.json` `documents.banned_nouns`), the ATS text layer (read with pypdf, which alone
+sees words run together: without it the batch exits 3 and says the spacing check was SKIPPED),
+every figure in each letter against the profile (`check_numbers.py --drafts`), and a letter
+bullet that repeats a resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
 `cv/<Prefix>_CV_<ABBR>`; the globs here cover both.
 

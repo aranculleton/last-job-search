@@ -26,7 +26,7 @@ roles.py: a role with real tenure keeps a floor, nobody takes more than its cap,
 and a role can carry a lower cap unless the posting is its territory (a short
 contract keeps one bullet unless the posting is about what it did).
 """
-import functools, math, re, sys, os
+import functools, glob, math, re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from bullet_library import LIB, THEMES, WEIGHT, CONFLICTS, NON_LEAD
 import person
@@ -228,10 +228,38 @@ WIN_BONUS = 1.0
 WIN_CAP = 2
 
 
+# what_works caches the lift per state root and never looks again, so a result
+# recorded while a process runs (a test, a long session) was never seen without
+# clearing that cache by hand. Read once per process, and again only when the
+# tracker or a kept draft.json has changed on disk: bullet_scores runs on every
+# trim and grow, and the files it would otherwise reread rarely change.
+_WINS: dict = {"key": None, "wins": {}}
+
+
+def _wins_key():
+    root = person.state()
+    paths = [os.path.join(root, "job_search_tracker.csv")] + sorted(
+        glob.glob(os.path.join(root, "documents", "applications", "*", "draft.json")))
+    sig = []
+    for p in paths:
+        try:
+            st = os.stat(p)
+            sig.append((p, st.st_mtime_ns, st.st_size))
+        except OSError:
+            sig.append((p, None, None))
+    return root, tuple(sig)
+
+
 def _wins():
     try:
         import what_works
-        return what_works.bullet_wins()
+        key = _wins_key()
+        if _WINS["key"] != key:
+            clear = getattr(getattr(what_works, "_bullet_wins", None), "cache_clear", None)
+            if clear:
+                clear()
+            _WINS.update(key=key, wins=what_works.bullet_wins())
+        return _WINS["wins"]
     except Exception:              # a lift is never a reason a resume fails to render
         return {}
 

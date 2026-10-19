@@ -144,7 +144,7 @@ review cycle again; a rejected angle here costs fifteen lines.
        --fit <the Step 1 score> --deadline "<YYYY-MM-DD, if stated>"
    ```
    It picks the filename, never one another application was sent under, and writes `picks.json` and `apps_in.json`.
-2. **Research, draft and audit.** Run the saved `draft-applications` workflow with `{today, round_dir: "$SCRATCH/apply", picks: <the contents of picks.json>}`. It researches the employer from its own pages (sonnet), drafts the draft object on the strongest model after reading the learned and what-works briefs, and has a grounding audit on the strongest model correct it. Where the Workflow tool is not available, do the same three stages by hand: the `employer-researcher` subagent, then the draft object yourself under the workflow's drafting prompt (the fields and budgets in `.claude/workflows/draft-applications.js`), then the `grounding-auditor` subagent, writing its corrected draft to `$SCRATCH/apply/audit_<slug>.json` as a one-element list.
+2. **Research, draft and audit.** Run the saved `draft-applications` workflow with `{today, round_dir: "$SCRATCH/apply", picks: <the contents of picks.json>}`. It researches the employer from its own pages (sonnet), drafts the draft object on the strongest model after reading the learned and what-works briefs, and has a grounding audit on the strongest model correct it. Where the Workflow tool is not available, do the same three stages by hand: the `employer-researcher` subagent, then the draft object yourself under the workflow's drafting prompt (the fields and budgets in `.claude/workflows/draft-applications.js`), then the `grounding-auditor` subagent, writing its whole audit (verdict, corrected draft, changes, residual risks) to `$SCRATCH/apply/audit_<slug>.json` as one JSON object. `assemble` renders only a `pass` or a `fixed` draft and reports a `reject` with its reasons.
 3. **Assemble, render, verify, keep.**
    ```bash
    python3 tools/stage_picks.py assemble "$SCRATCH/apply"
@@ -153,7 +153,7 @@ review cycle again; a rejected angle here costs fifteen lines.
    tools/verify_batch.sh "$SCRATCH/apply/drafts.json"
    python3 tools/outreach.py "$SCRATCH/apply/drafts.json" "$SCRATCH/apply/apps_in.json"
    ```
-   `check_claims` reports 0 errors and `verify_batch.sh` exits 0, or the finding is fixed in the draft object and rendered again: never by hand-editing the `.tex` (`05-cv-templates.md`). `outreach.py` writes `job_posting.md`, `outreach.md` and the kept `draft.json` under `documents/applications/<slug>/`.
+   `check_claims` reports 0 errors and `verify_batch.sh` exits 0, or the finding is fixed in the draft object and rendered again: never by hand-editing the `.tex` (`05-cv-templates.md`). Exit 3 is not a finding: pypdf is unavailable and the spacing check was skipped, so install it (`pip3 install pypdf`) and run the batch again. `outreach.py` writes `job_posting.md`, `outreach.md` and the kept `draft.json` under `documents/applications/<slug>/`.
 4. **Read both PDFs by eye** against Step 5b's list, and run Step 6.0's three guards.
 5. **Record it**: `python3 tools/record_drafts.py "$SCRATCH/apply/drafts.json" "$SCRATCH/apply/apps_in.json"` writes the tracker row by Step 6b's rules, and `screening_answers.md`.
 

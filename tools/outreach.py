@@ -254,6 +254,11 @@ def short_note(a, limit=None):
     return ""
 
 
+def whole_note(company, role, body):
+    """The note as it is sent: the fixed opening line, then the drafted body."""
+    return f"{OPENING.format(role=role, company=R.short_name(company))} {body.strip()}"
+
+
 def outreach_note(a):
     """Under eighty words, hard. Hook from the letter's opening, the one
     company fact from its second paragraph, one ask. A draft carrying an
@@ -269,7 +274,7 @@ def outreach_note(a):
     opening = OPENING.format(role=role, company=company)
     body = (a.get("outreach_body") or "").strip()
     if body:
-        note = f"{opening} {body}"
+        note = whole_note(a["company"], role, body)
         problems = check_note(note)
         if problems:
             raise ValueError(f"{a['company']}: outreach_body refused: " + "; ".join(problems))
@@ -314,21 +319,53 @@ def _known_contacts(company):
         return []
 
 
-def write(a, meta, today):
-    d = person.state("documents", "applications", slug(a["company"], a["role"], a.get("abbr", "")))
-    os.makedirs(d, exist_ok=True)
+def folder(a):
+    """The folder this draft's files are written to."""
+    return person.state("documents", "applications", slug(a["company"], a["role"], a.get("abbr", "")))
+
+
+def archive_posting(d, a, meta, today):
+    """Write job_posting.md once. Returns "written", "kept" or "none".
+
+    An existing file is left alone (/apply Step 6b): the archived copy is what
+    was applied to. Re-running this over a batch rewrote it every time, and over
+    a kept draft.json, whose posting is named rather than carried, it wrote an
+    empty fence over the only copy of the posting. A draft with no posting text
+    writes nothing, rather than an archive holding none.
+    """
+    path = os.path.join(d, "job_posting.md")
+    if os.path.exists(path):
+        return "kept"
+    posting = a.get("posting") or ""
+    if not posting.strip():
+        return "none"
     url = meta.get("url", "")
-    with open(os.path.join(d, "job_posting.md"), "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         f.write(f"# {a['role']} - {a['company']}\n\n")
         f.write(f"- **Source:** {url}\n" if url else "")
         f.write(f"- **Retrieved:** {meta.get('date', today)} via {meta.get('portal', 'portal search')}\n")
         f.write(f"- **Location:** {meta.get('location', '')}\n")
+        if str(a.get("req_id") or "").strip():
+            f.write(f"- **Requisition:** {str(a['req_id']).strip()}\n")
+        if str(a.get("contact_person") or "").strip():
+            f.write(f"- **Named on the posting:** {str(a['contact_person']).strip()}\n")
         f.write(f"- **{docpaths.noun_word()}:** {docpaths.resume_rel(a['abbr'], '.pdf')}\n")
         f.write(f"- **Cover letter:** {docpaths.letter_rel(a['abbr'], '.pdf')}\n\n")
         # A `---` rule is not a fence: the posting author controls the text and
         # can write one, plus a heading that looks like ours. The nonce cannot
         # be guessed and is stripped from the content before wrapping.
-        f.write(untrusted.fence(a.get("posting", ""), label="job posting") + "\n")
+        f.write(untrusted.fence(posting, label="job posting") + "\n")
+    return "written"
+
+
+def write(a, meta, today):
+    d = folder(a)
+    os.makedirs(d, exist_ok=True)
+    archived = archive_posting(d, a, meta, today)
+    if archived == "none":
+        print(f"outreach: {a['company']}: the draft holds no posting text, so no job_posting.md "
+              "was written. Archive the posting by hand from the text that was applied to.",
+              file=sys.stderr)
     # The draft object is the source both documents are rendered from. Without
     # it a fix to the renderer reaches only the batch still in someone's scratch
     # directory: when the skills line learned "experimentation design", two
@@ -337,7 +374,9 @@ def write(a, meta, today):
     # `python3 tools/fit_to_page.py <this file>` rebuilds both from here. The
     # posting is named, not copied: committed posting text lives only inside
     # the fence above, and fit_to_page reads it back through that fence.
-    kept = dict({k: v for k, v in a.items() if k != "posting"}, posting_from="job_posting.md")
+    kept = {k: v for k, v in a.items() if k not in ("posting", "posting_from")}
+    if os.path.exists(os.path.join(d, "job_posting.md")):
+        kept["posting_from"] = "job_posting.md"
     with open(os.path.join(d, "draft.json"), "w", encoding="utf-8") as f:
         json.dump([kept], f, indent=1, ensure_ascii=False)
         f.write("\n")
@@ -410,12 +449,29 @@ if __name__ == "__main__":
         sys.exit(0)
     if sys.argv[1:2] == ["--check-note"]:
         # /apply writes its note by hand: the same checks the assembled note meets.
-        found = check_note(" ".join(sys.argv[2:]))
+        # A drafted `outreach_body` is checked with --company and --role, which
+        # put the fixed opening line in front of it as outreach_note() does: the
+        # body alone was checked against the 80 words the whole note must fit.
+        import argparse
+        ap = argparse.ArgumentParser(prog="outreach.py --check-note")
+        ap.add_argument("note", nargs="+")
+        ap.add_argument("--company", help="with --role: the note is a body; check it whole")
+        ap.add_argument("--role")
+        ns = ap.parse_args(sys.argv[2:])
+        if bool(ns.company) != bool(ns.role):
+            ap.error("--company and --role go together")
+        note = " ".join(ns.note)
+        if ns.company:
+            note = whole_note(ns.company, ns.role, note)
+        found = check_note(note)
         for problem in found:
             print(problem)
         sys.exit(1 if found else 0)
     today = datetime.date.today().isoformat()
-    drafts = json.load(open(sys.argv[1]))
+    # Through the loader fit_to_page uses, so a kept draft.json has its posting
+    # read back in through the fence rather than arriving with none.
+    import fit_to_page
+    drafts, _ = fit_to_page.load(sys.argv[1])
     meta = {}
     if len(sys.argv) > 2:
         raw = json.load(open(sys.argv[2]))
@@ -441,8 +497,10 @@ if __name__ == "__main__":
         except ValueError as e:
             refused.append(f"{a.get('company')}: {e}")
             words = 0
+        had = os.path.exists(os.path.join(folder(a), "job_posting.md"))
         d = write(a, meta.get(supplied) or meta.get(a["abbr"].upper(), {}), today)
-        print("wrote", os.path.relpath(d, ROOT), "|", words, "words")
+        print("wrote", os.path.relpath(d, ROOT), "|", words, "words"
+              + (" | kept the archived job_posting.md" if had else ""))
     if refused:
         print("\nOUTREACH NOTE REFUSED (its outreach.md says so; every other file was written). "
               "Rewrite the body and run this again:\n  " + "\n  ".join(refused))

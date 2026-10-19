@@ -468,12 +468,10 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
     alive: an interview or offer at that employer, a referral in flight there, or a
     DO NOT CHASE note in force. Returns the review entries it closed (or would close).
     """
+    import csv_store  # the tracker's shared reader and writer: columns and line endings kept
     today = today or datetime.date.today()
-    try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            reader = csv.DictReader(fh)
-            header, rows = list(reader.fieldnames or []), list(reader)
-    except OSError:
+    rows = csv_store.read_rows(path)
+    if not rows:
         return []
     holds = throttle.referral_holds() if holds is None else holds
     running = live_processes(rows, superseded(rows))
@@ -489,11 +487,7 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
         r["status"] = "no_response"
         note = CLOSED_NOTE % (today.isoformat(), why)
         r["notes"] = ((r.get("notes") or "").rstrip() + " | " + note).strip(" |")
-    with open(path, "w", newline="", encoding="utf-8") as fh:
-        w = csv.DictWriter(fh, fieldnames=header, extrasaction="ignore")
-        w.writeheader()
-        for r in rows:
-            w.writerow({k: r.get(k, "") or "" for k in header})
+    csv_store.write_rows(path, rows, csv_store.header(path))
     return gone
 
 
