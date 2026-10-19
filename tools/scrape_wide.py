@@ -405,7 +405,7 @@ def unsent_line(name: str, rest: list[tuple], total: int, why: str, show: int = 
     first = "; ".join(describe(t) for t in rest[:show])
     more = f"; and {len(rest) - show} more" if len(rest) > show else ""
     return (f"portals: {name} stopped, {why}: {len(rest)} of {total} requests not sent, "
-            f"first {first}{more}. Later rounds reach them (documents/rounds/.sweep/).")
+            f"the first: {first}{more}. Later rounds reach them (documents/rounds/.sweep/).")
 
 
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
