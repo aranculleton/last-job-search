@@ -84,6 +84,8 @@ def short(notes: str) -> str:
     for group, text in entries:
         m = re.match(r"\*\*(.+?)\*\*", text)
         head = (m.group(1) if m else re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]).strip()
+        # Every line a sentence, however its heading ended ("...them:", "...found").
+        head = head.rstrip(":;, ") + ("" if head.rstrip(":;, ").endswith((".", "!", "?")) else ".")
         up = re.search(r"Profile upgrade:\s*([^.(]*)", text)
         ids = re.findall(r"[a-z][a-z0-9-]+", up.group(1)) if up else []
         need = _needs(ids)

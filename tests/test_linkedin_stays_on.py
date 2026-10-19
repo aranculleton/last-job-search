@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import portals  # noqa: E402
 import profile_upgrades as U  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 
 def test_it_ships_on_and_the_example_keeps_it_on():
@@ -25,15 +26,33 @@ def test_it_ships_on_and_the_example_keeps_it_on():
     assert not re.search(r"['\"]linkedin-search['\"]\s*:\s*False", example)
 
 
+def writes_it_off(root=ROOT) -> list[str]:
+    """The app's own files that set LinkedIn's switch off. A person's own files are theirs
+    to write in: their notes may quote the switch, and their profile is where it lives."""
+    off = re.compile(r"['\"]linkedin-search['\"]\s*:\s*False")
+    return [n for n in repo_files.tracked(root=root) if not n.startswith(("tests/", "CHANGELOG"))
+            and (Path(root) / n).suffix in (".py", ".md", ".js", ".json", ".sh")
+            and off.search((Path(root) / n).read_text(encoding="utf-8", errors="replace"))]
+
+
 def test_nothing_in_the_app_writes_it_off():
     # The one place that names the switch is the explanation of the person's own line.
-    names = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                           text=True).stdout.split()
-    off = re.compile(r"['\"]linkedin-search['\"]\s*:\s*False")
-    found = [n for n in names if not n.startswith(("tests/", "CHANGELOG"))
-             and (ROOT / n).suffix in (".py", ".md", ".js", ".json", ".sh")
-             and off.search((ROOT / n).read_text(encoding="utf-8", errors="replace"))]
-    assert found == ["tools/portals.py"], found
+    assert writes_it_off() == ["tools/portals.py"]
+
+
+def test_a_person_may_write_it_off_in_their_own_files(tmp_path):
+    # Their profile is where the switch lives, and their notes may quote it. Only the
+    # app's files are held to this, and a name with a space in it is read whole.
+    files = {"tools/portals.py": "PORTALS = {'linkedin-search': False}\n",
+             "profile/search.py": "PORTALS = {'linkedin-search': False}\n",
+             "handoff/notes.md": "Tried 'linkedin-search': False for a week.\n",
+             "tools/odd name.md": "'linkedin-search': False\n"}
+    for rel, text in files.items():
+        (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / rel).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
+    assert writes_it_off(tmp_path) == ["tools/odd name.md", "tools/portals.py"]
 
 
 def test_no_upgrade_or_instruction_suggests_switching_it_off():

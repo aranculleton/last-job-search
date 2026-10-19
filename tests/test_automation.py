@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
 import personal_paths  # noqa: E402
 import routines  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 REG = json.load(open(person.path("routines.json"), encoding="utf-8"))
 COMMON = open(os.path.join(AUTO, "prompts", "_common.md"), encoding="utf-8").read()
@@ -151,8 +152,7 @@ def id_hits(files, read):
 
 def test_no_real_ids_or_private_repos_are_committed():
     """Ids and names belong in a person's registry, never in the app."""
-    files = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True,
-                           text=True).stdout.split()
+    files = repo_files.tracked(root=ROOT)
     assert id_hits(files, lambda f: open(os.path.join(ROOT, f), encoding="utf-8").read()) == []
 
 

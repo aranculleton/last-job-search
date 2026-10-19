@@ -16,6 +16,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 import claude_surfaces as C  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 REG = C.load()
 STATUSES = {"documented", "skill only", "observed"}
@@ -89,31 +90,56 @@ def test_the_watch_finds_a_moved_quote_a_new_release_and_an_old_entry():
     assert "skill:x" not in fetched                             # only official pages
 
 
-def _app_files():
-    names = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+def _git_repo(root, files):
+    for rel, text in files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True)
+
+
+def _app_files(root=ROOT):
+    names = repo_files.tracked(root=root)
     keep = []
     for n in names:
         if n.startswith(("tests/", "CHANGELOG")) or n in ("tools/claude_surfaces.json",
                                                             "tools/claude_surfaces.py"):
             continue
-        p = ROOT / n
+        p = Path(root) / n
         if p.suffix in (".md", ".py", ".sh", ".json", ".yml", ".txt") and p.is_file():
             keep.append(n)
     return keep
+
+
+def stated_outside_the_registry(root=ROOT) -> list[str]:
+    found = []
+    for n in _app_files(root):
+        text = (Path(root) / n).read_text(encoding="utf-8", errors="replace")
+        spans = [(m.start(), m.end()) for m in C.BLOCK.finditer(text)] if n in C.DOCS else []
+        for phrase, at in C.mentions(text):
+            if not any(a <= at < b for a, b in spans):
+                found.append(f"{n}:{text.count(chr(10), 0, at) + 1}: {phrase!r}")
+    return found
 
 
 def test_no_doc_or_tool_states_a_surface_outside_the_registry():
     # The vocabulary is the tripwire: the names of screens and the claims that move when
     # the product does. A person's doc carries them only inside a block the registry
     # renders; Claude's own instructions point at an entry by id instead.
-    found = []
-    for n in _app_files():
-        text = (ROOT / n).read_text(encoding="utf-8", errors="replace")
-        spans = [(m.start(), m.end()) for m in C.BLOCK.finditer(text)] if n in C.DOCS else []
-        for phrase, at in C.mentions(text):
-            if not any(a <= at < b for a, b in spans):
-                found.append(f"{n}:{text.count(chr(10), 0, at) + 1}: {phrase!r}")
+    found = stated_outside_the_registry()
     assert found == [], "\n".join(found)
+
+
+def test_a_persons_own_notes_are_theirs_to_word(tmp_path):
+    # In a person's repo the same suite reads their tracked notes too, which say whatever
+    # they wrote. Only the app's files are held to the registry, and a name with a space
+    # in it is one file, not two.
+    _git_repo(tmp_path, {"tools/helper.py": "# open the Routines screen\n",
+                         "handoff/notes.md": "Opened the Routines screen today.\n",
+                         "profile/CLAUDE.md": "The Routines screen holds both tasks.\n",
+                         "tools/odd name.md": "nothing to see\n"})
+    assert stated_outside_the_registry(tmp_path) == ["tools/helper.py:1: 'Routines screen'"]
+    assert "tools/odd name.md" in _app_files(tmp_path)
 
 
 def test_every_block_in_the_docs_is_the_registry_word_for_word():
