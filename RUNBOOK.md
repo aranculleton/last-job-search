@@ -268,8 +268,12 @@ not a bug in the update.
    bring the test in line with it. If the new behaviour looks wrong for this person, report
    it to the app (the way this repo's `profile/CLAUDE.md` says, or an issue on the app) and
    leave the test failing rather than weaken it.
-4. **Retiring a failing test is the person's call.** Ask once, in one line, with the counts
-   from step 1. A permission check that stops an unexplained deletion is right to.
+4. **Deleting a failing test is the person's call, asked in plain words.** The sync prints
+   the exact question, what to say if they ask what it means, and the reply to yes and to no
+   (`ASK_TIDY` and the lines under it in `tools/sync_app.py`). Ask once, in those words: most
+   people have never seen a test, and "retire 57 tests?" means nothing to them. When none
+   needs deleting there is no question. A permission check that stops an unexplained
+   deletion is right to.
 5. Run `./tools/ci_local.sh`, then land on master as usual. Until it is green, master stays
    on the old version and nothing breaks.
 
