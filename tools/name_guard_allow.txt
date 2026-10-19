@@ -13,3 +13,4 @@ Brannock Quillfeather  # invented, tests/test_people_are_matched_by_where_they_w
 Larkspur Casino Group   # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
 Northgate Council       # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
 Wexmoor Council         # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Placeholder         # a word that opened a commit subject ("Placeholder LinkedIn links"), not a name
