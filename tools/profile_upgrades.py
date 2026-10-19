@@ -975,6 +975,8 @@ SAFE_DEFAULTS: dict[str, str] = {
                                   "InMail credits than Premium's",
     "search.OPP_SCALE": "computed from the profile's own opportunity weights when absent",
     "skills.MAX_PER_LINE": "six items a line unless the person wants another number",
+    "skills.FAMILIES": "none: the app's own families of interchangeable tools apply "
+                       "(tools/bridges.py); a field's own are added here",
     "skills.MIN_PER_CATEGORY": "one item makes a line worth printing; rarely changed",
     "networking.NOT_HIRING_REASON": "a neutral sentence any field reads correctly",
     "networking.NOT_HIRING_TITLES": "the built-in revenue titles, the same list every older "

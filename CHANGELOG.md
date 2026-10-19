@@ -122,6 +122,11 @@ make sense to somebody whose repo just received it.
   the chase (45 days, or a week after a second follow-up) as no_response, with a dated note
   on the row, and leaves alone any with an interview, a referral or a "do not chase" at that
   employer. A reply after that goes in with `/outcome` as usual. No profile upgrade.
+- **A tool you hold counts for a near-identical one a posting asks for.** Power BI for
+  Tableau, AWS for Azure, Xero for QuickBooks, in any field: the score treats it as a near
+  match and the resume shows the tool you hold, never the one you lack. Only bridges written
+  into your own profile did this before. One step only: a stand-in is never used to bridge
+  anything else. No profile upgrade.
 - **Questions come one short line at a time.** Each is 40 words at most, in plain words; its
   steps follow only a yes and its reason only a "why?", and a no gets one line. The LinkedIn
   steps for your connections are dated and sourced like every other path. No profile upgrade.

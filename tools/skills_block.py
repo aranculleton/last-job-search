@@ -152,6 +152,25 @@ def _asked_for(posting):
     return frozenset(item for _, item, pat in ITEMS if re.search(pat, posting, re.I))
 
 
+def _standing_in(posting):
+    """Held items that stand in for a tool the posting asks for and the person does not
+    hold, from the same family (tools/bridges.py): Power BI for a Tableau posting, AWS
+    for an Azure one. Left off, the resume showed neither, though the person does the
+    same work in the one they hold. The tool asked for is never printed."""
+    if not posting:
+        return frozenset()
+    try:
+        import bridges
+    except Exception:          # no profile to read: nothing stands in
+        return frozenset()
+    out = set()
+    for a in bridges.assess(posting):
+        if a.verdict == bridges.BRIDGE and bridges.strength_of(a.asked) == "near":
+            for h in a.have:
+                out.update(i for _, i, pat in ITEMS if i == h or re.search(pat, h, re.I))
+    return frozenset(out)
+
+
 def _from_posting(sel, posting):
     """Add a held skill this posting asks for by name.
 
@@ -174,11 +193,12 @@ def _from_posting(sel, posting):
     """
     if not posting:
         return sel
+    standing = _standing_in(posting)
     for cat, item, pat in ITEMS:
         line = MERGE.get(cat, cat)
         if item in sel.get(line, []):
             continue
-        if re.search(pat, posting, re.I):
+        if re.search(pat, posting, re.I) or item in standing:
             sel.setdefault(line, []).append(item)
     return sel
 
@@ -205,6 +225,8 @@ def _rank(sel, posting, context, company=""):
     if not posting and not context:
         return {c: sorted(v, key=lambda i: (i not in ANCHORS, i in SECONDARY))
                 for c, v in sel.items()}
+    standing = _standing_in(posting)
+
     def tier(item):
         pat = next(p for c, i, p in ITEMS if i == item)
         # A secondary skill never outranks a primary one. The candidate's
@@ -215,7 +237,7 @@ def _rank(sel, posting, context, company=""):
         if item in ANCHORS:
             return -1 + ANCHORS.index(item) * 0.1
         secondary = item in SECONDARY
-        named = bool(posting and re.search(pat, posting, re.I))
+        named = bool(posting and re.search(pat, posting, re.I)) or item in standing
         evidenced = bool(context and re.search(pat, context, re.I))
         # A flat +3 for a secondary put a posting-named secondary BELOW a
         # primary the posting never mentioned, and the per-line cap then cut it
@@ -240,14 +262,14 @@ def _rank(sel, posting, context, company=""):
                 continue
             if company and re.search(pat, company, re.I):
                 continue
-            if re.search(pat, posting, re.I):
+            if re.search(pat, posting, re.I) or item in standing:
                 sel.setdefault(line, []).append(item)
     # A secondary skill the posting never mentions has no business on the page:
     # it costs a line the primary skills should have and it invites a question
     # about the weakest thing on the resume.
     if posting:
         sel = {c: [i for i in v
-                   if i not in SECONDARY
+                   if i not in SECONDARY or i in standing
                    or re.search(next(p for _, it, p in ITEMS if it == i), posting, re.I)]
                for c, v in sel.items()}
     return {c: sorted(v, key=tier) for c, v in sel.items()}

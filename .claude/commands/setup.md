@@ -302,7 +302,8 @@ resume summary from these, never from the example person's in `05-cv-templates.m
 ### 8. Write the rest of `profile/`
 `roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
 as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
-not, and the honest bridges between), `search.py` (pay, gates, locations, titles, what the
+not, and the honest bridges between, with `FAMILIES` for the tools their field treats as
+interchangeable that `tools/bridges.py` FAMILIES does not already list), `search.py` (pay, gates, locations, titles, what the
 scrape searches), `employers.py`, `boards.py`, `networking.py` (their voice: opener, a line
 about them, the ask, their home city and timezone, and `LINKEDIN_PLAN`, "free" or
 "premium", from their answer; on a free account the whole connection note is 200

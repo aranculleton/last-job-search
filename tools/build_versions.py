@@ -112,8 +112,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-17", False, "the browser-read question says it reads only the people a search surfaced, at a person's pace"),
             (6, "2026-10-17", False, "the browser-read question names screenshots as the way that works on a phone"),
             (7, "2026-10-18", False, "the profile-reads question says finding people never needs a read, and that a read is for the best ten a run finds"),
+            (8, "2026-10-19", False, "skills.py may list the tools a field treats as interchangeable (FAMILIES); the app's own list applies without it"),
         ),
-        "fingerprint": "4e000e0488ba35e5",
+        "fingerprint": "214fc1cce51145ba",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -197,7 +198,7 @@ METHODS: dict[str, dict] = {
             (7, "2026-10-17", False, "one research cache with its freshness rule: stale research, roles open there you scored well, the letter's fact and concessions, and the cache's own cautions in the call prep"),
             (8, "2026-10-19", False, "each document is stamped with the prep that wrote it, and only an older one is rewritten"),
         ),
-        "fingerprint": "da058efffc44778c",
+        "fingerprint": "700f6904b37cf24f",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -243,9 +244,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-17", False, "rulings name the blocker or gate they rest on (rank, the scraper skill); the day's sync carries the model check"),
             (13, "2026-10-18", False, "fit_to_page runs on Python 3.9"),
             (14, "2026-10-18", False, "RUNBOOK names the people ladder and the Claude surfaces registry"),
-            (15, "2026-10-19", True, "a document already sent is never rendered over; a letter's figures are checked; a trimmed resume keeps the line that describes each job; a letter keeps its date, drops legal forms from the employer's name, is addressed to the person the employer names, and is flagged where it repeats the resume; a claimed skill the profile does not hold is caught"),
+            (15, "2026-10-19", True, "a document already sent is never rendered over; a letter's figures are checked; a trimmed resume keeps the line that describes each job; a letter keeps its date, drops legal forms from the employer's name, is addressed to the person the employer names, and is flagged where it repeats the resume; a claimed skill the profile does not hold is caught, and a held tool of the same family stands in for one a posting names that the person lacks"),
         ),
-        "fingerprint": "50487be65512eaf0",
+        "fingerprint": "363398b528dbb14c",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
