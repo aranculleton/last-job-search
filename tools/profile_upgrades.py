@@ -290,6 +290,21 @@ def _profile_never_say() -> str:
     return ""
 
 
+def _public_holidays() -> str:
+    """Pending where no rules cover the person's country and their own list has no date
+    in the coming year: follow-ups would count every public holiday as a working day."""
+    import datetime
+    import holidays
+    country, _region, extra = holidays._settings()
+    if not country or country in holidays.RULES:
+        return ""
+    year = datetime.date.today().year + 1
+    if any(str(d)[:4] == str(year) for d in extra):
+        return ""
+    return (f"no public holidays on file for {country} for {year} (profile/search.py "
+            "PUBLIC_HOLIDAYS), so follow-ups count them as working days")
+
+
 def _profile_reads() -> str:
     if _missing("networking", "PROFILE_READS"):
         return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
@@ -762,6 +777,16 @@ REGISTRY: tuple[Upgrade, ...] = (
             "one whose alumni reply most first (`python3 tools/network/sources.py` shows the "
             "order), and never the one they work at now; change nothing else", "edit", "~1 min",
             priority=4),
+    Upgrade("public-holidays", "2026-10-19",
+            "follow-ups that skip your country's public holidays, the way offices do",
+            _public_holidays, "look up the person's country's public holidays (and their "
+            "region's, from identity.location) for this year and next on its government's own "
+            "page, and write them as ISO dates in profile/search.py PUBLIC_HOLIDAYS with the "
+            "page's URL in a comment beside them; `python3 tools/holidays.py` then lists them",
+            "research", "~5 min",
+            names=("search.PUBLIC_HOLIDAYS",),
+            conditional=True,
+            priority=3),
     Upgrade("profile-never-say", "2026-10-19",
             "every phrase your own rules say never to write caught in every draft, not only "
             "when the drafting model remembers it",
@@ -970,6 +995,8 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    "search.HOLIDAY_REGION": "read from identity.location (a province, a UK nation, a US "
+                             "state); with none named, the country's common holidays",
     "search.HOURS_PER_YEAR": "2,080 hours, a full-time year of 40 hours a week, to read a band "
                              "stated by the hour as a year's pay; a market that works fewer "
                              "hours sets its own",

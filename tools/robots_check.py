@@ -80,10 +80,9 @@ def gate(url):
     return 0, 'ALLOWED - robots.txt permits this path'
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2 or sys.argv[1] in ('-h', '--help'):
-        print('usage: python3 tools/robots_check.py <url>',
-              file=sys.stdout if sys.argv[1:] in (['-h'], ['--help']) else sys.stderr)
-        sys.exit(0 if sys.argv[1:] in (['-h'], ['--help']) else 2)
+    if len(sys.argv) != 2:
+        print('usage: python3 tools/robots_check.py <url>', file=sys.stderr)
+        sys.exit(2)
     rc, msg = gate(sys.argv[1])
     print(msg)
     sys.exit(rc)

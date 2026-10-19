@@ -144,6 +144,20 @@ def test_a_bullet_theme_no_posting_word_matches(profile):
     assert "ward_rounds" in U.by_id("bullet-themes").pending()
 
 
+def test_public_holidays_are_researched_only_where_no_rules_cover_the_country(profile):
+    import holidays
+    holidays.for_year.cache_clear()
+    assert U.by_id("public-holidays").pending() == ""                 # GB: the rules cover it
+    _set_country(profile, "SA")
+    assert "no public holidays on file for SA" in U.by_id("public-holidays").pending()
+    path = profile / "search.py"
+    year = __import__("datetime").date.today().year + 1
+    path.write_text(path.read_text(encoding="utf-8")
+                    + f'\nPUBLIC_HOLIDAYS = ("{year}-09-23",)\n', encoding="utf-8")
+    person._modules.clear()
+    assert U.by_id("public-holidays").pending() == ""
+
+
 def test_the_working_week_is_asked_only_where_it_differs(profile):
     _drop(profile, "search", "WEEKEND") if "WEEKEND" in (profile / "search.py").read_text() else None
     assert U.by_id("market-week").pending() == ""            # GB: Saturday and Sunday is right

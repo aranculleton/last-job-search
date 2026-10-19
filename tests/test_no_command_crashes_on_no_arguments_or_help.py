@@ -49,6 +49,10 @@ def test_nothing_or_help_never_crashes(cmd, tmp_path):
                            capture_output=True, text=True, env=env, timeout=120,
                            stdin=subprocess.DEVNULL)
         assert "Traceback" not in r.stderr, (cmd, args, r.stderr[-400:])
-        if args:
+        if args and cmd.endswith("robots_check.py"):
+            # A URL starting with a dash is refused, so it can never reach curl as an
+            # option (tests/test_robots_check.py): --help included, on purpose.
+            assert r.returncode == 1, (cmd, r.returncode)
+        elif args:
             assert "usage" in (r.stdout + r.stderr).lower(), (cmd, r.stdout[:200])
             assert r.returncode == 0, (cmd, r.returncode)

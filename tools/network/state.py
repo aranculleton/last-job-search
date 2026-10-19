@@ -136,8 +136,20 @@ def _need_date(value, what: str) -> datetime.date:
     return d
 
 
+def _holidays(first: datetime.date, last: datetime.date) -> set:
+    """The person's public holidays from `first` to `last` that fall on a working day
+    (tools/holidays.py): a follow-up counted Thanksgiving as a business day."""
+    try:
+        import holidays
+        return {d for y in range(first.year, last.year + 1) for d in holidays.for_year(y)
+                if first <= d <= last and d.weekday() not in WEEKEND}
+    except Exception:  # no profile, or no rules for the country: weekends alone, as before
+        return set()
+
+
 def business_days_between(a, b) -> int:
-    """Weekdays strictly after `a` up to and including `b`. Negative if `b` precedes `a`.
+    """Working days strictly after `a` up to and including `b`. Negative if `b` precedes
+    `a`. A public holiday is not a working day (tools/holidays.py).
 
     Counted by whole weeks rather than a day loop: any seven consecutive days
     hold exactly five weekdays, so only the remainder needs walking, and a
@@ -153,7 +165,7 @@ def business_days_between(a, b) -> int:
         d += datetime.timedelta(days=1)
         if d.weekday() not in WEEKEND:
             days += 1
-    return days
+    return days - len(_holidays(a + datetime.timedelta(days=1), b))
 
 
 def add_business_days(start, count: int) -> datetime.date:
@@ -163,9 +175,10 @@ def add_business_days(start, count: int) -> datetime.date:
     the user recognizes instead of "six business days from whenever you sent it".
     """
     d = _need_date(start, "start date")
+    off = _holidays(d, d + datetime.timedelta(days=max(count, 0) * 2 + 14))
     for _ in range(max(count, 0)):
         d += datetime.timedelta(days=1)
-        while d.weekday() in WEEKEND:
+        while d.weekday() in WEEKEND or d in off:
             d += datetime.timedelta(days=1)
     return d
 
