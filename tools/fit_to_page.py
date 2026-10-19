@@ -498,6 +498,9 @@ def save(path, apps, read_in):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("usage: python3 tools/fit_to_page.py <drafts.json | documents/applications/<slug>/draft.json>\n\n" + __doc__.strip().split("\n\n")[0])
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     apps, read_in = load(sys.argv[1])
     # Refuse the whole batch before the first compile, so a name that belongs
     # to another application never gets half a batch rendered over it.

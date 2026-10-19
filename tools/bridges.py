@@ -261,6 +261,10 @@ def gaps(text):
 
 if __name__ == "__main__":
     import sys
+    if sys.argv[1:2] in (["-h"], ["--help"]):
+        print('usage: python3 tools/bridges.py "<posting text>": each skill it asks for, '
+              "what the profile holds for it, and what to say")
+        sys.exit(0)
     body = " ".join(sys.argv[1:]) or "Power BI or Tableau, SAP a plus, CIPS preferred."
     for a in assess(body):
         print("%-24s %-7s %s" % (a.asked, a.verdict, ", ".join(a.have)[:60]))

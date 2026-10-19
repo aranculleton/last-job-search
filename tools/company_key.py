@@ -279,6 +279,9 @@ def _key(name: str) -> str:
 
 if __name__ == "__main__":
     import sys
+    if not sys.argv[1:] or sys.argv[1] in ("-h", "--help"):
+        print('usage: python3 tools/company_key.py "<employer name>" [...]: the key each joins on')
+        sys.exit(0 if sys.argv[1:] else 2)
     for n in sys.argv[1:]:
         print(f"{n!r} -> {key(n)!r}")
 

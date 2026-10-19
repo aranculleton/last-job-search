@@ -1639,6 +1639,8 @@ def main(argv=None) -> int:
     ap.add_argument("--root", default=STATE_ROOT)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
+    if not (a.contact or a.all or a.stale_only):
+        ap.error("name a contact (their contact_id or name), or --all")
 
     contacts = state.load_contacts(a.contacts)
     if a.all or a.stale_only:

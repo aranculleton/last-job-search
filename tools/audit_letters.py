@@ -239,6 +239,9 @@ def audit(a, batch=()):
 MAX_BODY_WORDS = 250
 
 if __name__ == "__main__":
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("usage: python3 tools/audit_letters.py <drafts.json>\n\n" + __doc__.strip().split("\n\n")[0])
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     apps = json.load(open(sys.argv[1]))
     bad = 0
     for a in apps:

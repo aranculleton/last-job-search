@@ -476,6 +476,12 @@ SENT_NO_REPLY = {"awaiting_reply", "connected_no_reply"}
 
 if __name__ == "__main__":
     import datetime
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print("usage: python3 tools/outreach.py <drafts.json> [apps_in.json]\n"
+              "       python3 tools/outreach.py --folder \"<Company>\" \"<Role>\" [ABBR]\n"
+              "       python3 tools/outreach.py --check-note <note> [--company C --role R]\n\n"
+              + __doc__.strip().split("\n\n")[0])
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     if sys.argv[1:2] == ["--folder"]:
         # Every command that reads or writes an application's archive asks here,
         # so there is one answer to "which folder is this application's".

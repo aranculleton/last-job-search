@@ -153,6 +153,9 @@ def main() -> int:
     ap.add_argument("--status", action="append", help="tracker status to check (default: drafted)")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
+    if not os.path.exists(TRACKER):
+        print("still_open: no job_search_tracker.csv yet, so there is nothing to check")
+        return 0
     got = check(set(a.status or ["drafted"]))
     if a.json:
         print(json.dumps(got, indent=1))

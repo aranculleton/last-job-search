@@ -1842,8 +1842,9 @@ def mark_first_degree(people, connections):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        sys.exit('usage: discovery.py "<Company>" ["<City>"] [mode]')
+    if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
+        print('usage: discovery.py "<Company>" ["<City>"] [mode]')
+        sys.exit(0 if len(sys.argv) > 1 else 2)
     company = sys.argv[1]
     place = sys.argv[2] if len(sys.argv) > 2 else HOME_CITY
     mode = sys.argv[3] if len(sys.argv) > 3 else "cold"
