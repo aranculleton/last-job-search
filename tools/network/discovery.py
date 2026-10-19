@@ -1390,12 +1390,27 @@ DISQUALIFIERS = (
     # somebody in sales these are exactly the people to reach.
     # The reason is the person's too (networking.py NOT_HIRING_REASON): "dressed
     # as technical" only says something to somebody in a technical function.
+    # The titles from "industry" on (sales, account, partnerships, go-to-market) came
+    # from one session (2026-10-19): a "Data & AI Sales Executive" at a software
+    # company was kept. `_revenue_reason` says what was found, and keeps a title whose
+    # own role is in the person's function ("Data Scientist, Go-To-Market").
     Rule("revenue_role", "title", _NET_GET("NOT_HIRING_TITLES", re.compile(
         r"\b(solutions? architect|field engineer(?:ing)?|"
         r"cloud (?:&|and) ai specialist|technical account manager|"
         r"client partner|head of industry|customer success|sales engineer|"
         r"partner manager|account executive|solutions? consultant|"
-        r"pre-?sales|business development)\b", re.I)) or _NEVER,
+        r"pre-?sales|business development|"
+        r"industry (?:head|lead|leader|director|principal|advis[oe]r|executive)|"
+        r"sales (?:executive|director|manager|lead|leader|representative|rep|specialist|"
+        r"consultant|partner|head)|(?:head|director|vp|vice president|chief)\s*,?\s*(?:of\s+)?sales"
+        # "Director of Sales Analytics" runs an analytics team.
+        r"(?!\s+(?:analytics|analysis|insights?|data|intelligence|science|operations|ops|"
+        r"strategy|planning|forecasting))|"
+        r"(?:inside|enterprise|field|channel) sales|chief (?:sales|revenue) officer|"
+        r"account (?:manager|director|lead)|key accounts?|"
+        r"partnerships|partnership (?:manager|lead|director|executive)|"
+        r"alliances? (?:manager|lead|director)|"
+        r"go[- ]to[- ]market|gtm|[bs]dr)\b", re.I)) or _NEVER,
         _NET_GET("NOT_HIRING_REASON",
                  "a customer-facing revenue role, which does not hire for your function")),
 
@@ -1568,8 +1583,119 @@ def disqualify(person, target_company=None):
                 continue    # career history at some other employer, not a move away
             return "%s: %s" % (rule.reason, _matched(m))
 
+        if rule.name == "revenue_role":
+            why = _revenue_reason(title, rule)
+            if why is None:
+                continue
+            return why
+
         return "%s: %s" % (rule.reason, _matched(m))
     return None
+
+
+# What kind of revenue title a match is, in the words the reason gives. "Head of
+# Industry" was skipped with "revenue role dressed as technical" (2026-10-19), which
+# is not what it is. The titles that read as technical keep the person's own reason
+# (NOT_HIRING_REASON), which was written for them, and are blunt whatever else the
+# title says, as are an industry head and a client partner.
+_REVENUE_KINDS = (
+    (re.compile(r"solutions? architect|field engineer|cloud (?:&|and) ai specialist|"
+                r"technical account manager|sales engineer|solutions? consultant|pre-?sales", re.I),
+     None, True),
+    (re.compile(r"head of industry|industry ", re.I),
+     "an industry head, a sales and partnerships role", True),
+    (re.compile(r"client partner", re.I), "a client partner, a sales role", True),
+    (re.compile(r"customer success", re.I), "a customer success role", False),
+    (re.compile(r"sales|account|revenue", re.I), "a sales role", False),
+    (re.compile(r"business development|go[- ]to[- ]market|gtm|[bs]dr", re.I),
+     "a business development or go-to-market role", False),
+    (re.compile(r"partner|alliance", re.I), "a partnerships role", False),
+)
+# The person set their own revenue titles: their list and their reason, as written.
+_OWN_REVENUE_TITLES = _NET is not None and hasattr(_NET, "NOT_HIRING_TITLES")
+# The words a role ends on. A revenue match that carries one ("Sales Director",
+# "Account Manager", "Partnerships Lead") is the person's role, whatever team it sits
+# on; one that names only a team ("Senior Data Scientist, Go-To-Market", "Data
+# Analyst, Customer Success") gives way to a role in the person's function: both
+# were cut as revenue roles. Nouns only: "Analytics" and "Science" name a function,
+# and read as a role they made "GTM Analytics Lead" a go-to-market title.
+_ROLE_NOUN = (r"(?:scientists?|analysts?|engineers?|managers?|leads?|leaders?|directors?|head|"
+              r"architects?|specialists?|strategists?|developers?|modell?ers?|consultants?|"
+              r"officers?|owners?|executives?|representatives?|reps?|partners?|principals?|"
+              r"advis[oe]rs?|vp)")
+_ROLE_END = re.compile(r"\b%s$|^(?:head|director|vp|vice president|chief)\b|\b[bs]dr$" % _ROLE_NOUN,
+                       re.I)
+_HEAD_BEFORE = re.compile(r"\b(?:head|director|vp|vice president|chief \w+ officer|svp|evp)"
+                          r"(?:\s+of|\s+for|\s*,)?\s*$", re.I)
+
+
+def _function_words():
+    own = _NET_GET("FUNCTION_TITLE", None)
+    return getattr(own, "pattern", str(own)) if own is not None else None
+
+
+def _in_function_role():
+    """A title whose own role is in the person's function: a function word with a role
+    after it, at most one word between ("Data Scientist", "Data Science Manager", "GTM
+    Analytics Lead"), a head of the function ("Head of Data"), or an analyst or
+    scientist of any kind."""
+    generic = r"\b(?:analyst|scientist|statistician|economist|actuary)s?\b"
+    words = _function_words()
+    if words is None:
+        return re.compile(generic, re.I)
+    try:
+        return re.compile(r"(?:%s)(?:\s*(?:&|and|/)\s*\w+|\s+[\w-]+)?\s+%s\b"
+                          r"|\b(?:head|director|vp|vice president|lead)\s*,?\s+(?:of\s+)?(?:%s)"
+                          r"|%s" % (words, _ROLE_NOUN, words, generic), re.I)
+    except re.error:
+        return re.compile(generic, re.I)
+
+
+_IN_FUNCTION_ROLE = _in_function_role()
+
+
+def _is_their_role(title, m):
+    """Is this revenue match the role itself, not only the team the role sits on?"""
+    words = m.group(0).strip()
+    if _ROLE_END.search(words) or _HEAD_BEFORE.search(title[:m.start()]):
+        return True
+    # A role right after it, with no word of the person's function between: "GTM
+    # Strategy Manager" is a go-to-market role, "GTM Analytics Lead" an analytics one.
+    after = re.match(r"\s+((?:[\w&/-]+\s+){0,2}?)%s\b" % _ROLE_NOUN, title[m.end():], re.I)
+    if not after:
+        return False
+    fw = _function_words()
+    try:
+        return not (fw and re.search(fw, after.group(1), re.I))
+    except re.error:
+        return True
+
+
+def _revenue_reason(title, rule):
+    """Why a revenue title is skipped, saying what was found, or None to keep it.
+
+    "<what it is>, not one in your function: <the words>". A title that reads as
+    technical carries the person's own reason. A match that names only a team gives
+    way when the title's own role is in the person's function (_IN_FUNCTION_ROLE)."""
+    # A revenue title in their past is not their role: "Lead Data Scientist |
+    # ex-Account Executive" is a data scientist.
+    found = [m for m in rule.pattern.finditer(title) if not _PAST.search(title[:m.start()])]
+    if not found:
+        return None
+    if _OWN_REVENUE_TITLES:
+        return "%s: %s" % (rule.reason, _matched(found[0]))
+    kinds = []
+    for m in found:
+        phrase, blunt = next(((ph, bl) for rx, ph, bl in _REVENUE_KINDS if rx.search(m.group(0))),
+                             ("a customer-facing revenue role", False))
+        kinds.append((phrase, blunt or _is_their_role(title, m), m))
+    firm = [k for k in kinds if k[1]]
+    if not firm and _IN_FUNCTION_ROLE.search(title):
+        return None
+    phrase, _, m = (firm or kinds)[0]
+    if phrase is None:
+        return "%s: %s" % (rule.reason, _matched(m))
+    return "%s, not one in your function: %s" % (phrase, _clean(m.group(0)))
 
 
 # ---------------------------------------------------------------------------

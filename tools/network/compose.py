@@ -364,6 +364,58 @@ def employers_early(text, employers, within=2) -> list:
     return buried
 
 
+def _names_employer(sentence, employer) -> bool:
+    return bool(re.search(re.escape(str(employer)), sentence, re.I)) \
+        or company_key.key(str(employer)) in _employer_keys(sentence)
+
+
+def employers_first(text, employers, within=2) -> str:
+    """The note with the sentences naming its buried employers moved up, to follow the
+    greeting, or "" when that cannot be done by moving sentences alone (no sentence
+    names one, or the move still leaves one buried).
+
+    validate() said only "employers_buried", and a writer had to work out what to
+    change (2026-10-19). This is the change, made mechanically where it can be: the
+    same sentences, in another order, each word kept as written.
+    """
+    buried = employers_early(text, employers, within)
+    if not buried:
+        return ""
+    # Each sentence as the writer typed it (tone.sentences straightens curly quotes),
+    # and the greeting with its own line break when it has one.
+    text = str(text or "")
+    plain, sents, at = tone._plain(text), [], 0
+    for s in tone.sentences(text):
+        i = plain.find(s, at)
+        sents.append(text[i:i + len(s)] if i >= 0 else s)
+        at = i + len(s) if i >= 0 else at
+    m = _SALUTATION.match(sents[0]) if sents else None
+    if not m:
+        return ""
+    rest = sents[0][m.end():].strip()
+    joined = bool(rest) and not _COURTESY.match(rest)
+    if joined:
+        # "Hi Robin, saw your talk on ...": the greeting runs into the first sentence.
+        # That sentence takes a capital when it moves down, and the one moved up follows
+        # the greeting the way _after_greeting writes any clause after it.
+        lead, body = [], [rest[:1].upper() + rest[1:]] + sents[1:]
+    else:
+        lead = [sents[0]]
+        if not rest and len(sents) > 1 and _COURTESY.match(sents[1]):
+            lead.append(sents[1])
+        body = sents[len(lead):]
+    up = [s for s in body if any(_names_employer(s, e) for e in buried)]
+    if not up or up == body[:len(up)]:
+        return ""
+    order = up + [s for s in body if s not in up]
+    if joined:
+        out = " ".join([f"{m.group(0).strip()} {_after_greeting(order[0])}"] + order[1:])
+    else:
+        i = text.find(lead[-1])
+        out = (text[:i + len(lead[-1])] if i >= 0 else " ".join(lead)) + " " + " ".join(order)
+    return "" if employers_early(out, employers, within) else out
+
+
 def referrer_in_lead(text, referrer_name) -> bool:
     """Is the referrer named in the first sentence?
 
@@ -803,7 +855,11 @@ def shape_for(title="", reading=None, route="") -> str:
         return "brief" if senior else "shared"
     if any(i.get("kind") in _WORK_KINDS + ("post",) for i in reading.get("items") or []):
         return "brief" if senior else "their_work"
-    return "brief"
+    # Nothing shared and nothing of theirs to lead on: a senior reader still gets the
+    # brief note, and a peer the standard one at the plan's limit. Every peer with no
+    # posts got the 220 meant for senior readers, and a manager read as a peer could
+    # not fit the one specific line the note rested on (2026-10-19).
+    return "brief" if senior else "shared"
 
 
 def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
@@ -1248,8 +1304,17 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
         out.append(tone.Violation("lowercase_name", word))
     for found in CHECK_IN.findall(text):
         out.append(tone.Violation("check_in", found if isinstance(found, str) else found[0]))
-    for buried in employers_early(text, employers):
-        out.append(tone.Violation("employers_buried", str(buried)))
+    buried_all = employers_early(text, employers)
+    moved = employers_first(text, employers) if buried_all else ""
+    for buried in buried_all:
+        # What to do, and the reordering where moving sentences makes it.
+        out.append(tone.Violation(
+            "employers_buried",
+            f"{buried}: name {buried} in the first sentence after the greeting (by the "
+            "second at the latest)"
+            + (f"; for example: {moved}" if moved else
+               "; no sentence names it yet, so put it in the common ground or the line "
+               "about you")))
     if referrer and not referrer_in_lead(text, referrer):
         out.append(tone.Violation("referrer_buried", str(referrer)))
     if their_message:

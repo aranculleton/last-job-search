@@ -165,9 +165,15 @@ def test_stop_takes_its_reason_as_a_flag_too(tmp_path, monkeypatch):
 
 
 def test_the_about_excerpt_ends_on_a_word():
-    page = CARD.replace("Activity\n", "About\n" + "governance " * 60 + "\nActivity\n")
+    # The About is now kept whole up to reading.ABOUT_KEEP (2026-10-19: the part that
+    # mattered was past the old 400-character cut), so the cut is tested past that, and
+    # the line shown from it is the excerpt that must end on a word.
+    page = CARD.replace("Activity\n", "About\n" + "governance " * 300 + "\nActivity\n")
     r = reading.parse(page, name="Rosalind Achterberg", source="paste", today=TODAY)
     assert r["about"].endswith("…") and r["about"][:-1].endswith("governance")
+    assert len(r["about"]) <= reading.ABOUT_KEEP + 1
+    shown = next(h[3] for h in reading.hooks(r, TODAY) if h[1] == "about")
+    assert shown.endswith("…") and shown[:-1].endswith("governance")
 
 
 def test_words_are_compared_whatever_their_case():
