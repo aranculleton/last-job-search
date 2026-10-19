@@ -7,3 +7,6 @@ Pell Ansgar         # invented, tests/test_name_guard.py
 ChatGPT Codex       # a product: the ChatGPT coding agent
 Google's Gemini     # a product: Google's Gemini CLI
 Google Antigravity  # a product
+Fernhill Ratings    # invented, tests/test_people_are_matched_by_where_they_work.py
+Brindle's Analytics # invented, tests/test_people_are_matched_by_where_they_work.py
+Brannock Quillfeather  # invented, tests/test_people_are_matched_by_where_they_work.py
