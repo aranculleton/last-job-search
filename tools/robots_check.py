@@ -21,8 +21,10 @@ Usage:  python3 tools/robots_check.py <url>
 Exit 0 = the retry may proceed. Exit 1 = do not retry; go to escalation step 3.
 """
 
-import re, subprocess, sys
+import os, subprocess, sys
 from urllib.parse import urlsplit, unquote
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 BROWSER = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
            '(KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36')
@@ -44,67 +46,11 @@ def _fetch(url, ua):
     return body, int(code or 0)
 
 
-def is_robots_body(text):
-    """Does this actually look like a robots.txt?
+# The parser is openroles' (tools/openroles/robots.py, vendored): the same RFC 9309 rules
+# this file used to carry its own copy of, a tie going to Disallow and blank lines inside
+# a group tolerated. What is this file's own is below: fetching through curl as two agents.
+from openroles.robots import _groups, _match, allowed, is_robots_body  # noqa: E402,F401
 
-    A misconfigured host can answer /robots.txt with 200 and an HTML error page.
-    That body parses to zero rules, and zero rules read as "allowed" - so a
-    soft-200 granted permission that was never given. An empty or whitespace-only
-    body IS a valid allow-all under RFC 9309 and stays allowed; a non-empty body
-    with no recognised directive is treated as unreadable.
-    """
-    if not text.strip():
-        return True
-    for raw in text.splitlines():
-        line = raw.split('#', 1)[0].strip().lower()
-        if ':' in line and line.split(':', 1)[0].strip() in (
-            'user-agent', 'allow', 'disallow', 'sitemap', 'crawl-delay', 'host',
-        ):
-            return True
-    return False
-
-def _groups(text):
-    """user-agent -> [(is_allow, pattern)], tolerating blank lines inside a record."""
-    out, agents, expect = {}, [], True
-    for raw in text.splitlines():
-        line = raw.split('#', 1)[0].strip()
-        if not line or ':' not in line:
-            continue
-        field, _, value = line.partition(':')
-        field, value = field.strip().lower(), value.strip()
-        if field == 'user-agent':
-            if not expect:
-                agents, expect = [], True
-            agents.append(value.lower())
-            out.setdefault(value.lower(), [])
-        elif field in ('allow', 'disallow') and agents:
-            expect = False
-            for a in agents:
-                out[a].append((field == 'allow', value))
-    return out
-
-def _match(pattern, path):
-    """RFC 9309 wildcard match; returns match length or -1.
-
-    The pattern is percent-decoded to match the already-decoded path. Without
-    this, "Disallow: /foo%20bar" never matched "/foo bar" and the rule was
-    silently skipped - a fail-open on any site that encodes its own rules.
-    """
-    if pattern == '':
-        return -1
-    pattern = unquote(pattern)
-    rx = '^' + ''.join('.*' if c == '*' else ('$' if c == '$' else re.escape(c)) for c in pattern)
-    return len(pattern) if re.match(rx, path) else -1
-
-def allowed(text, agent, path):
-    g = _groups(text)
-    rules = g.get(agent.lower()) or g.get('*') or []
-    best_len, best_allow = -1, True
-    for is_allow, pat in rules:
-        n = _match(pat, path)
-        if n > best_len or (n == best_len and n >= 0 and not is_allow):
-            best_len, best_allow = n, is_allow      # ties -> Disallow wins (cautious)
-    return True if best_len < 0 else best_allow
 
 def gate(url):
     parts = urlsplit(url)

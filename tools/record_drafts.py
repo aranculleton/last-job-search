@@ -36,6 +36,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import outreach  # noqa: E402
+from openroles.models import ATS as _openroles_ats  # noqa: E402
 import csv_store  # noqa: E402
 import docpaths  # noqa: E402
 import person  # noqa: E402
@@ -55,9 +56,10 @@ HEADER = ["date", "company", "sector", "role", "role_type", "channel", "status",
 # appended a second row for an application already on file.
 
 # Where a posting from an employer's own applicant tracking system is applied
-# to: their careers page, which /apply Step 6b calls `online`. The keys of
-# tools/ats_boards.py FETCH (a test pins them equal).
-EMPLOYER_BOARDS = frozenset({"greenhouse", "lever", "ashby", "workday"})
+# to: their careers page, which /apply Step 6b calls `online`. Every system the
+# employer-board reader reads (tools/openroles), so none is listed here; a test
+# pins it to tools/ats_boards.py FETCH.
+EMPLOYER_BOARDS = frozenset(_openroles_ats)
 
 
 def _same_application(row: dict, new: dict) -> bool:

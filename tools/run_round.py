@@ -15,8 +15,8 @@ as if it were a file and prefilter's dict to text_screen as if it were a list.
 
   scrape_wide   every portal that is on, paginated, the profile's locations, remote
                 locations and title queries (search.py SCRAPE_*),
-                plus the employer boards in ats_boards.py (Greenhouse, Lever,
-                Ashby, Workday)
+                plus the employer boards in ats_boards.py (every system the
+                vendored openroles reads)
                 -> 00_scrape/kept.json (past the scraper's own prefilter)
   prefilter     hard gates: age, location, language, junior/senior titles, plus
                 the cross-run gate (--seen): anything throttle.ruled_out() would

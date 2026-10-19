@@ -46,7 +46,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
 import portals  # noqa: E402
-from prefilter import annotate, age_days  # noqa: E402
+from prefilter import annotate, age_days, stamp_copies  # noqa: E402
 
 # --------------------------------------------------------------- portal CLIs
 #
@@ -649,8 +649,8 @@ def main() -> int:
     paced.shutdown()
     save_cursor(swept, today.isoformat())
 
-    # Employer boards, straight from the ATS: Greenhouse, Lever, Ashby and
-    # Workday. No key, no HTML, and keyed by EMPLOYER rather than by keyword,
+    # Employer boards, straight from the ATS: every system openroles reads, and
+    # careers sites. No key, and keyed by EMPLOYER rather than by keyword,
     # which is the one thing a portal search cannot do: the profile names the
     # target employers and until then they were a preference stated in prose.
     # One analytics engineering role that scored 86 was invisible to both
@@ -691,7 +691,8 @@ def main() -> int:
         added = merge_alerts(seen, alert_rows)
         print(f"job alerts: {added} added, {len(alert_rows) - added} already found by the search")
 
-    rows = list(seen.values())
+    # Copies of one posting from several sources are as old as the oldest of them.
+    rows = stamp_copies(list(seen.values()), today)
     kept, dropped = [], []
     for j in rows:
         ok, row = annotate(j, today, a.jobage)

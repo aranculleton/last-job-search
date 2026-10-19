@@ -301,16 +301,42 @@ def posted_age(job: dict, today: _dt.date | None = None) -> int | None:
 def age_days(job: dict, today: _dt.date | None = None) -> int | None:
     """Days since the posting is known to have existed, or None when nothing says.
 
-    The earlier of the portal's date, the day this search first saw it
-    (`first_seen`, from seen_jobs.json) and the day a job alert sent it
-    (`alert_date`). A portal relisting a posting gives it a new date, so the
-    portal's date alone let a month-old posting read as new.
+    The earliest of the portal's date, the day this search first saw it
+    (`first_seen`, from seen_jobs.json), the day a job alert sent it
+    (`alert_date`) and the oldest date another copy of it in the same round
+    carries (`copy_date`, `stamp_copies`). A portal relisting a posting gives it a
+    new date, so the portal's date alone let a month-old posting read as new.
     """
     ages = [a for a in (posted_age(job, today),
                         days_since(job.get("first_seen"), today, iso_only=True),
-                        days_since(job.get("alert_date"), today, iso_only=True))
+                        days_since(job.get("alert_date"), today, iso_only=True),
+                        days_since(job.get("copy_date"), today, iso_only=True))
             if a is not None]
     return max(ages) if ages else None
+
+
+def stamp_copies(rows: list, today: _dt.date | None = None) -> list:
+    """The rows, each carrying `copy_date` where another copy of the same posting in
+    them (same title, employer and city) is older than its own dates say
+    (`throttle.oldest_copies`). Read by `age_days`, so the age gate and the freshness
+    bonus see the oldest copy. Rows with nothing older come back unchanged."""
+    try:
+        from throttle import copy_date, oldest_copies
+    except ImportError:
+        return rows
+    from dates import as_date
+    index = oldest_copies(rows, (today or _dt.date.today()).isoformat())
+    out = []
+    for job in rows:
+        d = copy_date(index, job) if isinstance(job, dict) else ""
+        if d and not job.get("copy_date"):
+            own = [x.isoformat() for x in (as_date(job.get(f), iso_only=True) for f in
+                                          ("date", "posted_date", "first_seen", "alert_date"))
+                   if x is not None]
+            if not own or d < min(own):
+                job = dict(job, copy_date=d)
+        out.append(job)
+    return out
 
 
 # An employer's own careers board is a different kind of source from an
@@ -327,7 +353,12 @@ def age_days(job: dict, today: _dt.date | None = None) -> int | None:
 # from the employer's own ATS. A Workday posting's date is the day it went up,
 # and a requisition an employer opened in July and is still interviewing for is
 # still listed because it is still open.
-LIVE_BOARDS = {"greenhouse", "lever", "workday", "ashby"}
+#
+# So is every other system openroles reads, and a careers site the employer runs: the
+# list is openroles' own (tools/openroles), not a copy that falls behind it.
+from openroles.models import ATS as _EMPLOYER_BOARDS  # noqa: E402
+
+LIVE_BOARDS = frozenset(_EMPLOYER_BOARDS)
 
 
 # Workday serves an employer's internal job site from the same host as its
@@ -338,26 +369,18 @@ LIVE_BOARDS = {"greenhouse", "lever", "workday", "ashby"}
 # WORKDAY_INTERNAL_SITES) once a round has shown one.
 WORKDAY_INTERNAL_SITES = {"privileged"} | {
     str(x).lower() for x in getattr(_S, "WORKDAY_INTERNAL_SITES", ())}
-_LOCALE = re.compile(r"^[a-z]{2}(?:-[A-Za-z]{2})?$")
 
 
 def workday_internal_site(url: str) -> str:
     """The internal Workday site a posting URL sits on, or "".
 
-    https://<tenant>.wd3.myworkdayjobs.com/[<locale>/]<site>/job/... names the
-    site in its first path segment after an optional locale.
+    openroles reads the site out of the URL (tools/openroles, the same parser the board
+    reader uses): https://<tenant>.wdN.myworkdayjobs.com/[<locale>/]<site>/job/... and
+    https://wdN.myworkdaysite.com/recruiting/<tenant>/<site>/job/... alike.
     """
-    try:
-        from urllib.parse import urlsplit
-        parts = urlsplit(str(url or ""))
-    except ValueError:
-        return ""
-    if not parts.hostname or not parts.hostname.lower().endswith("myworkdayjobs.com"):
-        return ""
-    segs = [p for p in parts.path.split("/") if p]
-    if segs and _LOCALE.match(segs[0]):
-        segs = segs[1:]
-    site = segs[0] if segs else ""
+    from openroles.providers.workday import token_from
+    token = token_from(str(url or "")) or ""
+    site = token.rsplit("/", 1)[-1] if "/" in token else ""
     return site if site.lower() in WORKDAY_INTERNAL_SITES else ""
 
 
@@ -518,6 +541,7 @@ def main() -> int:
     today = _dt.date.fromisoformat(a.today) if a.today else _dt.date.today()
 
     rows, was_dict = load_jobs(a.infile)
+    rows = stamp_copies(rows, today)
     ruled = already_ruled_out(a.seen, a.keep_ruled_out, today) if a.seen else (lambda job: "")
     first = seen_on(a.seen, today)
     kept, dropped = [], []

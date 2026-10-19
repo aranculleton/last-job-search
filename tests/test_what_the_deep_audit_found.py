@@ -186,9 +186,13 @@ def test_a_gap_asked_as_a_preference_is_never_do_not_apply():
     assert "never a reason not to apply" not in req[0].note
 
 
-def test_lever_rows_carry_their_created_date():
-    assert ats_boards._epoch_ms_date(1760000000000) == "2025-10-09"
-    assert ats_boards._epoch_ms_date(None) == ""
+def test_lever_rows_carry_their_created_date(boards_web):
+    boards_web.routes["api.lever.co/v0/postings/acme"] = [
+        {"id": "a", "text": "Analyst", "hostedUrl": "u", "createdAt": 1760000000000,
+         "categories": {"location": "Remote"}},
+        {"id": "b", "text": "Analyst", "hostedUrl": "u2", "categories": {"location": "Remote"}}]
+    rows, _ = ats_boards.lever("Acme", "acme")
+    assert [r["date"] for r in rows] == ["2025-10-09", ""]
 
 
 # ------------------------------------------------------------------ the documents

@@ -4,7 +4,9 @@ Empty on purpose. A real profile names employers here with the token their own
 careers page reads, each verified first:
 
     python3 tools/ats_boards.py --add greenhouse <board>
+    python3 tools/ats_boards.py --add personio <account>        # any system openroles reads
     python3 tools/ats_boards.py --add workday https://<tenant>.wd3.myworkdayjobs.com/<Site>
+    python3 tools/ats_boards.py --add careersite careers.<employer>.example
 
 BOARDS maps an employer to (provider, token); REFUSED to (provider, token, the
 robots.txt rule that says no); PLACES is a regex of the places an ATS location

@@ -107,6 +107,10 @@ def test_a_posting_on_an_internal_workday_site_is_dropped_with_its_reason():
     ok, _ = _decide("https://acme.wd5.myworkdayjobs.com/en-US/Privileged/job/Manchester/"
                     "Senior-Supply-Chain-Analyst_R0012345")
     assert not ok
+    # The same site at Workday's other address, which openroles' parser reads too.
+    ok, why = _decide("https://wd3.myworkdaysite.com/recruiting/acme/Privileged/job/Manchester/"
+                      "Senior-Supply-Chain-Analyst_R0012345")
+    assert not ok and why == "eligibility: internal Workday site (Privileged)"
 
 
 def test_workday_itself_is_not_a_reason_to_drop():

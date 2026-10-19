@@ -80,10 +80,20 @@ def test_a_refused_host_is_not_read_as_reachable(exit_code, connect, code, verdi
     assert env_check.classify(exit_code, connect, code) == verdict
 
 
-def test_the_check_covers_every_board_the_app_calls():
-    hosts = " ".join(u for _, u in env_check.HOSTS)
+def test_the_check_covers_every_board_the_app_calls(monkeypatch):
+    import ats_boards
+    monkeypatch.setattr(ats_boards, "BOARDS", {})              # before any board is on file
+    hosts = " ".join(u for _, u in list(env_check.HOSTS) + env_check.board_hosts())
     for h in ("linkedin.com", "freehire.me", "greenhouse.io", "lever.co", "ashbyhq.com"):
         assert h in hosts, h
+    # Once boards are on file, their own hosts, as openroles names them: no list here.
+    monkeypatch.setattr(ats_boards, "BOARDS", {
+        "Acme": ("personio", "acme"), "Brackenhollow": ("workday", "bh.wd3/Careers"),
+        "Acme Labs": ("personio", "acme")})
+    assert env_check.board_hosts() == [
+        ("Personio", "https://acme.jobs.personio.de"), ("Personio", "https://acme.jobs.personio.com"),
+        ("Workday", "https://bh.wd3.myworkdayjobs.com")]
+    assert "acme.jobs.personio.com" in env_check.allowlist()
     setup = open(os.path.join(ROOT, ".claude", "commands", "setup.md"), encoding="utf-8").read()
     assert "python3 tools/env_check.py" in setup
     assert '-w "%{http_code}' not in setup
