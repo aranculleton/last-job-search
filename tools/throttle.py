@@ -789,6 +789,10 @@ def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
 
 
 _TITLE_NOISE = re.compile(r"[^a-z0-9]+")
+# A bracket that says how or where a role is posted, not which role it is.
+_TITLE_TAG = re.compile(
+    r"\((?:future opportunities|evergreen|talent pool|remote|hybrid|on[- ]?site|"
+    r"full[- ]time|permanent|[mfwd]/[mfwd]/[mfwd]|all genders)\)", re.I)
 
 
 def _same_title(a, b) -> bool:
@@ -796,17 +800,18 @@ def _same_title(a, b) -> bool:
 
     Compared on letters and digits only, so "Sr. Analyst, Supply Chain" and
     "Senior Analyst, Supply Chain (Future Opportunities)" are not treated as two
-    jobs by a comma. Seniority words are folded for the same reason.
+    jobs by a comma or a posting tag. Seniority words are folded for the same
+    reason. The whole title, never a prefix of it: "Data Analyst" closed matched
+    "Data Analyst, Fraud Strategy", and a skip on a closed application is never
+    looked at again, so the second role was blocked for good.
     """
     def norm(x):
-        x = _TITLE_NOISE.sub(" ", str(x or "").lower())
+        x = _TITLE_NOISE.sub(" ", _TITLE_TAG.sub(" ", str(x or "")).lower())
         x = re.sub(r"\b(sr|snr)\b", "senior", x)
         x = re.sub(r"\b(jr)\b", "junior", x)
         return " ".join(x.split())
     x, y = norm(a), norm(b)
-    if not x or not y:
-        return False
-    return x == y or x.startswith(y) or y.startswith(x)
+    return bool(x) and x == y
 
 
 def _as_score(value) -> float | None:
