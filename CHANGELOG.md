@@ -20,6 +20,14 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Windows: the Poppler install named a tool Windows does not have.** The environment check,
+  the PDF check's error and SETUP.md said `choco install poppler`, which needs Chocolatey
+  installed first. They now say `winget install oschwartz10612.Poppler`, the same command the
+  setup list already gave, and winget comes with Windows 10 and 11. The environment check's
+  LaTeX line on Windows names `winget install MiKTeX.MiKTeX` too. Nothing to do.
+
 ## [3.6.0] - 2026-10-19
 
 ### Added

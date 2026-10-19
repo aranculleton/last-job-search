@@ -47,7 +47,7 @@ def run_tool(command):
             f"required command '{command[0]}' was not found. "
             "Install pypdf (`pip install pypdf`) or poppler-utils "
             "(macOS: brew install poppler, Debian/Ubuntu: apt install poppler-utils, "
-            "Windows: choco install poppler)"
+            "Windows: winget install oschwartz10612.Poppler)"
         ) from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip() or (exc.stdout or "").strip()
