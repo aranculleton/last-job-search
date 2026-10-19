@@ -67,15 +67,16 @@ python3 tools/run_round.py --out "$SCRATCH/r1b" --from-scraped "$SCRATCH/r1/00_s
 
 ### When the round misses
 
-It exits 2 and keeps three files it otherwise deletes, with the posting bodies stripped:
+It exits 2 and keeps four files it otherwise deletes, with the posting bodies stripped:
 
 | File | Answers |
 |---|---|
-| `01_dropped.json` | what the age and location gates removed, plus anything already ruled out in `seen_jobs.json` |
+| `00_scrape/dropped.json` | what the age, location and title gates removed (the scrape applies them) |
+| `01_dropped.json` | what was already ruled out in `seen_jobs.json`, and relists first seen too long ago |
 | `03_screened_all.json` | what the stated-fact knockouts removed, with the quote |
 | `06_skipped.json` | what the company throttle and the one-role-per-employer rule removed |
 
-Those are the three places a posting can vanish. `--expand` re-runs wider automatically,
+Those are the places a posting can vanish. `--expand` re-runs wider automatically,
 up to three rounds in all, each with more pages per search (from the default 5, then 10,
 then 30) and the same freshness window, which is a gate and never widens. Each wider round
 reuses the bodies the round before it fetched. The other widenings (title
@@ -212,7 +213,7 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 
 | Command | What it does |
 |---|---|
-| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the three files the MISSED message tells you to read. |
+| `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
 | `python3 tools/job_alerts.py <messages.json> --out <alerts.json>` | The person's LinkedIn job alerts, read by the session from Gmail only when `profile/search.py` `JOB_ALERT_QUERY` asks for it (`--query` prints the search). Takes the job ids alone and fills each posting from LinkedIn's own page; `run_round.py --alerts <alerts.json>` adds them to the round before the free filters. |
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. |
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |

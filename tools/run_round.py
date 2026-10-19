@@ -161,7 +161,14 @@ def write_summary(shortlist_path, out_dir, name):
 # posting body, capped at BODY_CAP per record and multiplied by a thousand
 # records. Strip that and the three files that answer "where did everything go"
 # cost a few hundred KB between them.
-DIAGNOSTICS = ("01_dropped.json", "03_screened_all.json", "06_skipped.json")
+#
+# The free gates' drops are the scrape's own: scrape_wide applies the age, place
+# and title gates before it writes kept.json, so they land in 00_scrape/dropped.json.
+# 01_dropped.json holds only what prefilter drops after that, which is what this
+# search had already ruled out. The message named 01_dropped.json for the location
+# and age gates, and the file that answers it was deleted with the rest of 00_scrape.
+SCRAPE_DROPPED = os.path.join("00_scrape", "dropped.json")
+DIAGNOSTICS = (SCRAPE_DROPPED, "01_dropped.json", "03_screened_all.json", "06_skipped.json")
 BODY_FIELD = "desc"
 
 
@@ -231,8 +238,18 @@ def prune(out_dir, keep=(), hold=()):
         if name in keep:
             freed += slim(path)
             continue
+        inner = {k.split(os.sep, 1)[1] for k in keep if k.startswith(name + os.sep)}
         try:
-            if os.path.isdir(path):
+            if os.path.isdir(path) and inner:
+                # A directory one of whose files is kept: that file slimmed, the rest gone.
+                for f in os.listdir(path):
+                    p = os.path.join(path, f)
+                    if f in inner:
+                        freed += slim(p)
+                    elif os.path.isfile(p):
+                        freed += os.path.getsize(p)
+                        os.remove(p)
+            elif os.path.isdir(path):
                 freed += sum(os.path.getsize(os.path.join(path, f))
                              for f in os.listdir(path))
                 shutil.rmtree(path)
@@ -526,10 +543,13 @@ def main():
               "re-run before widening or concluding anything from the count.")
     print(f"  tried: {a.pages} pages per query, {a.jobage}-day freshness, "
           f"scrape_wide's full query and location set")
+    scrape_dropped = (f"{SCRAPE_DROPPED} for the age, location and title gates, "
+                      if os.path.exists(f(SCRAPE_DROPPED)) else "")
     print(f"  likely blocker: in {a.out}, check 06_skipped.json for what the throttle "
-          "removed, 01_dropped.json for the location and age gates, and "
-          "03_screened_all.json for the stated-fact knockouts. All three were kept "
-          "(without posting bodies) precisely because this round missed.")
+          f"removed, {scrape_dropped}01_dropped.json for what was already ruled out "
+          "or first seen too long ago, and 03_screened_all.json for the stated-fact "
+          "knockouts. Each was kept (without posting bodies) precisely because this "
+          "round missed.")
     print("  widen next, in this order: more title variants, the remaining priority "
           "categories, wider PASS-set locations, adjacent target sectors and named "
           "employers, then the WebSearch fallback.")
