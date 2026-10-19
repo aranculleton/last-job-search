@@ -139,7 +139,7 @@ def test_the_file_itself_with_its_notes_above_the_header_is_read(home):
 # ------------------------------------------------------------ while the export is on its way
 
 PASTE = """Shirin Example
-View Shirin Example’s profile
+View profile
  • 1st
 1st degree connection
 Head of Demand Planning at Kestrel Mutual
@@ -152,7 +152,7 @@ Greater Manchester
 Connect
 https://www.linkedin.com/in/example-corwin
 Tamsin Oyelaran
-View Tamsin Oyelaran’s profile
+View profile
 • 1st
 Events Coordinator
 London
