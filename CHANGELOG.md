@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-10-19
+
 ### Added
 
 - **Follow-ups skip public holidays.** "Five to seven business days" counted a public
@@ -28,7 +30,9 @@ make sense to somebody whose repo just received it.
   Australia and New Zealand, and regional days for Canada's provinces, the UK's nations
   and several US states. Your region is read from where you live. Anywhere the rules do
   not cover, Claude looks up your country's holidays and keeps them in your profile
-  (`python3 tools/holidays.py` lists them). Profile upgrade: public-holidays.
+  (`python3 tools/holidays.py` lists them). A test of your own that checks
+  `business_days_between` against weekdays alone now needs your holidays taken out of
+  its count too. Profile upgrade: public-holidays.
 - **Your own "never write" rules are checked in every draft.** A rule in your profile
   such as never write "relocating" was followed only when the drafting model remembered
   it, and a note that broke it passed every check. The phrases your rules quote are now
