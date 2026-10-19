@@ -335,6 +335,11 @@ def _top(pre: list, before_main: list, name: str = "") -> tuple[str, str, str]:
     # A "Save to PDF" export: name, headline and location sit right before Summary
     # or Experience, after the sidebar sections LinkedIn prints first.
     if len(before_main) == 3:
+        if name and fold(before_main[1]) == fold(name):
+            # No location line: the line before the name, the name, then the headline.
+            # Read as name, headline and location, it made the name the headline and
+            # their job where they live ("based in Head of Data at ...").
+            return before_main[2][:160], "", ""
         return before_main[1][:160], before_main[2][:120], ""
     return "", "", ""
 

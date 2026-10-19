@@ -45,8 +45,32 @@ make sense to somebody whose repo just received it.
   it; the pack prepares it as "reported by" that source, and it never counts as a
   question asked. The question bank gains a `source` column only when a row has one.
 
+- **People search keeps only people at the employer.** From one person's run:
+  - A university's post naming the employer, the employer's own page and a page on the
+    employer's site were each kept as a contact.
+  - A name check for someone whose first name spells a one-word employer kept them there,
+    though the check finds them by name alone.
+  - "Name - Title - Employer - City" ignored the employer, so somebody at another firm
+    was kept.
+  - A brand line after a job ("Partner, Brand, AI by Parent") or written with a dash was
+    read as another employer, and so was a post naming the employer by its ratings arm or
+    brand line.
+  - A job the list did not know ("Senior Actuary, London") was read as a place.
+  - A "Save to PDF" profile with no location line gave their job as where they live.
+
+  Each is fixed, and contacts already added are checked again in the background.
+- **Notes the networking update writes are no longer flagged for rewriting straight
+  away.** The update writes each new contact's note marked WAITS ON A READ, and the
+  notes check counted any queued note as written the older way, so every /network run
+  began by rewriting the notes just written, which needs the reads they were waiting
+  on. Only a note with nothing read behind it and no such mark is redone now, and a
+  note written from someone's public work leaves the queue.
+- **Nothing that needs your browser is listed as something Claude applies alone.** The
+  notes rewrite was, until 3.4.1; a test now keeps it that way.
+
 No profile upgrade: the next interview pack for a live interview is written beside the
-old one by itself (build version interview 8).
+old one by itself (build version interview 8), and people already added are re-checked
+by the networking update (networking 27).
 
 ### Changed
 

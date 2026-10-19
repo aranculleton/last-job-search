@@ -350,8 +350,9 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-18", False, "the line saying why someone was found names the job a title search looked for, and nothing else: no search operators, never the person's own name"),
             (25, "2026-10-18", True, "people searches spend the budget where people are found: both title searches run first, a name check keeps only that person with the job the page gave them and is capped at three an employer, a post is dated so an old one no longer counts, and AVP, SVP and EVP read as senior"),
             (26, "2026-10-19", True, "people are matched to an employer only where their result names it as where they work, people at its ratings or analytics arm or under its brand line count, and contacts already added on a name alone are re-checked"),
+            (27, "2026-10-19", True, "people are kept only when they are people at the employer: a university's or the employer's own post is not a contact, a first name that spells the employer proves nothing on a name check, the employer before a place is read, a brand line after a job or a dash is the employer, a post naming another of the employer's names counts, and a job is never read as a place; contacts already added are re-checked"),
         ),
-        "fingerprint": "3d579f89ea9b28f7",
+        "fingerprint": "9feed3afbe94a613",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -382,8 +383,9 @@ METHODS: dict[str, dict] = {
             (13, "2026-10-19", False, "a comment's example employer is invented"),
             (14, "2026-10-19", False, "a comment names the place check's new rhythm, once and then weekly"),
             (15, "2026-10-19", False, "applied by /network itself; several profiles can be pasted at once; a note nobody has read for says so at its top"),
+            (16, "2026-10-19", False, "only notes written before notes rested on a reading are redone, and a note written from someone's public work leaves the queue"),
         ),
-        "fingerprint": "2d354573e812ff1e",
+        "fingerprint": "bbb39cea1b2cdddd",
     },
     "screening": {
         "by": "round", "priority": 2,

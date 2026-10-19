@@ -203,7 +203,9 @@ def is_person_url(url):
     posting no matter what the title says.
     """
     u = (url or "").lower()
-    if "/in/" not in u:
+    # LinkedIn's own address only: "/in/" is also a language path on employers' sites
+    # ("<employer>.com/in/en/leadership"), and its page was kept as a verified person.
+    if "linkedin.com/in/" not in u:
         return False
     return not any(p in u for p in JOB_BOARD_PATHS)
 
@@ -256,10 +258,13 @@ def resolve_result(url, company=None):
     if not m:
         return None
     handle = m.group("handle")
+    who = handle.replace("-", " ")
     # A company page's post carries the company's handle, not a person's, and
-    # turning it into /in/<company> invented a profile that does not exist.
-    if company and _norm_place(handle.replace("-", " ")) in (
-            _norm_place(company), company_key(company)):
+    # turning it into /in/<company> invented a profile that does not exist. Its
+    # handle may be the employer under another of its names ("<employer>-group"), or
+    # an institution's: a university's post about the employer was kept as a person.
+    if (company and (_norm_place(who) in (_norm_place(company), company_key(company))
+                     or same_employer(who, company))) or _INSTITUTION.search(who):
         return {"profile_url": None, "post_date": post_date(url), "kind": "company_post"}
     return {"profile_url": "https://www.linkedin.com/in/%s" % handle,
             "post_date": post_date(url),
@@ -450,11 +455,22 @@ _CREDENTIAL = re.compile(r"^(?:[A-Z][A-Z0-9&]{1,6}|(?=[A-Za-z.]*\.)[A-Z][A-Za-z.
                          r"Ph\.?D\.?|D\.?Phil\.?|M\.?Sc\.?|B\.?Sc\.?|M\.?Eng\.?|"
                          r"P\.?Eng\.?|M\.?B\.?A\.?|M\.?P\.?H\.?)$")
 # A part that names a job rather than an employer: "Data and Analytics Leader".
+# A job word the list lacked made "Senior Actuary, London" a place, and the title was lost.
 _ROLE_WORD = re.compile(r"\b(?:manager|director|head|lead|leader|analyst|scientist|engineer|"
-                        r"officer|consultant|founder|specialist|partner|vp|president|adviser|"
-                        r"advisor|architect|coordinator|executive|principal|associate|"
-                        r"strategist|developer|designer|recruiter|researcher|professor|"
-                        r"student|intern)s?\b", re.I)
+                        r"officer|consultant|founder|specialist|partner|vp|avp|svp|evp|"
+                        r"president|adviser|advisor|architect|coordinator|executive|principal|"
+                        r"associate|strategist|developer|designer|recruiter|researcher|"
+                        r"professor|student|intern|actuary|actuaries|accountant|auditor|"
+                        r"underwriter|economist|statistician|controller|treasurer|chief|"
+                        r"secretary|administrator|assistant|representative|counsel|lawyer|"
+                        r"solicitor|attorney|paralegal|nurse|physician|doctor|pharmacist|"
+                        r"therapist|teacher|lecturer|tutor|editor|writer|journalist|producer|"
+                        r"technician|operator|planner|buyer|trader|broker|banker|agent|owner|"
+                        r"ceo|cfo|cto|coo|cio|cdo|cro|chair|chairman|chairwoman|chairperson|"
+                        r"fellow|postdoc|graduate|apprentice|trainee|supervisor|inspector|"
+                        r"investigator|examiner|programmer|modeller|modeler|quant|steward|"
+                        r"contractor|freelancer|volunteer|trustee|governor|mentor|coach|"
+                        r"practitioner|expert|staff)s?\b", re.I)
 # "<function> @ <Employer>" is how many headlines write "at". Read whole, "Data @
 # Kestrel" was an employer of that name, and its person was dropped as working elsewhere.
 _AT = re.compile(r"(?:\bat\s+|(?:^|\s)@\s*)(\S.*)$")
@@ -487,6 +503,24 @@ PROFILE_STATUS = ("verified", "likely", "unconfirmed")
 def _person_like(name: str) -> bool:
     words = name.split()
     return 2 <= len(words) <= 5 and all(re.match(r"^[^\W\d_][\w.'\-]*$", w) for w in words)
+
+
+# Words in an organisation's name or a page's, never a person's: "Leadership Team",
+# "<Employer> Group", "<Employer> Careers".
+_ORG_WORDS = re.compile(r"\b(?:team|leadership|careers?|jobs|talent|recruiting|recruitment|"
+                        r"hiring|official|news|foundation|association|society|department|"
+                        r"group|company|limited|ltd|inc|llc|plc|corp|corporation|gmbh)\b", re.I)
+
+
+def _a_person(name: str, company: str = "") -> bool:
+    """Is this a person's name: a few plain words that are not an institution, a team,
+    an organisation, or the employer itself? A university's post naming the employer
+    was kept as a likely contact called "University of <Name>", and the employer's own
+    page as one called "<Employer> Group"."""
+    if not _person_like(name) or _INSTITUTION.search(name) or _ORG_WORDS.search(name) \
+            or _team_only(name):
+        return False
+    return not (company and same_employer(name, company))
 
 
 def _team_only(text: str) -> bool:
@@ -537,8 +571,11 @@ def _comma_part(last: str, company: str = "") -> tuple:
     for p in body if company else ():
         if same_employer(p, company):
             return ", ".join(x for x in body if x is not p), p, place
-    if _BRAND_LINE.match(", ".join(body)):
-        return "", ", ".join(body), place      # "Quillfeather, AI by Brannock": one employer
+    for i in range(len(body) - 1):
+        # "Quillfeather, AI by Brannock": one employer, after a job or not ("Partner,
+        # Quillfeather, AI by Brannock" read "AI by Brannock" as somewhere else).
+        if _BRAND_LINE.match(", ".join(body[i:])):
+            return ", ".join(body[:i]), ", ".join(body[i:]), place
     # "University of Larkspur, Faculty of Science": the institution is where they are.
     inst = next((p for p in body if _INSTITUTION.search(p)), "")
     if inst:
@@ -579,10 +616,22 @@ def parse_result_title(title: str, company: str = "") -> dict:
     while len(words) > 2 and _CREDENTIAL.match(words[-1]):
         words.pop()
     name = " ".join(words)
-    if not _person_like(name):
+    if not _a_person(name, company):
         return out
-    out["name"] = name
     rest = parts[1:]
+    # "<Brand> - AI by <Parent>": a brand line written with a dash instead of a comma is
+    # one employer, and its second half alone ("AI by <Parent>") read as another employer.
+    for i in range(len(rest) - 1, 0, -1):
+        if _BY_PARENT.match(rest[i]):
+            rest[i - 1:i + 1] = ["%s, %s" % (rest[i - 1], rest[i])]
+    # "Name - Title - Employer - <a place>": the place last, and the employer before it.
+    # Only the title was read, so somebody at another firm was kept as likely at the
+    # employer searched.
+    if len(rest) >= 3 and _is_place(rest[-1]) and not _names_company(rest[-1], company):
+        inner = parse_result_title(" - ".join([name] + rest[:-1]), company)
+        inner["location"] = inner["location"] or rest[-1]
+        return inner
+    out["name"] = name
     if not rest:
         return out
     last = rest[-1]
@@ -592,7 +641,7 @@ def parse_result_title(title: str, company: str = "") -> dict:
     if at:
         out["headline"] = out["headline"] or last
         out["employer"], out["location"] = _employer_and_place(at.group(1).strip())
-    elif _is_place(last):
+    elif _is_place(last) and not _names_company(last, company):
         out["location"] = last
     elif "," in last:
         headline, out["employer"], out["location"] = _comma_part(last, company)
@@ -602,6 +651,17 @@ def parse_result_title(title: str, company: str = "") -> dict:
     else:
         out["employer"] = last
     return out
+
+
+# The second half of a brand line: "AI by <Parent>", "a <Parent> company" is not one.
+_BY_PARENT = re.compile(r"^(?:\S+\s+){0,3}by\s+\S", re.I)
+
+
+def _names_company(text: str, company: str) -> bool:
+    """Does one comma part of `text` name the employer searched? Then it is no place:
+    "<Employer>, Manchester" was read as a location, and the employer was lost."""
+    return bool(company) and any(same_employer(p.strip(), company)
+                                 for p in str(text or "").split(",") if p.strip())
 
 
 def profile_status(parsed: dict, url: str, company: str = "", name: str = "") -> str:
@@ -665,7 +725,7 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
             m = re.match(r"^(.+?)\s+(?:on LinkedIn|posted on LinkedIn)\b:?", title)
             parsed = {"name": m.group(1).strip() if m else "", "headline": "", "employer": "",
                       "location": ""}
-            if not _person_like(parsed["name"]):
+            if not _a_person(parsed["name"], company):
                 continue
             # A post the search matched on its body, about another company, says nothing
             # about where its author works: a post about another company was kept as a
@@ -679,11 +739,10 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
         seen.add(handle)
         status = profile_status(parsed, got["profile_url"], company) if got["kind"] == "profile" \
             else "likely"
+        # A name check whose employer is one of the person's own names proves nothing
+        # either: the check searches "<name> <employer>", which their name alone answers,
+        # so a consultant called Ada was kept at an employer called Ada.
         by_name = status == "unconfirmed" and not parsed["employer"] and bool(company)
-        if by_name and kind == "profile_check":
-            # A name check searches for the name on purpose, and the employer came from
-            # the page that named them (sources.harvest's `known`): as likely as before.
-            status, by_name = "likely", False
         employer = parsed["employer"]
         if employer and status == "verified" and company_key(employer) != company_key(company):
             # The employer under another of its names ("<Name> Ratings", a brand line):
@@ -758,14 +817,25 @@ def same_employer(a: str, b: str) -> bool:
     return any(_same_key(x, y) for x in _names_of(a) for y in _names_of(b))
 
 
+# A brand line inside running text: "Quillfeather, AI by Brannock is hiring".
+_BRAND_IN_TEXT = re.compile(r"([A-Z][\w&.'\-]*(?:\s+[A-Z][\w&.'\-]*){0,3}),\s*(?:\S+\s+){0,3}?"
+                            r"by\s+([A-Z][\w&.'\-]*(?:\s+[A-Z][\w&.'\-]*){0,3})")
+
+
 def _names_employer(text: str, company: str) -> bool:
-    """Does `text` name `company`, as people write it (search_name), word for word?"""
-    want = search_name(company).lower()
-    words = re.findall(r"[a-z0-9&]+", want)
-    if not words:
-        return False
-    return bool(re.search(r"(?<![a-z0-9])" + r"\W+".join(map(re.escape, words)) + r"(?![a-z0-9])",
-                          str(text or "").lower()))
+    """Does `text` name `company`, as people write it (search_name) or by its key (the
+    name without "Group" and the like), word for word, or as a brand line? Word for word
+    alone, a post by somebody at "<Name> Ratings" was skipped in a search for "<Name>
+    Group", and so was a post naming the employer by its brand line."""
+    text = str(text or "")
+    low = text.lower()
+    for want in dict.fromkeys((search_name(company).lower(), company_key(company))):
+        words = re.findall(r"[a-z0-9&]+", want or "")
+        if words and re.search(r"(?<![a-z0-9])" + r"\W+".join(map(re.escape, words))
+                               + r"(?![a-z0-9])", low):
+            return True
+    return any(same_employer("%s, by %s" % (m.group(1), m.group(2)), company)
+               for m in _BRAND_IN_TEXT.finditer(text))
 
 
 def _profile_handle(url: str) -> str:
