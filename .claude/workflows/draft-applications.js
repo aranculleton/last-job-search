@@ -137,7 +137,7 @@ Return these fields:
 - deadline: the application deadline from the research above (its deadline field), as YYYY-MM-DD, or empty when none is stated. Never guess one.
 Body words across p1 + p2 + lead + p4 + the three bullet texts: 200 to 250.
 ${HARD_RULES}
-Before returning, write your fields as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json then python3 tools/outreach.py --check-note "<your outreach_body>" (it also applies the networking tone rules). Fix every finding. Touch no repository file.`,
+Before returning, write your fields as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json then python3 tools/outreach.py --check-note --company "<your company field>" --role "<your role field>" "<your outreach_body>" (it puts the opening line in front, as the sent note has it, and also applies the networking tone rules). Fix every finding. Touch no repository file.`,
     { label: `draft:${pick.company}`, phase: 'Draft', schema: DRAFT_SCHEMA }).then(d => ({ research, draft: d })),
 
   (prev, pick) => agent(
@@ -155,7 +155,7 @@ Audit, and fix what you find directly in the returned draft:
 3. The writing rules in 03-writing-style.md (especially rules 6, 7 and 8) and these hard rules: ${HARD_RULES}
 4. Targeting: each stated requirement is addressed by evidence or an honest bridge, using the posting's own terms where truthfully applicable. The hook in p1 is about the employer's problem.
 5. Budgets: summary 40 to 48 words; body (p1 + p2 + lead + p4 + bullet texts) 200 to 250 words; outreach_body under 80 words with its opening line, naming one of the candidate's employers.
-Then write the corrected draft as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json then python3 tools/outreach.py --check-note "<the outreach_body>". Fix every finding and re-run until clean; put its final output in voice_check.
+Then write the corrected draft as a one-element JSON list to ${scratch}/voice_${pick.slug}.json and run: python3 tools/voice_check.py --json ${scratch}/voice_${pick.slug}.json then python3 tools/outreach.py --check-note --company "<the draft's company>" --role "<the draft's role>" "<the outreach_body>". Fix every finding and re-run until clean; put its final output in voice_check.
 verdict: pass (no change needed), fixed (defects corrected), or reject (cannot be made truthful and targeted; explain in residual_risks).
 Last, write the whole audit you return (verdict, draft, changes, residual_risks, voice_check) as one JSON object to ${scratch}/audit_${pick.slug}.json, a reject included: tools/stage_picks.py assemble renders only a pass or a fixed draft, and reports a reject with its residual_risks. Touch no repository file.`,
     { label: `audit:${pick.company}`, phase: 'Audit', schema: AUDIT_SCHEMA }).then(a => ({ pick, research: prev.research, first_draft: prev.draft, audit: a })),

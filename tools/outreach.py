@@ -254,6 +254,11 @@ def short_note(a, limit=None):
     return ""
 
 
+def whole_note(company, role, body):
+    """The note as it is sent: the fixed opening line, then the drafted body."""
+    return f"{OPENING.format(role=role, company=R.short_name(company))} {body.strip()}"
+
+
 def outreach_note(a):
     """Under eighty words, hard. Hook from the letter's opening, the one
     company fact from its second paragraph, one ask. A draft carrying an
@@ -269,7 +274,7 @@ def outreach_note(a):
     opening = OPENING.format(role=role, company=company)
     body = (a.get("outreach_body") or "").strip()
     if body:
-        note = f"{opening} {body}"
+        note = whole_note(a["company"], role, body)
         problems = check_note(note)
         if problems:
             raise ValueError(f"{a['company']}: outreach_body refused: " + "; ".join(problems))
@@ -440,7 +445,21 @@ if __name__ == "__main__":
         sys.exit(0)
     if sys.argv[1:2] == ["--check-note"]:
         # /apply writes its note by hand: the same checks the assembled note meets.
-        found = check_note(" ".join(sys.argv[2:]))
+        # A drafted `outreach_body` is checked with --company and --role, which
+        # put the fixed opening line in front of it as outreach_note() does: the
+        # body alone was checked against the 80 words the whole note must fit.
+        import argparse
+        ap = argparse.ArgumentParser(prog="outreach.py --check-note")
+        ap.add_argument("note", nargs="+")
+        ap.add_argument("--company", help="with --role: the note is a body; check it whole")
+        ap.add_argument("--role")
+        ns = ap.parse_args(sys.argv[2:])
+        if bool(ns.company) != bool(ns.role):
+            ap.error("--company and --role go together")
+        note = " ".join(ns.note)
+        if ns.company:
+            note = whole_note(ns.company, ns.role, note)
+        found = check_note(note)
         for problem in found:
             print(problem)
         sys.exit(1 if found else 0)
