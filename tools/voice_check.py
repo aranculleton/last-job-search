@@ -377,6 +377,57 @@ def check(text: str, *, source: str = "") -> list[dict]:
 # OWN_VOICE in a first note) or a light "hope" inside a live thread can share
 # it. A cliche, a dash, or a phrase the person has said never to use is never
 # lifted, whatever `allow` matches.
+# ------------------------------------------------------------ said aloud
+
+# An answer the person will say out loud is held to the spoken register, not the
+# written one. A prep printed the resume summary as the answer to "tell me about
+# yourself" ("Data professional with a background in ... Builds risk-scoring models
+# ..."), and a person said the answers read as "weird short sentences or things that
+# start with 'At this', hard to say out loud". Three things mark written register in
+# an answer: no "I" in its opening (third person, or a resume line), a sentence that
+# opens on a verb with no subject ("Built ...", "Led ..."), and an opener that is a
+# label with a colon ("At <Employer>: ...").
+_FIRST_PERSON_WORD = re.compile(r"\b(?:i|i'm|i've|i'd|i'll|me|my|we|we're|we've|our)\b", re.I)
+_RESUME_VERB = re.compile(
+    r"^(?:built|builds|led|leads|designed|designs|delivered|delivers|owned|owns|created|"
+    r"creates|developed|develops|managed|manages|drove|drives|launched|launches|reduced|"
+    r"reduces|improved|improves|cut|cuts|ran|runs|engineered|engineers|implemented|"
+    r"implements|analy[sz]ed|analy[sz]es|automated|automates|established|spearheaded|"
+    r"oversaw|oversees|introduced|grew|grows|increased|partnered|partners|presented|"
+    r"presents|supported|supports|identified|validated|validates|onboarded|migrated|"
+    r"rebuilt|mapped|maps|wrote|writes|shipped|ships|scaled|scales|works|worked)\b"
+    # A resume's adjective openers, only as a resume uses them: "Comfortable with SQL" is
+    # written, and "Comfortable, yes." is how someone answers.
+    r"|^(?:comfortable|experienced|skilled|passionate|proficient)\s+(?:with|in|at|about|"
+    r"working)\b", re.I)
+# An answer this short ("One month.", "Manchester, by the canal.") is said as it stands,
+# with or without an "I" in it.
+SPOKEN_SHORT_WORDS = 15
+_LABEL_OPENER = re.compile(r"^(?:at|in|for|with|on|from)\s+[^.:!?]{1,40}:\s", re.I)
+
+
+def spoken_findings(answer: str) -> list[str]:
+    """Why an answer reads as written rather than said, or [] when it reads as said."""
+    text = " ".join(str(answer or "").split())
+    if not text:
+        return ["empty"]
+    out = []
+    sents = [x for x in sentences(text) if x.strip()]
+    # A clause after a semicolon opens like a sentence: "I'm an analyst; spearheaded ...".
+    clauses = [c.strip() for x in sents for c in x.split(";") if c.strip()]
+    if len(text.split()) >= SPOKEN_SHORT_WORDS and \
+            not _FIRST_PERSON_WORD.search(" ".join(sents[:2]) or text):
+        out.append("not in the first person: say it as \"I ...\"")
+    verbs = [x for x in clauses if _RESUME_VERB.match(x.strip())]
+    if verbs:
+        out.append("opens a sentence on a verb with no subject, as a resume line does: \"%s\""
+                   % verbs[0][:60])
+    labels = [x for x in sents if _LABEL_OPENER.match(x.strip())]
+    if labels:
+        out.append("opens on a label and a colon: \"%s\"; say it as a sentence" % labels[0][:60])
+    return out
+
+
 ALLOWABLE = frozenset({"house-style"})
 
 

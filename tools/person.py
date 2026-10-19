@@ -45,6 +45,12 @@ import python_floor  # noqa: E402
 
 python_floor.require()
 
+# The tools a person installed where a non-login shell does not look (MacTeX's
+# /Library/TeX/texbin, Bun's ~/.bun/bin): on PATH for every tool, tools/local_path.py.
+import local_path  # noqa: E402
+
+local_path.extend()
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = "LJS_PROFILE"
 DEFAULT = "profile"
@@ -153,6 +159,38 @@ def state(*parts: str) -> str:
     if not os.path.isabs(root):
         root = os.path.join(ROOT, root)
     return os.path.join(os.path.normpath(root), *parts)
+
+
+def main_checkout() -> str | None:
+    """The repository's main working folder when this one is a linked git worktree, else
+    None. A local chat works in a worktree of its own (CLAUDE.md, "On the person's own
+    computer"), and a worktree has none of the ignored files the main folder holds."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "rev-parse", "--git-dir", "--git-common-dir"], cwd=ROOT,
+                           capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    got = r.stdout.split() if r.returncode == 0 else []
+    if len(got) != 2:
+        return None
+    here, common = (os.path.realpath(os.path.join(ROOT, g)) for g in got)
+    if here == common:
+        return None
+    main = os.path.dirname(common)
+    return main if os.path.isdir(main) and main != os.path.realpath(ROOT) else None
+
+
+def local_state(*parts: str) -> str:
+    """A state file git does not carry (a connections export, a sync cursor), from this
+    folder, or from the main checkout when this is a worktree that lacks it. In a worktree
+    the connections export was simply not there, and a run found nothing, silently."""
+    here = state(*parts)
+    if os.path.exists(here) or os.environ.get(STATE_ENV):
+        return here
+    main = main_checkout()
+    there = os.path.join(main, *parts) if main else ""
+    return there if there and os.path.exists(there) else here
 
 
 def text(name: str) -> str:

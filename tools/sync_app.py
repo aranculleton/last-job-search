@@ -68,6 +68,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from personal_paths import _regex  # noqa: E402
 from personal_paths import is_personal as _personal_here  # noqa: E402
 
+# A cloud session sets CLAUDE_CODE_REMOTE; anything else is a person's own computer.
+CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 APP_URL = "https://github.com/aranculleton/last-job-search"
 REMOTE = "app"
@@ -319,6 +322,10 @@ def sync() -> int:
         print("sync_app: stopped, nothing changed. Commit or stash these first:")
         for ln in dirty[:20]:
             print(f"  {ln}")
+        if not CLOUD:
+            print("  If another chat works in this folder, these are its files: never commit or "
+                  "discard them from here. Give this chat a folder of its own instead: "
+                  "python3 tools/sync_app.py --worktree <a short name for this chat>")
         return 1
     base = merge_base()
     old = git("rev-parse", "HEAD").stdout.strip()
@@ -442,19 +449,137 @@ def nudge() -> None:
               "this again.", file=sys.stderr)
 
 
+def rewritten(old: str, new: str) -> bool:
+    """Did origin/master move to a commit that does not contain where it was: a history
+    rewrite, which git fetch prints as "(forced update)"?"""
+    return bool(old and new and old != new) and git(
+        "merge-base", "--is-ancestor", old, new, check=False).returncode != 0
+
+
+def after_rewrite(old: str) -> int:
+    """origin/master was rewritten. Merging it into a checkout made before conflicts on
+    hundreds of files, and a person had to warn the session in their own prompt. A branch
+    holding nothing beyond the old master moves to the new one; a branch with commits of its
+    own is left alone, with those commits named and the way to carry them across."""
+    branch = git("rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip()
+    mine = git("rev-list", "--reverse", "HEAD", "--not", old, "origin/master",
+               check=False).stdout.split()
+    if not mine:
+        moved = (git("checkout", "-q", "-B", branch, "origin/master", check=False)
+                 if branch and branch != "HEAD"
+                 else git("checkout", "-q", "--detach", "origin/master", check=False))
+        if moved.returncode:
+            # Never "nothing was lost" when nothing moved: files in the way stop the checkout.
+            in_way = [ln.strip() for ln in moved.stderr.splitlines() if ln.startswith(("\t", "  "))]
+            return _abort("master's history was rewritten (a forced update), and moving this "
+                          "branch onto the new master was refused: these files are in the way. "
+                          "Commit or move them, then run the sync again:", in_way or
+                          [moved.stderr.strip()[:300]])
+        print("sync_app: master's history was rewritten (a forced update). This branch held "
+              "nothing of its own, so it now starts from the new master; nothing was lost.")
+        return 0
+    print(f"sync_app: stopped, nothing changed. master's history was rewritten (a forced update), "
+          f"and this branch has {len(mine)} commit(s) of its own. Do not merge: carry them onto "
+          "the new master instead, then sync again:")
+    print(f"  git switch -c {branch or 'work'}-rebased origin/master && git cherry-pick "
+          + " ".join(c[:12] for c in mine))
+    return 1
+
+
+def abandoned(before: str, now: str) -> str:
+    """A commit this checkout is built on that origin/master no longer contains, or "".
+
+    That is what a history rewrite leaves behind, however it was fetched: by this sync, or
+    by hand before it, and then perhaps fast-forwarded again. Every value origin/master has
+    held is in its reflog; one this branch contains and the new master does not is the old
+    history. A branch already on the new master contains none of them."""
+    # The reflog file itself: each line holds the value before and after one update, and
+    # the value before the first update (the one a fresh clone started from) is in no
+    # entry `git reflog` prints.
+    log = git("rev-parse", "--git-path", "logs/refs/remotes/origin/master",
+              check=False).stdout.strip()
+    try:
+        with open(log if os.path.isabs(log) else os.path.join(ROOT, log), encoding="utf-8",
+                  errors="replace") as fh:
+            values = [h for line in fh.readlines()[-200:] for h in line.split()[:2]]
+    except OSError:
+        values = []
+    seen = [before] + values[::-1]
+    for old in dict.fromkeys(h for h in seen if h and h != now):
+        if rewritten(old, now) and git("merge-base", "--is-ancestor", old, "HEAD",
+                                       check=False).returncode == 0:
+            return old
+    return ""
+
+
 def pull_master() -> int:
     """A session's first step: bring in what other chats merged to master."""
+    before = git("rev-parse", "-q", "--verify", "refs/remotes/origin/master", check=False).stdout.strip()
     if git("fetch", "-q", "origin", "master", check=False).returncode:
         print("sync_app: master could not be fetched; carrying on with the app check.")
         return 0
+    now = git("rev-parse", "-q", "--verify", "refs/remotes/origin/master", check=False).stdout.strip()
+    old = abandoned(before, now)
+    if old:
+        return after_rewrite(old)
     if git("merge-base", "--is-ancestor", "origin/master", "HEAD", check=False).returncode == 0:
         return 0
+    dirty = _dirty()
+    if dirty:
+        print("sync_app: stopped, nothing changed. There are uncommitted changes, so master "
+              "was not merged in; commit them (or set them aside), then run this again:")
+        for line in dirty[:20]:
+            print("  " + line)
+        return 1
     if git("merge", "-q", "--no-edit", "origin/master", check=False).returncode:
         git("merge", "--abort", check=False)
         print("sync_app: stopped, nothing changed. master does not merge cleanly into this "
               "branch: run `git merge origin/master` and settle it (CLAUDE.md says how).")
         return 1
     print("sync_app: brought in master (what other chats merged).")
+    return 0
+
+
+def branch_name(name: str, today: datetime.date | None = None) -> str:
+    """chat/<name>-<date>, with -2, -3 and on when that branch is already here or on
+    origin: a stale local branch with the day's name already existed once."""
+    slug = re.sub(r"[^a-z0-9]+", "-", str(name or "chat").lower()).strip("-") or "chat"
+    base = f"chat/{slug}-{(today or datetime.date.today()).strftime('%Y%m%d')}"
+    taken = set(git("for-each-ref", "--format=%(refname:short)", "refs/heads",
+                    "refs/remotes/origin", check=False).stdout.split())
+    taken |= {t.split("/", 1)[1] for t in list(taken) if t.startswith("origin/")}
+    out, n = base, 1
+    while out in taken:
+        n += 1
+        out = f"{base}-{n}"
+    return out
+
+
+def worktree(name: str) -> int:
+    """A folder of this chat's own: ../<repo>-<name>, on a new branch from origin/master.
+
+    Two chats on one computer shared one folder, with the other chat's branch checked
+    out: a branch switch by one changes the other's files under it, and they fight over
+    git's index. Each local chat works in its own worktree and removes it when its pull
+    request lands (`git worktree remove <folder>`). Files git does not carry (the
+    connections export) are read from the main folder (person.local_state)."""
+    if git("fetch", "-q", "origin", "master", check=False).returncode:
+        print("sync_app: master could not be fetched; no worktree made.")
+        return 1
+    slug = re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-") or "chat"
+    folder = os.path.join(os.path.dirname(ROOT), f"{os.path.basename(ROOT)}-{slug}")
+    n = 1
+    while os.path.exists(folder):
+        n += 1
+        folder = os.path.join(os.path.dirname(ROOT), f"{os.path.basename(ROOT)}-{slug}-{n}")
+    branch = branch_name(slug)
+    r = git("worktree", "add", "-q", "-b", branch, folder, "origin/master", check=False)
+    if r.returncode:
+        print(f"sync_app: no worktree made: {(r.stderr or r.stdout).strip()[:200]}")
+        return 1
+    print(f"sync_app: this chat's own folder is {folder}, on branch {branch}, from master. "
+          "Work there from now on (every command run in it); when its pull request lands: "
+          f"git worktree remove {folder}")
     return 0
 
 
@@ -518,6 +643,12 @@ def main(argv: list[str]) -> int:
                       help="which of the person's own tests fail on this tree, and what to do")
     mode.add_argument("--own-test-risks", action="store_true",
                       help="the person's own tests that reach into private parts of the app")
+    mode.add_argument("--pull", action="store_true",
+                      help="a session's first step: bring in master, and never merge a "
+                           "rewritten one")
+    mode.add_argument("--worktree", metavar="NAME",
+                      help="a folder of this chat's own, beside the repo, on a new branch from "
+                           "master: for a second chat on the same computer")
     ap.add_argument("--on", default="", metavar="MODEL",
                     help="the model this session runs on: the day's work is checked against it")
     ap.add_argument("--tools", default=None, metavar="LIST",
@@ -538,6 +669,10 @@ def main(argv: list[str]) -> int:
         if risk:
             print(risk)
         return 0
+    if a.worktree:
+        return worktree(a.worktree)
+    if a.pull:
+        return pull_master()
     if is_the_app():
         print("sync_app: this is the app itself; nothing to sync.")
         return 0

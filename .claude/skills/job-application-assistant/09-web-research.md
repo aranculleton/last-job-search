@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.1
+framework_version: 1.1.2
 ---
 
 # Web Research and Fetching
@@ -85,6 +85,25 @@ Try these in order and stop at the first that yields real content:
 2. **Check `robots.txt`, then `curl` with browser headers** (above), then strip tags. Fixes the 403 class of failure. If `robots.txt` disallows the path for `*` or `Claude-User`, **skip this step entirely** and go to step 3.
 3. **`WebSearch`** for the company or role by name, to find an alternative canonical URL: the employer's own careers portal is almost always richer than the aggregator that surfaced the posting, and it carries the reference ID and grade that aggregators drop.
 4. **Declare it genuinely unavailable** only after 1 to 3 have failed. In `/rank` that means marking the entry `expired`; in `/apply` it means telling the user the posting could not be retrieved and stopping rather than drafting from the title.
+
+### A 5xx is a different failure too
+
+A `500`, `502`, `503` or `504` from the employer's own site, on every page, is usually bot
+protection or an outage, not a refusal, and curl with browser headers often gets the same.
+Neither a 403 retry nor a search snippet is the answer. In order:
+
+1. **Retry once, later in the same session**: do the rest of the work first, then try the
+   pages that matter again. An outage is often gone in half an hour. Never loop on it.
+2. **The employer's other own pages**: its regional site for the person's country, its
+   newsroom or press releases, its investor relations and annual report, an official
+   careers platform it runs on (its ATS board). Each is the employer's own page.
+3. **Only then a search summary, and labelled.** A fact known only from a search
+   engine's summary is kept with `"read": false` in the cache, and every reader prints it
+   with `[search summary, not read]`: a lead the person can check, never a fact to put in
+   a letter or say in an interview as if read.
+
+Record which pages failed and when in the cache's `sources`, so the next session retries
+those first instead of rediscovering them.
 
 ### Login walls are a different failure
 

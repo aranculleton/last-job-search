@@ -238,7 +238,7 @@ def plan() -> list:
 
 
 def _has_export() -> bool:
-    return os.path.exists(person.state("documents", "linkedin", "Connections.csv"))
+    return os.path.exists(person.local_state("documents", "linkedin", "Connections.csv"))
 
 
 def _results(contacts, threads, today=None) -> dict:
@@ -290,7 +290,8 @@ def searches(kind: str, company: str = "", city: str | None = None) -> list:
     import discovery
     k = KINDS[kind]
     if kind == "title_search":
-        return discovery.queries_for(company)
+        return discovery.queries_for(company, skip=spent_titles(company)) if company else \
+            discovery.queries_for(company)
     if kind == "alumni_employer":
         # A turn each: the first search of every past employer before the second of
         # any, so no one employer takes the lot.
@@ -316,6 +317,69 @@ def searches(kind: str, company: str = "", city: str | None = None) -> list:
         if not k.linkedin and "linkedin" not in q:
             q += " -site:linkedin.com"
         out.append(q)
+    return out
+
+
+# What each title search found at each employer: a title that found nobody worth
+# writing to there is not searched there again for TITLE_YIELD_DAYS, and the next
+# title in its group goes instead (discovery.queries_for, skip=).
+TITLE_YIELD_FILE = ("documents", "network", ".title_yield.json")
+UNPLACED_PENALTY = 10
+TITLE_YIELD_DAYS = 90
+
+
+def _yields() -> dict:
+    import json
+    try:
+        with open(person.state(*TITLE_YIELD_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def _title_in(query: str) -> str:
+    """The person's own title a search ran for, as TITLE_SETS spells it, or ""."""
+    import discovery
+    q = " ".join(str(query or "").lower().replace('"', " ").split())
+    found = [t for g in discovery.TITLE_SETS.values() for t in g
+             if " ".join(t.lower().split()) and " ".join(t.lower().split()) in q]
+    return max(found, key=len) if found else ""
+
+
+def record_yield(company: str, query: str, kept: int, placed: int,
+                 today: datetime.date | None = None) -> str:
+    """Keep what one title search found at one employer. Returns the title, or "" when
+    the query names none of the person's titles."""
+    import json
+    import company_key
+    title = _title_in(query)
+    key = company_key.key(company)
+    if not title or not key:
+        return ""
+    got = _yields()
+    got.setdefault(key, {})[title] = {"kept": int(kept), "placed": int(placed),
+                                      "date": (today or datetime.date.today()).isoformat()}
+    p = person.state(*TITLE_YIELD_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(got, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return title
+
+
+def spent_titles(company: str, today: datetime.date | None = None) -> list:
+    """The titles that found nobody worth writing to at this employer in TITLE_YIELD_DAYS."""
+    import company_key
+    today = today or datetime.date.today()
+    out = []
+    for title, rec in (_yields().get(company_key.key(company)) or {}).items():
+        try:
+            age = (today - datetime.date.fromisoformat(rec.get("date", ""))).days
+        except ValueError:
+            continue
+        if age <= TITLE_YIELD_DAYS and not rec.get("kept"):
+            out.append(title)
     return out
 
 
@@ -497,6 +561,13 @@ def _cli_harvest(argv: list) -> int:
               f"       why: {p['why']['line']}\n       evidence: {p.get('evidence')}")
     for p, why in run["dropped"]:
         print(f"  dropped {p.get('name')}: {why}")
+    if c.get("in_book"):
+        # "Already in your contact book" is not "already written to": a run told a person
+        # their best employers were covered when nobody there had had a message.
+        print(f"{company}: {c['in_book']} in the contact book already, {c['never_messaged']} of "
+              "them never messaged" + (f" (to write to them: python3 tools/network/state.py reopen "
+                                       f"--where company=\"{company}\" --where status=dropped "
+                                       "--reason ...)" if c["never_messaged"] else ""))
     if "--out" in opt:
         with open(opt["--out"], "w", encoding="utf-8") as fh:
             json.dump({**run, "dropped": [{"person": p, "why": w} for p, w in run["dropped"]]},
@@ -877,12 +948,22 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
             p["found_for"] = _searched_for(query, company)
         p["why"] = why.why_them(p, today=today, roles=[])
         keep.append(p)
-    # Stable: people the scores cannot tell apart keep the search engine's order.
-    keep.sort(key=lambda p: (-p["why"]["score"], discovery.PROFILE_STATUS.index(
-        p.get("profile_status") or "unconfirmed")))
+    # Stable: people the scores cannot tell apart keep the search engine's order. Anyone
+    # nothing has placed yet gives up UNPLACED_PENALTY points against people placed in
+    # the person's market: a deep read spent finding out where somebody is was the
+    # commonest waste. A penalty, not a bottom: a hiring manager with no place in their
+    # result still outranks a placed name with no job at all.
+    keep.sort(key=lambda p: (-(p["why"]["score"] - (UNPLACED_PENALTY if p.get("location_unverified") else 0)),
+                             discovery.PROFILE_STATUS.index(p.get("profile_status") or "unconfirmed")))
+    if kind == "title_search" and query and not name:
+        record_yield(company, query, len(keep),
+                     sum(1 for p in keep if not p.get("location_unverified")), today)
+    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    book = state.book_at(contacts, threads, company) if company else {"in_book": 0, "never_messaged": 0}
     return {"keep": keep, "dropped": dropped,
             "counts": {"results": len(results or ()), "people": len(people), "kept": len(keep),
-                       "verified": sum(p.get("profile_status") == "verified" for p in keep)}}
+                       "verified": sum(p.get("profile_status") == "verified" for p in keep),
+                       "in_book": book["in_book"], "never_messaged": book["never_messaged"]}}
 
 
 def _searched_for(query: str, company: str) -> str:

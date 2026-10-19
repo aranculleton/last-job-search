@@ -40,8 +40,12 @@ This repo is either **the app** (`github.com/aranculleton/last-job-search`, publ
 `profile/`) or **a person's repo**, made from the app with "Use this template" and private.
 Every session in a person's repo starts with the same five steps, before anything else:
 
-1. **Pull master**: `git fetch origin master && git merge origin/master`. Another chat may have
-   merged since this container was built.
+1. **Pull master**: `python3 tools/sync_app.py --pull`. Another chat may have merged since
+   this container was built. It never merges a master whose history was rewritten (the fetch
+   says "forced update"), which conflicts on hundreds of files: a branch with nothing of its
+   own moves to the new master, and one with commits of its own stops, names them and gives
+   the command that carries them across. Exit 1 means it stopped with nothing changed: do
+   what it printed before anything else.
 2. **Take the app's updates**: `python3 tools/sync_app.py --on "<this session's model>"
    --tools "<the browser tools this chat has: browser, chrome, enable, or none>"`. It
    fetches the app and merges what is new (the newest release; the maintainer's own copy takes
@@ -84,9 +88,10 @@ Every session in a person's repo starts with the same five steps, before anythin
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
    - **One chat per update.** Only the chat whose own sync brought an update in applies its
-     upgrades and asks its questions. Any other chat open on the repo is told "being applied
-     by the chat that brought this update in" and starts nothing and asks nothing; if they
-     are still pending two hours later, its next sync hands them over. So the chat that
+     upgrades and asks its questions. Any other chat open on the repo is told they belong to
+     another chat until a time 20 minutes on, and starts nothing and asks nothing; after
+     that its next sync hands them over. When the person says no other chat is open,
+     `python3 tools/profile_upgrades.py --take` hands them over at once. So the chat that
      brought the update in lands that sync on master promptly, before its other work.
 
 **A chat that carries on for days does this every day, not once.** Most people keep one
@@ -182,12 +187,19 @@ merging a pull request, `git fetch origin master && git merge origin/master`, so
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
 **On the person's own computer** a chat has no GitHub tools: `gh` is the route, and
-`place.py` lists it (and `gh auth login`, theirs) when it is missing. Never work on master
-there: `git switch -c <branch>`, commit, `git fetch origin master && git merge origin/master`
-(the sync sets the row-by-row driver on their computer too), `./tools/ci_local.sh`,
-`git push -u origin <branch>`, `gh pr create --base master --head <branch> --fill`,
-`gh pr merge <number> --merge --delete-branch`, then `git switch master && git pull --no-rebase
-origin master`.
+`place.py` lists it (and `gh auth login`, theirs) when it is missing. **Each local chat
+works in a folder of its own**: `python3 tools/sync_app.py --worktree <name>` makes
+`../<repo>-<name>` on a new, unique branch from master, and every command runs there; two
+chats in one folder switch branches under each other and fight over git's index. Files git
+does not carry (the connections export) are read from the main folder. Then: commit,
+`git fetch origin master && git merge origin/master` (the sync sets the row-by-row driver on
+their computer too), `./tools/ci_local.sh`, `git push -u origin HEAD`,
+`gh pr create --base master --fill`, `gh pr merge <number> --merge`, and check
+`gh pr view <number> --json state -q .state` says MERGED: the exit code can be non-zero after
+a merge that worked, when gh fails to fast-forward a stale local master. Keep no local master
+(`git switch --detach origin/master` after), and `git worktree remove <folder>` once it has
+landed. When the desktop app refuses the merge ("merge without review"), the person merges
+or approves it: say so once and stop, never retry. RUNBOOK.md step 4 has the commands.
 
 The one thing that is **not** negotiable in the other direction: do not push to master
 without CI green. It is the branch every other chat starts from, so a broken master
@@ -371,9 +383,13 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
   discovery; asking anything about outreach loads the skill. `/reply`, `/threads` and
   `/prep` are its other three actions.
 - **`/prep` vs `/interview`.** `/prep` prepares a **networking call** that came out of a
-  thread, and takes a contact name. `/interview` prepares a **real interview on a tracked
-  application**, and takes a company. "Prep me for <employer>" is almost always `/interview`. If
-  it is ambiguous, ask which.
+  thread, and takes a contact name. `/interview` prepares a **real interview**, and takes a
+  company: on a tracked application, or on a process with no application at all (a referral
+  that led to a recruiter's call; `interview_pack.py process` registers it). **A recruiter
+  screen on a live hiring process is an interview stage**, referred or not, so it is
+  `/interview`. "Prep me for <employer>" is almost always `/interview`. If it is ambiguous,
+  ask which. Each process keeps one living document, `interview_prep.md` in its folder,
+  updated in place and sent again on every change.
 - **`job-scraper` vs `scrape`.** One skill. The directory is `job-scraper`, the declared
   `name:` is `scrape`, and `/scrape` is the command. Not three things.
 - **`.claude/skills/` vs `.agents/skills/`.** The first is the four skills above. The

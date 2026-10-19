@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import csv
 import os
+import re
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -51,8 +52,10 @@ def test_a_document_ends_on_the_version_of_prep_that_wrote_it(tmp_path):
     path = prep.write_prep(CONTACTS[0], today=TODAY, root=str(tmp_path))
     text = open(path, encoding="utf-8").read()
     assert text.startswith("# Prep - Juno Castellan, Oakmere Foods")
-    assert text.rstrip().splitlines()[-1] == "<!-- prep v%d: tools/network/prep.py -->" \
-        % prep.generator_version()
+    # The stamp also says what it was written from (the contact's row and thread), so a
+    # change to either makes it stale.
+    assert re.fullmatch(r"<!-- prep v%d: tools/network/prep\.py; as of [0-9a-f]{12} -->"
+                        % prep.generator_version(), text.rstrip().splitlines()[-1])
     assert prep.stamp_of(text) == prep.generator_version()
     # What is shown is the document; the stamp rides only in the file.
     assert "<!--" not in prep.prep_markdown(CONTACTS[0], today=TODAY)

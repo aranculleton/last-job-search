@@ -16,6 +16,12 @@ import argparse
 import re
 import subprocess
 import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import local_path  # noqa: E402  pdftotext where Homebrew keeps it, on a Mac's bare PATH
+
+local_path.extend()
 from pathlib import Path
 
 

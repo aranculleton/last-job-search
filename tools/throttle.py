@@ -100,6 +100,18 @@ FINAL = {"hired", "rejected", "no_response", "no response", "offer_declined",
 # which is why it produces a note on the surfaced row rather than silence.
 UNSENT = {"drafted", "draft", "in_progress", "in progress", "not_sent", "not sent"}
 
+# A hiring process with no application in it (tools/interview_pack.py process): a referral
+# that led to a recruiter's call, where applying through the portal as well would put a
+# second, worse record of the same person in front of them. Its tracker row carries this
+# in its notes. It is live at the employer like an application, but nothing was sent, so
+# nothing counts it as one.
+PROCESS_NOTE = "process, no portal application"
+
+
+def is_process(row) -> bool:
+    """Is this tracker row a hiring process with no application?"""
+    return PROCESS_NOTE in str((row or {}).get("notes") or "")
+
 # The documented override: a role scoring this much higher than the open
 # application is surfaced anyway, named explicitly. It was in CLAUDE.md and in
 # no code, so the highest-scoring role of a run could be suppressed by a
@@ -951,8 +963,12 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
                        here - sent))}
             else:
                 o = same_role or best
-                why = ("the same role has already been applied to"
+                why = ("this role is already in a hiring process here, with no application"
+                       if same_role is not None and is_process(same_role)
+                       else "the same role has already been applied to"
                        if same_role is not None
+                       else "a hiring process is already live at this employer"
+                       if is_process(best)
                        else "an application is already open at this employer")
                 reason = (f"company throttle: {why} "
                           f"({o.get('role') or '?'}, {o.get('status') or '?'}, "

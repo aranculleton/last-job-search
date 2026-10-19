@@ -186,7 +186,9 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
             not in state.TRACKER_FINAL] if applied else []
     if live:
         a = live[0]
-        reasons.append((4, f"you applied there: {a.get('role') or 'a role'} ({a.get('status')})"))
+        import throttle
+        done = "a hiring process is live there" if throttle.is_process(a) else "you applied there"
+        reasons.append((4, f"{done}: {a.get('role') or 'a role'} ({a.get('status')})"))
 
     items = reading.get("items") or []
     ages = {id(i): _age(i.get("date", ""), today) for i in items}
@@ -257,17 +259,54 @@ def ranked(contacts: list, today: dt.date | None = None, tracker=None, threads=N
     return sorted(out, key=lambda c: (c["why"]["skip"], -c["why"]["score"]))
 
 
+def not_writable(contact: dict, threads=(), today: dt.date | None = None) -> str:
+    """Why this contact must not be written to now, or "" when a first note may go.
+
+    The default ranking listed people whose rows said closed, on hold, in conversation
+    or awaiting a reply, among them a closed contact at an employer the person had
+    ruled out (scoring 57) and people at an employer with a live interview, marked
+    HOLD. Only someone nothing has gone to, with no hold and at an employer still in
+    the search, is worth ranking for a first note."""
+    import sources
+    import state
+    today = today or dt.date.today()
+    cid = str(contact.get("contact_id") or "").strip()
+    status = state.effective_status(contact, state.threads_for(list(threads), cid))
+    if status != "not_contacted":
+        return status
+    hold = state.action_hold(contact.get("next_action"), today)
+    if hold:
+        return f"on hold: {hold}"
+    out = sources.ruled_out(contact.get("company") or "")
+    return f"employer ruled out: {out}" if out else ""
+
+
 def main(argv: list | None = None) -> int:
     import state
     args = argv if argv is not None else sys.argv[1:]
     if any(a in ("-h", "--help") for a in args):
-        print("usage: python3 tools/network/why.py [contact_id ...]\n\n" + __doc__.strip())
+        print("usage: python3 tools/network/why.py [--all] [contact_id ...]\n\n"
+              "Only contacts a first note may go to, unless --all or ids are named.\n\n"
+              + __doc__.strip())
         return 0
-    ids = set(args)
+    everyone = "--all" in args
+    ids = {a for a in args if a != "--all"}
     contacts = [c for c in state.load_contacts() if not ids or c.get("contact_id") in ids]
-    for c in ranked(contacts):
+    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    left_out = 0
+    if not (everyone or ids):
+        keep = [c for c in contacts if not not_writable(c, threads)]
+        left_out, contacts = len(contacts) - len(keep), keep
+    for c in ranked(contacts, threads=threads):
         w = c["why"]
-        print(f"{w['score']:>3}  {c.get('name')} ({c.get('company')}): {w['line']}")
+        tag = ""
+        if everyone or ids:
+            why_not = not_writable(c, threads)
+            tag = f"  [not now: {why_not}]" if why_not else ""
+        print(f"{w['score']:>3}  {c.get('name')} ({c.get('company')}): {w['line']}{tag}")
+    if left_out:
+        print(f"({left_out} others left out: written to, closed, on hold or at an employer "
+              "ruled out; --all lists them)")
     return 0
 
 

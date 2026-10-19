@@ -291,7 +291,12 @@ Every story ends on a `Use for:` line naming, in quotes, the interview questions
 ("Tell me about a model you built", "How do you handle conflicting numbers"): it is how
 `tools/interview_pack.py` matches a story to a likely question, and a story without one is
 reached by no question. Each hard answer sits under the question as its heading, in quotes,
-with the answer as a `>` quote below it. `profile.example/07-interview-prep.md` shows the shape.
+with the answer as a `>` quote below it. An answer that argues against a kind of employer
+("depth rather than rotating clients", "product companies rather than more consulting") ends
+on a `Not for:` line naming it, so a pack never hands it over for that employer. The answer
+about a permit or visa follows the disclosure rule they give: when they say only that they
+are entitled to work, the answer is for when they are asked directly, and is never
+volunteered. `profile.example/07-interview-prep.md` shows the shape.
 <!-- /section -->
 
 <!-- section: search -->

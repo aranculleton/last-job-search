@@ -99,25 +99,28 @@ def test_the_sign_in_wait_opens_the_sign_in_page_and_watches_only_the_address():
     assert reading.url_kind("https://www.linkedin.com/feed/") == "signed-in"
 
 
-def test_after_sign_in_a_sign_in_page_or_a_check_is_a_stop(tmp_path, monkeypatch):
+def test_after_sign_in_a_sign_in_page_or_a_check_is_a_stop(tmp_path, monkeypatch, capsys):
     _state(tmp_path, monkeypatch)
     reading.mark_signed_in()
     for text in (LOGIN, CHECK):
         if os.path.exists(tmp_path.joinpath(*reading.STOP_FILE)):
             os.remove(tmp_path.joinpath(*reading.STOP_FILE))
         monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(text))
-        with pytest.raises(SystemExit, match="stopped for today"):
-            reading.main(["read", "kestrel_achterberg", "-", "--source", "browser",
-                          "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"])
+        # Its own exit code, so `read; verdict` can tell a stop from a skip or a wait.
+        assert reading.main(["read", "kestrel_achterberg", "-", "--source", "browser",
+                             "--name", "Rosalind Achterberg", "--company",
+                             "Kestrel Mutual"]) == reading.EXIT["check"]
+        assert "stopped for today" in capsys.readouterr().out
         assert reading.stopped()
 
 
-def test_a_check_before_sign_in_is_a_stop_too(tmp_path, monkeypatch):
+def test_a_check_before_sign_in_is_a_stop_too(tmp_path, monkeypatch, capsys):
     _state(tmp_path, monkeypatch)
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(CHECK))
-    with pytest.raises(SystemExit, match="LinkedIn showed a check"):
-        reading.main(["read", "kestrel_achterberg", "-", "--source", "browser",
-                      "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"])
+    assert reading.main(["read", "kestrel_achterberg", "-", "--source", "browser",
+                         "--name", "Rosalind Achterberg", "--company",
+                         "Kestrel Mutual"]) == reading.EXIT["check"]
+    assert "LinkedIn showed a check" in capsys.readouterr().out
 
 
 def test_the_headline_is_the_line_under_the_name_not_the_employer_line():

@@ -14,7 +14,6 @@ a time and still overrun.
 """
 from __future__ import annotations
 
-import subprocess
 import sys
 import time
 import unittest
@@ -57,31 +56,47 @@ class EveryStageHasACeiling(unittest.TestCase):
 
 
 class ATimeoutSaysSoRatherThanHanging(unittest.TestCase):
+    """A real stage that hangs, under a one-second budget: no mock of subprocess."""
+
+    def setUp(self):
+        import tempfile
+        self.dir = tempfile.TemporaryDirectory()
+        script = Path(self.dir.name) / "slow_stage.py"
+        script.write_text("import sys, time\n"
+                          "print('progress: fake 1/9 sent', file=sys.stderr, flush=True)\n"
+                          "time.sleep(30)\n", encoding="utf-8")
+        self.HANG = [sys.executable, str(script)]
+
+    def tearDown(self):
+        self.dir.cleanup()
+
+    def _run(self, keep=None):
+        log = mock.MagicMock()
+        if keep:
+            R.ON_TIMEOUT["slow_stage.py"] = keep
+        with mock.patch.object(R, "_stage_budget", return_value=1):
+            started = time.monotonic()
+            try:
+                return log, R.run(self.HANG, log), time.monotonic() - started
+            except SystemExit as e:
+                return log, e, time.monotonic() - started
+
     def test_it_exits_with_an_explanation(self):
-        log = mock.MagicMock()
-        with mock.patch.object(R.subprocess, "run",
-                               side_effect=subprocess.TimeoutExpired("cmd", 1)):
-            with self.assertRaises(SystemExit) as caught:
-                R.run([sys.executable, "tools/fit.py"], log)
-        self.assertIn("timed out", str(caught.exception))
-        self.assertIn("fit.py", str(caught.exception))
+        log, caught, took = self._run()
+        self.assertIsInstance(caught, SystemExit)
+        self.assertIn("timed out", str(caught))
+        self.assertLess(took, 15, "the hung stage was not stopped")
 
-    def test_the_timeout_is_written_to_the_round_log(self):
-        log = mock.MagicMock()
-        with mock.patch.object(R.subprocess, "run",
-                               side_effect=subprocess.TimeoutExpired("cmd", 1)):
-            with self.assertRaises(SystemExit):
-                R.run([sys.executable, "tools/fit.py"], log)
-        self.assertTrue(log.write.called)
-        self.assertIn("timed out", " ".join(str(c) for c in log.write.call_args_list))
+    def test_the_timeout_and_what_it_said_are_in_the_round_log(self):
+        log, _, _ = self._run()
+        written = " ".join(str(c) for c in log.write.call_args_list)
+        self.assertIn("timed out", written)
+        # What the stage said before it hung reached the log as it was written.
+        self.assertIn("progress: fake 1/9 sent", written)
 
-    def test_a_timeout_with_bytes_output_does_not_crash_the_handler(self):
-        """TimeoutExpired carries bytes or str depending on how it was raised."""
-        log = mock.MagicMock()
-        exc = subprocess.TimeoutExpired("cmd", 1, output=b"partial", stderr=b"err")
-        with mock.patch.object(R.subprocess, "run", side_effect=exc):
-            with self.assertRaises(SystemExit):
-                R.run([sys.executable, "tools/fit.py"], log)
+    def test_a_stage_that_can_keep_its_results_goes_on(self):
+        log, code, _ = self._run(keep=lambda: 2)
+        self.assertEqual(code, 2)
 
 
 if __name__ == "__main__":

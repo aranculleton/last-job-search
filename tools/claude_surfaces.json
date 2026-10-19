@@ -13,7 +13,7 @@
     "linked to their computer", "linked to your computer", "Cmd+Shift+B", "Ctrl+Shift+B",
     "globe icon", "Browser tools",
     "Get a copy of your data", "Download your data", "larger download", "Connections filter",
-    "Current company filter"
+    "Current company filter", "Manage invitations", "Sent tab"
   ],
   "entries": [
     {
@@ -239,6 +239,61 @@
       "status": "documented",
       "verified_on": "2026-10-19",
       "verified_against": "LinkedIn's help pages a528043 and a566261 as a web search returned them on 2026-10-19 (not fetched)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "linkedin-sent-invitations",
+      "claim": "A LinkedIn member's connection requests still waiting for an answer are listed together, with a Withdraw beside each: My Network, then Manage, then the Sent tab. A session reads that one page, in the person's own browser, nothing clicked, to learn who already has a request pending, for everyone at once. Its direct address, linkedin.com/mynetwork/invitation-manager/sent/, is in third-party guides and not on LinkedIn's help page, so it may move; the menu route is LinkedIn's own.",
+      "goal": "see the connection requests you have sent that are still waiting",
+      "how": "on LinkedIn, My Network, then Manage, then the Sent tab",
+      "steps": [
+        "On LinkedIn, open My Network, then Manage (it says See all when invitations to you are waiting), then the Sent tab.",
+        "Everyone listed there has a request from you still waiting for an answer."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/a568295",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a568295", "quote": "open My Network, click Manage (or See all if you have pending received invitations), choose the Sent tab, and click Withdraw beside the name", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "https://linkedapi.io/guides/linkedin-pending-invitations.md", "quote": "The direct address most people end up bookmarking is `linkedin.com/mynetwork/invitation-manager/sent/`"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-19",
+      "verified_against": "LinkedIn's help page a568295 as a web search summarised it on 2026-10-19 (not fetched, so the quote is the summary's words, not the page's), and one third-party guide fetched that day for the direct address",
+      "ui_sensitive": true
+    },
+    {
+      "id": "linkedin-people-tab",
+      "claim": "An employer's LinkedIn Page has a People tab listing the members who have linked their profile to it, with their job titles and how each is connected to the person viewing. A session reads one load of it, in the person's own browser, nothing clicked: a dozen people's headlines and connection degree for one page, before any one profile is read. A people search narrowed to the employer (linkedin-people-at-employer) shows where each is based as well.",
+      "goal": "see who works at one employer",
+      "how": "on LinkedIn, the employer's Page, then its People tab",
+      "steps": [
+        "On LinkedIn, open the employer's Page, then its People tab.",
+        "Copy what it lists, or take a screenshot, and paste it here."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/a550270",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a550270", "quote": "The People tab gives insights about employees' job titles, fields of study, skills, and how they're connected to you", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-19",
+      "verified_against": "LinkedIn's help page a550270 as a web search summarised it on 2026-10-19 (not fetched, so the quote is the summary's words, not the page's)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-show",
+      "claim": "In the desktop app a hidden Browser pane comes back from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows. Hiding the pane does not close the browser: it keeps its own profile and its sign-ins across the app's chats (Anthropic's built-in-browser skill; the docs page says only that cookies can be kept after quitting).",
+      "goal": "bring the browser back into view",
+      "how": "in the Claude desktop app, the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows",
+      "steps": [
+        "In the Claude desktop app, the Browser button in this chat's title bar shows the browser again; Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows, does the same.",
+        "You stay signed in: hiding the browser does not sign you out of anything."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "To open the Browser, press Cmd+Shift+B on macOS or Ctrl+Shift+B on Windows, or click Browser in the session's title bar."},
+        {"url": "skill:anthropic-skills:built-in-browser", "quote": "The built-in browser keeps its own persistent profile, shared across the desktop app's sessions."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-19",
+      "verified_against": "code.claude.com/docs/en/desktop read word for word 2026-10-19, and the built-in-browser skill as installed that day",
       "ui_sensitive": true
     }
   ]

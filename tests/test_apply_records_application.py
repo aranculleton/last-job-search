@@ -411,7 +411,7 @@ class ArchiveNameIsOnePathComponent(unittest.TestCase):
          "by the **Subfolder naming** rule in `documents/README.md`",
          "gmail-sync both locates and creates archives; its old spaces-only "
          "paraphrase would split state across two folders"),
-        (INTERVIEW, "## Step 1: Load the Application Context",
+        (INTERVIEW, "## Step 1: Load the Context",
          "by the **Subfolder naming** rule in `documents/README.md`",
          "interview must read the same archive /apply and /outcome wrote"),
         (INTERVIEW, "### 6. Logistics",

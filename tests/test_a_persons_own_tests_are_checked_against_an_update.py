@@ -150,5 +150,6 @@ def test_the_error_itself_says_what_a_removed_private_name_means():
 
 def test_ci_says_what_to_do_when_a_persons_own_tests_fail():
     ci = open(os.path.join(ROOT, "tools", "ci_local.sh"), encoding="utf-8").read()
-    assert "python3 tools/sync_app.py --own-tests" in ci
-    assert "python3 tools/sync_app.py --own-test-risks" in ci
+    # "$PY": the person's own Python for this repo where there is one, else python3.
+    assert '"$PY" tools/sync_app.py --own-tests' in ci
+    assert '"$PY" tools/sync_app.py --own-test-risks' in ci

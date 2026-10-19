@@ -387,7 +387,7 @@ def search_name(company):
         s = cut
 
 
-def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
+def queries_for(company, titles=None, location=HOME_CITY, mode="cold", skip=()):
     """Build the people-search queries for one company, brief 3.1.
 
     In `cold` and `hiring_team`, `company` is the target employer. In the two
@@ -416,8 +416,18 @@ def queries_for(company, titles=None, location=HOME_CITY, mode="cold"):
     if not groups:
         raise ValueError("queries_for needs at least one title to search for")
     # The caller's titles in their order; otherwise the first of each group, so the
-    # hiring authority and the senior practitioner each get a search.
-    picks = ([t for g in groups for t in g] if titles else [g[0] for g in groups])
+    # hiring authority and the senior practitioner each get a search. `skip` is the
+    # titles that found nobody worth writing to at this employer lately
+    # (sources.spent_titles): the next title in the group goes instead. At large
+    # employers the first titles of a group ("Head of <function>") found mostly people
+    # elsewhere or in other functions, about five plausible people in twenty searches,
+    # and the same two searches ran again every run.
+    gone = {str(t).strip().lower() for t in skip or ()}
+    if titles:
+        picks = [t for g in groups for t in g]
+    else:
+        picks = [next((t for t in g if t.lower() not in gone), None) for g in groups]
+        picks = [t for t in picks if t]
 
     # An alumni anchor is history and stays quoted: unquoted, "<Name> Money" matches
     # every profile with the word money in it.
@@ -650,7 +660,61 @@ def parse_result_title(title: str, company: str = "") -> dict:
         out["headline"] = out["headline"] or last
     else:
         out["employer"] = last
+    # The employer searched, named as a word in the part read as the employer:
+    # "<Employer> Toronto" is that employer, in that city. Read whole, it was somewhere
+    # else, and a real employee was dropped as "works at <Employer> Toronto".
+    hit = _target_in(out["employer"], company)
+    if hit:
+        out["employer"], place = hit
+        out["location"] = out["location"] or place
+    elif (company and out["employer"] and " " not in out["employer"].strip()
+          and "," in last and not same_employer(out["employer"], company)
+          and not any(_target_in(x, company) for x in rest)):
+        # "Data Science Director, Driver": one word after a job, at an employer search,
+        # may be the team ("Driver" at a ride-hailing firm) as easily as another
+        # employer. Not proof they work elsewhere: kept, unsure, and checked.
+        out["employer_unsure"] = out["employer"]
+        out["employer"] = ""
     return out
+
+
+_PAST = re.compile(r"(?:\bex[-\s]|\bformer(?:ly)?\s+|\bpreviously\s+|\bpast:\s*|\bprev\.?\s+)$", re.I)
+
+
+def _target_in(text: str, company: str):
+    """(the employer as the text names it, the place after it) when `text` names the
+    employer searched as whole words, never as a past one ("ex-<Employer>"); else None."""
+    if not company or not text:
+        return None
+    want = search_name(company)
+    if not want or same_employer(text, company):
+        return None
+    m = re.search(r"(?<![\w-])" + re.escape(want) + r"(?!\w)", text, re.I)
+    if not m or _PAST.search(text[:m.start()]):
+        return None
+    rest = " ".join((text[:m.start()] + " " + text[m.end():]).replace(",", " ").split()).strip(" -")
+    if rest and not (_known_place(rest) or _city_like(rest)):
+        return None                    # "<Employer> Ventures" may be another firm
+    return text[m.start():m.end()], rest
+
+
+# Words that make "<Employer> <word>" another business, never a city after the name.
+_ORG_TAIL = frozenset("""bank capital group ventures holdings health healthcare insurance
+financial finance partners partnership studio studios games media foundation trust fund
+funds asset assets management securities markets energy foods retail logistics freight
+consulting advisory solutions services labs lab ai technology technologies software systems
+digital data analytics research pharma pharmaceuticals bio biotech motors airlines air
+international global worldwide inc ltd limited llc plc corp corporation co company""".split())
+
+
+def _city_like(text: str) -> bool:
+    """One to three capitalised words with no business, team, job or institution word in
+    them: a city after an employer's name ("<Employer> Seattle"), as a profile writes it."""
+    words = str(text or "").split()
+    if not 1 <= len(words) <= 3 or not all(w[:1].isupper() for w in words):
+        return False
+    low = {re.sub(r"[^a-z]", "", _ck_fold(w).lower()) for w in words}
+    return _plain_words(text) and not (low & (_ORG_TAIL | _TEAM_WORDS | BUSINESS_LINE))
 
 
 # The second half of a brand line: "AI by <Parent>", "a <Parent> company" is not one.
@@ -700,6 +764,32 @@ def name_explains(name: str, company: str) -> bool:
     return bool(want) and all(w in have for w in want)
 
 
+_SUMMARY_LOCATION = re.compile(r"\blocation:\s*([^\u00b7|\n]+)", re.I)
+_SUMMARY_EMPLOYER = re.compile(r"\b(?:experience|current(?:ly)?|works? at):\s*([^\u00b7|\n]+)", re.I)
+
+
+def _from_summary(result) -> dict:
+    """{"location", "employer", "summary"} from what the search tool said beside a
+    result: an explicit `location`, and a `summary` (or `snippet`, `description`) in the
+    shapes search engines write for a LinkedIn profile, "Experience: <Employer> ·
+    Location: <City>" or "<City> · <Title> · <Employer>". Blank where it says nothing."""
+    summary = " ".join(str(result.get("summary") or result.get("snippet")
+                           or result.get("description") or "").split())
+    location = " ".join(str(result.get("location") or "").split())
+    employer = ""
+    m = _SUMMARY_LOCATION.search(summary)
+    if m and not location:
+        location = m.group(1).strip(" .,")
+    m = _SUMMARY_EMPLOYER.search(summary)
+    if m:
+        employer = m.group(1).strip(" .,")
+    if not location and summary:
+        first = re.split(r"\s+[\u00b7|]\s+", summary)[0].strip(" .")
+        if _is_place(first):
+            location = first
+    return {"location": location[:120], "employer": employer[:120], "summary": summary}
+
+
 def people_from_results(results, company: str = "", kind: str = "title_search",
                         query: str = "", today=None) -> list:
     """The people a set of search results names, each with its evidence. Nothing fetched.
@@ -721,6 +811,7 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
         if handle in seen:
             continue
         parsed = parse_result_title(title, company)
+        told = _from_summary(r)
         if got["kind"] == "post":
             m = re.match(r"^(.+?)\s+(?:on LinkedIn|posted on LinkedIn)\b:?", title)
             parsed = {"name": m.group(1).strip() if m else "", "headline": "", "employer": "",
@@ -736,6 +827,15 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
                 continue
         if not parsed["name"]:
             continue
+        # What the search tool's own summary of the result says: where they are, and
+        # where they work now. Harvest took the title and the address alone, so almost
+        # everyone came back with no place, and a deep read was spent finding it.
+        if told["location"] and not parsed["location"]:
+            parsed["location"] = told["location"]
+        if told["employer"] and (not parsed["employer"] or parsed.get("employer_unsure")):
+            hit = _target_in(told["employer"], company)
+            parsed["employer"] = hit[0] if hit else told["employer"]
+            parsed.pop("employer_unsure", None)
         seen.add(handle)
         status = profile_status(parsed, got["profile_url"], company) if got["kind"] == "profile" \
             else "likely"
@@ -762,6 +862,12 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
             "evidence": f"search result {today.isoformat()}: \"{title.strip()}\" ({url})"
                         + (f", for {query!r}" if query else ""),
         }
+        if told["summary"]:
+            found["snippet"] = told["summary"][:300]
+        if parsed.get("employer_unsure"):
+            found["profile_status"] = "unconfirmed"
+            found["reverify"] = (f"the result ends on \"{parsed['employer_unsure']}\", which may "
+                                 f"be a team at {company} or another employer: check before writing")
         if by_name:
             # Nothing but their own name ties them to the employer: triage drops them.
             found["name_match_only"] = (f"the search matched their name, not {company}: "

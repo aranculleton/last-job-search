@@ -51,6 +51,7 @@ import argparse
 import csv
 import datetime as dt
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -202,19 +203,26 @@ def render(entries, today, only_live=True):
         if only_live and not e["owed"] and not live_apps and not shown:
             continue
         lines.append("## %s" % (e["name"] or e["key"]))
+        chat = campaigns(live_apps).get(e["key"])
+        if chat:
+            # Shown whether or not anything is due: the brief and other chats leave this
+            # employer to it, and two chats preparing one call contradict each other.
+            lines.append("- **handled by its campaign chat (%s)**: its prep, drafts and drills "
+                         "live there" % chat)
         live_ids = {id(a) for a in live_apps}
         for a in live_apps:
             quiet = state_of.get(id(a), {}).get("state") == "quiet"
-            lines.append("- application: **%s** %s (%s)%s"
-                         % (a.get("status", "?"), a.get("role", "?"), a.get("date", "?"),
+            lines.append("- %s: **%s** %s (%s)%s"
+                         % ("process, no application" if throttle.is_process(a) else "application",
+                            a.get("status", "?"), a.get("role", "?"), a.get("date", "?"),
                             ", gone quiet, not chased" if quiet else ""))
-            _folder, files, stages = _stages(a)
+            folder, files, stages = _stages(a)
             for st in stages:
                 if not st["done"] and st["date"] and st["date"] >= str(today):
                     lines.append("  - booked: %s %s%s%s" % (
                         st["label"] or "interview", st["date"],
                         ", with " + st["with"] if st["with"] else "",
-                        "" if _has_pack(files, st) else ", no pack yet"))
+                        "" if _has_pack(files, st, folder) else ", no pack yet"))
         for a in e["applications"]:
             if id(a) in live_ids:
                 continue
@@ -274,8 +282,18 @@ def _stages(row):
         return folder, [], []
 
 
-def _has_pack(files, stage) -> bool:
-    """A pack is on file for this stage: an interview_prep_<stage>.md of the same step."""
+def _has_pack(files, stage, folder="") -> bool:
+    """A pack is on file for this stage: the process's living interview_prep.md built for a
+    stage of the same step (its `<!-- stages: ... -->` line), or an older per-stage
+    interview_prep_<stage>.md."""
+    if "interview_prep.md" in files and folder:
+        try:
+            with open(os.path.join(folder, "interview_prep.md"), encoding="utf-8") as fh:
+                m = re.search(r"^<!-- stages: (.*?) -->$", fh.read(), re.M)
+        except OSError:
+            m = None
+        if m and any(what_works.stage_step(x) == stage["step"] for x in m.group(1).split("; ")):
+            return True
     return any(f.startswith("interview_prep_") and f.endswith(".md")
                and what_works.stage_step(f[15:-3].replace("_", " ")) == stage["step"]
                for f in files)
@@ -304,7 +322,7 @@ def interview_items(tracker, today):
         status = (row.get("status") or "").strip().lower()
         if status in FINAL or status in throttle.UNSENT or not status:
             continue
-        _folder, files, stages = _stages(row)
+        folder, files, stages = _stages(row)
         company = (row.get("company") or "").strip()
         role = (row.get("role") or "").strip() or "role not recorded"
         for st in stages:
@@ -314,7 +332,7 @@ def interview_items(tracker, today):
             days = (held_on - today).days
             what = "%s, %s%s" % (st["label"] or "interview", st["date"],
                                  ", with " + st["with"] if st["with"] else "")
-            if not st["done"] and 0 <= days <= PREP_WINDOW_DAYS and not _has_pack(files, st):
+            if not st["done"] and 0 <= days <= PREP_WINDOW_DAYS and not _has_pack(files, st, folder):
                 when = ("today" if days == 0 else "tomorrow" if days == 1
                         else "in %d days" % days)
                 what = "interview %s (%s), no pack yet: /interview %s" % (when, what, company)
@@ -367,7 +385,14 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "half": "contact", "key": o["company_key"], "rank": KIND_ORDER.get(o["kind"], 9),
             "name": name + (" (%s)" % o["company"] if o["company"] else ""),
             "who": "%s [%s]" % (who, o["status"]), "due": due.isoformat(),
-            "late": (today - due).days, "what": o["next_action"], "to": "",
+            "late": (today - due).days,
+            # A send past its day with nothing logged may have gone from the LinkedIn app,
+            # where the log never hears: two people listed "send now" already showed
+            # Pending. Asked, never told to send again.
+            "what": (("UNCONFIRMED: did this go? If it did: python3 tools/network/state.py sent "
+                      f"{o['contact_id']} (--outside if sent from LinkedIn itself). If not: "
+                      + o["next_action"]) if o.get("unconfirmed") else o["next_action"]),
+            "to": "",
             "text": _stored_draft(c),
             "held": [h for h in (state.action_hold(o["next_action"], today),) if h],
             "quiet": False, "kind": o["kind"], "status": o["status"]})
@@ -387,7 +412,33 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "to": followups.to_line(n) if n["state"] == "due" else "",
             "text": followups.body(n) if n["state"] == "due" else "",
             "held": list(n["held"]), "quiet": quiet, "ready": bool(n["message"])})
-    return items + interview_items(tracker, today)
+    items += interview_items(tracker, today)
+    # An employer with a chat of its own (a campaign chat, interview_pack.py campaign) is
+    # that chat's: everything due there is shown as held by it, never as this chat's work.
+    owned = campaigns(tracker)
+    for i in items:
+        chat = owned.get(i.get("key") or "")
+        if chat:
+            i["held"] = list(i.get("held") or []) + ["handled by its campaign chat (%s)" % chat]
+    return items
+
+
+def campaigns(tracker) -> dict:
+    """{company key: campaign chat} for every live process with a chat of its own."""
+    import json as _json
+    out = {}
+    for row in tracker or ():
+        if (row.get("status") or "").strip().lower() in FINAL:
+            continue
+        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        try:
+            with open(os.path.join(folder, "campaign.json"), encoding="utf-8") as fh:
+                chat = str(_json.load(fh).get("chat") or "").strip()
+        except (OSError, ValueError, AttributeError):
+            continue
+        if chat:
+            out[company_key(row.get("company"))] = chat
+    return out
 
 
 def _urgency(i):

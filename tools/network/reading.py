@@ -43,6 +43,25 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py queue                  # drafts waiting with no fresh reading
     python3 tools/network/reading.py paste <file|->         # several profiles in one paste, split by ---
     python3 tools/network/reading.py draft <contact_id> <file|->   # a note to draft.md, marked if unread
+    python3 tools/network/reading.py gate [--wait [--timeout S]]  # may a browser page load go now
+    python3 tools/network/reading.py invitations <file|->          # the sent-invitations list, once
+    python3 tools/network/reading.py people <file|-> --company C   # an employer's People tab, once
+    python3 tools/network/reading.py skip <contact_id> --reason R  # a read ruled them out: close it
+    python3 tools/network/reading.py batch [<contact_id>...]       # are the queued notes too alike?
+    python3 tools/network/reading.py extractor                     # the read-only page snippet
+
+Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
+    0  done: go, KEEP, saved          1  an error, or nothing to act on
+    2  the command line was wrong (argparse)
+    3  SKIP: a read or a public finding rules them out
+    4  LinkedIn's sign-in page: wait for the person, nothing counted
+    5  LinkedIn showed a check: browser reads stopped for today
+    6  the page is neither a profile, a sign-in nor a check
+    7  wait: the pause after the last page, seconds (the time is printed)
+    8  later: the hourly cap, a time later today (printed)
+    9  tomorrow: the day's cap, the send-day cap, or stopped for today
+    10 not read yet: no page of theirs read, so KEEP cannot be said
+    11 the batch of notes is too alike to send
 """
 
 from __future__ import annotations
@@ -67,6 +86,9 @@ from company_key import fold  # noqa: E402
 
 _NET = person.module("networking") if person.exists("networking.py") else None
 
+EXIT = {"ok": 0, "error": 1, "skip": 3, "signin": 4, "check": 5, "unknown": 6, "wait": 7,
+        "later": 8, "tomorrow": 9, "not_read": 10, "alike": 11}
+
 # "browser", "paste" or "off". Absent means "paste": reading a profile in the
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
 # for their yes (the profile-reads upgrade asks).
@@ -79,11 +101,25 @@ PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
 # it. A read is for someone the person will send to today, so the day's reads stop
 # at the requests left today (state.platform_budget) and SKIP_SPARE more, for the
 # people a read rules out; 15 a day and 8 an hour are the ceilings, the pace of
-# someone writing each note by hand. The person can set their own in
-# profile/networking.py (PROFILE_READS_PER_HOUR, PROFILE_READS_PER_DAY); the
-# send-day cap holds whatever they set. Earlier defaults were 30 and 80, with an
-# even 25 to 75 second gap and a longer break on exactly every fifth read: a
-# rhythm, which is what this replaced.
+# someone writing each note by hand.
+#
+# The pace now, and why. Between two pages: a gap drawn from a log-normal curve
+# with its middle at GAP_MEDIAN (90 seconds), never under 45 seconds or over 240,
+# so most gaps sit near a minute and a half and no two runs repeat. After a
+# varying 3 to 7 pages (BREAK_AFTER, drawn again each time), a longer break of 5
+# to 12 minutes (BREAK_SECONDS). On each page, 20 to 60 seconds scrolled through
+# at reading pace (DWELL_SECONDS), which is also what makes LinkedIn load the
+# sections it fills in late. The evidence is thin and stated as such: LinkedIn
+# publishes no rate, so these are a judgement of how long a person spends reading
+# a profile and writing a note, not a measured safe limit. What is measured is the
+# failure they replaced: an even 25 to 75 second gap with a break on exactly every
+# fifth read, and caps of 30 an hour and 80 a day, which is a rhythm a machine has
+# and a person does not.
+#
+# The person owns the trade-off, in profile/networking.py: PROFILE_READS_PER_HOUR,
+# PROFILE_READS_PER_DAY and PROFILE_READ_BREAK_MINUTES (the break, as (shortest,
+# longest) in minutes). The send-day cap holds whatever they set. No setting here
+# shortens anything they have not set themselves.
 READS_PER_HOUR = int(getattr(_NET, "PROFILE_READS_PER_HOUR", 8) or 8)
 READS_PER_DAY = int(getattr(_NET, "PROFILE_READS_PER_DAY", 15) or 15)
 SKIP_SPARE = 3
@@ -91,7 +127,24 @@ HOUR_MINUTES = 60                       # the hourly cap counts reads in this ro
 GAP_SECONDS = (45, 240)                 # between two profiles: most near a minute and a half
 GAP_MEDIAN = 90
 BREAK_AFTER = (3, 7)                    # a longer break after somewhere between 3 and 7 reads
-BREAK_SECONDS = (300, 720)
+BREAK_MINUTES_DEFAULT = (5, 12)
+
+
+def _break_minutes(value) -> tuple:
+    """The person's PROFILE_READ_BREAK_MINUTES as (shortest, longest), or the default.
+    A single number is a fixed length; anything unreadable is the default."""
+    try:
+        lo, hi = (value, value) if isinstance(value, (int, float)) else tuple(value)[:2]
+        lo, hi = float(lo), float(hi)
+    except (TypeError, ValueError):
+        return BREAK_MINUTES_DEFAULT
+    if lo < 0 or hi < 0:
+        return BREAK_MINUTES_DEFAULT
+    return (min(lo, hi), max(lo, hi))
+
+
+BREAK_MINUTES = _break_minutes(getattr(_NET, "PROFILE_READ_BREAK_MINUTES", BREAK_MINUTES_DEFAULT))
+BREAK_SECONDS = (int(BREAK_MINUTES[0] * 60), int(BREAK_MINUTES[1] * 60))
 DWELL_SECONDS = (20, 60)                # time on each page, scrolled through at reading pace
 PACE_SECONDS = GAP_SECONDS[0]           # the shortest gap ever allowed
 STOP_FILE = ("documents", "network", ".reads_stopped.json")
@@ -99,9 +152,26 @@ STOP_FILE = ("documents", "network", ".reads_stopped.json")
 # found (tools/network/sources.py, the ladder), puts its best READS_PER_RUN on the
 # day's short list, and a browser read refuses anyone not on it. Without a browser,
 # a paste is offered for the best HAND_TOP at most, never for everyone.
-READS_PER_RUN = 10
+#
+# The funnel, cheapest first. Free sources (search results with their summaries,
+# the connections export) make the list. Then one-page reads, each page holding many
+# people: the sent-invitations list (who already has a request pending, for everyone
+# at once) and an employer's People tab or a people search (headline, place and
+# degree for a dozen people a load). Only then a deep read, of their own profile, for
+# the few the person will write to that day. In one session (2026-10-19) five of
+# seven deep reads were spent on facts a cheaper check could have caught: a request
+# already pending, a city elsewhere, a role outside their function. So the day's
+# deep reads are at most READS_PER_RUN, of whom at most UNVERIFIED_ON_SHORTLIST may
+# be people nothing has placed in the person's city yet.
+READS_PER_RUN = 5
+UNVERIFIED_ON_SHORTLIST = 2
 HAND_TOP = 3
 SHORTLIST_FILE = ("documents", "network", ".shortlist.json")
+# The one-page reads (a list of many people, read once) and when each was read: they
+# pace and count like a profile, and never for the send-day cap, which is about the
+# people written to.
+PAGES_FILE = ("documents", "network", ".page_reads.json")
+PAGE_KINDS = ("invitations", "people")
 # Signed in to LinkedIn in the browser today, as the session last saw it. A sign-in
 # page before this is a wait for the person; after it, LinkedIn signed them out
 # mid-run, which is a stop. Never a password: only that a signed-in page was seen.
@@ -308,40 +378,121 @@ def _sections(lines: list) -> tuple[list, dict, list]:
     return pre, secs, before_main or []
 
 
-_CONTACT = re.compile(r"^[\u00b7\u2022]?\s*contact info$", re.I)
+_CONTACT = re.compile(r"^[·•]?\s*contact info$", re.I)
+# "Toronto, Ontario, Canada · Contact info" on one line, as a browser's page text
+# gives it when the place and the link sit in one row.
+_CONTACT_TAIL = re.compile(r"\s*[·•]?\s*contact info$", re.I)
 # The signed-in top card puts "Current employer · School" between the headline and
 # the location. Taking the line before the location as the headline saved that
 # line instead of the headline.
-_ORG_LINE = re.compile(r"\s[\u00b7\u2022]\s")
+_ORG_LINE = re.compile(r"\s[·•]\s")
+# Lines of the top card that are neither the headline, the place nor where they work:
+# the mutual-connection line, a request already sent, the buttons, the counts. The
+# mutual-connection line was saved as the headline on two profiles in one session.
+_CARD_SKIP = re.compile(
+    r"\bmutual connections?\b|\bis a mutual connection\b|^pending$|^follow$|^following$|"
+    r"^connect$|^message$|^more$|^open to\b|^verified$|^\d[\d,.]*\+?\s*(?:followers?|connections?)$|"
+    r"^(?:he|she|they)/(?:him|her|them)$|^[·•]?\s*(?:1st|2nd|3rd\+?)(?:\s+degree connection)?$|"
+    r"^view (?:my|full) profile$|^talks about\b|^provides services\b|^save to pdf$|^report",
+    re.I)
+_DEGREE_TAIL = re.compile(r"\s*[·•]\s*(?:1st|2nd|3rd\+?)(?:\s+degree connection)?\s*$", re.I)
+
+
+def _looks_place(line: str) -> bool:
+    """Is this top-card line where they are, rather than a school or an employer?"""
+    import discovery
+    x = " ".join(str(line or "").split())
+    if not x or _SCHOOL.search(x) or _ORG_LINE.search(x) or len(x) > 80:
+        return False
+    return ("," in x or discovery._is_place(x) or discovery._PLACE_SHAPE.search(x) is not None
+            or bool(re.search(r"\b(?:area|metropolitan|remote)\b", x, re.I)))
+
+
+def _name_at(lines: list, name: str):
+    """Index of the line that is their name, or None."""
+    surname = (fold(name).split() or [""])[-1]
+    if not surname:
+        return None
+    for i, x in enumerate(lines):
+        if len(x) <= len(name) + 30 and re.search(
+                r"(?<!\w)" + re.escape(surname) + r"(?!\w)", fold(x)):
+            return i
+    return None
 
 
 def _top(pre: list, before_main: list, name: str = "") -> tuple[str, str, str]:
-    """(headline, location, the card's "Employer · School" line) from the top of the page."""
-    anchor = next((i for i, x in enumerate(pre) if _CONTACT.match(x)), None)
+    """(headline, location, the card's "Employer · School" line) from the top of the page.
+
+    The card reads, in a browser today: name, degree, headline, place, Contact info,
+    employer, school, connections, a mutual connection, then the buttons. Older pages
+    and copies put "Employer · School" on one line between the headline and the place,
+    and some copies run the place and "Contact info" into one line. Read by what each
+    line is rather than where it sits: the school line had been taken for the place
+    ("based in <the school>") and the mutual-connection line for the headline.
+    """
+    lines = []
+    anchor = None
+    for x in pre:
+        if _CONTACT.match(x):
+            anchor = len(lines) if anchor is None else anchor
+            continue
+        if _CONTACT_TAIL.search(x) and len(x) > len("contact info") + 2:
+            head = _CONTACT_TAIL.sub("", x).strip(" ·•")
+            if head:
+                lines.append(head)
+                anchor = len(lines) if anchor is None else anchor
+            continue
+        lines.append(_DEGREE_TAIL.sub("", x).strip())
+    at = _name_at(lines, name) if name else None
+    if at is None and anchor is None:
+        # A "Save to PDF" export: name, headline and location sit right before Summary
+        # or Experience, after the sidebar sections LinkedIn prints first.
+        if len(before_main) == 3:
+            if name and fold(before_main[1]) == fold(name):
+                # No location line: the line before the name, the name, then the headline.
+                # Read as name, headline and location, it made the name the headline and
+                # their job where they live ("based in Head of Data at ...").
+                return before_main[2][:160], "", ""
+            return before_main[1][:160], before_main[2][:120], ""
+        return "", "", ""
+    first = (at + 1) if at is not None else 0
+    card = [(i, x) for i, x in enumerate(lines[first:], first)
+            if x and not _NOISE.match(x) and not _CARD_SKIP.search(x)]
+    if at is None and anchor is not None:
+        # No name found: the headline and the place are the lines just before Contact
+        # info, with "Employer · School" between them on an older card.
+        pre_anchor = [(i, x) for i, x in card if i < anchor]
+        take = 3 if len(pre_anchor) >= 3 and _ORG_LINE.search(pre_anchor[-2][1]) else 2
+        card = pre_anchor[-take:] + [(i, x) for i, x in card if i >= anchor]
+    if not card:
+        return "", "", ""
+    headline = card[0][1]
+    rest = card[1:]
+    location, org = "", ""
     if anchor is not None:
-        before = [x for x in pre[:anchor] if not _NOISE.match(x)]
-        surname = (fold(name).split() or [""])[-1]
-        at = next((i for i, x in enumerate(before) if surname and len(x) <= len(name) + 30
-                   and re.search(r"(?<!\w)" + re.escape(surname) + r"(?!\w)", fold(x))), None)
-        card = before[at + 1:] if at is not None else before
-        if at is None and len(card) >= 3 and _ORG_LINE.search(card[-2]) and "|" not in card[-2]:
-            card = card[-3:]
-        if not card:
-            return "", "", ""
-        if len(card) == 1:
-            return card[0][:160], "", ""
-        org = next((x for x in card[1:-1] if _ORG_LINE.search(x)), "")
-        return card[0][:160], card[-1][:120], org[:200]
-    # A "Save to PDF" export: name, headline and location sit right before Summary
-    # or Experience, after the sidebar sections LinkedIn prints first.
-    if len(before_main) == 3:
-        if name and fold(before_main[1]) == fold(name):
-            # No location line: the line before the name, the name, then the headline.
-            # Read as name, headline and location, it made the name the headline and
-            # their job where they live ("based in Head of Data at ...").
-            return before_main[2][:160], "", ""
-        return before_main[1][:160], before_main[2][:120], ""
-    return "", "", ""
+        before = [x for i, x in rest if i < anchor]
+        after = [x for i, x in rest if i >= anchor]
+        if before:
+            # The line just before Contact info is where they are, whatever the city:
+            # a place no list knows ("Slough") is still the place. Never a school or an
+            # "Employer · School" line.
+            last = before[-1]
+            location = last if not _SCHOOL.search(last) and not _ORG_LINE.search(last) else ""
+            org = next((x for x in before if _ORG_LINE.search(x)), "")
+        if not location:
+            location = next((x for x in after[:1] if _looks_place(x)), "")
+        if not org:
+            org = next((x for x in after if not _looks_place(x) and not _SCHOOL.search(x)), "")
+    else:
+        for x in [x for _, x in rest][:3]:
+            if not location and _looks_place(x):
+                location = x
+            elif not org and _ORG_LINE.search(x):
+                org = x
+        if not org:
+            org = next((x for _, x in rest if x != location and not _looks_place(x)
+                        and not _SCHOOL.search(x)), "")
+    return headline[:160], location[:120], org[:200]
 
 
 def _card_employer(org: str) -> str:
@@ -616,7 +767,8 @@ def mark_signed_in(now: datetime.datetime | None = None) -> None:
 
 
 SIGNIN_SAY = ("LinkedIn's sign-in is open in the browser pane. Sign in there yourself, then "
-              "say 'done' or just wait; I'll carry on.")
+              "say 'done' or just wait; I'll carry on. You stay signed in after that, even with "
+              "the browser hidden or closed.")
 
 
 def signin_steps() -> list:
@@ -624,6 +776,10 @@ def signin_steps() -> list:
     in the pane, say one sentence, and wait, looking only at the pane's address."""
     return [
         f"open {SIGNIN_URL} in the browser pane (the sign-in page, not a profile)",
+        "look at whether the pane is showing: the browser tool's tabs_context says displayed, "
+        "hidden or not open. Hidden or not open, the person cannot see the sign-in page: give "
+        "them `python3 tools/claude_surfaces.py steps browser-pane-show` first (the pane keeps "
+        "its sign-ins when hidden; it only goes out of view)",
         f"tell the person, once: {SIGNIN_SAY}",
         "never type in it, read it, look at it or keep anything from it while they sign in",
         f"every {SIGNIN_POLL_SECONDS}s, look only at the pane's address and title and run "
@@ -653,12 +809,19 @@ def item(kind: str, url: str, text: str, date: str = "") -> dict:
     if re.search(r"(?:^|\.)linkedin\.com$", host) and "/in/" in str(url):
         raise ValueError("a profile URL is not a finding: read the profile (read), "
                          "or add a post by its own /posts/ or /feed/update/ link")
-    if kind in _DATED and not re.match(r"^\d{4}-\d{2}-\d{2}$", str(date or "")):
-        raise ValueError(f"a {kind} needs its date (YYYY-MM-DD): an undated post may be years old")
+    date = str(date or "").strip()
+    if date.lower() == UNKNOWN_DATE:
+        date = UNKNOWN_DATE
+    exact = re.match(r"^\d{4}-\d{2}-\d{2}$", date) and dates.as_date(date, iso_only=True)
+    if kind in _DATED and not (exact or _MONTH.match(date) and _approx(date)):
+        raise ValueError(f"a {kind} needs its date, the day (YYYY-MM-DD) or at least the month "
+                         "(YYYY-MM): an undated post may be years old")
+    if date and date != UNKNOWN_DATE and not (exact or _approx(date)):
+        raise ValueError(f"a date is YYYY-MM-DD, YYYY-MM, YYYY or 'unknown', not {date!r}")
     body = " ".join(untrusted.strip_markers(str(text or "")).split())[:EXCERPT]
     if not body:
         raise ValueError("a finding needs the words it rests on: the title or the line itself")
-    return {"kind": kind, "date": str(date or ""), "url": str(url or ""), "text": body}
+    return {"kind": kind, "date": date, "url": str(url or ""), "text": body}
 
 
 def merge(old: dict | None, new: dict) -> dict:
@@ -695,7 +858,7 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     company = company or reading.get("company", "")
     headline = reading.get("headline", "")
     posts = " ".join(i.get("text", "") for i in reading.get("items", [])
-                     if i.get("kind") in ("post", "repost") and (_days(i.get("date", ""), datetime.date.today()) or 0) <= 90)
+                     if i.get("kind") in ("post", "repost") and (_item_days(i.get("date", ""), datetime.date.today()) or 0) <= 90)
     person_ = {"title": headline, "headline": headline, "about": reading.get("about", ""),
                "activity": posts, "company": company, "location": reading.get("location", "")}
     why = discovery.disqualify(person_, target_company=company)
@@ -729,9 +892,49 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
 
 # --------------------------------------------------------------------- hooks
 
+# A finding's date as it is known: a day, a month ("2026-03", a paper dated by its
+# issue), a year, or "unknown" (an undated podcast). Making up a day for one, to get
+# past a check that wanted YYYY-MM-DD, put a false precision into the record.
+_MONTH = re.compile(r"^(\d{4})-(\d{2})$")
+_YEAR_ONLY = re.compile(r"^(\d{4})$")
+UNKNOWN_DATE = "unknown"
+
+
+def _approx(date: str) -> datetime.date | None:
+    """The earliest day a month or a year can mean, so its age is never understated."""
+    text = str(date or "").strip()
+    m = _MONTH.match(text)
+    if m and 1 <= int(m.group(2)) <= 12:
+        return datetime.date(int(m.group(1)), int(m.group(2)), 1)
+    m = _YEAR_ONLY.match(text)
+    if m:
+        return datetime.date(int(m.group(1)), 1, 1)
+    return None
+
+
 def _days(date: str, today: datetime.date) -> int | None:
     # A timestamp is read as its day: a post dated 2026-10-17T10:00:00 is not undated.
     return dates.days_since(date, today, iso_only=True)
+
+
+def _item_days(date: str, today: datetime.date) -> int | None:
+    """A finding's age: its day, or for a month or a year known alone, from the earliest
+    day it can mean. Only findings take the coarser dates; everything else stays exact."""
+    got = _days(date, today)
+    if got is None and _approx(date):
+        return (today - _approx(date)).days
+    return got
+
+
+def shown_date(date: str) -> str:
+    """A finding's date as it should read: the day, "March 2026", "2026", or "date unknown"."""
+    text = str(date or "").strip()
+    if not text or text.lower() == UNKNOWN_DATE:
+        return "date unknown" if text else ""
+    m = _MONTH.match(text)
+    if m and _approx(text):
+        return _approx(text).strftime("%B %Y")
+    return text
 
 
 def hooks(reading: dict, today: datetime.date | None = None) -> list:
@@ -744,14 +947,14 @@ def hooks(reading: dict, today: datetime.date | None = None) -> list:
     for s in shared.get("schools", []):
         out.append((9, "shared school", f"you both studied at {s['name']}", s.get("evidence", "")))
     for i in reading.get("items", []):
-        age = _days(i.get("date", ""), today)
+        age = _item_days(i.get("date", ""), today)
         kind = i.get("kind", "")
         if kind in _DATED and (age is None or age > POST_DAYS):
             continue
         base = {"post": 8, "repost": 6, "comment": 5, "news": 4, "featured": 5}.get(kind, 7)
         if kind in _DATED and age is not None and age > 90:
             base -= 3
-        when = f" ({i['date']})" if i.get("date") else ""
+        when = f" ({shown_date(i['date'])})" if i.get("date") else ""
         out.append((base, kind, f"their {kind}{when}", i.get("text", "")))
     for p in shared.get("places", []):
         out.append((6, "same city before", f"you both worked in {p['name']}", p.get("evidence", "")))
@@ -814,7 +1017,7 @@ def grounded(common_ground: str, reading: dict | None) -> tuple[bool, str]:
     # A dated item older than POST_DAYS is history, as hooks() treats it: a 2018
     # appointment is evidence of who was appointed, not of what they do now.
     sources = [(i.get("kind", "item"), i.get("text", "")) for i in reading.get("items", [])
-               if not (i.get("kind") in _DATED and (_days(i.get("date", ""), today) or 0) > POST_DAYS)]
+               if not (i.get("kind") in _DATED and (_item_days(i.get("date", ""), today) or 0) > POST_DAYS)]
     sources += [("about", reading.get("about", ""))]
     # Their headline and current role count when they were read on their own page:
     # what they call their work is a fair thing to write about, and the page, not a
@@ -972,8 +1175,10 @@ def fresh(reading: dict | None, today: datetime.date | None = None) -> bool:
         s.get("kind") in PAGE_SOURCES for s in (reading or {}).get("sources", []))
 
 
-def _browser_reads() -> list:
-    """Every browser read on file, oldest first: [(when, the gap it asked for)]."""
+def _browser_reads(pages: bool = True) -> list:
+    """Every browser page load on file, oldest first: [(when, the gap it asked for, a
+    break?)]. A profile read and a one-page read (`page_read`) both count: the pace is
+    about page loads, whatever the page held. `pages=False` is profiles alone."""
     out = []
     for f in glob.glob(person.state(*DIR, "*", "reading.json")):
         try:
@@ -983,12 +1188,52 @@ def _browser_reads() -> list:
             continue
         for src in srcs:
             if src.get("kind") == "browser" and src.get("at"):
-                try:
-                    out.append((datetime.datetime.fromisoformat(src["at"]),
-                                float(src.get("next_gap") or PACE_SECONDS)))
-                except ValueError:
-                    continue
-    return sorted(out)
+                out.append(_load(src))
+    if pages:
+        out += [_load(p) for p in _pages()]
+    return sorted(x for x in out if x)
+
+
+def _load(src: dict):
+    """(when, gap, a break?) from one recorded read, or None when it carries no time."""
+    try:
+        gap = float(src.get("next_gap") or PACE_SECONDS)
+        when = datetime.datetime.fromisoformat(str(src.get("at")))
+    except (TypeError, ValueError):
+        return None
+    # A break was once told apart only by its length; one the person set shorter than
+    # the longest gap would have restarted the count. It is recorded now.
+    brk = bool(src["break"]) if "break" in src else gap > GAP_SECONDS[1]
+    return (when, gap, brk)
+
+
+def _pages() -> list:
+    try:
+        with open(person.state(*PAGES_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return [p for p in (got.get("reads") or []) if isinstance(p, dict)]
+
+
+def page_read(kind: str, url: str = "", now: datetime.datetime | None = None,
+              people: int = 0, rng=None) -> dict:
+    """Record one read of a page that lists many people (PAGE_KINDS): when, which, how
+    many it named and the pause after it. Counts against the same gap and caps as a
+    profile, never the send-day cap. Returns the record."""
+    if kind not in PAGE_KINDS:
+        raise ValueError(f"a one-page read is one of {', '.join(PAGE_KINDS)}, not {kind!r}")
+    now = now or datetime.datetime.now()
+    gap, brk = pause(rng)
+    rec = {"kind": kind, "url": str(url or ""), "at": now.isoformat(timespec="seconds"),
+           "people": int(people), "next_gap": gap, "break": brk}
+    keep = [p for p in _pages() if str(p.get("at", ""))[:10] >= (now.date() - datetime.timedelta(days=7)).isoformat()]
+    p = person.state(*PAGES_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"reads": keep + [rec]}, fh, indent=1)
+        fh.write("\n")
+    return rec
 
 
 def last_browser_read() -> datetime.datetime | None:
@@ -1029,56 +1274,107 @@ def sends_left_today(today: datetime.date | None = None) -> int | None:
         return None
 
 
-def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = -1) -> str:
-    """"" when a browser read may go now, otherwise why not and when it may.
+def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1,
+               profile: bool = True) -> dict:
+    """May a browser read go now? {"kind", "why", "at"}.
 
+    kind is "go"; "wait" (the pause after the last page: a short wait, `at` says when);
+    "later" (the hourly cap: later today, at `at`); or "tomorrow" (stopped for the day,
+    the daily cap, or enough read for the requests that can still go today). `profile`
+    is False for a one-page read (PAGE_KINDS), which the send-day cap does not hold:
+    that cap is about the people written to, and a list page writes to nobody.
     `sends_left` is the requests left today; -1 reads it from the contact book.
     """
     now = now or datetime.datetime.now()
     why = stopped(now.date())
     if why:
-        return f"browser reads are stopped for today: {why}. Tomorrow, or a paste"
+        return {"kind": "tomorrow", "at": None,
+                "why": f"browser reads are stopped for today: {why}. Tomorrow, or a paste"}
     reads = _browser_reads()
-    today = [t for t, _ in reads if t.date() == now.date()]
+    today = [r[0] for r in reads if r[0].date() == now.date()]
     if len(today) >= READS_PER_DAY:
-        return (f"{READS_PER_DAY} profiles read today (PROFILE_READS_PER_DAY); "
-                "the rest wait for tomorrow or a paste")
-    left = sends_left_today(now.date()) if sends_left == -1 else sends_left
-    if left is not None and len(today) >= left + SKIP_SPARE:
-        return (f"{len(today)} profiles read today, enough for the {left} request(s) that can "
-                "still go today: a profile is read only for someone sent to that day. The rest "
-                "wait for tomorrow")
+        return {"kind": "tomorrow", "at": None,
+                "why": f"{READS_PER_DAY} pages read today (PROFILE_READS_PER_DAY); "
+                       "the rest wait for tomorrow or a paste"}
+    if profile:
+        left = sends_left_today(now.date()) if sends_left == -1 else sends_left
+        people = [r[0] for r in _browser_reads(pages=False) if r[0].date() == now.date()]
+        if left is not None and len(people) >= left + SKIP_SPARE:
+            return {"kind": "tomorrow", "at": None,
+                    "why": f"{len(people)} profiles read today, enough for the {left} "
+                           "request(s) that can still go today: a profile is read only for "
+                           "someone sent to that day. The rest wait for tomorrow"}
     window = now - datetime.timedelta(minutes=HOUR_MINUTES)
-    last_hour = [t for t, _ in reads if t > window]
+    last_hour = [r[0] for r in reads if r[0] > window]
     if len(last_hour) >= READS_PER_HOUR:
         resume = min(last_hour) + datetime.timedelta(minutes=HOUR_MINUTES)
-        return (f"{READS_PER_HOUR} profiles in the last hour (PROFILE_READS_PER_HOUR); "
-                f"the next after {resume:%H:%M}")
+        return {"kind": "later", "at": resume,
+                "why": f"{READS_PER_HOUR} pages in the last hour (PROFILE_READS_PER_HOUR); "
+                       f"the next after {resume:%H:%M}"}
     if reads:
-        last, gap = reads[-1]
+        last, gap, _ = reads[-1]
         waited = (now - last).total_seconds()
         if waited < gap:
-            return f"{waited:.0f}s since the last profile; wait {gap - waited:.0f}s more"
-    return ""
+            at = last + datetime.timedelta(seconds=gap)
+            return {"kind": "wait", "at": at,
+                    "why": f"{waited:.0f}s since the last page; wait {gap - waited:.0f}s more"}
+    return {"kind": "go", "at": None, "why": ""}
+
+
+def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = -1,
+                 profile: bool = True) -> str:
+    """"" when a browser read may go now, otherwise why not and when it may."""
+    return gate_state(now, sends_left, profile)["why"]
+
+
+def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1) -> tuple:
+    """(profiles that may still be read today, the limit that binds, said plainly).
+
+    The queue printed the daily cap alone ("80 left today") while the hourly cap of 8
+    was what held: the binding one is the smallest of the day, the hour and the
+    requests that can still go today."""
+    now = now or datetime.datetime.now()
+    reads = _browser_reads()
+    day = READS_PER_DAY - sum(1 for r in reads if r[0].date() == now.date())
+    hour = READS_PER_HOUR - sum(1 for r in reads if r[0] > now - datetime.timedelta(minutes=HOUR_MINUTES))
+    limits = [(max(0, day), f"{READS_PER_DAY} a day (PROFILE_READS_PER_DAY)"),
+              (max(0, hour), f"{READS_PER_HOUR} an hour (PROFILE_READS_PER_HOUR)")]
+    left = sends_left_today(now.date()) if sends_left == -1 else sends_left
+    if left is not None:
+        people = sum(1 for r in _browser_reads(pages=False) if r[0].date() == now.date())
+        limits.append((max(0, left + SKIP_SPARE - people),
+                       f"the {left} request(s) that can still go today, and {SKIP_SPARE} spare"))
+    n, what = min(limits, key=lambda x: x[0])
+    return n, what
+
+
+def _is_break(reads) -> int:
+    """How many reads since the last long break, this one included."""
+    since_break = 0
+    for r in reversed(reads):
+        brk = r[2] if len(r) > 2 else r[1] > GAP_SECONDS[1]
+        if brk:                            # a break, never a long ordinary gap
+            break
+        since_break += 1
+    return since_break + 1
+
+
+def pause(rng=None, reads=None) -> tuple:
+    """(seconds to leave after this read, whether that is the long break)."""
+    import math
+    import random
+    rng = rng or random
+    reads = _browser_reads() if reads is None else reads
+    if _is_break(reads) >= rng.randint(*BREAK_AFTER):
+        return int(rng.uniform(*BREAK_SECONDS)), True
+    gap = rng.lognormvariate(math.log(GAP_MEDIAN), 0.45)
+    return int(min(max(gap, GAP_SECONDS[0]), GAP_SECONDS[1])), False
 
 
 def next_gap(rng=None, reads=None) -> int:
     """The pause to leave after this read: varied, with a longer break that comes after
     anywhere from 3 to 7 reads, never on a fixed count."""
-    import math
-    import random
-    rng = rng or random
-    reads = _browser_reads() if reads is None else reads
-    since_break = 0
-    for _, gap in reversed(reads):
-        if gap > GAP_SECONDS[1]:          # a break, never a long ordinary gap
-            break
-        since_break += 1
-    since_break += 1                       # this read
-    if since_break >= rng.randint(*BREAK_AFTER):
-        return int(rng.uniform(*BREAK_SECONDS))
-    gap = rng.lognormvariate(math.log(GAP_MEDIAN), 0.45)
-    return int(min(max(gap, GAP_SECONDS[0]), GAP_SECONDS[1]))
+    return pause(rng, reads)[0]
 
 
 def dwell(rng=None) -> int:
@@ -1102,15 +1398,66 @@ def reads_today(today: datetime.date | None = None) -> int:
     return n
 
 
-def shortlist(ids, today: datetime.date | None = None) -> list:
-    """Today's short list for browser reads: the run's best READS_PER_RUN, in order."""
-    ids = list(dict.fromkeys(i for i in ids if i))[:READS_PER_RUN]
+def _shortlist_file(today: datetime.date) -> list:
+    try:
+        with open(person.state(*SHORTLIST_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return list(got.get("ids") or []) if got.get("date") == today.isoformat() else []
+
+
+def placed(contact_id: str, contacts=None) -> bool:
+    """Has anything placed them in a city: the contact book's location, or a page
+    (a profile or a one-page read) that showed one? A search result with no place in
+    it leaves them unverified, and five of seven reads in one session went on people
+    a place would have ruled out."""
+    got = load(contact_id) or {}
+    if str(got.get("location") or "").strip():
+        return True
+    if contacts is None:
+        try:
+            import state
+            contacts = state.load_contacts()
+        except Exception:  # noqa: BLE001  no contact book: nothing placed them
+            contacts = []
+    row = next((c for c in contacts if c.get("contact_id") == contact_id), {})
+    return bool(str(row.get("location") or "").strip())
+
+
+def shortlist(ids, today: datetime.date | None = None, contacts=None) -> dict:
+    """Add to today's short list for deep reads, best first. {"ids", "added", "full",
+    "unplaced"}.
+
+    It adds, never replaces: running it again with the ones still unread dropped the
+    ones already read, and a list that can be replaced at will is no cap at all. The
+    day holds at most READS_PER_RUN, and at most UNVERIFIED_ON_SHORTLIST of them may be
+    people nothing has placed in a city yet (`placed`): the rest of those wait for a
+    one-page read or a public finding to place them.
+    """
+    today = today or datetime.date.today()
+    have = _shortlist_file(today)
+    unplaced_on = sum(1 for i in have if not placed(i, contacts))
+    added, full, unplaced = [], [], []
+    for i in dict.fromkeys(x for x in ids if x):
+        if i in have:
+            continue
+        if len(have) >= READS_PER_RUN:
+            full.append(i)
+            continue
+        if not placed(i, contacts):
+            if unplaced_on >= UNVERIFIED_ON_SHORTLIST:
+                unplaced.append(i)
+                continue
+            unplaced_on += 1
+        have.append(i)
+        added.append(i)
     p = person.state(*SHORTLIST_FILE)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as fh:
-        json.dump({"date": (today or datetime.date.today()).isoformat(), "ids": ids}, fh)
+        json.dump({"date": today.isoformat(), "ids": have}, fh)
         fh.write("\n")
-    return ids
+    return {"ids": have, "added": added, "full": full, "unplaced": unplaced}
 
 
 def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
@@ -1137,12 +1484,16 @@ def read_recently(reading: dict | None, today: datetime.date | None = None) -> b
 def queue(contacts: list, today: datetime.date | None = None) -> list:
     """Contacts with a first note waiting and nothing read about them lately, or whose
     note still says it waits on a read: read since, and not rewritten yet."""
+    import why
     out = []
     for c in contacts:
         cid = c.get("contact_id", "")
         if (c.get("status") or "not_contacted") != "not_contacted" or not cid:
             continue
         if not os.path.isfile(draft_path(cid)):
+            continue
+        # On hold, or at an employer the search has ruled out: never offered for a read.
+        if why.not_writable(c, (), today):
             continue
         if waits_on_read(cid) or not read_recently(load(cid), today):
             out.append(c)
@@ -1209,6 +1560,259 @@ def write_draft(contact_id: str, note: str, name: str = "") -> str:
     with open(p, "w", encoding="utf-8") as fh:
         fh.write(draft_text(contact_id, note, name))
     return p
+
+
+# ------------------------------------------------------------ one page, many people
+
+# The sent-invitations list (claude_surfaces.py show linkedin-sent-invitations): one card a person,
+# their name, their headline, then "Sent 3 days ago" and a Withdraw button. One read
+# of it says who already has a request pending, for everyone at once, where reading
+# each profile to find "Pending" spent a deep read on a fact this page holds.
+_SENT_AGE = re.compile(r"^sent\s+(?:(today|yesterday)|(\d{1,3})\s+(minute|hour|day|week|month|year)s?\s+ago)\b",
+                       re.I)
+_INVITE_NOISE = re.compile(
+    r"^(?:withdraw|manage invitations?|received|sent|people(?:\s*\(\d+\))?|pages|events|"
+    r"newsletters|all|grow|catch up|my network|invitations?|load more|show more|"
+    r"view (?:.+'s )?profile|.+'s profile (?:picture|photo)|previous|next|page \d+ of \d+|"
+    r"\d+ (?:people|invitations?)|you have no sent invitations?.*)$", re.I)
+
+
+def invitations(text: str, today: datetime.date | None = None) -> list:
+    """[{name, headline, sent}] from the sent-invitations page's text, in page order.
+    `sent` is the day the request went, as near as "Sent 2 weeks ago" says."""
+    today = today or datetime.date.today()
+    out, block = [], []
+    for line in _clean_lines(text):
+        m = _SENT_AGE.match(line)
+        if m:
+            people = [x for x in block if not _INVITE_NOISE.match(x) and not _NOISE.match(x)]
+            if people:
+                if m.group(1):
+                    when = today - datetime.timedelta(days=0 if m.group(1).lower() == "today" else 1)
+                else:
+                    unit = {"minute": "m", "hour": "h", "day": "d", "week": "w", "month": "mo",
+                            "year": "y"}[m.group(3).lower()]
+                    when = datetime.date.fromisoformat(_age_date(int(m.group(2)), unit, today))
+                out.append({"name": people[0][:120], "headline": (people[1] if len(people) > 1 else "")[:160],
+                            "sent": when.isoformat()})
+            block = []
+            continue
+        if _INVITE_NOISE.match(line):
+            if line.lower() == "withdraw":
+                block = []
+            continue
+        block.append(line)
+    return out
+
+
+def match_invitations(cards: list, contacts: list) -> dict:
+    """{"pending": [(card, contact)], "unknown": [card], "gone": [contact]}.
+
+    pending: a card whose name is a contact the log has not heard went (a request sent
+    from LinkedIn itself). gone: a request the log has as waiting that the page no
+    longer lists (accepted, or withdrawn there): told, never written."""
+    import state
+    by_name: dict = {}
+    for c in contacts:
+        by_name.setdefault(state._match_name(c.get("name")), []).append(c)
+    pending, unknown, listed = [], [], set()
+    for card in cards:
+        rows = by_name.get(state._match_name(card["name"]), [])
+        if len(rows) > 1:
+            rows = [c for c in rows if _has(c.get("company") or "", card["headline"])] or rows[:0]
+        if len(rows) != 1:
+            unknown.append(card)
+            continue
+        c = rows[0]
+        listed.add(c.get("contact_id"))
+        if (c.get("status") or "not_contacted") in ("not_contacted", "dropped"):
+            pending.append((card, c))
+    gone = []
+    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    for c in contacts:
+        cid = c.get("contact_id")
+        if cid in listed:
+            continue
+        rows = [r for r in state.threads_for(threads, cid) if state._direction(r)]
+        if state.request_pending(rows) is not None:
+            gone.append(c)
+    return {"pending": pending, "unknown": unknown, "gone": gone}
+
+
+def people_page(text: str, company: str) -> list:
+    """[{name, title, location, degree, reach, linkedin_url}] from an employer's People
+    tab or a people search, read once: a dozen people's headline, place and degree for
+    one page load. `reach` is "pending" where the card shows a request already sent."""
+    import sources
+    people = sources.people_paste(text, company)
+    lines = _clean_lines(text)
+    for p in people:
+        p["reach"] = ""
+        try:
+            i = next(n for n, x in enumerate(lines) if x.startswith(p["name"]))
+        except StopIteration:
+            continue
+        for x in lines[i + 1:i + 9]:
+            low = x.strip().lower()
+            if low == "pending":
+                p["reach"] = "pending"
+                break
+            if low in ("connect", "message", "follow"):
+                p["reach"] = {"connect": "request", "message": "message",
+                              "follow": "request under More"}[low]
+                break
+    return people
+
+
+def screen(person_: dict, company: str) -> tuple[bool, str]:
+    """The cheap check on what a one-page read showed: (still worth a deep read, why not)."""
+    provisional = {"headline": person_.get("title", ""), "location": person_.get("location", ""),
+                   "reach": person_.get("reach", ""), "current": "", "items": [], "about": ""}
+    return verdict(provisional, company)
+
+
+def from_list(contact_id: str, person_: dict, company: str, url: str = "",
+              today: datetime.date | None = None) -> dict:
+    """Keep what a one-page read showed about one person, beside anything read before.
+    A "list" source: it places them and screens them, and it is never a read of their
+    own page, so a note still cannot rest on it."""
+    today = today or datetime.date.today()
+    old = load(contact_id) or {}
+    new = {"name": person_.get("name", ""), "company": company, "read_on": old.get("read_on", ""),
+           "sources": [{"kind": "list", "url": url, "date": today.isoformat()}],
+           "headline": person_.get("title", ""), "location": person_.get("location", ""),
+           "degree": person_.get("degree", ""), "reach": person_.get("reach", ""), "items": []}
+    if old:
+        got = dict(old)
+        for k in ("headline", "location", "degree"):
+            got[k] = old.get(k) or new[k]
+        if new["reach"]:
+            got["reach"] = new["reach"]
+        got["sources"] = old.get("sources", []) + new["sources"]
+    else:
+        got = {**new, "about": "", "shared": {}, "current": ""}
+    save(contact_id, got)
+    return got
+
+
+# ------------------------------------------------------------ notes too alike
+
+# How many notes in a batch may share one sentence before the batch reads as a
+# template: two, or a third of the batch, whichever is more.
+ALIKE_MIN = 2
+ALIKE_SHARE = 1 / 3
+# A line the person's profile says varies by person (VARY_ABOUT_ME), so it is held to
+# the same rule as anything else a drafter repeats.
+VARY_ABOUT_ME = bool(getattr(_NET, "VARY_ABOUT_ME", False))
+_GREETING = re.compile(r"^\s*(?:hi|hello|hey|dear)\b[^,.!?]{0,40}[,.!]\s*", re.I)
+
+
+def _sentences(note: str) -> list:
+    body = _GREETING.sub("", " ".join(str(note or "").split()))
+    return [x.strip() for x in re.split(r"(?<=[.?!])\s+", body) if len(x.strip()) >= 12]
+
+
+def _same(a: str, b: str) -> bool:
+    wa = set(re.findall(r"[a-z0-9']+", fold(a).lower()))
+    wb = set(re.findall(r"[a-z0-9']+", fold(b).lower()))
+    return bool(wa) and bool(wb) and len(wa & wb) / len(wa | wb) >= 0.8
+
+
+def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
+          opener: str | None = None, vary_about_me: bool | None = None) -> list:
+    """What makes a batch of first notes a template: [(what, sentence, [ids])].
+
+    `same_ground` compares only the common ground, so ten notes ending on one sentence
+    passed. Here every sentence counts: one shared by more than ALIKE_MIN notes (or
+    ALIKE_SHARE of the batch) is a finding, and so is an ask that is not the person's
+    own (ASK in networking.py, the one place it lives). The person's opener, their
+    ASK and their ABOUT_ME are theirs to repeat, unless VARY_ABOUT_ME says the
+    background line differs by person."""
+    import compose
+    ask = compose.ASK if ask is None else ask
+    about_me = compose.ABOUT_ME if about_me is None else about_me
+    opener = compose.OPENER if opener is None else opener
+    vary = VARY_ABOUT_ME if vary_about_me is None else vary_about_me
+    own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x]
+    per = {cid: _sentences(t) for cid, t in notes.items()}
+    limit = max(ALIKE_MIN, int(len(notes) * ALIKE_SHARE))
+    out, seen = [], []
+    for sents in per.values():
+        for sent in sents:
+            if any(_same(sent, x) for x in own) or any(_same(sent, x) for x in seen):
+                continue
+            ids = [k for k, v in per.items() if any(_same(sent, y) for y in v)]
+            if len(ids) > limit:
+                out.append(("shared", sent, ids))
+                seen.append(sent)
+    if ask:
+        asks = {}
+        for cid, sents in per.items():
+            last = sents[-1] if sents else ""
+            if last.endswith("?") and not _same(last, ask) and re.search(
+                    r"\b(?:open to|quick (?:chat|call)|minutes|few questions|grab a coffee|"
+                    r"catch up|connect)\b", last, re.I):
+                asks.setdefault(last, []).append(cid)
+        for sent, ids in asks.items():
+            out.append(("not your ask", sent, ids))
+    return out
+
+
+def queued_notes(contacts: list) -> dict:
+    """{contact_id: note} for every first note waiting to be sent, without its marker line."""
+    out = {}
+    for c in contacts:
+        cid = c.get("contact_id", "")
+        if (c.get("status") or "not_contacted") != "not_contacted" or not cid:
+            continue
+        try:
+            with open(draft_path(cid), encoding="utf-8") as fh:
+                text = fh.read()
+        except (OSError, ValueError):
+            continue
+        if text.startswith(WAITS_ON_A_READ):
+            text = text.split("\n\n", 1)[-1]
+        out[cid] = text.strip()
+    return out
+
+
+# ------------------------------------------------------------ read-only extractor
+
+# A snippet the browser tool runs on a profile page it already has open, returning
+# the parts a reading keeps as compact JSON: no click, no scroll, no request. Copying
+# the whole page text out by hand cost thousands of tokens a profile and changed what
+# was captured; this returns the same text get_page_text would, cut to the sections
+# parse() reads. `read --json` takes its output.
+EXTRACTOR = r"""(() => {
+  const clip = (t, n) => (t || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
+  const main = document.querySelector("main") || document.body;
+  const out = {url: location.href, title: document.title, top: "", sections: []};
+  const secs = Array.from(main.querySelectorAll("section"));
+  if (secs.length) out.top = clip(secs[0].innerText, 1500);
+  const want = /^(about|activity|experience|education|featured|publications)$/i;
+  for (const s of secs.slice(1)) {
+    const h = s.querySelector("h2");
+    const head = h ? h.innerText.split("\n")[0].trim() : "";
+    if (want.test(head)) out.sections.push({heading: head, text: clip(s.innerText, 2500)});
+  }
+  return JSON.stringify(out);
+})()"""
+
+
+def from_extract(raw: str) -> str:
+    """The extractor's JSON as the page text parse() reads: the top card, then each
+    section under its heading."""
+    got = json.loads(raw)
+    if isinstance(got, str):
+        got = json.loads(got)
+    parts = [str(got.get("top") or "")]
+    for sec in got.get("sections") or []:
+        head = str(sec.get("heading") or "").strip()
+        body = str(sec.get("text") or "")
+        if head and not body.lstrip().lower().startswith(head.lower()):
+            body = head + "\n" + body
+        parts.append(body)
+    return "\n".join(p for p in parts if p.strip())
 
 
 # ------------------------------------------------------------ several in one paste
@@ -1304,8 +1908,9 @@ def _paste(text: str, source: str = "paste", today: datetime.date | None = None)
               "what it can rest on, then compose.first_note(..., reading=reading.load(<id>)), "
               "reading.same_ground() across them, and `reading.py draft <id> <file>`; show "
               "each new note in the reply")
-    if skipped:
-        print("next: close each SKIP with its reason (status closed), so they are never written to")
+    for c in skipped:
+        _, why_ = verdict(load(c["contact_id"]), c.get("company", ""))
+        print(_skip_hint(c["contact_id"], why_))
     if not read and not skipped:
         print("next: nothing matched; paste each profile under a line of --- and check the "
               "names against `reading.py queue`")
@@ -1343,6 +1948,42 @@ def _clip(text: str, n: int) -> str:
     return (cut or text[:n]) + "…"
 
 
+def _skip_hint(contact_id: str, why: str) -> str:
+    """What to run after a SKIP: a request already pending is recorded as sent, never
+    closed; anything else closes the contact with its reason and removes the draft."""
+    if "already pending" in why:
+        return (f"next: a request already went, from LinkedIn itself: python3 "
+                f"tools/network/state.py sent {contact_id} --outside")
+    return f'next: python3 tools/network/reading.py skip {contact_id} --reason "{why}"'
+
+
+def _gate_line(g: dict, now: datetime.datetime) -> str:
+    if g["kind"] == "go":
+        return ""
+    when = ""
+    if g.get("at"):
+        secs = max(0, int((g["at"] - now).total_seconds()))
+        when = f"; next page at {g['at']:%H:%M:%S} (in {secs}s)"
+    return f"{g['kind']}: {g['why']}{when}"
+
+
+def _wait_gate(timeout: float, profile: bool = True, sleep=None, clock=None) -> dict:
+    """Hold until a browser page may load, up to `timeout` seconds. A Claude session
+    cannot sleep in the foreground (the harness refuses it), so `gate --wait` is run
+    in the background and exits when the gate opens, or with the reason at the
+    timeout. Never waits for "tomorrow"."""
+    import time
+    sleep = sleep or time.sleep
+    clock = clock or datetime.datetime.now
+    end = clock() + datetime.timedelta(seconds=max(0.0, timeout))
+    while True:
+        now = clock()
+        g = gate_state(now, profile=profile)
+        if g["kind"] in ("go", "tomorrow") or not g.get("at") or g["at"] > end:
+            return g
+        sleep(max(1.0, min(30.0, (g["at"] - now).total_seconds() + 1)))
+
+
 def main(argv: list | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1353,14 +1994,17 @@ def main(argv: list | None = None) -> int:
     r.add_argument("--url", default="")
     r.add_argument("--name", default="", help="for a candidate not in the contact book yet")
     r.add_argument("--company", default="")
-    v = sub.add_parser("verdict", help="after the read: KEEP, or SKIP and why (exit 3)")
+    r.add_argument("--json", action="store_true",
+                   help="the file is the `extractor` snippet's JSON, not page text")
+    v = sub.add_parser("verdict", help="after the read: KEEP, SKIP (exit 3), or not read yet (10)")
     v.add_argument("contact_id")
     v.add_argument("--company", default="")
     a_ = sub.add_parser("add", help="one public finding: a talk, an article, a post")
     a_.add_argument("contact_id")
     a_.add_argument("--kind", required=True, choices=KINDS)
     a_.add_argument("--url", required=True)
-    a_.add_argument("--date", default="")
+    a_.add_argument("--date", default="",
+                    help="YYYY-MM-DD, or YYYY-MM or YYYY when that is all that is known, or unknown")
     a_.add_argument("--text", required=True)
     a_.add_argument("--name", default="", help="for a candidate not in the contact book yet")
     a_.add_argument("--company", default="")
@@ -1377,12 +2021,17 @@ def main(argv: list | None = None) -> int:
     qu = sub.add_parser("queue", help="drafts waiting with no fresh reading")
     qu.add_argument("--top", type=int, default=HAND_TOP,
                     help="how many to offer a paste for: the best few, never everyone")
-    sl = sub.add_parser("shortlist", help="today's short list for browser reads, best first")
+    sl = sub.add_parser("shortlist", help="add to today's short list for deep reads, best first")
     sl.add_argument("ids", nargs="+")
     st = sub.add_parser("stop", help="LinkedIn showed a check or a warning: no browser reads today")
     st.add_argument("reason", nargs="?", default="")
     st.add_argument("--reason", dest="reason_flag", default="")
-    sub.add_parser("gate", help="may a browser read go now, and if not, when")
+    ga = sub.add_parser("gate", help="may a browser page load go now, and if not, when")
+    ga.add_argument("--wait", action="store_true",
+                    help="hold until it may (run it in the background), up to --timeout")
+    ga.add_argument("--timeout", type=float, default=900.0)
+    ga.add_argument("--page", action="store_true",
+                    help="for a one-page read (invitations, people), which the send-day cap does not hold")
     pg = sub.add_parser("page", help="what LinkedIn showed: a profile, its sign-in page, or a check")
     pg.add_argument("file", help="the page text, or - for stdin")
     si = sub.add_parser("signin", help="LinkedIn is not signed in yet: what to do, and the wait")
@@ -1391,51 +2040,76 @@ def main(argv: list | None = None) -> int:
     ro = sub.add_parser("route", help="how this session reads profiles, and what to tell the person")
     ro.add_argument("--tools", default="",
                     help="what the session has, comma-separated: browser, chrome, enable")
+    iv = sub.add_parser("invitations", help="the sent-invitations page, read once: who already "
+                                            "has a request pending")
+    iv.add_argument("file", help="the page text, or - for stdin")
+    iv.add_argument("--record", action="store_true",
+                    help="record each pending one as sent (state.py sent --outside)")
+    iv.add_argument("--url", default="")
+    pp = sub.add_parser("people", help="an employer's People tab or a people search, read once")
+    pp.add_argument("file", help="the page text, or - for stdin")
+    pp.add_argument("--company", required=True)
+    pp.add_argument("--url", default="")
+    sk = sub.add_parser("skip", help="a read ruled them out: close them with the reason, "
+                                     "and remove their draft")
+    sk.add_argument("contact_id")
+    sk.add_argument("--reason", required=True)
+    ba = sub.add_parser("batch", help="are the queued first notes too alike to send (exit 11)")
+    ba.add_argument("ids", nargs="*", help="the notes to check; every queued note by default")
+    sub.add_parser("extractor", help="the read-only snippet that returns a profile page as JSON")
     a = ap.parse_args(argv)
 
+    if a.cmd == "extractor":
+        print(EXTRACTOR)
+        return EXIT["ok"]
     if a.cmd == "stop":
         reason = a.reason or a.reason_flag
         if not reason:
             raise SystemExit("reading: stop needs what LinkedIn showed, as `stop \"<words>\"` "
                              "or `stop --reason \"<words>\"`")
         print(f"reading: browser reads stopped for today ({os.path.relpath(stop(reason), person.state())})")
-        return 0
+        return EXIT["ok"]
     if a.cmd == "gate":
-        why = browser_gate()
-        if why:
-            print(f"wait: {why}")
-            return 3
+        now = datetime.datetime.now()
+        g = _wait_gate(a.timeout, profile=not a.page) if a.wait else gate_state(now, profile=not a.page)
+        if g["kind"] != "go":
+            print(_gate_line(g, datetime.datetime.now()))
+            if g["kind"] in ("wait", "later") and not a.wait:
+                print("  to wait it out, run in the background: python3 tools/network/reading.py "
+                      "gate --wait (it exits when the next page may load)")
+            return EXIT[g["kind"]]
         if not signed_in_today():
-            print("go, after sign-in: open the profile; if LinkedIn shows its sign-in page "
+            print("go, after sign-in: open the page; if LinkedIn shows its sign-in page "
                   "instead, run `reading.py signin` (a wait, not a stop)")
         print(f"go: spend {dwell()}s on the page, scrolling it to the end at reading pace "
               "(nothing clicked), then read its text once")
-        return 0
+        return EXIT["ok"]
     if a.cmd == "page":
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         kind, words = page_kind(text)
         print(kind + (f": {words}" if words else ""))
-        return {"profile": 0, "signin": 4, "check": 5}.get(kind, 6)
+        return {"profile": EXIT["ok"], "signin": EXIT["signin"],
+                "check": EXIT["check"]}.get(kind, EXIT["unknown"])
     if a.cmd == "signin":
         if a.done:
             mark_signed_in()
             print("reading: signed in; carry on with the first profile")
-            return 0
+            return EXIT["ok"]
         if a.url:
             state_ = url_kind(a.url)
             if state_ == "signed-in":
                 mark_signed_in()
             print(state_)
-            return 0 if state_ == "signed-in" else 4
+            return EXIT["ok"] if state_ == "signed-in" else EXIT["signin"]
         if signed_in_today():
             print("reading: already signed in today; a sign-in page now means LinkedIn signed "
                   "them out, which is a stop: `reading.py stop \"signed out mid-run\"`")
-            return 0
+            return EXIT["ok"]
         print("LinkedIn is not signed in yet. This is a wait for the person, never a stop, and "
               "nothing is counted:")
         for i, step in enumerate(signin_steps(), 1):
             print(f"  {i}. {step}")
-        return 4
+        return EXIT["signin"]
     if a.cmd == "route":
         r_ = route([t for t in a.tools.split(",") if t.strip()])
         print(f"route: {r_['route']} ({surface()})"
@@ -1445,20 +2119,30 @@ def main(argv: list | None = None) -> int:
             print("first: `reading.py signin` when the first profile shows LinkedIn's sign-in page")
         if r_["say"]:
             print(f"tell them, once: {r_['say']}")
-        return 0
+        return EXIT["ok"]
     if a.cmd == "shortlist":
         got = shortlist(a.ids)
-        print(f"reading: today's short list, {len(got)} of at most {READS_PER_RUN}: "
-              + ", ".join(got))
-        return 0
+        print(f"reading: today's short list, {len(got['ids'])} of at most {READS_PER_RUN}: "
+              + ", ".join(got["ids"]))
+        if got["full"]:
+            print(f"  not added, the day's list is full: {', '.join(got['full'])}. The list adds, "
+                  "it never replaces: they wait for tomorrow's")
+        if got["unplaced"]:
+            print(f"  not added, nothing places them in a city yet: {', '.join(got['unplaced'])}. "
+                  f"At most {UNVERIFIED_ON_SHORTLIST} such a day; a one-page read (`reading.py "
+                  "people`) or a public finding places them first")
+        return EXIT["ok"]
     if a.cmd == "queue":
         import state
         import why
         waiting = [c for c in why.ranked(queue(state.load_contacts()))]
         top = waiting[:max(0, a.top)]
+        left = ""
+        if PROFILE_READS == "browser":
+            n, what = reads_left()
+            left = f", {n} profile read(s) can still go today (the limit that binds: {what})"
         print(f"{len(waiting)} draft(s) waiting with no fresh reading; profile reads: {PROFILE_READS}"
-              + (f", {max(0, READS_PER_DAY - reads_today())} browser read(s) left today"
-                 if PROFILE_READS == "browser" else ""))
+              + left)
         if waiting:
             print(f"offer a paste for these {len(top)} only, the best by why-them, several in "
                   "one message with a line of --- between them (`reading.py paste`); the rest "
@@ -1466,7 +2150,7 @@ def main(argv: list | None = None) -> int:
         for i, c in enumerate(top, 1):         # numbered, so a reply can say "1 and 3"
             print(f"  {i}. {c.get('name')} ({c.get('company')}) {c.get('linkedin_url') or ''}"
                   f"  [{c['contact_id']}]")
-        return 0
+        return EXIT["ok"]
     if a.cmd == "paste":
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         return _paste(text, a.source)
@@ -1481,22 +2165,73 @@ def main(argv: list | None = None) -> int:
               + ("" if has_read(load(a.contact_id)) else
                  f"; nothing read about {row.get('name') or a.contact_id} yet, so it opens "
                  f"on {WAITS_ON_A_READ} and reading.py queue lists it"))
-        return 0
+        return EXIT["ok"]
+    if a.cmd == "batch":
+        import state
+        notes = queued_notes(state.load_contacts())
+        if a.ids:
+            notes = {k: v for k, v in notes.items() if k in a.ids}
+        found = alike(notes)
+        print(f"batch: {len(notes)} queued note(s) checked")
+        for what, sent_, ids in found:
+            print(f"  {what}: \"{_clip(sent_, 110)}\" in {len(ids)}: {', '.join(ids[:8])}"
+                  + (" ..." if len(ids) > 8 else ""))
+        if found:
+            print("  too alike to send as a batch: rewrite each from its own reading (the "
+                  "background line chosen per person where the profile says so), and the ask "
+                  "from ASK in profile/networking.py")
+            return EXIT["alike"]
+        print("  no sentence repeats past the limit, and every ask is the person's own")
+        return EXIT["ok"]
     if a.cmd == "verdict":
         found = load(a.contact_id)
         if not found:
             print(f"reading: nothing read about {a.contact_id} yet")
-            return 1
+            return EXIT["not_read"]
         keep, why = verdict(found, a.company or found.get("company", ""))
-        print(("KEEP" + (f" ({why})" if why else "")) if keep else f"SKIP: {why}")
-        return 0 if keep else 3
+        if not keep:
+            print(f"SKIP: {why}")
+            print(_skip_hint(a.contact_id, why))
+            return EXIT["skip"]
+        if not _page_read(found):
+            # Public findings, or a one-page read, rule nothing out; that is not a KEEP.
+            # A read refused for its pace then printed KEEP for someone a request had
+            # already gone to.
+            print(f"NOT READ YET: nothing on file rules {a.contact_id} out, and their own "
+                  "profile has not been read (a browser read, a paste or a PDF)")
+            return EXIT["not_read"]
+        print("KEEP" + (f" ({why})" if why else ""))
+        return EXIT["ok"]
+    if a.cmd == "invitations":
+        return _cli_invitations(a)
+    if a.cmd == "people":
+        return _cli_people(a)
+    if a.cmd == "skip":
+        import state
+        contacts = state.load_contacts()
+        got = load(a.contact_id) or {}
+        if "pending" in a.reason.lower():
+            print(f"reading: a request to {a.contact_id} is already pending, so it went: "
+                  f"python3 tools/network/state.py sent {a.contact_id} --outside")
+            return EXIT["error"]
+        row = ({"name": got.get("name", ""), "company": got.get("company", ""),
+                "location": got.get("location", ""), "title": got.get("headline", "")}
+               if got.get("name") else None)
+        try:
+            c = state.close(contacts, a.contact_id, datetime.date.today(), a.reason, row=row)
+        except ValueError as e:
+            raise SystemExit(f"reading: {e}") from None
+        state.save_contacts(contacts)
+        print(f"reading: {c.get('name') or a.contact_id} closed ({a.reason}); never surfaced "
+              "again, and their draft removed")
+        return EXIT["ok"]
     old = load(a.contact_id)
     if a.cmd == "show":                 # a reading stands on its own: no contact row needed
         if not old:
             print(f"reading: nothing read about {a.contact_id} yet")
-            return 1
+            return EXIT["error"]
         _show(old)
-        return 0
+        return EXIT["ok"]
     known = old or {}
     contact = _contact(a.contact_id, getattr(a, "name", "") or known.get("name", ""),
                        getattr(a, "company", "") or known.get("company", ""))
@@ -1518,9 +2253,11 @@ def main(argv: list | None = None) -> int:
             if fresh(old):
                 raise SystemExit(f"reading: {a.contact_id} was read on {old.get('read_on')}; "
                                  "a profile is opened once, and that reading stands")
-            why = browser_gate()
-            if why:
-                raise SystemExit(f"reading: {why}")
+            now = datetime.datetime.now()
+            g = gate_state(now)
+            if g["kind"] != "go":
+                print(f"reading: not read. {_gate_line(g, now)}")
+                return EXIT[g["kind"]]
         if source == "pdf":
             text = pdf_text(a.file)
         elif a.file == "-":
@@ -1528,24 +2265,30 @@ def main(argv: list | None = None) -> int:
         else:
             with open(a.file, encoding="utf-8") as fh:
                 text = fh.read()
+        if a.json:
+            try:
+                text = from_extract(text)
+            except (ValueError, AttributeError, TypeError) as e:
+                raise SystemExit(f"reading: --json needs the extractor's output ({e})") from None
         if source == "browser":
             kind, words = page_kind(text)
             if kind == "check":
                 stop(f"LinkedIn showed a check: {words}")
-                raise SystemExit(f"reading: LinkedIn showed a check ({words}). Browser reads are "
-                                 "stopped for today; tell the person what it showed, and never "
-                                 "try to get past it")
+                print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped "
+                      "for today; tell the person what it showed, and never try to get past it")
+                return EXIT["check"]
             if kind == "signin" and signed_in_today():
                 stop("LinkedIn's sign-in page after they had signed in today")
-                raise SystemExit("reading: LinkedIn signed them out mid-run. Browser reads are "
-                                 "stopped for today; tell the person, and carry on tomorrow")
+                print("reading: LinkedIn signed them out mid-run. Browser reads are stopped for "
+                      "today; tell the person, and carry on tomorrow")
+                return EXIT["check"]
             if kind == "signin":
                 print("reading: LinkedIn's sign-in page, not a profile. Not a read, not counted, "
                       "nothing stopped: run `reading.py signin` and wait for the person")
-                return 4
+                return EXIT["signin"]
         if source == "browser" and not on_shortlist(a.contact_id):
             raise SystemExit(f"reading: {a.contact_id} is not on today's short list. A browser "
-                             f"read is for the run's best {READS_PER_RUN} only: rank everyone "
+                             f"read is for the day's best {READS_PER_RUN} only: rank everyone "
                              "found, then `reading.py shortlist <ids, best first>`")
         try:
             new = parse(text, name=contact.get("name", ""), company=contact.get("company", ""),
@@ -1554,8 +2297,10 @@ def main(argv: list | None = None) -> int:
         except ValueError as e:
             raise SystemExit(f"reading: {e}") from None
         if source == "browser":
+            gap, brk = pause()
             new["sources"][0]["at"] = datetime.datetime.now().isoformat(timespec="seconds")
-            new["sources"][0]["next_gap"] = next_gap()
+            new["sources"][0]["next_gap"] = gap
+            new["sources"][0]["break"] = brk
             mark_signed_in()            # a profile in the pane means they are signed in
         reading = merge(old, new)
     print(f"reading: saved {os.path.relpath(save(a.contact_id, reading), person.state())}")
@@ -1564,10 +2309,99 @@ def main(argv: list | None = None) -> int:
         keep, why = verdict(reading, contact.get("company", ""))
         print(("verdict: KEEP" + (f" ({why})" if why else "")) if keep
               else f"verdict: SKIP: {why} (read the next person instead)")
+        if not keep:
+            print(_skip_hint(a.contact_id, why))
         if source == "browser":
-            print(f"pace: the next profile in {new['sources'][0]['next_gap']}s at the earliest; "
-                  "vary it, never open two at once")
-    return 0
+            at = datetime.datetime.now() + datetime.timedelta(seconds=new["sources"][0]["next_gap"])
+            print(f"pace: the next page at {at:%H:%M:%S} at the earliest "
+                  f"({new['sources'][0]['next_gap']}s"
+                  + (", the longer break" if new["sources"][0]["break"] else "")
+                  + "); never two at once")
+    return EXIT["ok"]
+
+
+def _cli_invitations(a) -> int:
+    import state
+    now = datetime.datetime.now()
+    if PROFILE_READS == "browser":
+        g = gate_state(now, profile=False)
+        if g["kind"] != "go":
+            print(f"reading: not read. {_gate_line(g, now)}")
+            return EXIT[g["kind"]]
+    text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+    kind, words = page_kind(text)
+    if kind == "check":
+        stop(f"LinkedIn showed a check: {words}")
+        print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped for today")
+        return EXIT["check"]
+    cards = invitations(text)
+    rec = page_read("invitations", a.url, now, people=len(cards))
+    contacts = state.load_contacts()
+    got = match_invitations(cards, contacts)
+    print(f"invitations: {len(cards)} request(s) pending on the page; the next page at "
+          f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
+    threads = state.load_threads()
+    done = 0
+    for card, c in got["pending"]:
+        line = (f"  sent outside the app: {c.get('name')} ({c.get('company')}), pending since "
+                f"about {card['sent']} [{c['contact_id']}]")
+        if a.record:
+            try:
+                state.sent(contacts, threads, c["contact_id"], datetime.date.today(),
+                           date=card["sent"], outside=True)
+                done += 1
+                line += ": recorded as sent, draft removed"
+            except ValueError as e:
+                line += f": not recorded ({e})"
+        print(line)
+    if done:
+        state.save_threads(threads)
+        state.save_contacts(contacts)
+    if got["pending"] and not a.record:
+        print("next: record them, so the queue stops saying send: python3 "
+              "tools/network/reading.py invitations <the same file> --record")
+    for c in got["gone"]:
+        print(f"  no longer pending: {c.get('name')} ({c.get('company')}) [{c['contact_id']}]: "
+              "accepted, or withdrawn on LinkedIn; their profile or the person says which")
+    if got["unknown"]:
+        print(f"  {len(got['unknown'])} other pending request(s) to people not in the contact book")
+    return EXIT["ok"]
+
+
+def _cli_people(a) -> int:
+    import state
+    now = datetime.datetime.now()
+    if PROFILE_READS == "browser":
+        g = gate_state(now, profile=False)
+        if g["kind"] != "go":
+            print(f"reading: not read. {_gate_line(g, now)}")
+            return EXIT[g["kind"]]
+    text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+    kind, words = page_kind(text)
+    if kind == "check":
+        stop(f"LinkedIn showed a check: {words}")
+        print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped for today")
+        return EXIT["check"]
+    people = people_page(text, a.company)
+    rec = page_read("people", a.url, now, people=len(people))
+    contacts = state.load_contacts()
+    print(f"people: {len(people)} at {a.company} on the page; the next page at "
+          f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
+    for p in people:
+        keep, why = screen(p, a.company)
+        row = state.already_contacted(contacts, name=p["name"], company=a.company,
+                                      linkedin_url=p.get("linkedin_url"))
+        tag = f"[{row['contact_id']}]" if row else "[not in the book]"
+        if row and (row.get("status") or "not_contacted") in ("not_contacted", "dropped"):
+            from_list(row["contact_id"], p, a.company, a.url)
+        print(f"  {'deep read' if keep else 'out'}: {p['name']}, {p.get('title') or '?'}"
+              f"{', ' + p['location'] if p.get('location') else ''}"
+              f"{' (' + p['degree'] + ')' if p.get('degree') else ''} {tag}"
+              + ("" if keep else f": {why}"))
+    print("next: shortlist only the few you will write to today, best first (`reading.py "
+          "shortlist`); the rest are drafted from what the page showed and marked as waiting "
+          "on a read")
+    return EXIT["ok"]
 
 
 if __name__ == "__main__":

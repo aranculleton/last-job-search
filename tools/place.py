@@ -32,6 +32,12 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+import local_path  # noqa: E402
+
+# Look where a person's computer keeps TeX and Bun before saying either is missing: a
+# chat's shell on a Mac lacks /Library/TeX/texbin, and this said "install LaTeX" to
+# someone whose LaTeX compiled both example documents.
+local_path.extend()
 
 PLACE_FILE = "place.json"           # in profile/: {"works_on": ..., "asked": date}
 TOLD_FILE = "ljs-place.json"        # in .git/: the chats already told, never committed
@@ -321,6 +327,16 @@ def told(chat: str, lines=None, today: datetime.date | None = None) -> bool:
     return ((today or datetime.date.today()) - on).days < RETELL_DAYS
 
 
+def _told_before(chat: str) -> bool:
+    """Was this chat last told something that was not nothing?"""
+    try:
+        with open(_told_path(), encoding="utf-8") as fh:
+            rec = (json.load(fh).get("said") or {}).get(chat)
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(rec, dict) and rec.get("digest") not in (None, _digest(()))
+
+
 def mark_told(chat: str, lines=(), today: datetime.date | None = None) -> None:
     p = _told_path()
     try:
@@ -360,6 +376,12 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
     lines = check(where, setting(), tools, signed_in_ever(), fixes, owner, name, employer,
                   works=works_on())
     if once and chat:
+        if not lines and _told_before(chat):
+            # It had asked for something, and it is all here now: said once, so the
+            # person who ran the commands hears it worked.
+            mark_told(chat, (), today)
+            return ("Place check (Claude: tell the person this once, in your own words): "
+                    "everything it asked for is in place now; nothing more to do.")
         if told(chat, lines, today):
             return ""
         mark_told(chat, lines, today)
@@ -373,6 +395,8 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
     return ("Place check (Claude: tell the person this at the end of your reply, in these "
             "words; it comes back weekly while it still applies, never more. If they ask how, "
             "or say they want to move, give them what `python3 tools/place.py how` prints. "
+            "When they say they have run what it asks, check again at once with `python3 "
+            "tools/place.py check`, rather than waiting for the next day's sync. "
             "Never apply a choice for them, and never hold back work that does not need it. A "
             "[bracketed] condition is yours to test, never said):\n"
             + "\n".join("  " + l.replace("\n", "\n  ") for l in lines)

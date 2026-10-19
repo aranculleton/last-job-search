@@ -39,6 +39,9 @@ PY_ONLY=0
 [ "${1:-}" = "--python" ] && PY_ONLY=1
 
 have() { command -v "$1" >/dev/null 2>&1; }
+# MacTeX's and Bun's own directories, which a chat's non-login shell does not have.
+# shellcheck source=tools/local_path.sh
+. tools/local_path.sh
 
 if [ "$PY_ONLY" = 0 ]; then
   if have lualatex && have xelatex && have pdftotext; then
@@ -59,19 +62,24 @@ if [ "$PY_ONLY" = 0 ]; then
       || echo "setup_env: brew install poppler failed; see SETUP.md"
     if ! { have lualatex && have xelatex; }; then
       echo "setup_env: TeX is not installed. Once, on this Mac:"
-      echo "  brew install --cask mactex-no-gui && eval \"\$(/usr/libexec/path_helper)\""
+      echo "  brew install --cask mactex-no-gui"
+      echo "  (nothing to add to your shell: the app finds /Library/TeX/texbin itself)"
     fi
   else
     echo "setup_env: no apt-get or brew here; install TeX Live and Poppler by hand (SETUP.md)"
   fi
   # texlive-fonts-extra is 1.7 GB and the resume used 1.5 MB of it, the two
   # icon packages moderncv loads. They are vendored in texmf/ instead
-  # (texmf/README.md). fit_to_page.py points TEXMFHOME at it itself; the link
-  # makes a compile by hand work too, since ~/texmf is kpathsea's default.
-  if [ ! -e "$HOME/texmf" ]; then
-    ln -s "$PWD/texmf" "$HOME/texmf" && echo "setup_env: linked ~/texmf to the repo's icon packages"
-  elif [ "$(readlink -f "$HOME/texmf")" != "$(readlink -f "$PWD/texmf")" ]; then
-    echo "setup_env: ~/texmf exists and is not the repo's; export TEXMFHOME=\"$PWD/texmf\" for hand compiles"
+  # (texmf/README.md), and every compile the app runs points TEXMFHOME at them
+  # (fit_to_page.py, ci_local.sh). Nothing is linked into the home directory any
+  # more: a ~/texmf link to the repo broke when the repo moved, and pointed at
+  # nothing. A link an older version made is put right, and said so.
+  if [ -L "$HOME/texmf" ] && [ -e "$HOME/texmf/README.md" ] \
+       && grep -q "moderncv" "$HOME/texmf/README.md" 2>/dev/null \
+       && [ "$(readlink -f "$HOME/texmf")" != "$(readlink -f "$PWD/texmf")" ]; then
+    ln -sfn "$PWD/texmf" "$HOME/texmf" && echo "setup_env: ~/texmf pointed at another copy of the app; re-pointed at this one"
+  elif [ -L "$HOME/texmf" ] && [ ! -e "$HOME/texmf" ]; then
+    ln -sfn "$PWD/texmf" "$HOME/texmf" && echo "setup_env: ~/texmf pointed at nothing (the repo moved); re-pointed at this one"
   fi
   # Bun runs the job-board CLIs (.agents/skills/*/cli). Claude's cloud containers
   # usually ship it; elsewhere both installs are per-user and ask for no password:

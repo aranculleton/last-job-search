@@ -48,7 +48,13 @@ def _file(key: str, default: str) -> str:
 PROFILE = _file("candidate_profile", "01-candidate-profile.md")
 EVALUATION = _file("evaluation", "04-job-evaluation.md")
 CLAUDE_MD = _file("summary", "CLAUDE.md")
-_SHEET = person.module("screening")
+try:
+    _SHEET = person.module("screening")
+except person.NoProfile:
+    # A profile with no screening.py still has its facts (the band, the notice, the
+    # sponsorship position), which the interview pack and the consistency check read; only
+    # the answer sheet itself needs the file, and says so when asked for.
+    _SHEET = None
 
 
 class MissingFact(RuntimeError):
@@ -114,6 +120,9 @@ def requires_sponsorship() -> bool:
 
 def answers() -> list[tuple[str, str, str]]:
     """(question as portals ask it, the answer, the note for the candidate)."""
+    if _SHEET is None:
+        raise MissingFact("the profile has no screening.py, the form's questions: /setup "
+                          "writes it")
     floor, low, high = salary_band()
     facts = dict(floor=floor, low=low, high=high, notice=notice_period(),
                  sponsor_answer="Yes" if requires_sponsorship() else "No")

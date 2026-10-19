@@ -58,3 +58,19 @@ Veterans Day                 # a public holiday, tools/holidays.py
 Victoria Day                 # a public holiday, tools/holidays.py
 Waitangi Day                 # a public holiday, tools/holidays.py
 Western Easter Sunday        # a public holiday, tools/holidays.py
+Ivo Vance               # invented, tests/test_a_referred_process_gets_one_living_document.py
+Tamsin Marsh            # invented, tests/test_a_referred_process_gets_one_living_document.py
+Rook Consulting         # part of the invented employer "Calder & Rook Consulting"
+Tom Head                # invented, tests/test_the_interview_pipeline_holds_under_a_bug_hunt.py
+Priya A. Shah           # invented, tests/test_the_interview_pipeline_holds_under_a_bug_hunt.py
+Dana Okafor             # invented, tests/test_the_interview_pipeline_holds_under_a_bug_hunt.py
+Ola Reed                # invented, tests/test_the_interview_pipeline_holds_under_a_bug_hunt.py
+Northvale Bank          # invented employer, tests/test_the_interview_pipeline_holds_under_a_bug_hunt.py
+Northlight Creative Agency  # invented employer, the same test
+Bankside Freight        # invented employer, the same test
+Dovecote Freight        # invented employer, the same test
+Engagement Manager      # a job title
+Sourcing Manager        # a job title
+Living Document         # not a name: a heading word pair
+Apple-silicon Mac       # not a name: a kind of computer
+Through Ivo Vance's      # the invented referrer, in a sentence the pack writes

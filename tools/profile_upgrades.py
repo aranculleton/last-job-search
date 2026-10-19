@@ -58,6 +58,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import fnmatch
+import json
 import os
 import re
 import subprocess
@@ -387,6 +388,9 @@ def _connections_export() -> str:
     root = root if os.path.isabs(root) else os.path.join(ROOT, root)
     if os.path.exists(os.path.join(root, "documents", "linkedin", "Connections.csv")):
         return ""
+    if not os.environ.get("LJS_STATE") and os.path.exists(
+            person.local_state("documents", "linkedin", "Connections.csv")):
+        return ""                                   # in the main checkout, read from a worktree
     if getattr(_mod("networking"), "CONNECTIONS_EXPORT", None) == "declined":
         u = by_id("connections-export")
         return again("connections-export", u.ask_version, u.changed)
@@ -513,6 +517,53 @@ def _statement_templates() -> str:
     return ""
 
 
+def _dropped_rows() -> str:
+    """Contacts closed only because a queue was set aside before anything went: they read as
+    dead ends, and discovery hid their employers as "already covered"."""
+    found = _probe("import state; print(len(state.closed_but_dropped(state.load_contacts(), "
+                   "state.load_threads())))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d contact(s) closed when a queue was set aside, though nothing was ever sent to "
+            "them" % n) if n else ""
+
+
+def _read_break() -> str:
+    """Browser reads pause between bursts; how long is the person's call, so it is written
+    into their profile where they can see and change it, at the app's value."""
+    net = _mod("networking")
+    if net is None or str(getattr(net, "PROFILE_READS", "") or "").lower() != "browser":
+        return ""
+    if hasattr(net, "PROFILE_READ_BREAK_MINUTES"):
+        return ""
+    return ("profile/networking.py has no PROFILE_READ_BREAK_MINUTES: the break between bursts "
+            "of profile reads is the app's, not yours to see or change")
+
+
+def _move_and_area() -> str:
+    """identity.moved and identity.area: an interview pack prepares honest small talk for
+    someone who moved in the last year, and asks nothing of anyone else."""
+    if not person.exists("person.json"):
+        return ""
+    ident = person.data("person").get("identity") or {}
+    missing = [k for k in ("moved", "area") if k not in ident]
+    return ("person.json has no identity.%s: an interview pack cannot tell whether you moved "
+            "recently, or where you live" % " or identity.".join(missing)) if missing else ""
+
+
+def _work_auth_employer() -> str:
+    """WORK_AUTH["employer"]: the wording a recruiter or employer hears. Without it a call
+    prep falls back to the senior networking line, which is not always the person's own
+    employer-facing sentence."""
+    net = _mod("networking")
+    if net is None:
+        return ""
+    auth = getattr(net, "WORK_AUTH", None)
+    if isinstance(auth, dict) and "employer" in auth:
+        return ""
+    return ("profile/networking.py WORK_AUTH has no \"employer\" line: a recruiter would hear "
+            "the networking wording rather than your employer-facing one")
+
+
 def _interview_prep() -> str:
     if person.exists() and not person.exists("07-interview-prep.md"):
         return "profile/07-interview-prep.md is missing: /interview has no STAR examples of yours"
@@ -530,6 +581,23 @@ def _interview_tags() -> str:
             "profile/07-interview-prep.md say which questions they answer nowhere, so an "
             "interview pack cannot match them: " + "; ".join(bare[:3])
             + (f"; {len(bare) - 3} more" if len(bare) > 3 else ""))
+
+
+def _profile_consistency() -> str:
+    """Facts a screen checks first, said differently in two places of the profile."""
+    if not person.exists():
+        return ""
+    found = _probe("import json, profile_consistency as c; print(json.dumps(c.findings()))")
+    try:
+        rows = json.loads(found) if found else []
+    except ValueError:
+        return ""
+    if not rows:
+        return ""
+    return ("your profile says %s differently in %d place(s): %s" % (
+        " and ".join(sorted({r["fact"] for r in rows})), len(rows),
+        "; ".join("%s:%s says \"%s\"" % (r["file"], r["line"], r["said"]) for r in rows[:3]
+                  if r["said"])))
 
 
 def _country() -> str:
@@ -920,6 +988,42 @@ REGISTRY: tuple[Upgrade, ...] = (
             "interview questions it answers, read from the story's own words (setup.md's "
             "history section says how); change nothing else in the file", "edit", "~2 min",
             priority=2),
+    Upgrade("profile-consistency", "2026-10-19",
+            "your pay band, notice, sponsorship and permit answer said the same way everywhere",
+            _profile_consistency, "python3 tools/profile_consistency.py, then ask the person "
+            "which is right for each fact it lists and correct the other place(s); never pick "
+            "for them", "question", "~2 min", priority=2, needs="you",
+            ask="Your profile gives two different answers on something a recruiter checks "
+                "first. Can I show you which, so you pick the right one?",
+            why_ask="A form, a letter and an interview pack each read one of them, and a "
+                    "recruiter remembers whichever they heard first."),
+    Upgrade("dropped-rows", "2026-10-19",
+            "people you set aside before writing, kept apart from real dead ends and easy to "
+            "reopen",
+            _dropped_rows, "python3 tools/network/state.py dropped-rows --apply", "instant",
+            command=("python3", "tools/network/state.py", "dropped-rows", "--apply"),
+            paths=("network_contacts.csv",), priority=2),
+    Upgrade("read-break", "2026-10-19",
+            "the pause between bursts of profile reads written in your profile, yours to change",
+            _read_break, "add PROFILE_READ_BREAK_MINUTES = (5, 12) to profile/networking.py "
+            "beside PROFILE_READS_PER_HOUR, with a comment: the break, in minutes, chosen at "
+            "random in that range between bursts of browser reads; a shorter break raises the "
+            "risk to their LinkedIn account. Change nothing else", "edit", "~1 min",
+            names=("networking.PROFILE_READ_BREAK_MINUTES",), conditional=True, priority=3),
+    Upgrade("move-and-area", "2026-10-19",
+            "honest small talk prepared for an interview when you moved recently",
+            _move_and_area, "read profile/01-candidate-profile.md and profile/CLAUDE.md; write "
+            "person.json identity.moved as YYYY-MM when they record a move in the last year "
+            "(else \"none\") and identity.area as the neighbourhood and city they give (else "
+            "the location); invent nothing", "edit", "~1 min",
+            names=("person.json:identity.moved", "person.json:identity.area"), priority=3),
+    Upgrade("work-auth-employer", "2026-10-19",
+            "recruiters hear your work authorization in your own employer-facing words",
+            _work_auth_employer, "add WORK_AUTH[\"employer\"] to profile/networking.py: the "
+            "sentence the profile says to use with employers and recruiters, in its own words "
+            "(where it names none, the \"senior\" line), and extend WORK_AUTH_CLAUSE so it "
+            "matches it; change nothing else", "edit", "~1 min",
+            names=("networking.WORK_AUTH",), priority=2),
     Upgrade("country", "2026-10-14",
             "paper size, working week and market language that follow your country",
             _country, "/setup --section market", "question", "~1 min",
@@ -995,6 +1099,18 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    "networking.PROFILE_READ_BREAK_MINUTES": "a break of 5 to 12 minutes, chosen at random, "
+                                             "between bursts of browser reads; shortening it "
+                                             "raises the risk to their LinkedIn account, so only "
+                                             "they set it",
+    "networking.VARY_ABOUT_ME": "False: the line about themselves is theirs to repeat in every "
+                                "note; True holds it to the same rule as anything else a batch "
+                                "repeats",
+    "search.SCRAPE_PAGES": "5 result pages a search in the cloud, 2 on their own computer, where "
+                           "every request leaves from their own address",
+    "search.SCRAPE_WORKERS": "10 searches at once in the cloud, 4 on their own computer",
+    "search.SCRAPE_MAX_REQUESTS": "no cap in the cloud; 300 requests to each app portal a round on "
+                                  "their own computer",
     "search.HOLIDAY_REGION": "read from identity.location (a province, a UK nation, a US "
                              "state); with none named, the country's common holidays",
     "search.HOURS_PER_YEAR": "2,080 hours, a full-time year of 40 hours a week, to read a band "
@@ -1142,9 +1258,12 @@ def _changed() -> set[str]:
 # syncs when it starts work. Every one of them used to find the same new upgrades, start
 # the same background /upgrade and ask the same questions. The chat whose own sync
 # brought the update in owns it. A chat that got the update by merging master, where
-# that chat landed it, stays quiet until the owner has had OWNER_HOURS to finish, then
-# takes over whatever is still pending.
-OWNER_HOURS = 2
+# that chat landed it, stays quiet until the owner has had OWNER_MINUTES to finish, then
+# takes over whatever is still pending. It was two hours, and a person who had closed the
+# other chats was told by the only one left to do nothing for two hours. A background
+# /upgrade takes minutes; twenty is room for it, and `--take` hands them over at once
+# when the person says no other chat is open.
+OWNER_MINUTES = 20
 SYNC_SUBJECT = "^Sync from the app: "
 
 
@@ -1171,7 +1290,7 @@ def owner_elsewhere(now: float | None = None) -> str:
         return ""
     if _git("merge-base", "--is-ancestor", sha, master).returncode != 0:
         return ""                                   # this chat's own sync, not landed yet
-    ends = when + OWNER_HOURS * 3600
+    ends = when + OWNER_MINUTES * 60
     if (now if now is not None else time.time()) >= ends:
         return ""
     return time.strftime("%H:%M UTC", time.gmtime(ends))
@@ -1236,6 +1355,8 @@ def main(argv: list[str] | None = None) -> int:
                       help="the pending upgrades as JSON, most urgent first (/upgrade reads it)")
     mode.add_argument("--check", metavar="ID",
                       help="one upgrade: 'done', or what is missing; exit 1 while pending")
+    mode.add_argument("--take", action="store_true",
+                      help="this chat applies the pending upgrades now: no other chat is open")
     mode.add_argument("--no", metavar="ID",
                       help="record the person's no to one question, dated: it is asked again "
                            "when the question changes or after REASK_DAYS")
@@ -1247,6 +1368,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"profile_upgrades: their no to {a.no} kept in {os.path.relpath(p, ROOT)}; asked "
               f"again when the question changes or after {REASK_DAYS} days. Say only: "
               f"\"{NO_REPLY}\"")
+        return 0
+    if a.take:
+        claim()
+        print("profile_upgrades: this chat owns the pending upgrades now; apply them "
+              "(`profile_upgrades.py --plan`, then /upgrade in the background)")
         return 0
     if a.check:
         why = by_id(a.check).pending()
@@ -1273,11 +1399,15 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"profile upgrades: {note}")
             rows = pending()
         if rows and a.line:
-            print(f"Profile upgrades: {len(rows)} pending, being applied by another chat.")
+            print(f"Profile upgrades: {len(rows)} pending, being applied by another chat "
+                  f"until {elsewhere}.")
         elif rows:
-            print(f"Profile upgrades: {len(rows)} pending, being applied by the chat that "
-                  f"brought this update in. Claude: start nothing and ask nothing about them; "
-                  f"if they are still pending after {elsewhere}, the next sync hands them here.")
+            print(f"Profile upgrades: {len(rows)} pending. They belong to another chat on this "
+                  f"repo, the one whose sync brought this update in, until {elsewhere}: this chat "
+                  f"got the update by merging master. Claude: start nothing and ask nothing about "
+                  f"them; after {elsewhere} the next sync hands them to this chat. If the person "
+                  "says no other chat is open, take them now: python3 tools/profile_upgrades.py "
+                  "--take")
         else:
             print("Profile upgrades: none pending.")
         return 0

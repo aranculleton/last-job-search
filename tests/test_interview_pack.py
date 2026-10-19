@@ -131,8 +131,10 @@ def _pack(**kw):
 
 def test_it_leads_with_one_screen(app):
     text = _pack()
-    assert text.startswith("# Interview pack: Demand Planning Analyst at Fernhill Freight, "
-                           "Technical interview\n\n2026-03-14, with Shirin Example, Head of Planning.")
+    # One living document for the process, saying what it is for next and when it changed.
+    assert text.startswith("# Interview prep: Demand Planning Analyst at Fernhill Freight\n\n"
+                           "Last updated 2026-03-11. Next: Technical interview, 2026-03-14, with "
+                           "Shirin Example, Head of Planning.")
     assert re.findall(r"^## (.+)$", text, re.M) == list(P.SECTIONS)
     screen = _section(text, "On one screen")
     assert len(screen) <= 20
@@ -155,7 +157,9 @@ def test_the_posting_is_read_never_repeated(app):
 
 def test_a_question_asked_here_before_leads_with_the_story_that_landed(app):
     screen = _section(_pack(), "On one screen")
-    assert screen[1] == ("1. How do you handle conflicting numbers? -> story: One report in "
+    # The first screen opens on what they are assessing; the questions follow their heading.
+    first = screen[screen.index("**Likely questions, and what to answer with**") + 1]
+    assert first == ("1. How do you handle conflicting numbers? -> story: One report in "
                          "place of eleven spreadsheets")
 
 
@@ -174,7 +178,8 @@ def test_the_session_maps_what_the_tags_do_not_reach(app):
                             "Walk me through how forecasts reach the depots.":
                                 "The forecast that freed safety stock"})
     screen = _section(text, "On one screen")
-    assert screen[1] == ("1. Walk me through how forecasts reach the depots. -> story: The "
+    first = screen[screen.index("**Likely questions, and what to answer with**") + 1]
+    assert first == ("1. Walk me through how forecasts reach the depots. -> story: The "
                          "forecast that freed safety stock")
     assert "Story: Ending a daily reconciliation (mapped;" in "\n".join(_section(text, "Likely questions"))
 
@@ -389,8 +394,8 @@ def test_the_questions_asked_go_into_one_bank(app):
 def test_the_cli_builds_and_writes_it(app, capsys):
     assert P.main(["pack", COMPANY, "--today", TODAY, "--write"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("# Interview pack: Demand Planning Analyst at Fernhill Freight")
-    assert os.path.exists(os.path.join(app, "interview_prep_technical_interview.md"))
+    assert out.startswith("# Interview prep: Demand Planning Analyst at Fernhill Freight")
+    assert os.path.exists(os.path.join(app, P.LIVING))
 
 
 def test_two_live_roles_at_one_employer_ask_which(app, capsys):

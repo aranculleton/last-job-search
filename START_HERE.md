@@ -181,10 +181,14 @@ tasks and cloud chats need a paid plan.
 **How your work reaches GitHub from here.** A chat on your computer has no GitHub tools of
 its own, so Claude uses GitHub's command line, `gh`: step 4's list installs it, and
 `gh auth login` (yours, once) signs it in through your web browser. Claude then works on a
-branch and lands it on master itself: it merges master into the branch first
+branch, in a folder of its own beside your copy (`python3 tools/sync_app.py --worktree
+<name>`), so two chats on one computer never switch branches under each other, and lands
+it on master itself: it merges master into the branch first
 (`git fetch origin master && git merge origin/master`, so two chats' changes to your tracker
 or contact book are merged row by row on your computer), runs the checks, then
-`gh pr create --base master --head <branch>` and `gh pr merge <number> --merge --delete-branch`.
+`gh pr create --base master --fill` and `gh pr merge <number> --merge`, and checks the pull
+request says merged (`gh pr view <number> --json state`), because `gh` can report an error
+after a merge that worked.
 You do none of it; it is written here so you know what it is doing.
 
 **Already using it in the cloud?** Nothing moves: open your copy locally as in step 3 and

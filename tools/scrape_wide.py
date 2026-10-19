@@ -37,10 +37,13 @@ import datetime as dt
 import functools
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -91,6 +94,28 @@ PORTAL_COUNTRY = getattr(_S, "PORTAL_COUNTRY", "")
 # named searches the first of SCRAPE_LOCATIONS.
 PORTAL_LOCATIONS = {str(k): list(v) for k, v in
                     dict(getattr(_S, "PORTAL_LOCATIONS", {}) or {}).items()}
+
+# Where a round runs decides how hard it leans on the portals. A cloud container is
+# a throwaway address; a person's own computer is the address their own LinkedIn
+# account signs in from, and a round of thousands of requests from it is a risk to
+# them (the linkedin-search skill says keep volume low). So off the cloud a round
+# asks for fewer pages, with fewer at once, and at most LOCAL_MAX_REQUESTS of each
+# app portal, unless profile/search.py sets its own (SCRAPE_PAGES, SCRAPE_WORKERS,
+# SCRAPE_MAX_REQUESTS): the person's trade-off to make, never the app's.
+CLOUD = os.environ.get("CLAUDE_CODE_REMOTE", "").lower() == "true"
+CLOUD_PAGES, CLOUD_WORKERS = 5, 10
+LOCAL_PAGES, LOCAL_WORKERS, LOCAL_MAX_REQUESTS = 2, 4, 300
+
+
+def defaults(cloud: bool | None = None) -> tuple:
+    """(pages, workers, the most requests a round sends to each app portal or None)."""
+    cloud = CLOUD if cloud is None else cloud
+    pages = getattr(_S, "SCRAPE_PAGES", None) or (CLOUD_PAGES if cloud else LOCAL_PAGES)
+    workers = getattr(_S, "SCRAPE_WORKERS", None) or (CLOUD_WORKERS if cloud else LOCAL_WORKERS)
+    cap = getattr(_S, "SCRAPE_MAX_REQUESTS", None)
+    if cap is None and not cloud:
+        cap = LOCAL_MAX_REQUESTS
+    return int(pages), int(workers), (int(cap) if cap else None)
 
 
 def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
@@ -243,7 +268,8 @@ SWEEP_MAX_FAILS = 3
 
 
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
-          clock=time.monotonic) -> tuple[list[dict], int, list[str]]:
+          clock=time.monotonic, tally: "Tally | None" = None,
+          on_rows=None) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
@@ -276,7 +302,176 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         if err:
             failed.append(err)
         rows += got
+        if on_rows and got:
+            on_rows(list(got))
+        if tally is not None:
+            tally.sent, tally.failed = sent, list(failed)
+            tally.limited += int(rate_limited(err))
+            tally.timeouts += int(bool(err) and "timeout" in err.lower())
+    if tally is not None:
+        tally.sent, tally.failed = sent, list(failed)
+        if sent < len(tasks):
+            tally.stopped = (f"{streak} failures in a row" if streak >= SWEEP_MAX_FAILS
+                             else f"its {SWEEP_BUDGET // 60}-minute budget ran out")
     return rows, sent, failed
+
+
+# ------------------------------------------------------------------ the pool
+#
+# LinkedIn and freehire go through a pool of workers, and the pool had no clock of
+# its own. On a person's own computer, rate-limited by LinkedIn, it ran into the
+# scrape stage's 45-minute limit; the stage was killed with everything it had found
+# in memory, and the round was lost, 45 minutes of it, with nothing written and
+# nothing in the log about LinkedIn or freehire at all. So the pool stops at
+# POOL_BUDGET, well inside the stage limit, writes what it has, and says what it
+# did not send; it backs off a portal that answers 429 (Retry-After when the error
+# carries one), halves that portal's share of the workers, and stops it after
+# POOL_MAX_LIMITED in a row; and it prints a line per portal every PROGRESS_SECONDS,
+# so a chat can tell a slow round from a hung one.
+POOL_BUDGET = 20 * 60
+POOL_MAX_LIMITED = 3
+BACKOFF_SECONDS = 60
+PROGRESS_SECONDS = 60
+_RETRY_AFTER = re.compile(r"retry[- ]after[\"':= ]+(\d{1,5})", re.I)
+
+
+def rate_limited(err: str | None) -> bool:
+    return bool(err) and (" 429" in err or "429 " in err or "too many requests" in err.lower())
+
+
+def retry_after(err: str | None) -> int | None:
+    m = _RETRY_AFTER.search(err or "")
+    return int(m.group(1)) if m else None
+
+
+class Tally:
+    """One portal's requests in a round: what went, what failed and why, and whether it
+    stopped. Shared by the pool, the paced sweeps and the progress line."""
+
+    def __init__(self, name: str, total: int, limit: int = 1, cap: int | None = None):
+        self.name, self.total, self.limit, self.cap = name, total, max(1, limit), cap
+        self.sent = self.active = self.limited = self.timeouts = self.streak = 0
+        self.failed: list[str] = []
+        self.until = 0.0
+        self.stopped = ""
+        self.capped = 0
+
+    def line(self, left: float | None = None) -> str:
+        bits = [f"{self.sent}/{self.total} sent", f"{len(self.failed)} failed"]
+        if self.limited or self.timeouts:
+            bits.append(f"{self.limited} rate-limited (429), {self.timeouts} timed out")
+        if self.capped:
+            bits.append(f"{self.capped} deeper page(s) left by the round's cap")
+        if self.stopped:
+            bits.append(f"stopped: {self.stopped}")
+        elif left is not None:
+            bits.append(f"{max(0, int(left // 60))} min left")
+        return f"progress: {self.name} " + ", ".join(bits)
+
+
+def _say(line: str, log=None) -> None:
+    print(line, file=sys.stderr, flush=True)
+    if log:
+        try:
+            with open(log, "a", encoding="utf-8") as fh:
+                fh.write(line + "\n")
+        except OSError:
+            pass
+
+
+def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int | None = None,
+         clock=time.monotonic, sleep=time.sleep, tallies: dict | None = None,
+         on_rows=None) -> tuple[list[dict], dict]:
+    """Run [(portal, fn, args)] on `workers` threads until done or `budget` runs out.
+
+    Each portal gets a Tally (in `tallies`, shared with the progress line). A 429
+    halves that portal's share of the workers and pauses it (Retry-After, else
+    BACKOFF_SECONDS times the run of 429s); POOL_MAX_LIMITED in a row stops it. `cap`
+    is the most requests a portal may send. `on_rows` sees each batch of rows as it
+    lands, which is how a partial scrape survives a stage that is killed.
+    Returns (rows, tallies)."""
+    tallies = {} if tallies is None else tallies
+    for portal in dict.fromkeys(j[0] for j in jobs):
+        n = sum(1 for j in jobs if j[0] == portal)
+        tallies.setdefault(portal, Tally(portal, min(n, cap) if cap else n, workers, cap))
+    queue, rows, lock = deque(jobs), [], threading.Lock()
+    start = clock()
+
+    def take():
+        now = clock()
+        if now - start >= budget:
+            return "done", None
+        waits = []
+        for i, job in enumerate(queue):
+            t = tallies[job[0]]
+            if t.stopped or (t.cap and t.sent + t.active >= t.cap):
+                continue
+            if t.until > now:
+                waits.append(t.until - now)          # backing off after a 429
+                continue
+            if t.active >= t.limit:
+                waits.append(0.2)                    # its share of the workers is busy
+                continue
+            del queue[i]
+            t.active += 1
+            return "go", job
+        return ("wait", max(0.2, min(waits))) if waits else ("done", None)
+
+    def worker():
+        while True:
+            with lock:
+                what, job = take()
+            if what == "done":
+                return
+            if what == "wait":
+                sleep(min(job, 5.0))
+                continue
+            portal, fn, args = job
+            try:
+                got, err = fn(*args)
+            except Exception as e:  # noqa: BLE001  one request never ends the pool
+                got, err = [], f"{type(e).__name__}: {str(e)[:120]}"
+            with lock:
+                t = tallies[portal]
+                t.active -= 1
+                t.sent += 1
+                if err:
+                    t.failed.append(err)
+                    if rate_limited(err):
+                        t.limited += 1
+                        t.streak += 1
+                        t.limit = max(1, t.limit // 2)
+                        t.until = clock() + (retry_after(err) or BACKOFF_SECONDS * t.streak)
+                        if t.streak >= POOL_MAX_LIMITED:
+                            t.stopped = (f"rate-limited {t.streak} times in a row (HTTP 429); "
+                                         "the portal is asking for less")
+                    elif "timeout" in err.lower():
+                        t.timeouts += 1
+                else:
+                    t.streak = 0
+                    rows.extend(got or ())
+                    if on_rows and got:
+                        on_rows(list(got))
+
+    threads = [threading.Thread(target=worker, daemon=True) for _ in range(max(1, workers))]
+    for th in threads:
+        th.start()
+    for th in threads:
+        th.join()
+    for portal, t in tallies.items():
+        left = sum(1 for j in queue if j[0] == portal)
+        if not left or t.stopped:
+            if left:
+                t.failed.append(f"{left} request(s) not sent: {t.stopped}")
+            continue
+        if clock() - start >= budget:
+            t.stopped = f"its {int(budget // 60)}-minute budget ran out"
+            t.failed.append(f"{left} request(s) not sent: {t.stopped}")
+        elif t.cap:
+            # The cap is the plan, not a failure: the deep pages it leaves are what a
+            # gentler round chose not to ask for.
+            t.capped = left
+    return rows, tallies
 
 
 # ------------------------------------------------------------------ canary
@@ -547,19 +742,107 @@ def build_tasks(on: dict[str, bool], pages: int) -> list[tuple]:
     return tasks
 
 
+PARTIAL = "partial_rows.json"
+
+
+def _write_partial(out: str, seen: dict) -> None:
+    """Everything found so far, written over itself: what a killed stage leaves."""
+    tmp = os.path.join(out, PARTIAL + ".tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(list(seen.values()), fh)
+        os.replace(tmp, os.path.join(out, PARTIAL))
+    except OSError:
+        pass
+
+
+def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
+           sent: dict, failed: dict, partial: str = "") -> int:
+    """The scrape's files from what was found: scraped, kept and dropped. Exit 2 when
+    more than a quarter of the requests failed, or when the scrape was cut short."""
+    # Copies of one posting from several sources are as old as the oldest of them.
+    rows = stamp_copies(list(seen.values()), today)
+    kept, dropped = [], []
+    for j in rows:
+        ok, row = annotate(j, today, jobage)
+        (kept if ok else dropped).append({**row, "prefilter": row["prefilter_reason"]})
+
+    buckets = {"0-3": 0, "4-7": 0, "8-14": 0}
+    for j in kept:
+        d = age_days(j, today)
+        if d is None:
+            continue
+        buckets["0-3" if d <= 3 else ("4-7" if d <= 7 else "8-14")] += 1
+    by_portal: dict[str, int] = {}
+    for j in rows:
+        by_portal[j["portal"]] = by_portal.get(j["portal"], 0) + 1
+
+    json.dump(kept, open(f"{out}/kept.json", "w"), indent=1)
+    # LinkedIn's search endpoint returns no body, so `desc` is None for every
+    # LinkedIn row here. Anything downstream that reads a posting - the text
+    # screen, the knockout stage, the extractor - is blind until
+    # tools/hydrate.py fills them in, and it fails quietly rather than loudly.
+    # Say so, loudly, rather than letting a caller assume these are readable.
+    blind = sum(1 for j in kept if not (j.get("desc") or "").strip())
+    if blind:
+        print(f"WARNING: {blind}/{len(kept)} kept postings have NO description. "
+              f"Run `python3 tools/hydrate.py {out}/kept.json --out "
+              f"{out}/hydrated.json` before ranking, screening or extracting, "
+              f"or every one of them reaches the model blind.")
+    json.dump(dropped, open(f"{out}/dropped.json", "w"), indent=1)
+    json.dump(rows, open(f"{out}/scraped.json", "w"), indent=1)
+    try:
+        os.remove(os.path.join(out, PARTIAL))
+    except OSError:
+        pass
+    print(f"{n_tasks} requests -> {len(rows)} unique postings {by_portal}")
+    print(f"prefilter kept {len(kept)}, dropped {len(dropped)}; age {buckets}")
+    report, bad = failure_report(sent, failed)
+    print(report)
+    if partial:
+        print(f"PARTIAL: {partial}")
+    return 2 if bad or partial else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--pages", type=int, default=5)
+    ap.add_argument("--pages", type=int, default=None,
+                    help=f"default {CLOUD_PAGES} in the cloud, {LOCAL_PAGES} on a person's own "
+                         "computer (profile/search.py SCRAPE_PAGES sets their own)")
     ap.add_argument("--jobage", type=int, default=14)
     ap.add_argument("--today", default=None)
-    ap.add_argument("--workers", type=int, default=10)
+    ap.add_argument("--workers", type=int, default=None,
+                    help=f"default {CLOUD_WORKERS} in the cloud, {LOCAL_WORKERS} on their own "
+                         "computer (SCRAPE_WORKERS)")
+    ap.add_argument("--max-requests", dest="max_requests", type=int, default=None,
+                    help="the most requests each app portal sends this round (default none "
+                         f"in the cloud, {LOCAL_MAX_REQUESTS} on their own computer)")
+    ap.add_argument("--budget", type=int, default=POOL_BUDGET,
+                    help="seconds the LinkedIn and freehire requests may take, in all")
+    ap.add_argument("--log", default=None, help="a file the progress lines are appended to")
+    ap.add_argument("--finish", action="store_true",
+                    help="no requests: write the scrape's files from what a killed run left "
+                         f"in {PARTIAL}, and exit 2")
     ap.add_argument("--skip-canary", action="store_true",
                     help="skip the pre-flight portal probe (offline replays)")
     ap.add_argument("--alerts", default=None,
                     help="postings from the person's job-alert emails (tools/job_alerts.py)")
     a = ap.parse_args()
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
+    pages, workers, cap = defaults()
+    pages = a.pages or pages
+    workers = a.workers or workers
+    cap = a.max_requests if a.max_requests is not None else cap
+    if a.finish:
+        try:
+            got = json.load(open(os.path.join(a.out, PARTIAL), encoding="utf-8"))
+        except (OSError, ValueError):
+            got = []
+        seen = {r["url"]: r for r in got if isinstance(r, dict) and r.get("url")}
+        return finish(a.out, seen, today, a.jobage, 0, {}, {},
+                      partial=(f"the scrape stage ran out of time; {len(seen)} postings had "
+                               "arrived and are kept, the rest of the requests never went"))
     if not (QUERIES and LOCATIONS):
         print("scrape_wide: profile/search.py names no SCRAPE_QUERIES or "
               "SCRAPE_LOCATIONS, so there is nothing to search: run /setup",
@@ -572,6 +855,9 @@ def main() -> int:
         print(f"portals: PORTALS in profile/search.py names {name!r}, which is not "
               f"an installed portal, so it switches nothing", file=sys.stderr)
     print("portals: " + ", ".join(f"{n} {'on' if v else 'off'}" for n, v in on.items()))
+    print(f"pace: {pages} pages, {workers} at once"
+          + (f", at most {cap} requests a portal" if cap else "")
+          + (" (a cloud session)" if CLOUD else " (this computer: gentler, the person's own address)"))
     for name in sorted(n for n, v in on.items() if v and n not in WIRED
                        and not (portals.has_cli(n) and portals.follows_contract(n))):
         why = "has no CLI" if not portals.has_cli(name) else "does not declare contract: 1"
@@ -592,7 +878,7 @@ def main() -> int:
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()}},
                       open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)
 
-    tasks = build_tasks(on, a.pages)
+    tasks = build_tasks(on, pages)
     if not tasks:
         print("portals: none of the portals this scrape can call is on, so this "
               "round is the employer boards alone (python3 tools/portals.py)")
@@ -601,37 +887,54 @@ def main() -> int:
     sent: dict[str, int] = {}
     failed: dict[str, list[str]] = {}
     mine: dict[str, list[tuple]] = {}
-    for task in tasks:
-        if task[0] not in ("li", "lir", "fh"):
-            mine.setdefault(task[0], []).append(task)
-    paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
-    sweeps = {paced.submit(sweep, skill, ts, a.jobage): portals.short(skill)
-              for skill, ts in mine.items()}
-    with ThreadPoolExecutor(max_workers=a.workers) as ex:
-        futs = {}
-        for task in tasks:
-            kind, q, loc, pg = task[:4]
-            if kind in mine:
-                continue
-            portal = "freehire" if kind == "fh" else "linkedin"
-            sent[portal] = sent.get(portal, 0) + 1
-            if kind == "li":
-                futs[ex.submit(linkedin, q, loc, pg, a.jobage)] = portal
-            elif kind == "lir":
-                futs[ex.submit(linkedin, q, loc, pg, a.jobage, True)] = portal
-            else:
-                futs[ex.submit(freehire, q, pg, a.jobage)] = portal
-        for f in as_completed(futs):
-            portal = futs[f]
-            try:
-                rows_, err = f.result()
-            except Exception as e:
-                rows_, err = [], f"{type(e).__name__}: {str(e)[:120]}"
-            if err:
-                failed.setdefault(portal, []).append(err)
+    lock = threading.Lock()
+
+    def landed(rows_):
+        with lock:
             for r in rows_:
                 if r.get("url"):
                     seen.setdefault(r["url"], r)
+
+    for task in tasks:
+        if task[0] not in ("li", "lir", "fh"):
+            mine.setdefault(task[0], []).append(task)
+    tallies: dict[str, Tally] = {portals.short(k): Tally(portals.short(k), len(ts))
+                                 for k, ts in mine.items()}
+    paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
+    sweeps = {paced.submit(sweep, skill, ts, a.jobage, tally=tallies[portals.short(skill)],
+                           on_rows=landed): portals.short(skill)
+              for skill, ts in mine.items()}
+    jobs = []
+    for task in tasks:
+        kind, q, loc, pg = task[:4]
+        if kind in mine:
+            continue
+        if kind == "li":
+            jobs.append(("linkedin", linkedin, (q, loc, pg, a.jobage)))
+        elif kind == "lir":
+            jobs.append(("linkedin", linkedin, (q, loc, pg, a.jobage, True)))
+        else:
+            jobs.append(("freehire", freehire, (q, pg, a.jobage)))
+    # Broadest first: page one of every search before anyone's page two, the home
+    # city before the rest. Under a cap, or a budget that runs out, what goes unsent
+    # is the deep pages, never a query or a place that was never asked at all.
+    jobs.sort(key=lambda j: (j[2][2] if j[1] is linkedin else j[2][1],
+                             0 if j[1] is not linkedin or str(j[2][1]).startswith(DEEP) else 1))
+    started = time.monotonic()
+    done = threading.Event()
+
+    def progress():
+        while not done.wait(PROGRESS_SECONDS):
+            left = a.budget - (time.monotonic() - started)
+            for t in list(tallies.values()):
+                _say(t.line(left), a.log)
+            with lock:
+                _write_partial(a.out, seen)
+
+    ticker = threading.Thread(target=progress, daemon=True)
+    ticker.start()
+    _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
+                           on_rows=landed)
     swept: dict[str, int] = {}
     for f in as_completed(sweeps):
         portal = sweeps[f]
@@ -643,11 +946,22 @@ def main() -> int:
         swept.update({k: n for k in mine if portals.short(k) == portal})
         if errs:
             failed.setdefault(portal, []).extend(errs)
-        for r in rows_:
-            if r.get("url"):
-                seen.setdefault(r["url"], r)
+        landed(rows_)
     paced.shutdown()
+    done.set()
+    for name, t in pool_tallies.items():
+        if name in sent:
+            continue
+        sent[name] = t.sent
+        if t.failed:
+            failed.setdefault(name, []).extend(t.failed)
+    for t in tallies.values():
+        _say(t.line(), a.log)
+        if t.stopped and t.name in ("linkedin", "freehire"):
+            _say(f"portals: {t.name} stopped, {t.stopped}; {t.total - t.sent} of {t.total} "
+                 "requests not sent", a.log)
     save_cursor(swept, today.isoformat())
+    _write_partial(a.out, seen)
 
     # Employer boards, straight from the ATS: every system openroles reads, and
     # careers sites. No key, and keyed by EMPLOYER rather than by keyword,
@@ -663,9 +977,7 @@ def main() -> int:
         from ats_boards import fetch_all as _ats_fetch
         ats_notes: dict[str, str] = {}
         ats_rows, ats_quiet = _ats_fetch(notes=ats_notes, today=today)
-        for r in ats_rows:
-            if r.get("url"):
-                seen.setdefault(r["url"], r)
+        landed(ats_rows)
         ats_by: dict[str, int] = {}
         for r in ats_rows:
             ats_by[r.get("portal")] = ats_by.get(r.get("portal"), 0) + 1
@@ -691,43 +1003,10 @@ def main() -> int:
         added = merge_alerts(seen, alert_rows)
         print(f"job alerts: {added} added, {len(alert_rows) - added} already found by the search")
 
-    # Copies of one posting from several sources are as old as the oldest of them.
-    rows = stamp_copies(list(seen.values()), today)
-    kept, dropped = [], []
-    for j in rows:
-        ok, row = annotate(j, today, a.jobage)
-        (kept if ok else dropped).append({**row, "prefilter": row["prefilter_reason"]})
-
-    buckets = {"0-3": 0, "4-7": 0, "8-14": 0}
-    for j in kept:
-        d = age_days(j, today)
-        if d is None:
-            continue
-        buckets["0-3" if d <= 3 else ("4-7" if d <= 7 else "8-14")] += 1
-    by_portal: dict[str, int] = {}
-    for j in rows:
-        by_portal[j["portal"]] = by_portal.get(j["portal"], 0) + 1
-
-    json.dump(kept, open(f"{a.out}/kept.json", "w"), indent=1)
-    # LinkedIn's search endpoint returns no body, so `desc` is None for every
-    # LinkedIn row here. Anything downstream that reads a posting - the text
-    # screen, the knockout stage, the extractor - is blind until
-    # tools/hydrate.py fills them in, and it fails quietly rather than loudly.
-    # Say so, loudly, rather than letting a caller assume these are readable.
-    blind = sum(1 for j in kept if not (j.get("desc") or "").strip())
-    if blind:
-        print(f"WARNING: {blind}/{len(kept)} kept postings have NO description. "
-              f"Run `python3 tools/hydrate.py {a.out}/kept.json --out "
-              f"{a.out}/hydrated.json` before ranking, screening or extracting, "
-              f"or every one of them reaches the model blind.")
-    json.dump(dropped, open(f"{a.out}/dropped.json", "w"), indent=1)
-    json.dump(rows, open(f"{a.out}/scraped.json", "w"), indent=1)
-    print(f"{len(tasks)} requests -> {len(rows)} unique postings {by_portal}")
-    print(f"prefilter kept {len(kept)}, dropped {len(dropped)}; age {buckets}")
-    report, bad = failure_report(sent, failed)
-    print(report)
-    return 2 if bad else 0
-
+    cut = [t for t in pool_tallies.values() if t.stopped and t.name in ("linkedin", "freehire")]
+    partial = ("; ".join(f"{t.name} stopped ({t.stopped}) with {t.total - t.sent} of its "
+                         f"{t.total} requests unsent" for t in cut))
+    return finish(a.out, seen, today, a.jobage, len(tasks), sent, failed, partial=partial)
 
 if __name__ == "__main__":
     raise SystemExit(main())

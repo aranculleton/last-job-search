@@ -165,6 +165,19 @@ def test_the_working_week_is_asked_only_where_it_differs(profile):
     assert "weekend" in U.by_id("market-week").pending()
 
 
+def test_the_read_break_is_written_only_for_someone_who_reads_in_their_browser(profile):
+    assert U.by_id("read-break").pending() == ""             # the example pastes profiles
+    path = profile / "networking.py"
+    path.write_text(path.read_text(encoding="utf-8").replace(
+        'PROFILE_READS = "paste"', 'PROFILE_READS = "browser"'), encoding="utf-8")
+    person._modules.clear()
+    assert "PROFILE_READ_BREAK_MINUTES" in U.by_id("read-break").pending()
+    path.write_text(path.read_text(encoding="utf-8") + "\nPROFILE_READ_BREAK_MINUTES = (5, 12)\n",
+                    encoding="utf-8")
+    person._modules.clear()
+    assert U.by_id("read-break").pending() == ""
+
+
 def test_the_market_language_is_asked_only_outside_english_markets(profile):
     assert U.by_id("market-language").pending() == ""        # GB, English postings
     _set_country(profile, "DE")
@@ -274,7 +287,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
-                                                                 "connections-export", "work-place"}
+                                                                 "connections-export", "work-place",
+                                                                 "profile-consistency"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -282,6 +296,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert U.by_id("connections-export").steps().endswith("Nothing is sent to anyone.")
     # Where they will mostly work is theirs to say; nothing in a profile answers it.
     assert "computer, or on your phone or the web" in U.by_id("work-place").ask
+    # Two answers to what a recruiter checks first: only the person knows which is true.
+    assert "you pick the right one" in U.by_id("profile-consistency").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):

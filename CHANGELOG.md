@@ -20,7 +20,153 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Interview prep for a process with no application.** A referral that led to a recruiter's
+  call, where nobody applied through the portal, could not be prepared at all: /interview
+  refused it, and the session wrote everything by hand. One command now registers the
+  process (`interview_pack.py process "<Employer>" --contact <who leads it> --role "<role>"
+  --stage "Recruiter screen" --date <day>`) and writes its prep document. The process is one
+  tracker row marked as a process, never counted as an application, never nudged, never
+  credited with a draft, and /outcome, `open_actions.py --due` and the brief all see the
+  call. Documents drafted for the role and never sent become that row; an application that
+  did go in is refused, because the call is its next stage.
+- **One living prep document for each hiring process.** The prep lived in four places: a
+  networking prep per contact, an interview pack per stage, hand-kept notes and the chat.
+  Now there is one, `interview_prep.md` beside the application, updated in place at every
+  stage and sent to you again every time it changes, with a "Last updated" line. What you
+  write in it is kept on every rebuild: your answers, what to rework, your notes, and what
+  you found out. Per-contact preps at that employer point to it.
+- **Answers written to be said.** Every likely question gets an answer in full, spoken,
+  first-person sentences, written by Claude from your own profile, and the document is not
+  ready until `interview_pack.py check` passes: it refuses resume prose, third person, bullet
+  points, pasted profile wording and answers still unwritten. Facts stay in shorthand;
+  answers never are. Call preps get the same check (`prep.py "<contact>" --check`), and your
+  rewritten answers survive a rebuild. A call prep's "Tell me about yourself" answer now opens
+  on a mark saying it is profile wording to rewrite, so a test of your own that expects the
+  profile summary as that answer word for word needs the mark in front of it.
+- **What they are assessing, and what they want to hear.** The first screen of every pack
+  says what this stage is weighing and what a strong answer gives them, and every question
+  says what it is really checking ("Why are you leaving?" checks whether you are running
+  from something; they want a pull towards the work, nothing against your employer).
+- **Prep tailored to who you are meeting.** For each interviewer, named or known only by
+  title: what someone in their role listens for and wants to hear at this stage, which of
+  your strengths to put first for them, the story to lead with, what their team works on,
+  and a question that fits them (a recruiter is asked about the process, never about their
+  own posts; a practitioner about how the team does the work the round tests). Only their
+  public, professional work is used, never anything personal, and never "I saw on your
+  profile". Claude does the research; the document never asks you to.
+- **The interview's format.** A recruiter screen, a case, a behavioural or values interview, a
+  coding round, a technical deep dive and a presentation each get what they test, their own
+  likely questions and drills, read from the stage's name or `--format`, or assumed from the
+  employer and the role and said to be assumed. How the process started (a referral, a
+  recruiter's approach, an application) changes what to say about it.
+- **Small talk that does a job.** The first minutes are prepared from what is true: how this
+  stage usually opens and how a true answer walks into your strongest point, what you share
+  with the interviewer, the employer's latest verified news as the bridge to "why us", and,
+  after a recent move, the honest way through "how are you finding it?". Never a memory you
+  do not have. Profile upgrade: move-and-area.
+- **What the employer's people have been told.** Every message logged to anyone at the
+  employer, and the form, read for where you are, your current employer, work
+  authorization, notice and pay, with each line that disagrees with your profile now
+  flagged. A referrer told "moving" weeks ago, before the move happened, is the case that
+  prompted it.
+- **A stock answer that argues against the employer is flagged.** "Depth over a rotating
+  client portfolio" said to a consultancy is marked CAREFUL, from `Suits:` and `Not for:`
+  lines on your answers or from its own words.
+- **More of the questions a screen actually asks**: where you are based, why you are leaving
+  (apart from why you are looking), the moves between jobs, notice and start date, whether
+  you are interviewing elsewhere, a project in a minute and one with a commercial result,
+  leadership from what you have actually done, and, when they apply, how you know the
+  referrer, what happens after a temporary permit, and travel at a consulting firm.
+- **A chat just for one employer, offered once.** When a stage is booked, you are offered a
+  separate chat for that employer: status, stage-by-stage drills scored on a rubric, verified
+  news, drafts for the recruiter and referrer (never sent), and a case log, from a prompt
+  kept in the app (`automation/prompts/campaign.md`). The rest of the search, the brief
+  included, leaves that employer to it.
+- **One answer to what a recruiter checks first.** `profile_consistency.py` finds where your
+  profile states your pay band, floor, notice period or sponsorship differently from its
+  source, or where a stock answer volunteers a permit's expiry against your own rule to
+  say it only when asked. You are asked which is right; nothing is picked for you. Profile
+  upgrade: profile-consistency.
+- **Recruiters hear your own employer-facing work-authorization line**, not the networking
+  one. Profile upgrade: work-auth-employer.
+- **Networking reads spent where cheap checks cannot decide.** Free sources first, then pages
+  that show many people at once (the People tab, your sent invitations), and deep profile
+  reads only for the few you will write to that day. The search's own summary now carries
+  location and role into the shortlist, unplaced people rank lower and only two go on a
+  day's list, and title searches rotate past the ones that found nobody.
+- **Requests you send from the LinkedIn app are recorded.** `state.py sent <id>` writes the
+  message and clears the draft in one line; reading your sent invitations reconciles the
+  rest, and an overdue queued item with nothing logged is marked "unconfirmed" rather than
+  "send now".
+- **A reversible "dropped" status.** People you set aside before writing to them were closed
+  like real dead ends, and discovery then called their employers "already covered".
+  `state.py reopen` and `drop` (by id or `--where`) move them back and forth, and discovery
+  says how many in the book were never messaged. Profile upgrade: dropped-rows.
+- **The pause between bursts of profile reads is yours to set** (`PROFILE_READ_BREAK_MINUTES`
+  in your networking settings), with the reasons for every pacing number written down.
+  Profile upgrade: read-break.
+
+### Changed
+
+- **A recruiter screen on a live process is /interview, referred or not.** /prep is for
+  networking calls; when its contact's call is a stage of a live process it says so and
+  points to /interview.
+- **/interview and /prep check the model themselves** and say first when interview prep
+  wants a stronger one, rather than relying on the morning sync's line being remembered.
+- **Call preps are rebuilt when anything they rest on changes**: the contact's status, next
+  step or date, a message, the research arriving, a process being registered, or the call
+  coming within two days with nothing researched, which they now flag as research to do
+  first. The brief rebuilds them every morning.
+- **A session starts with `sync_app.py --pull`**, not a bare merge. A master whose history
+  was rewritten is never merged into an old checkout: a branch with nothing of its own moves
+  to the new master, and one with work of its own stops and names it. Uncommitted changes
+  stop it with a list, and a move that git refuses is never reported as done.
+- **Employer research has a path for a site that answers 503**: retry once later in the
+  session, then the employer's regional, press, investor or job-board pages; a fact known
+  only from a search summary is kept labelled "search summary, not read".
+- **The permit answer in the interview template follows your disclosure rule** instead of
+  telling you to state the expiry plainly.
+- **On your own computer**: rounds are gentler by default (fewer pages and workers, a cap on
+  requests to each app portal, all yours to change), installed tools are found on the usual
+  Mac and Windows paths even when the shell's PATH lacks them, `~/texmf` is no longer linked
+  into the repo, `ci_local.sh` uses your virtual environment and says which Python it ran,
+  each chat on one computer works in a folder of its own (`sync_app.py --worktree <name>`),
+  and landing work checks the pull request says merged instead of trusting `gh`'s exit code.
+
 ### Fixed
+
+- **A round that runs long keeps what it found.** A scrape stage killed at its time limit
+  threw away 45 minutes of results. Each portal pool now has a budget of its own, results are
+  written as they arrive, a timed-out round finishes with what it has (exit 2, thin, not 1),
+  rate limits back off and stop a portal after repeated refusals, and a progress line per
+  portal is printed every minute. The rows are now written by one step at the end of
+  `scrape_wide.py` (`finish()`), so a test of your own that searches its source for
+  `rows = list(seen.values())` will not find it there; the employer boards still never
+  break a round.
+- **"KEEP" after nothing was read.** A verdict on someone with only public findings said
+  KEEP; it now says NOT READ YET, and every outcome of a read has its own exit code.
+- **Profile top cards read as they are laid out now**: a mutual-connection line is no longer
+  taken as the headline, and a school is no longer taken as where someone lives.
+- **People search keeps the employer from a result title** however it is written ("Director,
+  Data Science, <Employer>", "<Employer> <City>").
+- **Queued notes no longer end on the same sentence**: a batch is checked for any sentence
+  shared too widely, your line about yourself included when you say it should vary.
+- **The ranking of who to write to lists only people you can write to**, and a public finding
+  can carry a month or "unknown" instead of an invented day.
+- **The upgrade hand-off between two chats** says plainly which chat applies an update and
+  when the other may take over (`profile_upgrades.py --take` at once, when no other chat is
+  open).
+- **Interview and call prep bugs found in two independent reviews before release**: a
+  rebuild that dropped answers written for a question not on this stage's list; warning
+  lines saved as your answer and doubling; "pay" read inside "payments"; pay compared as text
+  rather than amounts; a referrer's id printed where their name belonged; the networking
+  work-authorization line given to a recruiter; the personal narrative pasted as an answer;
+  a temporary status read from "no visa sponsorship required"; a contact introduced to you
+  taken as your referrer; a bank with an advisory arm taken for a consultancy; a rebooked
+  stage written twice; bad dates written to file; and a campaign chat invisible when nothing
+  was due.
 
 - **Windows: the Poppler install named a tool Windows does not have.** The environment check,
   the PDF check's error and SETUP.md said `choco install poppler`, which needs Chocolatey

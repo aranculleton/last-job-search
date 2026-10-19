@@ -63,6 +63,8 @@ OWN_VOICE = re.compile(r"^(?:hope you'?re well|(?:would|I'?d) love (?:to|a)\b)",
 WORK_AUTH = {
     "senior": "I have settled status and full right to work in the UK, no sponsorship needed",
     "peer": "I can already work in the UK, no sponsorship needed",
+    # What a recruiter or an employer hears, on a call or a form.
+    "employer": "I have settled status and full right to work in the UK, no sponsorship needed",
 }
 WORK_AUTH_CLAUSE = re.compile(
     r"(?:my\s+)?visa(?:'s| is)?(?:\s+all)?\s+sorted"

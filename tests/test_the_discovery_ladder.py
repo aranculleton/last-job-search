@@ -51,12 +51,13 @@ def test_a_chat_with_no_browser_still_gets_the_whole_list_and_is_asked_for_nothi
 @pytest.mark.parametrize("tools,route", [(["browser"], "browser"), (["enable"], "enable"),
                                          (["chrome"], "browser"), (["chrome-off"], "hand"),
                                          ([], "hand")])
-def test_a_chat_with_a_browser_reads_the_best_ten_and_one_without_offers_a_paste(tools, route, monkeypatch):
+def test_a_chat_with_a_browser_reads_the_best_few_and_one_without_offers_a_paste(tools, route, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     got = sources.ladder(tools)
     assert got["read"] == route
     reads = route in ("browser", "enable")
-    assert got["read_cap"] == (reading.READS_PER_RUN if reads else 0) and reading.READS_PER_RUN == 10
+    # Deep reads are for the few written to that day; one-page reads screen the rest.
+    assert got["read_cap"] == (reading.READS_PER_RUN if reads else 0) and reading.READS_PER_RUN == 5
     assert (got["say"] == "") == reads
 
 
@@ -83,7 +84,8 @@ def test_search_results_become_people_with_evidence_and_a_profile_status_nothing
     # Someone whose own title names another employer works there, not here.
     assert any(p["name"] == "Rhian Pellow" and "works at Fenwick Lane" in w
                for p, w in got["dropped"])
-    assert got["counts"] == {"results": 8, "people": 5, "kept": 3, "verified": 2}
+    assert got["counts"] == {"results": 8, "people": 5, "kept": 3, "verified": 2,
+                             "in_book": 0, "never_messaged": 0}
     # The searched-for job is a reason to look, never a claim about their role.
     assert any("came up in a search for Head of Data there, which is not their title" in w
                for _, w in by["Rosalind Achterberg"]["why"]["reasons"])
@@ -180,10 +182,8 @@ def test_a_browser_read_is_for_the_short_list_only(tmp_path, monkeypatch):
         reading.main(["read", "kestrel_rosalind", str(page), "--source", "browser",
                       "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"])
     assert not (tmp_path / "documents" / "network" / "kestrel_rosalind").exists()
-    ids = reading.shortlist([f"p{i}" for i in range(14)] + ["p1"])
-    assert len(ids) == reading.READS_PER_RUN and ids[0] == "p0"
-    reading.shortlist(["kestrel_rosalind"])
-    assert reading.on_shortlist("kestrel_rosalind")
+    got = reading.shortlist(["kestrel_rosalind"])
+    assert got["added"] == ["kestrel_rosalind"] and reading.on_shortlist("kestrel_rosalind")
     assert reading.main(["read", "kestrel_rosalind", str(page), "--source", "browser",
                          "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"]) == 0
 
