@@ -876,9 +876,11 @@ SWEEP_STATE: str | None = None
 
 
 def _sweep_paths() -> tuple[str, str]:
-    """(where the cursor lives, where 3.7.0 put it)."""
-    new = SWEEP_STATE or person.state("documents", "rounds", ".sweep", "cursor.json")
-    return new, os.path.join(os.path.dirname(os.path.dirname(new)), ".sweep.json")
+    """(where the cursor lives, where 3.7.0 put it, or "" for a test's own path)."""
+    if SWEEP_STATE:
+        return SWEEP_STATE, ""
+    return (person.state("documents", "rounds", ".sweep", "cursor.json"),
+            person.state("documents", "rounds", ".sweep.json"))
 
 
 # This round's plan per person portal: (mode, core requests, rotating length, offset).
@@ -918,8 +920,10 @@ def _load(path: str) -> dict:
 
 
 def _cursor() -> dict:
+    """The cursor, read from where it lives and from where 3.7.0 put it, the newer
+    winning: an old file a move could not remove loses nothing it still holds."""
     new, old = _sweep_paths()
-    return _load(new) if os.path.exists(new) else _load(old)
+    return {**_load(old), **_load(new)}
 
 
 def _write_cursor(state: dict) -> bool:
@@ -944,8 +948,7 @@ def move_cursor() -> str:
     new, old = _sweep_paths()
     if not os.path.exists(old):
         return "nothing to move"
-    state = {**_load(old), **_load(new)}            # one a round wrote since wins
-    if not _write_cursor(state):
+    if not _write_cursor(_cursor()):
         return f"could not write {new}"
     return f"moved {old} to {new}"
 
