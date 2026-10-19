@@ -83,9 +83,10 @@ documents/references/**
 # candidate's weak points.
 documents/applications/**
 documents/postings/**
-# Belt-and-braces, not the primary guard: nothing writes here. Prep packs land
-# in documents/applications/<company>_<role>/, covered above. Kept because
-# tools/security_guards.py pins it in REQUIRED_IGNORE_RULES.
+# The interview question bank (documents/interview/question_bank.csv, written by
+# /outcome through tools/interview_pack.py): employers and what they asked. Prep
+# packs land in documents/applications/<company>_<role>/, covered above.
+# tools/security_guards.py pins this rule in REQUIRED_IGNORE_RULES.
 documents/interview/**
 !documents/**/.gitkeep
 

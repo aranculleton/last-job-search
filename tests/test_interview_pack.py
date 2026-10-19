@@ -320,6 +320,9 @@ def test_the_questions_asked_go_into_one_bank(app):
                                                            ("Larkspur Retail", "")]
     with pytest.raises(ValueError):
         P.add_asked(COMPANY, ROLE, "Phone screen", "Why us?", landed="great")
+    # /outcome run twice on the same stage records the question once.
+    assert P.add_asked(COMPANY, ROLE, "phone screen", "Why logistics") == ""
+    assert len(what_works.bank()) == 2
 
 
 def test_the_cli_builds_and_writes_it(app, capsys):

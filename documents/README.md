@@ -11,7 +11,8 @@ Two kinds of thing live here, and it helps to know which is which.
 starting in a fresh container knows anything at all. It is the whole of that record: every
 posting's own text, every round's shortlist with the scores it was ranked on, every
 application the tracker knows about including the ones made outside this repo, the answers
-given to a portal's own questions, and a call-prep document for every contact.
+given to a portal's own questions, a call-prep document for every contact, a prep pack for
+every interview stage, and the questions interviews actually asked.
 
 Nothing in here is sent. Every resume, letter and outreach note stops as a file on disk,
 and submitting one is the candidate's own act.
@@ -30,7 +31,7 @@ documents/
 ├── applications/    OUT   one folder per application
 ├── rounds/          OUT   each search round's shortlist, bodies stripped
 ├── network/         OUT   one call-prep document per contact
-└── interview/       OUT   material that belongs to no single application
+└── interview/       OUT   the question bank, across every application
 ```
 
 ## applications/
@@ -71,7 +72,9 @@ Each folder holds:
   the cover letter's verified company fact. Sending it is the candidate's call.
 - **`form_fields.txt`** - answers given to the portal's own questions, so a follow-up or
   a second application does not contradict the first.
-- **`interview_prep_<stage>.md`** - written by `/interview` when one lands.
+- **`interview_prep_<stage>.md`** - the prep pack for one interview stage, written by
+  `tools/interview_pack.py` when `/interview` runs. One file per stage, so earlier packs
+  stay as history; a rebuild keeps its "To rework" section.
 - **`outcome.md`** - written by `/outcome` once there is a result. Later sessions and
   `tools/what_works.py` read it, so the header is fixed:
 
@@ -86,6 +89,21 @@ Each folder holds:
   That `Status:` enum is the archive's, and it is deliberately not the tracker CSV's
   `status` column. `/outcome` cites this block as the definition, so it lives here and
   nowhere else.
+
+  Below it, `## Interview stages reached` holds one checkbox per stage: `- [x] Phone screen
+  (YYYY-MM-DD)` once held, and `- [ ] Technical interview (scheduled YYYY-MM-DD, with
+  <title or name>)` while booked. `tools/open_actions.py --due` reads the booked line (a
+  stage close with no pack, a thank-you not yet on file after it) and `what_works.py brief
+  interviews` the ticked ones (how far applications get).
+
+## interview/
+
+`question_bank.csv`: the questions interviews actually asked, with the story told and
+whether it landed, one row per question, across every application. `/outcome` adds to it
+after a stage (`tools/interview_pack.py asked`); the next pack at any employer leads with
+what was asked there before, and `what_works.py brief interviews` names the questions that
+keep coming up and the stories that land. The prep packs themselves are per application,
+in `applications/` above, not here.
 
 ## rounds/
 

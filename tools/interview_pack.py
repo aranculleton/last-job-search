@@ -911,13 +911,18 @@ def write_pack(ctx, never_say=None) -> str:
 # ---------------------------------------------------------------- what came of it
 
 def add_asked(company, role, stage, question, story="", landed="", note="", date=None) -> str:
-    """One question an interview asked, into the bank. Returns the bank's path."""
+    """One question an interview asked, into the bank. Returns the bank's path, or ""
+    when that employer's stage already has it: /outcome run twice records it once."""
     landed = _text(landed).lower()
     if landed and landed not in what_works.LANDED:
         raise ValueError("landed is one of %s, or blank" % ", ".join(what_works.LANDED))
     if not _text(question):
         raise ValueError("a question to record is needed")
     path = person.state(*what_works.BANK)
+    same = (company_key(company), what_works._norm(stage), what_works._norm(question))
+    if any((company_key(r.get("company")), what_works._norm(r.get("stage")),
+            what_works._norm(r.get("question"))) == same for r in what_works.bank()):
+        return ""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     new = not os.path.exists(path)
     with open(path, "a", newline="", encoding="utf-8") as fh:
@@ -983,8 +988,10 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     try:
         if a.cmd == "asked":
-            print("added to %s" % _rel(add_asked(a.company, a.role, a.stage, a.question,
-                                                  a.story, a.landed, a.note, a.date)))
+            path = add_asked(a.company, a.role, a.stage, a.question, a.story, a.landed,
+                             a.note, a.date)
+            print("added to %s" % _rel(path) if path else
+                  "already in %s for that stage" % "/".join(what_works.BANK))
             return 0
         if a.cmd == "rework":
             print("added to %s" % _rel(add_rework(a.company, a.role, a.stage, a.question,
