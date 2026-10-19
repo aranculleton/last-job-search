@@ -678,6 +678,11 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
         seen.add(handle)
         status = profile_status(parsed, got["profile_url"], company) if got["kind"] == "profile" \
             else "likely"
+        by_name = status == "unconfirmed" and not parsed["employer"] and bool(company)
+        if by_name and kind == "profile_check":
+            # A name check searches for the name on purpose, and the employer came from
+            # the page that named them (sources.harvest's `known`): as likely as before.
+            status, by_name = "likely", False
         employer = parsed["employer"]
         if employer and status == "verified" and company_key(employer) != company_key(company):
             # The employer under another of its names ("<Name> Ratings", a brand line):
@@ -697,7 +702,7 @@ def people_from_results(results, company: str = "", kind: str = "title_search",
             "evidence": f"search result {today.isoformat()}: \"{title.strip()}\" ({url})"
                         + (f", for {query!r}" if query else ""),
         }
-        if status == "unconfirmed" and not parsed["employer"] and company:
+        if by_name:
             # Nothing but their own name ties them to the employer: triage drops them.
             found["name_match_only"] = (f"the search matched their name, not {company}: "
                                         "the result names no employer")

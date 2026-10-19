@@ -63,6 +63,11 @@ def test_a_first_name_that_spells_a_one_word_employer_is_not_a_contact_there():
     # A post is its author's only when the post itself names the employer.
     people = discovery.people_from_results(results, "Wren", today=TODAY)
     assert "Wren Achterberg" not in [p["name"] for p in people]
+    # A name check looks for that name on purpose: the page that named them gave the
+    # employer, so their profile stays as likely as before.
+    check = _harvest(results[:1], "Wren", kind="profile_check", name="Wren Halloway",
+                     known={"title": "Data Consultant", "evidence": "a speaker list"})
+    assert [(p["name"], p["profile_status"]) for p in check["keep"]] == [("Wren Halloway", "likely")]
     # Nobody at the employer came back: the name matches are not a verdict on it.
     only_names = discovery.triage(discovery.people_from_results(results[:1], "Wren", today=TODAY),
                                   today=TODAY, target_company="Wren")
