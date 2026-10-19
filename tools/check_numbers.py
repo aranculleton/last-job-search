@@ -33,6 +33,13 @@ WHAT IS DELIBERATELY NOT A FINDING:
   - a company fact in a cover letter, which is verified separately against an
     independently located source and is not the candidate's own claim
 
+THE LETTER, with `--drafts`. Only the resume was ever checked, and the letter's
+opening, bullets and close are free model text that an interviewer reads as
+closely. So the drafts mode checks a draft's `summary`, `p1`, `lead`, `p4` and
+`cl_bullets` against the profile, and also allows what the letter may honestly
+repeat about the employer: the figures in `p2` (the one verified company fact,
+which is not itself checked here) and the figures in the posting.
+
 Measured when written: across 53 committed resumes, prose only, exactly one
 novel number, and it was LaTeX residue. The documents are already grounded, so
 this is a regression guard rather than a repair, the same shape as voice_check.
@@ -40,6 +47,7 @@ this is a regression guard rather than a repair, the same shape as voice_check.
 Usage:
     python3 tools/check_numbers.py cv/<Prefix>_Resume_ACME.tex
     python3 tools/check_numbers.py cv/*.tex
+    python3 tools/check_numbers.py --drafts rounds/r1/drafts.json [cv/*.tex]
 Exit 0 clean, 1 an ungrounded number, 2 a bad invocation.
 """
 
@@ -156,10 +164,38 @@ def check(text: str, source: str = "", allowed=None) -> list[dict]:
     return out
 
 
+# The draft fields that are the candidate's own words, rendered. `p2` is the
+# researched paragraph and is allowed rather than checked; `concession` and the
+# notes are never rendered.
+DRAFT_FIELDS = ("summary", "p1", "lead", "p4")
+
+
+def _bullet_text(b) -> str:
+    if isinstance(b, dict):
+        return f"{b.get('label', '')}: {b.get('text', '')}"
+    return " ".join(str(x) for x in b)
+
+
+def check_draft(a: dict, allowed=None) -> list[dict]:
+    """Numbers in one draft's letter and summary that nothing supports."""
+    allowed = allowed if allowed is not None else grounded()
+    ok = set(allowed) | claims(a.get("p2") or "") | claims(a.get("posting") or "")
+    name = a.get("abbr") or a.get("company") or "draft"
+    out = []
+    for k in DRAFT_FIELDS:
+        out += check(a.get(k) or "", f"{name}.{k}", ok)
+    for i, b in enumerate(a.get("cl_bullets") or []):
+        out += check(_bullet_text(b), f"{name}.cl_bullets[{i}]", ok)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("paths", nargs="+")
+    ap.add_argument("paths", nargs="*")
+    ap.add_argument("--drafts", help="a drafts.json: check each letter and summary as well")
     a = ap.parse_args()
+    if not (a.paths or a.drafts):
+        ap.error("give a document, or --drafts drafts.json")
 
     allowed = grounded()
     if not allowed:
@@ -175,9 +211,21 @@ def main() -> int:
         except OSError as exc:
             print(f"check_numbers: cannot read {path}: {exc}", file=sys.stderr)
             return 2
+    drafts = []
+    if a.drafts:
+        # Through fit_to_page's loader: a kept draft.json names its posting,
+        # and the posting's own figures are allowed in the letter.
+        import fit_to_page
+        try:
+            drafts, _ = fit_to_page.load(a.drafts)
+        except (OSError, ValueError) as exc:
+            print(f"check_numbers: cannot read {a.drafts}: {exc}", file=sys.stderr)
+            return 2
+        for d in drafts:
+            findings += check_draft(d, allowed)
 
     if not findings:
-        print(f"check_numbers: {len(a.paths)} file(s) clean, "
+        print(f"check_numbers: {len(a.paths)} file(s) and {len(drafts)} letter(s) clean, "
               f"{len(allowed)} grounded values")
         return 0
     print(f"check_numbers: {len(findings)} number(s) not in the profile")

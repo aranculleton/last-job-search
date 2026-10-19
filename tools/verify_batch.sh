@@ -134,11 +134,12 @@ echo "=== numbers ==="
 # This is the general case for the kind of claim that can be checked
 # mechanically: every number in the resume must exist in the profile.
 #
-# RESUMES ONLY, and deliberately. A cover letter carries verified company facts
-# ("a 40-year lease", "12,345 daily deliveries") which are not the
-# candidate's claims about themselves and are checked against an independently
-# located source instead. Running this over the letters reports dozens of them.
-python3 "$ROOT/tools/check_numbers.py" \
+# The letters are read from the drafts, not the .tex: a cover letter carries
+# verified company facts ("a 40-year lease", "12,345 daily deliveries") which
+# are not the candidate's claims about themselves, and only the draft knows
+# which paragraph holds them. `--drafts` checks the summary, the opening, the
+# bullets and the close, and allows the figures in p2 and in the posting.
+python3 "$ROOT/tools/check_numbers.py" --drafts "$DRAFTS" \
   $(for a in $ABBRS; do echo "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "NUMBERS: FAILURES ABOVE"; fail=1; }
 echo "=== voice ==="
