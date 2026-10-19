@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.4.1] - 2026-10-19
+
 ### Fixed
 
 - **The brief counts every reply someone is waiting for.** A reply owed with no date written
