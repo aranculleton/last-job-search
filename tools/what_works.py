@@ -56,16 +56,18 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "network"))
 
 import dates  # noqa: E402
+import docpaths  # noqa: E402
 import person  # noqa: E402
+import throttle  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 
 # A message is decided once it has a reply, or once this many days have passed
 # without one. Before that it is waiting, and counting it as a failure would make
 # every new batch look like a bad one.
 REPLY_WAIT_DAYS = 14
-# An application still `applied` after this many days is counted as unanswered,
-# the same 45 days `tools/followups.py` stops chasing at.
-SILENT_DAYS = 45
+# An application still `applied` after this many days is counted as unanswered:
+# the throttle's own number, which `tools/followups.py` stops chasing at too.
+SILENT_DAYS = throttle.SILENCE_DAYS
 # The smallest group a rate is compared on.
 MIN_GROUP = 8
 # |z| for a difference unlikely to be chance (two-sided, 95%).
@@ -324,7 +326,10 @@ def draft_for(row: dict, kept: list[dict]) -> dict | None:
     """
     k = company_key(row.get("company"))
     at = [d for d in kept if company_key(d.get("company")) == k]
-    m = re.search(r"_([A-Za-z0-9_]+)\.(?:tex|pdf)$", str(row.get("cv_file") or ""))
+    # The profile's own filename pattern. A bare "_(...)\.tex" took everything
+    # after the first underscore of the name ("Ellis_CV_Larkspur"), so no draft
+    # was ever found by its abbreviation.
+    m = docpaths.resume_name_rx().search(str(row.get("cv_file") or ""))
     if m:
         by_abbr = [d for d in at if str(d.get("abbr") or "").lower() == m.group(1).lower()]
         if by_abbr:
@@ -372,10 +377,20 @@ def reached_interview(row: dict, root: str | None = None) -> bool:
 
 
 def application_cases(tracker: list[dict], today=None) -> list[dict]:
-    """Every sent application with a result: reached an interview or did not."""
+    """Every sent application with a result: reached an interview or did not.
+
+    A row a later row for the same role has superseded is not a second
+    application. The tracker appends rather than edits, so "applied" on the 1st
+    and "interview" on the 20th were counted as one loss, once the first had sat
+    quiet for SILENT_DAYS, and one win.
+    """
+    import followups
     today = _today(today)
+    later = followups.superseded(tracker)
     cases = []
     for r in tracker:
+        if id(r) in later:
+            continue
         status = str(r.get("status") or "").strip().lower()
         applied = _date(r.get("date"))
         if status in WIN or (status in LOSS and reached_interview(r)):
@@ -396,8 +411,11 @@ def application_cases(tracker: list[dict], today=None) -> list[dict]:
 
 
 def _waiting(tracker, today) -> int:
+    import followups
     today = _today(today)
+    later = followups.superseded(tracker)
     return sum(1 for r in tracker if str(r.get("status") or "").strip().lower() == "applied"
+               and id(r) not in later
                and _date(r.get("date")) and (today - _date(r.get("date"))).days < SILENT_DAYS)
 
 
