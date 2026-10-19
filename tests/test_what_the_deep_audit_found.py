@@ -105,7 +105,12 @@ def test_a_country_code_beside_a_home_region_is_the_country(monkeypatch):
     assert prefilter.location_verdict("Northgate, WX, CA")[0] == "PASS"
     assert prefilter.location_verdict("Austin, TX")[0] == "FAIL"
     assert prefilter.location_verdict("Wexmoor, WX")[0] == "PASS"
-    assert prefilter.location_verdict("Northgate, CA")[0] == "FAIL"       # no region: a state
+    # A home-metro city beside the code is the country too. This was pinned as a
+    # state ("no region: a state"), which is how "<home city>, CA" with no
+    # province failed as on-site in California. A town off the metro list, alone
+    # with the code, is still the state.
+    assert prefilter.location_verdict("Northgate, CA")[0] == "PASS"
+    assert prefilter.location_verdict("Fernhill, CA")[0] == "FAIL"
 
 
 def test_a_refused_permit_and_private_equity_still_cut(monkeypatch):

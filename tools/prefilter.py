@@ -67,6 +67,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import places as _places  # noqa: E402
 from dates import days_since  # noqa: E402
 
 # --- Freshness -------------------------------------------------------------
@@ -124,6 +125,30 @@ def _has(low: str, term: str) -> bool:
     return re.search(r"(?<![a-z\u00e0-\u00ff])" + re.escape(term), low) is not None
 
 
+def _metro_in(low: str) -> str | None:
+    """The first home-metro place named in a lower-cased location, as a word."""
+    return next((g for g in METRO if re.search(r"\b" + re.escape(g) + r"\b", low)), None)
+
+
+# What a remote location says about where the work may be done from. A country
+# named with one of these beside it restricts the role to that country.
+_RESTRICTED = re.compile(r"\bonly\b|\bbased\b|\bresiden\w*|\bcitizens?\b")
+# A region written out; its codes (EU, EMEA) are tools/places.py REGION_CODES.
+_REGION_WORDS = re.compile(r"\b(?:europe|european union|emea|apac|latam|latin america)\b")
+
+
+def _abroad_in_remote(loc: str, low: str) -> tuple[str, str] | None:
+    """(the place, "country" or "region") a remote location names that is not home."""
+    for c in OTHER_COUNTRIES:
+        if re.search(r"\b" + re.escape(c) + r"\b", low):
+            return c, "country"
+    m = _places.COUNTRY_CODES.search(loc) or re.search(r"\b(?:united states|united kingdom)\b", low)
+    if m:
+        return m.group(0), "country"
+    m = _places.REGION_CODES.search(loc) or _REGION_WORDS.search(low)
+    return (m.group(0), "region") if m else None
+
+
 def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     low = _MODE.sub(" ", (loc or "").lower()).strip()
     low = re.sub(r"\s+", " ", low).strip(" -,")
@@ -135,11 +160,14 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     # when a home region or city is beside it: Dayforce, SmartRecruiters and
     # Workday write "<City>, ON, CA", and "CA" read as California failed every
     # such posting as on-site abroad. Alone ("San Diego, CA") it is still a state.
-    # A home-region token is the evidence, not a home city: a town name shared by
-    # both countries, alone with "CA", is California as often as not; with the
-    # home region beside it, it is not.
+    # A home-metro city is evidence too: "Toronto, CA", with no province, was read
+    # as California and failed. A city both countries have (the home metro and
+    # the neighbour's metros both name it) is not evidence either way, and is a
+    # FLAG below rather than a FAIL.
+    metro = _metro_in(low)
+    shared = bool(metro and NEIGHBOUR_METROS.search(low))
     states = [p for p in parts if p in NEIGHBOUR_STATES
-              and not (p == _CC and home)]
+              and not (p == _CC and (home or (metro and not shared)))]
     abroad = (bool(NEIGHBOUR_WORDS.search(low)) or bool(NEIGHBOUR_METROS.search(low))
               or bool(states))
     # A word, not a substring, and in the title only as a work mode: "Remote
@@ -154,6 +182,14 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     # not a pass: it passes only when the employer explicitly hires from home,
     # which a location string cannot show.
     if remote:
+        # Remote from one other country only: "Remote (US only)", "Remote, Germany
+        # only", "Remote, US-based". The check below took a country only as a whole
+        # part, so each of these passed for somebody living elsewhere. The
+        # neighbour too: a restriction is not a nominal office.
+        named = None if home else _abroad_in_remote(loc or "", low)
+        if named and named[1] == "country" and _RESTRICTED.search(low):
+            return "FAIL", (f"remote from {named[0]} only, outside {_HOME}; "
+                            f"relocation abroad is a deal-breaker")
         if abroad and not home:
             return "FLAG", _NB.get("remote_reason", "remote but anchored abroad")
         # A named country other than home is not a nominal office. The remote
@@ -166,12 +202,23 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
                 if c in parts:
                     return "FAIL", (f"remote but anchored outside {_HOME} ({c}); "
                                     f"relocation abroad is a deal-breaker")
+            if named and named[1] == "country" and named[0].lower() in parts:
+                return "FAIL", (f"remote but anchored outside {_HOME} ({named[0]}); "
+                                f"relocation abroad is a deal-breaker")
+            # A country inside a longer part, or a region that may take in home
+            # ("Remote - EMEA"): the body says which, so Tier 2 decides.
+            if named:
+                return "FLAG", (f"remote, but names {named[0]}; whether that includes "
+                                f"{_HOME} is for Tier 2")
         return "PASS", "explicitly remote; the stated city is a nominal office"
     if not low:
         return "FLAG", "no location stated; Tier 2 decides"
     for rx, why in _FLAG_PLACES:
         if rx.search(low):
             return "FLAG", why
+    if shared and _CC in parts and not home:
+        return "FLAG", (f"{metro} is a city in {_HOME} and abroad, with only "
+                        f"'{_CC.upper()}' beside it; Tier 2 decides")
     if abroad:
         # "United States, Canada": a list that names home as well is not a
         # posting abroad. Tier 2 reads the body.

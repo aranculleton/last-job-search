@@ -19,6 +19,7 @@ Usage:
     places.METRO                  # the home metro, as the gate matches it
     places.OTHER_COUNTRIES        # countries that are not home, lower case
     places.HOME_COUNTRY_RX.search("based in the uk")
+    places.abroad_short("remote within the US")   # codes in capitals: "us" is a pronoun
     places.metro_with(own)        # a tool's own metro list joined to the search's
 """
 
@@ -48,11 +49,24 @@ REGIONS = dict(LOCATION.get("regions") or {})
 OTHER_COUNTRIES = tuple(str(c).lower() for c in LOCATION.get("other_countries") or ())
 # The home country as a location or a sentence names it; unset, nothing is home.
 HOME_COUNTRY_RX = LOCATION.get("home_country_rx") or _NEVER
-# The shorthand a sentence uses for somewhere other than one country ("the US",
-# "the EU", "EMEA"). Read only after HOME_COUNTRY_RX, so "based in the UK" is
-# home for somebody whose home country pattern names the UK.
-ABROAD_SHORT = re.compile(r"\b(?:us|usa|u\.s\.|uk|eu|emea|apac|latam|united states|"
-                          r"united kingdom|europe)\b", re.I)
+# The shorthand a sentence or a location uses for somewhere other than one
+# country ("the US", "the EU", "EMEA"). Read only after HOME_COUNTRY_RX, so
+# "based in the UK" is home for somebody whose home country pattern names the UK.
+#
+# The codes are read as written, in capitals. Lower-cased, "us" is the pronoun:
+# "You must be based in Manchester and able to join us in the office" was cut
+# as a requirement to live abroad. A country code names one country; a region
+# code may take in the home country, so a reader treats the two differently.
+COUNTRY_CODES = re.compile(r"(?<![A-Za-z.])(?:U\.S\.(?:A\.)?|USA|US|U\.K\.|UK)(?![A-Za-z])")
+REGION_CODES = re.compile(r"(?<![A-Za-z])(?:EU|EMEA|APAC|LATAM)(?![A-Za-z])")
+# The same places written out, in any case.
+ABROAD_WORDS = re.compile(r"\b(?:united states|united kingdom|europe)\b", re.I)
+
+
+def abroad_short(sentence: str):
+    """The first shorthand for somewhere abroad in `sentence`, as a match, or None."""
+    s = sentence or ""
+    return COUNTRY_CODES.search(s) or REGION_CODES.search(s) or ABROAD_WORDS.search(s)
 
 
 def metro_with(own=()) -> tuple:
