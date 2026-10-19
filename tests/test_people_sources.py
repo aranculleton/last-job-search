@@ -43,7 +43,13 @@ def test_the_budget_holds_and_every_kind_gets_a_turn():
     rows = sources.ranked()
     per_company = sources.for_company("Oakmere Foods Ltd", rows)
     assert len(per_company) <= sources.SEARCHES_PER_COMPANY
-    assert len({k for k, _ in per_company}) == len(per_company)   # one each before seconds
+    # The title searches first, both of them: measured, the one kind that named people
+    # at the employer in bulk. Then every other kind gets one before any gets a second.
+    titles = sources.searches("title_search", "Oakmere Foods Ltd")[:sources.TITLE_SEARCHES]
+    assert len(titles) == sources.TITLE_SEARCHES == 2
+    assert per_company[:2] == [("title_search", q) for q in titles]
+    rest = [k for k, _ in per_company[2:]]
+    assert rest and "title_search" not in rest and len(set(rest)) == len(rest)
     assert all("Oakmere Foods" in q for _, q in per_company)
     once = sources.for_run(rows)
     assert len(once) <= sources.SEARCHES_PER_RUN

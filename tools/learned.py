@@ -168,11 +168,41 @@ def dislikes(text: str) -> list[str]:
     return [m.group(0) for _, rx in never_say() for m in rx.finditer(str(text or ""))]
 
 
+def _key(r: dict) -> tuple:
+    return (r.get("date"), r.get("area"), r.get("rule"))
+
+
+def superseded(rows: list[dict] | None = None) -> dict:
+    """{key of an active entry: the later active entry that overrules it}.
+
+    A later entry overrules an earlier one when the earlier rule prescribes a phrase the
+    later one says never to use: "every first note names the move (said as: I made the
+    move)" and, two days on, never_say "I made the move". Both stayed active, and the
+    brief told a drafting step to do both. The earlier stays on record as history; the
+    brief leaves it out. An earlier entry that itself says never to use the phrase agrees
+    with the later one and stands.
+    """
+    rows = load() if rows is None else rows
+    active = [r for r in rows if r.get("status", "active") == "active"]
+    out = {}
+    for n, r in enumerate(active):
+        text = str(r.get("rule") or "").lower()
+        own = {str(p).lower() for p in r.get("never_say") or ()}
+        for later in active[n + 1:]:
+            if any(p.strip() and p.lower() in text and p.lower() not in own
+                   for p in map(str, later.get("never_say") or ())):
+                out[_key(r)] = later
+                break
+    return out
+
+
 def brief(area: str | None = None) -> str:
-    """The active rules as lines to follow before drafting, or "" when there are none."""
-    rows = entries(area)
+    """The active rules as lines to follow before drafting, or "" when there are none.
+    A rule a later one overrules (superseded) is left out."""
+    over = superseded()
+    rows = [r for r in entries(area) if _key(r) not in over]
     if area is not None:
-        rows = rows + [r for r in entries("other") if r not in rows]
+        rows = rows + [r for r in entries("other") if r not in rows and _key(r) not in over]
     return "\n".join(f"- {r['rule']} ({r['date']}, they said: \"{r['said']}\")" for r in rows)
 
 
@@ -285,10 +315,14 @@ def main(argv=None) -> int:
     if a.cmd == "brief":
         print(brief(a.area) or "(nothing learned yet: the defaults apply)")
     elif a.cmd == "list":
+        over = superseded()
         for i, row in enumerate(load(), 1):
             if a.area and row.get("area") != a.area:
                 continue
-            print(f"{i:3}. [{row.get('status', 'active')}] {row.get('date')} {row.get('area')}: "
+            later = over.get(_key(row))
+            status = (f"overruled by {later.get('date')}" if later
+                      else row.get("status", "active"))
+            print(f"{i:3}. [{status}] {row.get('date')} {row.get('area')}: "
                   f"{row.get('rule')}  (said: \"{row.get('said')}\")")
     elif a.cmd == "record":
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say)

@@ -188,6 +188,16 @@ DEFAULT_PLAN = ("connections", "alumni_employer", "alumni_school", "posting", "p
                 "title_search", "team_page", "roster", "press", "people_tab")
 
 SEARCHES_PER_COMPANY = 4
+# Of those, the title searches go first, both of them. Measured: the plain title query
+# found 14 people at an employer where the old shapes found 5, and in two real runs at
+# one employer (2026-10-18) it was the only kind that named anyone there; posts, team
+# pages and press returned job ads, press releases and people elsewhere. A round robin
+# had given it one search in four, after the kinds that found nobody.
+TITLE_SEARCHES = 2
+# The searches that find a named person's LinkedIn profile (linkedin_check), for the
+# best name-only people a page named: on top of the four, and capped, where they had
+# been uncounted (one run made 13 searches at one employer).
+CHECKS_PER_COMPANY = 3
 SEARCHES_PER_RUN = 5          # the per_run kinds, together
 ALUMNI_EMPLOYER_SEARCHES = 3  # of those: one each for the three employers most recently left
 MIN_DECIDED = 5               # replies before a kind is moved by its results
@@ -341,8 +351,17 @@ def for_company(company: str, rows=None) -> list:
     if ruled_out(company):
         return []
     rows = ranked() if rows is None else rows
-    return _round_robin([[(kind, q) for q in searches(kind, company)] for kind, _, _ in rows
-                         if KINDS[kind].scope == "per_company"], SEARCHES_PER_COMPANY)
+    kinds = [kind for kind, _, _ in rows if KINDS[kind].scope == "per_company"]
+    titles = ([("title_search", q) for q in searches("title_search", company)][:TITLE_SEARCHES]
+              if "title_search" in kinds else [])
+    return titles + _round_robin([[(kind, q) for q in searches(kind, company)] for kind in kinds
+                                  if kind != "title_search"], SEARCHES_PER_COMPANY - len(titles))
+
+
+def to_check(people: list) -> list:
+    """The name-only people worth a profile check (linkedin_check), in the order given
+    (best first), at most CHECKS_PER_COMPANY. The rest wait, said so, for a later run."""
+    return [p for p in people if p.get("name_only")][:CHECKS_PER_COMPANY]
 
 
 def for_run(rows=None) -> list:
@@ -434,10 +453,11 @@ def _schools() -> list:
 
 def linkedin_check(name: str, company: str) -> str:
     """Rung 3, the search that finds a named person's LinkedIn profile: run it with
-    allowed_domains=discovery.SEARCH_DOMAINS, read the result, never fetch it, and
-    judge it with discovery.profile_status(). Plain words with the name quoted: the
-    form that found a named person's profile first, titled with their employer
-    (2026-10-18)."""
+    allowed_domains=discovery.SEARCH_DOMAINS, read the result, never fetch it, and give
+    the results to harvest(..., kind="profile_check", name=<their name>, known=<what the
+    page that named them said>), which keeps only them. Plain words with the name
+    quoted: the form that found a named person's profile first, titled with their
+    employer (2026-10-18). At most CHECKS_PER_COMPANY an employer (to_check)."""
     import discovery
     return f'"{name}" {discovery.search_name(company)}'
 
@@ -518,6 +538,8 @@ def main(argv: list | None = None) -> int:
         print(f"for {company}:")
         for kind, q in for_company(company, rows):
             print(f"  {kind}: {q}{_NAMES_ONLY if not KINDS[kind].linkedin else ''}")
+        print(f"  then at most {CHECKS_PER_COMPANY} profile checks, for the best name-only "
+              f"people found (sources.to_check, sources.linkedin_check)")
     return 0
 
 
@@ -626,7 +648,8 @@ def from_connections(company: str, connections=None, contacts=None) -> list:
 
 
 def harvest(results, company: str, kind: str = "title_search", query: str = "",
-            today: datetime.date | None = None, connections=None, contacts=None) -> dict:
+            today: datetime.date | None = None, connections=None, contacts=None,
+            name: str = "", known: dict | None = None) -> dict:
     """Rungs 2 and 3 for one employer: search results to a ranked list, nothing fetched.
 
     The results' own titles say who each person is and where they work
@@ -636,12 +659,25 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
     and why.why_them() ranks the rest. Returns {"keep": [...], "dropped": [(p, why)],
     "counts": {...}}; every kept person carries `evidence`, `profile_status` and
     `route`, and nobody is asked for anything.
+
+    `name` is a profile check's: only that person is kept, never the others the same
+    results happen to name. `known` is what the page that named them said ({"title",
+    "evidence"}, a speaker list's "AVP, Data Platforms"): the title fills in
+    where the result gives none, so a named leader no longer ranks with the unknowns.
     """
     import discovery
     import state
     import why
     today = today or datetime.date.today()
     people = discovery.people_from_results(results, company, kind=kind, query=query, today=today)
+    if name:
+        want = state._match_name(name)
+        people = [p for p in people if state._match_name(p["name"]) == want]
+        for p in people:
+            if known and known.get("title") and not p.get("title"):
+                p["title"], p["title_source"] = known["title"], known.get("evidence") or "the page that named them"
+            if known and known.get("evidence"):
+                p["evidence"] = f"{known['evidence']}; then {p['evidence']}"
     t = discovery.triage(people, today=today, target_company=company)
     if contacts is None:
         contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
@@ -686,13 +722,15 @@ _NAMES_ONLY = "  [names only: find each on LinkedIn before a request]"
 
 
 def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = False,
-                browser: bool = False) -> str:
+                browser: bool = False, named: int = 0) -> str:
     """What to say when the run's searches are spent and the batch is not full.
 
     Never padded with weaker names. `tried` is {kind: people worth writing to it
-    found}. The ways to more people are the person's own: the people they already
-    know (their connections export), the People tab of each employer in their own
-    browser, or names they know of.
+    found}. `named` is everyone the run kept, when more than `found` (those it could
+    write to now): the rest are named but need a look first, and the count says so
+    rather than reading as if nobody else turned up. The ways to more people are the
+    person's own: the people they already know (their connections export), the People
+    tab of each employer in their own browser, or names they know of.
     """
     if found >= wanted:
         return ""
@@ -706,8 +744,13 @@ def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = F
         more.append("each employer's People tab, read in your own browser at the same pace "
                     "as profiles")
     more.append("names of anyone you know of there, and I'll read and write to them")
-    return (f"I found {found} of the {wanted} people this run could write to, and stopped "
-            f"rather than pad the list. What I tried: {parts or 'nothing returned'}. To find "
+    head = (f"I found {named} people; {found} of the {wanted} this run could write to have "
+            f"enough known about them for a note, and the other {named - found} need a look "
+            f"first (their results give no job). I stopped rather than pad the list."
+            if named > found else
+            f"I found {found} of the {wanted} people this run could write to, and stopped "
+            f"rather than pad the list.")
+    return (f"{head} What I tried: {parts or 'nothing returned'}. To find "
             f"more: " + "; or ".join(more) + ".")
 
 

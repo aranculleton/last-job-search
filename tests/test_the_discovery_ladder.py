@@ -221,7 +221,7 @@ def test_the_networking_tools_never_fetch_linkedin():
 
 # The shapes a real run at one employer brought back on 2026-10-18, names invented.
 REAL_SHAPES = [
-    {"title": "Ottoline Barraclough - Chief Data Officer - Group Functions - Kestrel Mutual",
+    {"title": "Ottoline Barraclough - Chief Data Officer - Kestrel Mutual",
      "url": "https://www.linkedin.com/in/example-ottoline"},
     {"title": "Fenella Quarrie - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-fenella"},
     {"title": "Bastian Merriweather - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-bastian"},
@@ -260,9 +260,9 @@ def test_letters_after_a_name_come_off_and_a_short_surname_stays():
         assert discovery.parse_result_title(title)["name"] == name, title
     got = discovery.parse_result_title("Gideon Ashworth - Former President and CEO, Kestrel Mutual")
     assert got["headline"] == "Former President and CEO" and got["employer"] == "Kestrel Mutual"
-    assert discovery.parse_result_title("Idris Corrie - Toronto, Ontario, Canada")["location"]
-    got = discovery.parse_result_title("Anna Lee - Head of Data, Greater Toronto Area")
-    assert (got["headline"], got["location"]) == ("Head of Data", "Greater Toronto Area")
+    assert discovery.parse_result_title("Idris Corrie - Manchester, England, United Kingdom")["location"]
+    got = discovery.parse_result_title("Anna Lee - Head of Data, Greater Manchester")
+    assert (got["headline"], got["location"]) == ("Head of Data", "Greater Manchester")
     left = {"company": "Kestrel Mutual"}
     assert discovery.disqualify({**left, "title": "Former President and CEO"}, "Kestrel Mutual")
     for still_here in ("Former teacher turned data scientist at Kestrel Mutual",
@@ -276,10 +276,69 @@ def test_only_a_title_search_says_what_job_it_looked_for():
     one = [{"title": "Fenella Quarrie - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-fenella"}]
     for kind, query in (("posts", '"Kestrel Mutual" ("we\'re hiring" OR "join my team") Data '
                                   'Scientist site:linkedin.com/posts'),
-                        ("profile_check", '"Gopi Example" Kestrel Mutual')):
+                        ("profile_check", '"Shirin Example" Kestrel Mutual')):
         got = sources.harvest(one, "Kestrel Mutual", kind=kind, query=query, today=TODAY,
                               connections=[], contacts=[])
         assert not got["keep"][0].get("found_for"), kind
         assert not any("came up in a search" in w for _, w in got["keep"][0]["why"]["reasons"])
     assert sources._searched_for('"Kestrel Mutual" ("Head of Data" OR Lead) -site:x.com Manchester',
                                  "Kestrel Mutual") == "Head of Data Lead"
+
+
+def _post_url(handle: str, day: datetime.date) -> str:
+    ms = int(datetime.datetime(day.year, day.month, day.day, tzinfo=datetime.timezone.utc)
+             .timestamp() * 1000)
+    return f"https://www.linkedin.com/posts/{handle}_data-team-activity-{ms << 22}-AbCd"
+
+
+def test_a_post_is_dated_so_an_old_one_no_longer_passes_for_someone_there_now():
+    # A 2023 post naming the employer was kept as "likely": its date was read and stored
+    # where no check looked.
+    results = [
+        {"title": "Perpetua Lindqvist on LinkedIn: Kestrel Mutual's data team in 2023",
+         "url": _post_url("example-perpetua", datetime.date(2023, 3, 1))},
+        {"title": "Hal Okonedo on LinkedIn: Kestrel Mutual is growing its data team",
+         "url": _post_url("example-hal", datetime.date(2026, 10, 1))},
+    ]
+    got = sources.harvest(results, "Kestrel Mutual", kind="posts", today=TODAY,
+                          connections=[], contacts=[])
+    assert [p["name"] for p in got["keep"]] == ["Hal Okonedo"]
+    assert any(p["name"] == "Perpetua Lindqvist" and w.startswith("stale")
+               for p, w in got["dropped"])
+    assert got["keep"][0]["signal_date"] == "2026-10-01"
+
+
+def test_a_name_check_keeps_only_that_person_with_the_job_the_page_gave_them():
+    # Fed the results of a search for one speaker, harvest kept four other people the
+    # same results named, credited to that search; and the speaker page's title was lost,
+    # so an AVP ranked with the unknowns.
+    results = [
+        {"title": "Shirin Example - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-shirin"},
+        {"title": "Fenella Quarrie - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-fenella"},
+        {"title": "Bastian Merriweather - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-bastian"},
+    ]
+    page = {"title": "AVP, Data Platforms",
+            "evidence": "speaker at an invented summit 2026 (https://example.com/speakers)"}
+    got = sources.harvest(results, "Kestrel Mutual", kind="profile_check", today=TODAY,
+                          connections=[], contacts=[], name="Shirin Example", known=page)
+    assert [p["name"] for p in got["keep"]] == ["Shirin Example"]
+    p = got["keep"][0]
+    assert p["title"] == "AVP, Data Platforms" and p["title_source"] == page["evidence"]
+    assert p["evidence"].startswith(page["evidence"] + "; then search result")
+    assert not any("title is not in the search result" in w for _, w in p["why"]["reasons"])
+    import why
+    assert why.seniority(p["title"]) == "senior"            # AVP, SVP and EVP are senior
+    assert why.seniority("SVP, Data") == why.seniority("EVP Operations") == "senior"
+
+
+def test_name_checks_are_capped_and_the_plan_says_so():
+    people = [{"name": f"Person {i}", "name_only": True} for i in range(6)] + [{"name": "Known"}]
+    assert [p["name"] for p in sources.to_check(people)] == ["Person 0", "Person 1", "Person 2"]
+    assert sources.CHECKS_PER_COMPANY == 3
+
+
+def test_a_short_batch_counts_everyone_found_not_only_those_it_can_write_to():
+    line = sources.short_batch(2, 25, {"title_search": 12}, have_connections=True, named=12)
+    assert line.startswith("I found 12 people; 2 of the 25 this run could write to")
+    assert "the other 10 need a look first" in line
+    assert sources.short_batch(2, 25, {}, have_connections=True).startswith("I found 2 of the 25")

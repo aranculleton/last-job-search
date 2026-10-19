@@ -129,7 +129,9 @@ record it in `profile/`.
 **Before changing any app-owned file, read `MAINTAINING.md`, "Developer rules"**, whichever
 repo the session started in. In short: the change is made in the app, on a branch, and merged
 with CI green; the leak scan passes on the exact tree before anything is pushed, because the
-app is public and so are its branches and history; no example is a disguised person; a change
+app is public and so are its branches and history; no example is a disguised person, and a
+real person a run turns up is described, never named, in code, commits or PR text
+(`tools/name_guard.py`); a change
 an existing user would have to act on is a profile upgrade (`tools/profile_upgrades.py`); and
 a change to a part of the build that leaves something behind is a new version in
 `tools/build_versions.py`. Tests fail on the last two.
@@ -437,8 +439,11 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
 
 - A fixed search budget: at most `sources.SEARCHES_PER_COMPANY` (four) searches per employer
   across every kind of source, `sources.SEARCHES_PER_RUN` (five) for the kinds searched once a
-  run, and inside that at most two LinkedIn title searches per employer, three a hard ceiling
-  never meant to be reached (`discovery.queries_for()`). `sources.py` prints the run's searches.
+  run, and inside that the two LinkedIn title searches go first (`sources.TITLE_SEARCHES`, the
+  one kind measured to name people in bulk), three a hard ceiling never meant to be reached
+  (`discovery.queries_for()`). On top, at most `sources.CHECKS_PER_COMPANY` (three) profile
+  checks for the best name-only people (`sources.to_check`). `sources.py` prints the run's
+  searches.
 - Alumni and referral routes before cold. The response-rate gap is large.
 - Tier 1 requires a **quoted** live hiring signal, shown as evidence.
 - **Read each person before writing to them** (`tools/network/reading.py`, `/network` step 5):

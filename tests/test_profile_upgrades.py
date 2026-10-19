@@ -503,3 +503,19 @@ def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
         assert "--no " + uid in x.run, uid
     assert not any("not asked again" in (x.ask or "") or "never asked again" in (x.run or "")
                    for x in U.REGISTRY)
+
+
+def test_a_profile_line_telling_drafts_to_use_a_forbidden_phrase_is_found(profile):
+    # A never-say left the profile's own instruction to use the phrase in place, so every
+    # draft read both. Only a line that prescribes it counts.
+    import learned
+    learned.record("messages", "too casual", "never 'cheers'", never_say=["cheers"],
+                   today="2026-10-18")
+    (profile / "13-positioning.md").write_text(
+        "Sign-off: the line is \"cheers\" in every note.\n"
+        "Never write \"cheers\" to a recruiter.\n"
+        "We said cheers at the leaving do.\n", encoding="utf-8")
+    u = U.by_id("never-said")
+    got = u.pending()
+    assert "profile/13-positioning.md:1 ('cheers')" in got and u.needs == "nobody"
+    assert ":2 " not in got and ":3 " not in got

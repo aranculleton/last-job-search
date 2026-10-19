@@ -99,9 +99,14 @@ it. LinkedIn is never fetched from a session.
    - **Searches outside LinkedIn** (team pages, blogs, press, meetups, awards, code,
      portfolios, directories): run as printed; fetch a page only where its robots.txt
      allows; take a name only with the employer and role beside it, and ask a roster for
-     every speaker (`discovery.ROSTER_PROMPT`). **Then find their LinkedIn**:
-     `sources.linkedin_check(name, company)` with `SEARCH_DOMAINS`, results only, and the
-     result's URL is their `linkedin_url`. These kinds name people and do not link them
+     every speaker (`discovery.ROSTER_PROMPT`). **Then find their LinkedIn**, for the best
+     `sources.CHECKS_PER_COMPANY` (three) of them an employer (`sources.to_check`; the rest
+     wait for a later run, said so): `sources.linkedin_check(name, company)` with
+     `SEARCH_DOMAINS`, results only, then `sources.harvest(results, company,
+     kind="profile_check", name=<their name>, known={"title": <what the page called them>,
+     "evidence": <the page and its URL>})`. It keeps only that person, never the others the
+     same results name, and their title from the page fills in where the result gives none;
+     the result's URL is their `linkedin_url`. These kinds name people and do not link them
      (`sources.py` prints them `[names only]`), so triage marks such a person `name_only`
      and `why_them` ranks them down until a profile is found. With none found they can
      still be read and reached by email or an introduction, never by a connection request.
@@ -132,8 +137,9 @@ it. LinkedIn is never fetched from a session.
    never rephrase it to get round that; the next kind in the plan carries the run.
 
    **When the searches the budget allows are spent and the batch is not full, stop and say
-   so**, with `sources.short_batch(found, wanted, tried, have_connections, browser)`: how
-   many it found of how many it could send, what each kind returned, and the ways to more
+   so**, with `sources.short_batch(found, wanted, tried, have_connections, browser, named)`:
+   how many it found of how many it could send (`named` is everyone kept, when more than
+   those with enough known for a note), what each kind returned, and the ways to more
    people that are the person's own. Never pad the batch with weaker names.
 
 4. **Triage with `discovery.triage()`.** It applies the disqualifiers, the

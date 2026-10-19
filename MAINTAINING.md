@@ -24,6 +24,20 @@ These apply whenever the change is to the app, whichever repo the session starte
   writes the denylist from their profile; then `python3 tools/leak_scan.py <app checkout>
   --tokens <dir>/tokens` scans the app checkout with it. The app's CI scans again with the
   `LEAK_TOKENS` secret, but CI only sees what is already public, so the local scan is the gate.
+- **A real person a run turns up is described, never named**: not in code, a comment, a
+  test, a CHANGELOG line, a commit message or a pull request description. "A former chief
+  executive", "a short surname cut off". Search results, a test chat's report and a
+  contact book all hold real people, and on 2026-10-18 names from them reached a comment,
+  a test, a commit message and a PR description while the leak scan passed: it knows only
+  the maintainer's own people. Two checks close it, and both run in the app's CI on every
+  pull request: `python3 tools/name_guard.py diff origin/master` (a full name the app has
+  never carried; an invented one goes in `tools/name_guard_allow.txt`) and, on the PR
+  description and commit messages, `python3 tools/name_guard.py text <file>...` and
+  `python3 tools/leak_scan.py --text <file>... --tokens <dir>/tokens`. Run all three
+  before posting, because CI only sees text that is already public.
+- **A test never writes to a person's state.** Run it on a copy of their repo, or with
+  `LJS_STATE` pointing at a copy of the state files. A test contact written to a real
+  contact book on 2026-10-17 then sat in it as a queued draft, counted as already contacted.
 - **No example may be a disguised person.** An example resume, story, message or incident is
   invented, or it is the example person in `profile.example/`. A real case with the names
   swapped is still that person.
@@ -108,9 +122,12 @@ without trouble, and never inside the hours their own scheduled tasks run.
 1. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
    `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Minor for new
    behaviour, patch for fixes only. Merge it with CI green.
-2. On GitHub: Releases, **Draft a new release**, tag `vX.Y.Z` on master, title `vX.Y.Z`,
-   the CHANGELOG section as the notes, **Publish**. The tag is what every repo's next sync
-   reads; nothing else needs doing.
+2. Nothing: merging it is the release. `.github/workflows/release.yml` runs
+   `tools/release.py publish`, which tags `vX.Y.Z` on that commit and publishes the
+   CHANGELOG section as its notes, once. The tag is what every repo's next sync reads.
+   `python3 tools/release.py newest` says whether the newest version is out. Only if the
+   workflow fails: Releases, **Draft a new release**, tag `vX.Y.Z` on master, title
+   `vX.Y.Z`, the output of `python3 tools/release.py notes` as the notes, **Publish**.
 
 A broken release is fixed forward: a fix on master and a new patch release. Never move or
 delete a published tag, because repos that already took it would then hold history the

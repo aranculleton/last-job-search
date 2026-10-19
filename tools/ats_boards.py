@@ -606,7 +606,7 @@ def _path_place(path) -> str:
 
     Some tenants leave `locationsText` out of the listing, and a blank location
     is "nowhere" to `_wanted`, so a whole board came back with nothing in range.
-    "Toronto-40-King-St-W-Corp" reads "Toronto 40 King St W Corp".
+    "Manchester-1-Piccadilly-Corp" reads "Manchester 1 Piccadilly Corp".
     """
     parts = str(path or "").split("/")
     return " ".join(urllib.parse.unquote(parts[2]).replace("-", " ").split()) if len(parts) > 3 else ""
