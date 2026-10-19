@@ -81,6 +81,9 @@ def test_the_notes_a_person_reads_are_one_line_per_change_and_one_on_what_to_do(
     assert "- Something new. (set up for you)" in lines
     assert "- A question for you. (Claude asks you once)" in lines
     assert "- Headings that stop short." in lines and "- Or end on a colon." in lines
+    # A release of fixes alone has nothing to set up, and says only that it is taken.
+    fixes = release.short("### Fixed\n\n- **An old fix.**\n")
+    assert fixes.splitlines()[-1] == "What to do: nothing. Your next chat takes this update."
     assert "at great length" not in notes and "Profile upgrade" not in notes
     assert lines[-1] == ("What to do: nothing. Your next chat takes this update and sets it up, "
                          "and asks you 1 short question once.")

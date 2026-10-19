@@ -20,6 +20,55 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The brief counts every reply someone is waiting for.** A reply owed with no date written
+  beside it was left out, so the brief could open on "0 replies owed" while someone waited,
+  and a nudge whose clock had run was left out the same way. No profile upgrade.
+- **An employer written "Full Name (SHORT)" is one employer with SHORT.** A bracket that
+  counted a small word ("of") in its initials, or gave the name's own first words, keyed
+  apart from the short name, so a thread and an application at one employer never linked.
+  No profile upgrade.
+- **The PDF check says which reader read the text layer.** Only one of the two can see words
+  run together; when it was missing the check passed without saying half of it had not
+  run. No profile upgrade.
+- **Rewriting first notes no longer shows up as work a chat cannot do.** It needs each
+  person read, so it now happens inside a networking run, in a chat that can read them;
+  finding people no longer makes it look overdue, and a chat with no browser is never told
+  to do it. No profile upgrade.
+- **Your own tests are named when an update breaks them.** After an update lands, the tests
+  in your own profile run, and any that pinned how the app worked before is named, with what
+  to do. No profile upgrade.
+- **The denylist remembers names taken out of your files.** It reads every past version of
+  your tracker, contact book and message log, so a row deleted later is still checked. No
+  profile upgrade.
+
+### Changed
+
+- **Applications that have gone quiet are closed for you.** The brief closes each one past
+  the chase (45 days, or a week after a second follow-up) as no_response, with a dated note
+  on the row, and leaves alone any with an interview, a referral or a "do not chase" at that
+  employer. A reply after that goes in with `/outcome` as usual. No profile upgrade.
+- **Questions come one short line at a time.** Each is 40 words at most, in plain words; its
+  steps follow only a yes and its reason only a "why?", and a no gets one line. The LinkedIn
+  steps for your connections are dated and sourced like every other path. No profile upgrade.
+- **A no is asked again after 30 days, not 90.** A kept choice comes back on the same day
+  count. No profile upgrade.
+- **The place message is two or three sentences.** The dated steps and links come only
+  when you ask how. No profile upgrade.
+- **Waiting improvements are described by what you gain.** No ids, no version numbers. No
+  profile upgrade.
+- **The maintainer's own repo checks the public app by itself.** Every sync there scans
+  each unmerged branch, new commit messages and pull request text for the maintainer's own
+  names; nothing has to be kept up to date by hand, and CI's secret is optional. Anyone
+  else's repo is unaffected. No profile upgrade.
+
+### Removed
+
+- **Notion sync.** Nothing used it, and copying the pipeline to another service is not part
+  of the search. A sync file it left in your repo stays yours and private. No profile
+  upgrade.
+
 ## [3.4.0] - 2026-10-19
 
 ### Fixed
