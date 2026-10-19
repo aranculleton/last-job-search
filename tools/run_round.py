@@ -255,13 +255,21 @@ WIDENINGS = ((2.0, 1.5), (3.0, 2.0))
 
 
 def yield_of(path):
-    """(count scoring 60+, count scoring 75+) on the shortlist."""
+    """(count scoring 60+, count scoring 75+) on the shortlist, by the 0-100 score.
+
+    The score is `fit`. `priority` is only the order (fit times opportunity), and
+    counted as the score a posting with no stated salary and no date in the last
+    five days topped out at 69 for the example profile, so it could never be one of
+    the "2 at 75+" however well it fitted, though an unstated salary costs nothing.
+    A row with no fit, from before fit.py, is counted by its priority.
+    """
     try:
         rows = json.load(open(path))
     except Exception:
         return 0, 0
     rows = rows if isinstance(rows, list) else list(rows.values())
-    scores = [r.get("priority") or 0 for r in rows if isinstance(r, dict)]
+    scores = [(r.get("fit") if r.get("fit") is not None else r.get("priority")) or 0
+              for r in rows if isinstance(r, dict)]
     return sum(1 for s in scores if s >= 60), sum(1 for s in scores if s >= 75)
 
 
