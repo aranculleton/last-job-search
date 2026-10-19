@@ -576,4 +576,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
         print(f"followups: {e}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from None
