@@ -64,6 +64,27 @@ COLLISIONS = getattr(_S, "BAR_COLLISIONS", _NEVER)
 FRONTIER = set(getattr(_S, "BAR_FRONTIER", ()))
 
 
+def excluded_by_name(company: str | None) -> str:
+    """Why the employer's name alone excludes it, or "".
+
+    The bar's rules that read nothing but the name: an excluded sector, an
+    employer declined by name, a public agency named outright. The prefilter
+    applies these before hydrate fetches a body nobody will read. A public body
+    with a well-paid posting (BAR_PUBLIC) needs the posting, so it is not here.
+    """
+    name = str(company or "")
+    k = company_key(name)
+    both = f"{name} {k}"
+    for rx, why in EXCLUDED_RULES:
+        if rx.search(both):
+            return why
+    if k in DECLINED:
+        return DECLINED[k]
+    if PUBLIC_PRESTIGE.search(both) or PENSIONS.search(both):
+        return ""
+    return _NAMED_WHY if NAMED_PUBLIC.search(both) else ""
+
+
 def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     """(verdict, reason). See the module docstring for the order and meaning."""
     name = str(company or "")
@@ -73,17 +94,13 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     mid = (lo + hi) // 2 if lo and hi else None
     paid = mid is not None and mid >= TARGET_MIDPOINT
 
-    for rx, why in EXCLUDED_RULES:
-        if rx.search(both):
-            return EXCLUDED, why
-    if k in DECLINED:
-        return EXCLUDED, DECLINED[k]
+    why = excluded_by_name(company)
+    if why:
+        return EXCLUDED, why
     if PUBLIC_PRESTIGE.search(both):
         return PRESTIGE, _PRESTIGE_WHY
     if PENSIONS.search(both):
         pass  # a target-list public-adjacent employer is never public sector
-    elif NAMED_PUBLIC.search(both):
-        return EXCLUDED, _NAMED_WHY
     elif PUBLIC.search(both):
         if paid:
             return PAY, _PUBLIC_PAID.format(cur=CUR, mid=mid, target=TARGET_MIDPOINT)

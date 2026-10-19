@@ -38,7 +38,9 @@ implementation of "have we seen this" would drift, and the direction it drifts
 is dropping a role that should have surfaced. Everything the throttle does that
 is NOT a pure function of `seen_jobs.json` (the company throttle, one role per
 employer, warm-route notes) stays where it is, because those depend on scores
-this stage does not have yet.
+this stage does not have yet. The holds that need only the employer's name are
+applied here too: a referral in flight, do_not_target.json, and the candidate's
+bar where the name alone decides it (`bar.excluded_by_name`).
 
 Nothing is lost by moving it. `ruled_out` reads only the URL and the
 (title, employer) pair, both present from the scrape, and its exclusions
@@ -458,13 +460,23 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False):
         live = {**referral_holds(), **load_do_not_target()}
     except Exception:                    # no contact book or do_not_target yet
         live = {}
-    if not urls and not pairs and not live:
-        return lambda job: ""
+    # And the candidate's bar where the employer's name alone decides it (an
+    # excluded sector, an employer declined by name, a named public agency). The
+    # throttle applied it after hydrate, a fetch per posting per round for a
+    # verdict the name already gave.
+    try:
+        from bar import excluded_by_name
+    except Exception:                    # a profile with no bar
+        def excluded_by_name(company):
+            return ""
 
     def check(job) -> str:
         k = company_key(job.get("company"))
         if k and k in live:
             return live[k]
+        why = excluded_by_name(job.get("company"))
+        if why:
+            return f"candidate's bar: {why}"
         n = norm(job.get("url") or "")
         if n and n in urls:
             return urls[n]

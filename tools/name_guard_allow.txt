@@ -7,3 +7,6 @@ Pell Ansgar         # invented, tests/test_name_guard.py
 ChatGPT Codex       # a product: the ChatGPT coding agent
 Google's Gemini     # a product: Google's Gemini CLI
 Google Antigravity  # a product
+Larkspur Casino Group   # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Northgate Council       # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
+Wexmoor Council         # invented employer, tests/test_the_bar_by_name_runs_before_the_fetch.py
