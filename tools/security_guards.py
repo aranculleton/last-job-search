@@ -84,7 +84,7 @@ REQUIRED_IGNORE_RULES = [
     "documents/references/**",
     "documents/applications/**",
     "documents/postings/**",
-    # Belt-and-braces, not the primary guard: nothing writes here.
+    # The interview question bank (/outcome, tools/interview_pack.py asked).
     # /interview's prep packs land under documents/applications/**, above.
     "documents/interview/**",
     "job_search_tracker.csv",

@@ -16,6 +16,7 @@ so recording a result is all it takes for the next draft to use it.
     python3 tools/what_works.py brief messages [--route R] [--channel C] [--tier T]
     python3 tools/what_works.py brief documents
     python3 tools/what_works.py brief search
+    python3 tools/what_works.py brief interviews
     python3 tools/what_works.py event --contact <contact_id>
     python3 tools/what_works.py event --company "<employer>"
 
@@ -29,6 +30,10 @@ so recording a result is all it takes for the next draft to use it.
   worked shapes the next one without anybody asking.
 - `brief search` is the interview rate by fit band, route and channel: whether the
   scores are predicting anything.
+- `brief interviews` is how far applications get (a screen, a technical or second
+  round, a final, an offer), from the stages /outcome ticks in each outcome.md,
+  and from the question bank /outcome keeps: the questions asked more than once
+  and the stories that landed. /interview reads it before building a pack.
 - `event` is the one-line audit run when a result arrives (/outcome, a reply logged
   by /reply): what this result had, and what the rates are now.
 
@@ -56,16 +61,18 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "network"))
 
 import dates  # noqa: E402
+import docpaths  # noqa: E402
 import person  # noqa: E402
+import throttle  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 
 # A message is decided once it has a reply, or once this many days have passed
 # without one. Before that it is waiting, and counting it as a failure would make
 # every new batch look like a bad one.
 REPLY_WAIT_DAYS = 14
-# An application still `applied` after this many days is counted as unanswered,
-# the same 45 days `tools/followups.py` stops chasing at.
-SILENT_DAYS = 45
+# An application still `applied` after this many days is counted as unanswered:
+# the throttle's own number, which `tools/followups.py` stops chasing at too.
+SILENT_DAYS = throttle.SILENCE_DAYS
 # The smallest group a rate is compared on.
 MIN_GROUP = 8
 # |z| for a difference unlikely to be chance (two-sided, 95%).
@@ -325,7 +332,10 @@ def draft_for(row: dict, kept: list[dict]) -> dict | None:
     """
     k = company_key(row.get("company"))
     at = [d for d in kept if company_key(d.get("company")) == k]
-    m = re.search(r"_([A-Za-z0-9_]+)\.(?:tex|pdf)$", str(row.get("cv_file") or ""))
+    # The profile's own filename pattern. A bare "_(...)\.tex" took everything
+    # after the first underscore of the name ("Ellis_CV_Larkspur"), so no draft
+    # was ever found by its abbreviation.
+    m = docpaths.resume_name_rx().search(str(row.get("cv_file") or ""))
     if m:
         by_abbr = [d for d in at if str(d.get("abbr") or "").lower() == m.group(1).lower()]
         if by_abbr:
@@ -356,27 +366,42 @@ _REACHED = re.compile(
     r"|screening call|(?:first|second|third|final) round)\b", re.I)
 
 
+def outcome_md(row: dict) -> str:
+    """The application's outcome.md, or "" when it has none."""
+    try:
+        import outreach
+        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
+            return fh.read()
+    except Exception:
+        return ""
+
+
 def reached_interview(row: dict, root: str | None = None) -> bool:
     status = str(row.get("status") or "").strip().lower()
     if status in WIN:
         return True
     if _REACHED.search(str(row.get("notes") or "")):
         return True
-    try:
-        import outreach
-        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
-        with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
-            text = fh.read()
-    except Exception:
-        return False
+    text = outcome_md(row)
     return "- [x]" in text.lower() or "interview_only" in text
 
 
 def application_cases(tracker: list[dict], today=None) -> list[dict]:
-    """Every sent application with a result: reached an interview or did not."""
+    """Every sent application with a result: reached an interview or did not.
+
+    A row a later row for the same role has superseded is not a second
+    application. The tracker appends rather than edits, so "applied" on the 1st
+    and "interview" on the 20th were counted as one loss, once the first had sat
+    quiet for SILENT_DAYS, and one win.
+    """
+    import followups
     today = _today(today)
+    later = followups.superseded(tracker)
     cases = []
     for r in tracker:
+        if id(r) in later:
+            continue
         status = str(r.get("status") or "").strip().lower()
         applied = _date(r.get("date"))
         if status in WIN or (status in LOSS and reached_interview(r)):
@@ -397,8 +422,11 @@ def application_cases(tracker: list[dict], today=None) -> list[dict]:
 
 
 def _waiting(tracker, today) -> int:
+    import followups
     today = _today(today)
+    later = followups.superseded(tracker)
     return sum(1 for r in tracker if str(r.get("status") or "").strip().lower() == "applied"
+               and id(r) not in later
                and _date(r.get("date")) and (today - _date(r.get("date"))).days < SILENT_DAYS)
 
 
@@ -485,6 +513,139 @@ def event_company(tracker, kept, company: str, today=None, role: str = "") -> st
                                        ", from a " + how + " application" if how else "", keeps, rate)
 
 
+# ------------------------------------------------------------------ interviews
+
+# How far an application got, in the four steps a process has whatever each
+# employer calls them. An interview that is none of the other three (technical,
+# case, take-home, hiring manager, second round) is the middle step.
+STEPS = ("screen", "technical", "final", "offer")
+STEP_WORDS = {"screen": "a screen", "technical": "a technical or second round",
+              "final": "a final", "offer": "an offer"}
+_STEP_RX = (
+    ("offer", re.compile(r"\boffer\b", re.I)),
+    ("final", re.compile(r"\b(?:final|panel|on-?site|last round|assessment cent(?:re|er))\b", re.I)),
+    ("screen", re.compile(r"\b(?:phone|recruiter|screen\w*|hr|talent|intro\w*)\b", re.I)),
+)
+# `- [x] Phone screen (2026-03-10)` once held, and before it, as /outcome writes a
+# booked stage, `- [ ] Phone screen (scheduled 2026-03-10, with Head of Planning)`.
+_STAGE_LINE = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(.+?)\s*$")
+_STAGE_WHEN = re.compile(r"\((?P<sched>scheduled\s+)?(?P<date>\d{4}-\d{2}-\d{2})"
+                         r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
+
+
+def stage_step(label: str) -> str:
+    """The step one stage label stands for: one of STEPS."""
+    for step, rx in _STEP_RX:
+        if rx.search(str(label or "")):
+            return step
+    return "technical"
+
+
+def outcome_stages(text: str) -> list[dict]:
+    """Each stage line under "Interview stages reached" in an outcome.md.
+
+    {label, step, done, date, scheduled, with}: `done` is the box ticked,
+    `scheduled` a stage booked and not yet held, `with` who it is with.
+    """
+    body = str(text or "")
+    m = re.search(r"^##\s*Interview stages reached\s*$", body, re.M | re.I)
+    if m:
+        rest = body[m.end():]
+        nxt = re.search(r"^##\s", rest, re.M)
+        body = rest[:nxt.start()] if nxt else rest
+    out = []
+    for line in body.splitlines():
+        hit = _STAGE_LINE.match(line)
+        if not hit:
+            continue
+        text_ = hit.group(2)
+        when = _STAGE_WHEN.search(text_)
+        label = (text_[:when.start()] if when else re.sub(r"\(.*?\)", "", text_)).strip()
+        out.append({"label": label, "step": stage_step(label),
+                    "done": hit.group(1).lower() == "x",
+                    "date": when.group("date") if when else "",
+                    "scheduled": bool(when and when.group("sched")),
+                    "with": " ".join((when.group("with") or "").split()) if when else ""})
+    return out
+
+
+def furthest(row: dict) -> str:
+    """The furthest step an application reached, or "" for none."""
+    status = str(row.get("status") or "").strip().lower()
+    steps = [s["step"] for s in outcome_stages(outcome_md(row)) if s["done"]]
+    if status in WIN - {"interview"}:
+        steps.append("offer")
+    if not steps and reached_interview(row):
+        steps.append("screen")          # an interview with no stage written down
+    return max(steps, key=STEPS.index) if steps else ""
+
+
+# The questions an interview asked and the stories that answered them, across
+# every application: /outcome adds a row per question, `tools/interview_pack.py
+# asked` writes it, and the next pack reads it. A person's state file, kept
+# beside the tracker's other records.
+BANK = ("documents", "interview", "question_bank.csv")
+BANK_COLUMNS = ("date", "company", "role", "stage", "question", "story", "landed", "note")
+LANDED = ("yes", "partly", "no")
+MAX_BANK_LINES = 3
+
+
+def bank(root: str | None = None) -> list[dict]:
+    """Every row of the question bank, oldest first."""
+    return _csv(os.path.join(root or person.state(), *BANK))
+
+
+def brief_interviews(tracker, rows=None) -> str:
+    """How far applications get, and what the question bank has learned."""
+    import followups
+    later = followups.superseded(tracker)
+    sent = [r for r in tracker if id(r) not in later
+            and str(r.get("status") or "").strip().lower() not in throttle.UNSENT | {""}]
+    rows = bank() if rows is None else rows
+    lines = []
+    if sent:
+        reached = {s: 0 for s in STEPS}
+        for r in sent:
+            far = furthest(r)
+            for s in STEPS[:STEPS.index(far) + 1] if far else ():
+                reached[s] += 1
+        lines.append("How far your applications get (outcome.md stages and the tracker):")
+        if not reached["screen"]:
+            lines.append("- Of %d sent, none has reached an interview yet." % len(sent))
+        else:
+            lines.append("- Of %d sent: %s." % (len(sent), ", ".join(
+                "%s %s" % (STEP_WORDS[s], _rate(reached[s], len(sent)) if s == "screen"
+                           else "%d" % reached[s]) for s in STEPS)))
+        stops = [(reached[a] - reached[b], a) for a, b in zip(STEPS, STEPS[1:]) if reached[a]]
+        if stops:
+            lost, at = max(stops)
+            if lost:
+                lines.append("- Where they stop most: after %s (%d of %d went no further)."
+                             % (STEP_WORDS[at], lost, reached[at]))
+    asked: dict[str, list[dict]] = {}
+    for r in rows:
+        if _norm(r.get("question")):
+            asked.setdefault(_norm(r.get("question")), []).append(r)
+    again = sorted((v for v in asked.values() if len(v) > 1), key=lambda v: (-len(v), v[-1]["date"]))
+    for v in again[:MAX_BANK_LINES]:
+        last = v[-1]
+        lines.append("- Asked %d times: \"%s\" (last at %s%s)." % (
+            len(v), " ".join(str(last["question"]).split()), last.get("company") or "?",
+            ", " + last["stage"] if last.get("stage") else ""))
+    told: dict[str, list[str]] = {}
+    for r in rows:
+        story, landed = " ".join(str(r.get("story") or "").split()), str(r.get("landed") or "").strip().lower()
+        if story and landed in LANDED:
+            told.setdefault(story, []).append(landed)
+    for verdict, word in (("yes", "landed"), ("no", "fell flat")):
+        named = sorted(((sum(x == verdict for x in v), len(v), k) for k, v in told.items()
+                        if any(x == verdict for x in v)), reverse=True)[:MAX_BANK_LINES]
+        if named:
+            lines.append("- Stories that %s: %s." % (word, "; ".join(
+                "%s (%d of %d times told)" % (k, n, t) for n, t, k in named)))
+    return "\n".join(lines)
+
+
 # ------------------------------------------------------------------ the allocator's lift
 
 @functools.lru_cache(maxsize=8)
@@ -512,7 +673,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("brief", help="what has worked, read before drafting")
-    b.add_argument("area", choices=("messages", "documents", "search"))
+    b.add_argument("area", choices=("messages", "documents", "search", "interviews"))
     b.add_argument("--route")
     b.add_argument("--channel")
     b.add_argument("--tier")
@@ -531,6 +692,8 @@ def main(argv=None) -> int:
                              a.route, a.channel, a.tier)
     elif a.cmd == "brief" and a.area == "documents":
         out = brief_documents(tracker, drafts(), a.today)
+    elif a.cmd == "brief" and a.area == "interviews":
+        out = brief_interviews(tracker)
     elif a.cmd == "brief":
         out = brief_search(tracker, a.today)
     elif a.contact:
