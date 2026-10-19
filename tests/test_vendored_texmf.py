@@ -66,6 +66,86 @@ class TexEnv(unittest.TestCase):
         self.assertEqual(seen["env"]["TEXMFHOME"].split(",")[0].strip("{"), TEXMF)
 
 
+class NothingInTheHomeDirectory(unittest.TestCase):
+    """Two local chats in two worktrees, one ~/texmf link: setup_env.sh re-pointed it at
+    whichever copy ran last ("~/texmf pointed at another copy of the app; re-pointed at
+    this one"), so each chat's run took it from the other. The repo's own texmf/ is found
+    through TEXMFHOME, set by each compile, and the home directory is never touched."""
+
+    def _setup_env(self, home):
+        # Stand-ins for every tool the script would otherwise install, and a pip that
+        # installs nothing, so the run is offline and changes nothing outside `home`.
+        stubs = os.path.join(home, "stubs")
+        os.makedirs(stubs, exist_ok=True)
+        for tool in ("lualatex", "xelatex", "pdftotext", "bun", "pip3"):
+            path = os.path.join(stubs, tool)
+            with open(path, "w") as fh:
+                fh.write("#!/bin/sh\nexit 0\n")
+            os.chmod(path, 0o755)
+        env = dict(os.environ, HOME=home, PATH=stubs + os.pathsep + os.environ.get("PATH", ""))
+        env.pop("BUN_INSTALL", None)
+        return subprocess.run(["bash", os.path.join(ROOT, "tools", "setup_env.sh")], cwd=ROOT,
+                              env=env, capture_output=True, text=True, timeout=120)
+
+    @unittest.skipUnless(shutil.which("bash"), "no bash here")
+    def test_setup_env_leaves_a_link_to_another_copy_alone_and_says_what_is_used(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as home:
+            other = os.path.join(home, "other-worktree", "texmf")
+            os.makedirs(other)
+            with open(os.path.join(other, "README.md"), "w") as fh:
+                fh.write("# texmf: the two icon packages moderncv loads\n")
+            os.symlink(other, os.path.join(home, "texmf"))
+            r = self._setup_env(home)
+            self.assertEqual(os.readlink(os.path.join(home, "texmf")), other, r.stdout)
+            self.assertNotIn("re-pointed", r.stdout)
+            self.assertIn("TEXMFHOME", r.stdout)
+
+    @unittest.skipUnless(shutil.which("bash"), "no bash here")
+    def test_setup_env_creates_nothing_and_keeps_a_dangling_link(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as home:
+            r = self._setup_env(home)
+            self.assertFalse(os.path.lexists(os.path.join(home, "texmf")), r.stdout)
+            os.symlink(os.path.join(home, "moved-away"), os.path.join(home, "texmf"))
+            r = self._setup_env(home)
+            self.assertEqual(os.readlink(os.path.join(home, "texmf")),
+                             os.path.join(home, "moved-away"), r.stdout)
+
+    def test_no_app_script_links_texmf_into_the_home_directory(self):
+        import re
+        for name in os.listdir(os.path.join(ROOT, "tools")):
+            if name.endswith((".sh", ".py")):
+                with open(os.path.join(ROOT, "tools", name), encoding="utf-8") as fh:
+                    text = fh.read()
+                self.assertIsNone(re.search(r"\bln\b[^\n]*HOME[^\n]*texmf", text), name)
+
+    def test_every_compile_in_ci_sets_texmfhome_itself(self):
+        import yaml
+        with open(os.path.join(ROOT, ".github", "workflows", "ci.yml"), encoding="utf-8") as fh:
+            ci = yaml.safe_load(fh)
+        compiles = [s for job in ci["jobs"].values() for s in job.get("steps", [])
+                    if any(e in str(s.get("run", "")) for e in ("lualatex ", "xelatex "))]
+        self.assertTrue(compiles)
+        for step in compiles:
+            self.assertIn('export TEXMFHOME="$PWD/texmf"', step["run"], step.get("name"))
+        with open(os.path.join(ROOT, "tools", "ci_local.sh"), encoding="utf-8") as fh:
+            local = fh.read()
+        first = min(local.find("lualatex -"), local.find("xelatex -"))
+        self.assertLess(-1, local.find('export TEXMFHOME="$PWD/texmf"'))
+        self.assertLess(local.find('export TEXMFHOME="$PWD/texmf"'), first)
+
+    def test_no_document_says_the_setup_links_texmf(self):
+        import re
+        said = re.compile(r"link\w*\s+`?~/texmf`?\s+(?:to|here|at)", re.I)
+        for rel in ("SETUP.md", "RUNBOOK.md", "START_HERE.md", "CLAUDE.md", "README.md",
+                    "texmf/README.md"):
+            path = os.path.join(ROOT, rel)
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as fh:
+                    self.assertIsNone(said.search(fh.read()), rel)
+
+
 @unittest.skipUnless(shutil.which("lualatex") and shutil.which("kpsewhich"),
                      "no TeX Live here")
 class KpathseaFindsIt(unittest.TestCase):
