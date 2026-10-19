@@ -1551,7 +1551,8 @@ def move_runtime() -> list:
             extra = [x for x in got.get("reads") or []
                      if isinstance(x, dict) and (x.get("at"), x.get("url")) not in have]
             if extra:
-                pace.update(lambda d: d.__setitem__("pages", (d.get("pages") or []) + extra))
+                pace.update(lambda d, extra=extra: d.__setitem__(
+                    "pages", (d.get("pages") or []) + extra))
         elif got and str(got.get("date") or "") >= str(
                 (pace.load().get(keys[rel]) or {}).get("date") or ""):
             pace.put(keys[rel], got)
