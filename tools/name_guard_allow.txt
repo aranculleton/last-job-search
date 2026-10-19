@@ -2,3 +2,5 @@
 # One per line. Add a name here only when it is invented, or is not a person.
 Shirin Example      # invented, tests/test_the_discovery_ladder.py
 Hal Okonedo         # invented, tests/test_the_discovery_ladder.py
+Quillon Varga       # invented, tests/test_name_guard.py
+Pell Ansgar         # invented, tests/test_name_guard.py

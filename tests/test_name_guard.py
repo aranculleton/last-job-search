@@ -66,6 +66,17 @@ def test_a_change_that_adds_a_real_looking_name_fails_until_it_is_described(tmp_
     assert name_guard.check_diff("master~3") == []
 
 
+def test_a_name_not_yet_committed_is_found_before_the_commit(tmp_path, monkeypatch):
+    # Run before the commit, the check compared HEAD only and passed a new test file that
+    # CI, after the commit, failed.
+    _repo(tmp_path)
+    monkeypatch.setattr(name_guard, "ROOT", str(tmp_path))
+    (tmp_path / "new_test.py").write_text("# Quillon Varga, real-looking\n")
+    (tmp_path / "notes.md").write_text("Morgan Ellis works at Kestrel Mutual.\nAnd Pell Ansgar.\n")
+    assert sorted(name_guard.check_diff("master")) == ["new_test.py:1: Quillon Varga",
+                                                      "notes.md:2: And Pell Ansgar"]
+
+
 def test_a_pr_description_and_commit_messages_are_scanned_too(tmp_path, monkeypatch):
     _repo(tmp_path)
     monkeypatch.setattr(name_guard, "ROOT", str(tmp_path))

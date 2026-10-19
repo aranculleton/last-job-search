@@ -81,9 +81,26 @@ def names(text: str, known: set[str]) -> list[str]:
 
 
 def added(base: str) -> list[tuple[str, int, str]]:
-    """(path, line, text) for every line HEAD adds against `base`."""
-    diff = _git("diff", "--unified=0", "--no-color", "--no-ext-diff", f"{base}...HEAD", "--",
+    """(path, line, text) for every line this checkout adds against `base`: what is
+    committed since the two parted, what is changed but not committed yet, and every line
+    of a new file git would commit. Compared with HEAD alone, a check run before the commit
+    (ci_local.sh) passed a file that CI, after it, failed."""
+    fork = _git("merge-base", base, "HEAD").strip()
+    diff = _git("diff", "--unified=0", "--no-color", "--no-ext-diff", fork, "--",
                 ".", *(f":!{s}" for s in SKIP))
+    out = _diff_lines(diff)
+    for rel in _git("ls-files", "--others", "--exclude-standard", "-z").split("\0"):
+        if not rel or _skipped(rel):
+            continue
+        try:
+            with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+                out += [(rel, n, t) for n, t in enumerate(fh.read().splitlines(), 1)]
+        except (OSError, UnicodeDecodeError):
+            continue
+    return out
+
+
+def _diff_lines(diff: str) -> list[tuple[str, int, str]]:
     out, path, line = [], "", 0
     for ln in diff.splitlines():
         if ln.startswith("+++ "):
