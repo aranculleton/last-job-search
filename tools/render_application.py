@@ -1,5 +1,5 @@
 """Render tailored-application JSON into resume + cover letter .tex via gen.py."""
-import sys, json, re
+import sys, re
 import os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 "..", "templates"))
@@ -399,6 +399,12 @@ def build(a):
     )
     if a.get("edu") in gen.EDU_DETAILS and gen.EDU_DETAILS[a["edu"]] != gen.EDU_STD:
         d["edu"] = gen.EDU_DETAILS[a["edu"]]
+    # The letter's date is the day it was first rendered, kept in the draft so a
+    # re-render from the kept draft.json (a renderer fix reaching an unsent
+    # application) prints the date the letter was written, not the day of the fix.
+    if not str(a.get("letter_date") or "").strip():
+        a["letter_date"] = gen._long_date()
+    d["letter_date"] = a["letter_date"]
     return d
 
 
@@ -434,7 +440,7 @@ if __name__ == "__main__":
     # Through the same loader fit_to_page uses, so a kept draft's posting_from is
     # read in: a plain json.load rendered every kept draft untailored.
     import fit_to_page
-    apps, _ = fit_to_page.load(sys.argv[1])
+    apps, read_in = fit_to_page.load(sys.argv[1])
     check_batch(apps)
     for a in apps:
         d = build(a)
@@ -446,6 +452,6 @@ if __name__ == "__main__":
     # by abbr, and outreach.py names the application folder with it. A draft
     # that leaves the naming to doc_name.py has no abbr to give them, and both
     # tools died on KeyError: 'abbr' rather than deriving it a second time.
-    with open(sys.argv[1], "w") as fh:
-        json.dump(apps, fh, indent=1)
-        fh.write("\n")
+    # Saved as fit_to_page saves, so a kept draft's posting, read in through its
+    # fence, is never written back into draft.json outside it.
+    fit_to_page.save(sys.argv[1], apps, read_in)
