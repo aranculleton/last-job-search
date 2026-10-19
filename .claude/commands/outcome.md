@@ -65,7 +65,7 @@ Canonical spellings for the tracker CSV `status` column (underscores, never spac
 Ask the user what happened, then classify:
 
 **Progress updates** (application still open):
-- Interview invitation / stage scheduled or completed (phone screen, technical, case, final round)
+- Interview invitation / stage scheduled or completed (phone screen, technical, case, final round). A stage that is **booked** is recorded with its date and who it is with, as a scheduled line in `outcome.md` (Step 3): that line is what puts "interview in 3 days, no pack yet" and, afterwards, "thank-you not logged" on `tools/open_actions.py --due` and the brief.
 - Offer received (not yet accepted or declined)
 
 **Resolutions** (application closed) - these map to the archive `Status:` enum in `documents/README.md` that `/html-report` and `/interview` read (distinct from the tracker CSV column; see **Tracker status vocabulary** above):
@@ -136,9 +136,15 @@ Create or update `documents/applications/<company>_<role>/`. All content here is
 appended per update with a date, never overwritten>
 ```
 
-Update rules: tick stage checkboxes as they are reached (add the date in parentheses), append dated entries to Notes, and only change `Status` from `in_progress` to a final value on resolution. Re-running `/outcome` on the same application is idempotent - it appends new information, never duplicates or rewrites history.
+A **booked** stage is written unticked, with its date and who it is with, in place of its bare line (or as a new line in stage order when it is a stage the template does not name):
 
-**Thank-you note trigger:** when this step ticks a newly completed interview stage, offer in the same turn: "Want a short thank-you note for the interviewer? A prompt one is standard practice." If accepted, draft it under Step 2b's drafting and logging rules (same voice, same no-new-claims boundary, same `followup_YYYY-MM-DD.md` archive convention). Recording the stage is the trigger - no scanning for recent stages is ever needed.
+```markdown
+- [ ] Technical interview (scheduled YYYY-MM-DD, with <title or name>)
+```
+
+Update rules: tick stage checkboxes as they are reached (add the date in parentheses; a scheduled line becomes `- [x] Technical interview (YYYY-MM-DD, with <title or name>)`, the word `scheduled` dropped and the rest kept), move a scheduled date when the employer moves it, append dated entries to Notes, and only change `Status` from `in_progress` to a final value on resolution. Re-running `/outcome` on the same application is idempotent - it appends new information, never duplicates or rewrites history.
+
+**Thank-you note trigger:** when this step ticks a newly completed interview stage, offer in the same turn: "Want a short thank-you note for the interviewer? A prompt one is standard practice." If accepted, draft it under Step 2b's drafting and logging rules (same voice, same no-new-claims boundary, same `followup_YYYY-MM-DD.md` archive convention). Recording the stage is the trigger - no scanning for recent stages is ever needed. Until a note dated on or after the interview is in the folder, `tools/open_actions.py --due` lists "thank-you not logged" for a week after it, so one the user sent outside this command is saved there too.
 
 ---
 
