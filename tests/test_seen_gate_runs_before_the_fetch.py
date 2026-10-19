@@ -174,7 +174,9 @@ class TestTheRoundWiresItUp(unittest.TestCase):
     def test_the_escape_hatch_reaches_an_expanded_round(self):
         """--expand re-invokes this script; a flag it drops is a flag that lies."""
         src = (ROOT / "tools" / "run_round.py").read_text(encoding="utf-8")
-        expansion = src.split("return subprocess.call(", 1)[1]
+        # The widened round's call, which now also clears the bodies it handed on
+        # after it returns, so it is no longer the return statement itself.
+        expansion = src.split("subprocess.call(", 1)[1]
         self.assertIn('"--no-seen-read"', expansion)
 
     def test_prefilter_accepts_the_flag(self):
