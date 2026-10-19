@@ -94,8 +94,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", False, "a docstring's example Workday location is invented"),
             (11, "2026-10-19", False, "an employer's own board counts a posting in any town of the person's metro, its dates are read the one way, a Workday search reads past its second page, a Greenhouse or Lever posting is kept when any place it lists is wanted, and Lever's EU instance is read"),
             (12, "2026-10-19", True, "every hiring system openroles reads is searched (Workable, Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun and ClearCompany besides the first four) and careers sites that publish their jobs for search engines: each target employer's board is looked for again on all of them"),
+            (13, "2026-10-19", False, "a private name the board reader no longer has says, in its own error, what that means and where to look; --find says when a board was only guessed from a name, with its size and roles, and reads each board once"),
         ),
-        "fingerprint": "2386ba2d6ef0f2da",
+        "fingerprint": "7090f931ee1d7afe",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -247,8 +248,9 @@ METHODS: dict[str, dict] = {
             (14, "2026-10-18", False, "RUNBOOK names the people ladder and the Claude surfaces registry"),
             (15, "2026-10-19", True, "a document already sent is never rendered over; a letter's figures are checked; a trimmed resume keeps the line that describes each job; a letter keeps its date, drops legal forms from the employer's name, is addressed to the person the employer names, and is flagged where it repeats the resume; a claimed skill the profile does not hold is caught, a held tool of the same family stands in for one a posting names that the person lacks; and every skill a posting names that the profile does not hold is asked about before drafting, and only a yes puts it on the resume"),
             (16, "2026-10-19", False, "an application from any employer board openroles reads is recorded as applied online"),
+            (17, "2026-10-19", False, "RUNBOOK says what to do when a person's own tests fail after an update; an application's folder is found when its role carries a requisition number"),
         ),
-        "fingerprint": "ea7dd7e10b1808a8",
+        "fingerprint": "2e72070610ded33e",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -264,8 +266,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "interview research reads the one company-research cache and its freshness rule"),
             (6, "2026-10-19", True, "the pack is built by tools/interview_pack.py: sourced, one screen first, the money the form already named, the question bank, warm routes, an offer branch, mock feedback kept, and each skill you said yes to claiming flagged as one to expect a question on"),
+            (7, "2026-10-19", True, "a pack finds its application however the role is written (a requisition number in it), reads a hand-written outcome's rounds, finds the referrer from every record, and never tells you to message someone whose row says to leave them be"),
         ),
-        "fingerprint": "b9f9400ab4b468fc",
+        "fingerprint": "bd99593c4f356aaf",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -452,6 +455,8 @@ METHODS: dict[str, dict] = {
 KEEPS_NOTHING: dict[str, str] = {
     "tests/*": "tests change nothing a person has",
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
+    "tools/offline_boards.py": "a test seam: canned board answers inside a test, nothing kept",
+    "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
     ".github/*": "the app's own CI and issue templates",
     "profile.example/*": "the invented example person; a new profile name in it is a profile "
                          "upgrade or a safe default, which tests/test_profile_upgrades.py holds",

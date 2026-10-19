@@ -353,7 +353,11 @@ def _next_stage(stages) -> dict:
         return booked[0]
     done = [i for i, s in enumerate(stages) if s["done"]]
     after = stages[(done[-1] + 1) if done else 0:]
-    return after[0] if after else {}
+    if after:
+        return after[0]
+    # Every stage on record held and none booked: the next is the next round, never the
+    # "Phone screen" a pack assumes when nothing is on record at all.
+    return {"label": "Round %d" % (len(stages) + 1), "date": "", "with": ""} if stages else {}
 
 
 def gather(company, role="", stage="", date="", with_="", today=None, story_map=None,
@@ -366,8 +370,19 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
     row = _row(company, role, tracker)
     company, role = _text(row.get("company")) or company, _text(row.get("role")) or role
     folder = outreach.app_folder(company, role)
+    if not os.path.isdir(folder):
+        # Built from a folder that is not there, a pack has no posting, no form and no
+        # stages, and says nothing about it. A folder at this employer under another
+        # name is the likely one: name them rather than guess.
+        others = outreach.employer_folders(company)
+        if others:
+            raise LookupError(
+                "no application folder %s for %s, %r; this employer has %s. Rename the one "
+                "that is this application's to %s, or name the role as its folder does with "
+                "--role" % (_rel(folder), company, role, ", ".join(others),
+                            os.path.basename(folder)))
     outcome = _read(os.path.join(folder, "outcome.md"))
-    stages = what_works.outcome_stages(outcome)
+    stages = what_works.outcome_stages(outcome, today)
     if not stage:
         # Nothing on record yet means the first conversation, which is a screen
         # at nearly every employer; /interview asks, and passes --stage when not.
@@ -799,8 +814,38 @@ def ask_lines(ctx) -> list:
     return out[:MAX_ASK]
 
 
+# A row whose own next step says to leave them be: "Keep warm, no action", "Do not use
+# him to chase ...", or a HOLD or FREEZE.
+_HANDS_OFF = re.compile(r"\bno action\b|\bdo not (?:contact|message|use|chase|nudge)\b|"
+                        r"^\s*(?:HOLD|FREEZE)\b", re.I)
+
+
+def _referred(c, ctx, name) -> bool:
+    """Did this contact put the candidate forward for this application? Their status or
+    route says so, their outcome records a referral, their row links this application,
+    or the application's own notes name them beside a referral. The status alone missed
+    a referrer whose row was waiting on his reply, with "referral_converted_to_interview"
+    as its outcome and his name beside "referral" in the tracker."""
+    if _text(c.get("status")) == "referral_in_progress" or _text(c.get("route")).startswith("referral"):
+        return True
+    if "referr" in _text(c.get("outcome")).lower():
+        return True
+    linked = _text(c.get("linked_application"))
+    if linked and linked == _text(ctx["row"].get("cv_file")):
+        return True
+    if len(name) > 3:
+        text = " ".join([_text(ctx["row"].get("notes")), _text(ctx.get("outcome"))]).lower()
+        for m in re.finditer(re.escape(name.lower()), text):
+            if "referr" in text[max(0, m.start() - 80):m.end() + 80]:
+                return True
+    return False
+
+
 def warm_lines(ctx) -> list:
-    """Who is already talking to them, and who of the interviewers is already known."""
+    """Who is already talking to them, and who of the interviewers is already known.
+    A row that says to leave someone be is shown with its own words, never with a
+    message to send: one said "Keep warm, no action" and the pack told the candidate to
+    tell him the interview was booked."""
     k = company_key(ctx["company"])
     here = [c for c in ctx["contacts"] if company_key(c.get("company")) == k]
     names = " ".join(_text(x).lower() for x in [ctx["with"]] + [s["with"] for s in ctx["stages"]])
@@ -810,17 +855,24 @@ def warm_lines(ctx) -> list:
         status = state.effective_status(c, state.threads_for(ctx["threads"], cid))
         name = state.person_name(c.get("name")) or _text(c.get("name"))
         title = ", " + _text(c.get("title")) if _text(c.get("title")) else ""
+        step = _text(c.get("next_action"))
+        if _referred(c, ctx, name):
+            referrer = referrer or name
+        if step and _HANDS_OFF.search(step):
+            out.append("- %s%s [%s]: their row says to leave them be for now: \"%s\". "
+                       "(source: %s)" % (name, title, status, step[:140], prep.CONTACTS_SOURCE))
+            continue
         if len(name) > 3 and name.lower() in names:
             known = ["documents/network/%s/%s" % (cid, f) for f in ("prep.md", "reading.json")
                      if cid and os.path.exists(person.state("documents", "network", cid, f))]
             out.append("- %s%s is interviewing you and is in your contact book [%s]%s. "
                        "(source: %s)" % (name, title, status, ": reuse " + " and ".join(known)
                                          if known else "", prep.CONTACTS_SOURCE))
-        elif status == "referral_in_progress" or _text(c.get("route")).startswith("referral"):
-            referrer = referrer or name
+        elif _referred(c, ctx, name):
+            then = (" Their row's next step: \"%s\"." % step[:140]) if step else ""
             out.append("- %s%s put you forward [%s]. Tell them the interview is booked, and "
-                       "thank them after it. (source: %s)" % (name, title, status,
-                                                              prep.CONTACTS_SOURCE))
+                       "thank them after it.%s (source: %s)" % (name, title, status, then,
+                                                                prep.CONTACTS_SOURCE))
         elif status in throttle.RESPONDED:
             out.append("- %s%s is already talking to you [%s]: tell them it is booked. "
                        "(source: %s)" % (name, title, status, prep.CONTACTS_SOURCE))

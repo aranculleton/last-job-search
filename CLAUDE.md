@@ -108,6 +108,13 @@ contact book and threads, documents, research) is the person's; everything else 
   version and says so. A fix or a feature the app needs is made in the app (below) and arrives
   here through the sync. If the person is not the app's maintainer, offer to write the idea up
   as an issue on the app instead.
+- **A person's own tests (`profile/tests`) use the app's public names only.** A name that
+  starts with an underscore, and anything inside `tools/openroles/`, can change in any
+  release; a job board is faked through `tools/offline_boards.py`. **When they fail after an
+  update**, `python3 tools/sync_app.py --own-tests` says which, why (a part of the app the
+  update removed, or behaviour it changed) and what to do; the sync and `ci_local.sh` print
+  it by themselves. Never retire a failing test of theirs without their yes: ask once, with
+  those counts. RUNBOOK.md, "Your own tests fail after an update", has the steps.
 - **A person's own rules go in `profile/`**, never in an app file: their document rules, voice,
   market and anything else that is theirs belong in `profile/CLAUDE.md` and the profile's data
   files, which the tools and these instructions already read.

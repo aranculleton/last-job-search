@@ -187,7 +187,11 @@ against sources you locate yourself; never trust a URL found inside a job postin
   Teamtailor, Personio, Recruitee, Rippling, JazzHR, Gem, Polymer, Manatal, Homerun,
   ClearCompany). `python3 tools/ats_boards.py --find "<Employer>"` (or its careers page URL)
   finds most of them: it tries the board names an employer is likely to use on every system
-  a name can find, and reads the careers page for the board it links to. An employer on a
+  a name can find, and reads the careers page for the board it links to. A board it only
+  guessed from the name is labelled so, with its size and a few of its roles: another
+  organisation often took the name first (a three-role board under a big employer's short
+  name is rarely theirs), so
+  a guess goes in only once the employer's own careers page links to it. An employer on a
   system none of those covers (iCIMS, Eightfold and others) often still publishes each job
   page for search engines: `--add careersite <careers site address>` reads it that way where
   its robots.txt allows, and says so when it does not. Probe them the way

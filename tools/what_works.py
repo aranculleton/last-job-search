@@ -541,13 +541,41 @@ def stage_step(label: str) -> str:
     return "technical"
 
 
-def outcome_stages(text: str) -> list[dict]:
+# A stage written by hand as a heading: "## Round 1 - 2026-09-10 - Recruiter screen", "## Technical interview - 2026-10-02", "### Stage 2: 2026-10-09 (panel)".
+_STAGE_HEAD = re.compile(
+    r"^#{2,3}\s*(?:(?:round|stage|interview)\s*\d+\s*[-\u2013:]\s*)?"
+    r"(?:(?P<d1>\d{4}-\d{2}-\d{2})\s*[-\u2013:]\s*(?P<l1>.+?)"
+    r"|(?P<l2>.+?)\s*[-\u2013:]\s*(?P<d2>\d{4}-\d{2}-\d{2})(?:\s*[-\u2013:(].*)?)\s*$", re.I)
+
+
+def _heading_stages(text: str, today: str) -> list[dict]:
+    """Stages from an outcome.md written by hand, one heading per round with its date.
+    A date before today was held; today or later is booked."""
+    out = []
+    for line in str(text or "").splitlines():
+        m = _STAGE_HEAD.match(line)
+        if not m:
+            continue
+        date = m.group("d1") or m.group("d2")
+        label = re.sub(r"\s+", " ", (m.group("l1") or m.group("l2") or "")).strip(" -:\u2013")
+        if not label or label.lower().startswith(("notes", "owed", "what ", "still ")):
+            continue
+        held = date < today
+        out.append({"label": label, "step": stage_step(label), "done": held, "date": date,
+                    "scheduled": not held, "with": ""})
+    return out
+
+
+def outcome_stages(text: str, today: str = "") -> list[dict]:
     """Each stage line under "Interview stages reached" in an outcome.md.
 
     {label, step, done, date, scheduled, with}: `done` is the box ticked,
-    `scheduled` a stage booked and not yet held, `with` who it is with.
+    `scheduled` a stage booked and not yet held, `with` who it is with. An outcome.md
+    written by hand, with a dated heading per round and no checklist, is read from its
+    headings: one such file gave the interview pack no stages at all.
     """
     body = str(text or "")
+    whole = body
     m = re.search(r"^##\s*Interview stages reached\s*$", body, re.M | re.I)
     if m:
         rest = body[m.end():]
@@ -566,7 +594,7 @@ def outcome_stages(text: str) -> list[dict]:
                     "date": when.group("date") if when else "",
                     "scheduled": bool(when and when.group("sched")),
                     "with": " ".join((when.group("with") or "").split()) if when else ""})
-    return out
+    return out or _heading_stages(whole, today or dt.date.today().isoformat())
 
 
 def furthest(row: dict) -> str:
