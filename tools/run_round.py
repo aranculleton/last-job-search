@@ -22,7 +22,8 @@ as if it were a file and prefilter's dict to text_screen as if it were a list.
                 the cross-run gate (--seen): anything throttle.ruled_out() would
                 drop at the end is dropped here, before hydrate pays for it
   hydrate       fetch every surviving body; a posting with no text cannot be screened
-  text_screen   stated-fact knockouts (10-triage-blockers.md); flags, never cuts silently
+  text_screen   stated-fact knockouts (10-triage-blockers.md); flags, never cuts silently;
+                its cuts are recorded in seen_jobs.json so no later round fetches them
   opportunity   how good is the job (comp signals, employer, seniority band)
   fit           would they call back (title band, family, stack, years, location)
   throttle      company throttle, one role per employer, cross-run dedupe (the
@@ -414,8 +415,13 @@ def main():
     run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
          "--workers", str(a.workers), "--require", a.require]
         + (["--cache", a.hydrate_cache] if a.hydrate_cache else []), log, deadline)
-    run([sys.executable, f"{T}/text_screen.py", f("02_hydrated.json"), "--out", f("03_screened.json"),
-         "--out-all", f("03_screened_all.json")], log, deadline)
+    # The screen's cuts go to seen_jobs.json, so the next round drops them before
+    # hydrate fetches them again.
+    run([sys.executable, f"{T}/text_screen.py", f(HYDRATED), "--out", f("03_screened.json"),
+         "--out-all", f("03_screened_all.json"), "--today", a.today]
+        + ([] if a.no_seen_write
+           else ["--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]),
+        log, deadline)
     run([sys.executable, f"{T}/opportunity.py", f("03_screened.json"), "--out", f("04_opportunity.json"),
          "--top", "100000", "--today", a.today], log, deadline)
     run([sys.executable, f"{T}/fit.py", f("04_opportunity.json"), "--out", f("05_ranked.json"),

@@ -76,7 +76,11 @@ Only draft unprompted if the user has explicitly said to in that request.
   reason. Eligibility, a language, a credential, a different discipline, internal-only and a fact
   about the posting (closed, a duplicate) stand; a pay reason stands only on a range topping out
   below `SALARY_CUT_BELOW`; a place only where the location gate still fails the place the entry
-  recorded; a degree, a score or a years bar never. The gate that enforces
+  recorded; a degree, a score or a years bar never. A round records the text screen's own cuts
+  this way by itself (`tools/text_screen.py --seen`, which `run_round.py` passes), each with its
+  quote, so the next round drops them before hydrate fetches them again. The prefilter's drops
+  (age, place, title) are not recorded: they are decided again for free, before any fetch, and
+  thousands a round would bury the rulings. The gate that enforces
   that is `throttle.ruled_out()`, and it runs at **prefilter**, before `hydrate.py` spends an
   HTTP call fetching the body: a large share of everything reaching hydrate is a posting already
   ruled out. `prefilter.py` imports the throttle's own function rather than reimplementing it, so

@@ -885,11 +885,25 @@ def main() -> int:
     ap.add_argument("infile")
     ap.add_argument("--out", help="survivors, for the next stage")
     ap.add_argument("--out-all", dest="out_all", help="every record with its verdict")
+    ap.add_argument("--seen", default=None,
+                    help="seen_jobs.json: record each cut there (tools/exclude.py), so the "
+                         "next round drops it before hydrate fetches it again")
+    ap.add_argument("--today", default="", help="YYYY-MM-DD for the record; defaults to today")
     a = ap.parse_args()
     jobs = load_jobs(a.infile)
     out = [screen(j) for j in jobs]
     keep = [j for j in out if j["text_screen"] != "cut"]
     cut = [j for j in out if j["text_screen"] == "cut"]
+    # Every posting ruled out is written back, with its reason and what it rests
+    # on, or each round fetched and screened the same cuts again. Cuts only: a
+    # flag is a scoring input and never a ruling.
+    recorded = 0
+    if a.seen and cut:
+        import exclude
+        recorded = exclude.add_many(
+            [{"url": j.get("url"), "reason": "; ".join(j["cuts"]), "title": j.get("title"),
+              "company": j.get("company"), "location": j.get("location")} for j in cut],
+            today=a.today, path=a.seen)
     # --out is what the next stage extracts, so it holds SURVIVORS only. It
     # used to hold every record tagged with its verdict, which meant a caller
     # that forgot to filter paid a model to re-read postings this stage had
@@ -902,7 +916,8 @@ def main() -> int:
     for j in cut:
         print(f"CUT  {(j.get('company') or '')[:26]:26} {(j.get('title') or '')[:38]:38} {j['cuts'][0][:70]}")
     print(f"\n{len(jobs)} screened, {len(keep)} survive, {len(cut)} cut on a quoted stated fact "
-          f"(0 model tokens)", file=sys.stderr)
+          f"(0 model tokens)" + (f"; {recorded} recorded in {os.path.basename(a.seen)}"
+                                 if a.seen else ""), file=sys.stderr)
     return 0
 
 
