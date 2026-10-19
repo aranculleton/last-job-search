@@ -5,7 +5,8 @@ way to hit one page is to compile and measure. This trims in a fixed order,
 weakest content first, so what survives is always the strongest material:
 
   1. the lowest-scoring bullet for THIS posting, wherever it sits
-  2. never below any employer's floor
+  2. never below any employer's floor, and an employer cut to one line keeps
+     the line the allocator would give it alone (allocate._pick)
   3. then shorten the tools line
 
 Then it grows the page back: the strongest absent bullet is added and kept
@@ -255,6 +256,12 @@ def trim_resume(a):
 
     Returns the bullet id removed, "tools" when the tools line was shortened
     instead, or None when nothing more can come off.
+
+    A cut that leaves an employer one line keeps the line `allocate._pick`
+    would give it alone, not whichever survived. Removing the globally weakest
+    bullet took the one that best describes the job (it scores lowest on a
+    posting about something else) and left a sharper line as the role's whole
+    description, which the allocator's sole-bullet rule exists to prevent.
     """
     scores = _scores(a)
     cands = [(scores[b], b, j) for j in a["jobs"]
@@ -262,8 +269,13 @@ def trim_resume(a):
              for b in j["bullets"]]
     if cands:
         _, b, j = min(cands)
+        before = list(j["bullets"])
         j["bullets"].remove(b)
-        return b
+        if len(j["bullets"]) == 1:
+            taken = {x for o in a["jobs"] if o is not j for x in o["bullets"]}
+            j["bullets"] = allocate._pick(_employer(j), 1, scores, taken) or j["bullets"]
+        gone = [x for x in before if x not in j["bullets"]]
+        return gone[0] if gone else b
     # Everyone is at floor; shorten the tools line instead.
     parts = [p.strip() for p in a.get("tools", "").split(",")]
     if len(parts) > 8:
@@ -372,11 +384,12 @@ def fit(a):
     for _ in range(9):
         if pages <= PAGES:
             break
-        gone = trim_resume(a)
-        if not gone:
+        before = {b for j in a["jobs"] for b in j["bullets"]}
+        if not trim_resume(a):
             break
-        if gone != "tools":
-            trimmed.add(gone)
+        # Everything that came off, which is more than one bullet when a sole
+        # line was swapped for the one that describes the job.
+        trimmed |= before - {b for j in a["jobs"] for b in j["bullets"]}
         pages = _render_resume(a)
     # Fill the page. Add a bullet, recompile, and keep it only if the resume is
     # still within its pages; otherwise put the page back the way it was and stop.
