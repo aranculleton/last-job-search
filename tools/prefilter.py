@@ -286,14 +286,29 @@ def title_verdict(title: str) -> tuple[str, str]:
     return "FAIL", "title matches none of the role families in profile/search.py POSITIVE"
 
 
-def age_days(job: dict, today: _dt.date | None = None) -> int | None:
-    """Days since the posting was published, or None when the portal gave no date.
+def posted_age(job: dict, today: _dt.date | None = None) -> int | None:
+    """Days since the portal says the posting was published, or None when it gave no date.
 
     Only an ISO date is read. A relative string ("2 weeks ago"), an epoch or a
     US-format date is treated as no date, which keeps the posting (absence of a
     date is not evidence of age) but means the hard rule cannot act on it.
     """
     return days_since(job.get("date") or job.get("posted_date"), today, iso_only=True)
+
+
+def age_days(job: dict, today: _dt.date | None = None) -> int | None:
+    """Days since the posting is known to have existed, or None when nothing says.
+
+    The earlier of the portal's date, the day this search first saw it
+    (`first_seen`, from seen_jobs.json) and the day a job alert sent it
+    (`alert_date`). A portal relisting a posting gives it a new date, so the
+    portal's date alone let a month-old posting read as new.
+    """
+    ages = [a for a in (posted_age(job, today),
+                        days_since(job.get("first_seen"), today, iso_only=True),
+                        days_since(job.get("alert_date"), today, iso_only=True))
+            if a is not None]
+    return max(ages) if ages else None
 
 
 # An employer's own careers board is a different kind of source from an
@@ -350,9 +365,14 @@ def decide(job: dict, today: _dt.date | None = None,
     if site:
         return False, f"eligibility: internal Workday site ({site})"
     age = age_days(job, today)
+    posted = posted_age(job, today)
     live = (job.get("portal") or "") in LIVE_BOARDS
     if age is not None and age > max_age and not live:
-        return False, f"age: posted {age} days ago, past the {max_age}-day hard limit"
+        if posted is not None and posted >= age:
+            return False, f"age: posted {age} days ago, past the {max_age}-day hard limit"
+        said = ("the portal gives no date" if posted is None
+                else f"the portal's {posted} days is a relist")
+        return False, f"age: first seen {age} days ago, past the {max_age}-day hard limit; {said}"
     lv, lwhy = location_verdict(job.get("location", ""), job.get("title", ""))
     if lv == "FAIL":
         return False, f"location: {lwhy}"
@@ -363,6 +383,8 @@ def decide(job: dict, today: _dt.date | None = None,
         agestr = "no date from the portal"
     elif live and age > max_age:
         agestr = f"{age}d old, kept: still listed on the employer's own board"
+    elif posted is None:
+        agestr = f"first seen {age}d ago, no date from the portal"
     else:
         agestr = f"{age}d old"
     return True, f"{agestr}; location {lv} ({lwhy}); title {tv} ({twhy})"
@@ -377,6 +399,35 @@ def annotate(job: dict, today: _dt.date | None = None,
                     location_reason=lwhy, age_days=age_days(job, today))
 
 
+def _seen_entries(seen_path: str) -> dict | None:
+    """seen_jobs.json's entries, or None when it cannot be read."""
+    try:
+        with open(seen_path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    entries = data.get("seen") if isinstance(data, dict) else None
+    if not isinstance(entries, dict):
+        entries = data if isinstance(data, dict) else {}
+    return entries
+
+
+def seen_on(seen_path: str, today: _dt.date | None = None):
+    """A function from a posting to the day this search first saw it, or "".
+
+    `throttle.first_seen`, read before any posting is aged, so a relisted posting is
+    as old as its first sighting. A missing or unreadable seen file sees nothing.
+    """
+    entries = _seen_entries(seen_path) if seen_path else None
+    if not entries:
+        return lambda job: ""
+    try:
+        from throttle import first_seen
+    except ImportError:
+        return lambda job: ""
+    return first_seen(entries, (today or _dt.date.today()).isoformat())
+
+
 def already_ruled_out(seen_path: str):
     """A predicate over a posting: has this search already ruled it out?
 
@@ -387,14 +438,9 @@ def already_ruled_out(seen_path: str):
     The decision is `throttle.ruled_out`, imported rather than restated, so
     this can only ever drop what the throttle would drop anyway.
     """
-    try:
-        with open(seen_path) as fh:
-            data = json.load(fh)
-    except (OSError, ValueError):
+    entries = _seen_entries(seen_path)
+    if entries is None:
         return lambda job: ""
-    entries = data.get("seen") if isinstance(data, dict) else None
-    if not isinstance(entries, dict):
-        entries = data if isinstance(data, dict) else {}
     try:
         from throttle import ruled_out
         from throttle import load_do_not_target, referral_holds
@@ -458,9 +504,14 @@ def main() -> int:
 
     rows, was_dict = load_jobs(a.infile)
     ruled = already_ruled_out(a.seen) if a.seen else (lambda job: "")
+    first = seen_on(a.seen, today)
     kept, dropped = [], []
     n_seen = 0
     for job in rows:
+        # Aged from its first sighting as well as the portal's date, before any gate.
+        day = first(job)
+        if day and not job.get("first_seen"):
+            job = dict(job, first_seen=day)
         ok, row = annotate(job, today, a.jobage)
         # Checked after the intrinsic gates so `prefilter_reason` names the
         # cheapest true reason: a stale posting reads as stale whether or not

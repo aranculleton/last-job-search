@@ -122,9 +122,12 @@ KEEP_TOP = 60
 SUMMARY_DIR = "documents/rounds"
 # Fields worth keeping. `desc` is deliberately absent: it is the whole reason
 # the stage files are large, and it is on the posting's own page.
+# `first_seen` and `age_days` because the portal's `date` is a relist date as often
+# as not: the age is the earlier of the two.
 SUMMARY_FIELDS = ("priority", "fit", "opportunity", "title", "company", "location",
-                  "date", "url", "portal", "bar", "bar_reason", "warm_route_note",
-                  "outreach_pending_note", "throttle_override_note", "drafted_note")
+                  "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
+                  "warm_route_note", "outreach_pending_note", "throttle_override_note",
+                  "drafted_note")
 
 
 def write_summary(shortlist_path, out_dir, name):

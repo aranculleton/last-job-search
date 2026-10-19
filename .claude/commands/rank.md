@@ -5,8 +5,10 @@ You are batch-scoring the jobs that `/scrape` has collected, so the user can dec
 **Where the postings are.** A round (`tools/run_round.py`, which `/scrape` runs) scores every
 posting it keeps mechanically and writes its shortlist, the top 60 without posting bodies, to
 `documents/rounds/<round>.json`: each row's `fit` is its 0-100 score and `priority` its order
-(it can exceed 100, so it is never a score). A round writes only `skipped` rows to
-`job_scraper/seen_jobs.json` (`tools/throttle.py`), never `new` or `ranked` ones. So `/rank`'s postings come from the
+(it can exceed 100, so it is never a score). A round writes `skipped` rows to
+`job_scraper/seen_jobs.json` (`tools/throttle.py`), and a `surfaced` entry for each posting it
+shortlisted, carrying the day it was first and last seen (`first_seen`, `last_seen`), which is
+how a relisted posting stays as old as it is. Never `new` or `ranked` ones. So `/rank`'s postings come from the
 round summaries, and the scores it writes go to `seen_jobs.json`, where `tools/lookup_score.py`
 and `/apply` read them.
 

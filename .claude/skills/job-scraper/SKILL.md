@@ -580,6 +580,7 @@ being auto-excluded.
       "company": "...",
       "url": "...",
       "first_seen": "YYYY-MM-DD",
+      "last_seen": "YYYY-MM-DD",
       "posted_date": "YYYY-MM-DD" | null,
       "deadline": "YYYY-MM-DD" | null,
       "fit": "high/medium/low",
@@ -590,7 +591,7 @@ being auto-excluded.
       "language_gate": "PASS/FAIL/FLAG",
       "strengths": ["...", "..."],
       "gaps": ["...", "..."],
-      "status": "new/ranked/estimated/skipped/excluded/applied/expired",
+      "status": "new/surfaced/ranked/estimated/skipped/excluded/applied/expired",
       "portal": "<source portal skill, e.g. linkedin-search>",
       "source": "cli/websearch"
     }
@@ -616,6 +617,16 @@ below 60 low) so older readers keep working.
 `deadline` is a base field rather than a `/rank` extension: Step 2's detail fetch already extracts the application deadline, so it is written when the job is first seen and refreshed by `/rank` Step 4 when a scoring agent returns a different value. `null` means the posting states no deadline; a missing key means the entry predates this field - **never infer a deadline** from either, and never backfill by guessing.
 
 `posted_date` is the posting's own publication date, taken from the `date` field Step 2's contract already guarantees on every portal CLI's search output. Step 1b uses that date to scope the run to the last 14 days and then drops it, so nothing downstream can distinguish a posting published yesterday from one published two years ago - `first_seen` is when this scraper first saw the entry, not when the employer posted it. Persisting it makes Step 1b's window auditable after the run and gives `/rank` a freshness signal to weigh, instead of rediscovering the date and recording it in prose that nothing reads. That gap is real: a stale posting can be scraped and ranked Strong Fit at the top of a shortlist, its own scoring note observing the listing "may be long stale" with nothing able to act on it. `null` means the portal returned no date for that result (the CLIs emit `date: null` when a listing omits it); a missing key means the entry predates this field - **never infer a posting date** from either, and never backfill by guessing.
+
+**A posting is as old as the first time this search saw it.** A portal relisting a posting
+gives it a new date, and LinkedIn's card shows the relist date, so the portal's `date` alone made
+a month-old posting look fresh. A round records every posting it surfaces at `status:
+"surfaced"` (`tools/throttle.py` `write_back`), with `first_seen` set once and `last_seen` moved
+on each sighting; a posting under a new URL with the same title, employer and city as one seen in
+the last 30 days (`throttle.RELIST_WINDOW`) is that posting relisted and keeps its `first_seen`.
+`tools/prefilter.py` ages a posting by the earlier of its portal date and `first_seen` (and a job
+alert's `alert_date`), and the freshness bonus in `tools/opportunity.py` is given only on a
+portal date and never on an unknown or future one.
 
 2. Only present jobs NOT already in the seen list or tracker.
 

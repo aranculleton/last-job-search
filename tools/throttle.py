@@ -43,7 +43,7 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bar  # noqa: E402
-from dates import days_since  # noqa: E402
+from dates import as_date, days_since  # noqa: E402
 from company_key import key  # noqa: E402
 from lookup_score import norm  # noqa: E402
 
@@ -415,6 +415,96 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str], str]
         if t and k:
             pairs[(t, k)] = why
     return urls, pairs
+
+
+# A posting's own date is the portal's, and a portal relisting a posting gives it a
+# new one: LinkedIn's card shows the relist date, so a role first seen a month ago
+# read as posted yesterday and earned the freshness bonus. So seen_jobs.json keeps
+# the day this search first saw each posting, and a posting is as old as the
+# earlier of the two. A relist often comes under a new URL too, so a posting with
+# the same title, employer and city as one seen within this many days is that
+# posting again; past it, the same title is more likely a new opening.
+RELIST_WINDOW = 30
+
+_CITY_NOISE = re.compile(r"\([^)]*\)|\b(?:hybrid|on[- ]?site|in[- ]office|remote|flexible)\b")
+_SEEN_DAYS = ("first_seen", "excluded_date", "skipped_date", "rank_date", "last_seen")
+
+
+def city(location) -> str:
+    """The first place a location names, lower-cased: "Toronto, ON, Canada" is "toronto"."""
+    low = _CITY_NOISE.sub(" ", str(location or "").lower())
+    for part in re.split(r"[,|/;]|\s[-–]\s", low):
+        part = " ".join(part.split()).strip(" -")
+        if part:
+            return part
+    return ""
+
+
+def _posting_key(title, company, location) -> tuple[str, str, str]:
+    return ((title or "").strip().lower(), key(company), city(location))
+
+
+def _days_seen(e: dict) -> list[str]:
+    """Every day an entry records the posting as seen, as ISO dates."""
+    out = []
+    for k in _SEEN_DAYS:
+        d = as_date(e.get(k), iso_only=True)
+        if d:
+            out.append(d.isoformat())
+    return out
+
+
+def _seen_index(entries: dict, today: str = "") -> tuple[dict, dict]:
+    """(normalised URL -> entry key, (title, employer, city) -> entry key).
+
+    The second holds only postings seen within RELIST_WINDOW days of `today`, the
+    one first seen earliest for each.
+    """
+    now = as_date(today, iso_only=True) or dt.date.today()
+    since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat()
+    urls: dict[str, str] = {}
+    pairs: dict[tuple, str] = {}
+    first: dict[str, str] = {}
+    for u, e in entries.items():
+        if not isinstance(e, dict):
+            continue
+        days = _days_seen(e)
+        first[u] = min(days) if days else ""
+        n = norm(e.get("url") or u)
+        if n and n not in urls:
+            urls[n] = u
+        t, k, c = _posting_key(e.get("title"), e.get("company"), e.get("location"))
+        if t and k and days and max(days) >= since:
+            have = pairs.get((t, k, c))
+            if have is None or (first[u] and (not first[have] or first[u] < first[have])):
+                pairs[(t, k, c)] = u
+    return urls, pairs
+
+
+def _find(job: dict, urls: dict, pairs: dict) -> tuple[str | None, bool]:
+    """(the entry key a posting matches, whether by URL)."""
+    n = norm(job.get("url") or "")
+    if n and n in urls:
+        return urls[n], True
+    hit = pairs.get(_posting_key(job.get("title"), job.get("company"), job.get("location")))
+    return hit, False
+
+
+def first_seen(entries: dict, today: str = ""):
+    """A function from a posting to the day this search first saw it, or "".
+
+    By its URL, or as a relist of a posting with the same title, employer and city
+    seen in the last RELIST_WINDOW days. The companion of `ruled_out`: both read
+    seen_jobs.json and only what the scrape already has, so prefilter can age a
+    posting before hydrate fetches it.
+    """
+    urls, pairs = _seen_index(entries, today)
+
+    def of(job: dict) -> str:
+        k, _ = _find(job, urls, pairs)
+        days = _days_seen(entries[k]) if k is not None else []
+        return min(days) if days else ""
+    return of
 
 
 def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, str]:
@@ -794,39 +884,78 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
     return kept, skipped
 
 
-def write_back(path: str, data: dict, skipped: list[dict], today: str) -> int:
-    """Record every throttle/duplicate skip in seen_jobs.json. Returns rows written."""
+# Statuses a round may move to "surfaced" or "skipped": what an earlier round or a
+# hand-added backlog wrote. Never an application, a ranking or an exclusion.
+_ROUND_STATUSES = ("new", "estimated", "skipped", "surfaced")
+
+
+def _sighting(entries: dict, urls: dict, pairs: dict, r: dict, today: str) -> str | None:
+    """The entry for this posting, made or found, with its first and last sighting.
+
+    Found by URL, the entry's `first_seen` is kept and `last_seen` moves to today.
+    Found as a relist under a new URL, a new entry starts from the first sighting
+    of the old one. Not found, a new entry starts today. None for a row with no URL.
+    """
+    u = r.get("url")
+    if not u:
+        return None
+    k, by_url = _find(r, urls, pairs)
+    if k is not None and by_url:
+        e = entries[k]
+        days = _days_seen(e)
+        e.setdefault("first_seen", min(days) if days else today)
+        e["last_seen"] = today
+        return k
+    entry = {
+        "title": r.get("title"), "company": r.get("company"), "url": u,
+        "first_seen": today, "last_seen": today, "posted_date": r.get("date") or None,
+        "deadline": None, "portal": r.get("portal"), "source": "cli",
+        "location": r.get("location"), "location_verdict": r.get("location_verdict"),
+        "fit": r.get("fit"), "opportunity": r.get("opportunity"),
+        "priority": r.get("priority"), "status": "surfaced",
+    }
+    if k is not None:
+        days = _days_seen(entries[k])
+        entry["first_seen"] = min(days) if days else today
+        entry["relisted_from"] = entries[k].get("url") or k
+    entries[u] = entry
+    n = norm(u)
+    if n:
+        urls[n] = u
+    return u
+
+
+def write_back(path: str, data: dict, skipped: list[dict], today: str,
+               kept: list[dict] | tuple = ()) -> int:
+    """Record every skip, and when each posting was first and last seen. Returns skips written.
+
+    Surfaced rows are recorded too, at status "surfaced", so the day a posting was
+    first seen survives it being relisted. They are not "new": /rank reads "new" as
+    a backlog added by hand.
+    """
     entries = data.setdefault("seen", {})
-    index = {norm(u): u for u in entries if norm(u)}
+    urls, pairs = _seen_index(entries, today)
     n = 0
     for r in skipped:
         reason = r["skip_reason"]
-        if reason.startswith("already ruled out"):
+        k = _sighting(entries, urls, pairs, r, today)
+        if k is None or reason.startswith("already ruled out"):
             continue  # it is already recorded; do not rewrite the original reason
-        u = r.get("url")
-        if not u:
-            continue
-        existing = index.get(norm(u))
-        if existing is None:
-            entries[u] = {
-                "title": r.get("title"), "company": r.get("company"), "url": u,
-                "first_seen": today, "posted_date": r.get("date") or None,
-                "deadline": None, "portal": r.get("portal"), "source": "cli",
-                "location": r.get("location"),
-                "location_verdict": r.get("location_verdict"),
-                "fit": r.get("fit"), "opportunity": r.get("opportunity"),
-                "priority": r.get("priority"),
-                "status": "skipped", "skip_reason": reason, "skipped_date": today,
-            }
-            index[norm(u)] = u
-        else:
-            e = entries[existing]
-            # Never downgrade an application or a permanent exclusion to a skip.
-            if (e.get("status") or "new") in ("new", "estimated", "skipped"):
-                e["status"] = "skipped"
-            e["skip_reason"] = reason
-            e["skipped_date"] = today
+        e = entries[k]
+        # Never downgrade an application or a permanent exclusion to a skip.
+        if (e.get("status") or "new") in _ROUND_STATUSES:
+            e["status"] = "skipped"
+        e["skip_reason"] = reason
+        e["skipped_date"] = today
         n += 1
+    for r in kept:
+        k = _sighting(entries, urls, pairs, r, today)
+        if k is None:
+            continue
+        e = entries[k]
+        if (e.get("status") or "new") in _ROUND_STATUSES:
+            e["status"] = "surfaced"
+        r["first_seen"] = e.get("first_seen") or today
     tmp = tempfile.NamedTemporaryFile("w", dir=os.path.dirname(path) or ".",
                                       delete=False, encoding="utf-8", suffix=".tmp")
     with tmp:
@@ -872,17 +1001,24 @@ def main() -> int:
         print("do_not_target entries past review_after, no longer suppressing: %s"
               % ", ".join(stale), file=sys.stderr)
 
+    # The day each surfaced posting was first seen rides on the shortlist, so a
+    # relisted posting reads as old there too.
+    seen_on = first_seen(seen["seen"], a.today)
+    for r in kept:
+        r["first_seen"] = seen_on(r) or a.today
     json.dump(kept, open(a.out, "w"), indent=1)
     if a.skipped:
         json.dump(skipped, open(a.skipped, "w"), indent=1)
-    written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today)
+    written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today, kept)
 
     from collections import Counter
     kinds = Counter(r["skip_reason"].split(":")[0].split(",")[0] for r in skipped)
     print(f"{len(rows)} ranked -> {len(kept)} surfaced, {len(skipped)} skipped "
           f"({dict(kinds)}); {len(open_apps)} employers with an open application; "
           f"{len(blocked)} employers on do_not_target; "
-          f"{written} skips recorded in seen_jobs.json", file=sys.stderr)
+          f"{written} skips recorded in seen_jobs.json"
+          + ("" if a.no_write else f", and when each of the {len(kept)} surfaced was first seen"),
+          file=sys.stderr)
     n_warm = sum(1 for r in kept if r.get("warm_route"))
     if n_warm:
         print(f"{n_warm} surfaced roles have a live contact at that employer",
