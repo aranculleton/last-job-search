@@ -115,6 +115,19 @@ class TheAmbiguousPairsAreDisambiguatedWhereTheyLive(unittest.TestCase):
     def test_interview_says_it_is_not_prep(self):
         self.assertIn("Not `/prep`", open(os.path.join(COMMANDS, "interview.md")).read())
 
+    def test_the_skills_interview_step_is_the_interview_command(self):
+        """"Help me prepare for an interview at X" routes to the skill's Step 4, which
+        was four lines of its own: no archive, no research, no learned rules, no pack
+        on disk. It must defer to /interview, the one place the steps live."""
+        skill = open(os.path.join(SKILLS, "job-application-assistant", "SKILL.md")).read()
+        step = skill.split("### Step 4: Interview Preparation", 1)[1].split("\n## ", 1)[0]
+        step = step.split("\n### ", 1)[0]
+        self.assertIn("`/interview`", step)
+        self.assertIn(".claude/commands/interview.md", step)
+        quick = skill.split("## Quick Commands", 1)[1]
+        line = next(ln for ln in quick.splitlines() if "prepare for an interview" in ln)
+        self.assertIn("/interview", line)
+
 
 class ThePortalsAreWhatTheMapClaims(unittest.TestCase):
 
