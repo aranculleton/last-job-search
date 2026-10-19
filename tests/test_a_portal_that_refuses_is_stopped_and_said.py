@@ -164,6 +164,7 @@ def skills(tmp_path, monkeypatch):
     monkeypatch.setattr(scrape_wide, "PORTAL_LOCATIONS", {"cityboard-search": ["Townsville, QX"]})
     monkeypatch.setenv("LJS_STATE", str(tmp_path / "state"))
     monkeypatch.setattr(ats_boards, "fetch_all", lambda **k: ([], {}))
+    monkeypatch.setattr(scrape_wide, "PROBE_SECONDS", {})     # the probe fills it
     portals.cli.cache_clear()
     yield root
     portals.cli.cache_clear()

@@ -42,6 +42,7 @@ def board(tmp_path, monkeypatch):
     monkeypatch.setattr(scrape_wide, "EMPLOYER_QUERIES", ["planner"])
     monkeypatch.setattr(scrape_wide, "_covered_by_ats", lambda: set())
     monkeypatch.setattr(scrape_wide, "_cursor", lambda: {})
+    monkeypatch.setattr(scrape_wide, "PROBE_SECONDS", {})     # no other test's probe time
     portals.cli.cache_clear()
     yield "cityboard-search"
     portals.cli.cache_clear()
