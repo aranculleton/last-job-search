@@ -32,13 +32,13 @@ make sense to somebody whose repo just received it.
   pages a round and the rest in later rounds. Your target employers are looked for again
   on every system, in the background, and each board found is checked to return jobs
   before it is added. Profile upgrade: method-boards.
-- **`python3 tools/env_check.py --allowlist`** prints every address your search needs, for
-  a custom network setting, and the check tests the addresses your own employers' boards
-  use rather than a fixed three.
+- **A custom network setting can be given every address your search needs.**
+  `python3 tools/env_check.py --allowlist` prints them, and the check tests the addresses
+  your own employers' boards use rather than a fixed three.
 
 ### Changed
 
-- **One reader, and no copies of it.** Reading employer boards, the robots.txt rules, the
+- **Employer boards are read by openroles alone, so a fix to it reaches every search.** Reading employer boards, the robots.txt rules, the
   Workday address parser, the list of employer boards and their addresses all come from
   the vendored openroles 0.2.0, where the app had kept copies of its own that had fallen
   behind. A posting from any employer board openroles reads counts as live (an employer's
