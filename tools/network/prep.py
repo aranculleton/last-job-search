@@ -42,6 +42,10 @@ folder to sit in.
 Usage:
     from prep import prep_markdown, write_prep
     path = write_prep(contact, research, application, facts, threads, today="2030-01-15")
+
+    python3 tools/network/prep.py "<contact>"          # one contact's document
+    python3 tools/network/prep.py --stale-only         # only those an older prep wrote
+    python3 tools/network/prep.py --all [--dry-run]    # every contact's; --dry-run lists, writes nothing
 """
 
 from __future__ import annotations
@@ -1454,6 +1458,53 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
     return "\n".join(lines).rstrip() + "\n"
 
 
+# Which prep wrote a document, as its last line: the prep-docs method's version in
+# tools/build_versions.py, which a change to this file cannot skip. `--all` rewrote
+# every document whenever the generator changed (hundreds in one contact book, one
+# per contact, called or not) and left a file for every contact that never had one;
+# `--stale-only` rewrites only a document older than the last version that asked for
+# documents to be made again, or with no stamp, and `--dry-run` lists what would be
+# written and writes nothing.
+_STAMP = re.compile(r"^<!-- prep v(\d+)\b[^\n]*-->[ \t]*$", re.M)
+
+
+def _versions() -> tuple:
+    import build_versions
+    return build_versions.METHODS["prep-docs"]["versions"]
+
+
+def generator_version() -> int:
+    """The version of prep writing documents now."""
+    return _versions()[-1][0]
+
+
+def redo_from() -> int:
+    """The oldest version whose documents are still current: the last that asked for
+    documents to be made again. A wording-only version leaves documents alone."""
+    return max((v[0] for v in _versions() if v[2]), default=1)
+
+
+def stamp_line() -> str:
+    return "<!-- prep v%d: tools/network/prep.py -->" % generator_version()
+
+
+def stamp_of(text) -> int | None:
+    """The version a document says wrote it, or None."""
+    found = _STAMP.findall(str(text or ""))
+    return int(found[-1]) if found else None
+
+
+def stale(path) -> bool:
+    """Is the document at `path` older than the current prep, or unstamped? A missing
+    document is not stale: `--stale-only` never writes one nobody asked for."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            version = stamp_of(fh.read())
+    except OSError:
+        return False
+    return version is None or version < redo_from()
+
+
 def prep_path(contact, root=STATE_ROOT) -> str:
     cid = _contact_id(contact)
     if not cid:
@@ -1476,7 +1527,7 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
     text = prep_markdown(contact, company_research, application, profile_facts, threads, today,
                          open_roles=open_roles, draft=draft, never_say=never_say)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+        f.write(text + "\n" + stamp_line() + "\n")
     return path
 
 
@@ -1557,12 +1608,17 @@ def _write_one(row, tracker, a) -> str:
                       draft=draft)
 
 
-def main() -> int:
+def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Prep document for a booked call.")
     ap.add_argument("contact", nargs="?", default="",
                     help="contact_id, or the person's name")
     ap.add_argument("--all", action="store_true",
                     help="rewrite every contact's prep document")
+    ap.add_argument("--stale-only", action="store_true",
+                    help="rewrite only the documents an older prep wrote, or with no stamp; "
+                         "never write one for a contact who has none")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="list the documents that would be written, and write nothing")
     ap.add_argument("--contacts", default=state.CONTACTS_CSV)
     ap.add_argument("--threads", default=state.THREADS_CSV)
     ap.add_argument("--tracker", default=state.TRACKER_CSV)
@@ -1571,22 +1627,34 @@ def main() -> int:
                          "invented when this is absent; the section says so instead.")
     ap.add_argument("--root", default=STATE_ROOT)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
 
     contacts = state.load_contacts(a.contacts)
-    if a.all:
+    if a.all or a.stale_only:
         # The documents on disk are only as current as the code that wrote
         # them. Without a way to refresh the whole set, a fix to the company
         # section or the question shapes reaches whichever one somebody happens
         # to run next and no others.
-        tracker = state.load_tracker(a.tracker) if os.path.exists(a.tracker) else []
-        written = 0
+        todo = []
         for row in contacts:
             if not _text(row.get("name")):
                 continue
+            path = prep_path(row, a.root)
+            if a.stale_only and not stale(path):
+                continue
+            todo.append((row, path))
+        if a.dry_run:
+            for _row, path in todo:
+                print("would %s %s" % ("rewrite" if os.path.exists(path) else "write",
+                                       os.path.relpath(path, a.root)))
+            print("%d prep documents would be written (prep v%d); nothing written"
+                  % (len(todo), generator_version()))
+            return 0
+        tracker = state.load_tracker(a.tracker) if os.path.exists(a.tracker) else []
+        for row, _path in todo:
             _write_one(row, tracker, a)
-            written += 1
-        print("%d prep documents written" % written)
+        print("%d prep documents written%s" % (
+            len(todo), " (the ones older than prep v%d)" % redo_from() if a.stale_only else ""))
         return 0
     row = (state.already_contacted(contacts, contact_id=a.contact)
            or state.already_contacted(contacts, name=a.contact))
@@ -1594,6 +1662,9 @@ def main() -> int:
         print("no contact matching %r in %s" % (a.contact, a.contacts), file=sys.stderr)
         return 1
 
+    if a.dry_run:
+        print("would write %s; nothing written" % os.path.relpath(prep_path(row, a.root), a.root))
+        return 0
     tracker = state.load_tracker(a.tracker) if os.path.exists(a.tracker) else []
     print(os.path.relpath(_write_one(row, tracker, a), a.root))
     return 0
