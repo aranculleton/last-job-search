@@ -1152,8 +1152,9 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     say_auth = (ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth))
     if shape == "brief" and work_auth is None:
         say_auth = False
-    auth = ((_checked_claim(work_auth, seniority) if isinstance(work_auth, str)
-             else work_auth_line(seniority)) if say_auth else "")
+    register = "senior" if rtype == "decision_maker" else seniority
+    auth = ((_checked_claim(work_auth, register) if isinstance(work_auth, str)
+             else work_auth_line(register)) if say_auth else "")
     # With no opener the reason runs straight on from "Hi Robin," and takes the case a
     # clause after a comma takes: "Hi Robin, Saw your post" is the capital the other
     # composers already fixed.
@@ -1393,8 +1394,9 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
                           recruiter=recruiter)
     about_me = _about_me_for(" ".join(reasons), about_me)
     say_auth = ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth)
-    auth = ((_checked_claim(work_auth, seniority) if isinstance(work_auth, str)
-             else work_auth_line(seniority)) if say_auth else "")
+    register = "senior" if rtype == "decision_maker" else seniority
+    auth = ((_checked_claim(work_auth, register) if isinstance(work_auth, str)
+             else work_auth_line(register)) if say_auth else "")
     if sign_off is _DEFAULT:
         sign_off = SIGN_OFF["senior" if tone.is_senior(seniority) or rtype != "peer" else "peer"]
     paragraphs = [

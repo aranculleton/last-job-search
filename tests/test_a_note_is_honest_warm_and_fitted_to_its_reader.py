@@ -91,8 +91,9 @@ def test_an_exit_that_invites_no_reply_is_warned_in_a_first_message_only():
 
 def test_eligibility_is_said_to_a_decision_maker_and_a_recruiter_and_never_to_a_peer():
     to_head = compose.first_note("Juno Castellan", how_found=FOUND, title="Head of Data",
-                                 variant_key="a", shape="shared")
-    assert "no sponsorship needed" in to_head
+                                 variant_key="a", shape="shared",
+                                 about_me="I work in supply-chain analytics")
+    assert compose.work_auth_line("senior") in to_head          # the senior register
     to_peer = compose.first_note("Ana Rook", how_found=FOUND, title="Data Analyst",
                                  variant_key="a")
     assert "sponsorship" not in to_peer
@@ -192,7 +193,7 @@ def test_an_inmail_is_a_subject_and_a_body_in_the_shape_that_drew_a_reply():
     paras = m.body.split("\n\n")
     assert paras[0] == "Hi Juno, hope you're well."
     assert paras[2].startswith("At Brindle & Hart")
-    assert "no sponsorship needed" in paras[3]
+    assert compose.work_auth_line("senior") in paras[3]          # a decision-maker's register
     assert any(p in paras[3] for p in compose.BANK["ask"]["decision_maker"])
     assert paras[-1] == compose.SIGN_OFF["senior"]
     assert compose.validate(m, "inmail", title="Head of Data") == []

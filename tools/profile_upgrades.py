@@ -1815,6 +1815,10 @@ def main(argv: list[str] | None = None) -> int:
         # file is always the one the sync brought in, so the check runs from here too.
         import sync_app
         sync_app.own_tests_after_sync(ROOT)
+        # And the day's check is recorded: a sync run by an older copy of sync_app.py wrote
+        # no stamp, so every tool the new copy brought said "not checked for updates today"
+        # straight after the update.
+        sync_app._record_check()
     if a.after and rows and _personal_repo() and not owner_elsewhere():
         # Pushed before this chat decides it owns them: of two chats that both found no other
         # claim, git takes one push and refuses the other, and the refused one sees the
