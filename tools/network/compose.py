@@ -377,11 +377,16 @@ def employers_early(text, employers, within=2) -> list:
         return []
     head = " ".join(body_sentences(text)[:within])
     keys = _employer_keys(head)
+    # The person's own shorthand for an employer (VOICE) names it as well as its full name.
+    short = {company_key.key(k): v for k, v in advice.voice()["shorthand"].items()}
     buried = []
     for e in employers:
         if re.search(re.escape(str(e)), head, re.I):
             continue
         if company_key.key(str(e)) in keys:
+            continue
+        alias = short.get(company_key.key(str(e)))
+        if alias and re.search(r"(?<!\w)" + re.escape(alias) + r"(?!\w)", head):
             continue
         buried.append(e)
     return buried
@@ -638,6 +643,22 @@ def _voice(kind: str, text: str) -> str:
     return text
 
 
+def _never_said(kind: str, text: str) -> str:
+    """Refuse a message carrying a phrase the person said never to use (learned.py
+    --never-say). The first note and the InMail refused one through voice_check; a nudge,
+    a referral ask, an email and a warm intro went out with it (2026-10-20)."""
+    try:
+        import learned
+        hits = learned.dislikes(text)
+    except (ImportError, SystemExit):
+        return text
+    if hits:
+        raise ReadsAsGenerated(
+            "%s says what the person said never to: %s. Say it their way (python3 "
+            "tools/learned.py brief messages)" % (kind, "; ".join(sorted(set(hits)))[:160]))
+    return text
+
+
 def connection_note(name, hook, who_line, work_auth=None, seniority="peer",
                     close=DEFAULT_CLOSE, opener=DEFAULT_OPENER, their=()) -> str:
     """The brief 4.1 shape, inside the 300 character limit or not at all.
@@ -814,8 +835,12 @@ _LOOKING = re.compile(
 
 
 def _about_me_for(common_ground, about_me):
-    """The person's ABOUT_ME, without its looking clause where the ground is their hiring."""
-    if about_me == ABOUT_ME and about_me and HIRING_GROUND.search(str(common_ground or "")):
+    """The person's ABOUT_ME, without its looking clause where the ground is their hiring or
+    their news: congratulations followed by "I'm looking for my next role" uses the news as
+    the way into a jobs ask (2026-10-20)."""
+    ground = str(common_ground or "")
+    if about_me == ABOUT_ME and about_me and (HIRING_GROUND.search(ground)
+                                              or advice._CONGRATS.search(ground)):
         return _LOOKING.sub("", about_me).strip(" ,")
     return about_me
 
@@ -964,6 +989,17 @@ BANK = {
                         "Is there someone on that team you'd suggest I speak to?",
                         "Would you know who'd be best to speak to about it?")},
     "hedge": {"any": advice.HEDGES},
+    # A real question about their current work, which a close with room needs: "I'd love to
+    # join your team, or just learn more about it" was "a bit bare" (2026-10-20). {team} is
+    # the team as it is said ("the pricing team", "Larkspur's forecasting team").
+    "work_question": {"any": (
+        "What is {team} working on at the moment, and what do you look for in people joining?",
+        "What's {team} focused on these days, and what do you look for in people who join?",
+        "How is {team} set up at the moment, and what's it working on this year?")},
+    # The same, where the sentence before it has just named the team.
+    "work_question_said": {"any": (
+        "What are they working on at the moment, and what do you look for in people joining?",
+        "What are they focused on these days, and what do you look for in people who join?")},
 }
 # What the bank says instead where the person's own voice check refuses all of it: "would
 # love to" is theirs only where OWN_VOICE says so, and the app's default must never be the
@@ -1027,10 +1063,12 @@ def phrase(intent: str, reader: str = "peer", key: str = "", fallback: str = "")
 # How they were found, said truthfully as the reason for writing: the alternative to a
 # pretext. A reading-based specific is colour on top, used only when the sender has
 # looked themselves (`looked=True`).
+# "I came across your profile" was the person's own example of what never to send
+# (2026-10-20): it says nothing about why them. The search is said as it happened.
 HOW_FOUND = {
-    "team_search": "I came across your profile while looking at {company}'s {team} team",
+    "team_search": "I found you while looking at {company}'s {team} team",
     "people_page": "I found you on {company}'s people page",
-    "search": "I came across your profile while looking at {company}",
+    "search": "I found you while looking at {company}",
     "referral": "{referrer} suggested I get in touch",
     "event": "I saw your name on {event}'s speaker list",
     "alumni": "We both worked at {shared}",
@@ -1101,6 +1139,42 @@ def _question(question) -> str:
     return q[0].upper() + q[1:] if q[0].islower() else q
 
 
+# A sentence whose subject is the reader: "You moved into pricing from economics", "Your
+# team builds the forecasts". Only these take a hedge in front; "Your talk stuck with me"
+# says what the sender felt, and a hedge before it would garble it.
+_READER_SUBJECT = re.compile(
+    r"^(?:you(?:'ve|'re|'d)?|your (?:team|group|org\w*|company|function|department|unit))\b",
+    re.I)
+# The hedges that open a sentence ("probably" sits inside one).
+_PREFIX_HEDGE = re.compile(r"^(?:I\b|I'm\b|it\b)", re.I)
+
+
+def hedge(sentence, reading=None, reader="peer", key="") -> str:
+    """The sentence, hedged once where it is an inference about the reader: their path read
+    from a title or an employer, or a guess about their team (advice.provenance). Their own
+    words (STATED), a sentence already hedged and one about the sender come back as given.
+    The hedge is the person's (TEMPLATES "hedge"), else advice.HEDGES, chosen by `key`.
+
+    The hedges were in advice.py and in the person's own rules, and drafting did not use
+    them until the person pointed it out (2026-10-20): the composers hedge by default now.
+    A person whose rule outranks the check (`learned.py record --overrides
+    unhedged_inference`) gets the sentence as written."""
+    s = _sentence(sentence)
+    if not s or advice.hedges(s) or not _READER_SUBJECT.match(s) \
+            or "unhedged_inference" in _overrides() \
+            or advice.provenance(s, reading) not in (advice.INFERRED, advice.GUESS):
+        return s
+    # "I can imagine" is sympathy rather than a hedge on a fact ("I can imagine you moved
+    # into ..."): the bank's own leaves it out, and a person's TEMPLATES keep theirs.
+    opening = [h for h in options("hedge", reader) if _PREFIX_HEDGE.match(str(h).strip())
+               and (_variants("hedge", reader) or not re.match(r"I can imagine", str(h)))]
+    import hashlib
+    h = (opening[int(hashlib.sha1(str(key or "").encode()).hexdigest(), 16) % len(opening)]
+         if opening and key else opening[0] if opening else "It looks like").strip()
+    h = h[:1].upper() + h[1:]
+    return f"{h} {_after_greeting(s)}"
+
+
 # The shape a first note takes, from who they are and what was read about them.
 # One shape for everyone is how a batch comes out alike, and the same length for
 # a director as for a peer is the 300 characters a senior reader ignored.
@@ -1147,7 +1221,8 @@ _DEFAULT = object()      # "the caller did not say": the phrase bank chooses
 def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DEFAULT,
                opener=_DEFAULT, recruiter=False, seniority="peer", their=(),
                reading=None, shape="shared", title="", reader=None, work_auth=None,
-               how_found="", looked=False, parallel="", mutual="", variant_key="") -> str:
+               how_found="", looked=False, parallel="", mutual="", variant_key="",
+               hedged=True) -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
         Hi Robin, hope you're well. <the reason for writing>. <about me>. <question>? <ask>.
@@ -1177,6 +1252,11 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
 
     `shape` is one of SHAPES (`shape_for()` chooses it); "pointer" ends on a question
     the reader can answer by pointing to the right person.
+
+    An inference about them in the common ground or the parallel ("You moved into pricing
+    from economics", read from a title rather than their page) comes out hedged once
+    (`hedge()`); `hedged=False` leaves it as written. The person's VOICE (shorthand,
+    contractions) is applied to the whole note (`advice.spoken()`).
     """
     _no_reaction_waiting("first note")
     if shape not in SHAPES:
@@ -1213,6 +1293,11 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
                 f"{why}. Take the common ground from what was read "
                 f"(python3 tools/network/reading.py show <contact_id>), never from the snippet, "
                 "or say how you found them (how_found=)")
+    if hedged:
+        common_ground, parallel = (hedge(x, reading, rtype, variant_key) if str(x or "").strip()
+                                   else x for x in (common_ground, parallel))
+        reasons = [x for x in (reasons[0] if mutual and reasons else "", how_found,
+                               common_ground, parallel) if str(x or "").strip()]
     q = _question(question)
     if not q and not str(ask or "").strip():
         raise ValueError(
@@ -1238,7 +1323,7 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
             else f"{_greeting(name)} {_after_greeting(first, keep=keep)}")
     parts = [lead] + [_sentence(r) for r in rest] + [
         _sentence(about_me) if about_me else "", auth, q, _sentence(ask) if ask else ""]
-    note = " ".join(p for p in parts if p)
+    note = advice.spoken(" ".join(p for p in parts if p), keep=keep)
     _honest(note, looked, said=(how_found,))
     findings = first_note_findings(note, recruiter=recruiter, reader=rtype,
                                    work_auth=say_auth or None)
@@ -1301,7 +1386,7 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     high = KIND_LIMITS["referral_ask"]["words"][1]
     if words > high:
         raise TooLong("referral ask", words, high, unit="words")
-    return text
+    return _never_said("referral ask", text)
 
 
 def nudge(name, reason, close=None, opener=None, their=()) -> str:
@@ -1342,7 +1427,7 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
     limit = schema.LIMITS["nudge_chars"]
     if len(text) > limit:
         raise TooLong("nudge", len(text), limit)
-    return text
+    return _never_said("nudge", text)
 
 
 # The subjects every mass InMail carries. A subject is the one line read before
@@ -1418,9 +1503,27 @@ class InMail(str):
         return {"subject": self.subject, "body": self.body}
 
 
-def identity_subject() -> str:
+def _past_employers() -> list:
+    """[(the name a subject shows, every name it goes by)] for each employer the sender
+    left, most recent first, from profile/roles.py."""
+    out = []
+    for r in list(getattr(_ROLES, "ROLES", ()) or ())[1:]:
+        aka = r.get("known_as")
+        names = [r.get("employer") or ""] + ([aka] if isinstance(aka, str) else list(aka or []))
+        names = [str(n).strip() for n in names if str(n or "").strip()]
+        shown = (aka if isinstance(aka, str) and aka else r.get("employer") or "").strip()
+        if shown and shown not in [s for s, _n in out]:
+            out.append((shown, names))
+    return out
+
+
+def identity_subject(lead: str = "") -> str:
     """The subject that drew a reply: who the sender is, not a topic. "<title>, ex-<the
-    employers they left>", from profile/roles.py, or networking.py SUBJECT."""
+    employers they left>", from profile/roles.py, or networking.py SUBJECT.
+
+    `lead` is a past employer to name first: the one this reader shares with the sender, so
+    two InMails in one round do not carry one subject ("why is the structure identical for
+    both", 2026-10-20)."""
     own = str(getattr(_NET, "SUBJECT", "") or "").strip()
     if own:
         return own
@@ -1428,12 +1531,12 @@ def identity_subject() -> str:
     if not roles:
         return ""
     title = str(roles[0].get("title") or "").strip()
-    past = []
-    for r in roles[1:]:
-        aka = r.get("known_as")
-        nm = (aka if isinstance(aka, str) and aka else r.get("employer") or "").strip()
-        if nm and nm not in past:
-            past.append(nm)
+    past = _past_employers()
+    if str(lead or "").strip():
+        k = company_key.key(str(lead))
+        first = [p for p in past if any(company_key.key(n) == k for n in p[1])]
+        past = first + [p for p in past if p not in first]
+    past = [shown for shown, _names in past]
     for n in (2, 1, 0):
         out = title + (", ex-" + " and ".join(past[:n]) if n and past else "")
         if len(out.split()) <= schema.LIMITS["inmail_subject_words"]:
@@ -1441,10 +1544,49 @@ def identity_subject() -> str:
     return title
 
 
+def shared_employer(text: str, their=()) -> str:
+    """The sender's past employer that `text` (the reason for writing) or `their` names, as
+    the subject shows it, or ""."""
+    keys = _employer_keys(" ".join([str(text or "")] + [str(t) for t in their or ()]))
+    for shown, names in _past_employers():
+        if any(company_key.key(n) in keys for n in names):
+            return shown
+    return ""
+
+
+# The order an InMail's paragraphs take. The message that drew a reply from a senior reader
+# said who the sender was, then the work, then why them (me_first); a peer who shares
+# something with the sender reads that first (them_first); me_and_them puts who the sender
+# is beside why them. Two InMails in one round in one order were "identical in structure"
+# (2026-10-20): `inmail_order()` chooses by reader and reason, and `round_alike()` finds two
+# that still match.
+INMAIL_ORDERS = ("me_first", "them_first", "me_and_them")
+
+
+def inmail_order(reader: str = "peer", common_ground="", parallel="") -> str:
+    """The default order for this reader: a peer with something about them to lead on gets
+    it first; everyone else the shape that drew a reply."""
+    if reader == "peer" and (str(common_ground or "").strip() or str(parallel or "").strip()):
+        return "them_first"
+    return "me_first"
+
+
+def work_question(team: str, reader: str = "peer", key: str = "", said: bool = False) -> str:
+    """A real question about their current work, for the close ("what is <team> working on
+    at the moment, and what do you look for in people joining?"). `said` when the sentence
+    before it has just named the team, so it is not said twice."""
+    team = " ".join(str(team or "").split())
+    if not team:
+        return ""
+    got = phrase("work_question_said" if said else "work_question", reader, key)
+    return _question(got.replace("{team}", team)) if got else ""
+
+
 def inmail(name, subject=None, common_ground="", question=None, evidence="",
            about_me=ABOUT_ME, ask=_DEFAULT, opener=_DEFAULT, recruiter=False,
            seniority="peer", their=(), sign_off=_DEFAULT, title="", reader=None,
-           work_auth=None, how_found="", looked=False, parallel="", variant_key="") -> InMail:
+           work_auth=None, how_found="", looked=False, parallel="", variant_key="",
+           order=None, team="", reading=None, hedged=True) -> InMail:
     """The message with room in it, in the shape that drew a reply:
 
         Subject: <who you are: "<title>, ex-<employers>" by default>
@@ -1459,12 +1601,22 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
 
         <sign-off>
 
+    That is `order="me_first"`, the default for a decision-maker and a recruiter. A peer
+    with common ground or a parallel gets "them_first" (why them, then who you are and the
+    work, then the ask), and "me_and_them" puts who you are beside why them
+    (INMAIL_ORDERS); a round's InMails are not all built one way (`round_alike()`).
+
     Returns an InMail: the text as before, and `.subject` and `.body` for LinkedIn's two
     fields. The same rules as `first_note()` (never a job ask, work authorization by who
     reads it, it has to reach them, no claim to have read what the sender has not), plus
     one paragraph of evidence, which is what the credit buys. Sized to the reader: about
     150 words to a decision-maker or a recruiter, 100 to 130 to a peer (warned past
-    INMAIL_WORDS, never refused); the 200-word ceiling is a ceiling.
+    `inmail_words()`, never refused); the 200-word ceiling is a ceiling.
+
+    `team` ("the pricing team") gives the close a real question about their current work
+    when `question` is not given. The subject names first the past employer they share
+    with the sender, where the reason for writing names one. An inference about them is
+    hedged once (`hedge()`, `hedged=False` to leave it), and the person's VOICE applies.
     """
     _no_reaction_waiting("InMail")
     rtype = reader or reader_type(title, seniority, recruiter)
@@ -1475,32 +1627,55 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
             "an InMail needs a reason for writing to this person (how_found=, common_ground= "
             "or parallel=, as in a first note) and one paragraph of concrete evidence (a named "
             "piece of work, its scale, an outcome), which is what the credit buys")
+    order = order or inmail_order(rtype, common_ground, parallel)
+    if order not in INMAIL_ORDERS:
+        raise ValueError(f"order is one of {', '.join(INMAIL_ORDERS)}, not {order!r}")
+    if hedged:
+        common_ground, parallel = (hedge(x, reading, rtype, variant_key) if str(x or "").strip()
+                                   else x for x in (common_ground, parallel))
+        reasons = [x for x in (how_found, common_ground, parallel) if str(x or "").strip()]
     if opener is _DEFAULT:
         opener = phrase("opener", rtype, variant_key, fallback=OPENER) if OPENER else ""
+    asked_by_bank = ask is _DEFAULT
     if ask is _DEFAULT:
         ask = phrase("ask", rtype, variant_key, fallback=ASK if rtype == "peer" else "")
-    q = _question(question)
-    if not q and not str(ask or "").strip():
-        raise ValueError("an InMail needs something to answer: a real question about them, "
-                         "or the plain ask (ask=)")
-    subj = inmail_subject(subject if str(subject or "").strip() else identity_subject(),
-                          recruiter=recruiter)
     about_me = _about_me_for(" ".join(reasons), about_me)
     say_auth = ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth)
     register = "senior" if rtype == "decision_maker" else seniority
     auth = ((_checked_claim(work_auth, register) if isinstance(work_auth, str)
              else work_auth_line(register)) if say_auth else "")
+    q = _question(question)
+    if not q and str(team or "").strip():
+        # The sentence just before the question: said there, the team is "they" here.
+        before = auth or {"me_first": reasons[-1]}.get(order, evidence)
+        q = work_question(team, rtype, variant_key,
+                          said=" ".join(str(team).split()).lower() in str(before).lower())
+    if not q and not str(ask or "").strip():
+        raise ValueError("an InMail needs something to answer: a real question about them, "
+                         "or the plain ask (ask=)")
+    if asked_by_bank and q and ask and advice.content_words(q) & advice.content_words(ask):
+        # The question and the ask side by side say "team" twice: another way of asking.
+        ask = next((o for o in options("ask", rtype, ASK if rtype == "peer" else "")
+                    if not advice.content_words(q) & advice.content_words(o)), ask)
+    subj = inmail_subject(subject if str(subject or "").strip()
+                          else identity_subject(shared_employer(" ".join(reasons), their)),
+                          recruiter=recruiter)
     if sign_off is _DEFAULT:
         sign_off = SIGN_OFF["senior" if tone.is_senior(seniority) or rtype != "peer" else "peer"]
-    paragraphs = [
-        f"{_greeting(name)} {opener}." if opener else _greeting(name),
-        _sentence(about_me) if about_me else "",
-        _sentence(evidence),
-        " ".join(p for p in [_sentence(r) for r in reasons] + [auth, q, _sentence(ask) if ask
-                                                              else ""] if p),
-        str(sign_off or "").strip(),
-    ]
-    body = "\n\n".join(p for p in paragraphs if p)
+    why = " ".join(_sentence(r) for r in reasons)
+    me = _sentence(about_me) if about_me else ""
+    work = _sentence(evidence)
+    close = " ".join(p for p in (auth, q, _sentence(ask) if ask else "") if p)
+
+    def joined(*parts):
+        return " ".join(p for p in parts if p)
+
+    middle = {"me_first": [me, work, joined(why, close)],
+              "them_first": [why, joined(me, work), close],
+              "me_and_them": [joined(me, why), work, close]}[order]
+    paragraphs = ([f"{_greeting(name)} {opener}." if opener else _greeting(name)] + middle
+                  + [str(sign_off or "").strip()])
+    body = advice.spoken("\n\n".join(p for p in paragraphs if p), keep=their)
     _honest(body, looked, said=(how_found,))
     findings = first_note_findings(body, recruiter=recruiter, reader=rtype,
                                    work_auth=say_auth or None)
@@ -1565,7 +1740,7 @@ def email(name, subject, context, body, ask, sign_off=None, attachment=True,
         sign_off = SIGN_OFF["senior" if tone.is_senior(seniority) else "peer"]
     if sign_off:
         blocks.append(str(sign_off).strip())
-    return "\n\n".join(b for b in blocks if b)
+    return _never_said("email", "\n\n".join(b for b in blocks if b))
 
 
 def warm_intro(referrer_name, name, body, close=None, work_auth=None,
@@ -1613,7 +1788,7 @@ def warm_intro(referrer_name, name, body, close=None, work_auth=None,
         high = INTRO_WORDS[1]
         if high and len(text.split()) > high:
             raise TooLong("warm intro", len(text.split()), high, unit="words")
-    return text
+    return _never_said("warm intro", text)
 
 
 def register(text, seniority) -> str:
@@ -1726,6 +1901,11 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
         out.append(tone.Violation("lowercase_name", word))
     for found in CHECK_IN.findall(text):
         out.append(tone.Violation("check_in", found if isinstance(found, str) else found[0]))
+    # Praise to someone the sender is still a stranger to: "really interested me", "the kind
+    # of work I'd like to do more of" (2026-10-20). Refused, with what to write instead.
+    if k not in ("reply", "referral_ask"):
+        for praise, _s in advice.flattery(text):
+            out.append(tone.Violation("flattery", f"\"{praise}\": {advice.FLATTERY_FIX}"))
     if EMPLOYERS_FIRST == "refuse":
         out += _buried(text, employers)
     if referrer and not referrer_in_lead(text, referrer):
@@ -1776,35 +1956,62 @@ def _buried(text, employers) -> list:
     return out
 
 
+def inmail_words(reader: str = "peer") -> int:
+    """How many words an InMail to this reader need run to before it is warned: the length
+    the person asked for (`learned.py record ... --length inmail[:<reader>]=<words>`, the
+    latest that stands), else profile/networking.py INMAIL_WORDS, else the app's default.
+
+    "Slightly longer, more substance" was asked for and the warning still fired at 134 to
+    150 words (2026-10-20): what the person asked for is a number on record now, never a
+    guess at the words of a rule."""
+    try:
+        import learned
+        asked = learned.length("inmail", reader)
+    except (ImportError, SystemExit, AttributeError):
+        asked = None
+    return asked or INMAIL_WORDS_FOR.get(reader) or 0
+
+
 def advise(message, kind, name=None, seniority="peer", employers=(), reader=None, title="",
-           reading=None, first_contact=None, recruiter=False) -> list:
+           reading=None, first_contact=None, recruiter=False, their=()) -> list:
     """Every warning for a draft that may go but reads worse than it should, each an
     advice.Advice(rule, text, fix): what reads as generated, a hedge stacked or a
     disclaimer, an exit in a first message, a claim about them written as fact, a
     credential with no reason in its sentence, the employer named late, an InMail longer
-    than this reader needs, and any check the person's rules outrank. Shown with the draft
-    after a rewrite, never instead of one."""
+    than this reader needs, and any check the person's rules outrank (only mentioned, as
+    "your_rule_outranks"). Shown with the draft after a rewrite, never instead of one.
+    `their` holds the names on the reader's side, which the person's shorthand leaves as
+    written."""
     k = _KIND_ALIASES.get(str(kind or "").strip().lower(), str(kind or ""))
     text = message.body if isinstance(message, InMail) else str(message or "")
     recruiter = recruiter or bool(getattr(message, "recruiter", False))
     rtype = (reader or (getattr(message, "reader", "") if not title else "")
              or reader_type(title, seniority, recruiter))
-    out = advice.check(text, k, reader=rtype, first_contact=first_contact, reading=reading)
+    out = advice.check(text, k, reader=rtype, first_contact=first_contact, reading=reading,
+                       keep=their)
+    own = []
     if EMPLOYERS_FIRST != "refuse":
-        out += [advice.Advice(v.rule, v.text.split(":", 1)[0], v.text.split(":", 1)[-1].strip())
+        own += [advice.Advice(v.rule, v.text.split(":", 1)[0], v.text.split(":", 1)[-1].strip())
                 for v in _buried(text, employers)]
     if tone.CONTRACTIONS == "warn":
-        out += [advice.Advice("sentence_starts_with_contraction", v.text,
+        own += [advice.Advice("sentence_starts_with_contraction", v.text,
                               "you asked to be told: the long form where it reads better")
                 for v in tone.contractions_at_start(text)]
     if k == "inmail":
-        words, most = len(text.split()), INMAIL_WORDS_FOR.get(rtype)
+        words, most = len(text.split()), inmail_words(rtype)
         if most and words > most:
-            out.append(advice.Advice(
+            own.append(advice.Advice(
                 "longer_than_this_reader_needs", f"{words} words",
                 f"about {most} is right for a {rtype.replace('_', '-')} (profile/networking.py "
-                "INMAIL_WORDS); cut the paragraph that is not about them or the work"))
+                "INMAIL_WORDS); cut the paragraph that is not about them or the work. Asked "
+                "for longer? python3 tools/learned.py record ... --length inmail=<words>"))
     over = _overrides()
+    # A check the person's rule outranks is only mentioned, these as much as validate()'s:
+    # an `--overrides longer_than_this_reader_needs` used to change nothing here.
+    out += [a for a in own if a.rule not in over]
+    out += [advice.Advice("your_rule_outranks", f"{a.rule}: {a.text}",
+                          "your recorded rule outranks this check, so it is only mentioned")
+            for a in own if a.rule in over]
     if over:
         out += [advice.Advice("your_rule_outranks", f"{v.rule}: {v.text}",
                               "your recorded rule outranks this check, so it is only mentioned")
@@ -1924,6 +2131,95 @@ def alike(notes: dict) -> list:
             if len(sa) >= 3 and sa == sb:
                 out.append((a, b, " / ".join(sa)))
     return out
+
+
+# ---------------------------------------------------------------- a round's InMails alike
+#
+# Two InMails in one round went out with the same subject, the same paragraph order and the
+# same close: "why is the structure identical for both, it's supposed to personalise
+# everything based on company, role, level, the person" (2026-10-20). `alike()` compares the
+# sentences of first notes; a message with room is compared by what a reader sees of its
+# build: the subject, what each paragraph does, and how it ends.
+
+def _message_parts(text) -> tuple:
+    """(subject, paragraphs of the body) for a drafted message: an InMail's own parts, or
+    a "Subject:" first line, as a draft file holds it."""
+    subject, body = getattr(text, "subject", None), getattr(text, "body", None)
+    if subject is None or body is None:
+        raw = str(text or "").strip()
+        first, _nl, rest = raw.partition("\n")
+        if _SUBJECT_LINE.match(first):
+            subject, body = _SUBJECT_LINE.sub("", first).strip(), rest
+        else:
+            subject, body = "", raw
+    return str(subject or ""), [p.strip() for p in re.split(r"\n\s*\n", str(body)) if p.strip()]
+
+
+def paragraph_role(paragraph: str) -> str:
+    """What a paragraph does, read from its first sentence: "ask" (a question or an ask),
+    "them" (about the reader), "work" (a piece of work with its numbers) or "me" (who the
+    sender is). "" for the greeting and the sign-off, which every message has."""
+    sents = body_sentences(paragraph)
+    if not sents or all(advice._signoff(s) for s in sents):
+        return ""
+    first = tone._plain(sents[0])
+    if first.rstrip().endswith("?") or advice.ASK_SHAPED.match(first) \
+            or _QUESTION_OPENER.match(first):
+        return "ask"
+    if tone._SECOND_PERSON.search(first):
+        return "them"
+    if re.search(r"\d", first):
+        return "work"
+    return "me"
+
+
+def _same_words(a: str, b: str) -> bool:
+    wa, wb = (set(re.findall(r"[a-z0-9']+", advice._norm(x))) for x in (a, b))
+    return bool(wa) and bool(wb) and len(wa & wb) / len(wa | wb) >= 0.8
+
+
+def round_alike(drafts: dict) -> list:
+    """[(what, detail, [ids])] for the messages with room in one round (an InMail: a subject,
+    or three paragraphs or more) built the same way: "same subject", "same paragraph
+    order" (each paragraph doing the same thing, in the same order) or "same close" (the
+    last two sentences before the sign-off). Connection notes are `alike()`'s and
+    reading.alike()'s, where the person's own ASK is theirs to repeat."""
+    parts = {}
+    for cid, text in drafts.items():
+        subject, paras = _message_parts(text)
+        roles = tuple(r for r in (paragraph_role(p) for p in paras) if r)
+        if not subject and len(paras) < 3:
+            continue
+        parts[cid] = (subject, roles, " ".join(advice.close("\n\n".join(paras))))
+    out = []
+
+    def groups(key, same) -> list:
+        found = []
+        for cid in sorted(parts):
+            k = key(parts[cid])
+            if not k:
+                continue
+            for g in found:
+                if same(g[0], k):
+                    g[1].append(cid)
+                    break
+            else:
+                found.append((k, [cid]))
+        return [(k, ids) for k, ids in found if len(ids) > 1]
+
+    for k, ids in groups(lambda p: p[0], lambda a, b: advice._norm(a) == advice._norm(b)):
+        out.append(("same subject", k, ids))
+    for k, ids in groups(lambda p: p[1] if len(p[1]) >= 3 else (), lambda a, b: a == b):
+        out.append(("same paragraph order", " / ".join(k), ids))
+    for k, ids in groups(lambda p: p[2], _same_words):
+        out.append(("same close", k, ids))
+    return out
+
+
+ROUND_FIX = ("write each for its reader: a subject naming what you share with them "
+             "(identity_subject(lead=) leads with the employer you share), a different order "
+             "(inmail(order=), one of %s) and a close asking about their own team's work "
+             "(inmail(team=))" % ", ".join(INMAIL_ORDERS))
 
 
 def main(argv=None) -> int:

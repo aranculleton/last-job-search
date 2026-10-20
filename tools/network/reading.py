@@ -2663,6 +2663,9 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # sentences differed and whose shape did not.
     for a, b, shape in compose.alike(notes):
         out.append(("same shape", shape, [a, b]))
+    # The InMails in a round: one subject, one paragraph order or one close for two readers
+    # was "identical in structure" too (2026-10-20).
+    out += compose.round_alike(notes)
     return out
 
 
@@ -3330,6 +3333,14 @@ def main(argv: list | None = None) -> int:
               + ("" if has_read(load(a.contact_id)) else
                  f"; nothing read about {row.get('name') or a.contact_id} yet, so it opens "
                  f"on {WAITS_ON_A_READ} and reading.py queue lists it"))
+        # Built like another message waiting this round: said now, while it is being written.
+        import compose
+        queued = queued_notes(state.load_contacts())
+        queued[a.contact_id] = note.strip()
+        for what, detail, ids in compose.round_alike(queued):
+            if a.contact_id in ids:
+                others = ", ".join(i for i in ids if i != a.contact_id)
+                print(f"  {what} as {others}: \"{_clip(detail, 90)}\": {compose.ROUND_FIX}")
         return EXIT["ok"]
     if a.cmd == "batch":
         import state
@@ -3346,6 +3357,9 @@ def main(argv: list | None = None) -> int:
                   "background line chosen per person where the profile says so), the ask from "
                   "ASK or the phrase bank (compose.phrase, by contact), and no two built the "
                   "same way")
+            if any(what.startswith("same ") and what != "same shape" for what, _s, _i in found):
+                import compose
+                print(f"  the InMails: {compose.ROUND_FIX}")
             return EXIT["alike"]
         print("  no sentence repeats past the limit, and every ask is the person's own")
         return EXIT["ok"]

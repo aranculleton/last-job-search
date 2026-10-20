@@ -35,8 +35,8 @@ def test_no_capital_after_the_greeting_comma_without_an_opener():
                        "Saw the post on forecasting at Fernhill", "How is the team set up",
                        "At Brindle & Hart I cut forecast error from 22% to 14%", opener="",
                        looked=True)
-    # The InMail's greeting stands alone and the reason for writing comes after the work,
-    # as in the message that drew a reply; there it is a sentence of its own.
+    # The InMail's greeting stands alone and the reason for writing is a sentence of its
+    # own, wherever the reader's order puts it (compose.INMAIL_ORDERS).
     paras = m.body.split("\n\n")
     assert paras[0] == "Hi Robin,"
     assert any(p.startswith("Saw the post on forecasting at Fernhill.") for p in paras)

@@ -84,6 +84,12 @@ AI_TELLS = (
     ("the old default ask", re.compile(
         r"\bI(?:'d| would) love to hear (?:more )?(?:about )?how (?:your|the) team works\b", re.I),
      "ask what you would really ask them, or for a short call, in your own words"),
+    # Recorded as a reaction in one round (2026-10-20) and never checked: it says nothing
+    # about why them, and every sweep opens on it.
+    ("came across your profile", re.compile(
+        r"\b(?:came|come|coming) across (?:your|his|her|their) (?:profile|page|linkedin)\b", re.I),
+     "say how and why: \"I found you while looking at <employer>'s <team> team\", or lead on "
+     "what you share"),
 )
 
 # A list of three credentials in a row ("Oakmere Foods, Saltmarsh Analytics and Brindle &
@@ -100,7 +106,16 @@ EXITS = re.compile(
     r"if you can'?t|either way)\b"
     r"|\bno pressure\b|\btotally (?:understand|get it) if\b|\bcompletely understand if\b"
     r"|\bfeel free to ignore\b|\bno need to (?:reply|respond)\b|\bif you(?:'re| are) too busy\b"
-    r"|\bno (?:obligation|expectation)s?\b", re.I)
+    r"|\bno (?:obligation|expectation)s?\b"
+    # The exit lines a round still sent (2026-10-20): "No worries at all." on its own, "no
+    # worries if you're not around", "totally fine if not", "if now isn't a good time".
+    r"|^\W*no (?:worries|problem|stress)(?: at all)?\W*$"
+    r"|\bno (?:worries|problem)(?: at all)?,? if (?:you|it|now|this)\b"
+    r"|\b(?:totally|completely|absolutely|perfectly|entirely) (?:fine|ok(?:ay)?|understandable) "
+    r"if (?:not|you)\b"
+    r"|\bif (?:now|it|this)(?:'s| is)?(?:n'?t| not) (?:a good|the right) time\b"
+    r"|\bif you(?:'re| are)(?:n'?t| not) (?:able|around|free|interested)\b"
+    r"|\bif you(?:'d| would) rather not\b|\bno hard feelings\b", re.I)
 OPEN_ASK = ("Would love to hear if you have anything coming up, or know the right person to "
             "speak to.")
 # The same ask for a person whose own voice check refuses "would love to" (OWN_VOICE): the
@@ -168,11 +183,35 @@ _GUESS = re.compile(
     r"\b(?:useful|valuable|helpful|a (?:good |great |strong |natural )?fit|of use|add value|"
     r"could help|would help|bring)\b[^.!?]{0,40}\b(?:you|your team|a team like yours|yours)\b"
     r"|\ba team like yours\b|\byour team (?:needs|is probably|must|would)\b", re.I)
+# The sender's ask or wish, with them in it: "I'd love to join your team at Larkspur, or
+# just hear more" claims nothing about them, and was warned as an inference (2026-10-20).
+ASK_SHAPED = re.compile(
+    r"^(?:I(?:'d| would) (?:really |also |just |still )?(?:love|like|be (?:glad|happy|keen|"
+    r"grateful|interested))|(?:I'?m|I am) (?:keen|hoping|happy|open|always happy)|"
+    r"It'?d be (?:great|good|lovely)|(?:Happy|Keen|Glad) to|Let me know|Feel free|Would love)\b",
+    re.I)
+
+
+_ASKING_CLOSE = re.compile(
+    r"\b(?:I(?:'d| would) (?:really )?(?:love|like)|would love|keen to|happy to|glad to|"
+    r"or (?:just )?(?:hear|learn|chat|talk))\b", re.I)
 
 
 def _words(text: str) -> set:
     return {w for w in re.findall(r"[a-z][a-z'-]{4,}", tone._plain(str(text or "")).lower())
             if w not in tone.STOPWORDS}
+
+
+# Short names and acronyms ("QMX", "ONS", "Vela"): too short for `_words`, and exactly what
+# a career fact names. A fact read off their page names their employers.
+_COMMON_CAPS = frozenset("""i i'm i'd i've you your you're you've hi hey hello dear the a an it
+it's we our my at in on of and or but so if as by to for from with this that what how why who
+when where would could can do did are is was were hope""".split())
+
+
+def _short_names(text: str) -> set:
+    return {t.lower() for t in re.findall(r"(?<![\w'])[A-Z][\w&'-]*", tone._plain(str(text or "")))
+            if len(t) < 5 and t.lower() not in _COMMON_CAPS}
 
 
 def _read_text(reading: dict | None) -> str:
@@ -191,12 +230,16 @@ def provenance(sentence: str, reading: dict | None = None) -> str:
     them. STATED is said plainly, INFERRED hedged once, GUESS lightly or not at all."""
     s = " ".join(str(sentence or "").split())
     if not s or s.endswith("?") or not _ABOUT_THEM.search(s) or _NOT_A_CLAIM.match(s) \
-            or _SENDER_ACT.match(s):
+            or _SENDER_ACT.match(s) or ASK_SHAPED.match(tone._plain(s)):
         return ""
     if _GUESS.search(s):
         return GUESS
-    if reading and len(_words(s) & _words(_read_text(reading))) >= 2:
-        return STATED
+    if reading:
+        read = _read_text(reading)
+        # Their employers by a short name or initials count as much as a long word: "you
+        # started out as an economist before QMX and KMB" is read off their page.
+        if len(_words(s) & _words(read)) + len(_short_names(s) & _short_names(read)) >= 2:
+            return STATED
     return INFERRED
 
 
@@ -279,9 +322,323 @@ def without_purpose(text: str, creds=None) -> list[Advice]:
             if m:
                 out.append(Advice(
                     "credential_without_purpose", m.group(0),
-                    f"say in the same sentence why {m.group(0)} matters to them (\"which is "
-                    "why <their work> interests me\"), or cut it"))
+                    f"say in the same sentence why {m.group(0)} matters to them, as a plain "
+                    "link (\"the same <work> your team does\", \"like you, I came to it from "
+                    "<field>\"), or cut it"))
                 break
+    return out
+
+
+# ------------------------------------------------------------------ what a round taught (2026-10-20)
+
+# Praise from a stranger. "Your ads economics work really interested me" and "it's exactly
+# the kind of work I'd like to do more of" were both called stupid praise: what replaces it
+# is a plain link between their path and the sender's. compose.validate() refuses these.
+FLATTERY = re.compile(
+    r"\b(?:(?:really|genuinely|truly|so|particularly|especially|very) )?interest(?:ed|s) me\b"
+    r"|\b(?:really |so |very )?interesting (?:work|career|path|background|journey|move)\b"
+    r"|\bfascinat\w*|\bimpress(?:ive|ed|ively)\b|\binspir(?:ing|ed me|ational)\b"
+    r"|\b(?:exactly |just )?the (?:kind|sort|type) of work I(?:'d| would)? (?:like|love|want|"
+    r"enjoy|hope) to (?:do|be doing)\b"
+    r"|\b(?:amazing|incredible|awesome|brilliant|fantastic|excellent|outstanding|stellar) "
+    r"(?:work|career|path|journey|background|team|achievements?|story)\b"
+    r"|\bI (?:really )?(?:love|loved) (?:what|how) you\b|\b(?:huge|big) (?:fan|admirer)\b", re.I)
+FLATTERY_FIX = ("praise reads as flattery from a stranger: say the plain link between their "
+                "path and yours instead (\"you moved from economics into pricing, which is the "
+                "move I've been making\")")
+
+
+def flattery(text: str) -> list[tuple[str, str]]:
+    """[(the praise, its sentence)] in sentences that are not the person's own settings."""
+    own = _own()
+    return [(m.group(0), s) for s in tone.sentences(text) if not _theirs(s, own)
+            for m in FLATTERY.finditer(s)]
+
+
+# Guessing what someone sees from their level or title: "You've probably seen a fair few of
+# the Toronto teams from a Staff role" was "weird and presumptuous". A question about it
+# asks; a sentence that assumes it guesses.
+_LEVEL = (r"(?:staff|senior|principal|lead|head|director|manager|management|leadership|vp|"
+          r"chief|executive|exec|partner|founder)")
+_VANTAGE = re.compile(
+    r"\b(?:from|in|at|with|given) (?:a|an|your|that|such an?) (?:[\w-]+ ){0,2}" + _LEVEL
+    + r"(?: [\w-]+){0,2} (?:role|position|seat|level|title|chair|job)\b"
+    r"|\b(?:from|in|at) (?:a|an|your) (?:[\w-]+ )?(?:role|position|seat|level|vantage point) "
+    r"(?:like|as senior as) (?:that|yours)\b"
+    r"|\bfrom where you (?:sit|stand)\b|\bat your level\b|\bin your (?:position|seat|shoes)\b"
+    r"|\bgiven your (?:seniority|level|title|role|position|vantage point)\b"
+    r"|\bas (?:a|an) " + _LEVEL + r"\b[^.!?]{0,40}\byou\b", re.I)
+_PERCEIVE = re.compile(
+    r"\b(?:seen|see|saw|know|knew|notice[ds]?|heard|hear|come across|came across|met|meet|"
+    r"deal(?:t)? with|run into|ran into|get to see|have a view|have visibility|have a sense|"
+    r"be aware|familiar|exposed to|across)\b", re.I)
+
+
+def vantage(sentence: str) -> str:
+    """The words that guess what they see from their level or title, or ""."""
+    s = tone._plain(str(sentence or "")).strip()
+    if not s or s.endswith("?") or not _ABOUT_THEM.search(s):
+        return ""
+    m = _VANTAGE.search(s)
+    return m.group(0) if m and _PERCEIVE.search(s) else ""
+
+
+# A comparison that never says how: "goes a lot further than", "a step on from", "take my
+# work next" were all called unclear. Bigger, more complex, at more scale: say which.
+VAGUE_COMPARISON = re.compile(
+    r"\bgo(?:es|ing|ne)? (?:(?:a lot|a bit|a little|a step|much|way|even|well|far) )?further "
+    r"than\b"
+    r"|\b(?:a |the )?(?:big |real |natural |clear |logical )?step (?:on|up|beyond|further|"
+    r"forward) (?:from|on from)\b"
+    r"|\btak(?:e|es|ing) (?:my|the|this|that|our|their) (?:work|career|skills|experience) "
+    r"(?:next|further|forward)\b"
+    r"|\b(?:the|a) next level\b|\blevel up\b|\bbeyond what I(?:'ve| have)? (?:done|do|did)\b",
+    re.I)
+_SAYS_HOW = re.compile(
+    r"\b(?:bigger|larger|smaller|fewer|harder|faster|wider|broader|deeper|complex\w*|scale\w*|"
+    r"volumes?|more (?!of\b|than\b|about\b|to\b)\w+|senior|technical|\d[\d,.]*\w*)\b", re.I)
+VAGUE_FIX = ("say how it compares: bigger, more complex, more data, more users, more senior "
+             "(\"the same pricing models at ten times the volume\")")
+
+
+# Their career read back to them: "you did X, then Y, then Z". Name the one step that links
+# to the sender's.
+_SEQUENCE = re.compile(
+    r"\bthen\b|\bbefore that\b|\bbefore\b|\bafter (?:that|which)\b|\blater\b|\band now\b"
+    r"|,\s*now\b|\bfollowed by\b|\bwent on to\b|\bthese days\b", re.I)
+_FROM_TO_TO = re.compile(r"\bfrom\b[^.!?]{1,50}\bto\b[^.!?]{1,50}\b(?:and then|then|to)\b", re.I)
+
+
+def cv_recital(sentence: str) -> bool:
+    s = tone._plain(str(sentence or ""))
+    if not _ABOUT_THEM.search(s) or s.rstrip().endswith("?"):
+        return False
+    return len(_SEQUENCE.findall(s)) >= 2 or bool(_FROM_TO_TO.search(s))
+
+
+# Congratulations, then the jobs ask, in one note: their news used as the way in.
+_CONGRATS = re.compile(r"\bcongrat\w*|\bwell done on\b", re.I)
+_JOBS = re.compile(
+    r"\banything (?:coming up|open)\b|\b(?:openings?|vacanc\w+|open (?:roles?|positions?|reqs?))\b"
+    r"|\bhiring\b|\bopportunit\w+|\bjoin(?:ing)? (?:your|the) team\b|\bmy next role\b"
+    r"|\b(?:roles?|positions?) (?:on|in|at) (?:your|the) team\b", re.I)
+
+
+# A number is a figure; a year, the minutes asked for and "from 22% to 14%" (one change,
+# said with two numbers) are not several.
+_FIGURE = re.compile(r"(?<![\w.])(?:~|c\.\s?)?\$?\d[\d,.]*(?:\s?(?:%|k\b|m\b|bn\b|x\b)|\+)?")
+_DURATION = re.compile(r"^\s*(?:-\s*\d+\s*)?(?:minutes?|mins?|hours?|days?|weeks?|months?)\b",
+                       re.I)
+METRIC_DUMP = {"connection": 3, "inmail": 4, "email": 5}
+
+
+def figures(text: str) -> list[str]:
+    """The figures in a message, a change ("from 22% to 14%") counted once."""
+    t = tone._plain(str(text or ""))
+    found = []
+    for m in _FIGURE.finditer(t):
+        raw = m.group(0).strip()
+        if re.fullmatch(r"(?:19|20)\d\d", raw) or _DURATION.match(t[m.end():]):
+            continue
+        if found and re.fullmatch(r"\s*(?:to|-|\u2013|and|vs\.?)\s*", t[found[-1][1]:m.start()]):
+            found[-1] = (found[-1][0] + " to " + raw, m.end())
+            continue
+        found.append((raw, m.end()))
+    return [f for f, _ in found]
+
+
+# A close with nothing to answer about them. "I'd love to join your team, or just learn more
+# about it" was "a bit bare": the close that works asks about their current work or team.
+_WORK_QUESTION = re.compile(
+    r"\b(?:what|how|which|where|whether)\b[^.!?]{0,80}\b(?:working on|work(?:s)? on|focus\w* on|"
+    r"building|set up|structured|organi[sz]ed|look(?:ing)? for|priorit\w+|at the moment|"
+    r"right now|these days|this year|next|(?:the|your|their) (?:team|group|work|plans?))\b",
+    re.I)
+# The message with room for it. A connection note may close on a plain ask (the skill says
+# so), and an email goes to someone who asked for it, often for the resume alone.
+BARE_CLOSE_KINDS = frozenset({"inmail"})
+
+
+def _signoff(sentence: str) -> bool:
+    return len(sentence.split()) <= 3 and not sentence.rstrip().endswith("?")
+
+
+def close(text: str, n: int = 2) -> list[str]:
+    """The last `n` sentences before the sign-off: what the reader is left to answer."""
+    sents = [s for s in tone.sentences(text) if not re.match(r"^subject\s*:", s, re.I)]
+    while sents and _signoff(sents[-1]):
+        sents.pop()
+    return sents[-n:]
+
+
+# ------------------------------------------------------------------ words said twice
+
+# The words that carry no content of their own. "now" is not one: "now" twice in two
+# sentences was the person's own example (2026-10-20).
+_LIGHT = frozenset("""a an the and or but nor so yet for of to in on at by from with into onto
+over under about as than then that this these those there here it its i me my mine we our ours
+us you your yours he him his she her hers they them their theirs be am is are was were been
+being have has had having do does did will would shall should can could may might must not no
+if when while where which who whom whose what why how also just very too quite some any all
+each both either own same other such only even back up out off one get got go going like hi
+hey hello dear thanks thank much many more most well""".split())
+
+
+def _stem(word: str) -> str:
+    w = word.lower()
+    if w.endswith("'s"):
+        w = w[:-2]
+    if len(w) > 4 and w.endswith("s") and not w.endswith("ss"):
+        w = w[:-1]
+    return w
+
+
+def _content_tokens(sentence: str, lower_seen: set) -> list[str]:
+    out = []
+    for i, tok in enumerate(re.findall(r"[A-Za-z][A-Za-z'-]*", sentence)):
+        low = tok.lower()
+        if "'" in low and not low.endswith("'s"):
+            continue                           # a contraction is a function word
+        if tok[:1].isupper():
+            # A name, wherever it sits; at the start of a sentence, a capital is only
+            # position when the word is written in lower case elsewhere in the message.
+            if i > 0 or tok.isupper() or low not in lower_seen:
+                continue
+        w = _stem(low)
+        if len(w) >= 3 and w not in _LIGHT:
+            out.append(w)
+    return out
+
+
+def content_words(text: str) -> set:
+    """The content words of `text`, as `repeated()` counts them."""
+    t = tone._plain(str(text or ""))
+    seen = set(re.findall(r"\b[a-z][a-z'-]*", t))
+    return {w for s in tone.sentences(t) for w in _content_tokens(s, seen)}
+
+
+def repeated(text: str) -> list[tuple[str, str]]:
+    """[(word, where)] for each content word said twice in one sentence or in two sentences
+    side by side. Names, numbers and the words that carry no content are left out, and so
+    are the person's own fixed lines."""
+    own = _own()
+    sents = [s for s in tone.sentences(text) if not re.match(r"^subject\s*:", s, re.I)]
+    # The greeting and the courtesy line are furniture, and the sign-off is a name.
+    body = []
+    for i, s in enumerate(sents):
+        if i < 2:
+            s = re.sub(r"^(?:hi|hey|hello|dear)\b[^,\n]{0,40},\s*", "", s, flags=re.I).strip()
+            if not s or re.match(r"^(?:hope|trust)\b[^.!?]{0,40}\bwell\b", s, re.I):
+                continue
+        body.append(s)
+    while body and _signoff(body[-1]):
+        body.pop()
+    lower_seen = {w for w in re.findall(r"\b[a-z][a-z'-]*", tone._plain(text))}
+    # The person's fixed lines, their work authorization among them, are theirs as set: a
+    # word in one is not a repeat of a word drafted beside it.
+    wa = getattr(_NET, "WORK_AUTH", None)
+    own |= {_norm(v) for v in (wa.values() if isinstance(wa, dict) else ()) if str(v).strip()}
+    toks = [[] if _theirs(s, own) else _content_tokens(s, lower_seen) for s in body]
+    out, said = [], set()
+    for i, words in enumerate(toks):
+        dup = {w for w in words if words.count(w) > 1}
+        if i + 1 < len(toks):
+            dup |= set(words) & set(toks[i + 1])
+        for w in sorted(dup - said):
+            said.add(w)
+            out.append((w, body[i][:80]))
+    return out
+
+
+# ------------------------------------------------------------------ the person's voice
+
+_YES = {"true", "yes", "y", "1", "on"}
+
+
+def voice() -> dict:
+    """The person's voice (profile/networking.py VOICE): {"contractions": bool, "shorthand":
+    {full form: what they say}}. Absent or malformed, nothing changes: no contractions are
+    suggested and no shorthand is used."""
+    got = getattr(_NET, "VOICE", None)
+    got = got if isinstance(got, dict) else {}
+    short = got.get("shorthand")
+    pairs = {}
+    for k, v in (short.items() if isinstance(short, dict) else ()):
+        k, v = " ".join(str(k or "").split()), " ".join(str(v or "").split())
+        if k and v and k.lower() != v.lower():
+            pairs[k] = v
+    c = got.get("contractions", False)
+    c = c.strip().lower() in _YES if isinstance(c, str) else bool(c)
+    return {"contractions": c, "shorthand": pairs}
+
+
+# The full forms a person who speaks in contractions would not write, and what they say.
+CONTRACTIBLE = {
+    "i would not": "I wouldn't", "i will not": "I won't", "i do not": "I don't",
+    "i have been": "I've been", "you have been": "you've been", "we have been": "we've been",
+    "i am": "I'm", "i would": "I'd", "i will": "I'll", "it is": "it's", "that is": "that's",
+    "there is": "there's", "what is": "what's", "you are": "you're", "we are": "we're",
+    "they are": "they're", "do not": "don't", "does not": "doesn't", "did not": "didn't",
+    "cannot": "can't", "is not": "isn't", "are not": "aren't", "was not": "wasn't",
+    "would not": "wouldn't", "will not": "won't",
+}
+_CONTRACTIBLE = re.compile(
+    r"\b(?:" + "|".join(re.escape(k).replace(r"\ ", r"\s+")
+                         for k in sorted(CONTRACTIBLE, key=len, reverse=True))
+    + r")\b(?=\s+[A-Za-z])", re.I)
+
+
+def _with_case(found: str, short: str) -> str:
+    """What the person says, with the capital the full form had where it opened a sentence."""
+    if found[:1].isupper() and short[:1].islower():
+        return short[:1].upper() + short[1:]
+    return short
+
+
+def _shorthand_rx(full: str) -> re.Pattern:
+    return re.compile(r"(?<![\w'])" + r"\s+".join(map(re.escape, full.split())) + r"(?![\w'])",
+                      re.I)
+
+
+def _stiff(text: str, keep=()) -> list[tuple[int, int, str, str]]:
+    """[(start, end, full form, what the person says)], in order, none overlapping."""
+    v = voice()
+    t = tone._plain(str(text or ""))
+    kept = [str(k).lower() for k in keep or () if str(k).strip()]
+    spans = []
+    for full, short in v["shorthand"].items():
+        if any(full.lower() in k or k in full.lower() for k in kept):
+            continue
+        spans += [(m.start(), m.end(), m.group(0), _with_case(m.group(0), short))
+                  for m in _shorthand_rx(full).finditer(t)]
+    if v["contractions"]:
+        for m in _CONTRACTIBLE.finditer(t):
+            opens = not t[:m.start()].strip() or re.search(r"[.!?\n]\s*$", t[:m.start()])
+            if opens and tone.CONTRACTIONS == "refuse":
+                continue
+            spans.append((m.start(), m.end(), m.group(0), _with_case(
+                m.group(0), CONTRACTIBLE[" ".join(m.group(0).lower().split())])))
+    out, end = [], -1
+    for sp in sorted(spans):
+        if sp[0] >= end:
+            out.append(sp)
+            end = sp[1]
+    return out
+
+
+def stiff_forms(text: str, keep=()) -> list[tuple[str, str]]:
+    """[(the full form, what the person says)]: their shorthand where they listed one, and a
+    contraction where their VOICE says they speak in them (never opening a sentence when
+    their CONTRACTIONS refuse that). `keep` holds names that stay as written: theirs."""
+    return [(full, short) for _s, _e, full, short in _stiff(text, keep)]
+
+
+def spoken(text: str, keep=()) -> str:
+    """`text` in the person's own voice: each stiff form (stiff_forms) replaced by what they
+    say. Nothing changes without a VOICE setting."""
+    out = str(text or "")
+    for start, end, _full, short in reversed(_stiff(out, keep)):
+        out = out[:start] + short + out[end:]
     return out
 
 
@@ -312,13 +669,18 @@ def _theirs(sentence: str, own: set) -> bool:
 # ------------------------------------------------------------------ the whole check
 
 def check(text: str, kind: str = "connection", reader: str = "peer", first_contact=None,
-          reading: dict | None = None, creds=None) -> list[Advice]:
+          reading: dict | None = None, creds=None, keep=()) -> list[Advice]:
     """Every warning for this draft, each with its fix. `first_contact` defaults to the
-    kind (a note, an InMail, an email); an exit is only warned about there."""
+    kind (a note, an InMail, an email); an exit is only warned about there. `keep` holds
+    the names on the reader's side (their employer), which the person's shorthand leaves
+    as written."""
     text = str(text or "")
     first_contact = (kind in FIRST_CONTACT) if first_contact is None else first_contact
     own = _own()
     out = []
+    # The close, where it asks, is the sender's ask and never a claim about them: "I'd love
+    # to join your team at Larkspur, or just hear more" was warned as one (2026-10-20).
+    last = close(text, 1)
     for s in tone.sentences(text):
         if _theirs(s, own):
             continue
@@ -344,7 +706,21 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
             m = EXITS.search(s)
             if m:
                 out.append(Advice("soft_exit", m.group(0), exit_fix()))
-        p = provenance(s, reading)
+        seen = vantage(s)
+        if seen:
+            out.append(Advice("guesses_from_their_level", seen,
+                              "what they see is a guess from their title: ask it (\"how do "
+                              "the teams there tend to ...?\"), or cut it"))
+        m = VAGUE_COMPARISON.search(s)
+        if m and not _SAYS_HOW.search(s):
+            out.append(Advice("vague_comparison", m.group(0), VAGUE_FIX))
+        if cv_recital(s):
+            out.append(Advice("cv_recital", s[:100],
+                              "their career read back to them is a CV recital: name the one "
+                              "step that links to yours (\"you moved from logistics into "
+                              "forecasting, which is the move I'm making\")"))
+        p = "" if (last and s == last[-1] and _ASKING_CLOSE.search(s)) \
+            else provenance(s, reading)
         if p == GUESS and re.search(r"\ba team like yours\b|\buseful\b", s, re.I):
             out.append(Advice("generic_fit", s[:100],
                               "a fit claimed for any team is presumptuous: give a parallel in "
@@ -355,12 +731,46 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
                               "\"I'm guessing\", \"it looks like\"), or say what they wrote"))
     out += [a for a in without_purpose(text, creds)
             if not any(_theirs(s, own) and a.text in s for s in tone.sentences(text))]
+    out += _whole(text, kind, first_contact)
+    out += [Advice("repeated_word", f"\"{w}\" twice in: {where}",
+                   "say it once: cut the second, or use another word for it")
+            for w, where in repeated(text)]
+    out += [Advice("stiff_full_form", full,
+                   f"you say \"{short}\" (profile/networking.py VOICE): write that")
+            for full, short in stiff_forms(text, keep)]
     try:
         import learned
         over = learned.overrides()
     except (ImportError, SystemExit):
         over = set()
     return [a for a in out if a.rule not in over]
+
+
+def _whole(text: str, kind: str, first_contact: bool) -> list[Advice]:
+    """What only the message as a whole shows: their news used as the way into a jobs ask, a
+    run of numbers, and a close that asks nothing about them."""
+    out = []
+    if first_contact:
+        c, j = _CONGRATS.search(text), _JOBS.search(text)
+        if c and j:
+            out.append(Advice("congratulations_then_a_jobs_ask", f"{c.group(0)} ... {j.group(0)}",
+                              "their news is not the way into asking about roles: congratulate "
+                              "them and ask about the work, or leave the news out"))
+        most = METRIC_DUMP.get(kind)
+        figs = figures(text)
+        if most and len(figs) >= most:
+            out.append(Advice("metric_dump", ", ".join(figs),
+                              "one piece of work with its numbers is evidence; several is a "
+                              "dump: keep the one that matters to this reader"))
+        if kind in BARE_CLOSE_KINDS:
+            ending = close(text)
+            if ending and not any(_WORK_QUESTION.search(s) for s in ending):
+                out.append(Advice("bare_close", ending[-1][:100],
+                                  "the close asks nothing about them: add a real question "
+                                  "about their current work or team (\"what is <team> working "
+                                  "on at the moment, and what do you look for in people "
+                                  "joining?\"; compose.inmail(team=) writes one)"))
+    return out
 
 
 def main(argv=None) -> int:
