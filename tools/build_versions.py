@@ -176,8 +176,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "asks whether you pay for LinkedIn Premium"),
             (4, "2026-10-19", False, "every STAR story ends on a Use for line naming the questions it answers"),
             (5, "2026-10-19", False, "the interview template's permit answer follows your own disclosure rule, and a stock answer can name the kinds of employer it is not for"),
+            (6, "2026-10-20", False, "the interview guide lets an answer be drafted when the person asks, marked for them to confirm, and points its examples at their own stories"),
         ),
-        "fingerprint": "05446dfa33327399",
+        "fingerprint": "46c6df4ed9596400",
     },
     # ---- what the build makes over time and keeps
     "prep-docs": {
@@ -205,9 +206,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
             (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
-            (13, "2026-10-20", False, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up; an answer drafted on request is marked as a draft"),
+            (13, "2026-10-20", True, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up; an answer drafted on request is marked as a draft; call preps answer from the interview pack's own answers (stock answers, why you are looking, work authorization), read the team research the pack reads, use the same posting, and send a booked screen with no application to /interview, so call preps already written are rebuilt, keeping what the person wrote"),
         ),
-        "fingerprint": "04a26507fb71eb73",
+        "fingerprint": "bacf55c59b5c0bf6",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -265,7 +266,7 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-20", False, "the voice check skips HTML comments; texmf's README says nothing links ~/texmf; the grounding auditor passes a pasted note's reader to validate()"),
             (25, "2026-10-20", False, "an answer that opens on a short framing line is in the first person when it says I by its third sentence"),
         ),
-        "fingerprint": "5ffaa22b622aecac",
+        "fingerprint": "ef61d0382151a068",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -287,7 +288,7 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", True, "the person's own reasons are asked, never drafted; stock answers matched through employer names and Use for:, and checked against the employer; what each person there was told, and which messages have no text; the warm route by stored status; the recruiter assumed for a screen; the format of this round only; which team, and the process at a screen; just arrived honoured; a posting file for every process"),
             (11, "2026-10-20", True, "Likely questions is notes, never words to say, and never repeats an answer already written; a stock answer marked Not for this kind of employer, or holding a fill-in, is left out with the reason; notes beside an answer are kept and never checked; a rebuild keeps the person's own layout and never adds the Checking line twice; a screen asks its standard questions first; hooks are whole sentences; and an answer drafted on request carries a Draft line that check lists until the person confirms it"),
         ),
-        "fingerprint": "31f1bb4ced49aa55",
+        "fingerprint": "f04ac6c1e7568255",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
