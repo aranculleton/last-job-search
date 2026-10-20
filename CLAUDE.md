@@ -519,9 +519,10 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
   writing is true: how they were found (`how_found=`), a parallel in their own path, a mutual
   connection the person confirmed, or the common ground, and a note never says the sender
   read or saw something of theirs unless the sender did (`looked=True`). Before showing a
-  draft, `compose.advise()` too: its warnings (an exit line, stacked hedges, a claim written
-  as fact, a credential with no reason) are rewritten, not shown. See "Composition" in the
-  networking skill.
+  draft, `compose.advise()` too: the draft is rewritten on its warnings (an exit line,
+  stacked hedges, a claim written as fact, a credential with no reason) first, and a
+  warning the rewrite leaves standing is shown with the draft for the person to decide,
+  never in place of the rewrite. See "Composition" in the networking skill.
 - Connection notes are 200 characters on a free LinkedIn plan and 300 on Premium
   (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard. `compose.py` raises, never truncates.
 - A warm intro leads with the referrer's name in the first sentence.

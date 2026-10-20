@@ -329,9 +329,9 @@ the person's settings in `profile/networking.py`:
 
 | Reader | Work authorization (`ELIGIBILITY`) | The role wanted (`SAY_THE_ROLE`) | The ask | InMail length (`INMAIL_WORDS`) |
 |---|---|---|---|---|
-| recruiter | yes | yes | anything coming up that fits | about 150 words |
-| decision-maker | yes | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 150 words |
-| peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | 100 to 130 words |
+| recruiter | yes | yes | anything coming up that fits | about 170 words |
+| decision-maker | yes | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 170 words |
+| peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | about 130 words |
 
 The decision-maker's row is the message that drew a reply from a senior reader within
 three hours: who the sender is, with the years; one piece of real work with its numbers;
@@ -422,8 +422,10 @@ on Premium. That is the shape, and `first_note()` assembles it:
 - **Ask**: the person's `TEMPLATES` for this reader first, then their `ASK`, then the
   phrase bank's asks for this reader (`compose.py phrases`), chosen per contact
   (`variant_key=` the contact id) so a batch varies. Pass `ask=None` when the question
-  carries it. Never an exit ("if not, no worries"): it invites no reply, and a soft exit
-  belongs in a follow-up.
+  carries it. Never an exit ("if not, no worries"): it invites no reply. An easy no
+  belongs only in a later message that asks a favour, as the referral ask's "no problem
+  at all if not" does, and never as words that name the pressure ("no pressure either
+  way", under "Never name the thing you are disclaiming").
 
 **What a first note never does**, enforced by `AsksForTheJob` and by
 `validate(kind="connection")`:
@@ -448,8 +450,10 @@ language (`CONTRACTIONS` brings the old rule back for a person who wants it).
 
 ### Before it is shown: `compose.advise()`
 
-`validate()` is what must never go. `advise()` is what may go but reads worse than it
-should, each warning with its rewrite, and a warned draft is rewritten before it is shown:
+`validate()` is what must never go: a refused draft is rewritten and never shown.
+`advise()` is what may go but reads worse than it should, each warning with its rewrite.
+The draft is rewritten on its warnings before it is shown, and a warning the rewrite leaves
+standing is shown with the draft for the person to decide, never in place of the rewrite:
 
 - the phrases the person rejected: "sits close to", "is the kind of path", "I would value",
   "high on my list" and any praise of the company that fits any company, "the route I would
@@ -459,12 +463,15 @@ should, each warning with its rewrite, and a warned draft is rewritten before it
 - a list of three credentials in a row: name the one that matters to this reader;
 - hedges: one light hedge per inference ("I imagine", "I'm guessing", "probably", "it
   seems like"), never two in a sentence, never a disclaimer ("I can't know from the
-  outside");
+  outside"). A question and an offer on their terms ("if you think it might help, I can
+  send ...") hedge no claim and are never counted;
 - a claim about the reader written as fact. Each claim is STATED (their page says it, so
   say it plainly), INFERRED (from a title, an employer, a path: hedge it once) or a GUESS
   (about their team or what would be useful to them: lightly, or better not at all). A
   fact their reading holds (their employers by name or initials, their title) is STATED,
-  and an asking close ("I'd love to join your team, or just hear more") claims nothing;
+  and an asking close ("I'd love to join your team, or just hear more") claims nothing.
+  An inference has them as its subject ("You moved into pricing", "Your team builds the
+  forecasts"); "Your talk stuck with me" says what the sender felt, and is no claim;
 - a guess at what they see from their level or title ("you've probably seen a fair few
   of the teams from a Staff role"): ask it, or cut it;
 - a credential with no reason in its sentence: tie it to them as a plain link ("the same
@@ -475,9 +482,11 @@ should, each warning with its rewrite, and a warned draft is rewritten before it
 - their career read back to them ("you did X, then Y, then Z"): the one step that links to
   yours; congratulations followed by a jobs ask in the same note; a metric dump (three
   figures or more in a note, four in an InMail; "from 22% to 14%" counts once);
-- a content word said twice in one sentence or in two side by side ("consulting" twice in
-  the line about you, "now" twice running); names, numbers and the person's fixed lines
-  never count;
+- a content word said twice in one sentence ("consulting" twice in the line about you),
+  or in two sentences side by side ("now" twice running, always). A word the message's own
+  subject names (the reason for writing, the question, their team) may come back in the
+  next sentence: a message about pricing says "pricing". Names, numbers and the person's
+  fixed lines never count;
 - the person's own shorthand or contraction written out in full, where their VOICE in
   `profile/networking.py` lists it ("I am" for someone who says "I'm", an employer's full
   name for the short one they use). The composers write their VOICE themselves;
@@ -492,9 +501,17 @@ The person's own words are never warned about, and a check one of their rules ou
 
 Praise to a stranger is a refusal, not a warning: `validate()` refuses "really interested
 me", "fascinating", "impressive", "the kind of work I'd like to do more of" and the like
-(`flattery`), and the fix is the plain link between their path and the sender's. A phrase
-the person said never to use (`learned.py record --never-say`) is refused by `validate()`
-and by every composer, the nudge, referral ask, email and warm intro included.
+(`flattery`) in a sentence that reaches them, and the fix is the plain link between their
+path and the sender's. A sentence about the sender alone ("I've been fascinated by markdown
+pricing") is not praise of them. Every composer, the nudge, referral ask, email and warm
+intro included, refuses what `validate()` refuses for its kind, a phrase the person said
+never to use (`learned.py record --never-say`) among it.
+
+Each refusal carries the name of the check that made it, and voice_check's are its own
+("house-style", "ai-diction", "opener-hope"), so `learned.py record --overrides
+house-style` lifts that one check. A note to a hiring manager about an application already
+in is `validate(kind="message")`, with no length of its own (`outreach.check_note()` runs
+it): saying it was applied for is the point there, and a job ask everywhere else.
 
 **Then read it aloud.** `compose.READ_ALOUD` says how: the most natural spoken version,
 every fact, name and number kept, nothing added, their rules kept. Show it beside the
@@ -782,7 +799,11 @@ next session gets wrong.
 nag" asks them to hold the nagging in mind while they read. "No pressure either
 way" introduces pressure as a topic. Every one of them is the same move: the
 writer is uncomfortable about sending the message and hands that discomfort to
-the recipient instead of simply asking.
+the recipient instead of simply asking. The easy no a favour carries ("no problem
+at all if not", closing a referral ask) is not this move: it answers the favour
+asked and says nothing about the message itself, which is why a later message
+may carry it and a first one may not (`advise()` warns an exit only in a first
+note or an InMail).
 
 Cut the disclaimer and the awkwardness goes with it, because it was never in the
 question, only in the apology for asking. The `naming what you disclaim` rule in

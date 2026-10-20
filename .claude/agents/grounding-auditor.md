@@ -33,9 +33,11 @@ the move was complete.
    - for a networking message, `tools/network/compose.py`'s `validate()` with the right kind
      and the reader (`title=` or `reader=`) when the text came from a file: a note the
      composer returned carries its reader, a pasted one does not
-4. **The rules that are not**: the spelling variant in `profile/person.json`
-   (`documents.spelling`), no em dashes, the document noun in `documents.noun` and never one
-   of `documents.banned_nouns`, every candidate-specific rule in `profile/CLAUDE.md` (client
+   - the spelling variant in `profile/person.json` (`documents.spelling`), the dashes it
+     bans and the document noun in `documents.noun` (never one of `documents.banned_nouns`):
+     `check_claims.py` and `voice_check.py` hold a document to them, and `validate()` (through
+     `tone.py`) a message
+4. **The rules that are not**: every candidate-specific rule in `profile/CLAUDE.md` (client
    names that stay confidential, how to state where the candidate lives, sponsorship), no gap
    volunteered in a letter (use `tools/bridges.py` for the honest neighbour), and rule 9 of
    `03-writing-style.md` (no two letters share an opening or a closing sentence).

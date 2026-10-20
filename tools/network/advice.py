@@ -39,9 +39,10 @@ _NET = person.module("networking") if person.exists("networking.py") else None
 _SKILLS = person.module("skills") if person.exists("skills.py") else None
 _ROLES = person.module("roles") if person.exists("roles.py") else None
 
-# The message kinds that reach someone for the first time. A soft exit is allowed in a
-# follow-up, never here.
-FIRST_CONTACT = frozenset({"connection", "inmail", "email"})
+# The message kinds that reach someone for the first time. An easy no is allowed in a later
+# message that asks a favour, never here. An email is not one: it goes to someone who asked
+# for it (compose.email), and an email after a call was warned for its exit (2026-10-20).
+FIRST_CONTACT = frozenset({"connection", "inmail"})
 
 # ------------------------------------------------------------------ what reads as generated
 
@@ -75,8 +76,9 @@ AI_TELLS = (
         r"[^?.!]{0,50}\b(?:get (?:hired|in(?:to)?|a foot in)|break in(?:to)?|land (?:a|the) role|"
         r"join (?:your|the) team|stand out)\b|\bwhat (?:would|does) it take to (?:join|get (?:in|hired))\b"
         r"|\bwhat do you look for (?:in (?:a )?candidates?|when (?:you )?hir\w*)\b", re.I),
-     "a stranger is not a career adviser: ask openly, \"would love to hear if you have anything "
-     "coming up, or know the right person to speak to\""),
+     # {open_ask} is the open ask in words this person's voice check passes (open_ask()):
+     # the fix offered must be one the check that follows passes.
+     "a stranger is not a career adviser: ask openly, \"{open_ask}\""),
     ("a test question", re.compile(
         r"\bhow do you (?:decide|know|judge|tell)\b[^?]{0,90}\b(?:good enough|ready|worth (?:it|"
         r"shipping)|right)\b", re.I),
@@ -135,11 +137,14 @@ def open_ask() -> str:
 
 
 def exit_fix() -> str:
-    return (f"an exit invites them not to reply: end on the open ask (\"{open_ask()}\"); a "
-            "soft exit belongs in a follow-up, never a first message")
+    return (f"an exit invites them not to reply: end on the open ask (\"{open_ask()}\"); an "
+            "easy no belongs in a later message that asks a favour, never a first message")
 
 
-EXIT_FIX = exit_fix()
+def with_open_ask(fix: str) -> str:
+    """A fix text with its {open_ask} filled in by open_ask(), read when it is shown."""
+    return fix.replace("{open_ask}", open_ask()) if "{open_ask}" in fix else fix
+
 
 # ------------------------------------------------------------------ hedges
 
@@ -152,6 +157,9 @@ _HEDGE = re.compile(
     re.I)
 # "could you", "might I ask" ask; they do not hedge.
 _ASKING = re.compile(r"\b(?:could|would|can|might) (?:you|we|I ask)\b", re.I)
+# An offer on their terms, to the comma: "If you think it might help, I can send the
+# write-up" hedges no claim, and was warned as two hedges (2026-10-20).
+_IF_YOU_THINK = re.compile(r"\bif you (?:think|feel)\b[^,;.!?]*", re.I)
 DISCLAIMERS = re.compile(
     r"\bI can(?:'t|not) (?:really )?know\b|\bfrom the outside\b"
     r"|\bI (?:could|may|might) (?:well )?be wrong\b|\bcorrect me if I(?:'m| am) wrong\b"
@@ -161,8 +169,8 @@ DISCLAIMERS = re.compile(
 
 
 def hedges(sentence: str) -> list[str]:
-    """The hedges in one sentence, asking modals left out."""
-    s = _ASKING.sub(" ", str(sentence or ""))
+    """The hedges in one sentence, asking modals and an "if you think ..." offer left out."""
+    s = _IF_YOU_THINK.sub(" ", _ASKING.sub(" ", str(sentence or "")))
     return [m.group(0) for m in _HEDGE.finditer(s)]
 
 
@@ -190,6 +198,21 @@ ASK_SHAPED = re.compile(
     r"grateful|interested))|(?:I'?m|I am) (?:keen|hoping|happy|open|always happy)|"
     r"It'?d be (?:great|good|lovely)|(?:Happy|Keen|Glad) to|Let me know|Feel free|Would love)\b",
     re.I)
+
+
+# A sentence whose subject is the reader: "You moved into pricing from economics", "Your
+# team builds the forecasts". Only such a sentence is an inference about them, to hedge
+# once. "Your talk on forecasting stuck with me" and "I'm a big fan of your team's work"
+# say what the sender felt: both were warned as inferences (2026-10-20), and a hedge in
+# front of either garbles it. compose.hedge() reads the same test.
+_READER_SUBJECT = re.compile(
+    r"^(?:you(?:'ve|'re|'d)?|your (?:team|group|org\w*|company|function|department|unit))\b",
+    re.I)
+
+
+def reader_is_subject(sentence: str) -> bool:
+    """Is the reader the subject of this sentence ("You moved ...", "Your team builds ...")?"""
+    return bool(_READER_SUBJECT.match(tone._plain(" ".join(str(sentence or "").split()))))
 
 
 _ASKING_CLOSE = re.compile(
@@ -227,7 +250,10 @@ def provenance(sentence: str, reading: dict | None = None) -> str:
     """Where a claim about the reader comes from: STATED (they wrote it: their page says
     it), INFERRED (from a title, an employer or a career path), GUESS (about their current
     team, or what would be useful to them), or "" when the sentence claims nothing about
-    them. STATED is said plainly, INFERRED hedged once, GUESS lightly or not at all."""
+    them. STATED is said plainly, INFERRED hedged once, GUESS lightly or not at all.
+
+    A "you" or a "your" alone is no claim: INFERRED needs the reader as the sentence's
+    subject (reader_is_subject), and GUESS its own words (what would be useful to them)."""
     s = " ".join(str(sentence or "").split())
     if not s or s.endswith("?") or not _ABOUT_THEM.search(s) or _NOT_A_CLAIM.match(s) \
             or _SENDER_ACT.match(s) or ASK_SHAPED.match(tone._plain(s)):
@@ -240,17 +266,7 @@ def provenance(sentence: str, reading: dict | None = None) -> str:
         # started out as an economist before QMX and KMB" is read off their page.
         if len(_words(s) & _words(read)) + len(_short_names(s) & _short_names(read)) >= 2:
             return STATED
-    return INFERRED
-
-
-def claims(text: str, reading: dict | None = None) -> list[tuple[str, str, bool]]:
-    """[(sentence, provenance, hedged)] for each sentence that claims something about them."""
-    out = []
-    for s in tone.sentences(text):
-        p = provenance(s, reading)
-        if p:
-            out.append((s, p, bool(hedges(s))))
-    return out
+    return INFERRED if reader_is_subject(s) else ""
 
 
 # ------------------------------------------------------------------ a reason for each credential
@@ -348,11 +364,28 @@ FLATTERY_FIX = ("praise reads as flattery from a stranger: say the plain link be
                 "move I've been making\")")
 
 
+# Praise is only to them where the sentence reaches them. "I've been fascinated by markdown
+# pricing" and "a meetup talk inspired me to move into pricing" are about the sender, and
+# were refused as flattery (2026-10-20). A sentence with no "you" in it still reaches them
+# when it points back at something of theirs ("It's exactly the kind of work I'd like to do
+# more of", after their work was named) or names a team or employer as its subject
+# ("Larkspur's work is impressive").
+_GREETED = re.compile(r"^(?:hi|hey|hello|dear)\b[^,\n]{0,40},\s*", re.I)
+_POINTS_BACK = re.compile(r"^(?i:it|that|this|these|those)\b"
+                          r"|^(?:[A-Z][\w&.-]*\s){0,3}[A-Z][\w&.-]*'s\b")
+
+
+def _to_them(sentence: str) -> bool:
+    s = _GREETED.sub("", tone._plain(str(sentence or "")).strip())
+    return bool(_ABOUT_THEM.search(s) or _POINTS_BACK.match(s))
+
+
 def flattery(text: str) -> list[tuple[str, str]]:
-    """[(the praise, its sentence)] in sentences that are not the person's own settings."""
+    """[(the praise, its sentence)] in sentences that reach the reader (`_to_them`) and are
+    not the person's own settings."""
     own = _own()
-    return [(m.group(0), s) for s in tone.sentences(text) if not _theirs(s, own)
-            for m in FLATTERY.finditer(s)]
+    return [(m.group(0), s) for s in tone.sentences(text)
+            if _to_them(s) and not _theirs(s, own) for m in FLATTERY.finditer(s)]
 
 
 # Guessing what someone sees from their level or title: "You've probably seen a fair few of
@@ -485,12 +518,8 @@ hey hello dear thanks thank much many more most well""".split())
 
 
 def _stem(word: str) -> str:
-    w = word.lower()
-    if w.endswith("'s"):
-        w = w[:-2]
-    if len(w) > 4 and w.endswith("s") and not w.endswith("ss"):
-        w = w[:-1]
-    return w
+    """Plural and possessive off (tone._stem), from five letters up."""
+    return tone._stem(word, longer_than=4)
 
 
 def _content_tokens(sentence: str, lower_seen: set) -> list[str]:
@@ -517,10 +546,35 @@ def content_words(text: str) -> set:
     return {w for s in tone.sentences(t) for w in _content_tokens(s, seen)}
 
 
+# What counts as a word said twice, plainly:
+#   - a content word twice within one sentence is always warned ("consulting" twice in the
+#     line about the sender);
+#   - "now" in two sentences side by side is always warned: the person's own example
+#     (2026-10-20);
+#   - any other word in two sentences side by side is warned, unless the message's own
+#     subject names it: a word of a sentence that speaks to them (the reason for writing,
+#     their team) or asks them something (the question), or a team's own name ("the
+#     pricing team"). A message about pricing says "pricing" more than once, as tone.py
+#     argues for a reply, and was warned for it (2026-10-20).
+_SAID_TWICE_ALWAYS = frozenset({"now"})
+_TEAM_NAME = re.compile(r"\b([A-Za-z][\w'-]*)\s+(teams?)\b", re.I)
+
+
+def _subject_words(sents: list[str], toks: list[list[str]]) -> set:
+    """The words the message's own subject names (see above)."""
+    out = set()
+    for s, words in zip(sents, toks):
+        if words and (_ABOUT_THEM.search(s) or s.rstrip().endswith("?")):
+            out |= set(words)
+        for m in _TEAM_NAME.finditer(tone._plain(s)):
+            out |= {_stem(m.group(1)), _stem(m.group(2))}
+    return out
+
+
 def repeated(text: str) -> list[tuple[str, str]]:
     """[(word, where)] for each content word said twice in one sentence or in two sentences
-    side by side. Names, numbers and the words that carry no content are left out, and so
-    are the person's own fixed lines."""
+    side by side, by the rule above. Names, numbers and the words that carry no content are
+    left out, and so are the person's own fixed lines."""
     own = _own()
     sents = [s for s in tone.sentences(text) if not re.match(r"^subject\s*:", s, re.I)]
     # The greeting and the courtesy line are furniture, and the sign-off is a name.
@@ -539,11 +593,12 @@ def repeated(text: str) -> list[tuple[str, str]]:
     wa = getattr(_NET, "WORK_AUTH", None)
     own |= {_norm(v) for v in (wa.values() if isinstance(wa, dict) else ()) if str(v).strip()}
     toks = [[] if _theirs(s, own) else _content_tokens(s, lower_seen) for s in body]
+    subject = _subject_words(body, toks) - _SAID_TWICE_ALWAYS
     out, said = [], set()
     for i, words in enumerate(toks):
         dup = {w for w in words if words.count(w) > 1}
         if i + 1 < len(toks):
-            dup |= set(words) & set(toks[i + 1])
+            dup |= (set(words) & set(toks[i + 1])) - subject
         for w in sorted(dup - said):
             said.add(w)
             out.append((w, body[i][:80]))
@@ -687,14 +742,16 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
         for name, rx, fix in AI_TELLS:
             m = rx.search(s)
             if m:
-                out.append(Advice("ai_tell", f"{name}: {m.group(0)}", fix))
+                out.append(Advice("ai_tell", f"{name}: {m.group(0)}", with_open_ask(fix)))
         m = _LIST3.search(s)
         if m:
             out.append(Advice("three_credentials", m.group(0),
                               "a list of three reads as generated: name the one that matters "
                               "to this reader"))
         found = hedges(s)
-        if len(found) >= 2:
+        # A question hedges nothing it claims: "Would you know anyone I could speak to who
+        # might know the team?" was warned as two hedges (2026-10-20).
+        if len(found) >= 2 and not s.rstrip().endswith("?"):
             out.append(Advice("stacked_hedge", f"{', '.join(found)} in: {s[:80]}",
                               "hedge an inference once and lightly (\"I imagine\", \"I'm "
                               "guessing\", \"probably\", \"it seems like\"), never twice"))
