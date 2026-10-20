@@ -134,8 +134,8 @@ def test_the_same_sign_in_page_seen_again_while_waiting_is_one_sign_out(tmp_path
 
 def test_a_check_is_never_lifted_by_hand(tmp_path, monkeypatch):
     _state(tmp_path, monkeypatch)
-    reading.stop("LinkedIn showed a check: Let's do a quick security check", MORNING.date())
-    reading.mark_signed_in()
+    reading.stop("LinkedIn showed a check: Let's do a quick security check")   # today's
+    reading.mark_signed_in(datetime.datetime.now() + datetime.timedelta(seconds=2))
     assert "never lifted by hand" in reading.resumable()
     assert "resume" not in reading.gate_state(sends_left=5)["why"]
 
@@ -157,7 +157,9 @@ def test_a_read_and_the_signin_command_classify_it_and_never_suggest_a_stop(tmp_
 
 def test_resume_is_a_command_and_the_stop_says_so(tmp_path, monkeypatch, capsys):
     _state(tmp_path, monkeypatch)
-    _loaded(datetime.datetime.now() - datetime.timedelta(minutes=3))
+    now = datetime.datetime.now()                       # a load minutes ago, and today's
+    _loaded(max(now - datetime.timedelta(minutes=3), datetime.datetime.combine(now.date(),
+                                                                                datetime.time())))
     reading.signout()
     assert reading.main(["gate"]) == reading.EXIT["tomorrow"]
     assert "reading.py resume --reason" in capsys.readouterr().out

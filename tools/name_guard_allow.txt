@@ -96,3 +96,6 @@ Wren Allard             # invented, tests/test_reads_react_to_signals_not_a_gues
 Northern Data Talk      # invented event, tests/test_a_note_is_honest_warm_and_fitted_to_its_reader.py
 Forecasting Panel       # invented event, the same test
 Ops Keynote Night       # invented event, the same test
+Cy Marlow               # invented, tests/test_a_list_page_gives_addresses_and_ranks_by_function.py
+Dee Hollis              # invented, the same test
+Help Desk Technician    # a job title, the same test

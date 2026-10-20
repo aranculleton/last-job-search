@@ -48,8 +48,8 @@ def test_the_list_extractor_only_reads():
 def test_every_card_keeps_the_persons_own_address_and_never_a_mutuals():
     people = reading.people_page(reading.from_list_extract(_raw()), "Larkspur")
     by = {p["name"]: p for p in people}
-    assert by["Juno Castellan"]["linkedin_url"] == "https://www.linkedin.com/in/juno-castellan-1a2b"
-    assert by["Bo Venn"]["linkedin_url"] == "https://www.linkedin.com/in/bo-venn"
+    assert by["Juno Castellan"]["linkedin_url"] == "https://www.linkedin.com/in/example-juno"
+    assert by["Bo Venn"]["linkedin_url"] == "https://www.linkedin.com/in/example-bo"
     assert "Wren Allard" not in by                     # a mutual connection on Juno's card
     assert by["Juno Castellan"]["degree"] == "2nd"
     assert by["Ana Rook"]["reach"] == "pending"
@@ -59,7 +59,7 @@ def test_people_takes_the_extractors_output_and_prints_each_address(here, monkey
     monkeypatch.setattr(sys, "stdin", io.StringIO(_raw()))
     assert reading.main(["people", "-", "--company", "Larkspur"]) == reading.EXIT["ok"]
     out = capsys.readouterr().out
-    assert "[not in the book] https://www.linkedin.com/in/juno-castellan-1a2b" in out
+    assert "[not in the book] https://www.linkedin.com/in/example-juno" in out
     lines = [ln for ln in out.splitlines() if ln.startswith("  ")]
     # Best first: their own title, then a role in their function, then the rest, out last.
     assert lines[0].startswith("  deep read: Juno Castellan") and "one of your titles" in lines[0]
