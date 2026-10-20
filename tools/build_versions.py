@@ -370,7 +370,7 @@ METHODS: dict[str, dict] = {
             (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
             (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, and a peer given the standard length"),
         ),
-        "fingerprint": "05fa0a5854e9111d",
+        "fingerprint": "b2d89f0deba9d83b",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -405,7 +405,7 @@ METHODS: dict[str, dict] = {
             (17, "2026-10-19", True, "a batch of queued notes is checked for sentences they share, so notes that all end the same way are written again"),
             (18, "2026-10-20", False, "sent invitations read card by card with each note kept, only requests the page can show called gone, names matched however written, Experience kept role by role with path parallels and mutual connections, a top card place unlike the current role's a caution, the channel set from the page, the whole About kept, and the files that change on every read kept out of the repo"),
         ),
-        "fingerprint": "9475ed63dce8d9df",
+        "fingerprint": "225b9762de5990f6",
     },
     "screening": {
         "by": "round", "priority": 2,

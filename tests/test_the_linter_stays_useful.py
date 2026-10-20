@@ -85,13 +85,19 @@ class TheRepoIsCleanAgainstIt(unittest.TestCase):
         self.assertEqual(0, r.returncode, r.stdout or r.stderr)
 
 
+# Standard library on one platform only, so find_spec cannot see them on another: the
+# file lock in tools/network/pace.py imports msvcrt on Windows and fcntl elsewhere.
+_PLATFORM_ONLY = frozenset({"msvcrt", "winreg", "winsound", "_winapi", "fcntl", "termios",
+                            "grp", "pwd", "resource"})
+
+
 def _stdlib_on_39(mod: str) -> bool:
     """Python 3.9 has no sys.stdlib_module_names: a module the standard library ships."""
     if hasattr(sys, "stdlib_module_names"):
         return False
     import importlib.util
     import sysconfig
-    if mod in sys.builtin_module_names:
+    if mod in sys.builtin_module_names or mod in _PLATFORM_ONLY:
         return True
     try:
         spec = importlib.util.find_spec(mod)
