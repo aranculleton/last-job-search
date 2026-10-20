@@ -204,9 +204,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-19", False, "a quote from a reading is cut at a word, never mid-word"),
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
-            (12, "2026-10-20", False, "a prep document is left alone when only its date would change, and --all counts the ones already current"),
+            (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
         ),
-        "fingerprint": "1909260ca3193a1d",
+        "fingerprint": "3a7ecd035d2d2ad7",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -368,9 +368,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-10-19", False, "your connections export is saved from the file or from LinkedIn's whole archive, reading only Connections.csv, and one employer's 1st-degree people can be pasted while it is on its way, each drafted a message with no connection request"),
             (29, "2026-10-19", False, "business days skip your public holidays, employer names with a web address or initials join, and a state file a merge left conflict markers in is refused"),
             (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
-            (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, and a peer given the standard length"),
+            (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, a peer given the standard length, and a decision-maker given the senior work-authorization wording"),
         ),
-        "fingerprint": "b2d89f0deba9d83b",
+        "fingerprint": "20aa4cad7ae49b0e",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
