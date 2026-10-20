@@ -204,8 +204,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-19", False, "a quote from a reading is cut at a word, never mid-word"),
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
+            (12, "2026-10-20", False, "a prep document is left alone when only its date would change, and --all counts the ones already current"),
         ),
-        "fingerprint": "34dd4b0d13b8ea94",
+        "fingerprint": "1909260ca3193a1d",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -260,8 +261,9 @@ METHODS: dict[str, dict] = {
             (21, "2026-10-19", False, "the PDF check's missing-Poppler error gives the winget command on Windows, not Chocolatey"),
             (22, "2026-10-19", False, "the PDF check finds Poppler where a Mac or Windows installs it, even when the shell's PATH lacks it; the voice check hears short spoken answers as spoken and catches a third-person headline; form answers read a profile with no screening.py"),
             (23, "2026-10-19", False, "RUNBOOK: what to do when two chats applied the same profile upgrade"),
+            (24, "2026-10-20", False, "the voice check skips HTML comments; texmf's README says nothing links ~/texmf"),
         ),
-        "fingerprint": "e0472334de898204",
+        "fingerprint": "18795f045b7c13e9",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -312,7 +314,8 @@ METHODS: dict[str, dict] = {
                "contact a search found against today's matching (`discovery.same_employer`, "
                "`discovery.profile_status`): close any it would not keep, with the reason in "
                "`outcome`. No profile is read in the background and nothing is sent",
-        "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
+        "files": ("tools/network/compose.py", "tools/network/advice.py", "tools/network/tone.py",
+                  "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
@@ -365,8 +368,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-10-19", False, "your connections export is saved from the file or from LinkedIn's whole archive, reading only Connections.csv, and one employer's 1st-degree people can be pasted while it is on its way, each drafted a message with no connection request"),
             (29, "2026-10-19", False, "business days skip your public holidays, employer names with a web address or initials join, and a state file a merge left conflict markers in is refused"),
             (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
+            (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, and a peer given the standard length"),
         ),
-        "fingerprint": "2af56f039bffb699",
+        "fingerprint": "05fa0a5854e9111d",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -399,8 +403,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-19", False, "applied by /network itself; several profiles can be pasted at once; a note nobody has read for says so at its top"),
             (16, "2026-10-19", False, "only notes written before notes rested on a reading are redone, and a note written from someone's public work leaves the queue"),
             (17, "2026-10-19", True, "a batch of queued notes is checked for sentences they share, so notes that all end the same way are written again"),
+            (18, "2026-10-20", False, "sent invitations read card by card with each note kept, only requests the page can show called gone, names matched however written, Experience kept role by role with path parallels and mutual connections, a top card place unlike the current role's a caution, the channel set from the page, the whole About kept, and the files that change on every read kept out of the repo"),
         ),
-        "fingerprint": "81648bb3c525028b",
+        "fingerprint": "9475ed63dce8d9df",
     },
     "screening": {
         "by": "round", "priority": 2,
