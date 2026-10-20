@@ -56,7 +56,8 @@ it. LinkedIn is never fetched from a session.
    pending only when it went after the oldest card loaded; one sent before that is listed as
    not checked, and is never taken for accepted. Without a browser,
    a queued send whose day has passed with nothing logged is listed as UNCONFIRMED (`open_actions
-   --due`): ask whether it went, and record it with `state.py sent <id>` if it did.
+   --due`): ask whether it went, and record it with `state.py sent <id> --draft` (or
+   `--text-file` with the words that went) if it did.
    **"Already in the book" is not "already written to."** `harvest` prints, per employer, how
    many the book holds there and how many were never messaged (status `dropped`, a note set
    aside, or closed before anything went). To write to them after all:
@@ -412,19 +413,31 @@ it. LinkedIn is never fetched from a session.
    there is some; their own talk, post, paper or code leads (with no opener before it)
    where there is not; a senior reader gets the brief shape, under 220 characters with
    no question; a recruiter gets who they are, what they want and work authorization;
-   someone already connected gets a message rather than a request. Then `compose.validate(kind=
-   "connection")` on each. A draft that fails is rewritten, never shown with a
-   warning attached. The rules are in "Composition" in `networking/SKILL.md`;
-   the short version:
+   someone already connected gets a message rather than a request; someone who can point
+   to the right team gets `shape="pointer"`. Pass `title=` (or `reader=`) so who reads it
+   decides what it says, and `variant_key=` the contact id so the ask and opener vary.
+   **Start from the person's own messages that drew replies**
+   (`python3 tools/network/compose.py examples`): their shape and wording come before
+   any default. Then `compose.validate(kind="connection", title=...)` on each, and
+   `compose.advise(...)`. A draft that fails either is rewritten, never shown with a
+   warning attached. Then the read-aloud pass (`compose.READ_ALOUD`): the spoken version
+   beside the original, kept only if `compose.read_aloud(original, rewrite)` passes. The
+   rules are in "Composition" in `networking/SKILL.md`; the short version:
 
-   - The note asks for a conversation, never the job. No role the candidate wants, no
-     "are you hiring", no "is it on your team", no work authorization (unless
-     the person is a recruiter). `AsksForTheJob` refuses all of them.
-   - Per person, write two things: the **common ground** (shared employer,
-     school or move first; otherwise the one specific thing about their work)
-     and a **question** about them, answerable in a line. The opener, the
-     one-line "about me" and the 15-minute ask default to the candidate's own
-     words in `profile/networking.py`.
+   - The note asks for a conversation. Asking about openings, "are you hiring", "is it on
+     your team" are a recruiter's alone; work authorization and the role wanted go to a
+     recruiter and a decision-maker by default and to a peer only when that message passes
+     `work_auth=True` (`ELIGIBILITY`, `SAY_THE_ROLE`). `AsksForTheJob` names the phrase
+     and the fix.
+   - Per person, write the **reason for writing**, true and specific to them: how they
+     were found (`how_found=compose.how_found_line(...)`), a mutual connection the person
+     confirmed (`mutual=`, after asking "mention <name>?"), the **common ground** (shared
+     employer, school or move first; otherwise the one specific thing about their work),
+     or a **parallel in their path** from `reading.py show` (`parallel=`, hedged once).
+     Never say the person read or saw something of theirs unless they did (`looked=True`
+     on their word). A **question** about them only when there is a real one. The
+     opener, the one-line "about me" and the ask are the candidate's own words in
+     `profile/networking.py`, then the phrase bank.
    - **Pass each person's reading**: `compose.first_note(..., reading=reading.load(<id>))`.
      It raises `UngroundedNote` when the common ground rests on nothing that was read about
      them; their name and employer do not count, because the snippet already had them. A
@@ -441,9 +454,11 @@ it. LinkedIn is never fetched from a session.
      characters on a free account and 300 on Premium. `TooLong` means cut and
      recompose; a shorter `about_me` is usually the cut.
    - An InMail, where the plan has credits and the target is worth one, is
-     `compose.inmail()`: a **subject** of a few words naming the common ground or the
-     question (never "Quick question" or a job), the same moves as the note, and one
-     paragraph of evidence. Validate with `kind="inmail"`.
+     `compose.inmail()`: its `.subject` (who the candidate is, by default:
+     `compose.py subject` prints it) and `.body` go in LinkedIn's two fields. The shape that
+     drew a reply: who they are with the years, one piece of real work with its numbers,
+     why this person, eligibility by reader, the open ask. Validate with `kind="inmail"`
+     (the InMail carries its subject).
    - The referral ask is a different message, `compose.referral_ask()`, sent
      only after they have engaged.
 
@@ -504,8 +519,15 @@ through CLAUDE.md, "Learning the person".
 A draft stays at `not_contacted` until the person says it went: a draft is not a message.
 When they say it did, record it in the same turn, in one command per contact:
 `python3 tools/network/state.py sent <contact_id> --draft` when it went as drafted,
-`--text-file <file>` with their edits, `--outside` when it went from the LinkedIn app and its
-words were not seen, `--date` for another day. It does the three steps below at once:
+`--text-file <file>` with their edits (the edit is recorded as their preference by itself),
+`--no-note` for a request with no note, `--outside` when it went from the LinkedIn app,
+`--date` for another day, and `--channel inmail --subject "<the subject>"` for an InMail
+(it says how many credits are left). **The words are required**: a send with none is
+refused, because a message logged without them can never teach what works. After recording
+a batch as drafted, ask once whether any went with edits or on another day, and correct
+each with `state.py resent <contact_id> --text-file <file> [--date <day>]`; one that did not
+go at all comes off the log with `state.py unsend <contact_id>`, its words back in the draft.
+It does the three steps below at once:
 
 1. **The message**, appended to `network_threads.csv` (`state.load_threads()`, then
    `state.save_threads()`): `contact_id`, `date` the day it went, `direction` `out`,
