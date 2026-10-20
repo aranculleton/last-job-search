@@ -1259,6 +1259,7 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     contractions) is applied to the whole note (`advice.spoken()`).
     """
     _no_reaction_waiting("first note")
+    asked = dict(locals())
     if shape not in SHAPES:
         raise ValueError(f"shape must be one of {', '.join(SHAPES)}, not {shape!r}")
     if shape == "recruiter":
@@ -1337,6 +1338,10 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     limit = {"brief": min(BRIEF_CHARS, schema.LIMITS["connection_note_chars"]),
              "connected": CONNECTED_CHARS}.get(shape, schema.LIMITS["connection_note_chars"])
     if len(note) > limit:
+        if hedged and (common_ground, parallel) != (asked["common_ground"], asked["parallel"]):
+            # The hedge is what tipped it over: the note goes as written rather than not at
+            # all, and advise() still warns on the inference.
+            return first_note(**dict(asked, hedged=False))
         raise TooLong("first note", len(note), limit)
     return Note(_first_note_voice(note), rtype, recruiter)
 
@@ -1619,6 +1624,7 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
     hedged once (`hedge()`, `hedged=False` to leave it), and the person's VOICE applies.
     """
     _no_reaction_waiting("InMail")
+    asked = dict(locals())
     rtype = reader or reader_type(title, seniority, recruiter)
     recruiter = recruiter or rtype == "recruiter"
     reasons = [x for x in (how_found, common_ground, parallel) if str(x or "").strip()]
@@ -1686,9 +1692,12 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
             % "; ".join(sorted({v.text for v in findings})))
     if not tone.reaches_them(body, their):
         raise NoteIsAllAboutTheSender(_reaches_fix(name, their))
+    high = schema.LIMITS["inmail_words"][1]
+    if len(body) > INMAIL_CHAR_LIMIT or (high and len(body.split()) > high):
+        if hedged and (common_ground, parallel) != (asked["common_ground"], asked["parallel"]):
+            return inmail(**dict(asked, hedged=False))     # as for a first note
     if len(body) > INMAIL_CHAR_LIMIT:
         raise TooLong("InMail", len(body), INMAIL_CHAR_LIMIT)
-    high = schema.LIMITS["inmail_words"][1]
     if high and len(body.split()) > high:
         raise TooLong("InMail", len(body.split()), high, unit="words")
     return InMail(subj, _first_note_voice(body), rtype, recruiter)

@@ -2100,6 +2100,10 @@ def placed(contact_id: str, contacts=None) -> bool:
 # employer where three sit unanswered (2026-10-20), and neither can the day's list.
 PER_EMPLOYER = 2
 WAITING = ("awaiting_reply", "connected_no_reply")
+# Only a note sent this recently holds the employer: the throttle's 45 days of silence. An
+# unanswered note from months ago is a thread that has ended, and counted for ever it would
+# shut the employer to every new person.
+WAITING_DAYS = 45
 
 
 def _who(contact_id: str, contacts) -> dict | None:
@@ -2115,16 +2119,26 @@ def _who(contact_id: str, contacts) -> dict | None:
     return None
 
 
-def at_employer(company: str, contacts, also=()) -> tuple:
+def at_employer(company: str, contacts, also=(), today: datetime.date | None = None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
-    company_key, so an employer under another of its names is the same employer."""
+    company_key, so an employer under another of its names is the same employer. A note
+    first sent more than WAITING_DAYS ago no longer counts; one with no date still does."""
     from company_key import key as company_key
     import state
     k = company_key(company)
     if not k:
         return [], []
+    today = today or datetime.date.today()
+
+    def recent(c) -> bool:
+        try:
+            sent = datetime.date.fromisoformat(str(c.get("first_contacted") or "")[:10])
+        except ValueError:
+            return True
+        return (today - sent).days <= WAITING_DAYS
+
     waiting = [c for c in contacts or () if state.row_company_key(c) == k
-               and str(c.get("status") or "") in WAITING]
+               and str(c.get("status") or "") in WAITING and recent(c)]
     there = [x for x in also if x and company_key(x.get("company")) == k]
     return waiting, there
 
@@ -2174,7 +2188,7 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
             full.append(i)
             continue
         waiting, there = at_employer(who.get("company", ""), contacts,
-                                     [_who(x, contacts) for x in have])
+                                     [_who(x, contacts) for x in have], today=today)
         if len(waiting) + len(there) >= PER_EMPLOYER:
             said = []
             if waiting:
@@ -3341,6 +3355,14 @@ def owed_seconds(g: dict, now: datetime.datetime) -> float:
     return 0.0
 
 
+def after_breach(breach: dict | None) -> int:
+    """The exit code once a page loaded too soon has been kept. A wait or an hourly cap is
+    the next page's business (`next --wait` holds it), so the read itself is ok; a stop for
+    the day (a check, a sign-out, a daily cap) still exits as a stop, so a session's loop
+    reads nothing more today. Kept with an ok, a stop was a page the loop went past."""
+    return EXIT["tomorrow"] if breach and breach.get("kind") == "tomorrow" else EXIT["ok"]
+
+
 def keep_breach(g: dict, now: datetime.datetime, ident: str = "", owed: float = 0.0) -> str:
     """Log, once, that a page went in before the person's own pace allowed it, and say so.
     The page is kept, never refused: it was already open and its text taken, and refusing
@@ -3977,6 +3999,7 @@ def main(argv: list | None = None) -> int:
                 print("pace: that page loaded far slower than your recent ones, a soft signal: "
                       + (f"browser reads are stopped for today: {why_}" if why_ else
                          "the next pause is doubled"))
+            return after_breach(breach)
     return EXIT["ok"]
 
 
@@ -4308,7 +4331,7 @@ def _cli_invitations(a) -> int:
               + (" ..." if len(got["unchecked"]) > len(shown) else ""))
     if got["unknown"]:
         print(f"  {len(got['unknown'])} other pending request(s) to people not in the contact book")
-    return EXIT["ok"]
+    return after_breach(breach)
 
 
 def _cli_people(a) -> int:
@@ -4400,7 +4423,7 @@ def _cli_people(a) -> int:
     print("next: shortlist only the few you will write to today, best first (`reading.py "
           "shortlist`); the rest are drafted from what the page showed and marked as waiting "
           "on a read")
-    return EXIT["ok"]
+    return after_breach(breach)
 
 if __name__ == "__main__":
     sys.exit(main())

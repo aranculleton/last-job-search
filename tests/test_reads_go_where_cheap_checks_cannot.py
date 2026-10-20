@@ -410,3 +410,26 @@ def test_the_persons_own_lines_are_theirs_to_repeat_unless_they_vary_them():
     found = reading.alike(notes, ask=ask, about_me=about, opener="hope you're well",
                           vary_about_me=True)
     assert found and found[0][0] == "shared"
+
+
+def test_a_page_kept_after_a_stop_still_exits_as_a_stop(here, monkeypatch, capsys):
+    # Kept with an ok, a page read after the day was stopped by a check was one the
+    # session's loop went past, reading on.
+    import state
+    monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    row = {"contact_id": "kestrel_achterberg", "name": "Rosalind Achterberg",
+           "company": "Kestrel Mutual", "location": "Manchester", "channel": "connection",
+           "status": "not_contacted"}
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [row])
+    monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
+    now = datetime.datetime.now()
+    reading.shortlist(["kestrel_achterberg"], now.date(), contacts=[row], sends_left=10)
+    reading.stop("LinkedIn showed a check: Let's do a quick security check")
+    page = here / "p.txt"
+    page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),
+                    encoding="utf-8")
+    code = reading.main(["read", "kestrel_achterberg", str(page), "--source", "browser"])
+    out = capsys.readouterr().out
+    assert "saved" in out and "kept, not refused" in out
+    assert code == reading.EXIT["tomorrow"]
+    assert reading.after_breach({"kind": "wait"}) == reading.after_breach(None) == reading.EXIT["ok"]

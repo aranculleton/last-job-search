@@ -374,8 +374,9 @@ METHODS: dict[str, dict] = {
             (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, a peer given the standard length, a decision-maker given the senior work-authorization wording, the app's own asks in words the person's voice check passes, a note checked for the reader it was written for, a referrer's name kept capitalized, and ordinary sentences (wanting to understand how their role changed) no longer read as asking for the job"),
             (32, "2026-10-20", False, "a people page lists each card with the person's address and best first by how close the title is to their function, cutting IT support, operations and the like; a people search can be built from a company number and is confirmed by the first page of results; a sign-in page is an expired session or friction by the hours since the last page or sign-in"),
             (33, "2026-10-20", False, "profile reads back to 3.2.5's caps (30 an hour, 80 a day), reading for the week's requests, no slow start before a signal, a lifted cap lifting the ramp and the loads cap, and the place check said once in a chat"),
+            (34, "2026-10-20", False, "the voice checks from one round (a round's InMails built alike, a bare close, guessing from a level, flattery, vague comparisons, hedges by default, repeated words, a VOICE setting), and the tool fixes (rows from readings, pending invitations, no Connect button, InMail refunds, company numbers, research titles, two a company, the time where they are, a page loaded too soon kept)"),
         ),
-        "fingerprint": "7dc75c677257f3d7",
+        "fingerprint": "7bc9bc0f875ea42b",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -411,8 +412,9 @@ METHODS: dict[str, dict] = {
             (18, "2026-10-20", False, "sent invitations read card by card with each note kept, only requests the page can show called gone, names matched however written, Experience kept role by role with path parallels and mutual connections, a top card place unlike the current role's a caution, the channel set from the page only where it shows a degree, the whole About kept, and the files that change on every read kept out of the repo, or in the old file where this computer's ledger cannot be written"),
             (19, "2026-10-20", False, "a sign-in page hours after the last page is an expired session, not a stop; a sign-out stop is lifted on the person's word with reading.py resume, once a day, and the stop names it"),
             (20, "2026-10-20", False, "the reading list sized to the week's requests, and its words"),
+            (21, "2026-10-20", False, "notes drafted with the new voice checks; unsent drafts are not redrafted, and reading.py batch flags any built alike"),
         ),
-        "fingerprint": "4ea0e34794f32d37",
+        "fingerprint": "dd202e833fc29cf8",
     },
     "screening": {
         "by": "round", "priority": 2,

@@ -193,6 +193,23 @@ def test_an_inference_about_them_comes_out_hedged_once():
         "It looks like you moved into Larkspur."
 
 
+def test_a_hedge_never_makes_a_note_too_long_to_send():
+    # The hedge adds a few words; a note that fitted without it must still be written.
+    base = dict(parallel="You moved into Larkspur from logistics", title="Data Analyst",
+                variant_key="z")
+    plain = compose.first_note("Ana Rook", hedged=False, **base)
+    limit = compose.schema.LIMITS["connection_note_chars"]
+    about = compose.ABOUT_ME or "I build forecasts"
+    # Lengthen the line about the sender until the unhedged note sits two under the limit.
+    short = len(compose.first_note("Ana Rook", hedged=False, about_me=about, **base))
+    pad = " " + "y" * (limit - 2 - short - 1)
+    fits = compose.first_note("Ana Rook", hedged=False, about_me=about + pad, **base)
+    assert len(fits) == limit - 2
+    got = compose.first_note("Ana Rook", about_me=about + pad, **base)
+    assert len(fits) <= limit and got == fits
+    assert len(plain) < len(compose.first_note("Ana Rook", **base))   # hedged when it fits
+
+
 # ------------------------------------------------------------ 7. not inferences
 
 def test_a_fact_read_off_their_page_and_the_close_are_not_inferences():

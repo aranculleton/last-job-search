@@ -430,6 +430,16 @@ def test_people_waiting_on_a_reply_count_against_two_a_company(book, capsys):
     assert "against 2 a company" in capsys.readouterr().out
 
 
+def test_a_note_unanswered_for_months_no_longer_holds_the_employer():
+    old = (TODAY - datetime.timedelta(days=reading.WAITING_DAYS + 15)).isoformat()
+    waiting = [dict(_row(f"kestrel_{i}", n, "Kestrel Mutual", status="awaiting_reply",
+                         location="Manchester"), first_contacted=old)
+               for i, n in enumerate(("Rosalind Achterberg", "Corwin Haldane"))]
+    new = _row("kestrel_allard", "Wren Allard", "Kestrel Mutual", location="Manchester")
+    got = reading.shortlist(["kestrel_allard"], TODAY, contacts=waiting + [new], sends_left=10)
+    assert got["ids"] == ["kestrel_allard"]
+
+
 # ------------------------------------------------------------ 24. their time
 
 NOW = datetime.datetime(2026, 10, 20, 10, 30, tzinfo=datetime.timezone.utc)
