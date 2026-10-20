@@ -164,10 +164,12 @@ make sense to somebody whose repo just received it.
 
 - **Contractions are fine.** "I'm" and "I'd" may open a sentence again: forcing "I am" and
   "I would" made notes read, in your words, "like someone who just learned English as a
-  second language". `CONTRACTIONS` brings the old rule back if you want it. No profile
+  second language". `CONTRACTIONS` brings the old rule back if you want it. That is what
+  changes in a test of your own that expects an opening contraction refused. No profile
   upgrade: "allow" is the default.
 - **A late employer is a warning with the reordering, not a refusal**, as the message that
-  drew a reply had it, naming its target in the third paragraph (`EMPLOYERS_FIRST`).
+  drew a reply had it, naming its target in the third paragraph (`EMPLOYERS_FIRST`). That
+  is what changes in a test of your own that expects `validate()` to report it.
 - **A job-ask finding names the phrase and what to write instead**, and no longer spans two
   clauses: "...the work I want to be doing, and I'm looking for my next role" passes.
 - **The InMail is a subject and a body, in the shape that drew a reply.** Who you are, with

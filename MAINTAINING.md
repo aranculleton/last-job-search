@@ -157,8 +157,9 @@ app no longer names.
 ## Commit state at the moment it changes
 
 Not at the end of the session. A session that runs out of context mid-task loses
-everything uncommitted, and the app ships no hook that would catch it (`tools/security_guards.py`
-keeps the hook allowlist empty).
+everything uncommitted, and no hook catches it: the allowlist in `tools/security_guards.py`
+holds one hook only, the reaction check in `tools/learned.py`, and never a start-of-session
+one.
 
 The table in CLAUDE.md under "Memory: the repo remembers, the chat does not" says what
 goes where. The short version: an application, a message sent or received, a fact learned
