@@ -44,8 +44,10 @@ Generates `documents/network/<contact_id>/prep.md` via `prep.write_prep()`.
    no fragments, no "At <Employer>:" openers, keeping the `(source: ...)` after it. The
    tool places profile wording against each question and marks the summary
    `[raw profile wording: ...]`, because profile prose is written, not said. The personal
-   narrative is an arc to tell in their own words and is never pasted. Never invent an
-   experience to answer a question. Then:
+   narrative is an arc to tell in their own words and is never pasted. Unasked, never
+   invent an experience to answer a question; asked for an example, an anecdote or a
+   metric they cannot recall, write a plausible one marked "Draft: yours to confirm or
+   change", as `/interview` rule 2 says. Then:
    ```bash
    python3 tools/network/prep.py "<contact>" --check
    ```

@@ -2835,11 +2835,21 @@ _NOTES_START = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?notes?(?:\*\*|__)?\s*:?\s*
                           re.I)
 _NOTE_LINE = re.compile(r"^\s*(?:(?:\*\*|__)?notes?(?:\*\*|__)?\s*:|>|\((?:note|notes)\b)", re.I)
 _ITALIC_LINE = re.compile(r"^\s*(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)\s*[.:]?\s*$")
+# A draft the person asked for: an example, an anecdote, a metric or a project they could
+# not recall, written for them to confirm or change. Interview prep refused to write one,
+# when drafting it is the job (2026-10-20); a draft is never a fact until they make it one.
+# The line is a note (never said), and `check` lists every answer still carrying it.
+DRAFT_MARK = "Draft: yours to confirm or change. Delete this line once it is true."
+_DRAFT_LINE = re.compile(r"^\s*(?:\*\*|__|\*|_)?draft(?:\*\*|__|\*|_)?\s*:", re.I)
+DRAFT_TODO = ("a draft you have not confirmed yet: make it true (or change it to what "
+              "happened), then delete its Draft line")
 
 
 ANSWERS_INTRO = ("What you will say goes under each question, as sentences. Anything else (a "
                  "reminder, a list) goes under a line \"Notes:\", after \"Note:\", or in "
-                 "italics: it is kept on every rebuild and never checked as something to say.")
+                 "italics: it is kept on every rebuild and never checked as something to say. "
+                 "An answer drafted for you to confirm starts \"Draft:\"; delete that line "
+                 "once it is true.")
 
 
 def spoken(body) -> list:
@@ -2848,10 +2858,15 @@ def spoken(body) -> list:
     for ln in _own_words(body):
         if _NOTES_START.match(ln):
             notes = True
-        if notes or _NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln):
+        if notes or _NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln) or _DRAFT_LINE.match(ln):
             continue
         out.append(ln)
     return out
+
+
+def drafted(body) -> bool:
+    """Does an answer still carry the mark of a draft the person has not confirmed?"""
+    return any(_DRAFT_LINE.match(ln) for ln in body or ())
 
 
 def _restates(body, checking, hear) -> bool:
@@ -2921,6 +2936,8 @@ def check(path) -> list:
                 out.append((q, "not written yet"))
             continue
         out += [(q, why) for why in prep.unsayable(mine)]
+        if drafted(body):
+            out.append((q, DRAFT_TODO))
     return out
 
 

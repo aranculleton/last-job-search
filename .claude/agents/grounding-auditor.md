@@ -62,6 +62,13 @@ the candidate-specific rules from `profile/CLAUDE.md` (where they live, sponsors
 names). A detail missing from the sources that the
 person would have supplied directly, such as a profile URL, is "confirm", not "invented".
 
+## A draft the person asked for
+
+An interview or call prep answer under a line starting "Draft:" (`interview_pack.DRAFT_MARK`)
+is a draft the person asked for, to confirm or change: list it as "a draft to confirm", never
+as invented, and never remove it. It stops being a draft only when they delete the mark, and
+a draft never reaches a resume, a letter, a form or a message.
+
 ## What you return
 
 Write the corrected copy where the brief says (a scratch path, never over the original

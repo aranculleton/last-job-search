@@ -577,6 +577,13 @@ they cannot act on is one they did not get. Everything said to them:
 The tools' own messages are written this way (`tests/test_a_beginner_is_told_in_plain_words.py`
 keeps them so): pass them on as they are, never reworded into jargon.
 
+**A draft they ask for is not a claim.** When the person asks for an example, an anecdote,
+metrics, a project or a way they might have used a tool, for interview prep or a call, write
+a plausible one marked as a draft for them to confirm or change (`/interview` rule 2). Never
+refuse and never question whether it happened. "Never claim anything not in the profile" is
+about what an employer or a contact sees: a draft reaches the profile, or anything they see,
+only once the person confirms it.
+
 ## Learning the person: it grows with them
 
 The app's defaults (the voice of a first note, the questions an interview pack asks,
