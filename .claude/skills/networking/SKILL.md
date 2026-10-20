@@ -535,7 +535,11 @@ their networking.py), never "Quick question", "Job enquiry" or anything that ask
 job; `inmail_subject()` refuses those. Where the reason for writing names an employer the
 sender left, the subject names it first (`identity_subject(lead=)`). A page that shows only
 Message to someone not connected sets their channel to InMail and says how many credits are
-left; `state.py sent --channel inmail --subject "..."` spends one.
+left; `state.py sent --channel inmail --subject "..."` spends one. An InMail answered within
+90 days gives its credit back (LinkedIn's own help, read through a web search), and the
+balance LinkedIn shows wins over the count until the month turns: `state.py inmail-credits
+<n>` keeps it. Nobody whose card or page shows a request already Pending gets one: `people`
+and `read` record that request as sent.
 
 **No two InMails in a round built alike.** Two went out with one subject, one paragraph
 order and one close, and the person asked why the structure was identical when it is meant
