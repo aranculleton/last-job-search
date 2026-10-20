@@ -103,8 +103,28 @@ EXITS = re.compile(
     r"|\bno (?:obligation|expectation)s?\b", re.I)
 OPEN_ASK = ("Would love to hear if you have anything coming up, or know the right person to "
             "speak to.")
-EXIT_FIX = (f"an exit invites them not to reply: end on the open ask (\"{OPEN_ASK}\"); a soft "
-            "exit belongs in a follow-up, never a first message")
+# The same ask for a person whose own voice check refuses "would love to" (OWN_VOICE): the
+# fix offered must be one the check that follows passes.
+OPEN_ASK_PLAIN = ("If you have anything coming up, or know the right person to speak to, "
+                  "it'd be great to hear.")
+
+
+def open_ask() -> str:
+    """The open ask in words this person's voice check passes."""
+    try:
+        import voice_check
+    except ImportError:                       # pragma: no cover - path issue only
+        return OPEN_ASK
+    own = getattr(_NET, "OWN_VOICE", None)
+    return OPEN_ASK_PLAIN if voice_check.hard(OPEN_ASK, allow=own) else OPEN_ASK
+
+
+def exit_fix() -> str:
+    return (f"an exit invites them not to reply: end on the open ask (\"{open_ask()}\"); a "
+            "soft exit belongs in a follow-up, never a first message")
+
+
+EXIT_FIX = exit_fix()
 
 # ------------------------------------------------------------------ hedges
 
@@ -208,19 +228,40 @@ def credentials() -> list[tuple[str, re.Pattern]]:
     """(name, pattern) for what the sender holds that a note might mention as a credential:
     the profile's tools (TOOL_CATEGORIES), the ones it pins, and their certifications."""
     out = []
-    for name in getattr(_SKILLS, "PINNED", None) or ():
-        out.append((str(name), re.compile(r"\b" + re.escape(str(name)) + r"\b", re.I)))
+    pinned = getattr(_SKILLS, "PINNED", None)        # (category, item), or None
+    if isinstance(pinned, (list, tuple)) and len(pinned) == 2 and str(pinned[1]).strip():
+        name = str(pinned[1]).strip()
+        out.append((name, re.compile(r"\b" + re.escape(name) + r"\b", re.I)))
     for item in getattr(_SKILLS, "ITEMS", ()) or ():
         if len(item) > 2 and item[1] and item[0] in TOOL_CATEGORIES:
             try:
                 out.append((str(item[1]), re.compile(item[2], re.I)))
             except (re.error, TypeError):
                 continue
+    for name in certification_names():
+        # A note names a certificate by its maker and the word, rarely by its full title.
+        maker = name.split(" Certified")[0].strip() if " Certified" in name else ""
+        rx = (r"\b%s\b[^.!?]{0,60}\bcertif\w*|\bcertif\w*[^.!?]{0,30}\b%s\b"
+              % (re.escape(maker), re.escape(maker)) if maker else re.escape(name))
+        out.append((name, re.compile(rx, re.I)))
+    return out
+
+
+def certification_names() -> list[str]:
+    """The certificates in roles.py CERTIFICATIONS, as plain names: the LaTeX it is written
+    in (\\textbullet{} between them, \\kern0pt inside a name, \\textbf) taken out."""
     certs = str(getattr(_ROLES, "CERTIFICATIONS", "") or "")
-    for name in re.split(r"\\\\|;|\n", re.sub(r"\\textbf\{([^}]*)\}", r"\1", certs)):
-        name = re.sub(r"\(\d{4}\)|\\[a-z]+", "", name).strip(" .,")
+    certs = re.sub(r"\\textbf\{([^}]*)\}", r"\1", certs)
+    out = []
+    for name in re.split(r"\\textbullet\{\}|\\\\|;|\n|\u2022", certs):
+        # \kern0pt and its dimension go with the space TeX reads as part of it: "A\kern0pt WS"
+        # prints as one word.
+        name = re.sub(r"\\kern\s*-?[\d.]+\s*(?:pt|em|ex|mu)?\s?", "", name)
+        name = re.sub(r"\\[a-zA-Z]+(?:\{\})?|[{}]", "", name)
+        name = re.sub(r"\((?:\d{4}|in progress|expected[^)]*)\)", "", name, flags=re.I)
+        name = " ".join(name.split()).strip(" .,")
         if len(name) > 6:
-            out.append((name, re.compile(re.escape(name), re.I)))
+            out.append(name)
     return out
 
 
@@ -251,8 +292,9 @@ def _own() -> set:
     found = []
     for name in ("OPENER", "ABOUT_ME", "ASK", "WHO_LINE"):
         found.append(str(getattr(_NET, name, "") or ""))
-    for intents in (getattr(_NET, "TEMPLATES", None) or {}).values():
-        for variants in (intents or {}).values():
+    templates = getattr(_NET, "TEMPLATES", None)
+    for intents in (templates.values() if isinstance(templates, dict) else ()):
+        for variants in (intents.values() if isinstance(intents, dict) else ()):
             found += [str(v) for v in (variants if isinstance(variants, (list, tuple))
                                        else [variants])]
     return {_norm(s) for s in found if s.strip()}
@@ -301,7 +343,7 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
         if first_contact:
             m = EXITS.search(s)
             if m:
-                out.append(Advice("soft_exit", m.group(0), EXIT_FIX))
+                out.append(Advice("soft_exit", m.group(0), exit_fix()))
         p = provenance(s, reading)
         if p == GUESS and re.search(r"\ba team like yours\b|\buseful\b", s, re.I):
             out.append(Advice("generic_fit", s[:100],

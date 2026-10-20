@@ -199,13 +199,14 @@ UNSUPPORTED_CLAIM = getattr(_NET, "UNSUPPORTED_STATUS", None) or re.compile(r"(?
 
 _LINE_BOUND = re.compile(r"\n")
 
-# Sentence splitting mirrors `render_application.SENT_SPLIT` rather than
+# Sentence splitting follows `render_application.SENT_SPLIT` rather than
 # importing it: that module pulls in the entire resume generator, and a tone
 # check that cannot be imported without the LaTeX toolchain behind it is a tone
-# check nobody runs.
+# check nobody runs. One difference: a single capital before the full stop is an
+# initial ("J. Smith") only at a word's start, so "at QMX. I imagine" splits.
 _SENT_SPLIT = re.compile(
     r"(?<!\be\.g\.)(?<!\bi\.e\.)(?<!\bvs\.)(?<!\betc\.)(?<!\bInc\.)"
-    r"(?<!\bLtd\.)(?<![A-Z]\.)(?<=[.!?])\s+")
+    r"(?<!\bLtd\.)(?<!\b[A-Z]\.)(?<=[.!?])\s+")
 
 _GREETING = re.compile(r"^(?:hi|hey|hello|dear|good (?:morning|afternoon|evening))\b", re.I)
 _SUBJECT = re.compile(r"^subject\s*:", re.I)

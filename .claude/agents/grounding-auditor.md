@@ -31,6 +31,8 @@ the move was complete.
      allowed)
    - `python3 tools/voice_check.py <file>` (or `--json <file.json>` for a draft object)
    - for a networking message, `tools/network/compose.py`'s `validate()` with the right kind
+     and the reader (`title=` or `reader=`) when the text came from a file: a note the
+     composer returned carries its reader, a pasted one does not
 4. **The rules that are not**: the spelling variant in `profile/person.json`
    (`documents.spelling`), no em dashes, the document noun in `documents.noun` and never one
    of `documents.banned_nouns`, every candidate-specific rule in `profile/CLAUDE.md` (client

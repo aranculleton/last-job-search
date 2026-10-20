@@ -93,3 +93,6 @@ Bo Venn                 # invented, tests/test_a_reading_gives_reasons_that_are_
 Hi Bo                   # the invented Bo Venn greeted, tests/test_a_note_is_honest_warm_and_fitted_to_its_reader.py
 Hi Cy                   # invented, the same test
 Wren Allard             # invented, tests/test_reads_react_to_signals_not_a_guess.py
+Northern Data Talk      # invented event, tests/test_a_note_is_honest_warm_and_fitted_to_its_reader.py
+Forecasting Panel       # invented event, the same test
+Ops Keynote Night       # invented event, the same test

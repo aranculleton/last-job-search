@@ -201,7 +201,10 @@ def merge_json(base, ours, theirs, path: str = "", later=None,
     if ours == base:
         return theirs, []
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
-        side = later(path, ours, theirs) if later and path else ""
+        # Only a single value is settled by the later change: a list both sides added to
+        # would lose the other side's items, so it is left for a person as before.
+        scalar = all(v is None or isinstance(v, (str, int, float, bool)) for v in (ours, theirs))
+        side = later(path, ours, theirs) if later and path and scalar else ""
         if side:
             kept, other = (ours, theirs) if side == "ours" else (theirs, ours)
             if settled is not None:
@@ -266,7 +269,8 @@ _THEIRS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD")
 def _git(*args) -> str:
     import subprocess
     try:
-        r = subprocess.run(["git", *args], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["git", *args], capture_output=True, text=True, timeout=30,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return r.stdout if r.returncode == 0 else ""
@@ -321,10 +325,17 @@ def git_later(path: str):
                 cache[commit] = _keyed(rows, fields) if fields else {}
         got = cache[commit]
         if name.endswith(".json"):
-            for part in key.split("/"):
-                if not isinstance(got, dict) or part not in got:
+            # A key can hold a slash itself (seen_jobs.json is keyed by URL), so the
+            # path is walked by the longest key at each level that starts what is left.
+            rest = key
+            while rest:
+                if not isinstance(got, dict):
                     return None
-                got = got[part]
+                part = max((k for k in got if rest == k or rest.startswith(k + "/")),
+                           key=len, default=None)
+                if part is None:
+                    return None
+                got, rest = got[part], rest[len(part) + 1:]
             return got
         row = got.get(key)
         return None if row is None else row.get(field)

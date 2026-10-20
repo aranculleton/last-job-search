@@ -250,6 +250,56 @@ make sense to somebody whose repo just received it.
 - **Two chats on one computer no longer take the resume fonts from each other.**
   `setup_env.sh` never creates, changes or removes anything in your home directory; every
   compile uses that copy's own `texmf/`. No profile upgrade: nothing in your repo changes.
+- **A contact's reply you paste in is not taken as your reaction.** The reaction hook reads
+  only your own words: not text after "/reply", after "they replied:", in a quote or a code
+  block, a reminder the chat adds, a summary of earlier turns or a notification. Curly
+  apostrophes from a phone count ("I don’t like this"). "Sounds like a great fit" and
+  "awkward timing" are no longer reactions; "that's awkward" and "sounds like a bot" are.
+- **A reaction waiting in the chat never fails a test of yours**, and one recorded from
+  Python is not put back on the list at the end of the turn. A profile rule adopted by an
+  update clears no reaction of yours; a skip is kept through the next record; `learned.py
+  retire` takes every number a contradiction names; a rule banning what your profile already
+  bans no longer reads as contradicting it.
+- **`seen_jobs.json` merges by the later change too.** Its keys are web addresses, which the
+  merge split at every slash, so it always stopped for a person. A list both chats added to
+  is still left for a person, never settled by one side, and the merge reads git's output as
+  UTF-8 whatever the computer's language setting.
+- **A send that is refused records no edit**, so the retry does not record it twice. An InMail
+  draft logs its own subject line. `unsend` puts an InMail back with its subject and its
+  paragraphs, and leaves someone who wrote to you first owed a reply, not "never contacted".
+  `open_actions.py` asks for the words with a send it is unsure went.
+- **The chat that pushed its claim on an update keeps it** when the other chat's sync lands
+  first, instead of both waiting on each other for 20 minutes. The claim push keeps your own
+  `core.sshCommand`.
+- **Your own tests that cannot run are not run again every time the upgrade check looks**.
+- **`compose.py check` and `compose.py read-aloud` run.** Both crashed with a NameError.
+- **The app's own asks pass your voice check.** Its default asks for a decision-maker or a
+  recruiter said "would love to", which the voice check refuses unless your `OWN_VOICE`
+  allows it; where it does not, the composer says it another way, and so does `advise()`'s
+  fix for an exit line.
+- **A note is checked for the reader it was written for.** `validate()` and `advise()` read
+  the reader from the note itself, so a decision-maker's note is no longer refused for the
+  work-authorization line a peer's would not carry.
+- **The composer's own "I saw your name on <event>'s speaker list" is no longer refused** as a
+  claim to have read their work, and a referrer's name after "Hi <name>," keeps its capital.
+- **Ordinary sentences are no longer read as asking for the job**: "I want to understand how
+  your role changed", "I like to apply statistics", "they are slow hiring", and interest in
+  someone's move into a role. "I want a <role>" and "I'd love to apply" still are.
+- **Notes that share only your own lines are not called alike.** The batch's "same shape"
+  check leaves out your opener, your line about you and your ask, which every note carries
+  by your choice.
+- **A sentence ends after an acronym** ("at QMX. I imagine..."), so a hedge or a late
+  employer in the next sentence is read as its own.
+- **Credentials are read from your profile correctly**: the pinned skill by its name (not its
+  category, which flagged "bi-weekly"), and certificates from their LaTeX.
+- **A Message button with no degree on the page spends no InMail credit.**
+- **A stop or a short list is never lost** when this computer's ledger cannot be written: it
+  goes to the older file every reader still reads, and `move-runtime` moves nothing it could
+  not move. Moving an older copy's list merges it with today's.
+- **Settings written as words or strings are read as meant** (`"no"`, `"130"`), and one that
+  cannot be read keeps its default rather than breaking every import. A malformed
+  `TEMPLATES` no longer breaks drafting.
+- **The app's tests never write to a reading ledger you exported** (`LJS_LEDGER`).
 
 ## [3.7.0] - 2026-10-19
 

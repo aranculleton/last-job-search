@@ -704,6 +704,16 @@ def test_own_tests_reading_the_apps_code_or_pinning_changed_behaviour_are_kept_i
     sync_app.record_own_tests(str(repo), [(
         "test_reads::test_it", "AttributeError: module 'round_step' has no attribute 'gone'")])
     assert U.by_id("own-tests").pending() == ""
+    # Tests that could not run at all are not run again on every look: the record says so.
+    sync_app.record_own_tests(str(repo), [("test_reads::test_it", "AssertionError: 2 != 1")])
+    (tests / "test_reads.py").write_text("import nothing_called_this\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-qam", "broken"], check=True)
+    ran = []
+    monkeypatch.setattr(sync_app, "own_test_failures", lambda root: ran.append(1))   # None
+    for _ in range(3):
+        U.by_id("own-tests").pending()
+    assert len(ran) == 1 and sync_app.own_tests_record(str(repo))["could_not_run"]
 
 
 def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profile, tmp_path,

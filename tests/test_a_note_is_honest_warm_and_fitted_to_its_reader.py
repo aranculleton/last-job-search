@@ -269,3 +269,141 @@ def test_a_rule_the_person_recorded_outranks_a_check(monkeypatch):
     monkeypatch.setattr(learned, "overrides", lambda: {"asks_for_the_job"})
     assert "asks_for_the_job" not in {v.rule for v in compose.validate(note, "connection")}
     assert "your_rule_outranks" in rules(compose.advise(note, "connection"))
+
+
+# ------------------------------------------------------------ what the audit found
+
+def test_the_check_and_read_aloud_commands_run(tmp_path):
+    import subprocess
+    note = tmp_path / "note.txt"
+    note.write_text("Hi Ana, I came across your profile at Larkspur. Would you have 15 "
+                    "minutes for a call?\n", encoding="utf-8")
+    for args in (["check", str(note)], ["read-aloud", str(note), str(note)]):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "compose.py"),
+                            *args], capture_output=True, text=True, env=os.environ)
+        assert "NameError" not in r.stderr and r.returncode in (0, 1), r.stderr
+
+
+def test_the_apps_own_asks_pass_a_voice_check_that_refuses_would_love_to(monkeypatch):
+    import re
+    monkeypatch.setattr(compose, "_OWN_VOICE", re.compile(r"(?!x)x"))
+    for reader in ("decision_maker", "recruiter"):
+        for key in "abcdef":
+            ask = compose.phrase("ask", reader, key)
+            assert ask and compose._voice_ok(ask), (reader, ask)
+            m = compose.inmail("Wren Halloway", how_found=FOUND, evidence="Cut error 12%.",
+                               reader=reader, variant_key=key, opener="")
+            assert "love to" not in m.body.lower()
+    monkeypatch.setattr(advice, "_NET", None)
+    assert "love to" not in advice.exit_fix().lower()
+
+
+def test_a_note_is_checked_for_the_reader_it_was_written_for():
+    import copy
+    import pickle
+    n = compose.first_note("Wren Halloway", how_found=FOUND, title="Director of Analytics",
+                           about_me="")
+    assert n.reader == "decision_maker"
+    assert compose.validate(n, "connection", name="Wren Halloway") == []
+    m = compose.inmail("Wren Halloway", how_found=FOUND, evidence="Cut error 12%.",
+                       title="Director of Analytics", variant_key="x")
+    assert compose.validate(m, "inmail") == []
+    for x in (n, m):
+        assert pickle.loads(pickle.dumps(x)) == x and copy.deepcopy(x) == x
+    assert copy.deepcopy(m).subject == m.subject
+
+
+def test_the_composers_own_how_found_line_is_never_a_claim_to_have_looked():
+    for event in ("Northern Data Talk", "the Forecasting Panel", "Ops Keynote Night"):
+        line = compose.how_found_line("event", event=event)
+        note = compose.first_note("Wren Halloway", how_found=line, about_me="",
+                                  ask="Would you have 15 minutes for a call?")
+        assert line.split()[0] in note
+
+
+def test_a_referrer_keeps_the_capital_of_their_name():
+    line = compose.how_found_line("referral", referrer="Ana")
+    note = compose.first_note("Wren Halloway", how_found=line, shape="brief",
+                              title="Director of Analytics")
+    assert "Hi Wren, Ana suggested" in note
+    assert compose.first_note("Wren Halloway", how_found=FOUND, their=None)
+
+
+def test_a_malformed_template_setting_never_breaks_drafting(monkeypatch):
+    import types
+    monkeypatch.setattr(advice, "_NET", types.SimpleNamespace(TEMPLATES={"any": ["a", "b"]}))
+    advice.check("Hi Ana, hope you're well.", "connection")
+    monkeypatch.setattr(advice, "_NET", types.SimpleNamespace(TEMPLATES=["a"]))
+    advice.check("Hi Ana, hope you're well.", "connection")
+    monkeypatch.setattr(compose, "TEMPLATES", {"any": ["a", "b"]})
+    assert compose.phrase("ask", "peer", "k", fallback="Up for a call?") == "Up for a call?"
+
+
+def test_a_pinned_skill_is_its_item_and_a_certificate_is_read_from_its_latex(monkeypatch):
+    import types
+    monkeypatch.setattr(advice, "_SKILLS", types.SimpleNamespace(PINNED=("bi", "Looker"),
+                                                                 ITEMS=()))
+    monkeypatch.setattr(advice, "_ROLES", types.SimpleNamespace(CERTIFICATIONS=(
+        r"Acme Certified Data Engineer (2026) \textbullet{} A\kern0pt WX Certified ML "
+        r"Engineer (2026) \textbullet{} dbt Analytics Engineering (in progress)")))
+    assert advice.certification_names() == ["Acme Certified Data Engineer",
+                                            "AWX Certified ML Engineer",
+                                            "dbt Analytics Engineering"]
+    names = [n for n, _rx in advice.credentials()]
+    assert "Looker" in names and "bi" not in names
+    assert not advice.without_purpose("We run a bi-weekly pricing review.")
+    assert advice.without_purpose("I am AWX certified as well.")
+
+
+def test_a_sentence_ends_after_an_acronym():
+    assert tone.sentences("I was at QMX. I imagine that taught you a lot. J. Smith "
+                          "agreed.") == ["I was at QMX.", "I imagine that taught you a lot.",
+                                         "J. Smith agreed."]
+
+
+def test_the_persons_own_lines_are_not_a_shared_shape(monkeypatch):
+    monkeypatch.setattr(compose, "ABOUT_ME", "I work in supply-chain analytics in Manchester")
+    monkeypatch.setattr(compose, "ASK", "Would you have 15 minutes for a few questions sometime")
+    a = compose.first_note("Ana Rook", "We both worked at Oakmere Foods", their=("Oakmere",))
+    b = compose.first_note("Bo Venn", "We both went to Leeds", their=("Leeds",))
+    assert compose.alike({"a": a, "b": b}) == []
+
+
+def test_a_message_button_with_no_degree_read_spends_no_credit():
+    import reading
+    assert reading.channel_for({"reach": "message"}) == ""
+    assert reading.channel_for({"reach": "message", "degree": "2nd"}) == "inmail"
+
+
+@pytest.mark.parametrize("text", [
+    "I want to understand how your role changed.",
+    "I want to hear more. Your role sounds broad.",
+    "I'm interested in your move from finance into a product role.",
+    "I like to apply statistics to depot planning.",
+    "They are slow hiring at the moment.",
+])
+def test_ordinary_peer_sentences_are_not_job_asks(text):
+    assert not compose.JOB_ASK.search(text)
+
+
+@pytest.mark.parametrize("text", [
+    "I want a senior forecasting role.", "I want to move into a product role.",
+    "I'd love to apply for it.", "Is Larkspur hiring?", "I'm interested in the analyst role.",
+])
+def test_the_job_asks_are_still_found(text):
+    assert compose.JOB_ASK.search(text)
+
+
+def test_a_spoken_rewrite_that_lowers_an_opening_word_or_has_an_accent_is_read_right():
+    orig = "Hi Éloïse, we both worked at Oakmere. Curious how you found the move?"
+    assert compose.read_aloud(orig, orig.replace("Curious", "I'm curious"))["ok"]
+    res = compose.read_aloud(orig, orig.replace("Éloïse", "Élodie"))
+    assert "Éloïse" in res["lost"] and "Élodie" in res["added"]
+
+
+def test_settings_written_as_words_or_strings_are_read_as_meant():
+    assert compose._per_reader({"peer": "no", "recruiter": "yes"},
+                               {"recruiter": False, "decision_maker": True, "peer": True}) == \
+        {"recruiter": True, "decision_maker": True, "peer": False}
+    assert compose._per_reader({"peer": "130"}, {"peer": 100})["peer"] == 130
+    assert compose._as("two hundred", 220) == 220

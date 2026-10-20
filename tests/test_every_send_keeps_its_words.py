@@ -122,6 +122,56 @@ def test_an_edit_before_sending_is_recorded_as_their_preference(here, capsys):
     assert e and e[0]["sent"] == NOTE
 
 
+def test_a_refused_send_records_no_edit_and_the_retry_records_it_once(here):
+    contacts, threads = here / "c.csv", here / "t.csv"
+    state.save_contacts([_c("ana_rook")], str(contacts))
+    state.save_threads([], str(threads))
+    reading.write_draft("ana_rook", "Subject: Analyst, ex-Kestrel\n\nHi Ana, I am a data "
+                        "analyst in Leeds.", "Ana Rook")
+    sent_file = here / "sent.txt"
+    sent_file.write_text("Hi Ana, I'm a data analyst in Leeds.", encoding="utf-8")
+    args = ["sent", "ana_rook", "--text-file", str(sent_file), "--channel", "inmail",
+            "--contacts", str(contacts), "--threads", str(threads), "--today", TODAY.isoformat()]
+    state.main(args)                                     # no subject: refused
+    assert [r for r in learned.load() if r.get("kind") == "edit"] == []
+    assert state.main(args + ["--subject", "Analyst, ex-Kestrel"]) == 0
+    edits = [r for r in learned.load() if r.get("kind") == "edit"]
+    assert len(edits) == 1 and "Subject" not in edits[0]["draft"]
+
+
+def test_an_inmail_draft_logs_its_own_subject(here):
+    contacts, threads = here / "c.csv", here / "t.csv"
+    state.save_contacts([_c("ana_rook")], str(contacts))
+    state.save_threads([], str(threads))
+    reading.write_draft("ana_rook", "Subject: Analyst, ex-Kestrel\n\nHi Ana,\n\nA second "
+                        "paragraph.", "Ana Rook")
+    assert state.main(["sent", "ana_rook", "--draft", "--channel", "inmail", "--contacts",
+                       str(contacts), "--threads", str(threads), "--today",
+                       TODAY.isoformat()]) == 0
+    row = state.load_threads(str(threads))[0]
+    assert row["subject"] == "Analyst, ex-Kestrel"
+    assert row["full_text"] == "Hi Ana,\n\nA second paragraph."
+
+
+def test_an_unsent_inmail_comes_back_with_its_subject_and_paragraphs(here):
+    contacts, threads = [_c("ana_rook")], []
+    state.sent(contacts, threads, "ana_rook", TODAY, channel="inmail", subject="Analyst",
+               text="Hi Ana,\n\nSecond   paragraph here.")
+    got = state.unsend(contacts, threads, "ana_rook", TODAY)
+    text = open(got["draft"]).read()
+    assert "Subject: Analyst\n\nHi Ana,\n\nSecond paragraph here." in text
+
+
+def test_unsending_to_someone_who_wrote_first_keeps_their_message_owed(here):
+    contacts = [_c("ana_rook")]
+    threads = [{"contact_id": "ana_rook", "date": "2026-10-19", "direction": "in",
+                "channel": "connection", "scenario": "reply", "summary": "",
+                "full_text": "Hi, saw your post."}]
+    state.sent(contacts, threads, "ana_rook", TODAY, text=NOTE)
+    state.unsend(contacts, threads, "ana_rook", TODAY)
+    assert contacts[0]["status"] == "replied_needs_response"
+
+
 def test_nothing_is_ever_recorded_into_the_example_person(monkeypatch):
     monkeypatch.setenv(person.ENV, os.path.join(ROOT, "profile.example"))
     person._modules.clear()

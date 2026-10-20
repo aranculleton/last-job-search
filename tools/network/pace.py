@@ -356,8 +356,9 @@ def add_load(kind: str, at: str, gap: float, brk: bool, ident: str = "",
     update(lambda d: d.setdefault("loads", []).append(rec))
 
 
-def put(key: str, value_) -> None:
-    update(lambda d: d.__setitem__(key, value_))
+def put(key: str, value_) -> bool:
+    """Set one key; False when the ledger could not be written."""
+    return bool(update(lambda d: d.__setitem__(key, value_)))
 
 
 # ------------------------------------------------------------------ friction

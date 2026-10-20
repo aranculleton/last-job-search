@@ -171,3 +171,92 @@ def test_a_long_transcript_is_read_from_its_end(profile, tmp_path, monkeypatch):
     lines = learned._tail_lines(path)
     assert len(lines) < 10                       # the last finished turn on, not the file
     assert _stop(path) == {}
+
+
+# ------------------------------------------------------------------ what the audit found
+
+def test_a_contacts_words_pasted_in_are_not_the_persons_reaction():
+    for text in ("/reply Juno\nThat sounds like a great fit. I'd prefer a call Tuesday.",
+                 "Juno replied: we don't want to move forward, awkward timing",
+                 "thank you so much", "Why did you pick that employer?",
+                 "show me the weird ones", "I hate to say it, but run the round",
+                 "<system-reminder>too formal</system-reminder> run the round",
+                 "> too formal, all of them\nThat was their note to me."):
+        assert learned.reaction(text) == "", text
+    for text in ("I’d rather keep it short", "don’t say that",
+                 "Here’s what I sent", "too formal. She replied: fine",
+                 "that's awkward", "way too many hedges", "sounds like a bot"):
+        assert learned.reaction(text), text
+
+
+def test_a_reaction_waiting_in_the_chat_never_reaches_a_test(profile, monkeypatch):
+    learned.note_reaction("too formal", "too formal")
+    assert learned.pending()
+    monkeypatch.delenv("LJS_STATE")            # a test of the person's own, run by the sync
+    assert learned._reactions_path() is None and learned.pending() == []
+
+
+def test_a_reaction_recorded_from_python_is_not_put_back_by_the_end_of_the_turn(profile,
+                                                                               tmp_path):
+    words = "these all open the same way, too samey"
+    learned.hook({"hook_event_name": "UserPromptSubmit", "prompt": words})
+    learned.record("voice", words, "vary the opener", today="2026-10-20")
+    turn = TURN_ONE + [_line("user", text=words),
+                       _line("tool", command="python3 -c 'import learned; learned.record(...)'"),
+                       _line("result")]
+    assert _stop(_transcript(tmp_path, turn)) == {}
+    turn[-2] = _line("tool", command="python3 tools/network/compose.py ...")   # unseen
+    assert _stop(_transcript(tmp_path, turn)) == {}        # answered stays answered
+    learned.hook({"hook_event_name": "UserPromptSubmit", "prompt": words})
+    assert len(learned.pending()) == 1                     # said again: a new reaction
+
+
+def test_an_upgrade_adopting_profile_rules_clears_no_reaction(profile):
+    learned.note_reaction("too formal", "too formal")
+    learned.record("documents", "a rule in profile/CLAUDE.md", "never write \"relocating\"",
+                   never_say=["relocating"], answers=False)
+    assert len(learned.pending()) == 1
+
+
+def test_a_skip_survives_the_next_record(profile):
+    learned.skip("that's not how I found him", "a fact about one contact")
+    learned.record("voice", "too long", "shorter notes")
+    assert learned._data()["skipped"][0]["why"] == "a fact about one contact"
+
+
+def test_retire_takes_every_number_the_contradiction_names(profile, capsys):
+    for n in (1, 2):
+        learned.record("voice", f"rule {n}", f"open with line {n}",
+                       applied_to=["networking.py OPENER"])
+    assert learned.main(["retire", "1", "2"]) == 0
+    assert [r["status"] for r in learned.load()] == ["retired", "retired"]
+
+
+def test_a_rule_that_bans_what_the_profile_bans_agrees_with_it(profile, monkeypatch):
+    monkeypatch.setattr(learned, "profile_never_phrases",
+                        lambda text=None: [("relocating", "never write relocating")])
+    e = learned.record("voice", "stop saying relocating",
+                       "never describe the move as relocating")
+    assert e["conflicts"] == []
+    e = learned.record("voice", "say I'm relocating", "open with: I'm relocating to Leeds")
+    assert e["conflicts"]
+
+
+def test_the_example_person_is_never_held(tmp_path, monkeypatch):
+    monkeypatch.setenv(person.ENV, os.path.join(ROOT, "profile.example"))
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))
+    person._modules.clear()
+    person._data.clear()
+    path = _transcript(tmp_path, TURN_ONE + [_line("user", text="too formal")])
+    assert _stop(path) == {}
+    person._modules.clear()
+    person._data.clear()
+
+
+def test_a_compaction_summary_and_a_notification_are_not_the_persons_words(profile, tmp_path):
+    summary = dict(_line("user", text="Summary: the person said too formal, and rude."),
+                   isCompactSummary=True, isVisibleInTranscriptOnly=True)
+    note = dict(_line("user", text="the agent says these read like a template"),
+                origin={"kind": "task-notification"})
+    turn = TURN_ONE + [summary, note, _line("user", text="carry on with the round")]
+    assert _stop(_transcript(tmp_path, turn)) == {}

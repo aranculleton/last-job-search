@@ -994,10 +994,31 @@ def signed_in_today(today: datetime.date | None = None) -> bool:
                for got in (_json(person.state(*SIGNIN_FILE)), pace.load().get("signed_in")))
 
 
+def _keep(rel: tuple, key: str, rec) -> bool:
+    """Keep `rec` in this computer's ledger, or, where the ledger cannot be written, in the
+    older copy's file here, which every reader still reads: a stop or a short list that
+    silently went nowhere let the next read go ahead. True when it reached the ledger."""
+    if pace.put(key, rec):
+        return True
+    _write_file(rel, rec)
+    return False
+
+
+def _write_file(rel: tuple, rec) -> None:
+    path = person.state(*rel)
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(rec, fh, indent=1)
+    except OSError as e:
+        raise SystemExit(f"reading: neither the ledger nor {path} could be written ({e}); "
+                         "nothing was recorded") from e
+
+
 def mark_signed_in(now: datetime.datetime | None = None) -> None:
     now = now or datetime.datetime.now()
     rec = {"date": now.date().isoformat(), "at": now.isoformat(timespec="seconds")}
-    pace.put("signed_in", rec)
+    _keep(SIGNIN_FILE, "signed_in", rec)
 
 
 SIGNIN_SAY = ("LinkedIn's sign-in is open in the browser pane. Sign in there yourself, then "
@@ -1527,9 +1548,13 @@ def page_read(kind: str, url: str = "", now: datetime.datetime | None = None,
     if load_seconds is not None:
         rec["load_seconds"] = float(load_seconds)
     week = (now.date() - datetime.timedelta(days=7)).isoformat()
-    pace.update(lambda d: d.__setitem__("pages", [
-        p for p in d.get("pages") or [] if isinstance(p, dict)
-        and str(p.get("at", ""))[:10] >= week] + [rec]))
+    if not pace.update(lambda d: d.__setitem__("pages", [
+            p for p in d.get("pages") or [] if isinstance(p, dict)
+            and str(p.get("at", ""))[:10] >= week] + [rec])):
+        old = _json(person.state(*PAGES_FILE))       # the ledger failed: counted here
+        reads = [p for p in old.get("reads") or [] if isinstance(p, dict)
+                 and str(p.get("at", ""))[:10] >= week] + [rec]
+        _write_file(PAGES_FILE, {"reads": reads})
     note_load(kind, rec["at"], gap, brk, rec["url"], load_seconds, now)
     return rec
 
@@ -1549,12 +1574,18 @@ def move_runtime() -> list:
                     if isinstance(x, dict)}
             extra = [x for x in got.get("reads") or []
                      if isinstance(x, dict) and (x.get("at"), x.get("url")) not in have]
-            if extra:
-                pace.update(lambda d, extra=extra: d.__setitem__(
-                    "pages", (d.get("pages") or []) + extra))
+            if extra and not pace.update(lambda d, extra=extra: d.__setitem__(
+                    "pages", (d.get("pages") or []) + extra)):
+                continue                        # kept where it is until the ledger takes it
         elif got and str(got.get("date") or "") >= str(
                 (pace.load().get(keys[rel]) or {}).get("date") or ""):
-            pace.put(keys[rel], got)
+            if rel == SHORTLIST_FILE:           # the same day's list in both: merged
+                have = pace.load().get("shortlist") or {}
+                if have.get("date") == got.get("date"):
+                    ids = list(have.get("ids") or [])
+                    got = dict(got, ids=ids + [i for i in got.get("ids") or [] if i not in ids])
+            if not pace.put(keys[rel], got):
+                continue
         os.remove(p)
         moved.append(os.path.join(*rel))
     return moved
@@ -1587,8 +1618,7 @@ def _json(path: str) -> dict:
 def _write_stop(reason: str, today: datetime.date | None = None) -> str:
     rec = {"date": (today or datetime.date.today()).isoformat(),
            "reason": " ".join(str(reason or "").split())[:200]}
-    pace.put("stop", rec)
-    return pace.ledger_dir()
+    return pace.ledger_dir() if _keep(STOP_FILE, "stop", rec) else person.state(*STOP_FILE)
 
 
 def _signal_kind(reason: str) -> str:
@@ -1791,7 +1821,8 @@ def _shortlist_file(today: datetime.date) -> list:
 
 def _save_shortlist(ids: list, today: datetime.date) -> None:
     rec = {"date": today.isoformat(), "ids": list(ids)}
-    pace.put("shortlist", rec)
+    if not _keep(SHORTLIST_FILE, "shortlist", rec):
+        return                  # the ledger failed: the file here holds the list
     old = person.state(*SHORTLIST_FILE)
     if os.path.exists(old):
         os.remove(old)          # an older copy's file: the ledger holds the list now
@@ -2387,10 +2418,7 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # The phrase bank's own variants, and the person's TEMPLATES, are the asks and openers
     # a batch is meant to vary between.
     bank = [v for intent in ("ask", "pointer", "opener")
-            for rt in compose.READER_TYPES
-            for v in (compose._variants(intent, rt) or list(
-                (compose.BANK.get(intent) or {}).get(rt)
-                or (compose.BANK.get(intent) or {}).get("any") or ()))]
+            for rt in compose.READER_TYPES for v in compose.options(intent, rt)]
     own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x] + bank
     per = {cid: _sentences(t) for cid, t in notes.items()}
     limit = max(ALIKE_MIN, int(len(notes) * ALIKE_SHARE))
@@ -2625,7 +2653,9 @@ def channel_for(reading: dict) -> str:
     for a first-degree connection, "connection" where Connect shows, else ""."""
     reach, degree = reading.get("reach") or "", reading.get("degree") or ""
     if reach == "message":
-        return "message" if degree == "1st" else "inmail"
+        # Only a degree the page showed says they are not connected: with none read, a
+        # Message button may be a connection's, and no credit is assumed.
+        return "message" if degree == "1st" else ("inmail" if degree else "")
     if reach.startswith("request"):
         return "connection"
     return ""

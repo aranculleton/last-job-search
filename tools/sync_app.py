@@ -983,14 +983,22 @@ def record_own_tests(root: str, failures) -> None:
     """What the last run of the person's own tests found, for the own-tests upgrade: each
     failing test, its message, and the removed part of the app it names, if any."""
     mark = _mark_path(root)
-    if not mark or failures is None:
+    if not mark:
         return
+    if failures is None:
+        # The tests could not run (pytest missing, or a file that does not import): what
+        # the last run found stands, stamped with this tree so the upgrade's check does
+        # not run the whole suite again every time it looks.
+        got = own_tests_record(root) or {}
+        out = {"tree": tests_tree(root), "failures": got.get("failures") or [],
+               "could_not_run": True}
+    else:
+        out = {"tree": tests_tree(root),
+               "failures": [[n, (m or "")[:300], _gone(root, m)] for n, m in failures]}
     try:
         with open(os.path.join(os.path.dirname(mark), OWN_TESTS_RECORD), "w",
                   encoding="utf-8") as fh:
-            json.dump({"tree": tests_tree(root),
-                       "failures": [[n, (m or "")[:300], _gone(root, m)] for n, m in failures]},
-                      fh)
+            json.dump(out, fh)
     except OSError:
         pass
 

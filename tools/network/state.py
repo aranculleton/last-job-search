@@ -1225,7 +1225,7 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
         raise ValueError(f"{contact.get('name') or cid} already has a message logged on "
                          f"{rows[-1].get('date')}: nothing to record")
     channel = str(channel or "connection").strip().lower()
-    body = " ".join(str(text or "").split())
+    body = _paragraphs(text)
     subject = " ".join(str(subject or "").split())
     if not outside:
         if not body and (channel != "connection" or note):
@@ -1276,6 +1276,26 @@ def _drop_draft(contact_id: str) -> bool:
     return False
 
 
+def _paragraphs(text) -> str:
+    """The words as sent, spacing tidied inside each paragraph and the paragraphs kept:
+    an InMail's shape is its paragraphs, and a note put back by unsend keeps them."""
+    parts = [" ".join(p.split()) for p in re.split(r"\n\s*\n", str(text or ""))]
+    return "\n\n".join(p for p in parts if p)
+
+
+SUBJECT_LINE = "Subject:"
+
+
+def split_subject(text: str) -> tuple[str, str]:
+    """(subject, body) of a draft written as compose.InMail writes one: a first line
+    "Subject: ...", a blank line, then the body. ("", text) for anything else."""
+    t = str(text or "").lstrip()
+    if not t.startswith(SUBJECT_LINE):
+        return "", str(text or "")
+    first, _, rest = t.partition("\n")
+    return first[len(SUBJECT_LINE):].strip(), rest.strip()
+
+
 def _first_out(threads, cid) -> int | None:
     rows = [i for i, r in enumerate(threads)
             if str(r.get("contact_id") or "").strip() == cid and _direction(r) == "out"]
@@ -1301,7 +1321,7 @@ def resent(contacts, threads, contact_id, today, text="", date=None, subject="")
     before = row.get("full_text") or ""
     old_day = row.get("date")
     if str(text or "").strip():
-        row["full_text"] = " ".join(str(text).split())
+        row["full_text"] = _paragraphs(text)
         if row.get("scenario") == OUTSIDE_SCENARIO:
             row["scenario"] = "connection_note"
     if subject:
@@ -1338,12 +1358,14 @@ def unsend(contacts, threads, contact_id, today) -> dict:
         raise ValueError(f"{contact.get('name') or cid} replied after it ({later[0].get('date')}),"
                          " so it went: correct it with state.py resent instead")
     del threads[i]
-    left = [r for r in threads if str(r.get("contact_id") or "").strip() == cid
-            and _direction(r) == "out"]
+    theirs = [r for r in threads if str(r.get("contact_id") or "").strip() == cid]
+    left = [r for r in theirs if _direction(r) == "out"]
     if not left:
         contact["first_contacted"] = ""
-        contact["status"] = "not_contacted"
-        contact["next_action"] = "Send: the note in their draft"
+        # Someone who wrote first still has a thread: what it says, not "never contacted".
+        contact["status"] = derive_status(theirs) if theirs else "not_contacted"
+        contact["next_action"] = ("Send: the note in their draft" if not theirs else
+                                  "Reply: the note in their draft answers their message")
         contact["next_action_due"] = ""
     else:
         contact["next_action_due"] = add_business_days(
@@ -1351,9 +1373,12 @@ def unsend(contacts, threads, contact_id, today) -> dict:
             schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
     restored = ""
     if row.get("full_text"):
+        words = row["full_text"]
+        if str(row.get("subject") or "").strip():
+            words = f"{SUBJECT_LINE} {row['subject']}\n\n{words}"   # as compose writes one
         try:
             import reading
-            restored = reading.write_draft(cid, row["full_text"], contact.get("name") or "")
+            restored = reading.write_draft(cid, words, contact.get("name") or "")
         except (ImportError, OSError, ValueError):
             restored = ""
     return {"row": row, "draft": restored}
@@ -1546,27 +1571,29 @@ def _cli_sent(argv) -> int:
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
     for cid in a.contact_ids:
-        text = ""
+        text, before, subject = "", None, a.subject
         if a.text_file:
             with open(a.text_file, encoding="utf-8") as fh:
                 text = fh.read()
-            _learn_edit(cid, text)
+            before = _draft_of(cid)
         elif a.draft:
-            import reading
-            try:
-                with open(reading.draft_path(cid), encoding="utf-8") as fh:
-                    text = fh.read()
-            except OSError:
+            text = _draft_of(cid)
+            if text is None:
                 print(f"  not recorded: {cid} has no draft to log")
                 continue
-            if text.startswith(reading.WAITS_ON_A_READ):
-                text = text.split("\n\n", 1)[-1]
+        drafted_subject, body = split_subject(text)
+        if drafted_subject:                      # an InMail draft carries its subject line
+            text, subject = body, subject or drafted_subject
+        if before is not None:                   # the edit is to the words, not the subject
+            before = split_subject(before)[1]
         try:
             row = sent(contacts, threads, cid, a.today, date=a.date or None, channel=a.channel,
-                       text=text, outside=a.outside, note=not a.no_note, subject=a.subject)
+                       text=text, outside=a.outside, note=not a.no_note, subject=subject)
         except ValueError as e:
             print(f"  not recorded: {e}")
             continue
+        if before is not None:                   # recorded once the send is, never twice
+            _learn_edit(cid, text, draft=before)
         done += 1
         print(f"  {cid}: {row['summary'].lower()} on {row['date']}; awaiting their reply, "
               "draft removed")
@@ -1584,16 +1611,24 @@ def _cli_sent(argv) -> int:
     return 0 if done else 1
 
 
+def _draft_of(cid: str) -> str | None:
+    """Their queued draft's words, or None when there is none."""
+    try:
+        import reading
+        with open(reading.draft_path(cid), encoding="utf-8") as fh:
+            draft = fh.read()
+    except (ImportError, OSError, ValueError):
+        return None
+    if draft.startswith(reading.WAITS_ON_A_READ):
+        draft = draft.split("\n\n", 1)[-1]
+    return draft
+
+
 def _learn_edit(cid: str, sent_text: str, draft: str | None = None) -> None:
     """The person's own edit to a draft, recorded as a reaction by itself."""
     if draft is None:
-        try:
-            import reading
-            with open(reading.draft_path(cid), encoding="utf-8") as fh:
-                draft = fh.read()
-            if draft.startswith(reading.WAITS_ON_A_READ):
-                draft = draft.split("\n\n", 1)[-1]
-        except (ImportError, OSError, ValueError):
+        draft = _draft_of(cid)
+        if draft is None:
             return
     try:
         import learned

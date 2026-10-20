@@ -245,6 +245,40 @@ def test_a_claim_is_never_staked_over_a_sync_that_landed(tmp_path, monkeypatch, 
     assert P.owner_elsewhere() == ""                  # so a, whose sync landed, keeps them
 
 
+def test_the_chat_that_claimed_keeps_the_update_when_the_other_lands_first(tmp_path,
+                                                                             monkeypatch):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    monkeypatch.setattr(P, "ROOT", a)
+    assert P.push_claim() == "claimed"
+    monkeypatch.setattr(P, "ROOT", b)
+    assert P.push_claim() == "taken"
+    assert P.owner_elsewhere() != ""                  # b waits on a's claim
+    _git(b, "push", "-q", "origin", "HEAD:master")    # and lands its sync first
+    monkeypatch.setattr(P, "ROOT", a)
+    P.fetch_master()
+    assert P.owner_elsewhere() == ""                  # a is not told to wait on b
+
+
+def test_a_claim_push_keeps_the_persons_own_ssh_command(tmp_path, monkeypatch):
+    a, _b = _two_chats_one_update(tmp_path)
+    _people(a)
+    _git(a, "config", "core.sshCommand", "ssh -i ~/.ssh/work_key")
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    monkeypatch.setattr(P, "ROOT", a)
+    seen = {}
+    real = subprocess.run
+
+    def run(cmd, *args, **kw):
+        if "push" in cmd:
+            seen["ssh"] = kw["env"]["GIT_SSH_COMMAND"]
+        return real(cmd, *args, **kw)
+
+    monkeypatch.setattr(P.subprocess, "run", run)
+    P.push_claim()
+    assert seen["ssh"] == "ssh -i ~/.ssh/work_key -o BatchMode=yes"
+
+
 def test_no_claim_is_pushed_from_the_app(tmp_path, monkeypatch):
     a, _b = _two_chats_one_update(tmp_path)           # no profile/: the app itself
     monkeypatch.setattr(P, "ROOT", a)
@@ -332,6 +366,78 @@ def test_a_seen_posting_both_chats_changed_takes_the_later_change():
     out, problems = M.merge_json(base, ours, theirs, later=lambda p, o, t: "theirs",
                                  settled=settled)
     assert not problems and out == theirs and "seen/u1/status" in settled[0]
+
+
+URL = "https://jobs.example.com/acme/1?ref=a/b"
+
+
+def _two_sides_seen(tmp_path, ours, theirs, base="new"):
+    """A person's repo where two chats changed one posting in seen_jobs.json, keyed, as
+    there, by a URL with slashes in it; theirs is the later change."""
+    repo = str(tmp_path / "repo")
+    os.makedirs(os.path.join(repo, "tools"))
+    os.makedirs(os.path.join(repo, "job_scraper"))
+    _git(repo, "init", "-q", "-b", "master")
+    for f in ("tools/merge_state.py", ".gitattributes"):
+        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
+            dst.write(src.read())
+    seen = os.path.join(repo, "job_scraper", "seen_jobs.json")
+
+    def write(value):
+        with open(seen, "w") as fh:
+            json.dump({"seen": {URL: value}}, fh, indent=2)
+
+    write(base)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+
+    def change(value, when, msg):
+        write(value)
+        subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "commit", "-qam", msg], check=True, capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+
+    _git(repo, "checkout", "-qb", "other")
+    change(theirs, "2026-10-19T15:00:00", "theirs")
+    _git(repo, "checkout", "-q", "master")
+    change(ours, "2026-10-19T09:00:00", "ours")
+    M.install(repo)
+    return repo, seen
+
+
+def test_a_posting_keyed_by_a_url_takes_the_later_change(tmp_path):
+    repo, seen = _two_sides_seen(tmp_path, ours={"status": "excluded"},
+                                 theirs={"status": "applied"}, base={"status": "new"})
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.load(open(seen))["seen"][URL] == {"status": "applied"}
+    assert "the later change" in r.stdout + r.stderr
+
+
+def test_a_list_both_chats_added_to_is_never_settled_by_one_side(tmp_path):
+    repo, seen = _two_sides_seen(tmp_path, ours={"notes": ["a", "ours"]},
+                                 theirs={"notes": ["a", "theirs"]}, base={"notes": ["a"]})
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode != 0                     # left for a person, as before
+    said = r.stdout + r.stderr
+    assert "the later change" not in said and "notes" in said
+
+
+def test_a_name_outside_ascii_merges_whatever_the_locale(tmp_path, monkeypatch):
+    for k, v in (("LC_ALL", "C"), ("LANG", "C"), ("PYTHONUTF8", "0"),
+                 ("PYTHONCOERCECLOCALE", "0")):
+        monkeypatch.setenv(k, v)
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00",
+                            theirs_at="2026-10-19T15:00:00")
+    for side in ("other", "master"):              # a name both histories carry
+        _git(repo, "checkout", "-q", side)
+        text = open(book, encoding="utf-8").read().replace("Juno", "\u0141ucja")
+        open(book, "w", encoding="utf-8").write(text)
+        _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qam",
+             "name")
+    _git(repo, "checkout", "-q", "master")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert "UnicodeDecodeError" not in r.stdout + r.stderr
 
 
 def test_a_rebase_takes_the_later_change_too(tmp_path):

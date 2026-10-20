@@ -1567,7 +1567,12 @@ def push_claim() -> str:
     # Never a prompt: a push that wants a password or a passphrase fails at once and the
     # check against master stands, rather than hanging a sync on the person's computer.
     env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
-    env.setdefault("GIT_SSH_COMMAND", "ssh -o BatchMode=yes")
+    # The person's own ssh command (core.sshCommand, or one already in the environment)
+    # stays theirs, with the no-prompt option added to it.
+    ssh = env.get("GIT_SSH_COMMAND") or _git("config", "core.sshCommand").stdout.strip() or "ssh"
+    if "BatchMode" not in ssh:
+        ssh += " -o BatchMode=yes"
+    env["GIT_SSH_COMMAND"] = ssh
     try:
         r = subprocess.run(["git", "-C", ROOT, "push", "-q", "origin",
                             "%s:%s%s" % (sha, CLAIM_REFS, app)],
@@ -1644,9 +1649,14 @@ def owner_elsewhere(now: float | None = None) -> str:
     except OSError:
         pass
     # Checked before this chat's own claim: two chats that synced the same update a minute
-    # apart each claimed it, and both applied it. The one whose claim was pushed first, or
-    # whose sync reached master first, owns it.
-    theirs = _claimed_elsewhere(sha, r[3] if len(r) > 3 else "") or _landed_elsewhere(sha, r[2:])
+    # apart each claimed it, and both applied it. The one whose claim was pushed first owns
+    # it; where no claim could be pushed, the one whose sync reached master first. A pushed
+    # claim outranks the landing order, or the chat that claimed would wait on the one that
+    # was told to wait on it.
+    app = r[3] if len(r) > 3 else ""
+    mine = bool(app) and _git("rev-parse", "-q", "--verify",
+                              CLAIMS_SEEN + app).stdout.strip() == sha
+    theirs = 0 if mine else (_claimed_elsewhere(sha, app) or _landed_elsewhere(sha, r[2:]))
     if theirs:
         ends = theirs + OWNER_MINUTES * 60
         if (now if now is not None else time.time()) >= ends:

@@ -72,3 +72,32 @@ def test_a_read_waiting_past_midnight_says_today_needs_its_own_list(here, monkey
     out = capsys.readouterr().out
     assert rc == reading.EXIT["new_day"]
     assert "new day" in out and "reading.py shortlist ana_rook bo_venn" in out
+
+
+def test_a_ledger_that_cannot_be_written_never_loses_the_stop_or_the_list(here, tmp_path,
+                                                                          monkeypatch):
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_text("x", encoding="utf-8")
+    monkeypatch.setenv("LJS_LEDGER", str(blocker / "ledger"))     # cannot be made
+    day = datetime.date(2026, 10, 20)
+    reading._write_stop("LinkedIn showed a check", day)
+    assert reading.stopped(day) == "LinkedIn showed a check"
+    reading._save_shortlist(["ana_rook"], day)
+    assert reading._shortlist_file(day) == ["ana_rook"]
+    reading.page_read("people", "https://example.com/p", datetime.datetime(2026, 10, 20, 9),
+                      people=4)
+    assert [p["people"] for p in reading._pages()] == [4]
+    # move-runtime leaves the files where they are until a ledger can take them.
+    assert reading.move_runtime() == []
+    assert (here / "documents" / "network" / ".reads_stopped.json").exists()
+
+
+def test_moving_an_older_list_keeps_todays_list_in_the_ledger_too(here):
+    day = datetime.date(2026, 10, 20)
+    reading._save_shortlist(["bo_venn"], day)
+    net = here / "documents" / "network"
+    net.mkdir(parents=True, exist_ok=True)
+    (net / ".shortlist.json").write_text(json.dumps({"date": day.isoformat(),
+                                                     "ids": ["ana_rook"]}), encoding="utf-8")
+    reading.move_runtime()
+    assert sorted(pace.load()["shortlist"]["ids"]) == ["ana_rook", "bo_venn"]
