@@ -352,6 +352,9 @@ def update(fn) -> dict:
             data["loads"] = [x for x in data.get("loads") or [] if str(x.get("at", ""))[:10] >= cut]
             data["friction"] = [x for x in data.get("friction") or []
                                 if str(x.get("at", ""))[:10] >= cut]
+            if "breaches" in data:
+                data["breaches"] = [x for x in data.get("breaches") or []
+                                    if isinstance(x, dict) and str(x.get("at", ""))[:10] >= cut]
             _save(data)
             return data
     except OSError as e:
@@ -414,6 +417,28 @@ def record_friction(kind: str, words: str = "", now: datetime.datetime | None = 
 def friction(data: dict | None = None) -> list:
     return [x for x in (load() if data is None else data).get("friction") or []
             if isinstance(x, dict) and x.get("kind")]
+
+
+# ------------------------------------------------------------------ the person's own pace
+
+# A page loaded before the person's own pace allowed it: the session opened it while the
+# gate still said wait (or later, or tomorrow). It is not a LinkedIn signal, so it never goes
+# in the friction log, never puts the ramp back and never stops the day; it is kept apart,
+# once a page, so the person can see their own pace was broken and by how much. The page is
+# never refused for it: its text was already taken, and refusing it meant loading it again.
+def record_breach(rule: str, words: str = "", owed_seconds: float = 0, ident: str = "",
+                  now: datetime.datetime | None = None) -> dict:
+    """Keep one breach of the person's own pace, dated, apart from the friction log."""
+    rec = {"at": (now or datetime.datetime.now()).isoformat(timespec="seconds"),
+           "rule": str(rule or ""), "words": " ".join(str(words or "").split())[:200],
+           "owed_seconds": int(max(0, owed_seconds)), "id": str(ident or "")}
+    update(lambda d: d.setdefault("breaches", []).append(rec))
+    return rec
+
+
+def breaches(data: dict | None = None) -> list:
+    return [x for x in (load() if data is None else data).get("breaches") or []
+            if isinstance(x, dict) and x.get("at")]
 
 
 def soft_recent(now: datetime.datetime, data: dict | None = None) -> int:

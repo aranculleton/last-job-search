@@ -42,6 +42,7 @@ Usage:
         --outside) [--channel inmail --subject "..."] [--date YYYY-MM-DD]
     python3 tools/network/state.py resent <contact_id> [--text-file <file>] [--date ...] [--subject ...]
     python3 tools/network/state.py unsend <contact_id>
+    python3 tools/network/state.py inmail-credits [<the balance LinkedIn shows>]
 """
 
 from __future__ import annotations
@@ -50,6 +51,7 @@ import argparse
 from collections import Counter
 import csv
 import datetime
+import json
 import os
 import re
 import sys
@@ -1218,20 +1220,35 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     day = _need_date(date or today, "date")
     cid = str(contact_id or "").strip()
     contact = already_contacted(contacts, contact_id=cid) if cid else None
+    channel = str(channel or "connection").strip().lower()
+    body = _paragraphs(text)
+    subject = " ".join(str(subject or "").split())
+
+    def words_needed():
+        if not outside:
+            if not body and (channel != "connection" or note):
+                raise ValueError(NEEDS_TEXT)
+            if channel == "inmail" and not subject:
+                raise ValueError(NEEDS_SUBJECT)
+
+    if contact is None and cid:
+        # Read but never written to the book: the row comes from their reading, or is the
+        # same person's row under another id. A send is never lost for a missing row, and
+        # no row is added for a send refused for its words.
+        words_needed()
+        contact, _how = from_reading(contacts, cid, _need_date(today, "today"))
+        if contact is not None and contact.get("contact_id") != cid:
+            _drop_draft(cid)
+            cid = str(contact.get("contact_id") or "").strip()
     if contact is None:
-        raise ValueError(f"no contact {cid!r} in the contact book")
+        raise ValueError(f"no contact {cid!r} in the contact book, and nothing read about them "
+                         "names who they are: read them first (reading.py read <id> <file> "
+                         "--name \"<name>\" --company \"<employer>\"), or add their row")
     rows = [r for r in threads_for(threads, cid) if _direction(r) == "out"]
     if rows:
         raise ValueError(f"{contact.get('name') or cid} already has a message logged on "
                          f"{rows[-1].get('date')}: nothing to record")
-    channel = str(channel or "connection").strip().lower()
-    body = _paragraphs(text)
-    subject = " ".join(str(subject or "").split())
-    if not outside:
-        if not body and (channel != "connection" or note):
-            raise ValueError(NEEDS_TEXT)
-        if channel == "inmail" and not subject:
-            raise ValueError(NEEDS_SUBJECT)
+    words_needed()
     if channel == "connection" and outside and body:
         scenario = "connection_note"
         summary = ("Connection request with a note, sent from LinkedIn itself; the note as the "
@@ -1459,6 +1476,64 @@ def close(contacts, contact_id, today, reason, row=None) -> dict:
     return contact
 
 
+def add_row(contacts, contact_id, fields) -> dict:
+    """Append one contact row in the schema's shape, at `not_contacted` unless `fields`
+    says otherwise, and return it. The caller saves the book."""
+    row = {k: "" for k in schema.CONTACT_COLUMNS}
+    row.update({k: str(v or "") for k, v in (fields or {}).items() if k in schema.CONTACT_COLUMNS})
+    row["contact_id"] = str(contact_id or "").strip()
+    row["company_key"] = row.get("company_key") or company_key(row.get("company"))
+    row["status"] = row.get("status") or "not_contacted"
+    contacts.append(row)
+    return row
+
+
+def _reading_url(got: dict) -> str:
+    for src in (got or {}).get("sources") or []:
+        url = str((src or {}).get("url") or "")
+        if profile_handle(url):
+            return url
+    return ""
+
+
+def from_reading(contacts, contact_id, today) -> tuple:
+    """(the contact row, how it was found) for someone read but never written to the book.
+
+    `reading.py read --name --company` keeps what was read under documents/network/<id>/,
+    and nothing put the person in network_contacts.csv: three InMails that went to people
+    read that way were refused by `sent` ("no contact in the contact book") and logged only
+    once rows were added by hand (2026-10-20). So a send, or a draft, finds them here.
+
+    The same person already in the book, under any id, by their LinkedIn address or by
+    their name at that employer, is that row ("existing"): never a second one. Otherwise a
+    new row from the reading ("added"). (None, "") when nothing was read about them, or the
+    reading lacks their name or their employer."""
+    try:
+        import reading
+        got = reading.load(str(contact_id or "").strip()) or {}
+    except (ImportError, ValueError):
+        return None, ""
+    name, company = str(got.get("name") or "").strip(), str(got.get("company") or "").strip()
+    if not name or not company:
+        return None, ""
+    url = _reading_url(got)
+    same = already_contacted(contacts, name=name, company=company, linkedin_url=url or None)
+    if same is not None:
+        return same, "existing"
+    day = _need_date(today, "today")
+    try:
+        import reading
+        channel = reading.channel_for(got)
+    except ImportError:
+        channel = ""
+    row = add_row(contacts, contact_id, {
+        "name": name, "company": company, "title": got.get("headline", ""),
+        "location": got.get("location", ""), "linkedin_url": url,
+        "channel": channel or "connection",
+        "notes": f"added {day.isoformat()} from the reading of them, which never reached the book"})
+    return row, "added"
+
+
 def book_at(contacts, threads, company) -> dict:
     """Who the book already holds at one employer: {"in_book", "never_messaged", "ids"}.
     Discovery leaves them out, and said nothing; a run then told a person their top
@@ -1586,6 +1661,7 @@ def _cli_sent(argv) -> int:
             text, subject = body, subject or drafted_subject
         if before is not None:                   # the edit is to the words, not the subject
             before = split_subject(before)[1]
+        in_book = already_contacted(contacts, contact_id=cid) is not None
         try:
             row = sent(contacts, threads, cid, a.today, date=a.date or None, channel=a.channel,
                        text=text, outside=a.outside, note=not a.no_note, subject=subject)
@@ -1595,7 +1671,13 @@ def _cli_sent(argv) -> int:
         if before is not None:                   # recorded once the send is, never twice
             _learn_edit(cid, text, draft=before)
         done += 1
-        print(f"  {cid}: {row['summary'].lower()} on {row['date']}; awaiting their reply, "
+        logged = row["contact_id"]
+        if logged != cid:
+            print(f"  {cid}: the same person is in the contact book as {logged} (their LinkedIn "
+                  "address, or their name at that employer): recorded there, no second row")
+        elif not in_book:
+            print(f"  {cid}: was not in the contact book; added from what was read about them")
+        print(f"  {logged}: {row['summary'].lower()} on {row['date']}; awaiting their reply, "
               "draft removed")
     if done:
         save_threads(threads, a.threads)
@@ -1607,8 +1689,35 @@ def _cli_sent(argv) -> int:
               "words as sent> [--date YYYY-MM-DD]. The edit is recorded as their preference.")
     if done and a.channel == "inmail":
         b = platform_budget(contacts, threads, a.today)
-        print(f"InMail credits: {b['inmails_left']} of {b['inmails_limit']} left this month")
+        print(f"InMail credits: {b['inmails_left']} left this month ({b['inmails_source']})")
     return 0 if done else 1
+
+
+def _cli_inmail_credits(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py inmail-credits",
+        description="Keep the InMail balance LinkedIn shows (used until the month turns), or "
+                    "with no number, say what is left and where that number came from.")
+    ap.add_argument("balance", nargs="?", type=int, default=None,
+                    help="the InMail credits LinkedIn shows now")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    if a.balance is not None:
+        try:
+            record_inmails(a.balance, contacts, threads, a.today)
+        except ValueError as e:
+            print(f"inmail-credits: not kept: {e}")
+            return 1
+        print(f"inmail-credits: kept {a.balance} as LinkedIn shows it on {a.today}. InMails "
+              "sent from now take one each and a reply within "
+              f"{INMAIL_REFUND_DAYS} days gives one back; the count from the log takes over "
+              "again when the month turns")
+    b = platform_budget(contacts, threads, a.today)
+    print(f"InMail credits: {b['inmails_left']} left this month ({b['inmails_source']})")
+    return 0
 
 
 def _draft_of(cid: str) -> str | None:
@@ -1914,7 +2023,127 @@ def connection_requests(contacts, threads) -> set:
     return requests
 
 
-def platform_budget(contacts, threads, today) -> dict:
+# InMail credits come back. LinkedIn's own help, read through a web search on 2026-10-20
+# (linkedin.com is never fetched from a session): "Every InMail message that is
+# accepted/declined or responded to directly within 90 days of it being sent is credited
+# back", and "A pending InMail message isn't counted as either accepted or declined"
+# ("InMail message credits and renewal process", linkedin.com/help/linkedin/answer/a541643;
+# the Sales Navigator page, answer/57013, says the same of its credits). The same page says
+# a new allotment comes "every month, on the first day of your billing cycle", which need
+# not be the first of the calendar month. Whether unused Premium credits carry into the
+# next month could NOT be confirmed (third-party guides disagree), and a message to an Open
+# Profile spends no credit at all, which the log cannot see. So the count from the log is
+# a floor: after five InMails it said "0 of 5 left" while LinkedIn showed 3. The balance
+# LinkedIn shows, kept with `state.py inmail-credits <n>`, wins until the month turns.
+INMAIL_REFUND_DAYS = 90
+INMAIL_FILE = ("documents", "network", ".inmail_credits.json")
+_LINKEDIN_CHANNELS = frozenset({"inmail", "connection", "message", ""})
+
+
+def _inmail_sends(contacts, threads) -> set:
+    """(contact_id, day) for every InMail that went, from the log and the contact rows."""
+    out = set()
+    for row in threads:
+        if _direction(row) == "out" and channel_of(row) == "inmail" and as_date(row.get("date")):
+            out.add((str(row.get("contact_id") or "").strip(), as_date(row.get("date"))))
+    for contact in contacts:
+        if channel_of(contact) == "inmail" and as_date(contact.get("first_contacted")):
+            out.add((str(contact.get("contact_id") or "").strip(),
+                     as_date(contact.get("first_contacted"))))
+    return out
+
+
+def inmail_refunds(threads) -> list:
+    """[(contact_id, the day the InMail went, the day the reply credited it back)]: every
+    InMail answered on LinkedIn within INMAIL_REFUND_DAYS of going. An acceptance of a
+    connection request or a call is not an answer to it; an email reply is not on LinkedIn."""
+    by: dict[str, list] = {}
+    for row in threads:
+        by.setdefault(str(row.get("contact_id") or "").strip(), []).append(row)
+    out = []
+    for cid, rows in by.items():
+        rows = _ordered(rows)
+        for i, row in enumerate(rows):
+            day = as_date(row.get("date"))
+            if _direction(row) != "out" or channel_of(row) != "inmail" or not day:
+                continue
+            for later in rows[i + 1:]:
+                back = as_date(later.get("date"))
+                if (said_something(later) and channel_of(later) in _LINKEDIN_CHANNELS and back
+                        and day <= back <= day + datetime.timedelta(days=INMAIL_REFUND_DAYS)):
+                    out.append((cid, day, back))
+                    break
+    return out
+
+
+def _inmail_path() -> str:
+    return person.state(*INMAIL_FILE)
+
+
+def recorded_inmails(today) -> dict:
+    """The InMail balance the person read off LinkedIn this month, or {} (none, or the month
+    has turned since: a new allotment came, and the count from the log takes over again)."""
+    today = _need_date(today, "today")
+    try:
+        with open(_inmail_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    day = as_date((got or {}).get("date")) if isinstance(got, dict) else None
+    if not day or (day.year, day.month) != (today.year, today.month) or day > today:
+        return {}
+    try:
+        int(got.get("balance"))
+    except (TypeError, ValueError):
+        return {}
+    return got
+
+
+def record_inmails(balance, contacts, threads, today) -> dict:
+    """Keep the InMail balance LinkedIn shows, with the day and what the log held then, so
+    only InMails sent and credits returned after it move it. Used until the month turns."""
+    today = _need_date(today, "today")
+    n = int(balance)
+    if n < 0:
+        raise ValueError("an InMail balance is a count, 0 or more")
+    rec = {"balance": n, "date": today.isoformat(),
+           "inmails": sorted(f"{c}|{d.isoformat()}" for c, d in _inmail_sends(contacts, threads)),
+           "refunds": sorted(f"{c}|{s.isoformat()}|{r.isoformat()}"
+                             for c, s, r in inmail_refunds(threads))}
+    path = _inmail_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(rec, fh, indent=1)
+        fh.write("\n")
+    return rec
+
+
+def _inmails_left(contacts, threads, today, month_start, month_end, limit, recorded) -> dict:
+    sends = _inmail_sends(contacts, threads)
+    refunds = inmail_refunds(threads)
+    sent_month = sum(1 for _, d in sends if month_start <= d <= month_end)
+    back_month = sum(1 for _, _, r in refunds if month_start <= r <= min(month_end, today))
+    if recorded:
+        since = as_date(recorded.get("date")) or today
+        had_sends, had_back = set(recorded.get("inmails") or ()), set(recorded.get("refunds") or ())
+        new = sum(1 for c, d in sends if d >= since and f"{c}|{d.isoformat()}" not in had_sends)
+        back = sum(1 for c, s, r in refunds if since <= r <= today
+                   and f"{c}|{s.isoformat()}|{r.isoformat()}" not in had_back)
+        left = max(int(recorded["balance"]) - new + back, 0)
+        source = (f"the {recorded['balance']} LinkedIn showed on {since.isoformat()}"
+                  + (f", less {new} sent since" if new else "")
+                  + (f", plus {back} credited back since" if back else ""))
+    else:
+        left = max(min(limit, limit - sent_month + back_month), 0)
+        source = (f"counted from the log: {sent_month} sent this month"
+                  + (f", {back_month} credited back for a reply within {INMAIL_REFUND_DAYS} days"
+                     if back_month else "")
+                  + "; if LinkedIn shows another number, keep it: state.py inmail-credits <n>")
+    return {"inmails_sent": sent_month, "inmails_refunded": back_month, "inmails_left": left,
+            "inmails_source": source}
+
+
+def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
     """Connection requests and InMail credits left, against `schema.LIMITS`.
 
     Counted from the contact rows as well as the message log, deduplicated on
@@ -1923,6 +2152,10 @@ def platform_budget(contacts, threads, today) -> dict:
     lands afterwards, so counting only the log reports a budget the user has
     already spent. Connections are what `connection_requests` says went out as
     a request; a message to somebody already connected spends nothing.
+
+    InMail credits: an InMail answered within INMAIL_REFUND_DAYS gives its credit back,
+    and the balance the person read off LinkedIn this month (`record_inmails`) wins over
+    the count. `inmail_balance` is that record ({} for none); None reads it from file.
     """
     today = _need_date(today, "today")
     week_start = today - datetime.timedelta(days=today.weekday())
@@ -1930,25 +2163,13 @@ def platform_budget(contacts, threads, today) -> dict:
     month_start = today.replace(day=1)
     month_end = _month_end(today)
 
-    sends = set()
-    for row in threads:
-        if _direction(row) != "out":
-            continue
-        day, channel = as_date(row.get("date")), channel_of(row)
-        if day and channel:
-            sends.add((str(row.get("contact_id") or "").strip(), channel, day))
-    for contact in contacts:
-        day, channel = as_date(contact.get("first_contacted")), channel_of(contact)
-        if day and channel:
-            sends.add((str(contact.get("contact_id") or "").strip(), channel, day))
-
     requests = connection_requests(contacts, threads)
     connections = sum(1 for _, d in requests if week_start <= d <= week_end)
     connections_today = sum(1 for _, d in requests if d == today)
-    inmails = sum(1 for _, ch, d in sends
-                  if ch == "inmail" and month_start <= d <= month_end)
     conn_limit = schema.LIMITS["connections_per_week"]
     inmail_limit = schema.LIMITS["inmail_credits_per_month"]
+    inmail = _inmails_left(contacts, threads, today, month_start, month_end, inmail_limit,
+                           recorded_inmails(today) if inmail_balance is None else inmail_balance)
     day_limit = schema.LIMITS.get("connections_per_day") or conn_limit
     conn_left = max(conn_limit - connections, 0)
     # What one sitting can send today: the day's cap, never more than the week has left.
@@ -1985,9 +2206,11 @@ def platform_budget(contacts, threads, today) -> dict:
         "connections_today": connections_today,
         "connections_per_day": day_limit,
         "connections_left_today": today_left,
-        "inmails_sent": inmails,
+        "inmails_sent": inmail["inmails_sent"],
         "inmails_limit": inmail_limit,
-        "inmails_left": max(inmail_limit - inmails, 0),
+        "inmails_left": inmail["inmails_left"],
+        "inmails_refunded": inmail["inmails_refunded"],
+        "inmails_source": inmail["inmails_source"],
         "connection_note_chars": schema.LIMITS["connection_note_chars"],
         "inmail_words": schema.LIMITS["inmail_words"],
         "note": note,
@@ -2014,6 +2237,8 @@ def main(argv=None) -> int:
         return _cli_reopen_or_drop(argv[1:], argv[0])
     if argv[:1] == ["dropped-rows"]:
         return _cli_dropped_rows(argv[1:])
+    if argv[:1] == ["inmail-credits"]:
+        return _cli_inmail_credits(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()
@@ -2044,7 +2269,7 @@ def main(argv=None) -> int:
     b = platform_budget(contacts, threads, a.today)
     print(f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "
           f"this week ({b['connections_left_today']} of them today), "
-          f"InMail {b['inmails_left']}/{b['inmails_limit']} left this month")
+          f"InMail {b['inmails_left']} left this month ({b['inmails_source']})")
     if b["note"]:
         print("  " + b["note"])
 

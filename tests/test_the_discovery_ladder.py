@@ -174,7 +174,12 @@ def test_a_browser_read_is_for_the_short_list_only(tmp_path, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     monkeypatch.setattr(reading, "browser_gate", lambda *a, **k: "")
     import state
-    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
+    # In the contact book: a short list refuses an id that names nobody (it used to take any).
+    rosalind = {"contact_id": "kestrel_rosalind", "name": "Rosalind Achterberg",
+                "company": "Kestrel Mutual", "location": "Manchester", "channel": "connection",
+                "status": "not_contacted"}
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [rosalind])
+    monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     page = tmp_path / "page.txt"
     page.write_text("Rosalind Achterberg\nHead of Pricing\nManchester\nContact info\n· 2nd\n"
                     "Connect\nMessage\nMore\nAbout\nPricing work.\n", encoding="utf-8")

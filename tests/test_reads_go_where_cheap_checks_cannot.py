@@ -73,17 +73,35 @@ def _browsed(here, times, gap=60):
                                             "next_gap": gap}]})
 
 
-def test_a_read_refused_for_its_pace_says_wait_not_skip(here, monkeypatch, capsys):
+def test_a_read_too_soon_is_kept_never_refused_and_still_says_wait(here, monkeypatch, capsys):
+    """Was "a read refused for its pace says wait, not skip". A refused read lost a page
+    that was already open, and it had to be loaded again once the gate opened (2026-10-20):
+    it is kept now, the breach of the person's own pace logged once (never as a LinkedIn
+    signal), and the gate still says wait, longer by the pause the page skipped."""
+    import pace
+    import state
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    row = {"contact_id": "kestrel_achterberg", "name": "Rosalind Achterberg",
+           "company": "Kestrel Mutual", "location": "Manchester", "channel": "connection",
+           "status": "not_contacted"}
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [row])
+    monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     now = datetime.datetime.now()
     _browsed(here, [now - datetime.timedelta(seconds=5)], gap=120)
+    reading.shortlist(["kestrel_achterberg"], now.date(), contacts=[row], sends_left=10)
     page = here / "p.txt"
-    page.write_text("Rosalind Achterberg\nHead of Pricing\n", encoding="utf-8")
-    code = reading.main(["read", "kestrel_achterberg", str(page), "--source", "browser",
-                         "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"])
-    assert code == reading.EXIT["wait"] != reading.EXIT["skip"]
+    page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),
+                    encoding="utf-8")
+    code = reading.main(["read", "kestrel_achterberg", str(page), "--source", "browser"])
+    assert code == reading.EXIT["ok"] != reading.EXIT["wait"]
     out = capsys.readouterr().out
-    assert "next page at" in out
+    assert "saved" in out and "kept, not refused" in out and "not a LinkedIn signal" in out
+    assert out.count("before your own pace allowed it") == 1
+    got = reading.load("kestrel_achterberg")
+    src = next(s for s in got["sources"] if s.get("kind") == "browser")
+    assert src["next_gap"] >= 100 + reading.GAP_SECONDS[0]        # the skipped pause, honoured
+    assert len(pace.breaches()) == 1 and pace.breaches()[0]["rule"] == "wait"
+    assert pace.friction() == []                                  # not a LinkedIn signal
     assert reading.main(["gate"]) == reading.EXIT["wait"]
 
 
