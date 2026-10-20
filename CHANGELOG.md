@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-10-20
+
 ### Added
 
 - **Your reasons are asked, never written for you.** Why you are leaving or looking, why each
