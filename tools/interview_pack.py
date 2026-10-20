@@ -235,10 +235,19 @@ def untagged(path=None) -> list:
     return [s["title"] for s in stories(path) if not s["use_for"]]
 
 
+# What a stock answer holds while it is still a template: "[Customize per company]",
+# "<the employer>", TODO. Printed as it stands, it read as the answer (2026-10-20).
+_FILL_IN = re.compile(r"\[(?:PLACEHOLDER|TODO|TBD|FILL|INSERT|ADD|CUSTOMI[SZ]E|TAILOR)[^\]]*\]"
+                      r"|\bcustomi[sz]e (?:this |it )?(?:per|for (?:each|every|the)) (?:company|"
+                      r"employer|role|firm)\b|<[^<>\n]{2,40}>|\b(?:TODO|TBD)\b", re.I)
+
+
 def hard_answers(path=None) -> list:
     """{question, answer, confirm, source} for each question heading with a quoted answer.
 
     An answer still holding a `[PLACEHOLDER` is not an answer and is left out; one
+    holding any other fill-in ("[Customize per company]", "<the employer>") is kept with
+    `fill_in`, so the pack says what to fill instead of printing it as an answer. One
     marked `[CONFIRM` is kept and said to be unconfirmed.
     """
     path = path or person.path(STORIES_FILE)
@@ -266,8 +275,10 @@ def hard_answers(path=None) -> list:
         # A heading can hold several wordings of one question: '"Why are you leaving <the
         # current employer>?" / "Why are you looking?"'. Each is matched on its own.
         alternatives = [_text(q) for q in _QUOTED.findall(heading)] or [heading.strip("\"“” ")]
+        fill = _FILL_IN.search(answer)
         out.append({"question": heading.strip("\"“” "), "answer": answer,
                     "confirm": confirm, "source": _repo_rel(path),
+                    "fill_in": fill.group(0) if fill else "",
                     "alternatives": alternatives, "use_for": use_for,
                     "suits": tags.get("suits", ()), "not_for": tags.get("not for", ())})
     return out
@@ -910,8 +921,12 @@ def likely_questions(ctx) -> list:
     group["map"] = [(q, "raised by an earlier stage", "the session's map", {})
                     for q in ctx["map"] if what_works._norm(q) not in known]
     stage = group["stage"]
+    # A screen opens the same way everywhere, so its standard questions come first; the
+    # questions added to the map follow them. Put first, they took the one screen from
+    # "Tell me about yourself" (2026-10-20). A later stage leads on what came back from
+    # the one before.
     order = {
-        "screen": ["map", "here", stage[:3], group["gaps"][:1], stage[3:6], "cond", "format",
+        "screen": [stage[:3], "map", "here", group["gaps"][:1], stage[3:6], "cond", "format",
                    stage[6:], "reqs", group["gaps"][1:], "again"],
         "technical": ["map", "here", "reqs", "gaps", "format", "stage", "again"],
         "final": ["map", "here", stage[:1], group["gaps"][:1], stage[1:], "format", "reqs",
@@ -1050,16 +1065,25 @@ def answer_for(item, ctx) -> dict:
             lines.append("The letter told them: %s (source: %s)"
                          % (told, _text(ctx["draft"].get("_path"))))
         lines.append("Use a hook from The company, never a generic line.")
+    # A stock answer that is not for this employer, or still a template, is never printed
+    # as an answer: printed with a warning under it, it read as the thing to say.
+    careful = against_employer(prepared, ctx) if prepared else ""
+    if prepared and careful:
+        lines.append("Your stock answer to this is left out for %s: %s (source: %s). Say your "
+                     "real reasons for %s." % (ctx["company"], careful, prepared["source"],
+                                               ctx["company"]))
+        prepared = None
+    elif prepared and prepared.get("fill_in"):
+        lines.append("Your stock answer to this still has a fill-in (\"%s\") in %s: fill it "
+                     "there, and the next build uses it." % (prepared["fill_in"],
+                                                            prepared["source"]))
+        prepared = None
     if prepared:
         lines.append("Prepared: %s (source: %s)%s" % (
             prepared["answer"], prepared["source"],
             " Marked CONFIRM in the file: check it is still true first." if prepared["confirm"]
             else ""))
-        careful = against_employer(prepared, ctx)
-        if careful:
-            lines.append("CAREFUL: %s. Rewrite it from your real reasons for %s before you say "
-                         "it." % (careful, ctx["company"]))
-    elif kind and not story:
+    if kind and not story and not prepared:
         # Their reasons are theirs: asked, never drafted from dates and employers.
         lines.insert(0, "%s \"%s\" Nothing on file can supply the reasons. Their answer is kept "
                         "for every later employer: python3 tools/interview_pack.py motive \"%s\" "
@@ -1073,9 +1097,7 @@ def answer_for(item, ctx) -> dict:
     if story:
         return {"kind": "story", "short": "story: %s" % story["title"], "lines": lines}
     if prepared:
-        return {"kind": "prepared", "short": "prepared answer, below%s"
-                % (": CAREFUL" if any(ln.startswith("CAREFUL:") for ln in lines) else ""),
-                "lines": lines}
+        return {"kind": "prepared", "short": "prepared answer, below", "lines": lines}
     if kind:
         return {"kind": "ask", "short": "ask you first: your reasons, in your words",
                 "lines": lines}
@@ -1108,6 +1130,16 @@ def answer_for(item, ctx) -> dict:
 
 
 # ---------------------------------------------------------------- the other sections
+
+HOOK_CHARS = 200
+
+
+def _hook_text(value) -> str:
+    """One hook as it reads on one screen: the research note's first whole sentence, its
+    bullet marker off, cut where a clause ends only when it runs long. Cut at a fixed
+    width, a research bullet ended mid-sentence (2026-10-20)."""
+    return prep._short(re.sub(r"^\s*(?:[-*\u2022]|\d+[.)])\s+", "", _text(value)), HOOK_CHARS)
+
 
 def hooks(ctx) -> list:
     """Sourced facts to hang "why this company" on: the letter's first, then the research."""
@@ -2782,10 +2814,59 @@ def _found_out(text) -> list:
 
 
 def _own_words(body) -> list:
-    """The lines of an answer block the person (or the session, for them) wrote: never the
-    marker or the "- From:" lines this file generated, which a rebuild makes afresh."""
-    return [ln for ln in body or () if ln.strip() and TO_WRITE not in ln
-            and not ln.lstrip().startswith(("- From:", "- careful:"))]
+    """The lines of an answer block the person (or the session, for them) wrote, as they
+    laid them out (a blank line between paragraphs stays): never the marker or the
+    "- From:" lines this file generated, which a rebuild makes afresh."""
+    out = [ln.rstrip() for ln in body or () if TO_WRITE not in ln
+           and not ln.lstrip().startswith(("- From:", "- careful:"))]
+    while out and not out[0].strip():
+        out.pop(0)
+    while out and not out[-1].strip():
+        out.pop()
+    return out
+
+
+# What in an answer block is a note to the person, never words they will say: a line
+# under "Notes:" (and everything after it), a line that opens "Note:", one wholly in
+# italics, or a quote. A note placed after an answer was read as part of it, so bullet
+# notes failed the answer as "written as bullet points", and an italic line above it was
+# taken for its opening (2026-10-20).
+_NOTES_START = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?notes?(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*$",
+                          re.I)
+_NOTE_LINE = re.compile(r"^\s*(?:(?:\*\*|__)?notes?(?:\*\*|__)?\s*:|>|\((?:note|notes)\b)", re.I)
+_ITALIC_LINE = re.compile(r"^\s*(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)\s*[.:]?\s*$")
+
+
+ANSWERS_INTRO = ("What you will say goes under each question, as sentences. Anything else (a "
+                 "reminder, a list) goes under a line \"Notes:\", after \"Note:\", or in "
+                 "italics: it is kept on every rebuild and never checked as something to say.")
+
+
+def spoken(body) -> list:
+    """The lines of an answer the person will say: their own words with every note out."""
+    out, notes = [], False
+    for ln in _own_words(body):
+        if _NOTES_START.match(ln):
+            notes = True
+        if notes or _NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln):
+            continue
+        out.append(ln)
+    return out
+
+
+def _restates(body, checking, hear) -> bool:
+    """Does a note of theirs already say what a question is checking: the line this file
+    writes under it, rewritten in their own formatting? Rebuilt, it was added again above."""
+    made = "%s %s" % (checking, hear)
+    for ln in body or ():
+        if not (_NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln)):
+            continue
+        plain = re.sub(r"[*_>]", " ", ln)
+        if re.search(r"\bcheck\w*\b", plain, re.I) and re.search(r"\bhear\b", plain, re.I):
+            return True
+        if similar(plain, made) >= 0.5:
+            return True
+    return False
 
 
 def answer_lines(ctx, answered) -> list:
@@ -2800,11 +2881,15 @@ def answer_lines(ctx, answered) -> list:
             out.append("%s %s. They want to hear: %s." % (INTENT_MARK, checking, hear))
         old = kept.get(what_works._norm(q["question"]))
         body = _own_words(old[1] if old else [])
-        if body:
+        if checking and _restates(body, checking, hear):
+            out.pop()                  # their own line already says it: never added twice
+        if spoken(body):
             out += body
         else:
+            # Notes kept, and still to write: the marker and what to say it from.
             out.append(TO_WRITE)
             out += ["- From: %s" % re.sub(r"^Say: ", "", ln) for ln in a["lines"][:3]]
+            out += ([""] + body) if body else []
         out.append("")
     # An answer written for a question this stage does not list (an earlier stage's, one the
     # person added, one reworded since) is never dropped: it follows, as they wrote it.
@@ -2827,7 +2912,7 @@ def check(path) -> list:
     out = [("Research", re.sub(r"^\s*-\s*", "", ln).split(". The employer-researcher")[0])
            for ln in text.splitlines() if "RESEARCH FIRST (Claude" in ln]
     for i, (q, body) in enumerate(blocks.values()):
-        mine = _own_words(body)
+        mine = spoken(body)
         if not " ".join(mine).strip():
             # A motivation question waits on the person's own reasons, wherever it falls.
             if any(ASK_MARK in ln for ln in body):
@@ -2942,6 +3027,11 @@ def _section(title, lines, empty) -> list:
     return ["## " + title, ""] + (list(lines) if lines else ["- " + empty]) + [""]
 
 
+# The lines of an answer's sources that quote text someone could say as it stands: a stock
+# answer, the profile's own wording, or what to say.
+_QUOTES_TEXT = re.compile(r"^(?:Prepared:|Say:|From your profile:|%s)" % re.escape(prep.RAW_MARK))
+
+
 def pack_markdown(ctx, never_say=None) -> str:
     """The living document for this process, one screen first. `never_say` defaults to the
     person's phrases. What the person wrote (their answers, the rework, their notes, what
@@ -2978,7 +3068,7 @@ def pack_markdown(ctx, never_say=None) -> str:
     screen += ["", "**Hooks**"]
     letter = _text((ctx["draft"] or {}).get("_path"))
     screen += ["- %s%s (source: %s)" % ("The letter told them: " if f.source == letter else "",
-                                         prep._short(f.value, 110), f.source)
+                                         _hook_text(f.value), f.source)
                for f in hook_facts[:HOOKS]] or ["- %s: nothing researched to hang \"why us\" on."
                                                 % prep.NOT_RESEARCHED]
     screen += ["", "**Money:** %s." % one_money, ""]
@@ -2986,8 +3076,9 @@ def pack_markdown(ctx, never_say=None) -> str:
     # flagged for them here nor read by voice_check as something the person will say.
     quoted = [voice_check.QUOTED_OPEN, "**Do not say**"] + donts[:MAX_DO_NOT] + [voice_check.QUOTED_CLOSE]
     lines += _section("On one screen", prep._flag_banned(screen, banned) + quoted, "")
-    lines += _section("Your answers", prep._flag_banned(answer_lines(ctx, answered), banned),
-                      "No questions to answer yet.")
+    yours = answer_lines(ctx, answered)
+    lines += _section("Your answers", ([ANSWERS_INTRO, ""] if yours else [])
+                      + prep._flag_banned(yours, banned), "No questions to answer yet.")
     # What was said to them is quoted as it was sent; only what this file tells the person
     # to do about it is checked against the words they never use.
     told = told_lines(ctx)
@@ -3001,13 +3092,27 @@ def pack_markdown(ctx, never_say=None) -> str:
     lines += _section("The format", prep._flag_banned(format_lines(ctx), banned),
                       "An offer: nothing to drill.")
 
-    detail = []
+    # Notes on each question, never words to say: where an answer can come from. The text a
+    # stock answer or the profile holds is quoted here only while the person's own answer
+    # is unwritten, and marked as notes; repeated beside an answer already written, the
+    # raw profile wording and an older stock answer read as things to say (2026-10-20).
+    kept = _answer_blocks(owned.get("Your answers"))
+    detail = ["Notes on each question: what an answer can come from, and where. None of it is "
+              "words to say: what you say is under Your answers.", ""] if answered else []
     for q, a in answered:
         detail.append("- **Q.** %s (%s; source: %s)" % (q["question"], q["why"], q["source"]))
         checking, hear = intent(q["question"], ctx["company"])
         if checking:
             detail.append("  - Checking %s. They want to hear %s." % (checking, hear))
-        detail += ["  - " + ln for ln in a["lines"]]
+        written = spoken((kept.get(what_works._norm(q["question"])) or ("", []))[1])
+        for ln in a["lines"]:
+            if _QUOTES_TEXT.match(ln):
+                if written:
+                    continue
+                ln = "Notes, not words to say: " + ln
+            detail.append("  - " + ln)
+        if written:
+            detail.append("  - Your own answer is under Your answers.")
     lines += _section("Likely questions", prep._flag_banned(detail, banned),
                       "No questions: nothing on file to anticipate.")
     lines += _section("Stories", prep._flag_banned(_story_lines(ctx), banned),
@@ -3321,7 +3426,7 @@ def main(argv=None) -> int:
             for q, why in found:
                 print("- %s: %s" % (q, why))
             todo = [q for q, b in _answer_blocks(_owned(_read(path)).get("Your answers")).values()
-                    if not _own_words(b)]
+                    if not spoken(b)]
             research = sum(1 for q, _w in found if q == "Research")
             asks = sum(1 for q, _w in found if q == "Ask")
             answers = len(found) - research - asks

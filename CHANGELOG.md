@@ -60,6 +60,35 @@ make sense to somebody whose repo just received it.
 - **A stop says what was seen and when.** "Signed out mid-run" was written for the first
   page of a day; the stop now reads like "LinkedIn's sign-in page 7 min after the last page
   load (2026-10-20 09:00)".
+- **The interview pack's Likely questions are notes, never words to say.** They open saying
+  so, quote a stock answer or your profile's wording only while your own answer is unwritten
+  (marked "Notes, not words to say"), and once you have written it say only that it is under
+  Your answers. A stock answer whose `Not for:` line names this kind of employer is left out
+  with the reason, never printed with a warning under it, and one still holding a fill-in
+  ("[Customize per company]", "<the employer>", TODO) is left out naming the fill-in.
+  Packs already written are rebuilt by themselves, keeping your answers.
+- **Notes beside an answer are yours to keep, and never checked.** A line under `Notes:`,
+  after `Note:`, or wholly in italics is a note: kept on every rebuild, never read by
+  `interview_pack.py check` as part of the answer, so bullet notes no longer fail it as
+  "written as bullet points" and an italic note above an answer is no longer taken for its
+  opening. An answer that opens on a short framing line ("Two things. First, ... Second,
+  I ...") is in the first person when it says "I" by its third sentence.
+- **A rebuild keeps your layout.** Blank lines between your paragraphs stay, and where you
+  rewrote the "Checking" line in your own formatting, it is not added again above it.
+- **A screen asks its standard questions first** ("Tell me about yourself", "Why are you
+  looking?", "Why <employer>?"); the questions you added to the map follow them. A later
+  stage still leads on what came back from the one before.
+- **Hooks are whole sentences**: a research note's first sentence, its bullet marker off,
+  cut where a clause ends only when it runs long. A question quoting research is cut the
+  same way.
+- **"Ask them" asks how a team is set up only after a fact about how it is set up**; after a
+  fact about what it does, it asks what the team is spending most of its time on now.
+- **The reaction hook no longer fires on what you did not write**: another agent's report or
+  a notification relayed into the chat, or a document's own headings ("**Do not say**",
+  "## Notes"). "Identical" on its own is no longer a reaction; "these are identical" is.
+- **Two rules that apply to the same file or section are not a contradiction.** `CONTRADICTS`
+  for two rules on one setting (`networking.py OPENER`) stays; two rules on
+  `07-interview-prep.md` or `profile/CLAUDE.md` are two rules.
 
 ## [3.8.0] - 2026-10-20
 
