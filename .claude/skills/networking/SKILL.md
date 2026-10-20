@@ -453,8 +453,8 @@ should, each warning with its rewrite, and a warned draft is rewritten before it
 - a claim about the reader written as fact. Each claim is STATED (their page says it, so
   say it plainly), INFERRED (from a title, an employer, a path: hedge it once) or a GUESS
   (about their team or what would be useful to them: lightly, or better not at all);
-- a credential with no reason in its sentence: tie it to them ("which is why your LLM
-  evals work interests me"), or cut it. A sentence with a number in it is evidence and
+- a credential with no reason in its sentence: tie it to them ("which is why your
+  forecasting work interests me"), or cut it. A sentence with a number in it is evidence and
   carries its own point;
 - an exit in a first message; the employer named late (with the reordering); an InMail
   longer than its reader needs.

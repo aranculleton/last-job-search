@@ -89,3 +89,7 @@ Customer Success Manager  # a job title, the same test and tools/network/discove
 Business Intelligence Lead  # a job title, the same test
 Committee Member        # a job title, the same test
 Northgate Pricing Society  # invented organisation, the same test
+Bo Venn                 # invented, tests/test_a_reading_gives_reasons_that_are_about_them.py
+Hi Bo                   # the invented Bo Venn greeted, tests/test_a_note_is_honest_warm_and_fitted_to_its_reader.py
+Hi Cy                   # invented, the same test
+Wren Allard             # invented, tests/test_reads_react_to_signals_not_a_guess.py

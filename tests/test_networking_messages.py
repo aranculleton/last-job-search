@@ -116,7 +116,7 @@ def test_a_subject_that_says_nothing_or_asks_for_the_job_is_refused(subject):
 
 
 def test_no_subject_given_is_the_identity_line_that_drew_a_reply():
-    # "Consultant and data scientist, ex-<employers>": who they are, not a topic.
+    # "<title>, ex-<employers>": who they are, not a topic.
     m = compose.inmail(**dict(INMAIL, subject=""))
     assert m.subject == compose.identity_subject()
     assert m.subject == "Senior Operations Analyst, ex-Oakmere and Saltmarsh Analytics"

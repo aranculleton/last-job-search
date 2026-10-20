@@ -697,7 +697,7 @@ def _current(exp: list) -> str:
     return ""
 
 
-# A place line under a role's dates: "Toronto, Ontario, Canada · Hybrid", "Remote".
+# A place line under a role's dates: "Leeds, England, United Kingdom · Hybrid", "Remote".
 _WORK_MODE = re.compile(r"\s*[·•]\s*(?:on-?site|hybrid|remote)\s*$", re.I)
 
 
@@ -743,7 +743,7 @@ def _city(place: str) -> str:
 
 def place_note(reading: dict) -> str:
     """"" or a caution: their top card names one place and their current role another.
-    A top card said Toronto while the current role's own place read Waterloo, Ontario."""
+    A top card named one city while the current role's own place named another."""
     top = reading.get("location") or ""
     exp = reading.get("experience") or []
     now = next((e for e in exp if "present" in str(e.get("dates") or "").lower()), None)
@@ -761,8 +761,7 @@ def place_note(reading: dict) -> str:
 # title held there. Coarse on purpose: a parallel is offered for the person to judge,
 # marked inferred, never asserted.
 SECTORS = (
-    ("consulting", r"consult|advisory|deloitte|accenture|mckinsey|\bbain\b|\bbcg\b|kpmg|pwc|"
-                   r"ernst|\bey\b|slalom|capgemini|oliver wyman|quantumblack"),
+    ("consulting", r"consult|advisory|professional services|big four"),
     ("banking and finance", r"\bbank|capital\b|financ|fintech|insur|asset management|invest|"
                             r"pension|credit|lending|payments?\b|wealth|money\b"),
     ("sports", r"sport|football|athletic|\bleague\b|\bfc\b|\bnba\b|\bnfl\b|\bnhl\b|\bmlb\b"),
@@ -774,8 +773,8 @@ SECTORS = (
     ("travel", r"airline|airways|aviation|airport|travel|hotel"),
     ("retail", r"retail|stores?\b|supermarket|grocer|e-?commerce"),
     ("logistics", r"logistic|freight|shipping|supply chain|warehous"),
-    ("tech", r"software|\btech|\blabs?\b|\bai\b|platform|saas|cloud|google|amazon|microsoft|"
-             r"\bmeta\b|apple|shopify|uber|spotify|startup|product manager"),
+    ("tech", r"software|\btech|\blabs?\b|\bai\b|platform|saas|cloud|startup|"
+             r"product manager"),
 )
 
 

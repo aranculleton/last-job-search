@@ -86,7 +86,8 @@ AI_TELLS = (
      "ask what you would really ask them, or for a short call, in your own words"),
 )
 
-# A list of three credentials in a row ("BBC, British Airways and Newton"): the shape a
+# A list of three credentials in a row ("Oakmere Foods, Saltmarsh Analytics and Brindle &
+# Hart"): the shape a
 # generated note takes. Name the one that matters to this reader.
 _ITEM = r"(?:ex-)?[A-Z][\w&.'-]*(?:\s(?:of\s|and\s)?[A-Z][\w&.'-]*){0,3}"
 _LIST3 = re.compile(rf"\b({_ITEM}),\s+({_ITEM}),?\s+and\s+({_ITEM})\b")
