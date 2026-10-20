@@ -225,6 +225,11 @@ def _says(text: str, phrase: str) -> bool:
     return bool(words) and words <= _content(low)
 
 
+# A setting, as `--applied-to` names one: an upper-case name ("OPENER", "TITLE_SETS").
+_SETTING = re.compile(r"\b[A-Z][A-Z0-9]*_?[A-Z0-9_]{2,}\b")
+_FILE_NAME = re.compile(r"\S+\.(?:md|py|json|csv|txt|tex)\b")
+
+
 def conflicts(entry: dict, rows: list[dict] | None = None) -> list[tuple[int, dict, str]]:
     """[(number, earlier entry, why)] for each active entry, or never-write rule in
     profile/CLAUDE.md, that `entry` contradicts: one bans what the other prescribes, or
@@ -249,7 +254,11 @@ def conflicts(entry: dict, rows: list[dict] | None = None) -> list[tuple[int, di
                     why = f"it uses \"{p}\", which this one says never to"
                     break
         if not why:
-            same = set(r.get("applied_to") or ()) & set(entry.get("applied_to") or ())
+            # Two rules that set one setting ("networking.py OPENER") differently ask which
+            # stands. Two that only apply to the same file or section ("07-interview-prep.md")
+            # are two rules, and were flagged as a contradiction (2026-10-20).
+            same = {a for a in set(r.get("applied_to") or ()) & set(entry.get("applied_to") or ())
+                    if _SETTING.search(_FILE_NAME.sub(" ", str(a)))}
             if same and (r.get("rule") or "") != (entry.get("rule") or ""):
                 why = f"both set {', '.join(sorted(same))}"
         if why:
@@ -552,7 +561,10 @@ REACTION = re.compile("|".join([
     r"\bstop (?:suggesting|using|saying|adding|putting|sending|doing|asking)\b",
     r"\bnever (?:say|use|write|suggest|send|put|call)\b",
     r"\b(?:don'?t|do not) (?:say|use|write|suggest|send|put|add|mention|call|start|end|open)\b",
-    r"\b(?:identical|all the same|same (?:structure|shape|opener|opening|closing|line|ending))\b",
+    # "identical" alone is anyone's word (a research report used it): a reaction says what is.
+    r"\b(?:(?:all|they'?re|they are|these are|those are|it'?s|looks?|reads?|sounds?)\s+"
+    r"(?:\w+\s+)?identical|identical (?:in|structure|to each other)|all the same"
+    r"|same (?:structure|shape|opener|opening|closing|line|ending))\b",
     r"\b(?:i|i've|i have) (?:changed|edited|rewrote|reworded|tweaked)\b",
     r"\bhere'?s what i (?:sent|wrote)\b", r"\bwhat i actually sent\b",
     r"\bi (?:sent|wrote) (?:this|it) instead\b",
@@ -566,7 +578,16 @@ REACTION = re.compile("|".join([
 # adds, text they pasted (a contact's reply, a posting), a quoted line, a code block.
 _NOT_THEIRS = re.compile(r"<system-reminder>.*?</system-reminder>"
                          r"|<pasted_content\b[^>]*>.*?</pasted_content>"
-                         r"|```.*?```|^\s*>.*?$", re.S | re.M)
+                         r"|<task-notification>.*?</task-notification>"
+                         r"|<agent-message\b[^>]*>.*?</agent-message>"
+                         r"|```.*?```|^\s*>.*?$"
+                         # A document's own headings ("**Do not say**", "## Notes") are its
+                         # labels, never the person saying anything.
+                         r"|^\s*#{1,6}\s.*?$|^\s*(?:\*\*|__)[^*_\n]{1,80}(?:\*\*|__)\s*:?\s*$",
+                         re.S | re.M)
+# Text another agent or a notification wrote, wherever it sits in the prompt.
+_RELAYED = re.compile(r"\[Subagent hand-back\]|Another Claude session sent a message|"
+                      r"\[SYSTEM NOTIFICATION", re.I)
 _LONG_QUOTE = re.compile(r'"[^"\n]{80,}"|\u201c[^\u201d\n]{80,}\u201d')
 # "She replied: ..." introduces their words, not the person's.
 _THEIR_WORDS = re.compile(r"\b(?:replied|wrote back|responded|answered|said|wrote|messaged"
@@ -582,6 +603,8 @@ def reaction(text: str) -> str:
         return ""
     if t.lstrip().startswith("/reply"):          # the rest is the contact's message
         t = t.lstrip().split("\n", 1)[0]
+    if _RELAYED.search(t):                       # another agent's report, relayed
+        return ""
     t = _LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t))
     cut = _THEIR_WORDS.search(t)
     if cut:

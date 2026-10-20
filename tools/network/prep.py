@@ -285,13 +285,27 @@ def clip(text, limit) -> str:
 
 
 def _short(value, limit=ANCHOR_CHARS) -> str:
-    """A fragment short enough to sit inside a question, cut at a word."""
+    """A fragment short enough to sit inside a question: its first sentence, cut where a
+    clause ends when it is too long ("..., which" reads as cut; "... in 2025," as a
+    clause), else at a word."""
     text = _first_sentence(value) or _text(value)
     if len(text) <= limit:
         return text.rstrip(". ")
     head = text[:limit]
-    cut = head.rfind(" ")
+    cut = max(head.rfind(", "), head.rfind("; "), head.rfind(" - "), head.rfind(" ("))
+    if cut <= limit // 2:
+        cut = head.rfind(" ")
     return (head[:cut] if cut > limit // 2 else head).rstrip(",;: ") + "..."
+
+
+# What a team fact must say for "Is that still how the team is set up?" to follow it: how
+# the team is set up. A fact about what the team does got that question too, and read as
+# nonsense in an interview pack (2026-10-20).
+_TEAM_SHAPE = re.compile(r"\b(?:reports? (?:in)?to|reporting (?:in)?to|sits? (?:in|within|under)|"
+                         r"led by|headed by|run by|split (?:into|across)|organi[sz]ed|structured?|"
+                         r"headcount|\d+[- ](?:people|person|strong)|members?|pods?|squads?|hub|"
+                         r"team of)\b", re.I)
+TEAM_WORK_TAIL = "What is the team spending most of its time on right now?"
 
 
 # ---------------------------------------------------------------- sources
@@ -1186,8 +1200,10 @@ def questions_for_them(company_research, role) -> list:
     for keyname in _TEAM_KEYS:
         fact = _fact(research.get(keyname), default)
         if fact is not None:
+            shape = _TEAM_SHAPE.search(_first_sentence(fact.value) or fact.value)
             add(_ask("The research says", fact.value,
-                     "Is that still how the team is set up?"), fact.value, fact.source)
+                     "Is that still how the team is set up?" if shape else TEAM_WORK_TAIL),
+                fact.value, fact.source)
             break
     for keyname in ("funding", "funding_stage", "raised"):
         fact = _fact(research.get(keyname), default)

@@ -435,7 +435,9 @@ def spoken_findings(answer: str) -> list[str]:
     sents = [x for x in sentences(text) if x.strip()]
     # A clause after a semicolon opens like a sentence: "I'm an analyst; spearheaded ...".
     clauses = [c.strip() for x in sents for c in x.split(";") if c.strip()]
-    if not _FIRST_PERSON_WORD.search(" ".join(sents[:2]) or text) and (
+    # A spoken answer often opens on a short framing line ("Two things. First, the scale.
+    # Second, I ..."): first person anywhere in its first three sentences is said as said.
+    if not _FIRST_PERSON_WORD.search(" ".join(sents[:3]) or text) and (
             len(text.split()) >= SPOKEN_SHORT_WORDS or _HEADLINE.match(text)):
         out.append("not in the first person: say it as \"I ...\"")
     verbs = [x for x in clauses if _RESUME_VERB.match(x.strip())]

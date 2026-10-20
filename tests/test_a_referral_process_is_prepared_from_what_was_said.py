@@ -152,10 +152,12 @@ def test_motivation_answers_are_asked_and_stock_answers_are_matched_and_flagged(
         "Oakmere Foods, then Brindle & Hart Logistics)?" in moves
     assert P.ASK_MARK in _block(text, "Why %s?" % FIRM)
     assert "facts only" not in text
-    # The stock answer is found through the employer's name in its heading, and flagged.
+    # The stock answer is found through the employer's name in its heading, and, being
+    # marked Not for consulting, left out with the reason: never printed as the thing to say.
     leaving = _block(text, "Why are you leaving your current role?")
-    assert "Prepared: I want depth over a rotating client portfolio" in leaving
-    assert "CAREFUL: its Not for: line names consulting employers" in leaving
+    assert "depth over a rotating client portfolio" not in leaving
+    assert "left out for %s: its Not for: line names consulting employers" % FIRM in leaving
+    assert "depth over a rotating client portfolio" not in _section(text, "Likely questions")
     # A five-year answer this stage does not ask is still flagged, on one screen.
     screen = _section(text, "On one screen")
     assert 'Not as it stands: your answer to "Where do you see yourself in 5 years?"' in screen
