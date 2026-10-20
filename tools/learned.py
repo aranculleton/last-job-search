@@ -644,48 +644,85 @@ def refuse_over_pending(what: str) -> str:
 HOLD_LIMIT = 3
 
 
-def _transcript_texts(path: str) -> list[tuple[int, str, str]]:
-    """[(line number, kind, text)] from a Claude Code transcript: kind "user" for what the
-    person typed, "tool" for each command the chat ran."""
-    out = []
+# A long chat's transcript runs to hundreds of megabytes, and the end of every turn read
+# it whole. Only the current turn matters: it is read from the end, a block at a time,
+# back to the last turn the chat finished, and never more than TAIL_MAX.
+TAIL_BLOCK = 1 << 20
+TAIL_MAX = 32 << 20
+_TURN_END = (b'"stop_reason":"end_turn"', b'"stop_reason": "end_turn"')
+
+
+def _tail_lines(path: str) -> list[str]:
+    """The transcript's lines from the last finished turn on (or its last TAIL_MAX)."""
     try:
-        fh = open(path, encoding="utf-8")
+        fh = open(path, "rb")
     except (OSError, TypeError):
-        return out
+        return []
     with fh:
-        for n, line in enumerate(fh):
-            try:
-                d = json.loads(line)
-            except ValueError:
-                continue
-            if not isinstance(d, dict) or d.get("isMeta") or d.get("isSidechain"):
-                continue
-            msg = d.get("message") if isinstance(d.get("message"), dict) else {}
-            content = msg.get("content")
-            if d.get("type") == "user":
-                if isinstance(content, str):
-                    out.append((n, "user", content))
-                elif isinstance(content, list):
-                    texts = [c.get("text", "") for c in content
-                             if isinstance(c, dict) and c.get("type") == "text"]
-                    if texts and not any(isinstance(c, dict) and c.get("type") == "tool_result"
-                                         for c in content):
-                        out.append((n, "user", "\n".join(texts)))
-            elif d.get("type") == "assistant" and isinstance(content, list):
-                for c in content:
-                    if isinstance(c, dict) and c.get("type") == "tool_use":
-                        inp = c.get("input") if isinstance(c.get("input"), dict) else {}
-                        out.append((n, "tool", " ".join(str(v) for v in inp.values())))
-                if msg.get("stop_reason") == "end_turn":
-                    out.append((n, "end", ""))
+        fh.seek(0, os.SEEK_END)
+        size = fh.tell()
+        at, data = size, b""
+        while at > 0 and size - at < TAIL_MAX:
+            step = min(TAIL_BLOCK, at)
+            at -= step
+            fh.seek(at)
+            data = fh.read(step) + data
+            lines = data.split(b"\n")
+            body = lines[1:] if at > 0 else lines      # the first may be a part line
+            # The last finished turn before the person's latest message: the current
+            # turn's own final message may already be written when the hook runs.
+            users = [i for i, ln in enumerate(body) if b'"type":"user"' in ln
+                     or b'"type": "user"' in ln]
+            ends = [i for i, ln in enumerate(body) if any(t in ln for t in _TURN_END)
+                    and users and i < users[-1]]
+            if ends:
+                return [ln.decode("utf-8", "replace") for ln in body[ends[-1]:]]
+        lines = data.split(b"\n")
+        return [ln.decode("utf-8", "replace") for ln in (lines[1:] if at > 0 else lines)]
+
+
+def _transcript_texts(path: str) -> list[tuple[int, str, str]]:
+    """[(line number, kind, text)] from the end of a Claude Code transcript: kind "user"
+    for what the person typed, "tool" for each command the chat ran, "end" where the chat
+    finished a turn."""
+    out = []
+    for n, line in enumerate(_tail_lines(path)):
+        try:
+            d = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(d, dict) or d.get("isMeta") or d.get("isSidechain"):
+            continue
+        msg = d.get("message") if isinstance(d.get("message"), dict) else {}
+        content = msg.get("content")
+        if d.get("type") == "user":
+            if isinstance(content, str):
+                out.append((n, "user", content))
+            elif isinstance(content, list):
+                texts = [c.get("text", "") for c in content
+                         if isinstance(c, dict) and c.get("type") == "text"]
+                if texts and not any(isinstance(c, dict) and c.get("type") == "tool_result"
+                                     for c in content):
+                    out.append((n, "user", "\n".join(texts)))
+        elif d.get("type") == "assistant" and isinstance(content, list):
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "tool_use":
+                    inp = c.get("input") if isinstance(c.get("input"), dict) else {}
+                    out.append((n, "tool", " ".join(str(v) for v in inp.values())))
+            if msg.get("stop_reason") == "end_turn":
+                out.append((n, "end", ""))
     return out
 
 
 def _this_turn(items: list) -> list:
-    """What came after the last turn the chat finished: the prompt that opened this one,
-    the messages sent while it worked, and what it ran. A reaction days old in a chat that
-    has carried on since is not this turn's to hold."""
-    for i in range(len(items) - 1, -1, -1):
+    """What came after the last turn the chat finished before the person's latest message:
+    the prompt that opened this turn, the messages sent while it worked, and what it ran
+    (and this turn's own final message, which may already be written). A reaction days old
+    in a chat that has carried on since is not this turn's to hold."""
+    users = [i for i, it in enumerate(items) if it[1] == "user"]
+    if not users:
+        return []
+    for i in range(users[-1] - 1, -1, -1):
         if items[i][1] == "end":
             return items[i + 1:]
     return items

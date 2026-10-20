@@ -153,3 +153,21 @@ def test_the_cli_shows_the_rule_back_in_one_line(profile, capsys):
                          "--rule", "first notes under 200 characters"]) == 0
     out = capsys.readouterr().out
     assert "From now on, first notes under 200 characters (you said: \"too long, cut it\")" in out
+
+
+def test_the_turns_own_final_message_already_written_does_not_hide_the_reaction(profile,
+                                                                                tmp_path):
+    turn = TURN_ONE + [_line("user", text="too long, and identical in structure"),
+                       _line("tool", command="python3 tools/network/compose.py ..."),
+                       _line("result"), _line("end", text="Redrafted.")]
+    assert _stop(_transcript(tmp_path, turn))["decision"] == "block"
+
+
+def test_a_long_transcript_is_read_from_its_end(profile, tmp_path, monkeypatch):
+    monkeypatch.setattr(learned, "TAIL_BLOCK", 512)
+    old = [_line("user", text=f"Older prompt {i}, too formal") for i in range(400)]
+    turn = old + [_line("end")] + [_line("user", text="Now find people at the second employer.")]
+    path = _transcript(tmp_path, turn)
+    lines = learned._tail_lines(path)
+    assert len(lines) < 10                       # the last finished turn on, not the file
+    assert _stop(path) == {}
