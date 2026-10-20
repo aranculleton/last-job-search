@@ -450,13 +450,31 @@ def clean_days(today: datetime.date, loads: list, data: dict | None = None) -> i
     return n
 
 
+def mine(name: str) -> bool:
+    """Did the person write this limit themselves, in a form that can be read?"""
+    got = _MINE[name]()
+    return got is not None and _clean(name, got) is not None
+
+
+def loads_cap(period: str = "hour") -> int:
+    """All page loads together in an hour or a day: the loads limit, never below the
+    profile limit. A person who raised PROFILE_READS_PER_HOUR to lift every cap was still
+    held at the loads limit they never set (2026-10-20: 1000 an hour written, 30 held)."""
+    return max(value("loads_per_" + period), value("reads_per_" + period))
+
+
 def hourly_ceiling(today: datetime.date, loads: list, data: dict | None = None) -> tuple:
     """(pages an hour allowed now, why): the cap, or after LinkedIn has shown a signal the
-    ramp's step for the clean days since, never above loads_per_hour. A signal today puts the
+    ramp's step for the clean days since, never above the cap. A signal today puts the
     ramp back to its first step tomorrow. Before any signal there is no ramp: a first day
-    read at five an hour was the slow start 3.2.5 never had."""
-    top = value("loads_per_hour")
+    read at five an hour was the slow start 3.2.5 never had. A person who set their own
+    hourly cap and not the ramp has said how fast they want to go, and the ramp does not
+    hold them below it: it once stalled a run for 44 minutes at 10 an hour while their
+    own setting said 1000."""
+    top = loads_cap("hour")
     if not friction(data):
+        return top, "loads_per_hour"
+    if (mine("reads_per_hour") or mine("loads_per_hour")) and not mine("ramp"):
         return top, "loads_per_hour"
     steps = value("ramp")
     n = clean_days(today, loads, data)

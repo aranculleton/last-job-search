@@ -74,7 +74,7 @@ Follow these steps **in order**.
    backlog of a couple of hundred entries this is the difference between a run that finishes and
    one that is not worth starting.
 4. If no candidates remain, say so ("Nothing new to rank - run /scrape to find fresh postings") and stop.
-5. **Read what they have taught it**: `python3 tools/learned.py brief jobs` (and `brief search`).
+5. **Read what they have taught it**: `python3 tools/learned.py brief jobs` (and `brief search`, and `brief targets` for the employers they want or do not).
    A job or a kind of job they have turned down outranks any score: pass the rules to every
    scoring agent in Step 2, and leave out what they rule out, saying so in the Step 5 summary.
 6. Read the compact scoring brief **once**:

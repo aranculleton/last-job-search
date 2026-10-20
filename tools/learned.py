@@ -77,8 +77,10 @@ import person  # noqa: E402
 FILE = "learned.json"
 # Where a reaction belongs. "other" catches the rest; an area is a filter for the
 # brief, never a reason to drop what was said.
-AREAS = ("voice", "messages", "questions", "people", "jobs", "documents", "search",
-         "interview", "other")
+AREAS = ("voice", "messages", "questions", "people", "targets", "jobs", "documents",
+         "search", "interview", "other")
+# "targets" is which employers to pick and pursue; a rule about them went under "messages"
+# for want of it (2026-10-20).
 
 
 def _path() -> str | None:
@@ -962,11 +964,19 @@ def main(argv=None) -> int:
             where = f"entry {n}" if n else "a rule in profile/CLAUDE.md"
             print(f"  CONTRADICTS {where} ({old.get('date')}: {old.get('rule')}): {why}.")
         if e["conflicts"]:
-            nums = [str(n) for n, _o, _w in e["conflicts"] if n]
-            print("Ask the person once which stands, with both dates. Theirs is this one: "
-                  + (f"python3 tools/learned.py retire {' '.join(nums)}" if nums else
-                     "change the line in profile/CLAUDE.md")
-                  + f"; the earlier one: python3 tools/learned.py retire {len(load())}.")
+            # Each command names the entry it retires and when that rule was made: "Theirs is
+            # this one: retire 50" was read as "this one is 50", the earlier rule (2026-10-20).
+            new = len(load())
+            olds = [(n, o) for n, o, _w in e["conflicts"] if n]
+            earlier = ", ".join(f"{n} ({o.get('date')})" for n, o in olds)
+            print(f"Ask the person once which stands, with both dates. The new rule is entry "
+                  f"{new} ({e.get('date')}).")
+            print("  If the new rule stands: "
+                  + (f"python3 tools/learned.py retire {' '.join(str(n) for n, _o in olds)} "
+                     f"(retires the earlier entry {earlier})" if olds else
+                     "change the line in profile/CLAUDE.md"))
+            print(f"  If the earlier rule stands: python3 tools/learned.py retire {new} "
+                  f"(retires the new entry {new})")
     elif a.cmd == "skip":
         skip(a.said, a.why)
         print(f"learned: not a rule ({a.why}); {len(pending())} reaction(s) still unrecorded")

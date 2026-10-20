@@ -588,7 +588,7 @@ sending records itself when the send is logged with its words. Then, in the same
    itself when the part of the rules it rests on changes (one blocker row, one gate setting);
    when you change a screening rule, run `exclude.py lapsed` in the same turn and `restamp`
    the groups that do not rest on what changed.
-3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted. Where their rule and a check disagree, ask once which wins and add `--overrides <the check's rule name>` when theirs does. When it lists `CONTRADICTS`, ask which stands, with both dates, and retire the other.
+3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|targets|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted. Where their rule and a check disagree, ask once which wins and add `--overrides <the check's rule name>` when theirs does. When it lists `CONTRADICTS`, ask which stands, with both dates, and retire the other.
 4. Say in one line what will be different from now on.
 
 **Read before drafting.** Every step that writes something the person will read or

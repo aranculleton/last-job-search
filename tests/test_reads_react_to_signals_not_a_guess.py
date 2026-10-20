@@ -265,3 +265,28 @@ def test_the_fast_path_prints_only_the_addresses_to_open(here, monkeypatch, caps
     out = capsys.readouterr().out.splitlines()
     assert out[0] == "https://www.linkedin.com/in/wren-allard-example"
     assert "reading.py paste -" in out[-1]
+
+
+def test_a_person_who_lifts_the_caps_is_not_held_by_the_ramp_or_the_loads_cap(monkeypatch):
+    # From a real round (2026-10-20): PROFILE_READS_PER_HOUR = 1000 and "fast" written to
+    # lift every cap, yet the ramp held reads to 10 an hour and the run stalled 44 minutes.
+    today = NOW.date()
+    yesterday = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(),
+                               "kind": "slow"}]}
+    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READ_RISK="fast",
+                                                           PROFILE_READS_PER_HOUR=1000))
+    assert pace.loads_cap("hour") == 1000
+    assert pace.hourly_ceiling(today, [], yesterday) == (1000, "loads_per_hour")
+    # A ramp they wrote themselves still applies: it is theirs.
+    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
+        PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=1000, PROFILE_READ_RAMP=(5, 10, 20)))
+    assert pace.hourly_ceiling(today, [], yesterday)[0] == 5
+
+
+def test_a_wait_on_the_ramp_names_the_setting_and_where_to_change_it(here):
+    pace.record_friction("slow", "a page took far longer than usual",
+                         NOW - datetime.timedelta(days=1))
+    for i in range(5):
+        _profile_load(f"r{i}", NOW - datetime.timedelta(minutes=50 - i * 5))
+    g = reading.gate_state(NOW, sends_left=None)
+    assert g["kind"] == "later" and "PROFILE_READ_RAMP in profile/networking.py" in g["why"]

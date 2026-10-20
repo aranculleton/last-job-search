@@ -140,8 +140,8 @@ READS_PER_HOUR = pace.value("reads_per_hour")
 READS_PER_DAY = pace.value("reads_per_day")
 PAGES_PER_HOUR = pace.value("pages_per_hour")
 PAGES_PER_DAY = pace.value("pages_per_day")
-LOADS_PER_HOUR = max(pace.value("loads_per_hour"), READS_PER_HOUR)
-LOADS_PER_DAY = max(pace.value("loads_per_day"), READS_PER_DAY)
+LOADS_PER_HOUR = pace.loads_cap("hour")
+LOADS_PER_DAY = pace.loads_cap("day")
 SKIP_SPARE = pace.value("skip_spare")
 HOUR_MINUTES = 60                       # the hourly caps count loads in this rolling window
 GAP_SECONDS = pace.value("gap_seconds")  # between two pages: most near GAP_MEDIAN
@@ -1876,9 +1876,15 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
             resume = min(x["when"] for x in got) + datetime.timedelta(minutes=HOUR_MINUTES)
             label = name if name.startswith("PROFILE_") else (
                 "PROFILE_LOADS_PER_HOUR" if name == "loads_per_hour" else name)
+            # Say which setting holds it and where it is changed: a wait that names no
+            # setting was waited out for 44 minutes while the person thought every cap was
+            # lifted.
+            setting = ("PROFILE_READ_RAMP" if "PROFILE_READ_RAMP" in label
+                       else label if label.startswith("PROFILE_") else "")
+            change = (f" To change it: {setting} in profile/networking.py." if setting else "")
             return {"kind": "later", "at": resume,
                     "why": f"{cap} pages in the last hour ({label}); the next after "
-                           f"{resume:%H:%M}"}
+                           f"{resume:%H:%M}.{change}"}
     if loads:
         last = loads[-1]
         gap = last["gap"]
