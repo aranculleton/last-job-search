@@ -201,6 +201,34 @@ make sense to somebody whose repo just received it.
   note to them.
 - **A never-say phrase is refused in a follow-up, a referral ask, an email and a warm intro
   too**, not only in a first note, and one typed with a curly apostrophe is caught.
+- **One check for every message, agreeing with what the composers write** (an audit of the
+  networking checks, 2026-10-20). A follow-up, a referral ask, an email and a warm intro now
+  run the same check a first note does, not the never-say phrases alone, and an application's
+  outreach note is checked the same way, as a message with no length limit. Checks that
+  refused or warned on good writing no longer do:
+  - a sentence about you ("a talk inspired me to move into pricing") is not flattery, and one
+    about how you felt ("your talk stuck with me") is not a guess about them;
+  - "who should I speak to about forecasting there?" is not a job ask;
+  - "hope you're well" opens a follow-up as well as a first note;
+  - a question or an "if you think it would help" offer is not a stacked hedge;
+  - the topic word said again in the next sentence is not a repeat, while a word twice in one
+    sentence still is;
+  - an email after a call is not warned as a first message;
+  - a note to someone already connected is checked at its own length, not the 300 of a request.
+  A batch check no longer flags your own work-authorization line as two notes alike; a fix
+  the checks suggest is never one the next check refuses; each style finding carries its own
+  rule name, so `learned.py record --overrides <name>` lifts that one alone; and one input is
+  reported once, not three times. Dead functions are gone.
+- **Interview and call prep agree with each other** (an audit, 2026-10-20). A call prep
+  answers from the interview pack's own answers (your stock answers, why you are looking,
+  your work authorization in your words), reads the team research and the posting the pack
+  reads, and sends a booked screen with no application to `/interview`. A gap is named by the
+  posting's own word ("PySpark", not "big-data engineering is not held"); a skill you said
+  yes to is no longer also listed as never to claim; "Why Northwind Co.?" is a motivation
+  question; your oldest employer is no longer dropped from the career moves; a declined
+  referral is not recorded as a referral; a recruiter is asked about the next stage once. Call
+  preps already written are rebuilt, keeping what you wrote. A draft you asked for is shown and
+  listed to confirm, never held back as unfit.
 - **A contradiction says which entry each command retires.** "Theirs is this one: retire 50;
   the earlier one: retire 51" read as though 50 were the new rule. It now says "If the new rule
   stands: retire 50 (retires the earlier entry 50, <date>)" and the reverse.
