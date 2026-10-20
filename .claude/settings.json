@@ -13,5 +13,27 @@
       "Bash(python3 tools/verify_pdf.py:*)",
       "Bash(pdftotext:*)"
     ]
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/tools/learned.py hook"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/tools/learned.py hook"
+          }
+        ]
+      }
+    ]
   }
 }

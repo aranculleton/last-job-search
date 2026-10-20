@@ -635,7 +635,21 @@ _SENT_START_CONTRACTION = re.compile(
     r"^([A-Za-z]+'(?:ll|ve|d|re|m)\b" r"|" + _CONTRACTION_WORDS + r"\b)", re.I)
 
 
-def _sentence_starts_with_contraction(text) -> list:
+# The person's choice, profile/networking.py CONTRACTIONS: "allow" (the default),
+# "warn" (compose.advise says so) or "refuse" (validate refuses, as every note was held to
+# before). Forcing "I am" and "I would" at every sentence start made the defaults read,
+# in the person's words, "like someone who just learned English as a second language":
+# the message that drew a reply opened three sentences on "I'm".
+CONTRACTIONS = str(getattr(_NET, "CONTRACTIONS", "") or "allow").strip().lower()
+
+
+def _sentence_starts_with_contraction(text, mode=None) -> list:
+    if (mode or CONTRACTIONS) != "refuse":
+        return []
+    return contractions_at_start(text)
+
+
+def contractions_at_start(text) -> list:
     out = []
     for s in sentences(text):
         m = _SENT_START_CONTRACTION.match(s.strip())
@@ -727,10 +741,11 @@ def _british(text) -> list:
 # the register does not want.
 COLD_ONLY_RULES = frozenset({"sentence_starts_with_contraction"})
 
-# Rules that fire only on the person's own data, never on fixed text: a test
-# that gives every rule in RULES a firing case subtracts these. Adding a rule
-# here, not only to RULES, keeps a person's own completeness tests passing.
-DATA_DRIVEN_RULES = frozenset({"person_dislikes"})
+# Rules that fire only on the person's own data or setting, never on fixed text by
+# default: a test that gives every rule in RULES a firing case subtracts these. Adding a
+# rule here, not only to RULES, keeps a person's own completeness tests passing. An
+# opening contraction fires only where CONTRACTIONS is "refuse".
+DATA_DRIVEN_RULES = frozenset({"person_dislikes", "sentence_starts_with_contraction"})
 
 
 def _person_dislikes(text) -> list:

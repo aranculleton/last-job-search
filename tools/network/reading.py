@@ -2385,7 +2385,14 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     about_me = compose.ABOUT_ME if about_me is None else about_me
     opener = compose.OPENER if opener is None else opener
     vary = VARY_ABOUT_ME if vary_about_me is None else vary_about_me
-    own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x]
+    # The phrase bank's own variants, and the person's TEMPLATES, are the asks and openers
+    # a batch is meant to vary between.
+    bank = [v for intent in ("ask", "pointer", "opener")
+            for rt in compose.READER_TYPES
+            for v in (compose._variants(intent, rt) or list(
+                (compose.BANK.get(intent) or {}).get(rt)
+                or (compose.BANK.get(intent) or {}).get("any") or ()))]
+    own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x] + bank
     per = {cid: _sentences(t) for cid, t in notes.items()}
     limit = max(ALIKE_MIN, int(len(notes) * ALIKE_SHARE))
     out, seen = [], []
@@ -2401,12 +2408,16 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
         asks = {}
         for cid, sents in per.items():
             last = sents[-1] if sents else ""
-            if last.endswith("?") and not _same(last, ask) and re.search(
+            if last.endswith("?") and not any(_same(last, x) for x in [ask] + bank) and re.search(
                     r"\b(?:open to|quick (?:chat|call)|minutes|few questions|grab a coffee|"
                     r"catch up|connect)\b", last, re.I):
                 asks.setdefault(last, []).append(cid)
         for sent, ids in asks.items():
             out.append(("not your ask", sent, ids))
+    # Built the same way: "identical in structure" was the person's word for a batch whose
+    # sentences differed and whose shape did not.
+    for a, b, shape in compose.alike(notes):
+        out.append(("same shape", shape, [a, b]))
     return out
 
 
@@ -2954,6 +2965,11 @@ def main(argv: list | None = None) -> int:
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         return _paste(text, a.source)
     if a.cmd == "draft":
+        import learned
+        waiting = learned.refuse_over_pending("reading.py draft")
+        if waiting:
+            print(waiting)
+            return EXIT["error"]
         note = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         if not note.strip():
             raise SystemExit("reading: draft needs the note's text")
@@ -2977,8 +2993,9 @@ def main(argv: list | None = None) -> int:
                   + (" ..." if len(ids) > 8 else ""))
         if found:
             print("  too alike to send as a batch: rewrite each from its own reading (the "
-                  "background line chosen per person where the profile says so), and the ask "
-                  "from ASK in profile/networking.py")
+                  "background line chosen per person where the profile says so), the ask from "
+                  "ASK or the phrase bank (compose.phrase, by contact), and no two built the "
+                  "same way")
             return EXIT["alike"]
         print("  no sentence repeats past the limit, and every ask is the person's own")
         return EXIT["ok"]

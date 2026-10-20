@@ -31,11 +31,15 @@ def test_no_capital_after_the_greeting_comma_without_an_opener():
     note = compose.first_note("Robin Vale", "Saw the post on forecasting at Fernhill",
                               "How is the team set up", opener="")
     assert note.startswith("Hi Robin, saw the post")
-    body = compose.inmail("Robin Vale", "Your forecasting post",
-                          "Saw the post on forecasting at Fernhill", "How is the team set up",
-                          "At Brindle & Hart I cut forecast error from 22% to 14%",
-                          opener="").split("\n\n", 1)[1]
-    assert body.startswith("Hi Robin, saw the post")
+    m = compose.inmail("Robin Vale", "Your forecasting post",
+                       "Saw the post on forecasting at Fernhill", "How is the team set up",
+                       "At Brindle & Hart I cut forecast error from 22% to 14%", opener="",
+                       looked=True)
+    # The InMail's greeting stands alone and the reason for writing comes after the work,
+    # as in the message that drew a reply; there it is a sentence of its own.
+    paras = m.body.split("\n\n")
+    assert paras[0] == "Hi Robin,"
+    assert any(p.startswith("Saw the post on forecasting at Fernhill.") for p in paras)
 
 
 def test_a_named_city_counts_although_the_post_also_says_remote():

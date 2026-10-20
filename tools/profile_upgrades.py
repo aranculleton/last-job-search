@@ -648,6 +648,19 @@ def _runtime_files() -> str:
             "repo is never clean and the sync refuses to run" % n) if n else ""
 
 
+def _missing_texts() -> str:
+    """Messages that drew a reply, logged without their words: what_works cannot learn from
+    them. The message that drew a senior reader's reply in three hours reached the log days
+    later, and earlier ones were logged as "approach" with no text."""
+    if not person.exists():
+        return ""
+    found = _probe("import state, what_works as w; "
+                   "print(sum(1 for c in w.message_cases(state.load_contacts(), "
+                   "state.load_threads()) if c['won'] and not c['text']))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d message(s) that drew a reply are logged without their words" % n) if n else ""
+
+
 def _campaign_notes() -> str:
     """Notes kept by hand for an employer with a hiring process, from before its living prep
     document existed: what was decided in them is lost to the next chat until it is folded
@@ -1107,6 +1120,20 @@ REGISTRY: tuple[Upgrade, ...] = (
             "Never delete a test or weaken one to pass; a test of a part the update removed is "
             "the sync's question to the person. Run python3 -m pytest profile/tests -q before "
             "committing", "edit", "~15 min", priority=2, conditional=True),
+    Upgrade("message-texts", "2026-10-19",
+            "your messages that got replies kept with their words, so drafts follow what "
+            "worked for you rather than the app's defaults",
+            _missing_texts, "python3 -c \"import sys; sys.path[:0]=['tools','tools/network']; "
+            "import state, what_works as w; [print(c['contact_id'], c['date'], c['name'], "
+            "c['company']) for c in w.message_cases(state.load_contacts(), state.load_threads()) "
+            "if c['won'] and not c['text']]\" lists them. After a yes, for each one the person "
+            "pastes (from LinkedIn's sent messages, as it went): python3 tools/network/state.py "
+            "text <contact_id> --date <date> --text-file <the paste>. Skip any they cannot find",
+            "question", "~5 min", priority=2, needs="you", conditional=True,
+            ask="Some messages you sent that got a reply aren't saved with their words. Could "
+                "you paste them in once, so I can learn from what worked?",
+            why_ask="Drafts follow the shape of your messages that got replies, and a message "
+                    "kept without its words can't be one of them."),
     Upgrade("campaign-notes", "2026-10-19",
             "notes you kept by hand for an interview, before its prep document existed, "
             "folded into it so the next chat has them",
@@ -1237,6 +1264,21 @@ REGISTRY = REGISTRY + _method_upgrades()
 SAFE_DEFAULTS: dict[str, str] = {
     # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
     # the careful preset, which is the pace of the release before the dial, value for value.
+    "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "
+                               "\"warn\" or \"refuse\" bring back the old rule for a person "
+                               "who wants it",
+    "networking.ELIGIBILITY": "work authorization for a recruiter and a decision-maker, never a "
+                              "peer, as the profile's own rule (\"anyone whose reply could be "
+                              "about a role\") reads; recruiters always had it",
+    "networking.SAY_THE_ROLE": "a recruiter and a decision-maker may be told the role wanted, "
+                               "a peer is not; before, only a recruiter",
+    "networking.INMAIL_WORDS": "a warning only, past 170 words to a decision-maker or recruiter "
+                               "and 130 to a peer; the 200-word ceiling is unchanged",
+    "networking.EMPLOYERS_FIRST": "\"warn\": a late employer is a warning with the reordering, "
+                                  "never a refusal, as the message that drew a reply had it",
+    "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
+    "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
+    "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
     "networking.PROFILE_READ_RISK": "\"careful\": the pace before the dial existed; normal or "
     "fast only when the person writes it",
     "networking.PROFILE_PAGES_PER_HOUR": "4 list pages an hour at careful",

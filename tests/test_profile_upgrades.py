@@ -289,7 +289,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "learned-choices", "profile-reads",
                                                                  "connections-export", "work-place",
                                                                  "profile-consistency",
-                                                                 "campaign-notes"}
+                                                                 "campaign-notes", "message-texts"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -301,6 +301,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert "you pick the right one" in U.by_id("profile-consistency").ask
     # Their own notes are folded into the prep document only on their yes.
     assert "Can I fold them into it" in U.by_id("campaign-notes").ask
+    # Only they have the words they sent; nothing in the app can fetch them.
+    assert "paste them in once" in U.by_id("message-texts").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):
@@ -718,3 +720,27 @@ def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profi
     assert r.returncode == 0, r.stderr
     assert U.by_id("runtime-files").pending() == ""
     assert '"bo_venn"' in open(tmp_path / "ledger" / "reading-ledger.json").read()
+
+
+def test_messages_that_drew_replies_without_their_words_are_asked_for_once(profile, tmp_path,
+                                                                            monkeypatch):
+    import schema
+    import state
+    st = tmp_path / "state"
+    st.mkdir()
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    row = {k: "" for k in schema.CONTACT_COLUMNS}
+    row.update(contact_id="larkspur_castellan", name="Juno Castellan", company="Larkspur",
+               status="in_conversation")
+    state.save_contacts([row], str(st / "network_contacts.csv"))
+    out = {"contact_id": "larkspur_castellan", "date": "2026-09-01", "direction": "out",
+           "channel": "inmail", "scenario": "first_message", "summary": "approach",
+           "full_text": ""}
+    back = {"contact_id": "larkspur_castellan", "date": "2026-09-01", "direction": "in",
+            "channel": "inmail", "scenario": "reply", "summary": "replied",
+            "full_text": "Thanks, let's talk."}
+    state.save_threads([out, back], str(st / "network_threads.csv"))
+    assert "1 message(s) that drew a reply" in U.by_id("message-texts").pending()
+    state.save_threads([dict(out, full_text="Hi Juno, hope you're well."), back],
+                       str(st / "network_threads.csv"))
+    assert U.by_id("message-texts").pending() == ""

@@ -364,11 +364,21 @@ def test_a_peer_with_nothing_shared_gets_the_standard_length():
 
 # ------------------------------------------------------------ H2. a rule with its fix
 
-def test_a_buried_employer_says_what_to_do_and_offers_the_reordering():
+def test_a_buried_employer_says_what_to_do_and_offers_the_reordering(monkeypatch):
     note = ("Hi Wren, hope you're well. Your post on forecasting depot demand from weather feeds "
             "was a good read. I work in supply-chain analytics in Manchester now. I spent four "
             "years at Brindle & Hart Logistics before that. Would you have 15 minutes for a few "
             "questions sometime?")
+    # A warning by default since 2026-10-20 (the message that drew a reply named its
+    # target in the third paragraph); a refusal where the person's EMPLOYERS_FIRST says so.
+    assert not [v for v in compose.validate(note, "connection", name="Wren Halloway",
+                                            employers=["Brindle & Hart Logistics"])
+                if v.rule == "employers_buried"]
+    warned = [a for a in compose.advise(note, "connection", name="Wren Halloway",
+                                        employers=["Brindle & Hart Logistics"])
+              if a.rule == "employers_buried"]
+    assert len(warned) == 1 and warned[0].text == "Brindle & Hart Logistics"
+    monkeypatch.setattr(compose, "EMPLOYERS_FIRST", "refuse")
     found = [v for v in compose.validate(note, "connection", name="Wren Halloway",
                                          employers=["Brindle & Hart Logistics"])
              if v.rule == "employers_buried"]
