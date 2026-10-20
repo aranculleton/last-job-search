@@ -209,7 +209,25 @@ def test_check_holds_it_until_the_answers_are_said_and_the_research_is_done(stat
         text = text.replace("### %s\n" % q, "### %s\n%s\n" % (q, SPOKEN), 1)
     open(path, "w", encoding="utf-8").write(text)
     capsys.readouterr()
-    assert P.main(["check", FIRM]) == 0, capsys.readouterr().out
+    # The moves between jobs are the person's reasons: asked, never drafted from dates.
+    assert P.main(["check", FIRM]) == 1
+    assert "- Ask: Walk me through your career, and the moves between jobs." in \
+        capsys.readouterr().out
+    import shutil
+    stock = state / "07-interview-prep.md"
+    shutil.copy(os.path.join(ROOT, "profile.example", P.STORIES_FILE), stock)
+    import person
+    real_path = person.path
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(person, "path", lambda *parts: str(stock) if parts == (P.STORIES_FILE,)
+                   else real_path(*parts))
+        assert P.main(["motive", "Walk me through your career, and the moves between jobs.",
+                       "--answer", "Each move was for a bigger planning problem than the last "
+                       "one gave me.", "--suits", "consulting"]) == 0
+        P.main(["pack", FIRM, "--today", TODAY, "--write"])
+        capsys.readouterr()
+        assert P.main(["check", FIRM]) == 0, capsys.readouterr().out
+    text = _doc()
     # Resume prose in their place is refused.
     bad = text.replace(SPOKEN, "Operations analyst with seven years turning data into "
                                 "forecasts. Cut forecast error from 22% to 14%.", 1)

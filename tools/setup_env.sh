@@ -70,16 +70,15 @@ if [ "$PY_ONLY" = 0 ]; then
   fi
   # texlive-fonts-extra is 1.7 GB and the resume used 1.5 MB of it, the two
   # icon packages moderncv loads. They are vendored in texmf/ instead
-  # (texmf/README.md), and every compile the app runs points TEXMFHOME at them
-  # (fit_to_page.py, ci_local.sh). Nothing is linked into the home directory any
-  # more: a ~/texmf link to the repo broke when the repo moved, and pointed at
-  # nothing. A link an older version made is put right, and said so.
-  if [ -L "$HOME/texmf" ] && [ -e "$HOME/texmf/README.md" ] \
-       && grep -q "moderncv" "$HOME/texmf/README.md" 2>/dev/null \
-       && [ "$(readlink -f "$HOME/texmf")" != "$(readlink -f "$PWD/texmf")" ]; then
-    ln -sfn "$PWD/texmf" "$HOME/texmf" && echo "setup_env: ~/texmf pointed at another copy of the app; re-pointed at this one"
-  elif [ -L "$HOME/texmf" ] && [ ! -e "$HOME/texmf" ]; then
-    ln -sfn "$PWD/texmf" "$HOME/texmf" && echo "setup_env: ~/texmf pointed at nothing (the repo moved); re-pointed at this one"
+  # (texmf/README.md), and every compile the app runs sets TEXMFHOME to this
+  # copy's own texmf/ in its own environment (fit_to_page.py, ci_local.sh, CI).
+  # Nothing in the home directory is created, changed or removed. A ~/texmf link
+  # broke when the repo moved, and then, with two local chats in two worktrees,
+  # each run re-pointed the one link at its own copy and took it from the other.
+  # A ~/texmf that is already there is the person's, and is left exactly as it is.
+  echo "setup_env: the resume's icon fonts come from this repo's texmf/, through TEXMFHOME, which every compile the app runs sets itself; ~/texmf is not used or changed"
+  if [ -e "$HOME/texmf" ] || [ -L "$HOME/texmf" ]; then
+    echo "setup_env: ~/texmf exists and is left as it is; no compile the app runs reads it"
   fi
   # Bun runs the job-board CLIs (.agents/skills/*/cli). Claude's cloud containers
   # usually ship it; elsewhere both installs are per-user and ask for no password:

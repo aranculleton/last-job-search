@@ -33,7 +33,11 @@ Usage: `/reply <contact name or company>`, then paste their message.
 
 5. **Draft, then validate.** `compose.validate()` plus `tone.restate_ratio()`
    against their message. A high ratio means the draft is parroting them back,
-   which is the most common tell of a machine-written reply. Rewrite it.
+   which is the most common tell of a machine-written reply. Rewrite it. Then
+   `compose.advise(draft, "reply")`: rewrite what it warns about (a phrase that reads as
+   generated, stacked hedges, a claim about them written as fact); a soft exit is allowed
+   in a reply. If the person reacts to the draft, the reaction is recorded before the next
+   draft (`learned.py record` or `skip`): the composers refuse to draft over one.
 
 6. **Record.** Their message goes into `network_threads.csv` now. Ours goes in only when
    they say it went, dated the day it went: a draft is not a message, and logging it early

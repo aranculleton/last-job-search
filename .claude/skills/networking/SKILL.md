@@ -183,6 +183,11 @@ Run alumni modes before cold modes for any company where both are possible.
 - **Revenue roles dressed as technical.** Solutions Architect, Field Engineering,
   Cloud & AI Specialist, Technical Account Manager, Client Partner, Head of
   Industry. They are customer-facing sales and do not hire for technical teams.
+  So are sales, account, business development, go-to-market, partnerships and
+  customer success roles ("Data & AI Sales Executive"), unless the title's own role
+  is in the person's function: "Senior Data Scientist, Go-To-Market" and "Analytics
+  Manager, Partnerships" are kept. The skip says what it found ("an industry head, a
+  sales and partnerships role").
 - **Wrong office function.** Verify the city houses the function before
   searching. Record "no relevant presence" when it does not.
 - **Name collisions.** Acme the AI lab is not Acme Health. Verify
@@ -217,13 +222,36 @@ caught at once. So between finding and writing there is a read, and
   make the list: search results with the search tool's own summary of each (which often
   names the place and the employer), and the connections export. **One-page reads**
   screen it: the sent-invitations list once a session (who already has a request
-  pending, everyone at once) and an employer's People tab (a dozen people's headline,
-  place and degree for one load), both paced and capped like a profile. **A deep read**,
-  their own profile, only then, and only for the few the person will write to that day:
-  at most `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
-  Everyone else is drafted from what the cheaper reads showed, marked as waiting on a
-  read. No change to the funnel may add a page load, shorten the pacing or add a click
-  unless the person sets it in their profile.
+  pending, everyone at once) and a people search narrowed to the employer with its Current
+  company filter (a dozen people's headline, place and degree for one load), paced, with caps
+  of their own. A plain keyword search with the employer's name in it is not that filter: for
+  two large employers it returned almost nobody who works there, and it worked for two others
+  only because their people name the employer in their headline. The filtered address is
+  learned once from a search the person narrowed by hand (`reading.py search-url --learn`),
+  never guessed, and the People tab's `?keywords=` address is not used, because LinkedIn drops
+  it on load. **A profile read**, their own page, only then, and only for the few the person
+  will write to that day: as many as the requests that can still go today and three spare,
+  never above `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
+  Read its card first (top card and About, nothing scrolled), which decides most, and deep only
+  where it cannot. Everyone else is drafted from what the cheaper reads showed, marked as
+  waiting on a read. No change to the funnel may add a page load, shorten the pacing or add a
+  click unless the person sets it in their profile.
+- **Every limit is the person's, behind one dial.** `PROFILE_READ_RISK` in
+  `profile/networking.py` picks a preset (`careful`, the default and the pace before the dial;
+  `normal`; `fast`) and every limit derives from it, each overridable on its own
+  (`tools/network/pace.py` holds them in one place with the reason for each; `reading.py
+  limits` prints them). What is known and what is assumed is said there too: no preset is
+  safe, the numbers are a judgement of a person's pace, not a measured rate.
+- **React to signals, not a guess.** Run at a person's pace and watch: a check or CAPTCHA,
+  an "unusual activity" banner, HTTP 999, or the sign-in page after signing in stops the day
+  at once; a page that does not render or loads far slower than usual doubles the next pause,
+  and a second within the hour stops the day. The friction log keeps each, dated, across days,
+  and the pages-an-hour ceiling ramps up only on clean days since the last one (5, then the
+  preset's next steps). The count is one per computer, so every worktree's chat shares it.
+- **Reads never block the chat.** `reading.py next --wait` runs in the background and names
+  who to read once a page may load; the drafts for those already read are shown meanwhile.
+  When the person is at the keyboard, the fast path beats any pace: `reading.py queue --urls`
+  for the addresses, and one paste back.
 - **The route is chosen, never asked.** `reading.py route` reads which browser the chat
   has, never where it was started, and says what to do: read the best few in the browser,
   switch it on first, or offer a paste for the best three only (screenshots on a phone, a
@@ -253,10 +281,12 @@ caught at once. So between finding and writing there is a read, and
   the risk to their account; it does not remove it, because the terms forbid automated
   access at any pace. Never call this route safe.
 
-What a reading keeps is what a note could rest on: their headline, a short excerpt of
-their About, the history they share with the candidate (an employer, a school, a city,
-each with the line that shows it), and their recent posts and public work, dated and
-sourced. Never their whole profile, and never anything from the "People also viewed"
+What a reading keeps is what a note could rest on: their headline, their About (the
+summary of their work they wrote for anyone to read, kept whole up to LinkedIn's own
+limit so a note can rest on any part of it, and shown as a short excerpt), the history
+they share with the candidate (an employer, a school, a city, each with the line that
+shows it), and their recent posts and public work, dated and sourced. Never their whole
+profile, never anything personal, and never anything from the "People also viewed"
 column, which is other people. A pasted page that does not carry the contact's name is
 refused, because a note built on the wrong person's profile is worse than a generic one.
 
@@ -273,12 +303,34 @@ One shape for everyone is how a batch comes out alike, and the length that suits
 peer is the length a senior reader ignores. `compose.shape_for()` chooses from who
 they are and what was read, and `first_note(shape=)` holds it:
 
-- **shared**: shared history leads (an employer, a school, a city). The default.
+- **shared**: shared history leads (an employer, a school, a city). The default, and
+  what a peer gets when nothing is shared and nothing of theirs leads: the standard
+  note at the plan's limit, never the senior reader's 220.
 - **their_work**: their talk, post, paper or code leads, with no opener before it.
 - **brief**: a senior reader. The true line, who you are and the ask; no question,
   under 220 characters.
 - **recruiter**: their job is roles, so who you are, what you want and work authorization.
 - **connected**: already connected, so a message with room for the question and the ask.
+- **pointer**: the kind of team or work named, ending on a question they can answer by
+  pointing to the right person ("Would you know the right person to speak to about that?").
+  It makes a helpful reply easy without asking for anything: the referral-aware first note.
+
+### Who reads it decides what it says
+
+Three kinds of reader (`compose.READER_TYPES`, from their title, or `reader=`), each with
+the person's settings in `profile/networking.py`:
+
+| Reader | Work authorization (`ELIGIBILITY`) | The role wanted (`SAY_THE_ROLE`) | The ask | InMail length (`INMAIL_WORDS`) |
+|---|---|---|---|---|
+| recruiter | yes | yes | anything coming up that fits | about 150 words |
+| decision-maker | yes | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 150 words |
+| peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | 100 to 130 words |
+
+The decision-maker's row is the message that drew a reply from a senior reader within
+three hours: who the sender is, with the years; one piece of real work with its numbers;
+why this person; a plain statement of eligibility; the open ask. Asking about openings,
+"are you hiring", "refer me" stay a recruiter's alone, at every reader type: a job-ask
+finding names the phrase and what to write instead.
 
 Who to write to first is `tools/network/why.py`: a score and one plain line of why
 this person, from the route, shared history, a hiring post, a role open at their
@@ -322,15 +374,28 @@ That note is 186 characters, so it fits a free account's 200. Adding a question
 a tool?") takes it to 273, which `first_note()` refuses on a free plan and accepts
 on Premium. That is the shape, and `first_note()` assembles it:
 
-    Hi Sasha, hope you're well. <common ground>. <about me>. [<question>?] <ask>.
+    Hi Sasha, hope you're well. <the reason for writing>. <about me>. [<question>?] <ask>.
 
-- **Common ground** (required): the one true thing linking the candidate to
-  them. A shared employer or school first; otherwise the one specific
-  thing about their work that made the candidate write (a talk, a post, a
-  team). Taken from their reading (`reading.py show`), never invented: given the
-  reading, `first_note()` raises `UngroundedNote` when the common ground rests on
-  nothing in it, and their name or employer alone does not count. No two notes in a
-  batch say the same thing (`reading.same_ground()`).
+- **The reason for writing** (required, and true). One or more of, in this order:
+  - a **mutual connection** the person confirmed (`mutual=`): `reading.py show` lists the
+    ones the page names; ask "mention <name>?" first, and never say how well they know them;
+  - **how they were found** (`how_found=`, `compose.how_found_line("team_search",
+    company=..., team=...)` and the rest of `HOW_FOUND`): a search of the team, the people
+    page, a referral, a speaker list. The honest reason, and the one to use when nothing
+    else is real;
+  - the **common ground**: a shared employer or school, or the one thing about their work
+    that made the candidate write, taken from their reading (`UngroundedNote` when it
+    rests on nothing read; their name or employer alone does not count);
+  - a **parallel in their path** (`parallel=`): `reading.py show` lists them, marked
+    INFERRED, so the note hedges it once ("It looks like you moved into <X> from <Y>,
+    which is the move I'm hoping to make"). A generic fit ("useful on a team like yours")
+    is warned as presumptuous; their own path is the reason instead.
+
+  **Never a pretext.** A note that says the sender read, saw or watched something of theirs
+  ("I saw your package on GitHub") raises `UnconfirmedReading` unless `looked=True`, the
+  sender's own word that they did: a reading the chat did is not the sender having looked.
+  No two notes in a batch say the same thing (`reading.same_ground()`), and none is built
+  the same way (`reading.py batch` reports "same shape").
 - **About me** defaults to one modest line, `ABOUT_ME` in
   `profile/networking.py`, that also says the candidate is looking, as context
   rather than a demand, in the shape "I work in data science, ex-<Employer> and
@@ -344,9 +409,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
   made up to fill the slot. A person called "How has data science changed
   pricing there?" "so artificial", and the same note read better as the true line
   and a plain ask for a conversation, which is a complete note on its own.
-- **Ask** defaults to `ASK` in `profile/networking.py`: a small ask for a few
-  questions and fifteen minutes.
-  Pass `ask=None` when the question carries it.
+- **Ask**: the person's `TEMPLATES` for this reader first, then their `ASK`, then the
+  phrase bank's asks for this reader (`compose.py phrases`), chosen per contact
+  (`variant_key=` the contact id) so a batch varies. Pass `ask=None` when the question
+  carries it. Never an exit ("if not, no worries"): it invites no reply, and a soft exit
+  belongs in a follow-up.
 
 **What a first note never does**, enforced by `AsksForTheJob` and by
 `validate(kind="connection")`:
@@ -360,9 +427,50 @@ on Premium. That is the shape, and `first_note()` assembles it:
   who hires for it
 - say where the candidate wants their next role to be ("Acme is where I want my
   next role")
-- state work authorization. It costs a large part of the note's character limit and it is the
-  sentence that turns a conversation into an application. **Recruiters are the
-  one exception** (`recruiter=True`), because roles are their job.
+- state work authorization to a peer. To a recruiter and a decision-maker it goes in by
+  default (`ELIGIBILITY`), because their reply could be about a role; to a peer only when
+  that message passes `work_auth=True`. A brief note to a senior reader leaves it out unless
+  asked, for want of room.
+
+Contractions are fine: "I'm" and "I'd" open sentences in natural English, and forcing "I am"
+and "I would" made the defaults read like someone who just learned English as a second
+language (`CONTRACTIONS` brings the old rule back for a person who wants it).
+
+### Before it is shown: `compose.advise()`
+
+`validate()` is what must never go. `advise()` is what may go but reads worse than it
+should, each warning with its rewrite, and a warned draft is rewritten before it is shown:
+
+- the phrases the person rejected: "sits close to", "is the kind of path", "I would value",
+  "high on my list" and any praise of the company that fits any company, "the route I would
+  most like to follow", "which teams to look at and how to approach them", "Data scientist
+  here" as an opener, a closing question asking how to get hired, a test question in place
+  of an honest ask;
+- a list of three credentials in a row: name the one that matters to this reader;
+- hedges: one light hedge per inference ("I imagine", "I'm guessing", "probably", "it
+  seems like"), never two in a sentence, never a disclaimer ("I can't know from the
+  outside");
+- a claim about the reader written as fact. Each claim is STATED (their page says it, so
+  say it plainly), INFERRED (from a title, an employer, a path: hedge it once) or a GUESS
+  (about their team or what would be useful to them: lightly, or better not at all);
+- a credential with no reason in its sentence: tie it to them ("which is why your
+  forecasting work interests me"), or cut it. A sentence with a number in it is evidence and
+  carries its own point;
+- an exit in a first message; the employer named late (with the reordering); an InMail
+  longer than its reader needs.
+
+The person's own words are never warned about, and a check one of their rules outranks
+(`learned.py record --overrides <rule>`) is only mentioned.
+
+**Then read it aloud.** `compose.READ_ALOUD` says how: the most natural spoken version,
+every fact, name and number kept, nothing added, their rules kept. Show it beside the
+original; `compose.read_aloud(original, rewrite)` keeps it only if no fact was lost or
+added and it still passes `validate()`.
+
+**Their own messages that drew replies come first.** `python3 tools/network/compose.py
+examples` lists them, with their words: match their shape and their wording ahead of every
+default here. A message logged without its words cannot be one, which is why every send is
+logged with them.
 
 "Hope you're well" and "I'd love to" are allowed in a first note when the person's
 `OWN_VOICE` in `profile/networking.py` names them. They were banned on a frequency
@@ -382,12 +490,17 @@ to stop sending.
 If they have already offered to refer the candidate, in whatever words, the ask
 is answered: do what they said, then thank them.
 
-**InMail, under 200 words, with a subject.** `compose.inmail()`. Same shape as the first note,
-never a job ask, plus one paragraph of concrete evidence: a named model, a dataset size, a
-specific outcome. The 200 words are a ceiling, not a target. LinkedIn shows the **subject**
-before the message, so every InMail has one: a few words naming the common ground or the
-question ("Your forecasting talk at Northern Data Week"), never "Quick question", "Job
-enquiry" or anything that asks for the job; `inmail_subject()` refuses those.
+**InMail, under 200 words, with a subject.** `compose.inmail()` returns an `InMail`: the
+text as before, and `.subject` and `.body` for LinkedIn's two fields. The shape that drew a
+reply: "Hi <name>, hope you're well."; who they are, with the years; one piece of real work
+with its numbers; why this person, eligibility by reader, the ask; the sign-off. Never a job
+ask. Sized to the reader (the table above); the 200 words are a ceiling, not a target. The
+**subject** is who the sender is by default, the identity line that drew a reply
+(`compose.identity_subject()`: "<title>, ex-<the employers they left>", or `SUBJECT` in
+their networking.py), never "Quick question", "Job enquiry" or anything that asks for the
+job; `inmail_subject()` refuses those. A page that shows only Message to someone not
+connected sets their channel to InMail and says how many credits are left; `state.py sent
+--channel inmail --subject "..."` spends one.
 Credits are scarce; reserve them for tier 1 at top-priority companies, or people
 unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
 Open Profile (their profile shows a Message button), and everything else is a connection

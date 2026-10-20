@@ -164,3 +164,18 @@ def test_uncommitted_work_stops_the_merge_and_says_so(tmp_path, monkeypatch, cap
     assert sync_app.pull_master() == 1
     assert "uncommitted changes" in capsys.readouterr().out
     assert (me / "a.txt").read_text(encoding="utf-8") == "my edit"
+
+
+def test_a_chat_on_the_persons_computer_is_told_first_to_take_a_folder_of_its_own(
+        tmp_path, monkeypatch):
+    _origin, me = _setup(tmp_path)
+    monkeypatch.setattr(sync_app, "ROOT", str(me))
+    monkeypatch.setattr(sync_app, "CLOUD", False)
+    assert "--worktree" in sync_app.own_folder()       # the main folder
+    own = tmp_path / "me-two"
+    g(me, "worktree", "add", "-q", "-b", "chat/two", str(own))
+    monkeypatch.setattr(sync_app, "ROOT", str(own))
+    assert sync_app.own_folder() == ""                  # its own folder already
+    monkeypatch.setattr(sync_app, "ROOT", str(me))
+    monkeypatch.setattr(sync_app, "CLOUD", True)
+    assert sync_app.own_folder() == ""                  # a cloud chat has a container of its own

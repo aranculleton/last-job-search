@@ -42,7 +42,14 @@ _TARGET = re.compile(r"\b(?:target\w*|expect\w*|asking|band|looking for|salary|c
 _NOT_TARGET = re.compile(r"\b(?:current(?:ly)?|base of|earn\w*|market|benchmark|levels\.fyi|"
                          r"glassdoor|posted|posting|range for|median|percentile|offer(?:ed)?|"
                          r"previous|was paid|norms?|guide|survey|typical|average|reported|"
-                         r"their band|our band|band is)\b", re.I)
+                         r"their band|our band|band is|"
+                         # a posting's stated range against the person's knockout line: "a
+                         # range topping out between 100,000 and 104,999 is ranked down"
+                         r"topping out|tops out|ranked down|knock-?outs?|cut line|is cut|not cut|"
+                         r"stated range|whole range)\b", re.I)
+# The person's screening rules for postings (profile/10-triage-blockers.md): every amount in
+# them is a line a posting's range is held against, never the person's own band or floor.
+RULE_FILES = ("10-triage-blockers.md",)
 _FLOOR = re.compile(r"\b(?:floor|walk[- ]away|minimum|bottom line)\b", re.I)
 _NOTICE = re.compile(r"\bnotice(?: period)?\b(?:\s*(?:is|of|:|\|))?", re.I)
 _DURATION = re.compile(r"\b(\d+|one|two|three|four|six|eight|twelve)\s+(week|month)s?\b", re.I)
@@ -166,6 +173,7 @@ def findings(unread: list | None = None) -> list[dict]:
         # require sponsorship?"), never the person's position: blanked, offsets kept.
         masked = _QUOTED.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
         source_rows = os.path.normpath(path) == evaluation
+        rules = os.path.basename(path) in RULE_FILES
         for start, sent in _sentence_spans(masked):
             i = text.count("\n", 0, start) + 1
             line = text.splitlines()[i - 1].strip() if text.splitlines() else ""
@@ -173,7 +181,8 @@ def findings(unread: list | None = None) -> list[dict]:
                 continue
             if sent.rstrip(" *_\"'\u201d").endswith("?"):
                 continue        # a question as a form asks it, not a statement of fact
-            if low is not None and _TARGET.search(sent) and not _NOT_TARGET.search(sent):
+            if low is not None and not rules and _TARGET.search(sent) \
+                    and not _NOT_TARGET.search(sent):
                 for m in _RANGE.finditer(sent):
                     a, b = _range_of(m)
                     if a >= 1000 and (a, b) != (low, high):
@@ -182,8 +191,8 @@ def findings(unread: list | None = None) -> list[dict]:
                                     "source": "%s to %s in %s" % (
                                         "{:,}".format(low), "{:,}".format(high),
                                         _rel(sheet.EVALUATION))})
-            if floor is not None and _FLOOR.search(sent) and not _RANGE.search(sent) \
-                    and not _NOT_TARGET.search(sent):
+            if floor is not None and not rules and _FLOOR.search(sent) \
+                    and not _RANGE.search(sent) and not _NOT_TARGET.search(sent):
                 for m in _SINGLE.finditer(sent):
                     v = _amount(m.group(1))
                     if v >= 1000 and v != floor:

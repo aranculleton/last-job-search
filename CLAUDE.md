@@ -88,9 +88,12 @@ Every session in a person's repo starts with the same five steps, before anythin
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
    - **One chat per update.** Only the chat whose own sync brought an update in applies its
-     upgrades and asks its questions. Any other chat open on the repo is told they belong to
-     another chat until a time 20 minutes on, and starts nothing and asks nothing; after
-     that its next sync hands them over. When the person says no other chat is open,
+     upgrades and asks its questions; where two chats synced the same update, the one whose
+     sync reached master first. Master is checked before any chat is told to start, and
+     again before each upgrade: one another chat landed is merged, never made twice. Any
+     other chat open on the repo is told they belong to another chat until a time 20
+     minutes on, and starts nothing and asks nothing; after that its next sync hands them
+     over. When the person says no other chat is open,
      `python3 tools/profile_upgrades.py --take` hands them over at once. So the chat that
      brought the update in lands that sync on master promptly, before its other work.
 
@@ -181,14 +184,17 @@ So, every session:
 **Two chats changing the same state file is not a conflict to resolve by hand.** The
 tracker, the contact book, the message log and `seen_jobs.json` merge row by row
 (`tools/merge_state.py`, which every sync wires into git): rows either side added are both
-kept, and notes both sides added are both kept. Git stops only where both sides changed the
-same field of the same row to different values; keep the later one, by its date. Before
+kept, and notes both sides added are both kept. Where both sides changed the same field of
+the same row, the later change is kept by itself, and the merge says which and what the other
+side had: tell the person, whose word outranks it. Git stops only where neither change is
+later. Before
 merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
 **On the person's own computer** a chat has no GitHub tools: `gh` is the route, and
 `place.py` lists it (and `gh auth login`, theirs) when it is missing. **Each local chat
-works in a folder of its own**: `python3 tools/sync_app.py --worktree <name>` makes
+works in a folder of its own, made before any other work** (the sync's first line says so
+while a chat is still in the main folder): `python3 tools/sync_app.py --worktree <name>` makes
 `../<repo>-<name>` on a new, unique branch from master, and every command runs there; two
 chats in one folder switch branches under each other and fight over git's index. Files git
 does not carry (the connections export) are read from the main folder. Then: commit,
@@ -503,10 +509,16 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
   off, never a session.
 - **Outreach is for referrals, in three stages that are never compressed into one:** a
   first note that asks for a conversation (`compose.first_note()`), the conversation, then
-  a referral ask for one linked role (`compose.referral_ask()`). A first note never names
-  the role the candidate wants, never asks if they are hiring and never states work authorization
-  unless the reader is a recruiter. A cold note in the application shape draws almost no
-  replies; see "Composition" in the networking skill.
+  a referral ask for one linked role (`compose.referral_ask()`). **Who reads it decides what
+  it says** (`compose.READER_TYPES`, each a setting in `profile/networking.py`): work
+  authorization and the role wanted go to a recruiter and a decision-maker by default, never
+  to a peer unless that message asks; only a recruiter is asked about roles. The reason for
+  writing is true: how they were found (`how_found=`), a parallel in their own path, a mutual
+  connection the person confirmed, or the common ground, and a note never says the sender
+  read or saw something of theirs unless the sender did (`looked=True`). Before showing a
+  draft, `compose.advise()` too: its warnings (an exit line, stacked hedges, a claim written
+  as fact, a credential with no reason) are rewritten, not shown. See "Composition" in the
+  networking skill.
 - Connection notes are 200 characters on a free LinkedIn plan and 300 on Premium
   (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard. `compose.py` raises, never truncates.
 - A warm intro leads with the referrer's name in the first sentence.
@@ -555,8 +567,11 @@ changes a setting it records.
 **Whenever the person reacts to anything**: a message, a draft, a person or a job that
 was surfaced, the voice, the questions, a word choice, how much detail. Phrases like
 "I don't like this", "too formal", "not this kind of company", "stop suggesting
-recruiters", or an edit they make to a draft before sending it all count. Then, in the
-same turn:
+recruiters", or an edit they make to a draft before sending it all count. **This is
+enforced, not remembered**: the app's one hook (`tools/learned.py hook`) puts a reaction on
+the chat's pending list, every composer refuses to draft over it, and the turn cannot end
+until it is recorded or skipped with a reason (`learned.py skip`). An edit made before
+sending records itself when the send is logged with its words. Then, in the same turn:
 
 1. Apply it now: redraft, drop the person or the job, change the setting.
 2. Make it stick where it governs. That means the profile setting: `networking.py`
@@ -573,7 +588,7 @@ same turn:
    itself when the part of the rules it rests on changes (one blocker row, one gate setting);
    when you change a screening rule, run `exclude.py lapsed` in the same turn and `restamp`
    the groups that do not rest on what changed.
-3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted.
+3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted. Where their rule and a check disagree, ask once which wins and add `--overrides <the check's rule name>` when theirs does. When it lists `CONTRADICTS`, ask which stands, with both dates, and retire the other.
 4. Say in one line what will be different from now on.
 
 **Read before drafting.** Every step that writes something the person will read or

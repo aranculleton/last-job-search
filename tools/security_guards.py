@@ -124,7 +124,15 @@ ALLOWED_IGNORE_NEGATIONS = {
 }
 
 # Hook commands the template legitimately ships, as "<Event>:<command>" strings.
-# Empty by design - the template ships no hooks at all.
+#
+# One, reviewed 2026-10-20: tools/learned.py's reaction check, on the prompt and at the
+# end of a turn. The person asked for it in so many words ("a hook that detects a
+# complaint or an edit and refuses to finish the turn until learned.py record has run"),
+# because the same rule written as an instruction was followed nowhere: one chat
+# redrafted on nine corrections and recorded none. It runs the repo's own file, reads the
+# prompt and the transcript, writes only this chat's pending list in its git directory,
+# runs nothing else, needs no network and does nothing in a repo with no profile. It is
+# the only one, and SessionStart stays empty: a setup step is never a hook.
 #
 # A hook is strictly more dangerous than a permissions.allow entry. A permission
 # pre-approves something Claude may choose to do; a hook runs unconditionally when
@@ -133,7 +141,8 @@ ALLOWED_IGNORE_NEGATIONS = {
 # August 2026 wave, planting a SessionStart hook in .claude/settings.json that
 # executed on session start:
 # https://research.jfrog.com/post/shai-hulud-is-back-august/
-ALLOWED_HOOKS: set[str] = set()
+LEARNED_HOOK = 'python3 "$CLAUDE_PROJECT_DIR"/tools/learned.py hook'
+ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}"}
 
 FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}
 

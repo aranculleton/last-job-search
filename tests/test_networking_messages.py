@@ -108,11 +108,22 @@ def test_an_inmail_has_a_subject_and_the_first_notes_shape():
     assert compose.validate(m, "inmail", name="Sasha Reed") == []
 
 
-@pytest.mark.parametrize("subject", ["", "Quick question", "Job enquiry", "Opportunity",
+@pytest.mark.parametrize("subject", ["Quick question", "Job enquiry", "Opportunity",
                                      "Are you hiring analysts?"])
 def test_a_subject_that_says_nothing_or_asks_for_the_job_is_refused(subject):
     with pytest.raises(ValueError):
         compose.inmail(**dict(INMAIL, subject=subject))
+
+
+def test_no_subject_given_is_the_identity_line_that_drew_a_reply():
+    # "<title>, ex-<employers>": who they are, not a topic.
+    m = compose.inmail(**dict(INMAIL, subject=""))
+    assert m.subject == compose.identity_subject()
+    assert m.subject == "Senior Operations Analyst, ex-Oakmere and Saltmarsh Analytics"
+    assert m["body"] == m.body and str(m).startswith(f"Subject: {m.subject}\n\n")
+    assert compose.validate(m, "inmail", name="Sasha Reed") == []
+    with pytest.raises(ValueError):
+        compose.inmail_subject("")
 
 
 def test_an_inmail_that_asks_for_the_job_is_refused_and_validate_sees_it():

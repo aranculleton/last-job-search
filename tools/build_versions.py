@@ -204,8 +204,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-19", False, "a quote from a reading is cut at a word, never mid-word"),
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
+            (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
         ),
-        "fingerprint": "34dd4b0d13b8ea94",
+        "fingerprint": "3a7ecd035d2d2ad7",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -259,8 +260,10 @@ METHODS: dict[str, dict] = {
             (20, "2026-10-19", False, "every command prints its usage instead of crashing with no arguments, the voice check reads a never-say phrase however it is punctuated, and your own never-write rules are checked"),
             (21, "2026-10-19", False, "the PDF check's missing-Poppler error gives the winget command on Windows, not Chocolatey"),
             (22, "2026-10-19", False, "the PDF check finds Poppler where a Mac or Windows installs it, even when the shell's PATH lacks it; the voice check hears short spoken answers as spoken and catches a third-person headline; form answers read a profile with no screening.py"),
+            (23, "2026-10-19", False, "RUNBOOK: what to do when two chats applied the same profile upgrade"),
+            (24, "2026-10-20", False, "the voice check skips HTML comments; texmf's README says nothing links ~/texmf; the grounding auditor passes a pasted note's reader to validate()"),
         ),
-        "fingerprint": "0bdc0be54c7e80d8",
+        "fingerprint": "52ba4ec82b288911",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -279,8 +282,9 @@ METHODS: dict[str, dict] = {
             (7, "2026-10-19", True, "a pack finds its application however the role is written (a requisition number in it), reads a hand-written outcome's rounds, finds the referrer from every record, and never tells you to message someone whose row says to leave them be"),
             (8, "2026-10-19", True, "a pack treats waiting on someone's reply as leave them be, says booked only when the round has a date, quotes rows whole or cut at a word, carries every section of a hand-written outcome file, keeps its do-not-say list out of the voice check, and prepares a question you were told about as reported, with its source"),
             (9, "2026-10-19", True, "one living document per hiring process, a process with no application included: answers written to be said and checked, what each interviewer is assessing and wants to hear, the format, small talk with a purpose, and what the employer's people have been told"),
+            (10, "2026-10-19", True, "the person's own reasons are asked, never drafted; stock answers matched through employer names and Use for:, and checked against the employer; what each person there was told, and which messages have no text; the warm route by stored status; the recruiter assumed for a screen; the format of this round only; which team, and the process at a screen; just arrived honoured; a posting file for every process"),
         ),
-        "fingerprint": "404e3ceab9f1e835",
+        "fingerprint": "f4e8f5604030c5b0",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -310,7 +314,8 @@ METHODS: dict[str, dict] = {
                "contact a search found against today's matching (`discovery.same_employer`, "
                "`discovery.profile_status`): close any it would not keep, with the reason in "
                "`outcome`. No profile is read in the background and nothing is sent",
-        "files": ("tools/network/compose.py", "tools/network/tone.py", "tools/network/reply.py",
+        "files": ("tools/network/compose.py", "tools/network/advice.py", "tools/network/tone.py",
+                  "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
@@ -363,8 +368,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-10-19", False, "your connections export is saved from the file or from LinkedIn's whole archive, reading only Connections.csv, and one employer's 1st-degree people can be pasted while it is on its way, each drafted a message with no connection request"),
             (29, "2026-10-19", False, "business days skip your public holidays, employer names with a web address or initials join, and a state file a merge left conflict markers in is refused"),
             (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
+            (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, a peer given the standard length, a decision-maker given the senior work-authorization wording, the app's own asks in words the person's voice check passes, a note checked for the reader it was written for, a referrer's name kept capitalized, and ordinary sentences (wanting to understand how their role changed) no longer read as asking for the job"),
         ),
-        "fingerprint": "2af56f039bffb699",
+        "fingerprint": "7ef16dacc96dc6d5",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -397,8 +403,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-19", False, "applied by /network itself; several profiles can be pasted at once; a note nobody has read for says so at its top"),
             (16, "2026-10-19", False, "only notes written before notes rested on a reading are redone, and a note written from someone's public work leaves the queue"),
             (17, "2026-10-19", True, "a batch of queued notes is checked for sentences they share, so notes that all end the same way are written again"),
+            (18, "2026-10-20", False, "sent invitations read card by card with each note kept, only requests the page can show called gone, names matched however written, Experience kept role by role with path parallels and mutual connections, a top card place unlike the current role's a caution, the channel set from the page only where it shows a degree, the whole About kept, and the files that change on every read kept out of the repo, or in the old file where this computer's ledger cannot be written"),
         ),
-        "fingerprint": "81648bb3c525028b",
+        "fingerprint": "a82356200cfa9a71",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -542,6 +549,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/followups.py": "a view derived from the tracker on every run",
     "tools/still_open.py": "a check run on demand; keeps nothing",
     "tools/network/state.py": "a view derived from the contact book and log on every run",
+    "tools/network/pace.py": "how fast reads go and the count of pages loaded, kept per "
+                             "computer outside the repo; nothing in the person's repo",
     "tools/run_round.py": "runs every round afresh; its shortlists are dated records of one round",
     "tools/scrape_wide.py": "runs every round afresh",
     "tools/hydrate.py": "runs every round afresh",

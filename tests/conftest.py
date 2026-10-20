@@ -23,6 +23,9 @@ os.environ["LJS_PROFILE"] = EXAMPLE
 _state = tempfile.mkdtemp(prefix="ljs_state_")
 shutil.copytree(os.path.join(EXAMPLE, "state"), _state, dirs_exist_ok=True)
 os.environ["LJS_STATE"] = _state
+# A ledger the person exported for their own reads is never the tests' to write to: with it
+# unset, the ledger lives under the tests' own state.
+os.environ.pop("LJS_LEDGER", None)
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
 
 

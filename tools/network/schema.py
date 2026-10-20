@@ -58,6 +58,7 @@ THREAD_COLUMNS = [
     "scenario",          # reply_engine classification, for inbound
     "summary",           # one line, what was said
     "full_text",         # the message, for reply context
+    "subject",           # an InMail's or an email's subject line, as sent
 ]
 
 # Ordered by how far the thread has progressed. A status later in this list

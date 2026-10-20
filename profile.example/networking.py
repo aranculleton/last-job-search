@@ -57,6 +57,26 @@ OPENER = "hope you're well"
 ABOUT_ME = "I work in supply-chain analytics in Manchester and I'm looking for my next role"
 ASK = "Would you have 15 minutes for a few questions sometime"
 # Their own phrases, allowed back into a first note.
+# How the person sounds, and what each kind of reader is told (tools/network/compose.py).
+# Each is shown here at the app's default; a person's /setup writes theirs.
+# Opening a sentence on "I'm" or "I'd": "allow", "warn" or "refuse".
+CONTRACTIONS = "allow"
+# Work authorization in a first message, by who reads it; a message can still override it.
+ELIGIBILITY = {"recruiter": True, "decision_maker": True, "peer": False}
+# Saying the role wanted in a first message. Asking for the job stays a recruiter's alone.
+SAY_THE_ROLE = {"recruiter": True, "decision_maker": True, "peer": False}
+# The brief note's length for a senior reader.
+SENIOR_NOTE_CHARS = 220
+# An employer named late: "warn" (with the reordering) or "refuse".
+EMPLOYERS_FIRST = "warn"
+# An InMail longer than this reader needs is warned (the 200-word ceiling still holds).
+INMAIL_WORDS = {"recruiter": 170, "decision_maker": 170, "peer": 130}
+# The InMail subject; empty builds it from roles.py: "<title>, ex-<employers left>".
+SUBJECT = ""
+# The person's own ways of saying what carries no fact, per reader type or "any", each a
+# list the composer chooses between per contact. Empty: their OPENER and ASK, then the
+# app's phrase bank (python3 tools/network/compose.py phrases).
+TEMPLATES = {}
 OWN_VOICE = re.compile(r"^(?:hope you'?re well|(?:would|I'?d) love (?:to|a)\b)", re.I)
 
 # Work authorization, in the two registers.

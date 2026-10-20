@@ -288,7 +288,9 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
                                                                  "connections-export", "work-place",
-                                                                 "profile-consistency"}
+                                                                 "profile-consistency",
+                                                                 "campaign-notes", "message-texts",
+                                                                 "voice-refresh"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -298,6 +300,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert "computer, or on your phone or the web" in U.by_id("work-place").ask
     # Two answers to what a recruiter checks first: only the person knows which is true.
     assert "you pick the right one" in U.by_id("profile-consistency").ask
+    # Their own notes are folded into the prep document only on their yes.
+    assert "Can I fold them into it" in U.by_id("campaign-notes").ask
+    # Only they have the words they sent; nothing in the app can fetch them.
+    assert "paste them in once" in U.by_id("message-texts").ask
 
 
 def test_the_plan_is_most_urgent_first(profile):
@@ -609,3 +615,154 @@ def test_a_story_with_no_use_for_line_is_tagged_in_the_background(profile):
                  encoding="utf-8")
     assert u.pending().startswith("1 STAR story in profile/07-interview-prep.md")
     assert "An untagged one" in u.pending()
+
+
+def _process_state(tmp_path, monkeypatch):
+    """A state root holding one hiring process with no application, as 3.7.0 registered it:
+    its folder and outcome.md, and no job_posting.md. Invented employer and contact."""
+    import csv
+    import outreach
+    import record_drafts
+    st = tmp_path / "state"
+    st.mkdir()
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    row = {k: "" for k in record_drafts.HEADER}
+    row.update(date="2026-10-19", company="Calder & Rook Consulting", role="Operations Analyst",
+               status="interview", channel="referral", source="contact:calder_rook_vance",
+               notes="process, no portal application: led by Ivo Vance")
+    with open(st / "job_search_tracker.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=record_drafts.HEADER)
+        w.writeheader()
+        w.writerow(row)
+    folder = outreach.app_folder(row["company"], row["role"])
+    os.makedirs(folder)
+    with open(os.path.join(folder, "outcome.md"), "w", encoding="utf-8") as fh:
+        fh.write("# Outcome: Calder & Rook Consulting - Operations Analyst\n")
+    return st, folder
+
+
+def test_a_process_folder_with_no_posting_is_given_one(profile, tmp_path, monkeypatch):
+    _st, folder = _process_state(tmp_path, monkeypatch)
+    assert "1 hiring process folder(s) with no job_posting.md" in \
+        U.by_id("process-postings").pending()
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "interview_pack.py"),
+                        "postings"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    text = open(os.path.join(folder, "job_posting.md"), encoding="utf-8").read()
+    assert "not held yet" in text and "--posting" in text
+    assert U.by_id("process-postings").pending() == ""
+
+
+def test_hand_kept_notes_for_a_process_are_offered_once_to_fold_in(profile, tmp_path,
+                                                                    monkeypatch):
+    st, folder = _process_state(tmp_path, monkeypatch)
+    assert U.by_id("campaign-notes").pending() == ""            # nothing kept by hand
+    net = st / "documents" / "network"
+    net.mkdir(parents=True)
+    (net / "calder_rook_campaign.md").write_text("Say I am based in Manchester.\n",
+                                                  encoding="utf-8")
+    (net / "open_actions.md").write_text("Everything owed.\n", encoding="utf-8")   # not theirs
+    why = U.by_id("campaign-notes").pending()
+    assert "documents/network/calder_rook_campaign.md" in why and "open_actions" not in why
+    # Folded in: the process's document says so in its Notes, and it is not asked again.
+    with open(os.path.join(folder, "interview_prep.md"), "w", encoding="utf-8") as fh:
+        fh.write("## Notes\n\n- Folded in from documents/network/calder_rook_campaign.md on "
+                 "2026-10-20.\n")
+    assert U.by_id("campaign-notes").pending() == ""
+
+
+def test_own_tests_reading_the_apps_code_or_pinning_changed_behaviour_are_kept_in_line(
+        tmp_path, monkeypatch):
+    import sync_app
+    repo = tmp_path / "repo"
+    (repo / "tools").mkdir(parents=True)
+    (repo / "tools" / "round_step.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+    tests = repo / "profile" / "tests"
+    tests.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setattr(U, "ROOT", str(repo))
+    assert U.by_id("own-tests").pending() == ""                 # nothing of theirs at risk
+    (tests / "test_reads.py").write_text(
+        "import os\nROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))\n"
+        "def test_it():\n"
+        "    src = open(os.path.join(ROOT, 'tools', 'round_step.py')).read()\n"
+        "    assert 'return 1' in src\n", encoding="utf-8")
+    why = U.by_id("own-tests").pending()
+    assert "read the app's code as text" in why and "test_reads.py" in why
+    # Rewritten to run the code and check what it does: nothing left to do.
+    (tests / "test_reads.py").write_text(
+        "import round_step\ndef test_it():\n    assert round_step.run() == 1\n", encoding="utf-8")
+    assert U.by_id("own-tests").pending() == ""
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-qm", "tests"], check=True)
+    # The sync found one checking behaviour the update changed: it is brought in line.
+    sync_app.record_own_tests(str(repo), [("test_reads::test_it", "AssertionError: 2 != 1")])
+    assert "check what an update changed: test_reads::test_it" in U.by_id("own-tests").pending()
+    # One that used a part the update removed is the sync's question to the person, not this.
+    sync_app.record_own_tests(str(repo), [(
+        "test_reads::test_it", "AttributeError: module 'round_step' has no attribute 'gone'")])
+    assert U.by_id("own-tests").pending() == ""
+    # Tests that could not run at all are not run again on every look: the record says so.
+    sync_app.record_own_tests(str(repo), [("test_reads::test_it", "AssertionError: 2 != 1")])
+    (tests / "test_reads.py").write_text("import nothing_called_this\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-qam", "broken"], check=True)
+    ran = []
+    monkeypatch.setattr(sync_app, "own_test_failures", lambda root: ran.append(1))   # None
+    for _ in range(3):
+        U.by_id("own-tests").pending()
+    assert len(ran) == 1 and sync_app.own_tests_record(str(repo))["could_not_run"]
+
+
+def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profile, tmp_path,
+                                                                           monkeypatch):
+    st = tmp_path / "state"
+    (st / "documents" / "network").mkdir(parents=True)
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    monkeypatch.setenv("LJS_LEDGER", str(tmp_path / "ledger"))
+    assert U.by_id("runtime-files").pending() == ""
+    (st / "documents" / "network" / ".shortlist.json").write_text(
+        '{"date": "2026-10-20", "ids": ["bo_venn"]}', encoding="utf-8")
+    assert "1 reading file(s) in documents/network" in U.by_id("runtime-files").pending()
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "reading.py"),
+                        "move-runtime"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert U.by_id("runtime-files").pending() == ""
+    assert '"bo_venn"' in open(tmp_path / "ledger" / "reading-ledger.json").read()
+
+
+def test_messages_that_drew_replies_without_their_words_are_asked_for_once(profile, tmp_path,
+                                                                            monkeypatch):
+    import schema
+    import state
+    st = tmp_path / "state"
+    st.mkdir()
+    monkeypatch.setenv(person.STATE_ENV, str(st))
+    row = {k: "" for k in schema.CONTACT_COLUMNS}
+    row.update(contact_id="larkspur_castellan", name="Juno Castellan", company="Larkspur",
+               status="in_conversation")
+    state.save_contacts([row], str(st / "network_contacts.csv"))
+    out = {"contact_id": "larkspur_castellan", "date": "2026-09-01", "direction": "out",
+           "channel": "inmail", "scenario": "first_message", "summary": "approach",
+           "full_text": ""}
+    back = {"contact_id": "larkspur_castellan", "date": "2026-09-01", "direction": "in",
+            "channel": "inmail", "scenario": "reply", "summary": "replied",
+            "full_text": "Thanks, let's talk."}
+    state.save_threads([out, back], str(st / "network_threads.csv"))
+    assert "1 message(s) that drew a reply" in U.by_id("message-texts").pending()
+    state.save_threads([dict(out, full_text="Hi Juno, hope you're well."), back],
+                       str(st / "network_threads.csv"))
+    assert U.by_id("message-texts").pending() == ""
+
+
+def test_a_saved_voice_in_the_old_stiff_wording_is_offered_a_rewrite(profile, monkeypatch):
+    net = profile / "networking.py"
+    text = net.read_text(encoding="utf-8")
+    assert U.by_id("voice-refresh").pending() == ""          # the example's own voice
+    net.write_text(text.replace(
+        'ASK = "Would you have 15 minutes for a few questions sometime"',
+        'ASK = "I would love to hear how your team works"'), encoding="utf-8")
+    assert "ASK in profile/networking.py" in U.by_id("voice-refresh").pending()
+    assert "rewrite them the way you write" in U.by_id("voice-refresh").ask

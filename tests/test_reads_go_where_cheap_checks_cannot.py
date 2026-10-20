@@ -163,9 +163,19 @@ def test_no_more_than_two_unplaced_people_a_day(here):
 
 def test_the_queue_names_the_limit_that_binds(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
-    _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(5)])
+    # A clean day of reading before today puts the ramp at its top (pace.hourly_ceiling),
+    # so the hourly cap is what binds, as it did before the ramp existed.
+    _browsed(here, [now - datetime.timedelta(days=1, hours=3)]
+             + [now - datetime.timedelta(minutes=i + 1) for i in range(5)])
     n, what = reading.reads_left(now, sends_left=None)
     assert n == reading.READS_PER_HOUR - 5 and "an hour" in what
+
+
+def test_with_no_clean_day_yet_the_ramp_binds_first(here):
+    now = datetime.datetime(2026, 10, 19, 15, 0)
+    _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(3)])
+    n, what = reading.reads_left(now, sends_left=None)
+    assert n == 2 and "the ramp" in what           # 5 an hour on the first day, 3 read
 
 
 # ------------------------------------------------------------ 7. the top card

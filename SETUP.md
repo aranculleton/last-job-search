@@ -43,8 +43,9 @@ fails without it. **`texlive-fonts-extra` is deliberately not installed.** moder
 actually used is vendored in `texmf/` and found through `TEXMFHOME` (`texmf/README.md`).
 That cuts the TeX download from about 760 MB to about 160 MB. This is the same package set
 CI's Debian leg installs, and that leg is what proves the documents compile without it.
-For a compile by hand, `export TEXMFHOME="$PWD/texmf"` from the repo root first, or run
-`./tools/setup_env.sh` once, which links `~/texmf` to it.
+For a compile by hand, `export TEXMFHOME="$PWD/texmf"` from the repo root first. Nothing
+is linked into your home directory: each copy of the app (each worktree, if two chats run
+at once) uses its own `texmf/`, and a `~/texmf` you already have is left alone.
 
 **`cffi` is upgraded first** because `pypdf` needs a working one, and the system
 `cryptography` package can be broken on a fresh container in a way that makes

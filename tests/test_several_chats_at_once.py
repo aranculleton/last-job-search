@@ -130,3 +130,332 @@ def test_a_chat_that_did_not_bring_it_plans_nothing(tmp_path, monkeypatch, capsy
     monkeypatch.setattr(P, "pending", lambda: [(P.REGISTRY[0], "missing")])
     P.main(["--plan"])
     assert json.loads(capsys.readouterr().out) == []
+
+
+def _two_chats_one_update(tmp_path):
+    """The app, a person's repo, and two chats that each synced the same app commit in a
+    commit of their own, a minute apart, before either landed."""
+    app, origin = str(tmp_path / "app"), str(tmp_path / "origin")
+    a, b = str(tmp_path / "a"), str(tmp_path / "b")
+    subprocess.run(["git", "init", "-q", "-b", "master", app], check=True)
+    _git(app, "commit", "-q", "--allow-empty", "-m", "app 3.8.0")
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "master", origin], check=True)
+    subprocess.run(["git", "clone", "-q", origin, a], check=True, capture_output=True)
+    _git(a, "commit", "-q", "--allow-empty", "-m", "the person's start")
+    _git(a, "push", "-q", "origin", "HEAD:master")
+    subprocess.run(["git", "clone", "-q", origin, b], check=True, capture_output=True)
+    for i, chat in enumerate((a, b)):
+        _git(chat, "fetch", "-q", app, "master")
+        # A minute apart: two real chats never make the same commit, though a fast test can.
+        when = "2026-10-20T08:0%d:00" % i
+        subprocess.run(["git", "-C", chat, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "merge", "-q", "--no-ff", "--allow-unrelated-histories", "FETCH_HEAD",
+                        "-m", "Sync from the app: 1 new commit(s)"], capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+    return a, b
+
+
+def test_two_chats_that_synced_the_same_update_do_not_both_apply_it(tmp_path, monkeypatch):
+    a, b = _two_chats_one_update(tmp_path)
+    monkeypatch.setattr(P, "ROOT", b)
+    P.claim()                                         # chat b claimed it, as its sync does
+    assert P.owner_elsewhere() == ""                  # nothing has landed: b's to do
+    # Chat a lands its sync, and applies an upgrade on master.
+    _git(a, "commit", "-q", "--allow-empty", "-m", "Profile upgrade: move-and-area")
+    _git(a, "push", "-q", "origin", "HEAD:master")
+    _git(b, "fetch", "-q", "origin")
+    # b's claim no longer holds: the same update reached master through a first.
+    assert P.owner_elsewhere() != ""
+    assert P.done_on_master() == {"move-and-area"}
+    # Checked right before it starts, an upgrade on master is merged, never made again.
+    assert P.main(["--check", "move-and-area"]) == 0
+    # The person's word that no other chat is open hands them over anyway.
+    P.claim(taken=True)
+    assert P.owner_elsewhere() == ""
+
+
+def test_a_chat_whose_own_sync_landed_first_keeps_the_update(tmp_path, monkeypatch):
+    a, _b = _two_chats_one_update(tmp_path)
+    _git(a, "push", "-q", "origin", "HEAD:master")
+    _git(a, "fetch", "-q", "origin")
+    monkeypatch.setattr(P, "ROOT", a)
+    P.claim()
+    assert P.owner_elsewhere() == "" and P.done_on_master() == set()
+
+
+def _people(*chats):
+    for chat in chats:
+        os.makedirs(os.path.join(chat, "profile"), exist_ok=True)
+
+
+def test_the_first_chat_to_take_an_update_tells_the_other_before_anything_lands(
+        tmp_path, monkeypatch):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    monkeypatch.setattr(P, "ROOT", a)
+    assert P.push_claim() == "claimed"
+    monkeypatch.setattr(P, "ROOT", b)
+    assert P.push_claim() == "taken"                  # git took a's push and refused b's
+    assert P.done_on_master() == set()                # nothing has landed anywhere
+    assert P.owner_elsewhere() != ""                  # and b already knows a has them
+    # The person's word that no other chat is open still hands them over.
+    P.claim(taken=True)
+    assert P.owner_elsewhere() == ""
+    monkeypatch.setattr(P, "ROOT", a)
+    P.fetch_master()
+    assert P.owner_elsewhere() == ""                  # a's own claim is a's
+
+
+def test_a_chat_the_claim_reached_starts_nothing(tmp_path, monkeypatch, capsys):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    monkeypatch.setattr(P, "ROOT", a)
+    P.push_claim()
+    monkeypatch.setattr(P, "ROOT", b)
+    monkeypatch.setattr(P, "pending", lambda: [(P.REGISTRY[0], "missing")])
+    monkeypatch.setattr(P, "run_instant", lambda rows: [])
+    import merge_state
+    import sync_app
+    monkeypatch.setattr(merge_state, "install", lambda root: None)
+    monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
+    assert P.main(["--after-sync"]) == 0
+    assert "belong to another chat" in capsys.readouterr().out
+    assert P.main(["--plan"]) == 0
+    assert json.loads(capsys.readouterr().out) == []
+
+
+def test_a_claim_is_never_staked_over_a_sync_that_landed(tmp_path, monkeypatch, capsys):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    _git(a, "push", "-q", "origin", "HEAD:master")    # a's sync landed, from an older copy
+    monkeypatch.setattr(P, "ROOT", b)
+    monkeypatch.setattr(P, "pending", lambda: [(P.REGISTRY[0], "missing")])
+    monkeypatch.setattr(P, "run_instant", lambda rows: [])
+    import merge_state
+    import sync_app
+    monkeypatch.setattr(merge_state, "install", lambda root: None)
+    monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
+    P.main(["--after-sync"])
+    capsys.readouterr()
+    refs = _git(b, "ls-remote", "origin", P.CLAIM_REFS + "*")
+    assert refs.stdout.strip() == ""                  # b pushed no claim of its own
+    monkeypatch.setattr(P, "ROOT", a)
+    P.claim()                                         # as a's own sync did
+    P.fetch_master()
+    assert P.owner_elsewhere() == ""                  # so a, whose sync landed, keeps them
+
+
+def test_the_chat_that_claimed_keeps_the_update_when_the_other_lands_first(tmp_path,
+                                                                             monkeypatch):
+    a, b = _two_chats_one_update(tmp_path)
+    _people(a, b)
+    monkeypatch.setattr(P, "ROOT", a)
+    assert P.push_claim() == "claimed"
+    monkeypatch.setattr(P, "ROOT", b)
+    assert P.push_claim() == "taken"
+    assert P.owner_elsewhere() != ""                  # b waits on a's claim
+    _git(b, "push", "-q", "origin", "HEAD:master")    # and lands its sync first
+    monkeypatch.setattr(P, "ROOT", a)
+    P.fetch_master()
+    assert P.owner_elsewhere() == ""                  # a is not told to wait on b
+
+
+def test_a_claim_push_keeps_the_persons_own_ssh_command(tmp_path, monkeypatch):
+    a, _b = _two_chats_one_update(tmp_path)
+    _people(a)
+    _git(a, "config", "core.sshCommand", "ssh -i ~/.ssh/work_key")
+    monkeypatch.delenv("GIT_SSH_COMMAND", raising=False)
+    monkeypatch.setattr(P, "ROOT", a)
+    seen = {}
+    real = subprocess.run
+
+    def run(cmd, *args, **kw):
+        if "push" in cmd:
+            seen["ssh"] = kw["env"]["GIT_SSH_COMMAND"]
+        return real(cmd, *args, **kw)
+
+    monkeypatch.setattr(P.subprocess, "run", run)
+    P.push_claim()
+    assert seen["ssh"] == "ssh -i ~/.ssh/work_key -o BatchMode=yes"
+
+
+def test_no_claim_is_pushed_from_the_app(tmp_path, monkeypatch):
+    a, _b = _two_chats_one_update(tmp_path)           # no profile/: the app itself
+    monkeypatch.setattr(P, "ROOT", a)
+    assert P.push_claim() == ""
+    assert _git(a, "ls-remote", "origin", P.CLAIM_REFS + "*").stdout.strip() == ""
+
+
+# ------------------------------------------------------------------ the later change wins
+
+CONTACTS = "contact_id,name,status,next_action\n"
+JUNO = "oakmere_castellan,Juno Castellan,awaiting_reply,\n"
+
+
+def _two_sides(tmp_path, ours_at, theirs_at, ours_status="call_booked",
+               theirs_status="in_conversation"):
+    """A person's repo where two chats changed one contact's status, each at its own time."""
+    repo = str(tmp_path / "repo")
+    os.makedirs(os.path.join(repo, "tools"))
+    _git(repo, "init", "-q", "-b", "master")
+    for f in ("tools/merge_state.py", ".gitattributes"):
+        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
+            dst.write(src.read())
+    book = os.path.join(repo, "network_contacts.csv")
+    open(book, "w").write(CONTACTS + JUNO)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+
+    def change(status, when, msg):
+        open(book, "w").write(CONTACTS + JUNO.replace("awaiting_reply", status))
+        subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "commit", "-qam", msg], check=True, capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+
+    _git(repo, "checkout", "-qb", "other")
+    change(theirs_status, theirs_at, "theirs")
+    _git(repo, "checkout", "-q", "master")
+    change(ours_status, ours_at, "ours")
+    M.install(repo)
+    return repo, book
+
+
+def test_a_status_both_chats_changed_takes_the_later_change(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00", theirs_at="2026-10-19T15:00:00")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = open(book).read()
+    assert "<<<<<<<" not in text and "in_conversation" in text and "call_booked" not in text
+    said = r.stdout + r.stderr
+    assert "kept 'in_conversation', the later change" in said and "'call_booked'" in said
+
+
+def test_the_later_change_wins_whichever_side_it_is_on(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T15:00:00", theirs_at="2026-10-19T09:00:00")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "call_booked" in open(book).read()
+
+
+def test_a_change_with_no_later_side_is_still_left_for_a_person(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00", theirs_at="2026-10-19T09:00:00")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode != 0
+    text = open(book).read()
+    assert "<<<<<<<" in text and "call_booked" in text and "in_conversation" in text
+
+
+def test_without_git_history_a_both_changed_field_is_a_conflict_as_before():
+    base = CONTACTS + JUNO
+    ours = base.replace("awaiting_reply", "call_booked")
+    theirs = base.replace("awaiting_reply", "in_conversation")
+    out, problems = M.merge_csv(base, ours, theirs, "network_contacts.csv")
+    assert problems and "<<<<<<<" in out
+    settled = []
+    out, problems = M.merge_csv(base, ours, theirs, "network_contacts.csv",
+                                later=lambda k, f, o, t: "theirs", settled=settled)
+    assert not problems and "in_conversation" in out and "call_booked" not in out
+    assert settled and "both changed status" in settled[0]
+
+
+def test_a_seen_posting_both_chats_changed_takes_the_later_change():
+    base = {"seen": {"u1": {"status": "new"}}}
+    ours = {"seen": {"u1": {"status": "excluded"}}}
+    theirs = {"seen": {"u1": {"status": "applied"}}}
+    settled = []
+    out, problems = M.merge_json(base, ours, theirs, later=lambda p, o, t: "theirs",
+                                 settled=settled)
+    assert not problems and out == theirs and "seen/u1/status" in settled[0]
+
+
+URL = "https://jobs.example.com/acme/1?ref=a/b"
+
+
+def _two_sides_seen(tmp_path, ours, theirs, base="new"):
+    """A person's repo where two chats changed one posting in seen_jobs.json, keyed, as
+    there, by a URL with slashes in it; theirs is the later change."""
+    repo = str(tmp_path / "repo")
+    os.makedirs(os.path.join(repo, "tools"))
+    os.makedirs(os.path.join(repo, "job_scraper"))
+    _git(repo, "init", "-q", "-b", "master")
+    for f in ("tools/merge_state.py", ".gitattributes"):
+        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
+            dst.write(src.read())
+    seen = os.path.join(repo, "job_scraper", "seen_jobs.json")
+
+    def write(value):
+        with open(seen, "w") as fh:
+            json.dump({"seen": {URL: value}}, fh, indent=2)
+
+    write(base)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+
+    def change(value, when, msg):
+        write(value)
+        subprocess.run(["git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@example.com",
+                        "commit", "-qam", msg], check=True, capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_DATE=when, GIT_COMMITTER_DATE=when))
+
+    _git(repo, "checkout", "-qb", "other")
+    change(theirs, "2026-10-19T15:00:00", "theirs")
+    _git(repo, "checkout", "-q", "master")
+    change(ours, "2026-10-19T09:00:00", "ours")
+    M.install(repo)
+    return repo, seen
+
+
+def test_a_posting_keyed_by_a_url_takes_the_later_change(tmp_path):
+    repo, seen = _two_sides_seen(tmp_path, ours={"status": "excluded"},
+                                 theirs={"status": "applied"}, base={"status": "new"})
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert json.load(open(seen))["seen"][URL] == {"status": "applied"}
+    assert "the later change" in r.stdout + r.stderr
+
+
+def test_a_list_both_chats_added_to_is_never_settled_by_one_side(tmp_path):
+    repo, seen = _two_sides_seen(tmp_path, ours={"notes": ["a", "ours"]},
+                                 theirs={"notes": ["a", "theirs"]}, base={"notes": ["a"]})
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert r.returncode != 0                     # left for a person, as before
+    said = r.stdout + r.stderr
+    assert "the later change" not in said and "notes" in said
+
+
+def test_a_name_outside_ascii_merges_whatever_the_locale(tmp_path, monkeypatch):
+    for k, v in (("LC_ALL", "C"), ("LANG", "C"), ("PYTHONUTF8", "0"),
+                 ("PYTHONCOERCECLOCALE", "0")):
+        monkeypatch.setenv(k, v)
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00",
+                            theirs_at="2026-10-19T15:00:00")
+    for side in ("other", "master"):              # a name both histories carry
+        _git(repo, "checkout", "-q", side)
+        text = open(book, encoding="utf-8").read().replace("Juno", "\u0141ucja")
+        open(book, "w", encoding="utf-8").write(text)
+        _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qam",
+             "name")
+    _git(repo, "checkout", "-q", "master")
+    r = _git(repo, "merge", "--no-edit", "other")
+    assert "UnicodeDecodeError" not in r.stdout + r.stderr
+
+
+def test_a_rebase_takes_the_later_change_too(tmp_path):
+    repo, book = _two_sides(tmp_path, ours_at="2026-10-19T09:00:00", theirs_at="2026-10-19T15:00:00")
+    _git(repo, "checkout", "-q", "other")
+    r = _git(repo, "rebase", "master")
+    assert r.returncode == 0, r.stdout + r.stderr
+    text = open(book).read()
+    assert "<<<<<<<" not in text and "in_conversation" in text
+
+
+def test_the_plan_says_which_listed_upgrades_are_already_in_place(tmp_path, monkeypatch, capsys):
+    _repo_with_a_landed_sync(tmp_path, monkeypatch)
+    rows = [(P.REGISTRY[0], "missing"), (P.REGISTRY[1], "missing")]
+    P.remember_listed(rows)                           # what the sync printed
+    monkeypatch.setattr(P, "pending", lambda: rows[:1])   # one done since, by anyone
+    assert P.main(["--plan"]) == 0
+    out = capsys.readouterr()
+    assert [r["id"] for r in json.loads(out.out)] == [rows[0][0].id]
+    assert "Already in place since the sync listed them" in out.err
+    assert rows[1][0].id in out.err and rows[0][0].id not in out.err

@@ -109,15 +109,19 @@ def test_a_row_that_says_to_leave_them_be_is_never_given_a_message(step):
     assert lines[-1].startswith("- How did you hear about us: through Hal Okonedo.")
 
 
-@pytest.mark.parametrize("date,said", [("2026-10-30", "Tell them the interview is booked"),
-                                       ("", "Tell them once the interview has a date")])
+@pytest.mark.parametrize("date,said", [("2026-10-30", "led to an interview on 2026-10-30"),
+                                       ("", "led to an interview, and")])
 def test_booked_is_said_only_when_the_stage_has_a_date(date, said):
     referrer = {"contact_id": "f_r", "name": "Hal Okonedo", "company": "Fernhill",
                 "status": "referral_in_progress", "route": "referral", "next_action": ""}
     talking = {"contact_id": "f_t", "name": "Juno Castellan", "company": "Fernhill",
-               "status": "replied", "route": "cold", "next_action": ""}
+               "status": "in_conversation", "route": "cold", "next_action": ""}
     lines = interview_pack.warm_lines(_ctx([referrer, talking], date=date))
-    assert any(said in ln for ln in lines)
+    # The referrer is thanked once and told nothing more until there is an outcome.
+    [ref] = [ln for ln in lines if "Hal Okonedo put you forward" in ln]
+    assert said in ref and "no update until there is an outcome" in ref
+    [other] = [ln for ln in lines if "Juno Castellan" in ln]
+    assert ("tell them it is booked" in other) == bool(date)
     if not date:
         assert not any("is booked" in ln for ln in lines)
 

@@ -35,6 +35,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import advice  # noqa: E402
 import company_key  # noqa: E402
 import person  # noqa: E402
 import schema  # noqa: E402
@@ -84,6 +85,28 @@ class AsksForTheJob(ValueError):
 
 class UngroundedNote(ValueError):
     """The common ground rests on nothing that was read about them (reading.grounded)."""
+
+
+class UnconfirmedReading(ValueError):
+    """A note that says the sender read, saw or watched something of theirs, when the
+    sender has not said they did. "I saw your package on GitHub" went to someone the
+    person had found through a search of the team: "clearly that's not how I found him"."""
+
+
+class UnrecordedReaction(ValueError):
+    """Drafting again over a reaction from the person that nobody recorded
+    (tools/learned.py pending)."""
+
+
+def _no_reaction_waiting(what: str = "compose") -> None:
+    """Refuse to draft while a reaction from the person waits to be recorded."""
+    try:
+        import learned
+        msg = learned.refuse_over_pending(what)
+    except (ImportError, SystemExit):
+        return
+    if msg:
+        raise UnrecordedReaction(msg)
 
 
 class NoteIsAllAboutTheSender(ValueError):
@@ -364,6 +387,58 @@ def employers_early(text, employers, within=2) -> list:
     return buried
 
 
+def _names_employer(sentence, employer) -> bool:
+    return bool(re.search(re.escape(str(employer)), sentence, re.I)) \
+        or company_key.key(str(employer)) in _employer_keys(sentence)
+
+
+def employers_first(text, employers, within=2) -> str:
+    """The note with the sentences naming its buried employers moved up, to follow the
+    greeting, or "" when that cannot be done by moving sentences alone (no sentence
+    names one, or the move still leaves one buried).
+
+    validate() said only "employers_buried", and a writer had to work out what to
+    change (2026-10-19). This is the change, made mechanically where it can be: the
+    same sentences, in another order, each word kept as written.
+    """
+    buried = employers_early(text, employers, within)
+    if not buried:
+        return ""
+    # Each sentence as the writer typed it (tone.sentences straightens curly quotes),
+    # and the greeting with its own line break when it has one.
+    text = str(text or "")
+    plain, sents, at = tone._plain(text), [], 0
+    for s in tone.sentences(text):
+        i = plain.find(s, at)
+        sents.append(text[i:i + len(s)] if i >= 0 else s)
+        at = i + len(s) if i >= 0 else at
+    m = _SALUTATION.match(sents[0]) if sents else None
+    if not m:
+        return ""
+    rest = sents[0][m.end():].strip()
+    joined = bool(rest) and not _COURTESY.match(rest)
+    if joined:
+        # "Hi Robin, saw your talk on ...": the greeting runs into the first sentence.
+        # That sentence takes a capital when it moves down, and the one moved up follows
+        # the greeting the way _after_greeting writes any clause after it.
+        lead, body = [], [rest[:1].upper() + rest[1:]] + sents[1:]
+    else:
+        lead = [sents[0]]
+        if not rest and len(sents) > 1 and _COURTESY.match(sents[1]):
+            lead.append(sents[1])
+        body = sents[len(lead):]
+    up = [s for s in body if any(_names_employer(s, e) for e in buried)]
+    if not up or up == body[:len(up)]:
+        return ""
+    order = up + [s for s in body if s not in up]
+    if joined:
+        out = " ".join([f"{m.group(0).strip()} {_after_greeting(order[0])}"] + order[1:])
+    else:
+        i = text.find(lead[-1])
+        out = (text[:i + len(lead[-1])] if i >= 0 else " ".join(lead)) + " " + " ".join(order)
+    return "" if employers_early(out, employers, within) else out
+
+
 def referrer_in_lead(text, referrer_name) -> bool:
     """Is the referrer named in the first sentence?
 
@@ -576,6 +651,7 @@ def connection_note(name, hook, who_line, work_auth=None, seniority="peer",
     detail matters least, and a truncator always cuts the close, which is the
     part that asks for the reply.
     """
+    _no_reaction_waiting("connection note")
     if not str(hook or "").strip():
         raise ValueError(
             "a connection note without a hook specific to this person is a template "
@@ -661,36 +737,70 @@ ABOUT_ME = getattr(_NET, "ABOUT_ME", "")
 ASK = getattr(_NET, "ASK", "")
 
 # The phrasings that turn a first note into an application. Every one of them
-# has turned up in a draft queued for sending.
-JOB_ASK = re.compile(
-    r"\b(?:the|a) (?:job|role) I want\b"
-    r"|\bI want (?:the |a |an |my next )?[\w'&,. -]{0,60}?\brole\b"
-    r"|\bI want a role\b"
-    r"|\bis (?:it|that|the role) on your team\b"
-    r"|\b(?:does|would) it report into your team\b"
-    r"|\bwho hires for (?:it|this|that)\b"
-    r"|\bdo you recruit for (?:it|this|that)\b"
-    r"|\bwho should I (?:speak|talk) to\b"
-    r"|\b(?:is|are) (?:you|your team|the team|[A-Z][\w&.]*(?: [A-Z][\w&.]*){0,2}) hiring\b"
-    r"|\bdoes the team hire\b"
-    r"|\bwhere I want (?:my next role|to go(?: next)?|to take (?:it|that))\b"
-    r"|\bis where I want\b"
-    r"|\bwhat I want next\b"
-    r"|\bthe direction I am aiming\b"
-    # The plain forms, all of which passed: "Do you have any openings on your
-    # team?", "Could you refer me", "I'd like to be considered for".
-    r"|\b(?:any|have|has|got)\b[^.?!]{0,25}\b(?:openings?|vacanc\w+|open (?:roles?|positions?|reqs?))\b"
-    r"|\brefer me\b"
-    r"|\b(?:be )?considered for (?:the|a|an|your|this|that)\b"
-    r"|\b(?:I am|I'm|I've been|I have been|I just)\s+appl(?:ying|ied)\b"
-    r"|\b(?:are|is) (?:you|your team|the team) (?:recruiting|looking to (?:hire|add|grow))\b"
-    r"|\bis (?:your|the) team growing\b"
+# has turned up in a draft queued for sending. Two kinds, each with what to write
+# instead: saying the role the sender wants (allowed where SAY_THE_ROLE says so for this
+# reader, as it is for a decision-maker by default), and asking for the job, which only
+# a recruiter is asked. The fix is named with the phrase: "asks for the job" alone sent a
+# writer back to guess which of several sentences tripped it (2026-10-20).
+_SAY_ROLE_FIX = ("say the work you are looking for, not that you want their role; or allow "
+                 "it for this kind of reader (profile/networking.py SAY_THE_ROLE)")
+_POINTER_FIX = ("ask for a pointer instead: \"would you know the right person to speak to "
+                "about <the work>?\" (shape=\"pointer\")")
+_LATER_FIX = "that is the referral ask, after they reply: compose.referral_ask()"
+_OPEN_FIX = ("to a decision-maker, ask openly: \"would love to hear if you have anything coming "
+             "up\"; to a peer, ask about them, or for a pointer")
+JOB_ASKS = (
+    # (pattern, kind, what to write instead). "wants" is saying the role wanted.
+    (r"\b(?:the|a) (?:job|role) I want\b", "wants", _SAY_ROLE_FIX),
+    # Within one clause: "the work I want to be doing, and I'm looking for my next role" is
+    # two clauses, and the second is allowed (2026-10-20).
+    # The words between are the role's own ("a senior data science role"): never "to",
+    # "your" or "how", which make it a sentence about something else ("I want to
+    # understand how your role changed"), and never across a full stop.
+    (r"\bI want (?:the |a |an |my next )?(?:(?!(?:to|your|their|his|her|how|what|why)\b)"
+     r"[\w'&-]+ ){0,6}role\b", "wants", _SAY_ROLE_FIX),
+    (r"\bI want to (?:move|get|step|go|transition|pivot|switch) (?:in)?to (?:a|an|the)\b"
+     r"[^.?!,]{0,40}\brole\b", "wants", _SAY_ROLE_FIX),
+    (r"\bwhere I want (?:my next role|to go(?: next)?|to take (?:it|that))\b", "wants", _SAY_ROLE_FIX),
+    (r"\bis where I want\b", "wants", _SAY_ROLE_FIX),
+    (r"\bwhat I want next\b", "wants", _SAY_ROLE_FIX),
+    (r"\bthe direction I am aiming\b", "wants", _SAY_ROLE_FIX),
+    (r"\bis (?:it|that|the role) on your team\b", "asks", _OPEN_FIX),
+    (r"\b(?:does|would) it report into your team\b", "asks", _OPEN_FIX),
+    (r"\bwho hires for (?:it|this|that)\b", "asks", _POINTER_FIX),
+    (r"\bdo you recruit for (?:it|this|that)\b", "asks", _POINTER_FIX),
+    (r"\bwho should I (?:speak|talk) to\b", "asks", _POINTER_FIX),
+    # An employer's name is capitalized however the pattern is compiled: "they are slow
+    # hiring" is not a question about their hiring.
+    (r"\b(?:is|are) (?:you|your team|the team|(?-i:[A-Z])[\w&.]*(?: (?-i:[A-Z])[\w&.]*){0,2})"
+     r" hiring\b",
+     "asks", _OPEN_FIX),
+    (r"\bdoes the team hire\b", "asks", _OPEN_FIX),
+    # The plain forms, all of which passed: "Do you have any openings on your team?",
+    # "Could you refer me", "I'd like to be considered for".
+    (r"\b(?:any|have|has|got)\b[^.?!]{0,25}\b(?:openings?|vacanc\w+|open (?:roles?|positions?|reqs?))\b",
+     "asks", _OPEN_FIX),
+    (r"\brefer me\b", "asks", _LATER_FIX),
+    (r"\b(?:be )?considered for (?:the|a|an|your|this|that)\b", "asks", _LATER_FIX),
+    (r"\b(?:I am|I'm|I've been|I have been|I just)\s+appl(?:ying|ied)\b", "asks", _LATER_FIX),
+    (r"\b(?:are|is) (?:you|your team|the team) (?:recruiting|looking to (?:hire|add|grow))\b",
+     "asks", _OPEN_FIX),
+    (r"\bis (?:your|the) team growing\b", "asks", _OPEN_FIX),
     # Plain asks that passed: "Is the <role> still open?", "I'd love to apply",
     # "Would you consider me for the role?", "I'm interested in the <role> opening".
-    r"|\b(?:role|position|opening|job|req)\b[^.?!]{0,30}\bstill open\b"
-    r"|\b(?:love|like|keen|want|hoping) to apply\b|\bconsider me\b"
-    r"|\binterested in (?:the|your|this|that|an?)\b[^.?!]{0,60}\b(?:role|position|opening|vacancy|job)\b",
-    re.I)
+    (r"\b(?:role|position|opening|job|req)\b[^.?!]{0,30}\bstill open\b", "asks", _LATER_FIX),
+    # Applying for something, not applying a method: "I like to apply statistics" passes.
+    (r"\b(?:love|like|keen|want|hoping) to apply(?=\s*(?:[.!?,]|$|for\b|to (?:the|a|an|your|"
+     r"this|that|one)\b|there\b|here\b|now\b))|\bconsider me\b", "asks", _LATER_FIX),
+    # Interest in a role, not in their move into one ("your move from finance into a
+    # product role" is about their path).
+    (r"\binterested in (?:the|your|this|that|an?) (?:(?!(?:move|moving|switch\w*|transition\w*|"
+     r"path|journey|career|from|into|time)\b)[\w'&-]+ ){0,6}(?:role|position|opening|vacancy|job)\b",
+     "asks", _LATER_FIX),
+)
+_JOB_ASKS = [(re.compile(rx, re.I), kind, fix) for rx, kind, fix in JOB_ASKS]
+# All of them as one pattern, as callers have always used it.
+JOB_ASK = re.compile("|".join(f"(?:{rx})" for rx, _k, _f in JOB_ASKS), re.I)
 
 # Common ground that is their hiring: a post, an open role. Beside it the
 # default ABOUT_ME's looking clause turns the note back into a job ask, which
@@ -735,14 +845,232 @@ def is_recruiter(title) -> bool:
     return bool(RECRUITER_TITLE.search(str(title or "")))
 
 
-def first_note_findings(text, recruiter=False) -> list:
-    """Why this first note reads as asking for the job, as (rule, text) pairs."""
-    if recruiter:
-        return []
-    out = [tone.Violation("asks_for_the_job", m.group(0)) for m in JOB_ASK.finditer(text)]
-    out += [tone.Violation("work_auth_in_first_note", m.group(0))
-            for m in _WORK_AUTH_ANY.finditer(text)]
+# ---------------------------------------------------------------- who reads it
+#
+# Three kinds of reader, told different things. A recruiter's job is roles. A
+# decision-maker can place someone, and the message that drew a reply from one within
+# three hours said plainly who the sender was, that they needed no sponsorship and that
+# they could start quickly, and asked "if you have anything coming up". A peer can only
+# advise, so they get who the sender is, one reason tied to their own path, and a plain
+# request for a short call or a pointer. Each setting is the person's, in
+# profile/networking.py, per reader type, and a message can override it.
+READER_TYPES = ("recruiter", "decision_maker", "peer")
+
+
+_YES = {"true", "yes", "y", "1", "on"}
+_NO = {"false", "no", "n", "0", "off", ""}
+
+
+def _as(value, like):
+    """A profile setting as the type of its default: "no" is False and "130" is 130, and a
+    value that cannot be read keeps the default rather than breaking every import."""
+    if isinstance(like, bool):
+        if isinstance(value, str):
+            v = value.strip().lower()
+            return True if v in _YES else False if v in _NO else like
+        return bool(value)
+    if isinstance(like, int):
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return like
+    return value
+
+
+def _per_reader(got, default: dict) -> dict:
+    out = dict(default)
+    if isinstance(got, dict):
+        out.update({k: _as(v, default[k]) for k, v in got.items() if k in default})
     return out
+
+
+# Whether a first message states work authorization. The profile's own rule: "for a
+# recruiter or anyone whose reply could be about a role"; left out for a peer, who keeps
+# it for the reply or the referral stage.
+ELIGIBILITY = _per_reader(getattr(_NET, "ELIGIBILITY", None),
+                          {"recruiter": True, "decision_maker": True, "peer": False})
+# Whether a first message may say the role the sender wants. Asking for the job stays a
+# recruiter's alone.
+SAY_THE_ROLE = _per_reader(getattr(_NET, "SAY_THE_ROLE", None),
+                           {"recruiter": True, "decision_maker": True, "peer": False})
+# How long an InMail need be for each reader: past this it is warned, never refused. The
+# 200-word ceiling is a ceiling.
+INMAIL_WORDS_FOR = _per_reader(getattr(_NET, "INMAIL_WORDS", None),
+                               {"recruiter": 170, "decision_maker": 170, "peer": 130})
+# "warn" (the default): the employer named late is a warning with the reordering; "refuse"
+# makes it a finding. The message that drew a reply named its target in the third
+# paragraph, not the first sentence.
+EMPLOYERS_FIRST = str(getattr(_NET, "EMPLOYERS_FIRST", "") or "warn").strip().lower()
+
+
+def reader_type(title="", seniority=None, recruiter=False) -> str:
+    """"recruiter", "decision_maker" or "peer", from their title (and the register)."""
+    if recruiter or is_recruiter(title):
+        return "recruiter"
+    import why
+    if why.seniority(title) == "senior" or (seniority and tone.is_senior(seniority)):
+        return "decision_maker"
+    return "peer"
+
+
+def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> list:
+    """Why this first message reads as asking for the job, as (rule, text) pairs, each
+    naming the phrase and what to write instead. `reader` (READER_TYPES) and the person's
+    settings decide what is allowed: a recruiter is asked about roles; a decision-maker
+    may be told the role wanted and the sender's work authorization; a peer neither,
+    unless `work_auth=True` says this message should state it."""
+    if recruiter or reader == "recruiter":
+        return []
+    reader = reader or "peer"
+    out = []
+    for rx, kind, fix in _JOB_ASKS:
+        if kind == "wants" and SAY_THE_ROLE.get(reader):
+            continue
+        out += [tone.Violation("asks_for_the_job", f"\"{m.group(0)}\": {fix}")
+                for m in rx.finditer(text)]
+    allowed = ELIGIBILITY.get(reader, False) if work_auth is None else bool(work_auth)
+    if not allowed:
+        out += [tone.Violation("work_auth_in_first_note",
+                               f"\"{m.group(0)}\": a {reader.replace('_', '-')} is not told "
+                               "this in a first message (profile/networking.py ELIGIBILITY); "
+                               "pass work_auth=True to say it in this one")
+                for m in _WORK_AUTH_ANY.finditer(text)]
+    return out
+
+
+# ---------------------------------------------------------------- the phrase bank
+#
+# Several natural ways to say each thing a note says that carries no fact, so a batch
+# varies without a model call. The person's own (profile/networking.py TEMPLATES, per
+# reader type or "any", each intent a list) come first; their single OPENER and ASK next;
+# these last. A variant is chosen per contact, so the same person always gets the same
+# one and the next contact a different one.
+# The opener is the person's own (networking.py OPENER) or none: the bank has no stock
+# opener, since every "hope you're well" shape is the house style voice_check refuses.
+BANK = {
+    "ask": {
+        "peer": ("Would you be up for a quick chat sometime?",
+                 "Would you have 15 minutes for a call in the next couple of weeks?",
+                 "I'd really appreciate a short call if you're open to it."),
+        "decision_maker": (advice.OPEN_ASK,
+                           "If anything's coming up on your team, or there's someone better "
+                           "placed to speak to, I'd love to hear.",
+                           "Would love to hear if anything's coming up, or who'd be the right "
+                           "person to speak to."),
+        "recruiter": ("Would love to hear if you have anything coming up that fits.",
+                      "If anything you're working on fits, I'd love to hear about it."),
+    },
+    "pointer": {"any": ("Would you know the right person to speak to about that?",
+                        "Is there someone on that team you'd suggest I speak to?",
+                        "Would you know who'd be best to speak to about it?")},
+    "hedge": {"any": advice.HEDGES},
+}
+# What the bank says instead where the person's own voice check refuses all of it: "would
+# love to" is theirs only where OWN_VOICE says so, and the app's default must never be the
+# draft its own check refuses.
+BANK_PLAIN = {
+    "ask": {
+        "decision_maker": ("If anything's coming up on your team, or there's someone better "
+                           "placed to speak to, it'd be great to hear.",),
+        "recruiter": ("If you have anything coming up that fits, it'd be great to hear about it.",),
+    },
+}
+TEMPLATES = getattr(_NET, "TEMPLATES", None)
+TEMPLATES = TEMPLATES if isinstance(TEMPLATES, dict) else {}
+
+
+def _voice_ok(text: str) -> bool:
+    """Would the person's own voice check pass this line?"""
+    try:
+        import voice_check
+    except ImportError:                       # pragma: no cover - path issue only
+        return True
+    return not voice_check.hard(text, allow=_OWN_VOICE)
+
+
+def _variants(intent: str, reader: str) -> list:
+    out = []
+    for where in (TEMPLATES, ):
+        for key in (reader, "any"):
+            got = where[key].get(intent) if isinstance(where.get(key), dict) else None
+            if got:
+                out += list(got) if isinstance(got, (list, tuple)) else [got]
+    return [str(v) for v in out if str(v).strip()]
+
+
+def options(intent: str, reader: str = "peer", fallback: str = "") -> list:
+    """Every way the composer may say `intent` to this reader: the person's TEMPLATES, else
+    their own wording (`fallback`), else the bank's lines their voice check passes."""
+    got = _variants(intent, reader)
+    if not got and str(fallback or "").strip():
+        got = [str(fallback)]
+    if not got:
+        bank = BANK.get(intent) or {}
+        got = [o for o in (bank.get(reader) or bank.get("any") or ()) if _voice_ok(o)]
+        if not got:
+            plain = BANK_PLAIN.get(intent) or {}
+            got = list(plain.get(reader) or plain.get("any") or ())
+    return got
+
+
+def phrase(intent: str, reader: str = "peer", key: str = "", fallback: str = "") -> str:
+    """One way to say `intent` ("ask", "pointer", "hedge", or "opener" from TEMPLATES) for
+    this reader, chosen by `key` (the contact id) so a batch varies and a redraft does not."""
+    options_ = options(intent, reader, fallback)
+    if not options_:
+        return ""
+    import hashlib
+    i = int(hashlib.sha1(str(key or "").encode()).hexdigest(), 16) % len(options_) if key else 0
+    return options_[i]
+
+
+# How they were found, said truthfully as the reason for writing: the alternative to a
+# pretext. A reading-based specific is colour on top, used only when the sender has
+# looked themselves (`looked=True`).
+HOW_FOUND = {
+    "team_search": "I came across your profile while looking at {company}'s {team} team",
+    "people_page": "I found you on {company}'s people page",
+    "search": "I came across your profile while looking at {company}",
+    "referral": "{referrer} suggested I get in touch",
+    "event": "I saw your name on {event}'s speaker list",
+    "alumni": "We both worked at {shared}",
+}
+
+
+def how_found_line(kind: str, **fields) -> str:
+    """The sentence for how they were found (HOW_FOUND), with its blanks filled."""
+    if kind not in HOW_FOUND:
+        raise ValueError(f"how_found is one of {', '.join(HOW_FOUND)}, not {kind!r}")
+    try:
+        return HOW_FOUND[kind].format(**fields)
+    except KeyError as e:
+        raise ValueError(f"how_found {kind!r} needs {e.args[0]}=") from None
+
+
+# A claim to have read, seen or watched something of theirs.
+_SENDER_LOOKED = re.compile(
+    r"(?:\bI(?:'ve| have)?\s+|(?:^|(?<=[.!?,]\s)))(?:read|saw|seen|watched|listened to|"
+    r"came across|enjoyed|liked|loved|noticed|spotted|found)\b[^.?!]{0,40}\b(?:your|their)\b[^.?!]{0,30}\b(?:post|article|talk|"
+    r"piece|package|repo(?:sitory)?|paper|podcast|blog|newsletter|thread|video|presentation|"
+    r"library|project|code|panel|interview|keynote|book)s?\b", re.I)
+
+
+def _honest(note: str, looked: bool, said=()) -> None:
+    """Refuse a note that says the sender looked at something of theirs, unless they did.
+    `said` is the composer's own line of how they were found ("I saw your name on the
+    event's speaker list"), true by construction and never a claim to have read them."""
+    if looked:
+        return
+    for line in said:
+        line = str(line or "").strip().rstrip(".")
+        if line:
+            note = re.sub(re.escape(line), " ", note, flags=re.I)
+    m = _SENDER_LOOKED.search(note)
+    if m:
+        raise UnconfirmedReading(
+            f"\"{m.group(0)}\" says you looked at it, and you have not said you did. Say how "
+            "you found them instead (how_found=), or pass looked=True once you have read it "
+            "yourself")
 
 
 # The person's own opener and close, allowed back into a first note: only the
@@ -781,8 +1109,11 @@ def _question(question) -> str:
 #   brief       a senior reader: the true line, who you are and the ask; no question
 #   recruiter   their job is roles, so who you are, what you want and work authorization
 #   connected   already connected: a message, with room for the question and the ask
-SHAPES = ("shared", "their_work", "brief", "recruiter", "connected")
-BRIEF_CHARS = 220
+#   pointer     the kind of team or work named, ending on a question they can answer by
+#               pointing to the right person: makes a helpful reply easy without asking
+SHAPES = ("shared", "their_work", "brief", "recruiter", "connected", "pointer")
+# The brief note's length for a senior reader: profile/networking.py SENIOR_NOTE_CHARS.
+BRIEF_CHARS = _as(getattr(_NET, "SENIOR_NOTE_CHARS", 0) or 220, 220)
 CONNECTED_CHARS = 600
 _WORK_KINDS = ("talk", "article", "podcast", "code", "publication", "featured")
 
@@ -803,91 +1134,136 @@ def shape_for(title="", reading=None, route="") -> str:
         return "brief" if senior else "shared"
     if any(i.get("kind") in _WORK_KINDS + ("post",) for i in reading.get("items") or []):
         return "brief" if senior else "their_work"
-    return "brief"
+    # Nothing shared and nothing of theirs to lead on: a senior reader still gets the
+    # brief note, and a peer the standard one at the plan's limit. Every peer with no
+    # posts got the 220 meant for senior readers, and a manager read as a peer could
+    # not fit the one specific line the note rested on (2026-10-19).
+    return "brief" if senior else "shared"
 
 
-def first_note(name, common_ground, question=None, about_me=ABOUT_ME, ask=ASK,
-               opener=OPENER, recruiter=False, seniority="peer", their=(),
-               reading=None, shape="shared") -> str:
+_DEFAULT = object()      # "the caller did not say": the phrase bank chooses
+
+
+def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DEFAULT,
+               opener=_DEFAULT, recruiter=False, seniority="peer", their=(),
+               reading=None, shape="shared", title="", reader=None, work_auth=None,
+               how_found="", looked=False, parallel="", mutual="", variant_key="") -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
-        Hi Robin, hope you're well. <common ground>. <about me>. <question>? <ask>.
+        Hi Robin, hope you're well. <the reason for writing>. <about me>. <question>? <ask>.
 
-    `common_ground` is the one true thing that links the sender to them, or
-    the one thing about their work that prompted the note: a shared employer or
-    school, a team, a talk, a post. Required, because without it the note is a
-    sweep.
+    The reason for writing is one or more of, in this order: a mutual connection the
+    person confirmed (`mutual=`, a name), how they were found, said truthfully
+    (`how_found=`, a sentence; `how_found_line()` writes one), the common ground (a shared
+    employer or school, or the one thing about their work that prompted the note), and a
+    parallel in their own path (`parallel=`, from `reading.py show`, hedged once). At
+    least one is required, because without it the note is a sweep.
 
-    `question` is optional. When there is a real one, it is about THEM and
-    answerable in a line: how they got into the field, how the team is set up,
-    what the work is like. Never whether they are hiring, and never about a role
-    the sender wants: that is the referral ask, later. A question made up to fill
-    the slot ("How has data science changed pricing there?") is what a person
-    called "so artificial" and "stupid", so with no real one the note is the true
-    line and a plain ask for a conversation, which is a complete note.
+    `question` is optional. When there is a real one, it is about THEM and answerable in
+    a line. With no real one the note is the true line and a plain ask for a
+    conversation, which is a complete note.
 
-    `about_me` and `ask` default to the person's own words (their networking.py). Pass `ask=None` when the
-    question already carries the ask. `recruiter=True` is for a recruiter, whose
-    job is roles: the job-ask rules lift and work authorization is added.
+    Who reads it decides what it says (`reader=`, else from `title=`, `recruiter=` and
+    `seniority=`; READER_TYPES): work authorization by ELIGIBILITY (a recruiter and a
+    decision-maker by default, never a peer unless `work_auth=True`), the role wanted by
+    SAY_THE_ROLE, and the ask from the phrase bank for that reader unless `ask=` is
+    given (`ask=None` when the question carries it). `variant_key` (the contact id)
+    picks the variant, so a batch varies.
 
-    `reading` is what was read about them (tools/network/reading.py). Given one,
-    the common ground must rest on it: history they share, or the words of
-    something they wrote or said. Their name and employer do not count, because
-    a search snippet already had them.
+    `reading` is what was read about them. A common ground given alone must rest on it
+    (their name and employer do not count: a snippet had them). A note that says the
+    sender read, saw or watched something of theirs needs `looked=True`, the sender's own
+    word that they did: a reading the chat did is not the sender having looked.
 
-    `shape` is one of SHAPES (`shape_for()` chooses it). "shared" is the form
-    above, unchanged.
+    `shape` is one of SHAPES (`shape_for()` chooses it); "pointer" ends on a question
+    the reader can answer by pointing to the right person.
     """
+    _no_reaction_waiting("first note")
     if shape not in SHAPES:
         raise ValueError(f"shape must be one of {', '.join(SHAPES)}, not {shape!r}")
     if shape == "recruiter":
         recruiter = True
+    rtype = reader or reader_type(title, seniority, recruiter)
+    if rtype not in READER_TYPES:
+        raise ValueError(f"reader is one of {', '.join(READER_TYPES)}, not {rtype!r}")
+    recruiter = recruiter or rtype == "recruiter"
+    if opener is _DEFAULT:
+        opener = phrase("opener", rtype, variant_key, fallback=OPENER) if OPENER else ""
     if shape in ("their_work", "brief"):
         opener = ""
     if shape == "brief":
         question = None
-    if not str(common_ground or "").strip():
+    if ask is _DEFAULT:
+        ask = (phrase("pointer", rtype, variant_key) if shape == "pointer"
+               else phrase("ask", rtype, variant_key, fallback=ASK))
+    reasons = [x for x in (f"We're both connected to {mutual}" if str(mutual or "").strip()
+                           else "", how_found, common_ground, parallel)
+               if str(x or "").strip()]
+    if not reasons:
         raise ValueError(
-            "a first note needs the common ground: the shared employer, school or "
-            "move, or the one thing about their work that prompted the note")
-    if reading is not None:
+            "a first note needs a reason for writing to them: how you found them (how_found=), "
+            "the common ground (a shared employer, school or move, or the one thing about "
+            "their work), or a parallel in their path (parallel=)")
+    if reading is not None and str(common_ground or "").strip() \
+            and not (how_found or parallel or mutual):
         import reading as _reading
         ok, why = _reading.grounded(common_ground, reading)
         if not ok:
             raise UngroundedNote(
                 f"{why}. Take the common ground from what was read "
-                f"(python3 tools/network/reading.py show <contact_id>), never from the snippet")
+                f"(python3 tools/network/reading.py show <contact_id>), never from the snippet, "
+                "or say how you found them (how_found=)")
     q = _question(question)
     if not q and not str(ask or "").strip():
         raise ValueError(
             "a first note needs something to answer: a real question about them, or "
             "the plain ask for a conversation (ask=)")
-    about_me = _about_me_for(common_ground, about_me)
-    # With no opener the common ground runs straight on from "Hi Robin," and
-    # takes the case a clause after a comma takes: "Hi Robin, Saw your post"
-    # is the capital the other composers already fixed.
-    lead = (f"{_greeting(name)} {opener}. {_sentence(common_ground)}" if opener
-            else f"{_greeting(name)} {_after_greeting(common_ground, keep=their)}")
-    parts = [lead, _sentence(about_me) if about_me else "",
-             work_auth_line(seniority) if recruiter else "",
-             q, _sentence(ask) if ask else ""]
+    about_me = _about_me_for(" ".join(reasons), about_me)
+    # A brief note to a senior reader has no room for it: there it is said only when this
+    # message asks for it.
+    say_auth = (ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth))
+    if shape == "brief" and work_auth is None:
+        say_auth = False
+    register = "senior" if rtype == "decision_maker" else seniority
+    auth = ((_checked_claim(work_auth, register) if isinstance(work_auth, str)
+             else work_auth_line(register)) if say_auth else "")
+    # With no opener the reason runs straight on from "Hi Robin," and takes the case a
+    # clause after a comma takes: "Hi Robin, Saw your post" is the capital the other
+    # composers already fixed.
+    first, rest = reasons[0], reasons[1:]
+    # The referrer's name in "Ana suggested I get in touch" keeps its capital after the comma.
+    referrer = re.match(r"\s*(\S+(?:\s+\S+)?)\s+suggested\b", str(how_found or ""))
+    keep = tuple(their or ()) + (mutual,) + ((referrer.group(1),) if referrer else ())
+    lead = (f"{_greeting(name)} {opener}. {_sentence(first)}" if opener
+            else f"{_greeting(name)} {_after_greeting(first, keep=keep)}")
+    parts = [lead] + [_sentence(r) for r in rest] + [
+        _sentence(about_me) if about_me else "", auth, q, _sentence(ask) if ask else ""]
     note = " ".join(p for p in parts if p)
-    findings = first_note_findings(note, recruiter=recruiter)
+    _honest(note, looked, said=(how_found,))
+    findings = first_note_findings(note, recruiter=recruiter, reader=rtype,
+                                   work_auth=say_auth or None)
     if findings:
         raise AsksForTheJob(
-            "this first note asks for the job: %s. A first note asks for a "
-            "conversation; the role belongs in compose.referral_ask() once they "
-            "have replied." % "; ".join(sorted({v.text for v in findings})))
-    if not tone.reaches_them(note, their):
-        raise NoteIsAllAboutTheSender(
-            "nothing in this note reaches %s. Put what links you to them in "
-            "common_ground, or pass their= with the employer or event it names."
-            % (tone.first_name(name) or "them"))
+            "this first note asks for the job: %s. A first note asks for a conversation; "
+            "the role belongs in compose.referral_ask() once they have replied."
+            % "; ".join(sorted({v.text for v in findings})))
+    if not tone.reaches_them(note, tuple(their or ()) + ((mutual,) if mutual else ())):
+        raise NoteIsAllAboutTheSender(_reaches_fix(name, their))
     limit = {"brief": min(BRIEF_CHARS, schema.LIMITS["connection_note_chars"]),
              "connected": CONNECTED_CHARS}.get(shape, schema.LIMITS["connection_note_chars"])
     if len(note) > limit:
         raise TooLong("first note", len(note), limit)
-    return _first_note_voice(note)
+    return Note(_first_note_voice(note), rtype, recruiter)
+
+
+def _reaches_fix(name, their=()) -> str:
+    """What to add when a note never reaches the person it is addressed to: the word."""
+    who = tone.first_name(name) or "them"
+    named = next((str(t) for t in their or () if str(t).strip()), "")
+    return ("nothing in this note reaches %s: it says who you are and nothing about why you "
+            "wrote to them. Add \"you\" or \"your\" to the reason for writing (\"your move "
+            "into ...\", \"I found you on ...\")%s, or say how you found them (how_found=)."
+            % (who, f", or name {named}, which their= holds" if named else ""))
 
 
 def referral_ask(name, context, role, link, close=None, work_auth=None,
@@ -904,6 +1280,7 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     Tuesday"), one line, no restating. `role` names the role and employer;
     `link` is the posting.
     """
+    _no_reaction_waiting("referral ask")
     for what, value in (("context", context), ("role", role), ("link", link)):
         if not str(value or "").strip():
             raise ValueError(f"referral_ask needs {what}")
@@ -943,6 +1320,7 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
 
     Raises TooLong, like everything else here, rather than trimming.
     """
+    _no_reaction_waiting("nudge")
     if not str(reason or "").strip():
         raise ValueError(
             "a nudge with no new reason is a check-in, and a check-in is why the "
@@ -1002,64 +1380,143 @@ def inmail_subject(subject, recruiter=False) -> str:
     return s
 
 
-def inmail(name, subject, common_ground, question, evidence, about_me=ABOUT_ME, ask=ASK,
-           opener=OPENER, recruiter=False, seniority="peer", their=(), sign_off=None) -> str:
-    """The first note with room in it, and a subject line.
+class Note(str):
+    """A first note: the text, as it always was, and who it was written for (`.reader`,
+    `.recruiter`), so validate() and advise() check it for that reader without being told
+    again."""
 
-        Subject: <subject>
+    def __new__(cls, text: str, reader: str = "peer", recruiter: bool = False):
+        obj = super().__new__(cls, text)
+        obj.reader, obj.recruiter = reader, recruiter
+        return obj
 
-        Hi Sasha, hope you're well. <common ground>.
+    def __reduce__(self):
+        return (Note, (str(self), self.reader, self.recruiter))
 
-        <about me>.
 
-        <evidence>.
+class InMail(str):
+    """An InMail: the whole message as a string, as it always was, and its two parts,
+    `.subject` and `.body`, also `m["subject"]` and `m["body"]`. The subject goes in
+    LinkedIn's subject field and the body in the message, so validate() no longer needs a
+    "Subject:" line inside the text. `.reader` is who it was written for."""
 
-        <question>? <ask>.
+    def __new__(cls, subject: str, body: str, reader: str = "", recruiter: bool = False):
+        obj = super().__new__(cls, f"Subject: {subject}\n\n{body}")
+        obj.subject, obj.body = subject, body
+        obj.reader, obj.recruiter = reader, recruiter
+        return obj
 
-    The same moves as `first_note()` and the same rules (never a job ask, no work
-    authorization except to a recruiter, it has to reach them), plus one
-    paragraph of evidence: a named piece of work, its scale, an outcome. That
-    paragraph is what the credit buys; without it this is a connection note that
-    cost a scarce credit. The word limit is a ceiling, not a target.
+    def __reduce__(self):
+        return (InMail, (self.subject, self.body, self.reader, self.recruiter))
+
+    def __getitem__(self, key):
+        if key in ("subject", "body"):
+            return getattr(self, key)
+        return super().__getitem__(key)
+
+    def parts(self) -> dict:
+        return {"subject": self.subject, "body": self.body}
+
+
+def identity_subject() -> str:
+    """The subject that drew a reply: who the sender is, not a topic. "<title>, ex-<the
+    employers they left>", from profile/roles.py, or networking.py SUBJECT."""
+    own = str(getattr(_NET, "SUBJECT", "") or "").strip()
+    if own:
+        return own
+    roles = list(getattr(_ROLES, "ROLES", ()) or ())
+    if not roles:
+        return ""
+    title = str(roles[0].get("title") or "").strip()
+    past = []
+    for r in roles[1:]:
+        aka = r.get("known_as")
+        nm = (aka if isinstance(aka, str) and aka else r.get("employer") or "").strip()
+        if nm and nm not in past:
+            past.append(nm)
+    for n in (2, 1, 0):
+        out = title + (", ex-" + " and ".join(past[:n]) if n and past else "")
+        if len(out.split()) <= schema.LIMITS["inmail_subject_words"]:
+            return out
+    return title
+
+
+def inmail(name, subject=None, common_ground="", question=None, evidence="",
+           about_me=ABOUT_ME, ask=_DEFAULT, opener=_DEFAULT, recruiter=False,
+           seniority="peer", their=(), sign_off=_DEFAULT, title="", reader=None,
+           work_auth=None, how_found="", looked=False, parallel="", variant_key="") -> InMail:
+    """The message with room in it, in the shape that drew a reply:
+
+        Subject: <who you are: "<title>, ex-<employers>" by default>
+
+        Hi Sasha, hope you're well.
+
+        <about me: who you are, with the years>.
+
+        <evidence: one piece of real work, with its numbers>.
+
+        <why this person> <eligibility, by reader> <question>? <the open ask>.
+
+        <sign-off>
+
+    Returns an InMail: the text as before, and `.subject` and `.body` for LinkedIn's two
+    fields. The same rules as `first_note()` (never a job ask, work authorization by who
+    reads it, it has to reach them, no claim to have read what the sender has not), plus
+    one paragraph of evidence, which is what the credit buys. Sized to the reader: about
+    150 words to a decision-maker or a recruiter, 100 to 130 to a peer (warned past
+    INMAIL_WORDS, never refused); the 200-word ceiling is a ceiling.
     """
-    for what, value in (("common_ground", common_ground), ("evidence", evidence)):
-        if not str(value or "").strip():
-            raise ValueError(
-                f"an InMail needs {what}: the common ground, as in a first note, and one "
-                "paragraph of concrete evidence (a named piece of work, its scale, an "
-                "outcome), which is what the credit buys")
+    _no_reaction_waiting("InMail")
+    rtype = reader or reader_type(title, seniority, recruiter)
+    recruiter = recruiter or rtype == "recruiter"
+    reasons = [x for x in (how_found, common_ground, parallel) if str(x or "").strip()]
+    if not reasons or not str(evidence or "").strip():
+        raise ValueError(
+            "an InMail needs a reason for writing to this person (how_found=, common_ground= "
+            "or parallel=, as in a first note) and one paragraph of concrete evidence (a named "
+            "piece of work, its scale, an outcome), which is what the credit buys")
+    if opener is _DEFAULT:
+        opener = phrase("opener", rtype, variant_key, fallback=OPENER) if OPENER else ""
+    if ask is _DEFAULT:
+        ask = phrase("ask", rtype, variant_key, fallback=ASK if rtype == "peer" else "")
     q = _question(question)
     if not q and not str(ask or "").strip():
         raise ValueError("an InMail needs something to answer: a real question about them, "
-                         "or the plain ask for a conversation (ask=)")
-    subj = inmail_subject(subject, recruiter=recruiter)
-    about_me = _about_me_for(common_ground, about_me)
+                         "or the plain ask (ask=)")
+    subj = inmail_subject(subject if str(subject or "").strip() else identity_subject(),
+                          recruiter=recruiter)
+    about_me = _about_me_for(" ".join(reasons), about_me)
+    say_auth = ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth)
+    register = "senior" if rtype == "decision_maker" else seniority
+    auth = ((_checked_claim(work_auth, register) if isinstance(work_auth, str)
+             else work_auth_line(register)) if say_auth else "")
+    if sign_off is _DEFAULT:
+        sign_off = SIGN_OFF["senior" if tone.is_senior(seniority) or rtype != "peer" else "peer"]
     paragraphs = [
-        (f"{_greeting(name)} {opener}. {_sentence(common_ground)}" if opener
-         else f"{_greeting(name)} {_after_greeting(common_ground, keep=their)}"),
-        " ".join(p for p in (_sentence(about_me) if about_me else "",
-                             work_auth_line(seniority) if recruiter else "") if p),
+        f"{_greeting(name)} {opener}." if opener else _greeting(name),
+        _sentence(about_me) if about_me else "",
         _sentence(evidence),
-        " ".join(p for p in (q, _sentence(ask) if ask else "") if p),
-        " ".join(str(sign_off or "").split()),
+        " ".join(p for p in [_sentence(r) for r in reasons] + [auth, q, _sentence(ask) if ask
+                                                              else ""] if p),
+        str(sign_off or "").strip(),
     ]
     body = "\n\n".join(p for p in paragraphs if p)
-    findings = first_note_findings(body, recruiter=recruiter)
+    _honest(body, looked, said=(how_found,))
+    findings = first_note_findings(body, recruiter=recruiter, reader=rtype,
+                                   work_auth=say_auth or None)
     if findings:
         raise AsksForTheJob(
             "this InMail asks for the job: %s. It asks for a conversation; the role belongs "
             "in compose.referral_ask() once they have replied."
             % "; ".join(sorted({v.text for v in findings})))
     if not tone.reaches_them(body, their):
-        raise NoteIsAllAboutTheSender(
-            "nothing in this InMail reaches %s. Put what links you to them in common_ground, "
-            "or pass their= with the employer or event it names." % (tone.first_name(name) or "them"))
+        raise NoteIsAllAboutTheSender(_reaches_fix(name, their))
     if len(body) > INMAIL_CHAR_LIMIT:
         raise TooLong("InMail", len(body), INMAIL_CHAR_LIMIT)
     high = schema.LIMITS["inmail_words"][1]
     if high and len(body.split()) > high:
         raise TooLong("InMail", len(body.split()), high, unit="words")
-    return f"Subject: {subj}\n\n{_first_note_voice(body)}"
+    return InMail(subj, _first_note_voice(body), rtype, recruiter)
 
 
 def email(name, subject, context, body, ask, sign_off=None, attachment=True,
@@ -1080,6 +1537,7 @@ def email(name, subject, context, body, ask, sign_off=None, attachment=True,
     says resume, and the reader sees both. The word is the person's
     (documents.noun).
     """
+    _no_reaction_waiting("email")
     if not str(context or "").strip():
         raise ValueError(
             "the email needs a context line saying where this conversation started; "
@@ -1129,6 +1587,7 @@ def warm_intro(referrer_name, name, body, close=None, work_auth=None,
     *connect with* would be truncated mid-way, and the strongest asset in the
     book spent on a broken sentence.
     """
+    _no_reaction_waiting("warm intro")
     if channel not in ("message", "connection"):
         raise ValueError("channel is 'message' (a message pane) or 'connection' "
                          "(a connection request, capped at 300 characters)")
@@ -1207,12 +1666,18 @@ def lowered_names(text) -> list[str]:
 
 
 def validate(message, kind, name=None, seniority="peer", employers=(),
-             referrer=None, their_message=None, recruiter=False) -> list:
+             referrer=None, their_message=None, recruiter=False, reader=None, title="",
+             work_auth=None, subject=None, _all=False) -> list:
     """Every reason this draft should not be sent, as (rule, offending_text).
 
     What the skill layer runs before showing the user anything. Returns instead
     of raising: a draft usually breaks more than one rule, and a writer given
     one problem at a time rewrites the same message four times.
+
+    What reads badly but may go is `advise()`'s, never this: a late employer (unless
+    EMPLOYERS_FIRST is "refuse"), a hedge, an exit. A rule the person said outranks a
+    check (`learned.py record --overrides <rule>`) drops that check from here; advise()
+    still mentions it. An InMail's subject is `subject=`, or the InMail's own.
     """
     k = _KIND_ALIASES.get(str(kind or "").strip().lower())
     if k is None:
@@ -1221,17 +1686,30 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
             f"{sorted(set(_KIND_ALIASES.values()))}. A typo here would skip the "
             f"length check entirely.")
     text = str(message or "")
+    if subject is None and isinstance(message, InMail):
+        subject = message.subject
+        text = message.body
+    # A note the composer wrote knows who it is for: checked for that reader, not a peer.
+    recruiter = recruiter or bool(getattr(message, "recruiter", False))
+    rtype = (reader or (getattr(message, "reader", "") if not title else "")
+             or reader_type(title, seniority, recruiter))
     # A reply goes to somebody who has already written back, which is what
     # `live_thread` means. Without it a reply such as "That's great, thank you
     # Riley" fails on the one rule that is scoped to cold messages.
     out = list(tone.check(text, recipient_seniority=seniority, name=name,
                           live_thread=(k in ("reply", "referral_ask"))))
     if k in ("connection", "inmail"):
-        out += first_note_findings(text, recruiter=recruiter)
+        out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth)
     if k == "inmail":
         first = text.lstrip().split("\n", 1)[0]
-        if not _SUBJECT_LINE.match(first):
-            out.append(tone.Violation("no_subject", "an InMail with no 'Subject:' line"))
+        if subject is not None:
+            if not str(subject).strip():
+                out.append(tone.Violation("no_subject", "an InMail with no subject"))
+            elif _GENERIC_SUBJECT.match(str(subject)):
+                out.append(tone.Violation("generic_subject", str(subject).strip()))
+        elif not _SUBJECT_LINE.match(first):
+            out.append(tone.Violation("no_subject", "an InMail with no subject: pass subject= "
+                                                    "(or a 'Subject:' first line)"))
         elif _GENERIC_SUBJECT.match(_SUBJECT_LINE.sub("", first)):
             out.append(tone.Violation("generic_subject", first.strip()))
     limits = KIND_LIMITS[k]
@@ -1248,8 +1726,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
         out.append(tone.Violation("lowercase_name", word))
     for found in CHECK_IN.findall(text):
         out.append(tone.Violation("check_in", found if isinstance(found, str) else found[0]))
-    for buried in employers_early(text, employers):
-        out.append(tone.Violation("employers_buried", str(buried)))
+    if EMPLOYERS_FIRST == "refuse":
+        out += _buried(text, employers)
     if referrer and not referrer_in_lead(text, referrer):
         out.append(tone.Violation("referrer_buried", str(referrer)))
     if their_message:
@@ -1268,7 +1746,254 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     for f in _voice_findings(text, k):
         out.append(tone.Violation("reads_as_generated",
                                   f"{f['rule']}: {f['match']} -> {f['fix']}"))
+    if _all:
+        return out
+    over = _overrides()
+    return [v for v in out if v.rule not in over]
+
+
+def _overrides() -> set:
+    try:
+        import learned
+        return learned.overrides()
+    except (ImportError, SystemExit):
+        return set()
+
+
+def _buried(text, employers) -> list:
+    out = []
+    buried_all = employers_early(text, employers)
+    moved = employers_first(text, employers) if buried_all else ""
+    for buried in buried_all:
+        # What to do, and the reordering where moving sentences makes it.
+        out.append(tone.Violation(
+            "employers_buried",
+            f"{buried}: name {buried} in the first sentence after the greeting (by the "
+            "second at the latest)"
+            + (f"; for example: {moved}" if moved else
+               "; no sentence names it yet, so put it in the common ground or the line "
+               "about you")))
     return out
+
+
+def advise(message, kind, name=None, seniority="peer", employers=(), reader=None, title="",
+           reading=None, first_contact=None, recruiter=False) -> list:
+    """Every warning for a draft that may go but reads worse than it should, each an
+    advice.Advice(rule, text, fix): what reads as generated, a hedge stacked or a
+    disclaimer, an exit in a first message, a claim about them written as fact, a
+    credential with no reason in its sentence, the employer named late, an InMail longer
+    than this reader needs, and any check the person's rules outrank. Shown with the draft
+    after a rewrite, never instead of one."""
+    k = _KIND_ALIASES.get(str(kind or "").strip().lower(), str(kind or ""))
+    text = message.body if isinstance(message, InMail) else str(message or "")
+    recruiter = recruiter or bool(getattr(message, "recruiter", False))
+    rtype = (reader or (getattr(message, "reader", "") if not title else "")
+             or reader_type(title, seniority, recruiter))
+    out = advice.check(text, k, reader=rtype, first_contact=first_contact, reading=reading)
+    if EMPLOYERS_FIRST != "refuse":
+        out += [advice.Advice(v.rule, v.text.split(":", 1)[0], v.text.split(":", 1)[-1].strip())
+                for v in _buried(text, employers)]
+    if tone.CONTRACTIONS == "warn":
+        out += [advice.Advice("sentence_starts_with_contraction", v.text,
+                              "you asked to be told: the long form where it reads better")
+                for v in tone.contractions_at_start(text)]
+    if k == "inmail":
+        words, most = len(text.split()), INMAIL_WORDS_FOR.get(rtype)
+        if most and words > most:
+            out.append(advice.Advice(
+                "longer_than_this_reader_needs", f"{words} words",
+                f"about {most} is right for a {rtype.replace('_', '-')} (profile/networking.py "
+                "INMAIL_WORDS); cut the paragraph that is not about them or the work"))
+    over = _overrides()
+    if over:
+        out += [advice.Advice("your_rule_outranks", f"{v.rule}: {v.text}",
+                              "your recorded rule outranks this check, so it is only mentioned")
+                for v in validate(message, kind, name=name, seniority=seniority,
+                                  employers=employers, reader=rtype, _all=True)
+                if v.rule in over]
+    return out
+
+
+# ---------------------------------------------------------------- read it aloud
+
+READ_ALOUD = (
+    "Read this note aloud as the person would say it to {who}, and write that version: "
+    "the most natural spoken English, contractions welcome, every fact, name and number "
+    "kept, nothing added, every rule of theirs kept (python3 tools/learned.py brief "
+    "messages). Show it beside the original, then run compose.read_aloud(original, yours) "
+    "and keep it only if that passes.")
+# A capital is any Latin one: "\u00c9lo\u00efse" is a name as much as "Eloise".
+_CAP = "A-Z" + "".join(chr(c) for c in range(0xC0, 0x250) if chr(c).isupper())
+_FACT = re.compile(r"\b\d[\d,.]*\s?(?:%|k\b|m\b|x\b|\+)?"
+                   r"|(?<![\w'])[" + _CAP + r"][\w'-]*(?:\s(?:&\s|of\s|and\s)?[" + _CAP
+                   + r"][\w&'-]*)*")
+# Words that take a capital only for opening a sentence.
+_OPENING = frozenset("""hi hey hello dear hope thanks would could i i'm i'd i've we we're your you
+the a an it it's if is are do did any my at in on for with from to by of after before when
+while as since so but and or this that these those there here what how why who which""".split())
+
+
+def _facts(text: str) -> set:
+    """The names and numbers in a text: what a rewrite must keep and must not add."""
+    out = set()
+    for s in tone.sentences(text):
+        for m in _FACT.finditer(s):
+            words = m.group(0).strip().rstrip(".,").split()
+            if m.start() == 0 or s[:m.start()].rstrip().endswith(","):
+                while words and words[0].lower().rstrip(",") in _OPENING:
+                    words = words[1:]
+            while words and words[-1] in ("I", "I'm", "I'd", "I've"):
+                words = words[:-1]                  # "At Brindle & Hart I cut ..."
+            f = " ".join(words)
+            if f and f.lower() not in _OPENING and f != "I":
+                out.add(f)
+    return out
+
+
+def read_aloud(original: str, rewrite: str, kind: str = "connection", **kw) -> dict:
+    """Check the spoken rewrite against the original (READ_ALOUD says how to make one):
+    {"ok", "lost", "added", "findings"}. A fact, name or number the original had and the
+    rewrite dropped is lost; one the rewrite brought in is added, which is a new claim.
+    Either, or a finding validate() makes, and the original stands."""
+    a, b = _facts(original), _facts(rewrite)
+    # A word that had a capital only for opening a sentence ("Curious how ...") is kept
+    # where the rewrite says it at all ("I'm curious how ...").
+    lost = sorted(f for f in a if f not in b and not any(f in x for x in b)
+                  and not (" " not in f and re.search(r"\b%s\b" % re.escape(f.lower()), rewrite)))
+    added = sorted(f for f in b if f not in a and not any(f in x for x in a)
+                   and not (" " not in f and re.search(r"\b%s\b" % re.escape(f.lower()), original)))
+    findings = [f"{v.rule}: {v.text}" for v in validate(rewrite, kind, **kw)]
+    return {"ok": not (lost or added or findings), "lost": lost, "added": added,
+            "findings": findings}
+
+
+# ---------------------------------------------------------------- what drew replies
+
+def examples(channel: str | None = None, limit: int = 3, contacts=None, threads=None) -> list:
+    """The person's own sent messages that drew a reply, newest first, with their words:
+    the few-shot a draft follows ahead of every default here. Read from the message log
+    (what_works.message_cases); a message logged without its text cannot be one."""
+    import state
+    import what_works
+    contacts = state.load_contacts() if contacts is None else contacts
+    threads = state.load_threads() if threads is None else threads
+    won = [c for c in what_works.message_cases(contacts, threads)
+           if c["won"] and c["text"] and (not channel or c["channel"] == channel)]
+    won.sort(key=lambda c: c["date"], reverse=True)
+    return [{"text": c["text"], "channel": c["channel"], "date": c["date"],
+             "route": c["route"], "days_to_reply": c["days_to_reply"]} for c in won[:limit]]
+
+
+# ---------------------------------------------------------------- a batch alike
+
+def _own_lines() -> list:
+    """The sentences that are the person's to repeat in every note: their opener, the line
+    about them, their ask, the work-authorization lines, and every ask the composer may
+    use. A batch sharing these was written the way they set it."""
+    lines = [OPENER, ABOUT_ME, ASK, work_auth_line("peer"), work_auth_line("senior")]
+    lines += [v for intent in ("ask", "pointer", "opener") for rt in READER_TYPES
+              for v in options(intent, rt, {"ask": ASK, "opener": OPENER}.get(intent, ""))]
+    return [advice._norm(x) for x in lines if str(x or "").strip()]
+
+
+def skeleton(text: str, own=None) -> tuple:
+    """A note's shape: how each sentence after the greeting opens, and how many there are,
+    leaving out the person's own fixed sentences (`_own_lines`), which every note carries by
+    their choice. "Identical in structure" is what the person called a batch that shared it."""
+    own = _own_lines() if own is None else own
+    out = []
+    for s in body_sentences(text):
+        n = advice._norm(s)
+        if any(o and (o == n or (len(o) > 12 and o in n)) for o in own):
+            continue
+        words = re.findall(r"[a-z']+", tone._plain(s).lower())[:2]
+        out.append(" ".join(words))
+    return tuple(out)
+
+
+def alike(notes: dict) -> list:
+    """[(id, id, the shape)] for each pair of notes in a batch built the same way: the same
+    number of sentences, each opening the same, after the greeting."""
+    own = _own_lines()
+    shapes = {k: skeleton(v, own) for k, v in notes.items() if str(v or "").strip()}
+    ids = sorted(shapes)
+    out = []
+    for i, a in enumerate(ids):
+        for b in ids[i + 1:]:
+            sa, sb = shapes[a], shapes[b]
+            if len(sa) >= 3 and sa == sb:
+                out.append((a, b, " / ".join(sa)))
+    return out
+
+
+def main(argv=None) -> int:
+    import argparse
+    import json
+    ap = argparse.ArgumentParser(description="Check a draft, or see what the composer offers.")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("check", help="what refuses a draft, and what it is warned about")
+    c.add_argument("file", help="the draft, or - for stdin")
+    c.add_argument("--kind", default="connection")
+    c.add_argument("--name", default=None)
+    c.add_argument("--title", default="")
+    c.add_argument("--reader", default=None, choices=READER_TYPES)
+    c.add_argument("--subject", default=None)
+    c.add_argument("--employer", action="append", default=[])
+    c.add_argument("--contact", default="", help="their contact id: their reading is used")
+    r = sub.add_parser("read-aloud", help="check a spoken rewrite against the original")
+    r.add_argument("original")
+    r.add_argument("rewrite")
+    r.add_argument("--kind", default="connection")
+    e = sub.add_parser("examples", help="your own messages that drew a reply")
+    e.add_argument("--channel", default=None)
+    e.add_argument("--limit", type=int, default=3)
+    sub.add_parser("subject", help="the InMail subject offered by default")
+    sub.add_parser("phrases", help="the phrase bank, yours first")
+    a = ap.parse_args(argv)
+    if a.cmd == "subject":
+        print(identity_subject() or "(no roles in the profile to build one from)")
+        return 0
+    if a.cmd == "phrases":
+        for intent in ("opener",) + tuple(BANK):
+            for rt in READER_TYPES:
+                got = options(intent, rt, fallback={"opener": OPENER}.get(intent, ""))
+                print(f"{intent} ({rt}): " + (" | ".join(got) or "(none)"))
+        return 0
+    if a.cmd == "examples":
+        got = examples(a.channel, a.limit)
+        for x in got:
+            print(json.dumps(x, ensure_ascii=False))
+        print(f"{len(got)} message(s) of yours that drew a reply"
+              + ("" if got else ": none logged with its words yet"))
+        return 0
+    if a.cmd == "read-aloud":
+        res = read_aloud(open(a.original, encoding="utf-8").read(),
+                         open(a.rewrite, encoding="utf-8").read(), a.kind)
+        print(json.dumps(res, ensure_ascii=False, indent=1))
+        return 0 if res["ok"] else 1
+    text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+    rd = None
+    if a.contact:
+        import reading as _reading
+        rd = _reading.load(a.contact)
+    bad = validate(text, a.kind, name=a.name, title=a.title, reader=a.reader,
+                   employers=a.employer, subject=a.subject)
+    warn = advise(text, a.kind, name=a.name, title=a.title, reader=a.reader,
+                  employers=a.employer, reading=rd)
+    for v in bad:
+        print(f"refused: {v.rule}: {v.text}")
+    for w in warn:
+        print(f"warn: {w.rule}: {w.text} -> {w.fix}")
+    waiting = ""
+    try:
+        import learned
+        waiting = learned.refuse_over_pending("compose")
+    except (ImportError, SystemExit):
+        pass
+    if waiting:
+        print(waiting)
+    print(f"{len(bad)} refused, {len(warn)} warning(s)")
+    return 1 if bad or waiting else 0
 
 
 # A light "hope you're well" inside a live thread is allowed: stripped from a
@@ -1295,3 +2020,7 @@ def _voice_findings(text: str, kind: str | None = None) -> list:
     allow = {"connection": _OWN_VOICE, "inmail": _OWN_VOICE,
              "reply": _THREAD_WARMTH, "referral_ask": _THREAD_WARMTH}.get(kind)
     return voice_check.hard(text, allow=allow)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

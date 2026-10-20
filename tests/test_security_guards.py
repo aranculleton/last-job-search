@@ -212,8 +212,8 @@ class HookGuardTests(GuardRepoFixture):
         guard = self.root / "tools" / "security_guards.py"
         guard.write_text(
             guard.read_text(encoding="utf-8").replace(
-                "ALLOWED_HOOKS: set[str] = set()",
-                f"ALLOWED_HOOKS: set[str] = {{{command!r}}}",
+                "ALLOWED_HOOKS: set[str] = {",
+                f"ALLOWED_HOOKS: set[str] = {{{command!r}, ",
             ),
             encoding="utf-8",
         )
@@ -425,3 +425,15 @@ class RealRepoTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShippedHookTests(unittest.TestCase):
+    """The one hook the app ships is the reaction check, and nothing else gets in."""
+
+    def test_the_app_ships_exactly_the_reaction_check(self):
+        data = json.loads((REPO_ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        shipped = {c for event, entries in data.get("hooks", {}).items()
+                   for c in security_guards._hook_commands(event, entries)}
+        assert shipped == security_guards.ALLOWED_HOOKS
+        assert all("tools/learned.py hook" in c for c in shipped)
+        assert not any(c.startswith("SessionStart:") for c in security_guards.ALLOWED_HOOKS)

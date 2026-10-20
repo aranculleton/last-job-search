@@ -176,8 +176,13 @@ def test_a_common_ground_must_rest_on_what_was_read():
 
 def test_first_note_refuses_a_common_ground_nothing_read_supports():
     r = _read()
+    # Saying they saw it needs the sender's own word that they did (2026-10-20): a reading
+    # the chat did is not the sender having looked.
+    with pytest.raises(compose.UnconfirmedReading):
+        compose.first_note("Tamsin Oyelaran", "Saw your post on forecasting cold-chain "
+                           "demand from weather feeds", reading=r)
     note = compose.first_note("Tamsin Oyelaran", "Saw your post on forecasting cold-chain "
-                              "demand from weather feeds", reading=r)
+                              "demand from weather feeds", reading=r, looked=True)
     assert note.startswith("Hi Tamsin")
     with pytest.raises(compose.UngroundedNote):
         compose.first_note("Tamsin Oyelaran", "Your work at Fernhill Freight caught my eye", reading=r)

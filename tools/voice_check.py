@@ -318,9 +318,22 @@ def unquoted(text: str) -> str:
     return _QUOTED.sub(" ", text or "")
 
 
+# An HTML comment is never shown and never read: the marks the tools write in their own
+# files (an interview pack's `<!-- stages: Recruiter screen; Technical interview -->`, a
+# `<!-- claude-surface: <id> -->` block). Read as prose, the pack's stage line came back
+# as two em-dash findings for its own "<!--" and "-->" (2026-10-19). Taken out after the
+# quoted lists, whose markers are comments too.
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+
+
+def uncommented(text: str) -> str:
+    """`text` without its HTML comments, each left as a line break."""
+    return _HTML_COMMENT.sub("\n", text or "")
+
+
 def check(text: str, *, source: str = "") -> list[dict]:
     """Every finding in `text`. Empty list means it reads as written by a person."""
-    body = plain(unquoted(text or ""))
+    body = plain(uncommented(unquoted(text or "")))
     out: list[dict] = []
     for _, m in banned_phrases(body):
         start = max(0, m.start() - 40)

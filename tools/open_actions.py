@@ -390,7 +390,8 @@ def due_items(contacts, threads, tracker, today, docs=None):
             # where the log never hears: two people listed "send now" already showed
             # Pending. Asked, never told to send again.
             "what": (("UNCONFIRMED: did this go? If it did: python3 tools/network/state.py sent "
-                      f"{o['contact_id']} (--outside if sent from LinkedIn itself). If not: "
+                      f"{o['contact_id']} --draft (--text-file <the words> if it went with "
+                      "other words, --outside if sent from LinkedIn itself). If not: "
                       + o["next_action"]) if o.get("unconfirmed") else o["next_action"]),
             "to": "",
             "text": _stored_draft(c),

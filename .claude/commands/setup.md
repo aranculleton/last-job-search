@@ -59,7 +59,9 @@ read from, as openroles names them (the three most common systems' hosts before 
 on file). `python3 tools/env_check.py --allowlist` prints the domains a custom network policy
 needs, once the boards are on file. A host the network policy refuses is named as such, which a bare
 HTTP status could not tell apart from a host that answered. Its `where:` line says whether
-this is a cloud session or their own computer. **On their own computer**, run
+this is a cloud session or their own computer. **On their own computer**, first give this
+chat a folder of its own if the sync said it is in the main one
+(`python3 tools/sync_app.py --worktree setup`, then work there), then run
 `./tools/setup_env.sh` yourself and pass on only what it prints as theirs to do (an install
 that asks for the computer's password); a blocked host there is their own network, not a
 setting of ours. **In a cloud session**, if anything is missing or a
