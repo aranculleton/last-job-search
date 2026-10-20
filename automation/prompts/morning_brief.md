@@ -47,7 +47,9 @@ It is what makes the brief this person's rather than a template:
    are connection requests left this week, highest tier and employer value first, from
    contacts already in the book (no discovery runs here).
 3. Write `documents/network/followup_pack_<today>.md` in the previous pack's layout. If
-   nothing is due, write no pack.
+   nothing is due, write no pack. Beside each networking draft, the time where its reader is
+   (`python3 tools/network/reading.py send-time <contact_id>`), said only, never a reason to
+   hold one back.
 4. **Keep the call preps current**: `python3 tools/network/prep.py --stale-only` rebuilds
    every prep written before its contact's status, next action or thread changed (answers
    already rewritten to be said are kept). Say in one line how many it rebuilt, and when

@@ -506,7 +506,11 @@ ask. Sized to the reader (the table above); the 200 words are a ceiling, not a t
 their networking.py), never "Quick question", "Job enquiry" or anything that asks for the
 job; `inmail_subject()` refuses those. A page that shows only Message to someone not
 connected sets their channel to InMail and says how many credits are left; `state.py sent
---channel inmail --subject "..."` spends one.
+--channel inmail --subject "..."` spends one. An InMail answered within 90 days gives its
+credit back (LinkedIn's own help, read through a web search), and the balance LinkedIn shows
+wins over the count until the month turns: `state.py inmail-credits <n>` keeps it. Nobody
+whose card or page shows a request already Pending gets one: `people` and `read` record that
+request as sent.
 Credits are scarce; reserve them for tier 1 at top-priority companies, or people
 unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
 Open Profile (their profile shows a Message button), and everything else is a connection
