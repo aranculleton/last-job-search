@@ -20,6 +20,47 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **A sign-out stop has a way back, on your word.** After a clean sign-in, `python3
+  tools/network/reading.py resume --reason "<your words>"` lifts the day's stop, once a day.
+  The signal stays in the friction log, marked "person confirmed benign", and still holds
+  the ramp back; a second sign-out that day stops it with no resume. A security check, an
+  unusual-activity banner or a 999 is never lifted by hand. The stop says the command exists.
+  Before, the only way on was editing the ledger by hand.
+- **A people page comes with each person's address.** `reading.py extractor --list` is a
+  read-only snippet for a people search or an employer's People tab: every card with the
+  person's profile address, headline, place, degree and buttons (a mutual connection's link
+  on a card is never taken for the person). `reading.py people` takes its output as it is,
+  and prints the address of everyone not in your contact book. A page's text has no links,
+  and a chat's own script to read them was refused by the desktop app's safety check.
+- **A people search from an employer's company number.** `reading.py search-url --company
+  "<employer>" --company-id <n>` builds it without a hand-filtered address. It stays
+  unconfirmed until `people` reads the first page of results: "7 of 10 at <employer>" keeps
+  the number, and "only 2 of 10" says it is someone else's and refuses it.
+- **Search for your own function.** `search-url --function` searches your own function
+  titles (`TITLE_SETS` "function" in profile/networking.py), each quoted and joined with OR.
+
+### Changed
+
+- **A sign-in page the morning after is a session that expired, not friction.** On the first
+  page of the day, or 4 or more hours after the last page or sign-in
+  (`PROFILE_SESSION_EXPIRY_HOURS`), it asks you to sign in: no stop, no signal. Within that
+  window, or a second sign-out the same day, it stops the day as before. The same sign-in
+  page seen again while you sign in is one sign-out, never two. A people or invitations page
+  that shows the sign-in page is handled the same way.
+- **A people page is ranked by how close each title is to your function**: your own titles
+  first, then a role in your function, then the rest. A function that is never a route to
+  yours (IT support, help desk, operations, warehouse, facilities, office administration) is
+  cut with the reason, unless it shares a word with your own function or a request to them
+  is already pending.
+
+### Fixed
+
+- **A stop says what was seen and when.** "Signed out mid-run" was written for the first
+  page of a day; the stop now reads like "LinkedIn's sign-in page 7 min after the last page
+  load (2026-10-20 09:00)".
+
 ## [3.8.0] - 2026-10-20
 
 ### Added

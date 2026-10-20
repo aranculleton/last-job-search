@@ -227,8 +227,9 @@ caught at once. So between finding and writing there is a read, and
   of their own. A plain keyword search with the employer's name in it is not that filter: for
   two large employers it returned almost nobody who works there, and it worked for two others
   only because their people name the employer in their headline. The filtered address is
-  learned once from a search the person narrowed by hand (`reading.py search-url --learn`),
-  never guessed, and the People tab's `?keywords=` address is not used, because LinkedIn drops
+  learned once from a search the person narrowed by hand (`reading.py search-url --learn`), or
+  built from the employer's company number (`--company-id`) and confirmed by the first page
+  of results before it is kept, and the People tab's `?keywords=` address is not used, because LinkedIn drops
   it on load. **A profile read**, their own page, only then, and only for the few the person
   will write to that day: as many as the requests that can still go today and three spare,
   never above `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
@@ -243,8 +244,12 @@ caught at once. So between finding and writing there is a read, and
   limits` prints them). What is known and what is assumed is said there too: no preset is
   safe, the numbers are a judgement of a person's pace, not a measured rate.
 - **React to signals, not a guess.** Run at a person's pace and watch: a check or CAPTCHA,
-  an "unusual activity" banner, HTTP 999, or the sign-in page after signing in stops the day
-  at once; a page that does not render or loads far slower than usual doubles the next pause,
+  an "unusual activity" banner, HTTP 999, or the sign-in page within four hours of the last
+  page or sign-in (or a second sign-out that day) stops the day at once. The sign-in page on
+  the first page of the day, or hours after the last, is a session that expired: the person
+  signs in and nothing stops. A sign-out stop is the one they may lift, once, after a clean
+  sign-in, on their own word (`reading.py resume --reason "<their words>"`), and the signal
+  stays in the log, marked; a page that does not render or loads far slower than usual doubles the next pause,
   and a second within the hour stops the day. The friction log keeps each, dated, across days,
   and the pages-an-hour ceiling ramps up only on clean days since the last one (5, then the
   preset's next steps). The count is one per computer, so every worktree's chat shares it.
@@ -272,8 +277,9 @@ caught at once. So between finding and writing there is a read, and
   once, one at a time with a varied gap around a minute and a half and a longer break of
   5 to 12 minutes (theirs to change: `PROFILE_READ_BREAK_MINUTES`) after a varying three
   to seven, each page scrolled to its end at reading pace with
-  nothing clicked, and a stop for the day at any check or warning, or at the sign-in page after
-  they signed in (`reading.py gate` and `stop`). The first sign-in is theirs to do, in
+  nothing clicked, and a stop for the day at any check or warning, or at a sign-in page soon
+  after a page or a sign-in (`reading.py gate` and `stop`; a sign-out stop alone can be lifted
+  once on their word, `reading.py resume`). The first sign-in is theirs to do, in
   the pane, and is a wait rather than a stop (`reading.py signin`). The caps are
   `PROFILE_READS_PER_HOUR` (8 an hour) and `PROFILE_READS_PER_DAY` (15), never more in
   a day than the requests that can still go that day plus three, and at most

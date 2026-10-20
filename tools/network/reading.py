@@ -46,14 +46,16 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py paste <file|->         # several profiles in one paste, split by ---
     python3 tools/network/reading.py draft <contact_id> <file|->   # a note to draft.md, marked if unread
     python3 tools/network/reading.py gate [--wait [--timeout S]]  # may a browser page load go now
+    python3 tools/network/reading.py resume --reason R             # lift a sign-out stop, on their word
     python3 tools/network/reading.py invitations <file|->          # the sent-invitations list, once
-    python3 tools/network/reading.py people <file|-> --company C   # an employer's People tab, once
+    python3 tools/network/reading.py people <file|-> --company C   # a people page, once (text or extractor --list JSON)
     python3 tools/network/reading.py skip <contact_id> --reason R  # a read ruled them out: close it
     python3 tools/network/reading.py batch [<contact_id>...]       # are the queued notes too alike?
-    python3 tools/network/reading.py extractor                     # the read-only page snippet
+    python3 tools/network/reading.py extractor [--list]            # the read-only page snippet
     python3 tools/network/reading.py next [--wait] [--mode card|deep]   # who to read next, once a page may load
     python3 tools/network/reading.py shortlist [<id>...] [--remove <id>...]  # today's short list
-    python3 tools/network/reading.py search-url --company C [--place P] [--keywords K] [--learn ADDRESS]
+    python3 tools/network/reading.py search-url --company C [--place P] [--keywords K | --function]
+                                                [--learn ADDRESS | --company-id N]
     python3 tools/network/reading.py queue --urls                  # the fast path: addresses to open and paste
     python3 tools/network/reading.py limits                        # every limit, its value and why
     python3 tools/network/reading.py friction [--kind K --words W] # the signals seen, and the ramp
@@ -194,9 +196,11 @@ SHORTLIST_FILE = ("documents", "network", ".shortlist.json")
 # together (LOADS_PER_*), never the send-day cap, which is about the people written to.
 PAGES_FILE = ("documents", "network", ".page_reads.json")
 PAGE_KINDS = ("invitations", "people", "search")
-# Signed in to LinkedIn in the browser today, as the session last saw it. A sign-in
-# page before this is a wait for the person; after it, LinkedIn signed them out
-# mid-run, which is a stop. Never a password: only that a signed-in page was seen.
+# Signed in to LinkedIn in the browser, as the session last saw it, with the time. A
+# sign-in page is a wait for the person when the session expired (the first page of the
+# day, or EXPIRY_HOURS after the last page or sign-in), and friction, which stops the day,
+# within that window or at a second sign-out (`signout`). Never a password: only that a
+# signed-in page was seen.
 SIGNIN_FILE = ("documents", "network", ".signed_in.json")
 # These four (the stop, the day's list, the list-page reads, the sign-in) changed on every
 # read. Kept in documents/network, a persistence step that force-added the folder
@@ -1596,14 +1600,21 @@ def last_browser_read() -> datetime.datetime | None:
     return reads[-1][0] if reads else None
 
 
-def stopped(today: datetime.date | None = None) -> str:
-    """Why browser reads are stopped for today, or "". A warning ends the day's reads, in
-    every chat on this computer: the ledger holds the stop as well as the file here."""
+def _stop_today(today: datetime.date | None = None) -> dict:
+    """Today's stop that still holds, from the ledger or the file here, or {}."""
     day = (today or datetime.date.today()).isoformat()
     for got in (_json(person.state(*STOP_FILE)), pace.load().get("stop") or {}):
-        if isinstance(got, dict) and got.get("date") == day:
-            return str(got.get("reason") or "stopped")
-    return ""
+        if isinstance(got, dict) and got.get("date") == day and not got.get("lifted"):
+            return got
+    return {}
+
+
+def stopped(today: datetime.date | None = None) -> str:
+    """Why browser reads are stopped for today, or "". A warning ends the day's reads, in
+    every chat on this computer: the ledger holds the stop as well as the file here. A
+    sign-out the person lifted (`resume`) no longer stops them."""
+    got = _stop_today(today)
+    return str(got.get("reason") or "stopped") if got else ""
 
 
 def _json(path: str) -> dict:
@@ -1615,8 +1626,11 @@ def _json(path: str) -> dict:
     return got if isinstance(got, dict) else {}
 
 
-def _write_stop(reason: str, today: datetime.date | None = None) -> str:
-    rec = {"date": (today or datetime.date.today()).isoformat(),
+def _write_stop(reason: str, today: datetime.date | None = None, kind: str = "",
+                now: datetime.datetime | None = None) -> str:
+    now = now or datetime.datetime.now()
+    rec = {"date": (today or now.date()).isoformat(), "at": now.isoformat(timespec="seconds"),
+           "kind": kind or _signal_kind(reason),
            "reason": " ".join(str(reason or "").split())[:200]}
     return pace.ledger_dir() if _keep(STOP_FILE, "stop", rec) else person.state(*STOP_FILE)
 
@@ -1638,6 +1652,161 @@ def stop(reason: str, today: datetime.date | None = None) -> str:
     the day's reads stop, and the signal goes in the friction log, which holds the ramp back."""
     pace.record_friction(_signal_kind(reason), reason)
     return _write_stop(reason, today)
+
+
+# ------------------------------------------------------------ signed out: expired, or friction
+
+# A sign-in page where a page was expected is one of two things. A session that expired
+# overnight looks like this: the first page of the day, many hours after the last, and
+# the person signs back in with no check at all. One real run recorded exactly that as
+# "signed out mid-run", stopped the whole day, and gave no way back but editing the ledger
+# by hand. A sign-in page minutes after a page loaded, or a second sign-out in one day,
+# is friction, and stops the day.
+EXPIRY_HOURS = pace.value("expiry_hours")
+SIGNOUT_KEEP_DAYS = 7
+
+
+def _at(rec) -> datetime.datetime | None:
+    try:
+        return datetime.datetime.fromisoformat(str((rec or {}).get("at") or ""))
+    except ValueError:
+        return None
+
+
+def _signed_in_at() -> datetime.datetime | None:
+    """When the person last signed in, as `signin --url` or `--done` saw it."""
+    got = [_at(x) for x in (_json(person.state(*SIGNIN_FILE)), pace.load().get("signed_in"))
+           if isinstance(x, dict)]
+    got = [x for x in got if x]
+    return max(got) if got else None
+
+
+def signouts(today: datetime.date | None = None) -> list:
+    """The sign-in pages seen on this day where a page was expected, oldest first."""
+    day = (today or datetime.date.today()).isoformat()
+    return [x for x in pace.load().get("signouts") or []
+            if isinstance(x, dict) and str(x.get("at", ""))[:10] == day]
+
+
+def _ago(delta: datetime.timedelta) -> str:
+    mins = int(delta.total_seconds() // 60)
+    if mins < 90:
+        return f"{mins} min"
+    return f"{mins / 60:.1f} hours"
+
+
+def signout(now: datetime.datetime | None = None,
+            seen: str = "LinkedIn's sign-in page") -> dict:
+    """Classify a sign-in page seen where a page was expected, record it, and act on it.
+
+    {"kind": "expired" | "friction", "why", "at", "again"}. Expired: the first page of the
+    day, or EXPIRY_HOURS or more since the last page load. The person signs in, nothing
+    stops and it is no signal. Friction: within EXPIRY_HOURS of a load, or a second sign-out
+    the same day. The day's reads stop, it is a signal, and the stop names `resume`. The same
+    sign-in page seen again before the person has signed in is the same sign-out
+    (`again`), recorded once."""
+    now = now or datetime.datetime.now()
+    outs = signouts(now.date())
+    signed = _signed_in_at()
+    if outs and (signed is None or signed <= (_at(outs[-1]) or now)):
+        return dict(outs[-1], again=True)
+    loads = _loads()
+    last = loads[-1]["when"] if loads else None
+    # The clock runs from whichever came last: a page loaded, or the person signing in. A
+    # session does not expire minutes after a sign-in any more than after a page.
+    ref = max((x for x in (last, signed) if x and x <= now), default=None)
+    since = (now - ref) if ref else None
+    what = "sign-in" if ref is not None and ref == signed and ref != last else "page load"
+    load_words = (f"{_ago(since)} after the last {what} ({ref:%Y-%m-%d %H:%M})" if ref
+                  else "with nothing loaded or signed into before it on this computer")
+    first_of_day = ref is None or ref.date() < now.date()
+    if outs:
+        kind = "friction"
+        why = (f"{seen}, the second sign-out today (the first at {_at(outs[0]):%H:%M}, signed "
+               f"back in at {signed:%H:%M}), {load_words}")
+    elif first_of_day or since >= datetime.timedelta(hours=EXPIRY_HOURS):
+        kind = "expired"
+        why = (f"{seen} on the first page of the day, {load_words}: the session expired"
+               if first_of_day else f"{seen} {load_words}: the session expired")
+    else:
+        kind = "friction"
+        why = f"{seen} {load_words}"
+    rec = {"at": now.isoformat(timespec="seconds"), "kind": kind, "why": why[:240],
+           "minutes_since": int(since.total_seconds() // 60) if since else None}
+    cut = (now.date() - datetime.timedelta(days=SIGNOUT_KEEP_DAYS)).isoformat()
+    pace.update(lambda d: d.__setitem__("signouts", [
+        x for x in d.get("signouts") or [] if isinstance(x, dict)
+        and str(x.get("at", ""))[:10] >= cut] + [rec]))
+    if kind == "friction":
+        pace.record_friction("signed_out", why, now)
+        _write_stop(why, now.date(), kind="signed_out", now=now)
+    return dict(rec, again=False)
+
+
+def resumable(now: datetime.datetime | None = None) -> str:
+    """"" when today's stop may be lifted by the person's word (`resume`), else why not."""
+    now = now or datetime.datetime.now()
+    rec = _stop_today(now.date())
+    if not rec:
+        return "nothing is stopped today"
+    if str(rec.get("kind") or _signal_kind(rec.get("reason"))) != "signed_out":
+        return ("a security check, an unusual-activity banner or an HTTP 999 is never lifted "
+                "by hand: the reads wait for tomorrow, or a paste")
+    if (pace.load().get("resumed") or {}).get("date") == now.date().isoformat():
+        return "the day's one resume is spent: a second sign-out stops the day for good"
+    if len(signouts(now.date())) > 1:
+        return "two sign-outs today: the day stops for good, tomorrow or a paste"
+    signed, at = _signed_in_at(), _at(rec)
+    if not signed or (at and signed <= at):
+        return ("sign in first: `reading.py signin --url <the pane's address>` must say "
+                "signed-in after the stop")
+    return ""
+
+
+RESUME_LINE = ("If the person signed back in with no check and says it was an ordinary "
+               "sign-out: python3 tools/network/reading.py resume --reason \"<their words>\" "
+               "(once a day; the signal stays in the log, marked as they said)")
+
+
+def _way_back(now: datetime.datetime | None = None) -> str:
+    """The resume line, where today's stop is a sign-out the person may lift once signed in."""
+    why_not = resumable(now)
+    return RESUME_LINE if not why_not or why_not.startswith("sign in first") else ""
+
+
+def _said_signout(got: dict) -> int:
+    """What a session is told about a sign-out, and the exit code."""
+    if got["kind"] == "friction":
+        print(f"reading: {got['why']}. That is friction: browser reads are stopped for today. "
+              "Tell the person what was seen.")
+        if _way_back():
+            print(f"  {_way_back()}")
+        return EXIT["check"]
+    print(f"reading: {got['why']}. Not a stop and not a signal: run `reading.py signin` and wait "
+          "for the person to sign in; nothing is counted")
+    return EXIT["signin"]
+
+
+def resume(reason: str, now: datetime.datetime | None = None) -> dict:
+    """Lift today's sign-out stop on the person's word, after a clean sign-in. The friction
+    entry stays, marked "person confirmed benign", and still counts for the ramp; a second
+    sign-out today stops the day with no resume. Returns the lifted stop."""
+    now = now or datetime.datetime.now()
+    reason = " ".join(str(reason or "").split())
+    if not reason:
+        raise SystemExit("reading: resume needs the person's own reason: --reason \"<their words>\"")
+    why_not = resumable(now)
+    if why_not:
+        raise SystemExit(f"reading: not resumed: {why_not}")
+    rec = dict(_stop_today(now.date()), lifted=now.isoformat(timespec="seconds"),
+               lifted_because=reason[:200])
+    _keep(STOP_FILE, "stop", rec)
+    old = _json(person.state(*STOP_FILE))
+    if old.get("date") == rec["date"] and not old.get("lifted"):
+        _write_file(STOP_FILE, dict(old, lifted=rec["lifted"], lifted_because=rec["lifted_because"]))
+    pace.confirm_benign("signed_out", rec["date"], reason, now)
+    pace.put("resumed", {"date": rec["date"], "at": rec["lifted"], "reason": reason[:200]})
+    return rec
 
 
 def sends_left_today(today: datetime.date | None = None) -> int | None:
@@ -1667,8 +1836,10 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
     now = now or datetime.datetime.now()
     why = stopped(now.date())
     if why:
+        way_back = _way_back(now)
         return {"kind": "tomorrow", "at": None,
-                "why": f"browser reads are stopped for today: {why}. Tomorrow, or a paste"}
+                "why": f"browser reads are stopped for today: {why}. Tomorrow, or a paste"
+                       + (f". {way_back}" if way_back else "")}
     loads = _loads()
     ledger = pace.load()
     today = [x for x in loads if x["when"].date() == now.date()]
@@ -2334,6 +2505,49 @@ def people_page(text: str, company: str) -> list:
     return people
 
 
+# Functions that are never anyone's route to a role in the person's own: a card whose title
+# is one of these, and names nothing of their function, is out at the list. Kept narrow on
+# purpose (a recruiter, an engineer or a product manager can still refer), and any of them
+# that shares a word with the person's own function is left out (an operations analyst's
+# search keeps operations). A keyword search narrowed to one employer for data science
+# still returned IT support and general operations (2026-10-20).
+UNRELATED = ("it support", "help desk", "helpdesk", "service desk", "desktop support",
+             "technical support", "it technician", "field technician", "customer support",
+             "customer service", "operations", "warehouse", "facilities", "office manager",
+             "office administrator", "administrative assistant", "receptionist")
+
+
+def _unrelated_rx():
+    import discovery
+    own = discovery._own_words()
+    words = [w for w in UNRELATED if not set(w.split()) & own]
+    return re.compile(r"(?<!\w)(?:" + "|".join(re.escape(w) for w in words) + r")(?!\w)", re.I) \
+        if words else None
+
+
+def title_fit(title: str) -> tuple[int, str]:
+    """How close a card's title is to the person's function, as (rank, why): 3 one of their
+    own titles (networking.py TITLE_SETS), 2 a role in their function, 1 nothing either way,
+    0 a function in UNRELATED that names nothing of theirs, which is out."""
+    import discovery
+    t = " ".join(str(title or "").split())
+    if not t:
+        return 1, ""
+    low = t.lower()
+    for group in ("function", "senior_ic", "hiring_authority"):
+        for x in discovery.TITLE_SETS.get(group) or []:
+            if re.search(r"(?<!\w)%s(?!\w)" % re.escape(str(x).lower()), low):
+                return 3, f"one of your titles: {x}"
+    if discovery._IN_FUNCTION_ROLE.search(t):
+        return 2, "a role in your function"
+    rx = _unrelated_rx()
+    m = rx.search(t) if rx else None
+    if m:
+        word = m.group(0)
+        return 0, f"{'an' if word[:1].lower() in 'aeiou' else 'a'} {word} role, not one in your function"
+    return 1, "the title names nothing of your function"
+
+
 def screen(person_: dict, company: str) -> tuple[bool, str]:
     """The cheap check on what a one-page read showed: (still worth a deep read, why not).
     A card that names another employer as where they work is out; one that names none
@@ -2347,6 +2561,10 @@ def screen(person_: dict, company: str) -> tuple[bool, str]:
     provisional = {"headline": person_.get("title", ""), "location": person_.get("location", ""),
                    "reach": person_.get("reach", ""), "current": "", "items": [], "about": ""}
     keep, why = verdict(provisional, company)
+    if keep and person_.get("reach") != "pending":
+        rank, fit = title_fit(person_.get("title", ""))
+        if rank == 0:
+            return False, fit
     if keep and where == "unknown":
         why = "; ".join(x for x in (why, f"the card does not say where they work: the deep "
                                          f"read checks it is {company}") if x)
@@ -2487,6 +2705,73 @@ EXTRACTOR = r"""(() => {
   }
   return JSON.stringify(out);
 })()"""
+
+
+# The same for a page that lists many people (a people search, an employer's People tab):
+# each card's text with the address of the person it is about, and the labels of its
+# buttons. A page's text has names but no addresses, so a chat had to read the links
+# itself, and a script of its own for that was refused by the desktop app's safety check.
+# Read-only like the one above: nothing is clicked, typed or scrolled. A card's first
+# profile link is the person's; a later one in it (a mutual connection) is not.
+LIST_EXTRACTOR = r"""(() => {
+  const main = document.querySelector("main") || document.body;
+  const prof = /linkedin\.com\/in\/[^/?#]+/;
+  const holders = new Map();
+  for (const a of main.querySelectorAll('a[href*="/in/"]')) {
+    const m = (a.href || "").match(prof);
+    if (!m) continue;
+    let card = a.closest("li");
+    if (!card) {
+      card = a.parentElement;
+      for (let i = 0; card && i < 6 && card.innerText.split("\n").filter(Boolean).length < 3; i++)
+        card = card.parentElement;
+    }
+    if (card && !holders.has(card)) holders.set(card, "https://www." + m[0]);
+  }
+  const cards = [];
+  const seen = new Set();
+  for (const [card, url] of holders) {
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const buttons = Array.from(card.querySelectorAll("button"))
+      .map(b => (b.innerText || "").trim()).filter(t => t && t.length < 30);
+    cards.push({url, buttons: buttons.slice(0, 4),
+                text: (card.innerText || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, 700)});
+  }
+  return JSON.stringify({url: location.href, title: document.title, kind: "list", cards});
+})()"""
+
+
+def from_list_extract(raw: str) -> str:
+    """The list extractor's JSON as the page text people_page() reads: each card's text,
+    any button label its text lacks, and the person's address on a line of its own, which
+    the card parser keeps as their profile address."""
+    got = json.loads(raw)
+    if isinstance(got, str):
+        got = json.loads(got)
+    if not isinstance(got, dict) or not isinstance(got.get("cards"), list):
+        raise ValueError("not the list extractor's output (`reading.py extractor --list`)")
+    parts = []
+    for c in got["cards"]:
+        if not isinstance(c, dict):
+            continue
+        # The name link's own label ("View <name>'s profile") can run on the name's line.
+        text = _VIEW_PROFILE.sub(" ", str(c.get("text") or "")).strip()
+        text = "\n".join(" ".join(ln.split()) for ln in text.splitlines())
+        lines = {ln.strip().lower() for ln in text.splitlines()}
+        extra = [b for b in (str(x).strip() for x in c.get("buttons") or [])
+                 if b and b.lower() not in lines]
+        url = str(c.get("url") or "").strip()
+        parts.append("\n".join([text] + extra + ([url] if url else [])))
+    return "\n\n".join(p for p in parts if p)
+
+
+_VIEW_PROFILE = re.compile(r"\bView\s+[^\n]{1,80}?['\u2019]s?\s+profile\b", re.I)
+
+
+def _list_json(text: str) -> bool:
+    t = str(text or "").lstrip()
+    return t.startswith("{") and '"cards"' in t[:4000]
 
 
 def from_extract(raw: str) -> str:
@@ -2804,6 +3089,16 @@ def main(argv: list | None = None) -> int:
     su.add_argument("--learn", default="", metavar="ADDRESS",
                     help="the address of a search the person filtered by hand: its filters are "
                          "kept for this employer (and place)")
+    su.add_argument("--company-id", default="", metavar="N",
+                    help="the employer's LinkedIn company number, as a people search narrowed "
+                         "to it carries it: kept unconfirmed until `people` reads the first "
+                         "page of results and finds them there")
+    su.add_argument("--function", action="store_true",
+                    help="search for the titles of the person's own function (networking.py "
+                         "TITLE_SETS), joined with OR")
+    rs = sub.add_parser("resume", help="lift today's sign-out stop on the person's word, after a "
+                                       "clean sign-in (once a day; never a check)")
+    rs.add_argument("--reason", required=True, help="the person's own words")
     st = sub.add_parser("stop", help="LinkedIn showed a check or a warning: no browser reads today")
     st.add_argument("reason", nargs="?", default="")
     st.add_argument("--reason", dest="reason_flag", default="")
@@ -2834,17 +3129,24 @@ def main(argv: list | None = None) -> int:
     pp.add_argument("--company", required=True)
     pp.add_argument("--url", default="")
     pp.add_argument("--load-seconds", type=float, default=None)
+    pp.add_argument("--json", action="store_true",
+                    help="the file is the list extractor's output (`extractor --list`), which "
+                         "carries each person's address; found by itself when it is")
     sk = sub.add_parser("skip", help="a read ruled them out: close them with the reason, "
                                      "and remove their draft")
     sk.add_argument("contact_id")
     sk.add_argument("--reason", required=True)
     ba = sub.add_parser("batch", help="are the queued first notes too alike to send (exit 11)")
     ba.add_argument("ids", nargs="*", help="the notes to check; every queued note by default")
-    sub.add_parser("extractor", help="the read-only snippet that returns a profile page as JSON")
+    ex = sub.add_parser("extractor", help="the read-only snippet that returns a profile page, or "
+                                          "with --list a page of many people, as JSON")
+    ex.add_argument("--list", action="store_true",
+                    help="for a people search or an employer's People tab: every card with "
+                         "the person's address, headline, place, degree and buttons")
     a = ap.parse_args(argv)
 
     if a.cmd == "extractor":
-        print(EXTRACTOR)
+        print(LIST_EXTRACTOR if a.list else EXTRACTOR)
         return EXIT["ok"]
     if a.cmd == "move-runtime":
         moved = move_runtime()
@@ -2881,7 +3183,15 @@ def main(argv: list | None = None) -> int:
                 print(f"reading: kept the filters for {a.company}"
                       + (f" in {a.place}" if a.place else "") + f": {got}")
                 return EXIT["ok"]
-            print(search_url(a.company, a.place, a.keywords))
+            if a.company_id:
+                learn_company_id(a.company, a.company_id)
+            keywords = a.keywords or (function_keywords() if a.function else "")
+            print(search_url(a.company, a.place, keywords))
+            if _employer_filter(a.company).get("unconfirmed"):
+                print(f"  unconfirmed: company {a.company_id or _employer_filter(a.company)['currentCompany']} "
+                      f"is taken to be {a.company}. Read the first page of results with "
+                      f"`reading.py people <file> --company \"{a.company}\" --url <address>`: it "
+                      "counts who works there and keeps the number, or says it is someone else's")
         except (LookupError, ValueError) as e:
             print(f"reading: {e}")
             return EXIT["error"]
@@ -2892,6 +3202,14 @@ def main(argv: list | None = None) -> int:
             raise SystemExit("reading: stop needs what LinkedIn showed, as `stop \"<words>\"` "
                              "or `stop --reason \"<words>\"`")
         print(f"reading: browser reads stopped for today ({os.path.relpath(stop(reason), person.state())})")
+        if _way_back():
+            print(f"  {_way_back()}")
+        return EXIT["ok"]
+    if a.cmd == "resume":
+        rec = resume(a.reason)
+        print(f"reading: today's stop is lifted on the person's word ({rec['lifted_because']}). "
+              "The signal stays in the friction log, marked as they said, and still holds the "
+              "ramp back. A second sign-out today stops the day with no resume.")
         return EXIT["ok"]
     if a.cmd == "gate":
         now = datetime.datetime.now()
@@ -2924,10 +3242,13 @@ def main(argv: list | None = None) -> int:
                 mark_signed_in()
             print(state_)
             return EXIT["ok"] if state_ == "signed-in" else EXIT["signin"]
-        if signed_in_today():
-            print("reading: already signed in today; a sign-in page now means LinkedIn signed "
-                  "them out, which is a stop: `reading.py stop \"signed out mid-run\"`")
-            return EXIT["ok"]
+        if signed_in_today() or signouts():
+            # A sign-in page where a page was expected: expired, or friction, by the time
+            # since the last page load (`signout`).
+            got = signout()
+            if got["kind"] == "friction":
+                return _said_signout(got)
+            print(f"reading: {got['why']}. Not a stop, nothing counted.")
         print("LinkedIn is not signed in yet. This is a wait for the person, never a stop, and "
               "nothing is counted:")
         for i, step in enumerate(signin_steps(), 1):
@@ -3122,15 +3443,8 @@ def main(argv: list | None = None) -> int:
                 print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped "
                       "for today; tell the person what it showed, and never try to get past it")
                 return EXIT["check"]
-            if kind == "signin" and signed_in_today():
-                stop("LinkedIn's sign-in page after they had signed in today")
-                print("reading: LinkedIn signed them out mid-run. Browser reads are stopped for "
-                      "today; tell the person, and carry on tomorrow")
-                return EXIT["check"]
             if kind == "signin":
-                print("reading: LinkedIn's sign-in page, not a profile. Not a read, not counted, "
-                      "nothing stopped: run `reading.py signin` and wait for the person")
-                return EXIT["signin"]
+                return _said_signout(signout())
             if kind == "unknown" and len(" ".join(_clean_lines(text))) < NOT_RENDERED_CHARS:
                 # A page that stopped rendering is a soft signal: the next pause doubles, and
                 # a second within the hour ends the day's reads.
@@ -3281,6 +3595,8 @@ def learn_search(address: str, company: str, place: str = "") -> dict:
     data = _filters()
     emp = data.setdefault("employers", {}).setdefault(company_key(company), {})
     emp.update(name=company, currentCompany=q["currentCompany"])
+    for k in ("unconfirmed", "wrong"):           # narrowed by hand: theirs, confirmed
+        emp.pop(k, None)
     shape = {k: v for k, v in q.items() if k not in _FILTERS + ("keywords", "page")}
     data["shape"] = shape
     if place and q.get("geoUrn"):
@@ -3293,6 +3609,89 @@ def learn_search(address: str, company: str, place: str = "") -> dict:
     return {"currentCompany": q["currentCompany"], "geoUrn": q.get("geoUrn", ""), **shape}
 
 
+def _employer_filter(company: str) -> dict:
+    from company_key import key as company_key
+    return (_filters().get("employers") or {}).get(company_key(company)) or {}
+
+
+def _save_filters(data: dict) -> None:
+    p = person.state(*SEARCH_FILE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=1)
+        fh.write("\n")
+
+
+def learn_company_id(company: str, number: str) -> dict:
+    """Keep an employer's LinkedIn company number given directly, unconfirmed: the first
+    page of results read with `people` confirms it or says whose it is (`confirm_company`).
+    The number goes in the address the way a hand-filtered search carries it."""
+    from company_key import key as company_key
+    n = str(number or "").strip()
+    if not n.isdigit():
+        raise ValueError(f"a company number is digits only, not {number!r}")
+    data = _filters()
+    emp = data.setdefault("employers", {}).setdefault(company_key(company), {})
+    value_ = '["%s"]' % n
+    if emp.get("currentCompany") != value_ or emp.get("wrong"):
+        emp.clear()
+        emp.update(name=company, currentCompany=value_, unconfirmed=True)
+        _save_filters(data)
+    return emp
+
+
+# Of the cards that say where they work, at least this share must be at the employer for
+# a company number given directly to be taken as theirs.
+CONFIRM_SHARE = 0.5
+CONFIRM_MIN = 3
+
+
+def confirm_company(company: str, count: dict, url: str = "") -> str:
+    """After the first page of results for an unconfirmed company number: the line to say,
+    and the number kept (confirmed) or marked wrong. "" when there is nothing to confirm."""
+    emp = _employer_filter(company)
+    if not emp.get("unconfirmed"):
+        return ""
+    if url:
+        from urllib.parse import parse_qs, urlsplit
+        got = parse_qs(urlsplit(url).query).get("currentCompany")
+        if got and got[0] != emp.get("currentCompany"):
+            return ""
+    told = count.get("at", 0) + count.get("elsewhere", 0)
+    if told < CONFIRM_MIN:
+        return (f"  the company number is not confirmed yet: only {told} card(s) say where they "
+                f"work; read another page of results")
+    from company_key import key as company_key
+    data = _filters()
+    emp = data["employers"][company_key(company)]
+    if count.get("at", 0) / told >= CONFIRM_SHARE:
+        emp.pop("unconfirmed", None)
+        _save_filters(data)
+        return (f"  confirmed: {count['at']} of {told} at {company}, so company "
+                f"{emp['currentCompany']} is theirs and is kept")
+    emp["wrong"] = f"{count.get('at', 0)} of {told} at {company}"
+    _save_filters(data)
+    return (f"  NOT {company}: only {count.get('at', 0)} of {told} at {company}. That company "
+            "number is someone else's; check it, or narrow a search by hand and keep it with "
+            "--learn")
+
+
+# LinkedIn's help documents quotes for an exact phrase and OR in capitals for any of them
+# (answer 75814, read through a web search on 2026-10-20).
+FUNCTION_KEYWORDS = 4
+
+
+def function_keywords() -> str:
+    """The person's own function titles (networking.py TITLE_SETS "function") as one
+    keyword search: each quoted, joined with OR."""
+    import discovery
+    titles = [t for t in discovery.TITLE_SETS.get("function") or [] if str(t).strip()]
+    if not titles:
+        raise LookupError("profile/networking.py TITLE_SETS names no \"function\" titles to "
+                          "search for")
+    return " OR ".join('"%s"' % t for t in titles[:FUNCTION_KEYWORDS])
+
+
 def search_url(company: str, place: str = "", keywords: str = "") -> str:
     """The address of a people search narrowed to this employer (and place), with these
     keywords, in the shape learned from the person's own filtered search."""
@@ -3300,6 +3699,10 @@ def search_url(company: str, place: str = "", keywords: str = "") -> str:
     from company_key import key as company_key
     data = _filters()
     emp = (data.get("employers") or {}).get(company_key(company))
+    if emp and emp.get("wrong"):
+        raise LookupError(f"company {emp['currentCompany']} is not {company} (the first page "
+                          f"of results had {emp['wrong']}): give the right number with "
+                          "--company-id, or narrow a search by hand and keep it with --learn")
     if not emp:
         raise LookupError(f"no filter on file for {company}: in your own browser, search for "
                           f"people narrowed to {company} (python3 tools/claude_surfaces.py steps "
@@ -3335,6 +3738,8 @@ def _cli_invitations(a) -> int:
         stop(f"LinkedIn showed a check: {words}")
         print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped for today")
         return EXIT["check"]
+    if kind == "signin":
+        return _said_signout(signout())
     cards = invitations(text)
     total = invitations_total(text)
     rec = page_read("invitations", a.url, now, people=len(cards), load_seconds=a.load_seconds)
@@ -3392,11 +3797,22 @@ def _cli_people(a) -> int:
             print(f"reading: not read. {_gate_line(g, now)}")
             return EXIT[g["kind"]]
     text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+    if a.json or _list_json(text):
+        try:
+            got = json.loads(text)
+            url = (got.get("url") if isinstance(got, dict) else "") or ""
+            text = from_list_extract(text)
+        except (ValueError, AttributeError, TypeError) as e:
+            raise SystemExit(f"reading: that is not the list extractor's output ({e}): "
+                             "`reading.py extractor --list`") from None
+        a.url = a.url or url
     kind, words = page_kind(text)
     if kind == "check":
         stop(f"LinkedIn showed a check: {words}")
         print(f"reading: LinkedIn showed a check ({words}). Browser reads are stopped for today")
         return EXIT["check"]
+    if kind == "signin":
+        return _said_signout(signout())
     people = people_page(text, a.company)
     rec = page_read("people", a.url, now, people=len(people), load_seconds=a.load_seconds)
     contacts = state.load_contacts()
@@ -3406,25 +3822,34 @@ def _cli_people(a) -> int:
           f"{count['elsewhere']} elsewhere, {count['unknown']} where the card does not say; "
           f"the next page at "
           f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
-    for p in people:
+    said = confirm_company(a.company, count, a.url)
+    if said:
+        print(said)
+    # Best first: the cards worth a deep read, by how close the title is to their function.
+    rows = []
+    for n, p in enumerate(people):
         keep, why = screen(p, a.company)
+        rank, fit = title_fit(p.get("title", ""))
+        rows.append((not keep, -rank if keep else 0, n, p, keep, why, fit if keep else ""))
+    for _out, _rank, _n, p, keep, why, fit in sorted(rows, key=lambda r: r[:3]):
         row = state.already_contacted(contacts, name=p["name"], company=a.company,
                                       linkedin_url=p.get("linkedin_url"))
-        tag = f"[{row['contact_id']}]" if row else "[not in the book]"
+        tag = (f"[{row['contact_id']}]" if row else "[not in the book]"
+               + (f" {p['linkedin_url']}" if p.get("linkedin_url") else ""))
         waiting = bool(row) and (row.get("status") or "not_contacted") in ("not_contacted", "dropped")
         if waiting:
             from_list(row["contact_id"], p, a.company, a.url)
         print(f"  {'deep read' if keep else 'out'}: {p['name']}, {p.get('title') or '?'}"
               f"{', ' + p['location'] if p.get('location') else ''}"
               f"{' (' + p['degree'] + ')' if p.get('degree') else ''} {tag}"
-              + (f": {why}" if why else ""))
+              + (f": {why}" if why else "")
+              + (f" [{fit}]" if fit and keep else ""))
         if waiting and not keep:
             print("    " + _skip_hint(row["contact_id"], why))
     print("next: shortlist only the few you will write to today, best first (`reading.py "
           "shortlist`); the rest are drafted from what the page showed and marked as waiting "
           "on a read")
     return EXIT["ok"]
-
 
 if __name__ == "__main__":
     sys.exit(main())

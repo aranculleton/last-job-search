@@ -1343,6 +1343,9 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.PROFILE_PASTE_TOP": "3 profiles offered for a paste, as before",
     "networking.PROFILE_READ_FRESH_DAYS": "a reading stands for 30 days, as before",
     "networking.PROFILE_READ_SKIP_SPARE": "3 reads beyond the requests left today, as before",
+    "networking.PROFILE_SESSION_EXPIRY_HOURS": "4 hours: a sign-in page that long after the last "
+                                                "page or sign-in is a session that expired, not "
+                                                "friction; within it, the day stops as before",
     "networking.PROFILE_READ_RAMP": "5 pages an hour until a clean day of reading, then 8: lower "
     "than before only on a first day, or after a signal",
     "networking.PROFILE_READ_BREAK_MINUTES": "a break of 5 to 12 minutes, chosen at random, "
