@@ -1484,7 +1484,7 @@ def _loads(pages: bool = True) -> list:
     load in both is counted once."""
     out, seen = [], set()
 
-    def keep(kind, src):
+    def keep(kind, src, ident=""):
         got = _load(src)
         if not got:
             return
@@ -1493,7 +1493,8 @@ def _loads(pages: bool = True) -> list:
             return
         seen.add(key)
         out.append({"kind": kind, "when": got[0], "gap": got[1], "brk": got[2],
-                    "load_seconds": src.get("load_seconds")})
+                    "load_seconds": src.get("load_seconds"),
+                    "id": str(ident or src.get("id") or "")})
 
     for f in glob.glob(person.state(*DIR, "*", "reading.json")):
         try:
@@ -1503,7 +1504,7 @@ def _loads(pages: bool = True) -> list:
             continue
         for src in srcs:
             if src.get("kind") == "browser" and src.get("at"):
-                keep("profile", src)
+                keep("profile", src, os.path.basename(os.path.dirname(f)))
     if pages:
         for p in _pages():
             keep(str(p.get("kind") or "people"), p)
@@ -1894,12 +1895,12 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
                        "are read tomorrow"}
     if profile:
         left = sends_left_week(now.date()) if sends_left == -1 else sends_left
-        people = [x for x in today if x["kind"] == "profile"]
+        people = unused([x for x in today if x["kind"] == "profile"])
         if left is not None and len(people) >= left + SKIP_SPARE:
             return {"kind": "tomorrow", "at": None,
-                    "why": f"{len(people)} profiles read today, enough for the {left} "
-                           "request(s) left this week: a profile is read only for someone "
-                           "to write to"}
+                    "why": f"{len(people)} profiles read today and not yet written to, enough "
+                           f"for the {left} request(s) left this week: a profile is read only "
+                           "for someone to write to. Send some, and reading goes on"}
     window = now - datetime.timedelta(minutes=HOUR_MINUTES)
     hour = [x for x in loads if x["when"] > window]
     hour_mine = [x for x in hour if (x["kind"] == "profile") == profile]
@@ -1942,13 +1943,32 @@ def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = 
     return gate_state(now, sends_left, profile)["why"]
 
 
-def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1) -> tuple:
-    """(profiles that may still be read today, the limit that binds, said plainly).
+def _book() -> list:
+    """The contact book, or [] when it cannot be read: the counts below then fall back to
+    every read today, as before."""
+    try:
+        import state
+        return state.load_contacts()
+    except Exception:  # noqa: BLE001  a count must never break a read
+        return []
 
-    The queue once printed the daily cap alone ("80 left today") while an hourly cap of 8
-    was what held: the binding one is the smallest of the day, the hour, all loads, the
-    ramp and the requests left this week."""
-    now = now or datetime.datetime.now()
+
+def unused(profiles: list, contacts=None) -> list:
+    """The profile reads today not yet used for a note that went: a read is for someone to
+    write to, so once they have been written to it no longer counts against the requests
+    still to go. Counting every read today said "18 read, enough for the 13 left" when ten
+    of the 18 had already been sent to, and stalled a run the person had lifted every cap
+    on (2026-10-20)."""
+    contacts = _book() if contacts is None else contacts
+    sent = {str(c.get("contact_id") or "") for c in contacts or ()
+            if str(c.get("first_contacted") or "").strip()
+            or str(c.get("status") or "not_contacted").strip() not in ("", "not_contacted")}
+    return [x for x in profiles if not x.get("id") or x["id"] not in sent]
+
+
+def _limits(now: datetime.datetime, sends_left: int | None = -1) -> list:
+    """[(profiles that may still be read under it, said plainly, its setting)] for every
+    limit on profile reads today; the setting is "" where none is the person's to change."""
     loads = _loads()
     hour_ago = now - datetime.timedelta(minutes=HOUR_MINUTES)
     today = [x for x in loads if x["when"].date() == now.date()]
@@ -1956,20 +1976,59 @@ def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1
     hour = [x for x in loads if x["when"] > hour_ago]
     ceiling, why_ceiling = pace.hourly_ceiling(now.date(), [x["when"] for x in loads])
     ceiling = min(ceiling, LOADS_PER_HOUR)
-    limits = [(max(0, READS_PER_DAY - len(profiles)), f"{READS_PER_DAY} a day (PROFILE_READS_PER_DAY)"),
+    ramp = why_ceiling != "loads_per_hour"
+    limits = [(max(0, READS_PER_DAY - len(profiles)), f"{READS_PER_DAY} a day (PROFILE_READS_PER_DAY)",
+               "PROFILE_READS_PER_DAY"),
               (max(0, READS_PER_HOUR - sum(1 for x in hour if x["kind"] == "profile")),
-               f"{READS_PER_HOUR} an hour (PROFILE_READS_PER_HOUR)"),
+               f"{READS_PER_HOUR} an hour (PROFILE_READS_PER_HOUR)", "PROFILE_READS_PER_HOUR"),
               (max(0, LOADS_PER_DAY - len(today)), f"{LOADS_PER_DAY} pages a day in all "
-                                                    "(PROFILE_LOADS_PER_DAY)"),
+                                                    "(PROFILE_LOADS_PER_DAY)",
+               "PROFILE_LOADS_PER_DAY"),
               (max(0, ceiling - len(hour)), f"{ceiling} pages an hour in all ("
-               + ("PROFILE_LOADS_PER_HOUR" if why_ceiling == "loads_per_hour" else why_ceiling)
-               + ")")]
+               + (why_ceiling if ramp else "PROFILE_LOADS_PER_HOUR") + ")",
+               "PROFILE_READ_RAMP" if ramp else "PROFILE_LOADS_PER_HOUR")]
     left = sends_left_week(now.date()) if sends_left == -1 else sends_left
     if left is not None:
-        limits.append((max(0, left + SKIP_SPARE - len(profiles)),
-                       f"the {left} request(s) left this week, and {SKIP_SPARE} spare"))
-    n, what = min(limits, key=lambda x: x[0])
+        limits.append((max(0, left + SKIP_SPARE - len(unused(profiles))),
+                       f"the {left} request(s) left this week, and {SKIP_SPARE} spare",
+                       "PROFILE_READ_SKIP_SPARE"))
+    return limits
+
+
+def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1) -> tuple:
+    """(profiles that may still be read today, the limit that binds, said plainly).
+
+    The queue once printed the daily cap alone ("80 left today") while an hourly cap of 8
+    was what held: the binding one is the smallest of the day, the hour, all loads, the
+    ramp and the requests left this week."""
+    n, what, _setting = min(_limits(now or datetime.datetime.now(), sends_left),
+                            key=lambda x: x[0])
     return n, what
+
+
+def budget_line(now: datetime.datetime | None = None, sends_left: int | None = -1) -> str:
+    """One line before a round: the profile reads and list pages it can have today, the
+    limit that binds and the exact line in profile/networking.py that changes it. A person
+    learned which setting held them only from a wait in the middle of a run (2026-10-20)."""
+    now = now or datetime.datetime.now()
+    n, what, setting = min(_limits(now, sends_left), key=lambda x: x[0])
+    loads = _loads()
+    today = [x for x in loads if x["when"].date() == now.date()]
+    pages = max(0, min(PAGES_PER_DAY - sum(1 for x in today if x["kind"] in PAGE_KINDS),
+                       LOADS_PER_DAY - len(today)))
+    name = {v: k for k, v in pace.SETTING.items()}.get(setting, "")
+    current = pace.value(name) if name else ""
+    change = (f"to change it, set `{setting} = <a higher number>` in profile/networking.py "
+              f"(now {current}, {pace.source(name)})" if name else "")
+    if setting == "PROFILE_READ_SKIP_SPARE":
+        change = ("it moves as notes go: a read stops counting once its note is sent, so send "
+                  f"the ones drafted, or set `PROFILE_READ_SKIP_SPARE = <more>` in "
+                  f"profile/networking.py (now {SKIP_SPARE})")
+    stopped_why = stopped(now.date())
+    if stopped_why:
+        return f"Reads today: none, they are stopped for today: {stopped_why}."
+    return (f"Reads today: up to {n} profile(s) and {pages} list page(s). What binds: {what}"
+            + (f"; {change}" if change else "") + ".")
 
 
 def _is_break(reads) -> int:
@@ -3472,6 +3531,8 @@ def main(argv: list | None = None) -> int:
                     help="card: the top card and About, nothing scrolled; deep: scrolled to "
                          "the end, for Experience and Activity")
     sub.add_parser("limits", help="every reading limit, its value, where it came from, and why")
+    sub.add_parser("budget", help="one line before a round: the reads and list pages left today, "
+                                  "the limit that binds and the line that changes it")
     sub.add_parser("move-runtime", help="move the reading files an older copy kept in "
                                         "documents/network into this computer's ledger")
     fr = sub.add_parser("friction", help="the signals LinkedIn showed, and the ramp; or keep one")
@@ -3562,9 +3623,11 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "limits":
         for line in pace.report():
             print(line)
-        n, what = reads_left()
-        print(f"Now: {n} profile read(s) can still go today (the limit that binds: {what}). "
-              f"The ledger: {pace.ledger_dir()}")
+        print(budget_line())
+        print(f"The ledger: {pace.ledger_dir()}")
+        return EXIT["ok"]
+    if a.cmd == "budget":
+        print(budget_line())
         return EXIT["ok"]
     if a.cmd == "friction":
         if a.kind:
@@ -3723,6 +3786,7 @@ def main(argv: list | None = None) -> int:
             print(f"  not added, nothing places them in a city yet: {', '.join(got['unplaced'])}. "
                   f"At most {UNVERIFIED_ON_SHORTLIST} such a day; a one-page read (`reading.py "
                   "people`) or a public finding places them first")
+        print(budget_line())       # before the round: what it can have, and what binds
         return EXIT["ok"]
     if a.cmd == "queue":
         import state

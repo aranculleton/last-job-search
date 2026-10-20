@@ -227,15 +227,49 @@ def _clean(name, value):
         return None
 
 
+# The caps that count pages in one period. A cap the person sets for a period is the one
+# that binds: every preset cap for the same period that would hold them lower gives way to
+# it. With PROFILE_READS_PER_HOUR = 1000 written to lift every cap, the preset's list-page,
+# load and ramp limits still held a run at 10 an hour for 44 minutes (2026-10-20). The
+# requests LinkedIn allows a day (schema.LIMITS) are not a reading cap and are never lifted.
+PERIOD_CAPS = {"hour": ("reads_per_hour", "pages_per_hour", "loads_per_hour"),
+               "day": ("reads_per_day", "pages_per_day", "loads_per_day", "reads_per_run")}
+
+
+def _own(name: str):
+    """The person's own readable setting for one limit, or None."""
+    got = _MINE[name]()
+    return _clean(name, got) if got is not None else None
+
+
+def own_cap(period: str) -> tuple:
+    """(the highest cap the person set themselves for this period, its setting), or
+    (None, "")."""
+    best, by = None, ""
+    for n in PERIOD_CAPS.get(period, ()):
+        if n == "reads_per_run":
+            continue                 # the list's ceiling is not a pace the person sets for a period
+        v = _own(n)
+        if v is not None and (best is None or v > best):
+            best, by = v, SETTING[n]
+    return best, by
+
+
+def _period(name: str) -> str:
+    return next((p for p, names in PERIOD_CAPS.items() if name in names), "")
+
+
 def value(name: str, risk: str | None = None):
-    """The limit's value: the person's own setting, else the dial's preset."""
+    """The limit's value: the person's own setting, else the dial's preset, raised to a cap
+    the person set for the same period where theirs is higher."""
     what = LIMITS[name]
     risk = risk or preset()
-    mine = _MINE[name]()
-    got = _clean(name, mine) if mine is not None else None
+    got = _own(name)
     if got is not None:
         return got
-    return what[2 + PRESET_NAMES.index(risk)]
+    v = what[2 + PRESET_NAMES.index(risk)]
+    own, _by = own_cap(_period(name))
+    return own if own is not None and own > v else v
 
 
 def source(name: str) -> str:
@@ -243,6 +277,11 @@ def source(name: str) -> str:
     mine = _MINE[name]()
     if mine is not None and _clean(name, mine) is not None:
         return "your setting, %s in profile/networking.py" % SETTING[name]
+    own, by = own_cap(_period(name))
+    base = LIMITS[name][2 + PRESET_NAMES.index(preset())]
+    if own is not None and own > base:
+        return ("the %s preset's %s, raised to your own %s (%s), which outranks it"
+                % (preset(), base, by, own))
     if mine is not None:
         return "the %s preset (%s could not be read)" % (preset(), SETTING[name])
     return "the %s preset" % preset()
@@ -499,7 +538,7 @@ def hourly_ceiling(today: datetime.date, loads: list, data: dict | None = None) 
     top = loads_cap("hour")
     if not friction(data):
         return top, "loads_per_hour"
-    if (mine("reads_per_hour") or mine("loads_per_hour")) and not mine("ramp"):
+    if own_cap("hour")[0] is not None and not mine("ramp"):
         return top, "loads_per_hour"
     steps = value("ramp")
     n = clean_days(today, loads, data)

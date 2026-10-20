@@ -88,7 +88,7 @@ def test_limits_prints_the_value_the_source_and_what_binds_now(here, capsys):
     assert reading.main(["limits"]) == 0
     out = capsys.readouterr().out
     assert "PROFILE_READ_RISK" in out and "PROFILE_READS_PER_RUN = 80 (the careful preset)" in out
-    assert "the limit that binds" in out
+    assert "What binds:" in out and "in profile/networking.py" in out
 
 
 # ------------------------------------------------------------------ one count a machine
@@ -290,3 +290,49 @@ def test_a_wait_on_the_ramp_names_the_setting_and_where_to_change_it(here):
         _profile_load(f"r{i}", NOW - datetime.timedelta(minutes=50 - i * 5))
     g = reading.gate_state(NOW, sends_left=None)
     assert g["kind"] == "later" and "PROFILE_READ_RAMP in profile/networking.py" in g["why"]
+
+
+# ------------------------------------------------------------------ the person's caps bind
+
+def test_reads_already_sent_to_do_not_count_against_the_requests_still_to_go(here, monkeypatch):
+    # From a real run (2026-10-20): 18 read today, 10 of them already sent to, and the gate
+    # said "18 profiles read today, enough for the 13 request(s) that can still go".
+    import state
+    start = NOW.replace(hour=8, minute=0)
+    for i in range(18):
+        _profile_load(f"p{i}", start + datetime.timedelta(minutes=20 * i))
+    sent = [{"contact_id": f"p{i}", "status": "awaiting_reply",
+             "first_contacted": NOW.date().isoformat()} for i in range(10)]
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: sent)
+    later = start + datetime.timedelta(hours=8)
+    g = reading.gate_state(later, sends_left=13)
+    assert g["kind"] != "tomorrow", g
+    assert reading.reads_left(later, sends_left=13)[0] == 13 + reading.SKIP_SPARE - 8
+    # With nobody sent to, all 18 still count, as before.
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
+    assert reading.gate_state(later, sends_left=13)["kind"] == "tomorrow"
+
+
+def test_a_cap_the_person_sets_outranks_every_preset_cap_of_its_period(monkeypatch):
+    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
+        PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=1000, PROFILE_READS_PER_DAY=1000))
+    for name in ("pages_per_hour", "loads_per_hour", "pages_per_day", "loads_per_day",
+                 "reads_per_run"):
+        assert pace.value(name) == 1000, name
+    assert "raised to your own PROFILE_READS_PER_HOUR (1000), which outranks it" in \
+        pace.source("pages_per_hour")
+    report = "\n".join(pace.report())
+    assert "PROFILE_LOADS_PER_HOUR = 1000" in report
+    # A lower cap of theirs lowers only what they set; it never lowers another.
+    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR=4))
+    assert pace.value("reads_per_hour") == 4 and pace.value("pages_per_hour") == 10
+
+
+def test_the_budget_line_says_what_binds_and_the_line_that_changes_it(here):
+    line = reading.budget_line(NOW, sends_left=None)
+    assert line.startswith("Reads today: up to 30 profile(s) and 20 list page(s).")
+    assert "set `PROFILE_READS_PER_HOUR = <a higher number>` in profile/networking.py" in line
+    tight = reading.budget_line(NOW, sends_left=2)
+    assert "the 2 request(s) left this week" in tight and "PROFILE_READ_SKIP_SPARE" in tight
+    reading.stop("LinkedIn showed a check: Let's do a quick security check", NOW.date())
+    assert "stopped for today" in reading.budget_line(NOW, sends_left=None)

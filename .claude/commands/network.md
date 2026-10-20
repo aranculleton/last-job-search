@@ -247,10 +247,15 @@ it. LinkedIn is never fetched from a session.
    the connections export); one-page reads screen it (the sent-invitations list once, an
    employer's People tab); and only then a profile read, for the people the person will write
    to today. Put the best by `why_them` on the day's short list, `python3
-   tools/network/reading.py shortlist <ids, best first>`. It is sized to the requests that can
-   still go today and three spare, never above `reading.READS_PER_RUN` (5 unless the person
-   set it), and takes at most `reading.UNVERIFIED_ON_SHORTLIST` (2) people nothing has placed
-   in a city yet. It adds to the day's list and refuses past the cap; people read on an
+   tools/network/reading.py shortlist <ids, best first>`. It is sized to the requests left
+   this week and three spare (a read stops counting once its note is sent), never above
+   `reading.READS_PER_RUN` (80 unless the person set it), and takes at most
+   `reading.UNVERIFIED_ON_SHORTLIST` (10) people nothing has placed in a city yet. It ends on
+   one line, "Reads today: up to N profile(s) and M list page(s). What binds: ...", with the
+   exact line in profile/networking.py that changes it (`reading.py budget` prints it alone):
+   show the person that line before the reads start, never only after a wait. A cap the
+   person sets there outranks every preset cap of its period. It adds to the day's list and
+   refuses past the cap; people read on an
    earlier day, or past a first note in the contact book, leave it by themselves and are
    named, and `--remove <id>` takes someone off. A browser read refuses anyone not on it.
    It refuses an id that names nobody (not in the contact book, nothing read about them):
