@@ -124,7 +124,10 @@ def test_a_rewrite_that_would_change_only_the_date_leaves_the_document_alone(tmp
     assert all(_doc(tmp_path, cid).read_text(encoding="utf-8") == text
                for cid, text in first.items())
     assert "0 prep documents written" in out and "3 already current" in out
-    # A real change to one contact still rewrites that one, with the new date.
+    # A real change to one contact still rewrites that one, with the new date, and a prep
+    # asked for one contact is written, date and all.
     path = prep.write_prep(dict(CONTACTS[2], status="in_conversation"), today="2026-10-16",
-                           root=str(tmp_path))
+                           root=str(tmp_path), keep_if_same=True)
     assert "Written 2026-10-16." in open(path, encoding="utf-8").read()
+    one = prep.write_prep(CONTACTS[0], today="2026-10-17", root=str(tmp_path))
+    assert "Written 2026-10-17." in open(one, encoding="utf-8").read()

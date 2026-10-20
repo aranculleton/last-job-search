@@ -1844,7 +1844,7 @@ def _read(path):
 
 def write_prep(contact, company_research=None, application=None, profile_facts=None,
                threads=(), today=None, root=STATE_ROOT, open_roles=(), draft=None,
-               never_say=None) -> str:
+               never_say=None, keep_if_same=False) -> str:
     """Write the prep document and return its path.
 
     Filed under the contact id rather than a company or a date, because the next
@@ -1865,9 +1865,10 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
            + "\n" + ("<!-- generated answers: %s -->\n" % json.dumps(wrote, sort_keys=True)
                      if wrote else ""))
     old = _read(path)
-    # A document that would change only its date is left as it is: two chats that each
-    # regenerated every prep wrote the same documents a day apart, and all 217 conflicted.
-    if old is not None and _WRITTEN.sub("", old) == _WRITTEN.sub("", new):
+    # In a rewrite of them all, a document that would change only its date is left as it
+    # is: two chats that each regenerated every prep wrote the same documents a day apart,
+    # and all 217 conflicted. Asked for one contact, it is written, date and all.
+    if keep_if_same and old is not None and _WRITTEN.sub("", old) == _WRITTEN.sub("", new):
         return path
     with open(path, "w", encoding="utf-8") as f:
         f.write(new)
@@ -1923,7 +1924,7 @@ def find_application(contact, tracker_rows) -> dict:
 # ---------------------------------------------------------------- CLI
 
 
-def _write_one(row, tracker, a) -> str:
+def _write_one(row, tracker, a, keep_if_same=False) -> str:
     """One prep document, with the profile facts built when none were passed.
 
     Nothing ever passed a `--profile-facts` file, so every document on disk had
@@ -1948,7 +1949,8 @@ def _write_one(row, tracker, a) -> str:
                       today=a.today,
                       root=a.root,
                       open_roles=roles,
-                      draft=draft)
+                      draft=draft,
+                      keep_if_same=keep_if_same)
 
 
 def main(argv=None) -> int:
@@ -2011,7 +2013,7 @@ def main(argv=None) -> int:
         wrote = same = 0
         for row, path in todo:
             before = _read(path)
-            _write_one(row, tracker, a)
+            _write_one(row, tracker, a, keep_if_same=True)
             if _read(path) == before:
                 same += 1
             else:

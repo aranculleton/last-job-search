@@ -1695,7 +1695,10 @@ def _revenue_reason(title, rule):
     phrase, _, m = (firm or kinds)[0]
     if phrase is None:
         return "%s: %s" % (rule.reason, _matched(m))
-    return "%s, not one in your function: %s" % (phrase, _clean(m.group(0)))
+    # "revenue role" stays in every such reason: what reads the reason (a person's own
+    # checks among it) knows a revenue skip by those words.
+    lead = "" if "revenue role" in phrase else "a revenue role: "
+    return "%s%s, not one in your function: %s" % (lead, phrase, _clean(m.group(0)))
 
 
 # ---------------------------------------------------------------------------
