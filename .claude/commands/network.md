@@ -461,7 +461,8 @@ it. LinkedIn is never fetched from a session.
      the pairs that say the same thing to different people; rewrite one of each pair from
      its own reading. Then the whole batch: `python3 tools/network/reading.py batch` (every
      queued note) exits 11 when a sentence repeats in more than two notes or a third of them,
-     or a note ends on an ask that is not the person's own `ASK`, the one place the ask lives.
+     or a note ends on an ask that is not the person's own `ASK`, the one place the ask lives,
+     or two InMails share a subject, a paragraph order or a close.
      Their opener, `ABOUT_ME` and `ASK` are theirs to repeat, unless `VARY_ABOUT_ME` in
      `profile/networking.py` says the background line is chosen per person. When a common ground already names an employer, the about-me line
      does not repeat it: pass a shorter `about_me`.
@@ -473,7 +474,11 @@ it. LinkedIn is never fetched from a session.
      `compose.py subject` prints it) and `.body` go in LinkedIn's two fields. The shape that
      drew a reply: who they are with the years, one piece of real work with its numbers,
      why this person, eligibility by reader, the open ask. Validate with `kind="inmail"`
-     (the InMail carries its subject).
+     (the InMail carries its subject). Pass `team=` so the close asks about their current
+     work, and give two InMails in one round different builds: `order=` (one of
+     `compose.INMAIL_ORDERS`), a subject about what they share, a close of their own.
+     `reading.py batch` and `reading.py draft` say which share a subject, a paragraph order
+     or a close (`compose.round_alike()`).
    - The referral ask is a different message, `compose.referral_ask()`, sent
      only after they have engaged.
 
