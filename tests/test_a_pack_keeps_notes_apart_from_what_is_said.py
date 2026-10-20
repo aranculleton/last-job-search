@@ -30,8 +30,11 @@ import outreach  # noqa: E402
 import person  # noqa: E402
 import prep  # noqa: E402
 import voice_check  # noqa: E402
-from test_a_referral_process_is_prepared_from_what_was_said import (  # noqa: E402,F401
-    FIRM, ROLE, TODAY, _doc, _process, case)
+import test_a_referral_process_is_prepared_from_what_was_said as referral  # noqa: E402
+from test_a_referral_process_is_prepared_from_what_was_said import (  # noqa: E402
+    FIRM, ROLE, TODAY, _doc, _process)
+
+case = referral.case            # the same invented process, its own fixture
 
 ABOUT = "Tell me about yourself."
 
