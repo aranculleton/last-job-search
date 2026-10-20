@@ -32,6 +32,8 @@ WHAT IS DELIBERATELY NOT A FINDING:
     likely to be prose as a claim and the noise would drown the signal
   - a company fact in a cover letter, which is verified separately against an
     independently located source and is not the candidate's own claim
+  - in an interview or call prep (a .md file), an answer still marked as a draft the
+    person asked for (`without_drafts`): it is theirs to confirm, and says so
 
 THE LETTER, with `--drafts`. Only the resume was ever checked, and the letter's
 opening, bullets and close are free model text that an interviewer reads as
@@ -146,6 +148,29 @@ def quote(text: str, value: str) -> str:
     return (m.group(0).strip() if m else "")[:140]
 
 
+# An answer in an interview or call prep (markdown) drafted at the person's request, under
+# the line interview_pack.DRAFT_MARK starts with: its metric is theirs to confirm, and it is
+# marked as such, so it is not a finding. It runs from that line to the next heading, the
+# next question, or the next answer. Only markdown: a draft never reaches a resume or a
+# letter, so in a .tex or a drafts.json nothing is skipped.
+_DRAFT_START = re.compile(r"^\s*(?:\*\*|__|\*|_)?draft(?:\*\*|__|\*|_)?\s*:", re.I)
+_ANSWER_END = re.compile(r"^\s*(?:#{1,6}\s|- \*\*Q\.\*\*|\*\*A\.\*\*)")
+
+
+def without_drafts(text: str) -> str:
+    """`text` with every answer that still carries a draft's mark taken out."""
+    out, skipping = [], False
+    for line in str(text or "").splitlines():
+        if _DRAFT_START.match(re.sub(r"^\s*\*\*A\.\*\*\s*", "", line)):
+            skipping = True
+            continue
+        if skipping and _ANSWER_END.match(line):
+            skipping = False
+        if not skipping:
+            out.append(line)
+    return "\n".join(out)
+
+
 def check(text: str, source: str = "", allowed=None) -> list[dict]:
     """Numbers in `text` that the source of truth does not support."""
     allowed = allowed if allowed is not None else grounded()
@@ -207,7 +232,10 @@ def main() -> int:
     for path in a.paths:
         try:
             with open(path, encoding="utf-8") as fh:
-                findings += check(fh.read(), os.path.basename(path), allowed)
+                text = fh.read()
+            if path.endswith(".md"):
+                text = without_drafts(text)
+            findings += check(text, os.path.basename(path), allowed)
         except OSError as exc:
             print(f"check_numbers: cannot read {path}: {exc}", file=sys.stderr)
             return 2

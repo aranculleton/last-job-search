@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.4
+framework_version: 1.1.5
 ---
 
 # Interview Preparation Guide
@@ -19,9 +19,10 @@ Keep answers to 1-2 minutes. Be specific. End with what you learned or would do 
 
 <!-- Worked examples for Morgan Ellis, the fictional example person in profile.example/.
 A real person's own, drawn from their resume, are in profile/07-interview-prep.md. In a real set every
-number appears on the resume; do not inflate any of them in the room. Where an interviewer
-pushes for detail the resume does not carry, say what you actually remember and flag the rest
-as approximate. -->
+number appears on the resume, except a draft the person asked for, which is marked for them to
+confirm (/interview rule 2); do not inflate any of them in the room. Where an interviewer pushes
+for detail the resume does not carry, say what you actually remember and flag the rest as
+approximate. -->
 
 ### 1. The forecast that freed safety stock (applied modelling)
 **S:** Weekly demand forecasts for 2,400 SKUs across six distribution centres ran at a 22% error, and planners were covering the gap with extra safety stock.
@@ -69,7 +70,7 @@ as approximate. -->
 
 ## Common Tough Questions
 
-An answer can end on a `Suits:` or a `Not for:` line naming the kinds of employer it fits or argues against (consulting, product, bank, public sector, startup). `tools/interview_pack.py` marks a stock answer CAREFUL when it argues against the employer it is about to be said to, "depth over rotating clients" said to a consultancy, and reads untagged answers for the words that would.
+An answer can end on a `Suits:` or a `Not for:` line naming the kinds of employer it fits or argues against (consulting, product, bank, public sector, startup). `tools/interview_pack.py` leaves out a stock answer that argues against the employer it is about to be said to, "depth over rotating clients" said to a consultancy, says why, and lists it under what not to say; it reads untagged answers for the words that would.
 
 ### "Why are you leaving Brindle & Hart Logistics?" / "Why are you looking?"
 > I am not unhappy - the role has given me ownership of the forecasts from the warehouse data feed through to what the planners order. The move is about scope. I have taken demand forecasting about as far as one distribution network allows, and I want a larger or more varied planning problem, with a team that plans over a longer horizon than the week. `[CONFIRM: check this matches your actual reason before using it.]`
@@ -86,7 +87,7 @@ An answer can end on a `Suits:` or a `Not for:` line naming the kinds of employe
 > **Delivery notes.** Say it in two sentences and stop; a gap sounds like a problem only if you narrate it like one. Land the strongest true fact plainly and do not oversell it. Mention a minor job only if asked what it was, and never put it on the resume or claim it as professional experience. If pressed, be matter-of-fact.
 
 ### "You don't have [specific skill/experience]."
-> Name the gap plainly, then bridge to the nearest real thing and say what you are doing about it. Worked examples: no SAP configuration, but I have reported from SAP extracts and the warehouse-management system behind them. No Airflow, but I have run scheduled dbt models with data-quality tests in production. No people management, but I have owned reporting used by 30+ operations managers and moved them off eleven spreadsheets. No experience in your specific sector, but I changed sector between each of my roles, and each time I learned the commercial mechanics fast enough to be useful in the first month. Never claim the skill.
+> Name the gap plainly, then bridge to the nearest real thing and say what you are doing about it. Worked examples: no SAP configuration, but I have reported from SAP extracts and the warehouse-management system behind them. No Airflow, but I have run scheduled dbt models with data-quality tests in production. No people management, but I have owned reporting used by 30+ operations managers and moved them off eleven spreadsheets. No experience in your specific sector, but I changed sector between each of my roles, and each time I learned the commercial mechanics fast enough to be useful in the first month. Unasked, never claim the skill; asked for an example of using it, draft one, marked for the person to confirm (/interview rule 2).
 
 ### "Where do you see yourself in 5 years?"
 > Leading the planning analytics for a network end to end - the forecasts, the data feeds behind them and the relationship with the planners who act on the output - with a small team around it. I would rather go deep on planning than broad across many analytics topics.
@@ -125,12 +126,12 @@ Not for: consulting
 - "What do people who thrive here have in common?"
 
 ## Phone/Video Interview Tips
-- Have STAR examples written out (use this file)
+- Have your STAR stories written out (profile/07-interview-prep.md; the ones in this file are the example person's)
 - Keep a glass of water nearby
 - Smile when speaking (it changes your tone)
 - Ask for clarification if a question is vague
 - It's OK to take 5 seconds to think before answering
-- End with: "Is there anything else you'd like to know about my background?"
+- End with: "Is there anything about my background you'd like me to go into more?"
 
 ## After the Application (Best Practice)
 
