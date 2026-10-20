@@ -249,14 +249,23 @@ def check_note(note):
         problems.append("names none of the candidate's employers, so it carries no credential")
     if len(APPLYING.findall(note)) > 1:
         problems.append("says it has applied more than once")
-    # The networking rules every other outbound message meets: a status the
-    # profile does not hold, banned and excusing phrases, an exclamation to a
-    # senior reader. Only voice_check ran here, so a note claiming citizenship
-    # the candidate does not hold went through.
+    # Every rule another outbound message meets, through the one gate: compose.validate()
+    # for a "message", the kind for a note to a hiring manager about an application already
+    # in, where saying it was applied for is the point. This ran a subset of it (tone and
+    # voice_check), and passed "really interested me", which validate refuses as flattery
+    # (2026-10-20). Before that, only voice_check ran, and a note claiming citizenship the
+    # candidate does not hold went through.
+    sent = note.replace("[name]", "Sam")
+    try:
+        import compose
+    except (ImportError, RuntimeError, OSError, AttributeError):
+        compose = None                # no networking profile: the checks it can still run
+    if compose is not None:
+        return problems + [f"{v.rule}: {v.text}" for v in compose.validate(
+            sent, "message", name="Sam", seniority="senior", reader="decision_maker")]
     if _tone is not None:
         problems += [f"{v.rule}: {v.text}" for v in
-                     _tone.check(note.replace("[name]", "Sam"), recipient_seniority="senior",
-                                 name="Sam")]
+                     _tone.check(sent, recipient_seniority="senior", name="Sam")]
     try:
         import voice_check
     except ImportError:

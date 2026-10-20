@@ -19,9 +19,10 @@ problem at once rather than raising on the first, because it runs on text the
 model wrote by hand and the writer needs the whole list to do one rewrite
 instead of four.
 
-    from compose import connection_note, validate
-    note = connection_note("Wren Halloway", hook, who_line, work_auth=True)
-    validate(note, "connection", name="Wren Halloway", seniority="senior")
+    from compose import first_note, validate
+    note = first_note("Wren Halloway", how_found="I found you on Larkspur's people page",
+                      title="Head of Planning")
+    validate(note, "connection", name="Wren Halloway")
 """
 
 from __future__ import annotations
@@ -124,13 +125,14 @@ class NoteIsAllAboutTheSender(ValueError):
     """
 
 
-# The original name. Nothing should raise it any more, but an except clause
-# somewhere is cheaper to keep working than to find.
+# The original name. Nothing in the app raises it under this name; it stays as one
+# line so an except clause in a person's own tests keeps working.
 HookIsAboutTheSender = NoteIsAllAboutTheSender
 
 
-# LinkedIn's InMail body cap. The 150 to 200 word band in schema.LIMITS is the
-# target; this is the wall, and a draft over it cannot be sent at all.
+# LinkedIn's InMail body cap: the wall, and a draft over it cannot be sent at all.
+# schema.LIMITS["inmail_words"] holds the 200-word ceiling, a ceiling and never a
+# target; how long an InMail need be for its reader is INMAIL_WORDS_FOR below.
 INMAIL_CHAR_LIMIT = 1900
 
 # An email is the one channel where brevity is the failure. Someone who asked
@@ -167,11 +169,6 @@ SIGN_OFF = dict(_NET.SIGN_OFF)
 # composers refuse, instead of only the arguments this module assembled itself.
 _UNSUPPORTABLE = tone.UNSUPPORTED_CLAIM
 
-# The phrasings a draft actually arrives with, all of which mean the same thing
-# and only one of which is the approved wording: networking.py's
-# WORK_AUTH_CLAUSE. "visa's sorted" is the brief's named example of what not to
-# send a Senior Director.
-_WORK_AUTH_CLAUSE = _NET.WORK_AUTH_CLAUSE
 
 # The opening furniture: the salutation, the courtesy line that follows it, and
 # an email subject line. None of them is a sentence the reader takes content
@@ -215,6 +212,9 @@ _KIND_ALIASES = {
     "follow_up": "nudge",
     "intro_connection": "intro_connection",
     "warm_intro_connection": "intro_connection",
+    # A note to a hiring manager about an application already in (outreach.py): read in a
+    # message pane, so no length here; outreach.check_note() holds it to its own words.
+    "message": "message",
 }
 
 KIND_LIMITS = {
@@ -233,13 +233,14 @@ KIND_LIMITS = {
     "nudge": {"chars": schema.LIMITS["nudge_chars"]},
     # A warm intro whose instruction was "connect with X" is the request itself.
     "intro_connection": {"chars": schema.LIMITS["connection_note_chars"]},
+    "message": {},
 }
 
 # There is no default close and no default opener any more, and the reason
 # shows up in any message log. Count the sent messages that carry their text:
 #
-#     most  open "hope you're well"              (this file's DEFAULT_OPENER)
-#     most  close on "would love" or "I'd love"  (this file's DEFAULT_CLOSE)
+#     most  open "hope you're well"              (the old default opener)
+#     most  close on "would love" or "I'd love"  (the old default close)
 #
 # A default phrase ends up in nearly every message: the same opener on all of
 # them and the same close on all of them. Neither phrase is wrong in one
@@ -249,10 +250,9 @@ KIND_LIMITS = {
 # form, and the recipients are in overlapping networks.
 #
 # The close is also the sentence that asks for the reply, which makes it the
-# worst sentence in the message to hand a default to. So it is required, like
-# the hook and the who-line, and for the same reason.
-DEFAULT_CLOSE = None
-DEFAULT_OPENER = None
+# worst sentence in the message to hand a default to. So the ask is the
+# person's own (ASK, TEMPLATES) or one of several in the phrase bank, chosen
+# per contact (`phrase()`), never one fixed line.
 
 
 def _sentence(text) -> str:
@@ -643,86 +643,30 @@ def _voice(kind: str, text: str) -> str:
     return text
 
 
-def _never_said(kind: str, text: str) -> str:
-    """Refuse a message carrying a phrase the person said never to use (learned.py
-    --never-say). The first note and the InMail refused one through voice_check; a nudge,
-    a referral ask, an email and a warm intro went out with it (2026-10-20)."""
-    try:
-        import learned
-        hits = learned.dislikes(text)
-    except (ImportError, SystemExit):
-        return text
-    if hits:
-        raise ReadsAsGenerated(
-            "%s says what the person said never to: %s. Say it their way (python3 "
-            "tools/learned.py brief messages)" % (kind, "; ".join(sorted(set(hits)))[:160]))
+class Refused(ReadsAsGenerated):
+    """A composed message that validate() refuses for its kind. A ReadsAsGenerated, so an
+    except clause written for the never-say refusal still catches it."""
+
+
+# Length is each composer's own, raised as TooLong with the count before the gate runs. An
+# email's floor is the writer's to judge: a short one after a call still goes.
+_COMPOSER_LENGTH = frozenset({"too_long", "too_short"})
+
+
+def _gate(kind: str, text: str, what: str, **kw) -> str:
+    """Refuse a composed message on what validate() refuses for its kind, the way TooLong
+    refuses length. The nudge, the referral ask, the email and the warm intro ran only the
+    never-say check, and nudge() returned "just checking in" with an em dash in it
+    (2026-10-20): one gate now, the one a hand-written draft meets."""
+    found = [v for v in validate(text, kind, **kw) if v.rule not in _COMPOSER_LENGTH]
+    if found:
+        theirs = any(v.rule == "person_dislikes" for v in found)
+        raise Refused(
+            "%s is refused: %s.%s" % (
+                what, "; ".join(sorted({f"{v.rule}: {v.text}" for v in found}))[:400],
+                " Say it their way (python3 tools/learned.py brief messages)." if theirs
+                else ""))
     return text
-
-
-def connection_note(name, hook, who_line, work_auth=None, seniority="peer",
-                    close=DEFAULT_CLOSE, opener=DEFAULT_OPENER, their=()) -> str:
-    """The brief 4.1 shape, inside the 300 character limit or not at all.
-
-    Hook first because a hook tied to that person is the only thing separating
-    this from a sweep, the who-line second because the named employers have to
-    be read before the reader decides, work authorization only when it removes
-    an objection, and a soft close because a five-second reply is the ask.
-
-    Raises TooLong rather than truncating. What to cut is a judgment about which
-    detail matters least, and a truncator always cuts the close, which is the
-    part that asks for the reply.
-    """
-    _no_reaction_waiting("connection note")
-    if not str(hook or "").strip():
-        raise ValueError(
-            "a connection note without a hook specific to this person is a template "
-            "sweep, and senior people spot it instantly")
-
-    if not str(who_line or "").strip():
-        raise ValueError("a connection note has to say who the sender is, with employers named")
-    if not str(close or "").strip():
-        raise ValueError(
-            "a connection note needs a close written for this person: it is the "
-            "sentence that asks for the reply, and it is the one sentence a "
-            "default ruins. A default close ends up identical in every message "
-            "sent, which is what a form looks like")
-    # With no opener the hook runs straight on from "Hi Wren," as one sentence,
-    # so it must NOT be capitalized the way a standalone sentence is.
-    # `_sentence()` upper-cases a leading lowercase letter, which is right
-    # after a full stop and wrong after a comma. `nudge()` already carried this
-    # fix; removing DEFAULT_OPENER gave `connection_note` the same problem and
-    # it rendered "Hi Sasha, Saw you are recruiting", a visible typo in the
-    # first line of an outbound message.
-    #
-    # Lowering it unconditionally was the same bug wearing the other face: a
-    # hook that legitimately opens on "I", "SQL" or "NASA" came out as
-    # "Hi Quinn, i moved teams last year", which is a typo in the one
-    # line every reader sees. `_after_greeting()` already drew that
-    # distinction for `inmail()` and is now the single place it is drawn.
-    if opener:
-        head = [f"{_greeting(name)} {opener}.", _sentence(hook)]
-    else:
-        head = [f"{_greeting(name)} {_after_greeting(hook, keep=their)}"]
-    parts = head + [_sentence(who_line),
-                    _checked_claim(work_auth, seniority) if work_auth else "",
-                    _sentence(close)]
-    note = " ".join(p for p in parts if p)
-    # Checked on the assembled note, not on the hook. Taking the hook alone
-    # forbade "I am an analyst in <City>" as an opening, which is the
-    # plainest and best one there is, and pushed every draft into explaining the
-    # reader's own job back to them. The note has to reach them; it does not
-    # have to reach them in the first sentence.
-    if not tone.reaches_them(note, their):
-        raise NoteIsAllAboutTheSender(
-            "nothing in this note reaches %s: it names no second person, and none "
-            "of their= appears in it. A stranger reading it learns who you are and "
-            "nothing about why you wrote to THEM. Name what you know about their "
-            "work, or pass their= with the employer, product or event the note "
-            "refers to." % (tone.first_name(name) or "them"))
-    limit = schema.LIMITS["connection_note_chars"]
-    if len(note) > limit:
-        raise TooLong("connection note", len(note), limit)
-    return _voice("connection note", note)
 
 
 # ---------------------------------------------------------------------------
@@ -768,8 +712,10 @@ _SAY_ROLE_FIX = ("say the work you are looking for, not that you want their role
 _POINTER_FIX = ("ask for a pointer instead: \"would you know the right person to speak to "
                 "about <the work>?\" (shape=\"pointer\")")
 _LATER_FIX = "that is the referral ask, after they reply: compose.referral_ask()"
-_OPEN_FIX = ("to a decision-maker, ask openly: \"would love to hear if you have anything coming "
-             "up\"; to a peer, ask about them, or for a pointer")
+# {open_ask} is advice.open_ask(): the open ask in words this person's voice check passes,
+# filled in when the finding is made (first_note_findings).
+_OPEN_FIX = ("to a decision-maker, ask openly: \"{open_ask}\"; to a peer, ask about them, or "
+             "for a pointer")
 JOB_ASKS = (
     # (pattern, kind, what to write instead). "wants" is saying the role wanted.
     (r"\b(?:the|a) (?:job|role) I want\b", "wants", _SAY_ROLE_FIX),
@@ -790,7 +736,6 @@ JOB_ASKS = (
     (r"\b(?:does|would) it report into your team\b", "asks", _OPEN_FIX),
     (r"\bwho hires for (?:it|this|that)\b", "asks", _POINTER_FIX),
     (r"\bdo you recruit for (?:it|this|that)\b", "asks", _POINTER_FIX),
-    (r"\bwho should I (?:speak|talk) to\b", "asks", _POINTER_FIX),
     # An employer's name is capitalized however the pattern is compiled: "they are slow
     # hiring" is not a question about their hiring.
     (r"\b(?:is|are) (?:you|your team|the team|(?-i:[A-Z])[\w&.]*(?: (?-i:[A-Z])[\w&.]*){0,2})"
@@ -803,7 +748,12 @@ JOB_ASKS = (
      "asks", _OPEN_FIX),
     (r"\brefer me\b", "asks", _LATER_FIX),
     (r"\b(?:be )?considered for (?:the|a|an|your|this|that)\b", "asks", _LATER_FIX),
-    (r"\b(?:I am|I'm|I've been|I have been|I just)\s+appl(?:ying|ied)\b", "asks", _LATER_FIX),
+    # Saying you applied, in every form it takes: "I've just applied", the outreach note's
+    # own opening, matched "I just applied" only. A first note is no place for it; the note
+    # to a hiring manager about a submitted application is checked as a "message", where
+    # saying it is the point (outreach.check_note).
+    (r"\b(?:I am|I'm|I've been|I have been|I(?:'ve| have)?\s+(?:just|recently))\s+"
+     r"appl(?:ying|ied)\b|\bI(?:'ve| have)\s+applied\s+(?:for|to)\b", "asks", _LATER_FIX),
     (r"\b(?:are|is) (?:you|your team|the team) (?:recruiting|looking to (?:hire|add|grow))\b",
      "asks", _OPEN_FIX),
     (r"\bis (?:your|the) team growing\b", "asks", _OPEN_FIX),
@@ -951,7 +901,8 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> l
     for rx, kind, fix in _JOB_ASKS:
         if kind == "wants" and SAY_THE_ROLE.get(reader):
             continue
-        out += [tone.Violation("asks_for_the_job", f"\"{m.group(0)}\": {fix}")
+        out += [tone.Violation("asks_for_the_job",
+                               f"\"{m.group(0)}\": {advice.with_open_ask(fix)}")
                 for m in rx.finditer(text)]
     allowed = ELIGIBILITY.get(reader, False) if work_auth is None else bool(work_auth)
     if not allowed:
@@ -1105,10 +1056,14 @@ def _honest(note: str, looked: bool, said=()) -> None:
             note = re.sub(re.escape(line), " ", note, flags=re.I)
     m = _SENDER_LOOKED.search(note)
     if m:
+        # Never "pass looked=True" alone: "I read your post on ..." with looked=True is a
+        # note validate() refuses (saw_your_post), and the error sent writers there
+        # (2026-10-20). What they said is the point, not that the sender read it.
         raise UnconfirmedReading(
             f"\"{m.group(0)}\" says you looked at it, and you have not said you did. Say how "
-            "you found them instead (how_found=), or pass looked=True once you have read it "
-            "yourself")
+            "you found them instead (how_found=). Once you have read it yourself, name what "
+            "they said or made (\"your point that markdown should follow shelf life\"), not "
+            "that you read or saw it, and pass looked=True")
 
 
 # The person's own opener and close, allowed back into a first note: only the
@@ -1139,12 +1094,6 @@ def _question(question) -> str:
     return q[0].upper() + q[1:] if q[0].islower() else q
 
 
-# A sentence whose subject is the reader: "You moved into pricing from economics", "Your
-# team builds the forecasts". Only these take a hedge in front; "Your talk stuck with me"
-# says what the sender felt, and a hedge before it would garble it.
-_READER_SUBJECT = re.compile(
-    r"^(?:you(?:'ve|'re|'d)?|your (?:team|group|org\w*|company|function|department|unit))\b",
-    re.I)
 # The hedges that open a sentence ("probably" sits inside one).
 _PREFIX_HEDGE = re.compile(r"^(?:I\b|I'm\b|it\b)", re.I)
 
@@ -1160,7 +1109,10 @@ def hedge(sentence, reading=None, reader="peer", key="") -> str:
     A person whose rule outranks the check (`learned.py record --overrides
     unhedged_inference`) gets the sentence as written."""
     s = _sentence(sentence)
-    if not s or advice.hedges(s) or not _READER_SUBJECT.match(s) \
+    # Only a sentence whose subject is the reader (advice.reader_is_subject, the test
+    # advice.provenance() reads) takes a hedge in front: "Your talk stuck with me" says what
+    # the sender felt, and a hedge before it would garble it.
+    if not s or advice.hedges(s) or not advice.reader_is_subject(s) \
             or "unhedged_inference" in _overrides() \
             or advice.provenance(s, reading) not in (advice.INFERRED, advice.GUESS):
         return s
@@ -1189,6 +1141,17 @@ SHAPES = ("shared", "their_work", "brief", "recruiter", "connected", "pointer")
 # The brief note's length for a senior reader: profile/networking.py SENIOR_NOTE_CHARS.
 BRIEF_CHARS = _as(getattr(_NET, "SENIOR_NOTE_CHARS", 0) or 220, 220)
 CONNECTED_CHARS = 600
+
+
+def note_chars(shape: str = "") -> int:
+    """The most characters a first note of this shape runs to: the plan's connection note
+    limit, the brief note's SENIOR_NOTE_CHARS inside it, or CONNECTED_CHARS for a message to
+    someone already connected. first_note() holds a note to it, and validate() checks a
+    Note by the shape it carries."""
+    plan = schema.LIMITS["connection_note_chars"]
+    return {"brief": min(BRIEF_CHARS, plan), "connected": CONNECTED_CHARS}.get(shape, plan)
+
+
 _WORK_KINDS = ("talk", "article", "podcast", "code", "publication", "featured")
 
 
@@ -1335,15 +1298,14 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
             % "; ".join(sorted({v.text for v in findings})))
     if not tone.reaches_them(note, tuple(their or ()) + ((mutual,) if mutual else ())):
         raise NoteIsAllAboutTheSender(_reaches_fix(name, their))
-    limit = {"brief": min(BRIEF_CHARS, schema.LIMITS["connection_note_chars"]),
-             "connected": CONNECTED_CHARS}.get(shape, schema.LIMITS["connection_note_chars"])
+    limit = note_chars(shape)
     if len(note) > limit:
         if hedged and (common_ground, parallel) != (asked["common_ground"], asked["parallel"]):
             # The hedge is what tipped it over: the note goes as written rather than not at
             # all, and advise() still warns on the inference.
             return first_note(**dict(asked, hedged=False))
         raise TooLong("first note", len(note), limit)
-    return Note(_first_note_voice(note), rtype, recruiter)
+    return Note(_first_note_voice(note), rtype, recruiter, shape)
 
 
 def _reaches_fix(name, their=()) -> str:
@@ -1391,7 +1353,7 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
     high = KIND_LIMITS["referral_ask"]["words"][1]
     if words > high:
         raise TooLong("referral ask", words, high, unit="words")
-    return _never_said("referral ask", text)
+    return _gate("referral_ask", text, "referral ask", name=name, seniority=seniority)
 
 
 def nudge(name, reason, close=None, opener=None, their=()) -> str:
@@ -1405,7 +1367,7 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
     of the first message.
 
     `their` is the names the reason may open on, their employer first, the same
-    argument `connection_note` takes. A reason opening "Acme opened a
+    argument `first_note` takes. A reason opening "Acme opened a
     role" is otherwise indistinguishable from one opening "Saw the role".
 
     Raises TooLong, like everything else here, rather than trimming.
@@ -1432,7 +1394,7 @@ def nudge(name, reason, close=None, opener=None, their=()) -> str:
     limit = schema.LIMITS["nudge_chars"]
     if len(text) > limit:
         raise TooLong("nudge", len(text), limit)
-    return _never_said("nudge", text)
+    return _gate("nudge", text, "nudge", name=name)
 
 
 # The subjects every mass InMail carries. A subject is the one line read before
@@ -1471,17 +1433,20 @@ def inmail_subject(subject, recruiter=False) -> str:
 
 
 class Note(str):
-    """A first note: the text, as it always was, and who it was written for (`.reader`,
-    `.recruiter`), so validate() and advise() check it for that reader without being told
-    again."""
+    """A first note: the text, as it always was, who it was written for (`.reader`,
+    `.recruiter`) and its shape (`.shape`, SHAPES), so validate() and advise() check it for
+    that reader and that shape's length (note_chars) without being told again. A
+    "connected" note runs to 600 characters, and validate(kind="connection") refused it at
+    the request's 300 (2026-10-20)."""
 
-    def __new__(cls, text: str, reader: str = "peer", recruiter: bool = False):
+    def __new__(cls, text: str, reader: str = "peer", recruiter: bool = False,
+                shape: str = ""):
         obj = super().__new__(cls, text)
-        obj.reader, obj.recruiter = reader, recruiter
+        obj.reader, obj.recruiter, obj.shape = reader, recruiter, shape
         return obj
 
     def __reduce__(self):
-        return (Note, (str(self), self.reader, self.recruiter))
+        return (Note, (str(self), self.reader, self.recruiter, self.shape))
 
 
 class InMail(str):
@@ -1615,8 +1580,8 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
     fields. The same rules as `first_note()` (never a job ask, work authorization by who
     reads it, it has to reach them, no claim to have read what the sender has not), plus
     one paragraph of evidence, which is what the credit buys. Sized to the reader: about
-    150 words to a decision-maker or a recruiter, 100 to 130 to a peer (warned past
-    `inmail_words()`, never refused); the 200-word ceiling is a ceiling.
+    170 words to a decision-maker or a recruiter, about 130 to a peer (INMAIL_WORDS, warned
+    past `inmail_words()`, never refused); the 200-word ceiling is a ceiling.
 
     `team` ("the pricing team") gives the close a real question about their current work
     when `question` is not given. The subject names first the past employer they share
@@ -1749,7 +1714,11 @@ def email(name, subject, context, body, ask, sign_off=None, attachment=True,
         sign_off = SIGN_OFF["senior" if tone.is_senior(seniority) else "peer"]
     if sign_off:
         blocks.append(str(sign_off).strip())
-    return _never_said("email", "\n\n".join(b for b in blocks if b))
+    text = "\n\n".join(b for b in blocks if b)
+    high = EMAIL_WORDS[1]
+    if high and len(text.split()) > high:
+        raise TooLong("email", len(text.split()), high, unit="words")
+    return _gate("email", text, "email", name=name, seniority=seniority)
 
 
 def warm_intro(referrer_name, name, body, close=None, work_auth=None,
@@ -1797,48 +1766,13 @@ def warm_intro(referrer_name, name, body, close=None, work_auth=None,
         high = INTRO_WORDS[1]
         if high and len(text.split()) > high:
             raise TooLong("warm intro", len(text.split()), high, unit="words")
-    return _never_said("warm intro", text)
+    return _gate("intro_connection" if channel == "connection" else "intro", text,
+                 "warm intro", name=name, seniority=seniority, referrer=referrer_name)
 
 
-def register(text, seniority) -> str:
-    """Calibrate the surface of a finished draft to the recipient (brief 4.5).
-
-    Same content, different surface. Two things change and nothing else:
-    work-authorization phrasing becomes the approved wording for the register,
-    and a senior recipient's copy loses its exclamation marks and its "Hey".
-    Rewriting more than that would be editing the writer's argument, which is
-    not this function's business.
-
-    Refuses outright when the draft claims citizenship or permanent residency.
-    That is not a register problem and no phrasing fixes it.
-    """
-    s = str(text or "")
-    if not s.strip():
-        return s
-    m = _UNSUPPORTABLE.search(s)
-    if m:
-        raise UnsupportedClaim(
-            f"{m.group(0)!r} is not something the profile supports: "
-            f"{getattr(_NET, 'UNSUPPORTED_WHY', 'the profile does not hold that status')}.")
-    approved = WORK_AUTH["senior" if tone.is_senior(seniority) else "peer"]
-    s = _WORK_AUTH_CLAUSE.sub(lambda _m: approved, s)
-    if tone.is_senior(seniority):
-        s = re.sub(r"!+", ".", s)
-        s = re.sub(r"^hey\b", "Hi", s, flags=re.I | re.M)
-    return s
-
-
-# A check-in gives them nothing to answer, which is why the first message went
-# unanswered. `nudge()` refuses an empty reason; a hand-written draft reached
-# validate() with "just checking in to see if you had a chance to look at my note"
-# and came back clean.
-CHECK_IN = re.compile(
-    r"\b(?:just\s+)?checking\s+in\b|\bjust\s+check\s+in\b|\bcircl(?:e|ing)\s+back\b"
-    r"|\bbump(?:ing)?\s+(?:this|my|it)\b|\btop\s+of\s+(?:your|the)\s+inbox\b"
-    r"|\b(?:did|have)\s+you\s+(?:get|had|have)\s+(?:a\s+)?chance\s+to\b"
-    r"|\bhad\s+a\s+chance\s+to\s+(?:look|read|see|review)\b|\bjust\s+following\s+up\b"
-    r"|\bfollowing\s+up\s+on\s+my\s+(?:last|previous|earlier)\s+(?:message|note|email)\b",
-    re.I)
+# A check-in gives them nothing to answer: tone.CHECK_IN, the one list, which reply.py
+# reads too for a chase of theirs.
+CHECK_IN = tone.CHECK_IN
 
 
 def lowered_names(text) -> list[str]:
@@ -1896,7 +1830,9 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
                                                     "(or a 'Subject:' first line)"))
         elif _GENERIC_SUBJECT.match(_SUBJECT_LINE.sub("", first)):
             out.append(tone.Violation("generic_subject", first.strip()))
-    limits = KIND_LIMITS[k]
+    limits = dict(KIND_LIMITS[k])
+    if k == "connection" and getattr(message, "shape", ""):
+        limits["chars"] = note_chars(message.shape)
     chars, words = len(text), len(text.split())
     if "chars" in limits and chars > limits["chars"]:
         out.append(tone.Violation("too_long", f"{chars} characters, limit {limits['chars']}"))
@@ -1908,8 +1844,13 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
             out.append(tone.Violation("too_short", f"{words} words, at least {low}"))
     for word in lowered_names(text):
         out.append(tone.Violation("lowercase_name", word))
-    for found in CHECK_IN.findall(text):
-        out.append(tone.Violation("check_in", found if isinstance(found, str) else found[0]))
+    # A check-in phrase tone already refuses as a banned phrase ("circle back") is
+    # reported once, as that: it came back three times under three names (2026-10-20).
+    banned = [v.text.lower() for v in out if v.rule == "banned_phrase"]
+    for m in CHECK_IN.finditer(text):
+        found = m.group(0).lower()
+        if not any(b in found or found in b for b in banned):
+            out.append(tone.Violation("check_in", m.group(0)))
     # Praise to someone the sender is still a stranger to: "really interested me", "the kind
     # of work I'd like to do more of" (2026-10-20). Refused, with what to write instead.
     if k not in ("reply", "referral_ask"):
@@ -1932,9 +1873,11 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     # straight here, which got `tone.check` and nothing else. Same rules, same
     # message, different door, and the door without the check is the one a
     # model uses when the composer's shape does not fit what it wants to say.
+    # Each finding goes under voice_check's own rule name ("house-style",
+    # "ai-diction"), so `learned.py record --overrides house-style` lifts that one
+    # check and nothing else: under one name for all of them, it lifted none.
     for f in _voice_findings(text, k):
-        out.append(tone.Violation("reads_as_generated",
-                                  f"{f['rule']}: {f['match']} -> {f['fix']}"))
+        out.append(tone.Violation(f["rule"], f"{f['match']} -> {f['fix']}"))
     if _all:
         return out
     over = _overrides()
@@ -1988,7 +1931,9 @@ def advise(message, kind, name=None, seniority="peer", employers=(), reader=None
     disclaimer, an exit in a first message, a claim about them written as fact, a
     credential with no reason in its sentence, the employer named late, an InMail longer
     than this reader needs, and any check the person's rules outrank (only mentioned, as
-    "your_rule_outranks"). Shown with the draft after a rewrite, never instead of one.
+    "your_rule_outranks"). The draft is rewritten on them before it is shown; a warning
+    the rewrite leaves standing is shown with the draft, for the person to decide, never
+    in place of the rewrite.
     `their` holds the names on the reader's side, which the person's shorthand leaves as
     written."""
     k = _KIND_ALIASES.get(str(kind or "").strip().lower(), str(kind or ""))
@@ -2102,11 +2047,13 @@ def examples(channel: str | None = None, limit: int = 3, contacts=None, threads=
 
 # ---------------------------------------------------------------- a batch alike
 
-def _own_lines() -> list:
+def _own_lines(about_me: bool = True) -> list:
     """The sentences that are the person's to repeat in every note: their opener, the line
-    about them, their ask, the work-authorization lines, and every ask the composer may
-    use. A batch sharing these was written the way they set it."""
-    lines = [OPENER, ABOUT_ME, ASK, work_auth_line("peer"), work_auth_line("senior")]
+    about them (unless `about_me` is False: VARY_ABOUT_ME), their ask, the
+    work-authorization lines, and every ask the composer may use. A batch sharing these was
+    written the way they set it."""
+    lines = [OPENER, ABOUT_ME if about_me else "", ASK, work_auth_line("peer"),
+             work_auth_line("senior")]
     lines += [v for intent in ("ask", "pointer", "opener") for rt in READER_TYPES
               for v in options(intent, rt, {"ask": ASK, "opener": OPENER}.get(intent, ""))]
     return [advice._norm(x) for x in lines if str(x or "").strip()]
@@ -2183,7 +2130,10 @@ def paragraph_role(paragraph: str) -> str:
 
 
 def _same_words(a: str, b: str) -> bool:
-    wa, wb = (set(re.findall(r"[a-z0-9']+", advice._norm(x))) for x in (a, b))
+    """Do two sentences share four words in five (the words of both, accents folded)? The
+    one test of two lines being the same: reading.alike() reads it too."""
+    wa, wb = (set(re.findall(r"[a-z0-9]+", company_key.fold(tone._plain(x)).lower()))
+              for x in (a, b))
     return bool(wa) and bool(wb) and len(wa & wb) / len(wa | wb) >= 0.8
 
 
@@ -2305,26 +2255,38 @@ def main(argv=None) -> int:
 # follow-up it can read as an ultimatum, and "Hope you're well. Any update on
 # the timing?" is a normal thing to send. The finding that banned it (the same
 # opener on most messages of a batch) was about FIRST messages to strangers, so
-# the ban stays for every cold kind and lifts for a reply. Without this,
-# validate() refused the sentence the skill tells a reply to use, and writers
-# dressed it up as "hope the week has been a good one" to get past the check.
+# the ban stays for the cold kinds (a connection note and an InMail, where only
+# the person's own OWN_VOICE lifts it, and the outreach "message") and lifts for
+# a reply, a referral ask, a nudge, an email (to someone who asked for it) and a
+# warm intro. Without this, validate() refused the sentence the skill tells a
+# follow-up to use ("Hi Wren, hope you're well. Any word back from the hiring
+# manager?" as a nudge, 2026-10-20), and writers dressed it up as "hope the week
+# has been a good one" to get past the check.
 _THREAD_WARMTH = re.compile(r"\s*hope\b", re.I)
+_WARM_KINDS = ("reply", "referral_ask", "nudge", "email", "intro", "intro_connection")
+
+# What tone.check() already reports, under its own names: a banned phrase
+# (voice_check's "cliche" is the same list), the dashes, and a phrase the person
+# said never to use. Reported again here they came back twice (2026-10-20).
+_TONE_REPORTS = frozenset({"cliche", "em-dash", "person-dislikes"})
 
 
 def _voice_findings(text: str, kind: str | None = None) -> list:
-    """voice_check's HARD findings, or nothing if it cannot be imported.
+    """voice_check's HARD findings that tone.check() does not already report
+    (_TONE_REPORTS), or nothing if it cannot be imported.
 
     Soft findings are dropped deliberately, the same way `_voice()` drops them
     (voice_check.hard says why). A first note may carry the person's own
-    opener and close, and a live thread a light "hope".
+    opener and close, and a follow-up a light "hope" (_WARM_KINDS).
     """
     try:
         import voice_check
     except ImportError:
         return []
-    allow = {"connection": _OWN_VOICE, "inmail": _OWN_VOICE,
-             "reply": _THREAD_WARMTH, "referral_ask": _THREAD_WARMTH}.get(kind)
-    return voice_check.hard(text, allow=allow)
+    allow = {"connection": _OWN_VOICE, "inmail": _OWN_VOICE}.get(kind)
+    if kind in _WARM_KINDS:
+        allow = _THREAD_WARMTH
+    return [f for f in voice_check.hard(text, allow=allow) if f["rule"] not in _TONE_REPORTS]
 
 
 if __name__ == "__main__":

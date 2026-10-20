@@ -2847,9 +2847,9 @@ def _sentences(note: str) -> list:
 
 
 def _same(a: str, b: str) -> bool:
-    wa = set(re.findall(r"[a-z0-9']+", fold(a).lower()))
-    wb = set(re.findall(r"[a-z0-9']+", fold(b).lower()))
-    return bool(wa) and bool(wb) and len(wa & wb) / len(wa | wb) >= 0.8
+    """Two sentences that share four words in five: compose's one test of it."""
+    import compose
+    return compose._same_words(a, b)
 
 
 def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
@@ -2871,7 +2871,11 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # a batch is meant to vary between.
     bank = [v for intent in ("ask", "pointer", "opener")
             for rt in compose.READER_TYPES for v in compose.options(intent, rt)]
-    own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x] + bank
+    # Everything that is the person's to repeat, their work-authorization lines among them:
+    # four notes to decision-makers were found sharing it (2026-10-20). compose._own_lines()
+    # is the one list, and the lines a caller passed are theirs too.
+    own = [x for x in (ask, opener) + (() if vary else (about_me,)) if x] + bank \
+        + compose._own_lines(about_me=not vary)
     per = {cid: _sentences(t) for cid, t in notes.items()}
     limit = max(ALIKE_MIN, int(len(notes) * ALIKE_SHARE))
     out, seen = [], []

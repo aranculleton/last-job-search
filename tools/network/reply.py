@@ -54,6 +54,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
 import person  # noqa: E402
 import schema  # noqa: E402
 import state  # noqa: E402
+import tone  # noqa: E402
 
 # The candidate's places and status: profile/networking.py. Each place word is
 # lower case and regex-escaped; one the profile does not set matches nothing.
@@ -496,10 +497,13 @@ DISCOURAGING = _rx(
      r"\b(layoffs|redundancies)\b[^.!?\n]{0,30}"),
 )
 
+# Their chase: the check-in phrases a draft of ours is refused for (tone.CHECK_IN), and
+# the ones only a chase of theirs uses. These come first, so a cue reads as it always did.
 CHASING = _rx(
-    (0.9, "they are chasing us",
-     r"\b(did you (get|see|have a chance)|following up on my|just (checking|bumping|nudging)|"
-     r"any (thoughts|update)|circling back)\b"),
+    (0.9, "they are chasing us", re.compile(
+        r"\b(?:did you (?:get|see|have a chance)|following up on my|"
+        r"just (?:checking|bumping|nudging)|any (?:thoughts|update))\b|" + tone.CHECK_IN.pattern,
+        re.I)),
     (0.88, "a call was missed",
      r"\b(missed (each other|you|our call|the call)|weren'?t able to connect|"
      r"couldn'?t find you|didn'?t manage to connect|no.?show|you weren'?t (on|there))\b"),
