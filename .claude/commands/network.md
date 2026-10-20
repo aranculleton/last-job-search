@@ -21,8 +21,8 @@ this chat can use, cheapest and safest first:
    search cannot prove someone has no profile, and nothing is fetched.
 4. **A read in their own browser**, where this chat has one: first the pages that hold many
    people at once (the sent-invitations list, a people search narrowed to the employer), then
-   the profiles of the best few only, the people being written to that day: as many as the
-   requests that can still go today and three spare, never above `reading.READS_PER_RUN`,
+   the profiles of the people being written to: as many as the requests left this week and
+   three spare, never above `reading.READS_PER_RUN`,
    each read as its card when the card decides it, paced (step 5).
 5. **A paste or screenshots from them**, for the best `reading.HAND_TOP` (3) at most, and only
    where there is no browser. It is never how the list is made, and never asked for everyone.

@@ -231,8 +231,8 @@ caught at once. So between finding and writing there is a read, and
   built from the employer's company number (`--company-id`) and confirmed by the first page
   of results before it is kept, and the People tab's `?keywords=` address is not used, because LinkedIn drops
   it on load. **A profile read**, their own page, only then, and only for the few the person
-  will write to that day: as many as the requests that can still go today and three spare,
-  never above `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
+  will write to: as many as the requests left this week and three spare, never above
+  `READS_PER_RUN` (80), of whom at most ten may be people nothing has placed yet.
   Read its card first (top card and About, nothing scrolled), which decides most, and deep only
   where it cannot. Everyone else is drafted from what the cheaper reads showed, marked as
   waiting on a read. No change to the funnel may add a page load, shorten the pacing or add a
@@ -280,9 +280,10 @@ caught at once. So between finding and writing there is a read, and
   nothing clicked, and a stop for the day at any check or warning, or at a sign-in page soon
   after a page or a sign-in (`reading.py gate` and `stop`; a sign-out stop alone can be lifted
   once on their word, `reading.py resume`). The first sign-in is theirs to do, in
-  the pane, and is a wait rather than a stop (`reading.py signin`). The caps are
-  `PROFILE_READS_PER_HOUR` (8 an hour) and `PROFILE_READS_PER_DAY` (15), never more in
-  a day than the requests that can still go that day plus three, and at most
+  the pane, and is a wait rather than a stop (`reading.py signin`). The caps are 3.2.5's,
+  restored on 2026-10-20: `PROFILE_READS_PER_HOUR` (30 an hour) and `PROFILE_READS_PER_DAY`
+  (80), every kind of page together, never more in a day than the requests left this week
+  plus three (the pauses hold an hour to about 17), and at most
   `connections_per_day` (25) requests go in a day, inside the week's 50. That lowers
   the risk to their account; it does not remove it, because the terms forbid automated
   access at any pace. Never call this route safe.

@@ -1308,7 +1308,7 @@ REGISTRY = REGISTRY + _method_upgrades()
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
     # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
-    # the careful preset, which is the pace of the release before the dial, value for value.
+    # the careful preset: the pauses of the release before the dial, and 3.2.5's caps.
     "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "
                                "\"warn\" or \"refuse\" bring back the old rule for a person "
                                "who wants it",

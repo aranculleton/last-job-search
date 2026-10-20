@@ -40,8 +40,44 @@ make sense to somebody whose repo just received it.
   the number, and "only 2 of 10" says it is someone else's and refuses it.
 - **Search for your own function.** `search-url --function` searches your own function
   titles (`TITLE_SETS` "function" in profile/networking.py), each quoted and joined with OR.
+- **A "targets" area for what you learn it.** A rule about which employers to pick (`learned.py
+  record --area targets`) has its own area, read by `/rank`; it used to go under "messages".
 
 ### Changed
+
+- **Profile reads are back to 3.2.5's caps: 30 an hour and 80 a day.** 3.3.0 cut them to 8
+  and 15, and with a reading list of at most 5 and a slow first day, a person read about five
+  people a day while they could send 25 requests. Now:
+  - 30 page loads an hour and 80 a day, of every kind together, at every pace setting;
+  - a day reads for the week's requests left (and three spare), not only today's, so one
+    sitting can prepare the week, as 3.2.5 did;
+  - the slow start (5 an hour, rising each clean day) comes only after LinkedIn has shown a
+    signal, never on a first day;
+  - reaching a daily cap says the rest are read tomorrow, no longer "or a paste".
+  The pauses between pages are unchanged, so in practice an hour reads about 17. No pace is
+  safe: LinkedIn's terms forbid automated access at any pace, and more pages raise the risk
+  of a restriction on the account. A number you set in profile/networking.py is kept; a
+  profile that set `PROFILE_READ_RISK` to normal or fast gets the new caps with its own
+  pauses. No profile upgrade: these are defaults.
+- **A cap you lift is lifted everywhere.** A `PROFILE_READS_PER_HOUR` you set above the
+  loads cap now raises it too, and the slow start after a signal no longer holds you below
+  your own hourly number unless you set `PROFILE_READ_RAMP` yourself. Any wait for an hourly
+  cap names the setting that holds it and where to change it. Before, 1000 an hour written
+  to lift every cap was held at 10 for 44 minutes, and the wait said why in no words you
+  could act on.
+- **A beginner is told what to do in plain words.** When a cloud chat cannot reach job
+  sites, it now says so plainly and gives one recommended fix in numbered steps: Network
+  access set to Full, which reaches the running chat within about a minute
+  (`python3 tools/env_check.py --say`; a round prints the same). Before, it was "blocked from
+  this environment", or "add the host under the cloud environment's Allowed domains".
+  START_HERE's cloud step and its "On your own computer" section are rewritten as numbered
+  steps with one recommendation each: install GitHub Desktop and sign in, clone your copy,
+  open it in the desktop app's Code tab with Local. Each was checked against Anthropic's and
+  GitHub's pages on 2026-10-20.
+- **The place check is said once in a chat**, and again only when what it says changes, or
+  weekly while your computer still lacks a tool the work needs. A person who already has a
+  chat on their computer is never asked to move. Told weekly, "two chats work best, ask me
+  how to move" came back for no reason.
 
 - **A sign-in page the morning after is a session that expired, not friction.** On the first
   page of the day, or 4 or more hours after the last page or sign-in
@@ -89,6 +125,10 @@ make sense to somebody whose repo just received it.
 - **Two rules that apply to the same file or section are not a contradiction.** `CONTRADICTS`
   for two rules on one setting (`networking.py OPENER`) stays; two rules on
   `07-interview-prep.md` or `profile/CLAUDE.md` are two rules.
+- **A contradiction says which entry each command retires.** "Theirs is this one: retire 50;
+  the earlier one: retire 51" read as though 50 were the new rule. It now says "If the new rule
+  stands: retire 50 (retires the earlier entry 50, <date>)" and the reverse.
+- **The docs sync no longer writes one block over another** when a block is empty.
 
 ## [3.8.0] - 2026-10-20
 
