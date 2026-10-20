@@ -24,13 +24,16 @@ file and which no sync touches:
   person's now: an upgrade or a redone /setup section never changes them
   (`locked()`), only an explicit new instruction from the person does.
 - `never_say` phrases are enforced in code: tools/network/tone.py and
-  tools/voice_check.py flag them in anything drafted, as `person_dislikes`.
+  tools/voice_check.py flag them in anything drafted, as `person_dislikes`, and every
+  composer in tools/network/compose.py refuses a message carrying one.
+- `length` is how long they asked a kind of message to run, as a number
+  (`--length inmail=170`): compose.inmail_words() reads it ahead of networking.py.
 
     python3 tools/learned.py brief [area]        # the active rules, for a drafting step
     python3 tools/learned.py list [area]         # every entry, numbered
     python3 tools/learned.py record --area voice --said "..." --rule "..." \\
         [--applied-to "profile/networking.py OPENER"]... [--never-say "..."]... \\
-        [--overrides <check>]... [--replaces <n>]...
+        [--overrides <check>]... [--replaces <n>]... [--length inmail[:<reader>]=<words>]...
     python3 tools/learned.py skip --said "..." --why "..."   # a reaction that sets no rule
     python3 tools/learned.py pending             # reactions this chat has not recorded
     python3 tools/learned.py retire <n>          # they changed their mind
@@ -77,8 +80,10 @@ import person  # noqa: E402
 FILE = "learned.json"
 # Where a reaction belongs. "other" catches the rest; an area is a filter for the
 # brief, never a reason to drop what was said.
-AREAS = ("voice", "messages", "questions", "people", "jobs", "documents", "search",
-         "interview", "other")
+AREAS = ("voice", "messages", "questions", "people", "targets", "jobs", "documents",
+         "search", "interview", "other")
+# "targets" is which employers to pick and pursue; a rule about them went under "messages"
+# for want of it (2026-10-20).
 
 
 def _path() -> str | None:
@@ -145,13 +150,16 @@ def entries(area: str | None = None) -> list[dict]:
 
 
 def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
-           today: str | None = None, overrides=(), replaces=(), answers: bool = True) -> dict:
+           today: str | None = None, overrides=(), replaces=(), answers: bool = True,
+           length=()) -> dict:
     """Keep one reaction, in the person's own words (`said`, kept as said). Returns the
     entry written, with `conflicts`: the earlier active rules it contradicts, for the
     person to choose between. `replaces` retires earlier entries by number, once they
     have chosen this one; `overrides` names the checks this rule outranks. `answers` is
     False for a record nobody reacted with (a profile rule adopted by an upgrade), which
-    clears no reaction waiting in the chat."""
+    clears no reaction waiting in the chat. `length` is how long they asked a kind of
+    message to run, as "<kind>[:<reader>]=<words>" ("inmail=170", "inmail:peer=160"): the
+    length checks read it (`length()`), never the words of the rule."""
     if area not in AREAS:
         raise SystemExit(f"learned: area {area!r}; one of {', '.join(AREAS)}")
     if not str(said or "").strip() or not str(rule or "").strip():
@@ -164,6 +172,9 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
     over = [str(c).strip() for c in overrides if str(c).strip()]
     if over:
         entry["overrides"] = over
+    lengths = parse_lengths(length)
+    if lengths:
+        entry["length"] = lengths
     rows = load()
     for n in replaces:
         if not 1 <= int(n) <= len(rows):
@@ -279,6 +290,48 @@ def overrides() -> set[str]:
     return {str(c) for r in entries() for c in r.get("overrides") or ()}
 
 
+# ------------------------------------------------------------------ how long they want it
+
+# "Slightly longer, more substance" was recorded as a rule, and the InMail length warning
+# went on firing at 134 to 150 words, because nothing reads the words of a rule (2026-10-20).
+# A length is recorded as a number, for a kind of message and, if they said, a reader.
+LENGTH_READERS = ("any", "peer", "decision_maker", "recruiter")
+_LENGTH = re.compile(r"^\s*([a-z_]+)(?::([a-z_]+))?\s*=\s*(\d{2,4})\s*$")
+
+
+def parse_lengths(specs) -> dict:
+    """{kind: {reader: words}} from "<kind>[:<reader>]=<words>" specs; SystemExit on one
+    that is not that shape, so a typo is said rather than dropped."""
+    if isinstance(specs, str):
+        specs = [specs]
+    out: dict = {}
+    for spec in specs or ():
+        m = _LENGTH.match(str(spec).lower())
+        if not m or (m.group(2) or "any") not in LENGTH_READERS:
+            raise SystemExit(f"learned: --length {spec!r}; write <kind>[:<reader>]=<words>, "
+                             f"for example inmail=170 or inmail:peer=160 (readers: "
+                             f"{', '.join(LENGTH_READERS)})")
+        out.setdefault(m.group(1), {})[m.group(2) or "any"] = int(m.group(3))
+    return out
+
+
+def length(kind: str, reader: str = "any") -> int | None:
+    """The words the person asked a `kind` of message to run to for this reader: the latest
+    active entry that says, for this reader or for any. None when they never said."""
+    got = None
+    for r in entries():
+        per = r.get("length")
+        per = per.get(kind) if isinstance(per, dict) else None
+        if not isinstance(per, dict):
+            continue
+        n = per.get(reader, per.get("any"))
+        try:
+            got = int(n) if n else got
+        except (TypeError, ValueError):
+            continue
+    return got
+
+
 # ------------------------------------------------------------------ edits before sending
 
 
@@ -342,7 +395,11 @@ def never_say() -> list[tuple[str, re.Pattern]]:
     out = []
     for r in entries():
         for phrase in r.get("never_say") or ():
-            words = [re.escape(w) for w in str(phrase).split()]
+            # An apostrophe either way: a phrase typed on a phone arrives as "I’m", and the
+            # message checks straighten every draft to "I'm" first, so the curly one never
+            # matched anything (2026-10-20).
+            words = [re.escape(w).replace("’", "'").replace("'", "['’]")
+                     for w in str(phrase).split()]
             if words:
                 # Edges that work for a phrase that opens or closes on punctuation: \b
                 # needs a word character there, so "(remote)" or "[sic]" never matched.
@@ -916,6 +973,9 @@ def main(argv=None) -> int:
                    help="a check this rule outranks, by its name (compose.py prints it)")
     r.add_argument("--replaces", action="append", default=[], type=int,
                    help="an earlier entry this one replaces, by number, once they chose")
+    r.add_argument("--length", action="append", default=[],
+                   help="how long they asked a kind of message to run, in words: "
+                        "<kind>[:<reader>]=<words>, e.g. inmail=170")
     k = sub.add_parser("skip")
     k.add_argument("--said", required=True)
     k.add_argument("--why", required=True)
@@ -952,8 +1012,11 @@ def main(argv=None) -> int:
                   f"{row.get('rule')}  (said: \"{row.get('said')}\")")
     elif a.cmd == "record":
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
-                   replaces=a.replaces)
+                   replaces=a.replaces, length=a.length)
         print(f"learned: {e['area']}: {e['rule']}")
+        for kind, per in (e.get("length") or {}).items():
+            print("  length: " + ", ".join(f"{kind} to {'any reader' if who == 'any' else who}"
+                                           f" runs to about {n} words" for who, n in per.items()))
         print(f"Say to the person, in one line: From now on, {e['rule']} (you said: "
               f"\"{e['said'][:160]}\").")
         if e.get("overrides"):
@@ -962,11 +1025,19 @@ def main(argv=None) -> int:
             where = f"entry {n}" if n else "a rule in profile/CLAUDE.md"
             print(f"  CONTRADICTS {where} ({old.get('date')}: {old.get('rule')}): {why}.")
         if e["conflicts"]:
-            nums = [str(n) for n, _o, _w in e["conflicts"] if n]
-            print("Ask the person once which stands, with both dates. Theirs is this one: "
-                  + (f"python3 tools/learned.py retire {' '.join(nums)}" if nums else
-                     "change the line in profile/CLAUDE.md")
-                  + f"; the earlier one: python3 tools/learned.py retire {len(load())}.")
+            # Each command names the entry it retires and when that rule was made: "Theirs is
+            # this one: retire 50" was read as "this one is 50", the earlier rule (2026-10-20).
+            new = len(load())
+            olds = [(n, o) for n, o, _w in e["conflicts"] if n]
+            earlier = ", ".join(f"{n} ({o.get('date')})" for n, o in olds)
+            print(f"Ask the person once which stands, with both dates. The new rule is entry "
+                  f"{new} ({e.get('date')}).")
+            print("  If the new rule stands: "
+                  + (f"python3 tools/learned.py retire {' '.join(str(n) for n, _o in olds)} "
+                     f"(retires the earlier entry {earlier})" if olds else
+                     "change the line in profile/CLAUDE.md"))
+            print(f"  If the earlier rule stands: python3 tools/learned.py retire {new} "
+                  f"(retires the new entry {new})")
     elif a.cmd == "skip":
         skip(a.said, a.why)
         print(f"learned: not a rule ({a.why}); {len(pending())} reaction(s) still unrecorded")

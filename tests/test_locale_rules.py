@@ -4,7 +4,9 @@ The dash, spelling and document-noun rules were written four times (check_claims
 tone, voice_check, audit_letters) and the copies disagreed; the hard-finding filter
 was written four times (three in compose, one in outreach); the banned phrases were
 two lists. Each test below pins one rule, one disagreement and how it was settled,
-or one filter's exemptions as they were before there was one filter.
+or one filter's exemptions as they were before there was one filter. The voice filter's
+moved on 2026-10-20: a light "hope" is lifted in every follow-up, and what tone.check()
+reports is not reported again, and the outreach check is validate() for a "message".
 """
 from __future__ import annotations
 
@@ -253,13 +255,21 @@ def _old_lift(found, pattern):
     return [f for f in found if not (f["rule"] == "house-style" and pattern.match(f["match"]))]
 
 
-def _old_voice_findings(text, kind):
+# What tone.check() reports under its own names (a banned phrase, a dash, a phrase the
+# person said never to use), and what that name is there.
+TONE_NAME = {"cliche": "banned_phrase", "em-dash": "em_dash", "person-dislikes": "person_dislikes"}
+
+
+def _voice_findings_now(text, kind):
+    """What validate()'s voice filter returns, as of 2026-10-20: a light "hope" lifted in
+    every follow-up (a nudge, an email and a warm intro as well as a reply and a referral
+    ask), and nothing tone.check() already reports, so no finding comes back twice."""
     hard = _old_hard(text)
     if kind in ("connection", "inmail"):
         hard = _old_lift(hard, compose._OWN_VOICE)
-    if kind in ("reply", "referral_ask"):
+    if kind in ("reply", "referral_ask", "nudge", "email", "intro", "intro_connection"):
         hard = _old_lift(hard, compose._THREAD_WARMTH)
-    return hard
+    return [f for f in hard if f["rule"] not in TONE_NAME]
 
 
 def _raised(fn, *args):
@@ -291,15 +301,25 @@ def test_the_composers_refuse_what_they_refused(text):
 
 
 @pytest.mark.parametrize("text", SAMPLES)
-@pytest.mark.parametrize("kind", ["connection", "inmail", "reply", "referral_ask", "email", None])
+@pytest.mark.parametrize("kind", ["connection", "inmail", "reply", "referral_ask", "email",
+                                  "nudge", "intro", "message", None])
 def test_validate_lifts_what_it_lifted(text, kind):
-    assert compose._voice_findings(text, kind) == _old_voice_findings(text, kind)
+    assert compose._voice_findings(text, kind) == _voice_findings_now(text, kind)
+    # And nothing voice_check finds is lost: tone reports the rest under its own name.
+    vk = kind or "connection"
+    got = compose.validate(text, vk, _all=True)
+    found = {v.rule for v in got} | {compose._check_of(v) for v in got}
+    for f in _old_lift(_old_hard(text), compose._OWN_VOICE if vk in ("connection", "inmail")
+                       else compose._THREAD_WARMTH if vk in ("reply", "referral_ask", "nudge",
+                                                             "email", "intro")
+                       else re.compile(r"(?!x)x")):
+        assert TONE_NAME.get(f["rule"], f["rule"]) in found, (f, found)
 
 
 def test_the_exemptions_are_the_ones_each_filter_had():
     first = "Hi Tamsin, hope you're well. Would love to hear how it is going."
     assert compose._voice_findings(first, "connection") == []
-    assert compose._voice_findings(first, "email")                 # not lifted outside a first note
+    assert compose._voice_findings(first, "email")         # "would love to" is lifted in a first note only
     warm = "Hope you're well. Any update on the timing?"
     assert compose._voice_findings(warm, "reply") == []
     assert compose._voice_findings(warm, "connection") == []          # OWN_VOICE has it too
@@ -308,8 +328,12 @@ def test_the_exemptions_are_the_ones_each_filter_had():
 
 
 @pytest.mark.parametrize("text", SAMPLES)
-def test_the_outreach_note_check_is_unchanged(text):
-    def old_check_note(note):
+def test_the_outreach_note_check_is_validate_for_a_message(text):
+    # It ran tone.check and voice_check by hand, a subset of validate() (2026-10-20). It is
+    # validate(kind="message") now, beside its own three checks, and it loses nothing the
+    # old check caught: every tone finding, and every voice_check finding by its own name
+    # or by the name tone reports it under.
+    def own_checks(note):
         problems = []
         n = len(note.split())
         if n >= outreach.MAX_NOTE_WORDS:
@@ -318,9 +342,14 @@ def test_the_outreach_note_check_is_unchanged(text):
             problems.append("names none of the candidate's employers, so it carries no credential")
         if len(outreach.APPLYING.findall(note)) > 1:
             problems.append("says it has applied more than once")
-        problems += [f"{v.rule}: {v.text}" for v in
-                     tone.check(note.replace("[name]", "Tamsin"), recipient_seniority="senior",
-                                name="Sam")]
-        problems += [f"{f['rule']}: {f['match']}" for f in _old_hard(note)]
         return problems
-    assert outreach.check_note(text) == old_check_note(text)
+    gate = [f"{v.rule}: {v.text}" for v in compose.validate(
+        text.replace("[name]", "Sam"), "message", name="Sam", seniority="senior",
+        reader="decision_maker")]
+    got = outreach.check_note(text)
+    assert got == own_checks(text) + gate
+    rules_ = ({p.split(":", 1)[0] for p in got}
+              | {p.split(":", 2)[1].strip() for p in got if p.startswith("reads_as_generated:")})
+    assert {v.rule for v in tone.check(text, recipient_seniority="senior", name="Sam")} <= rules_
+    for f in _old_hard(text):
+        assert TONE_NAME.get(f["rule"], f["rule"]) in rules_, (f, rules_)

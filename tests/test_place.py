@@ -55,10 +55,12 @@ def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
     for where in ("desktop-cloud", "unknown"):
         said = _say(where, "browser", [])
         assert said.startswith(place.FINDING_WORKS)            # what works here, first
-        assert "Continue this in a chat on your computer. At the time of writing: open the " \
-               "Claude desktop app" in said and "the folder my-job-search" in said
-        assert "github.com/example-owner/my-job-search, choose Code, then Open with GitHub " \
-               "Desktop" in said
+        # Numbered steps, one action a line, each part dated: one long sentence of
+        # destinations lost a person who had only used the cloud (2026-10-20).
+        assert "First, put your copy on your computer.\nAt the time of writing (checked" in said
+        assert "\n1. Install GitHub Desktop from github.com/apps/desktop" in said
+        assert "Then start a chat on it.\nAt the time of writing (checked" in said
+        assert "\n2. Open its Code tab, at the top." in said
         # The set-up that works, said plainly; no paste offered to a person at a computer.
         assert place.TWO_CHATS in said and place.PASTE_TOP not in said
     # Not knowing the chat's tools, it asks the chat to look before it says anything.
@@ -141,8 +143,8 @@ def test_nothing_missing_says_nothing():
 def test_the_next_step_after_setups_question_moves_them_only_when_true():
     for where in ("web", "desktop-cloud", "phone"):
         step = place.next_step("computer", where, *REPO)
-        assert step.startswith(place.TWO_CHATS + " Continue this in a chat on your computer. "
-                               "At the time of writing")
+        assert step.startswith(place.TWO_CHATS + " Two parts, once. First, put your copy on "
+                               "your computer.\nAt the time of writing (checked")
         assert 'say "set me up"' in step
         _clean(step)
     for answer, where in (("computer", "local"), ("phone", "web"), ("phone", "phone"),
@@ -154,38 +156,78 @@ def test_the_next_step_after_setups_question_moves_them_only_when_true():
     assert "local" not in place.TRADE_OFF.lower() and "cloud" not in place.TRADE_OFF.lower()
 
 
-def test_said_once_then_weekly_while_it_still_applies(tmp_path, monkeypatch):
-    # Said only once, a person who missed it, or who later wanted the right chat, never
-    # heard it again. It comes back after RETELL_DAYS in the same chat, never sooner.
+def test_said_once_in_a_chat_and_again_only_when_it_changes(tmp_path, monkeypatch):
+    # Told weekly, a person who had already chosen heard "two chats work best, ask me how
+    # to move" again and again for no reason (2026-10-20). A choice is offered once.
     monkeypatch.setattr(place, "_told_path", lambda: str(tmp_path / "told.json"))
     monkeypatch.setattr(place, "setting", lambda: "browser")
     monkeypatch.setattr(place, "repo", lambda: REPO)
+    monkeypatch.setattr(place, "has_local", lambda: False)
     env = {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "remote_desktop",
            "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE1"}
     day = datetime.date(2026, 10, 19)
     first = place.report([], once=True, env=env, today=day)
     assert first.startswith("Place check (Claude: tell the person this at the end of your reply")
-    assert "comes back weekly while it still applies, never more" in first
+    assert "said once in a chat, and again only when it changes" in first
     assert "never hold back work that does not need it" in first
     assert place.report([], once=True, env=env, today=day) == ""
-    later = day + datetime.timedelta(days=place.RETELL_DAYS - 1)
-    assert place.report([], once=True, env=env, today=later) == ""
-    week = day + datetime.timedelta(days=place.RETELL_DAYS)
-    assert place.report([], once=True, env=env, today=week).startswith("Place check")
-    assert place.report([], once=True, env=env, today=week) == ""
-    # A record from before dates were kept is said again once, then dated.
+    for days in (place.RETELL_DAYS, 30, 90):
+        assert place.report([], once=True, env=env,
+                            today=day + datetime.timedelta(days=days)) == ""
+    # A record from before dates were kept counts as told.
     import json
     (tmp_path / "told.json").write_text(json.dumps(
         {"said": {"cse_EXAMPLE1": place._digest(place.check(
             "desktop-cloud", "browser", [], False, (), *REPO))}}))
-    assert place.report([], once=True, env=env, today=week).startswith("Place check")
-    assert place.report([], once=True, env=env, today=week) == ""
+    assert place.report([], once=True, env=env, today=day) == ""
     # A chat that was told an older wording (one open before an update) hears the new one,
     # once, and then nothing again.
     monkeypatch.setattr(place, "SHORT_CLOUD", "Finding people works in this chat, still.")
     assert "still." in place.report([], once=True, env=env)
     assert place.report([], once=True, env=env) == ""
     assert place.report([], once=True, env={**env, "CLAUDE_CODE_REMOTE_SESSION_ID": "cse_EXAMPLE2"})
+
+
+def test_a_computer_missing_a_tool_hears_it_again_weekly_until_it_is_there(tmp_path, monkeypatch):
+    import env_check
+    monkeypatch.setattr(place, "_told_path", lambda: str(tmp_path / "told.json"))
+    monkeypatch.setattr(place, "setting", lambda: "paste")
+    monkeypatch.setattr(place, "repo", lambda: REPO)
+    monkeypatch.setattr(place, "note_local", lambda today=None: False)
+    monkeypatch.setattr(env_check, "local_fixes",
+                        lambda: [("LaTeX, to make the PDFs", "brew install --cask mactex-no-gui",
+                                  "password")])
+    env = {"CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "local-EXAMPLE"}
+    day = datetime.date(2026, 10, 19)
+    assert "mactex" in place.report([], once=True, env=env, today=day)
+    assert place.report([], once=True, env=env, today=day + datetime.timedelta(days=3)) == ""
+    later = day + datetime.timedelta(days=place.RETELL_DAYS)
+    assert "mactex" in place.report([], once=True, env=env, today=later)
+
+
+def test_a_person_with_a_chat_on_their_computer_is_never_asked_to_move():
+    for works in ("computer", "both"):
+        for where in ("desktop-cloud", "web", "unknown"):
+            assert place.check(where, "paste", [], False, (), *REPO, works=works,
+                               has_local=True) == []
+            said = place.check(where, "browser", [], False, (), *REPO, works=works,
+                               has_local=True)
+            assert said == [place.SHORT_HAS_LOCAL]
+            assert "move" not in said[0] and "Ask me how" not in said[0]
+
+
+def test_a_chat_on_their_computer_is_recorded_once_and_keeps_their_answer(tmp_path, monkeypatch):
+    import person
+    d = tmp_path / "profile"
+    d.mkdir()
+    (d / "person.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv(person.ENV, str(d))
+    place.record("both", datetime.date(2026, 10, 1))
+    assert place.note_local(datetime.date(2026, 10, 20)) and place.has_local()
+    assert not place.note_local(datetime.date(2026, 10, 21))
+    assert place.works_on() == "both"
+    place.record("computer", datetime.date(2026, 10, 22))
+    assert place.has_local() and place.works_on() == "computer"
 
 
 def test_the_answer_is_recorded_only_in_a_profile_that_exists(tmp_path, monkeypatch):
@@ -251,7 +293,7 @@ def test_what_every_chat_says_unasked_is_two_or_three_short_sentences_and_no_lin
     for answer, where in (("computer", "local"), ("both", "web"), ("computer", "web")):
         assert place.TWO_CHATS in place.next_step(answer, where, *REPO)
     # The steps are all still there for the person who asks.
-    assert "At the time of writing:" in _say("desktop-cloud", "browser", [])
+    assert "At the time of writing (checked" in _say("desktop-cloud", "browser", [])
 
 
 def test_an_existing_person_at_a_computer_hears_about_two_chats_without_browser_reads():
@@ -264,7 +306,7 @@ def test_an_existing_person_at_a_computer_hears_about_two_chats_without_browser_
             _clean(short[0])
             said = "\n".join(place.check(where, "paste", [], False, (), *REPO, detail=True,
                                          works=works))
-            assert said.startswith(place.TWO_CHATS) and "At the time of writing:" in said
+            assert said.startswith(place.TWO_CHATS) and "At the time of writing (checked" in said
         assert place.check("local", "paste", [], False, (), *REPO, works=works) == []
     assert place.check("web", "paste", [], False, (), *REPO, works="phone") == []
     assert place.check("web", "paste", [], False, (), *REPO) == []      # never asked yet

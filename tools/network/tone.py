@@ -244,6 +244,14 @@ _THANKS = re.compile(
 # to delete one of them was the check being wrong rather than the draft.
 THANKS_WINDOW = 120
 
+# A sign-off is manners too, not a second thanks: an email the composer wrote ("Thanks for
+# the chat on Tuesday. ... Thanks,\nMorgan") was refused as stacked by its own sign-off
+# once the composers ran validate() (2026-10-20). Only the last line or two, and only a
+# line that is the thanks alone.
+_SIGN_OFF_THANKS = re.compile(
+    r"\n[ \t]*(?:many\s+)?(?:thanks|thank you)(?:\s+again)?[ \t]*,?[ \t]*(?:\n[^\n]{0,60})?\s*\Z",
+    re.I)
+
 # "I saw your post about X" names the act of having seen it instead of the
 # substance of it, which is what marks a message as one of a batch. Referencing
 # what they said is the point; referencing that they said it is the tell.
@@ -251,6 +259,19 @@ _SAW_POST = re.compile(
     r"\b(?:saw|noticed|came across|read|spotted|stumbled (?:up)?on)\b[^.!?\n]{0,30}\b"
     r"(?:your|the)\s+(?:recent\s+)?(?:post|update|comment|article|piece|thread)\b"
     r"|\b(?:saw|noticed|read)\s+(?:that\s+)?you\s+(?:posted|shared|wrote)\b", re.I)
+
+# A check-in gives them nothing to answer, which is why the first message went
+# unanswered. compose.nudge() refuses an empty reason; a hand-written draft reached
+# compose.validate() with "just checking in to see if you had a chance to look at my
+# note" and came back clean. The one list of these phrases: compose.validate() refuses
+# them in a draft, and reply.py reads them in a message of theirs as a chase.
+CHECK_IN = re.compile(
+    r"\b(?:just\s+)?checking\s+in\b|\bjust\s+check\s+in\b|\bcircl(?:e|ing)\s+back\b"
+    r"|\bbump(?:ing)?\s+(?:this|my|it)\b|\btop\s+of\s+(?:your|the)\s+inbox\b"
+    r"|\b(?:did|have)\s+you\s+(?:get|had|have)\s+(?:a\s+)?chance\s+to\b"
+    r"|\bhad\s+a\s+chance\s+to\s+(?:look|read|see|review)\b|\bjust\s+following\s+up\b"
+    r"|\bfollowing\s+up\s+on\s+my\s+(?:last|previous|earlier)\s+(?:message|note|email)\b",
+    re.I)
 
 # The brief's named example of what not to send a Senior Director. The
 # approved wording lives in compose.WORK_AUTH in both registers, and neither is
@@ -497,9 +518,8 @@ def reaches_them(text, their=()) -> bool:
     return False
 
 
-# The original name, kept so nothing breaks while it is still referenced.
-# Same function; the caller decides whether to hand it a hook or a whole note,
-# and everything in this repo now hands it the whole note.
+# The original name. Nothing in the app calls it; it stays as one line so a
+# person's own tests that import it keep working.
 hook_reaches_them = reaches_them
 
 
@@ -589,6 +609,7 @@ def _opens_with_laugh(text) -> list:
 
 
 def _stacked_thanks(text) -> list:
+    text = _SIGN_OFF_THANKS.sub("", text)
     spans = [(m.start(), m.end(), m.group(0)) for m in _THANKS.finditer(text)]
     # Deliberately offset by one: this walks adjacent pairs, so the
     # sequences differ in length by design and strict would be wrong.
@@ -822,8 +843,9 @@ MIN_CONTENT_WORDS = 6
 MIN_CONTENT_WORD_LEN = 5   # the brief's ">4 chars"
 
 
-def _stem(word) -> str:
-    """Plural and possessive off, nothing else.
+def _stem(word, longer_than=MIN_CONTENT_WORD_LEN) -> str:
+    """Plural and possessive off, nothing else; a plural "s" only on a word longer than
+    `longer_than` letters (advice.repeated() takes it off from five).
 
     "pipelines" handed back as "pipeline" is still their word. Anything more
     aggressive starts merging words that are genuinely different and the measure
@@ -833,7 +855,7 @@ def _stem(word) -> str:
     w = word.lower().rstrip("'")
     if w.endswith("'s"):
         w = w[:-2]
-    if len(w) > MIN_CONTENT_WORD_LEN and w.endswith("s") and not w.endswith("ss"):
+    if len(w) > longer_than and w.endswith("s") and not w.endswith("ss"):
         w = w[:-1]
     return w
 

@@ -51,7 +51,7 @@ Every session in a person's repo starts with the same five steps, before anythin
    fetches the app and merges what is new (the newest release; the maintainer's own copy takes
    master), never sends anything back, and ends with the day's model check: what this model
    suits and what wants another, which goes first in the reply when the person's request is
-   one of the latter. Then the place check (`tools/place.py`), once and then weekly while it applies: when this chat
+   one of the latter. Then the place check (`tools/place.py`), once a chat (weekly only while a computer lacks a tool): when this chat
    cannot do what the person set up (profiles read in their browser, from a chat with no
    browser of theirs; tools missing on their computer), it prints what to tell them, which
    goes at the end of the reply in its own words: two or three short sentences, and the
@@ -262,9 +262,12 @@ third-party data) or `gmail_sync/state.json`.
   vendored in `texmf/`. `File fontawesome5.sty not found` means `TEXMFHOME` was not set;
   `fit_to_page.py` sets it, and a compile by hand needs `export TEXMFHOME="$PWD/texmf"` first.
 - **A pyo3 panic from `tools/verify_pdf.py`** is a broken `cffi`: `pip3 install --upgrade cffi`.
-- **A job board the session cannot reach** may be blocked by its egress policy: check
+- **A job board the session cannot reach** may be blocked by the chat's cloud settings: check
   `curl -sS "$HTTPS_PROXY/__agentproxy/status"` for `connect_rejected`. That is a policy
-  denial, not a bug: do not route around it. `/apply <pasted posting text>` needs no network.
+  denial, not a bug: do not route around it. Tell the person what `python3 tools/env_check.py
+  --say` prints, word for word (a round prints the same under "Tell the person"): one
+  recommended fix in numbered steps, which reaches the running chat within about a minute.
+  Meanwhile the web search fallback, and `/apply <pasted posting text>`, need no job board.
 
 ## Automation: what runs without anyone asking
 
@@ -516,9 +519,10 @@ Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
   writing is true: how they were found (`how_found=`), a parallel in their own path, a mutual
   connection the person confirmed, or the common ground, and a note never says the sender
   read or saw something of theirs unless the sender did (`looked=True`). Before showing a
-  draft, `compose.advise()` too: its warnings (an exit line, stacked hedges, a claim written
-  as fact, a credential with no reason) are rewritten, not shown. See "Composition" in the
-  networking skill.
+  draft, `compose.advise()` too: the draft is rewritten on its warnings (an exit line,
+  stacked hedges, a claim written as fact, a credential with no reason) first, and a
+  warning the rewrite leaves standing is shown with the draft for the person to decide,
+  never in place of the rewrite. See "Composition" in the networking skill.
 - Connection notes are 200 characters on a free LinkedIn plan and 300 on Premium
   (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard. `compose.py` raises, never truncates.
 - A warm intro leads with the referrer's name in the first sentence.
@@ -556,6 +560,31 @@ it. The file path is the record, written underneath, and never the answer on its
 "I've put it in documents/..." is not done. The same goes for anything updated: show
 the new version, not where it went.
 
+## Talking to the person: plain words, one recommendation, short
+
+Most people using this have never used a terminal, GitHub or a cloud setting, and a message
+they cannot act on is one they did not get. Everything said to them:
+
+- **Plain English.** No word they would have to look up: not environment, repository,
+  branch, worktree, proxy, domain, allowlist, CLI or config. Where a screen itself uses such
+  a word, quote its button and say in a few words what it is for (the settings of the cloud
+  computer this chat runs on, say).
+- **One recommendation.** Where there is a choice, say which you recommend and why, in a
+  sentence. The other options only if they ask.
+- **Clear steps.** One action a line, numbered; for another company's screens, the steps
+  `python3 tools/claude_surfaces.py steps <id>` prints.
+- **Short.** A few lines. Reasons, detail and alternatives come when they ask, never before.
+
+The tools' own messages are written this way (`tests/test_a_beginner_is_told_in_plain_words.py`
+keeps them so): pass them on as they are, never reworded into jargon.
+
+**A draft they ask for is not a claim.** When the person asks for an example, an anecdote,
+metrics, a project or a way they might have used a tool, for interview prep or a call, write
+a plausible one marked as a draft for them to confirm or change (`/interview` rule 2). Never
+refuse and never question whether it happened. "Never claim anything not in the profile" is
+about what an employer or a contact sees: a draft reaches the profile, or anything they see,
+only once the person confirms it.
+
 ## Learning the person: it grows with them
 
 The app's defaults (the voice of a first note, the questions an interview pack asks,
@@ -588,7 +617,7 @@ sending records itself when the send is logged with its words. Then, in the same
    itself when the part of the rules it rests on changes (one blocker row, one gate setting);
    when you change a screening rule, run `exclude.py lapsed` in the same turn and `restamp`
    the groups that do not rest on what changed.
-3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted. Where their rule and a check disagree, ask once which wins and add `--overrides <the check's rule name>` when theirs does. When it lists `CONTRADICTS`, ask which stands, with both dates, and retire the other.
+3. Record it: `python3 tools/learned.py record --area <voice|messages|questions|people|targets|jobs|documents|search|interview|other> --said "<their words>" --rule "<what is different from now on>" --applied-to "<file SETTING>"`. Add `--never-say "<phrase>"` for wording they never want; `tone.py` and `voice_check.py` then flag it in everything drafted. Where their rule and a check disagree, ask once which wins and add `--overrides <the check's rule name>` when theirs does. When it lists `CONTRADICTS`, ask which stands, with both dates, and retire the other.
 4. Say in one line what will be different from now on.
 
 **Read before drafting.** Every step that writes something the person will read or

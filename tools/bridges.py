@@ -66,10 +66,12 @@ MAP = person.module("skills").BRIDGES
 _COMPILED = [(re.compile(e["pattern"], re.I), e) for e in MAP]
 # What the fit score already knows is not held (search.py FIT_MISSING) is a gap here
 # too, wherever the map says nothing about it, so a document is never drafted to
-# claim a skill the score is docking the posting for.
-_MISSING = [(rx, {"asked": why, "verdict": GAP, "note": ""})
-            for rx, _pts, why in (getattr(person.module("search"), "FIT_MISSING", None) or ())
-            if why]
+# claim a skill the score is docking the posting for. The gap is named by what the
+# posting wrote ("PySpark"), and the entry's reason ("big-data engineering is not
+# held") is its note: named by the reason, the pack asked "What is your experience
+# with big-data engineering is not held?".
+_MISSING = [(rx, why) for rx, _pts, why in
+            (getattr(person.module("search"), "FIT_MISSING", None) or ())]
 
 
 # Tools a field treats as interchangeable. A posting asking for one, from somebody
@@ -229,12 +231,17 @@ def assess(text):
         seen.add(a.asked)
         out.append(a)
         claimed.update(p for p in parts if a.asked.lower() in p.lower())
-    for rx, e in _MISSING:
+    for rx, why in _MISSING:
         hits = [p for p in parts if rx.search(p)]
         # Only where the map is silent: a sentence it already judged keeps its verdict.
-        if hits and e["asked"] not in seen and not set(hits) & claimed:
-            seen.add(e["asked"])
-            out.append(Assessment(e["asked"], GAP, (), "", ""))
+        if not hits or set(hits) & claimed:
+            continue
+        for p in hits:
+            for m in rx.finditer(p):
+                name = re.sub(r"\s+", " ", m.group(0)).strip()
+                if name and name.casefold() not in {x.casefold() for x in seen}:
+                    seen.add(name)
+                    out.append(Assessment(name, GAP, (), "", " ".join(str(why or "").split())))
     order = {HELD: 0, BRIDGE: 1, GAP: 2}
     return sorted(out, key=lambda a: order[a.verdict])
 
@@ -244,14 +251,6 @@ def strength_of(asked):
         if e["asked"] == asked:
             return e.get("strength", "near")
     return "near"
-
-
-def bridge_for(text):
-    """The single best line to lead with, or "" if there is nothing honest."""
-    for a in assess(text):
-        if a.line:
-            return a.line
-    return ""
 
 
 def gaps(text):

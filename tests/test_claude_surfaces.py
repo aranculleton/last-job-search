@@ -161,3 +161,22 @@ def test_the_watch_runs_in_the_app_only_and_reports_without_changing_anything():
     assert "claude_surfaces.py watch --strict" in wf and "timeout-minutes:" in wf
     assert re.search(r"permissions:\s*\n\s*contents: read\s*\n\s*issues: write", wf)
     assert "git push" not in wf and "git commit" not in wf
+
+
+def test_an_empty_block_is_filled_and_never_runs_into_the_next(tmp_path):
+    doc = ("<!-- claude-surface: local-chat -->\n<!-- /claude-surface -->\n\nkept\n\n"
+           "<!-- claude-surface: clone-copy -->\nold words\n<!-- /claude-surface -->\n")
+    (tmp_path / "START_HERE.md").write_text(doc, encoding="utf-8")
+    C.sync_docs(str(tmp_path))
+    got = (tmp_path / "START_HERE.md").read_text(encoding="utf-8")
+    assert "\nkept\n" in got and got.count("<!-- /claude-surface -->") == 2
+    assert C.block("local-chat") in got and C.block("clone-copy") in got
+
+
+def test_a_beginner_gets_numbered_steps_in_the_docs_and_in_the_chat():
+    for eid in ("cloud-internet", "clone-copy", "local-chat"):
+        lines = C.render(eid).split("\n")
+        assert lines[0].endswith("):") and "checked " in lines[0]
+        assert [ln.split(".")[0] for ln in lines[1:]] == [str(i) for i in range(1, len(lines))]
+    said = "\n".join(C.steps("cloud-internet"))
+    assert "Network access to Full" in said and "within about a minute" in said

@@ -18,13 +18,11 @@ LINKEDIN_PLAN = "premium"
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
 # where they copy the page when they open it to send the request.
 PROFILE_READS = "paste"
-# How many profiles a browser read opens: at most this many in an hour and in a
-# day, with varied pauses between them, and never more in a day than the requests
-# Morgan can still send that day. It is Morgan's own LinkedIn account reading, and
-# LinkedIn's terms forbid automated access at any pace: these lower the risk of a
-# restriction and do not remove it, and raising them raises it.
-PROFILE_READS_PER_HOUR = 8
-PROFILE_READS_PER_DAY = 15
+# How fast a browser read goes is the app's (tools/network/pace.py: 30 profiles an hour
+# and 80 a day at most, varied pauses, never more in a day than the requests Morgan can
+# send this week) unless set here, for example PROFILE_READS_PER_DAY = 15. It is
+# Morgan's own LinkedIn account reading, and LinkedIn's terms forbid automated access at
+# any pace: lower numbers lower the risk of a restriction and do not remove it.
 
 # Research papers as a discovery source (tools/network/openalex.py): for a field
 # where the people worth meeting publish. Morgan's does not.
@@ -61,6 +59,16 @@ ASK = "Would you have 15 minutes for a few questions sometime"
 # Each is shown here at the app's default; a person's /setup writes theirs.
 # Opening a sentence on "I'm" or "I'd": "allow", "warn" or "refuse".
 CONTRACTIONS = "allow"
+# How the person sounds in a message (tools/network/advice.py voice()), read by the
+# composers and by compose.advise(). "contractions": True writes "I'm", "I'd", "it's" where
+# speech has them, and advise() flags the stiff full form ("I am", "I would"). "shorthand"
+# is the person's own short names, {full form: what they say}: an employer people know by a
+# short name, "macro" for macroeconomics. The composers write the shorthand and advise()
+# flags the full form. Never a deliberate typo. Empty, as here, nothing changes; Morgan's
+# could be:
+#   VOICE = {"contractions": True,
+#            "shorthand": {"Saltmarsh Analytics": "Saltmarsh", "macroeconomics": "macro"}}
+VOICE = {"contractions": False, "shorthand": {}}
 # Work authorization in a first message, by who reads it; a message can still override it.
 ELIGIBILITY = {"recruiter": True, "decision_maker": True, "peer": False}
 # Saying the role wanted in a first message. Asking for the job stays a recruiter's alone.

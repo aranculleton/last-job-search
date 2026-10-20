@@ -53,11 +53,13 @@ def test_a_chat_with_no_browser_still_gets_the_whole_list_and_is_asked_for_nothi
                                          ([], "hand")])
 def test_a_chat_with_a_browser_reads_the_best_few_and_one_without_offers_a_paste(tools, route, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    monkeypatch.setattr(reading, "sends_left_week", lambda today=None: 12)
     got = sources.ladder(tools)
     assert got["read"] == route
     reads = route in ("browser", "enable")
-    # Deep reads are for the few written to that day; one-page reads screen the rest.
-    assert got["read_cap"] == (reading.READS_PER_RUN if reads else 0) and reading.READS_PER_RUN == 5
+    # Deep reads are for the people written to this week, and a spare for those a read rules
+    # out; one-page reads screen the rest.
+    assert got["read_cap"] == ((12 + reading.SKIP_SPARE) if reads else 0)
     assert (got["say"] == "") == reads
 
 
@@ -174,7 +176,12 @@ def test_a_browser_read_is_for_the_short_list_only(tmp_path, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     monkeypatch.setattr(reading, "browser_gate", lambda *a, **k: "")
     import state
-    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
+    # In the contact book: a short list refuses an id that names nobody (it used to take any).
+    rosalind = {"contact_id": "kestrel_rosalind", "name": "Rosalind Achterberg",
+                "company": "Kestrel Mutual", "location": "Manchester", "channel": "connection",
+                "status": "not_contacted"}
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [rosalind])
+    monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     page = tmp_path / "page.txt"
     page.write_text("Rosalind Achterberg\nHead of Pricing\nManchester\nContact info\n· 2nd\n"
                     "Connect\nMessage\nMore\nAbout\nPricing work.\n", encoding="utf-8")

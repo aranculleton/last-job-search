@@ -588,6 +588,12 @@ def main():
     down = _portals_down(a.out)
     for name in down:
         print(f"portal health: {name} DOWN ({_down_detail(a.out, name)})")
+    blocked = str(_health_file(a.out).get("say") or "")
+    if blocked:
+        # The cloud chat's own settings block the sites: what fixes it is the person's,
+        # in plain words, never "fix the portal" (env_check.blocked_say).
+        print("Tell the person, in these words, once:")
+        print("\n".join("  " + ln for ln in blocked.splitlines()))
     widen = not met and a.expand and a.round < MAX_ROUNDS
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
@@ -650,8 +656,10 @@ def main():
     # sentence below it about a thin local market would be a true-sounding lie.
     if down:
         print(f"  *** {', '.join(down)} failed the pre-flight probe (portal health, above). ***")
-        print("  This round is NOT evidence about the market. Fix the portal and "
-              "re-run before widening or concluding anything from the count.")
+        print("  This round is NOT evidence about the market. "
+              + ("This chat's cloud settings block the sites: the person's fix is above. "
+                 "Re-run" if blocked else "Fix the portal and re-run")
+              + " before widening or concluding anything from the count.")
     if partial:
         print(f"  *** {partial}. ***")
     print(f"  tried: {a.pages} pages per query, {a.jobage}-day freshness, "

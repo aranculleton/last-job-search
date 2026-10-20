@@ -40,8 +40,103 @@ make sense to somebody whose repo just received it.
   the number, and "only 2 of 10" says it is someone else's and refuses it.
 - **Search for your own function.** `search-url --function` searches your own function
   titles (`TITLE_SETS` "function" in profile/networking.py), each quoted and joined with OR.
+- **Interview prep drafts what you ask for.** Ask for an example, an anecdote, metrics, a
+  project or a way you might have used a tool, and it writes a plausible one under its question
+  with a "Draft: yours to confirm or change" line, never a refusal and never a question about
+  whether it happened. `interview_pack.py check` lists every answer still marked until you make
+  it true and delete the line. A draft never reaches your profile, a resume, a letter, a form or
+  a message until you confirm it. Before, it refused, citing "never write a memory the person
+  does not have".
+- **One line before a round says what you can read and what holds you.** `reading.py
+  shortlist` ends on it, and `reading.py budget` prints it alone: "Reads today: up to N
+  profile(s) and M list page(s). What binds: ...", with the exact line in profile/networking.py
+  that changes it. Before, you learned which setting held you only from a wait mid-run.
+- **The time where they are, at every hand-over.** `reading.py draft`, `queue` and a new
+  `reading.py send-time <ids>` print the current time in the recipient's city (from their
+  location when it maps to one time zone for certain, else your own `TIMEZONE` or `HOME_CITY`).
+  Nothing is held back. In one round, five InMails went out between six and seven in the morning there.
+- **Many company numbers kept at once**: `reading.py company-ids "Employer A=1234" "Employer
+  B=5678"`, each unconfirmed until a first page of results confirms it. A `search-url` with no
+  stored filter now says plainly that a keyword search returns people who do not work there,
+  and how to get the number.
+- **Your InMail balance, as LinkedIn shows it.** An InMail answered within 90 days gives its
+  credit back (LinkedIn's help, read through a web search), and `state.py inmail-credits <n>`
+  keeps the balance you see until the month turns. It said "0 of 5 left" while LinkedIn showed
+  3.
+- **A voice setting**, `VOICE` in profile/networking.py: your shorthand for employers and
+  whether you speak in contractions, applied to every note and checked by `advise()`. Absent,
+  nothing changes.
+- **A "targets" area for what you learn it.** A rule about which employers to pick (`learned.py
+  record --area targets`) has its own area, read by `/rank`; it used to go under "messages".
 
 ### Changed
+
+- **Profile reads are back to 3.2.5's caps: 30 an hour and 80 a day.** 3.3.0 cut them to 8
+  and 15, and with a reading list of at most 5 and a slow first day, a person read about five
+  people a day while they could send 25 requests. Now:
+  - 30 page loads an hour and 80 a day, of every kind together, at every pace setting;
+  - a day reads for the week's requests left (and three spare), not only today's, so one
+    sitting can prepare the week, as 3.2.5 did;
+  - the slow start (5 an hour, rising each clean day) comes only after LinkedIn has shown a
+    signal, never on a first day;
+  - reaching a daily cap says the rest are read tomorrow, no longer "or a paste".
+  The pauses between pages are unchanged, so in practice an hour reads about 17. No pace is
+  safe: LinkedIn's terms forbid automated access at any pace, and more pages raise the risk
+  of a restriction on the account. A number you set in profile/networking.py is kept; a
+  profile that set `PROFILE_READ_RISK` to normal or fast gets the new caps with its own
+  pauses. No profile upgrade: these are defaults.
+- **Your caps outrank the presets, and a read stops counting once its note is sent.** A cap
+  you set for an hour or a day in profile/networking.py outranks every preset cap of that
+  period (list pages, all page loads, the day's list, the slow start after a signal), and
+  `reading.py limits` says it was raised to yours. The requests LinkedIn allows a day are not
+  a reading cap and are never lifted. Only the profiles read and not yet written to count
+  against the requests still to go: 18 read, ten of them already sent to, stopped a run as
+  "enough for the 13 left". Notes unanswered for more than 45 days no longer count against
+  the two people a company.
+- **A round's messages are each built for their reader.** In one round, two InMails went out
+  with one subject, one paragraph order and one close. `compose.round_alike()` finds a subject,
+  a paragraph order or a close two messages share, and `reading.py batch` (exit 11) and
+  `reading.py draft` run it. `inmail()` takes `order=` (who you are first for a senior reader,
+  why them first for a peer with common ground, or both together) and `team=`, which closes on
+  a real question about their current work; the subject names first a past employer you share
+  with them.
+- **What a note says about them is hedged by default** ("I imagine you moved ..."), unless
+  their own page says it; a fact read off their page, and your closing ask, are no longer
+  warned as inferences. A hedge never makes a note too long to send: it goes as written
+  instead.
+- **New warnings on a draft, each with its fix**: a close that asks nothing about their work
+  (an InMail), guessing what they see from their level ("from a Staff role you've probably
+  seen ..."), a comparison that never says how ("goes a lot further than"), a word said twice
+  close together, a career read back to them as a list ("you did X, then Y, then Z"),
+  congratulations followed by a jobs ask, a dump of figures, and more exit lines ("no worries
+  at all", "totally fine if not"). Praise from a stranger ("really interested me",
+  "fascinating", "impressive", "the kind of work I'd like to do more of") is refused, with
+  the plain link between your path and theirs as the fix. "I came across your profile" is
+  gone from how a note says it found them.
+- **The length you asked for is the length it checks**: `learned.py record --length
+  inmail[:reader]=N` sets it, and `advise()`'s own warnings honour `--overrides`.
+- **A people page ranks research-only titles (research scientist, ML researcher) below your
+  function** when yours is not research, never cuts them, and says once when a first page has
+  nobody in your function in your city.
+- **A cap you lift is lifted everywhere.** A `PROFILE_READS_PER_HOUR` you set above the
+  loads cap now raises it too, and the slow start after a signal no longer holds you below
+  your own hourly number unless you set `PROFILE_READ_RAMP` yourself. Any wait for an hourly
+  cap names the setting that holds it and where to change it. Before, 1000 an hour written
+  to lift every cap was held at 10 for 44 minutes, and the wait said why in no words you
+  could act on.
+- **A beginner is told what to do in plain words.** When a cloud chat cannot reach job
+  sites, it now says so plainly and gives one recommended fix in numbered steps: Network
+  access set to Full, which reaches the running chat within about a minute
+  (`python3 tools/env_check.py --say`; a round prints the same). Before, it was "blocked from
+  this environment", or "add the host under the cloud environment's Allowed domains".
+  START_HERE's cloud step and its "On your own computer" section are rewritten as numbered
+  steps with one recommendation each: install GitHub Desktop and sign in, clone your copy,
+  open it in the desktop app's Code tab with Local. Each was checked against Anthropic's and
+  GitHub's pages on 2026-10-20.
+- **The place check is said once in a chat**, and again only when what it says changes, or
+  weekly while your computer still lacks a tool the work needs. A person who already has a
+  chat on their computer is never asked to move. Told weekly, "two chats work best, ask me
+  how to move" came back for no reason.
 
 - **A sign-in page the morning after is a session that expired, not friction.** On the first
   page of the day, or 4 or more hours after the last page or sign-in
@@ -89,6 +184,55 @@ make sense to somebody whose repo just received it.
 - **Two rules that apply to the same file or section are not a contradiction.** `CONTRADICTS`
   for two rules on one setting (`networking.py OPENER`) stays; two rules on
   `07-interview-prep.md` or `profile/CLAUDE.md` are two rules.
+- **A person read but never put in the contact book is no longer a send lost.** `state.py
+  sent` and `reading.py draft` make their row from what was read, or record against the same
+  person's row under another id (same LinkedIn address, or the same name at that employer),
+  never a second row. In one round, three InMails were unlogged until rows were added by hand.
+- **A short list refuses an id that names nobody** (not in the contact book, nothing read about
+  them), instead of keeping it until `read` failed on it.
+- **A page loaded too soon is kept, never refused.** It was already open and its text taken;
+  refused, it had to be loaded again. The breach of your own pace is logged apart from
+  LinkedIn's signals, the next pause is longer by the one it skipped, and a page loaded after
+  the day was stopped still exits as a stop, so a run reads nothing more today.
+- **A request already pending is seen**: "Pending" on a card or a profile marks it as sent,
+  and keeps the person off InMail and new-note lists. Two people were nearly sent an InMail
+  credit while a request to them was already waiting.
+- **A profile with no Connect button says so**, and `draft` warns before writing a connection
+  note to them.
+- **A never-say phrase is refused in a follow-up, a referral ask, an email and a warm intro
+  too**, not only in a first note, and one typed with a curly apostrophe is caught.
+- **One check for every message, agreeing with what the composers write** (an audit of the
+  networking checks, 2026-10-20). A follow-up, a referral ask, an email and a warm intro now
+  run the same check a first note does, not the never-say phrases alone, and an application's
+  outreach note is checked the same way, as a message with no length limit. Checks that
+  refused or warned on good writing no longer do:
+  - a sentence about you ("a talk inspired me to move into pricing") is not flattery, and one
+    about how you felt ("your talk stuck with me") is not a guess about them;
+  - "who should I speak to about forecasting there?" is not a job ask;
+  - "hope you're well" opens a follow-up as well as a first note;
+  - a question or an "if you think it would help" offer is not a stacked hedge;
+  - the topic word said again in the next sentence is not a repeat, while a word twice in one
+    sentence still is;
+  - an email after a call is not warned as a first message;
+  - a note to someone already connected is checked at its own length, not the 300 of a request.
+  A batch check no longer flags your own work-authorization line as two notes alike; a fix
+  the checks suggest is never one the next check refuses; each style finding carries its own
+  rule name, so `learned.py record --overrides <name>` lifts that one alone; and one input is
+  reported once, not three times. Dead functions are gone.
+- **Interview and call prep agree with each other** (an audit, 2026-10-20). A call prep
+  answers from the interview pack's own answers (your stock answers, why you are looking,
+  your work authorization in your words), reads the team research and the posting the pack
+  reads, and sends a booked screen with no application to `/interview`. A gap is named by the
+  posting's own word ("PySpark", not "big-data engineering is not held"); a skill you said
+  yes to is no longer also listed as never to claim; "Why Northwind Co.?" is a motivation
+  question; your oldest employer is no longer dropped from the career moves; a declined
+  referral is not recorded as a referral; a recruiter is asked about the next stage once. Call
+  preps already written are rebuilt, keeping what you wrote. A draft you asked for is shown and
+  listed to confirm, never held back as unfit.
+- **A contradiction says which entry each command retires.** "Theirs is this one: retire 50;
+  the earlier one: retire 51" read as though 50 were the new rule. It now says "If the new rule
+  stands: retire 50 (retires the earlier entry 50, <date>)" and the reverse.
+- **The docs sync no longer writes one block over another** when a block is empty.
 
 ## [3.8.0] - 2026-10-20
 

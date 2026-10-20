@@ -103,6 +103,9 @@ PROFILE_SOURCE = os.path.relpath(
 CONTACTS_SOURCE = "network_contacts.csv"
 THREADS_SOURCE = "network_threads.csv"
 TRACKER_SOURCE = "job_search_tracker.csv"
+# Where the work-authorization line each reader hears is kept (networking.py WORK_AUTH).
+NETWORKING_SOURCE = "%s WORK_AUTH" % os.path.relpath(
+    person.path("networking.py"), ROOT).replace(os.sep, "/")
 # Where the phrases the person has said never to use are kept (tools/learned.py).
 LEARNED_SOURCE = os.path.relpath(person.path(learned.FILE), ROOT).replace(os.sep, "/")
 
@@ -400,7 +403,7 @@ ROUTE_WORDS = {
 _FIRST_PERSON = re.compile(r"\s*(?:i|i'm|i am|we|we're|we are|my|our|us)\b", re.I)
 
 
-def _who_lines(contact) -> list:
+def _who_lines(contact, application=None) -> list:
     contact = contact or {}
     src = _contact_source(contact)
     out = []
@@ -439,7 +442,7 @@ def _who_lines(contact) -> list:
     referrer = referrer_name(contact)
     if referrer:
         out.append("- Referred by %s. %s (source: %s)"
-                   % (referrer, _referrer_advice(contact), CONTACTS_SOURCE))
+                   % (referrer, _referrer_advice(contact, application), CONTACTS_SOURCE))
     return out + _reading_lines(contact)
 
 
@@ -465,14 +468,42 @@ def is_recruiter(contact) -> bool:
     return bool(_SCREENER.search(_text((contact or {}).get("title"))))
 
 
-def _referrer_advice(contact) -> str:
+# A title or a next step that says this person decides the hire, or interviews for it.
+_HIRING_TITLE = re.compile(r"\b(?:hiring|managers?|heads?|directors?|leads?|chief|vp|vice "
+                           r"presidents?|partners?|principals?)\b", re.I)
+_INTERVIEW_STEP = re.compile(r"\b(?:interview|screen|panel|case|final round|assessment)\b", re.I)
+LIVE_STATUSES = ("interview", "offer")
+
+
+def on_hiring_side(contact, application=None) -> bool:
+    """Is this reader on the hiring side of a process: a recruiter, someone named on the
+    posting, or a hiring manager whose call is a stage of a live process at their employer
+    (its application or process at interview or offer)? To them a referrer is the answer to
+    "how did you hear about us", never the opener, and work authorization is said in the
+    employer-facing words. The referrer who started the process is not: their call is still
+    a networking call, and so is a peer's coffee chat at the same employer."""
+    contact = contact or {}
+    if is_recruiter(contact) or _text(contact.get("route")) == "hiring_team":
+        return True
+    if _text((application or {}).get("status")).lower() not in LIVE_STATUSES:
+        return False
+    # A call booked with them, and they are not the one who put the candidate forward.
+    if _text(contact.get("status")) != "call_booked":
+        return False
+    return bool(_HIRING_TITLE.search(_text(contact.get("title")))
+                or _INTERVIEW_STEP.search(_text(contact.get("next_action"))))
+
+
+def _referrer_advice(contact, application=None) -> str:
     """Whether to lead with the referrer. To a cold peer the referrer is why they will
     listen, so first. A recruiter who received the referral internally already knows who
     routed it: naming them first is redundant, and one person dropped it from a reply for
-    exactly that reason. There it is the answer to "how did you hear about the role"."""
-    if is_recruiter(contact):
-        return ("They routed it internally, so the recruiter knows: say it when asked how "
-                "you heard about the role, not as an opener.")
+    exactly that reason. There it is the answer to "how did you hear about the role", and
+    the same holds for a hiring manager on a live process (`on_hiring_side`)."""
+    if on_hiring_side(contact, application):
+        return ("They routed it internally, so %s knows: say it when asked how you heard "
+                "about the role, not as an opener."
+                % ("the recruiter" if is_recruiter(contact) else "the hiring side"))
     return "Name them in the first minute, not the last."
 
 
@@ -574,7 +605,7 @@ def _thread_lines(contact, threads, today) -> list:
 _TEAM_KEYS = ("team_context", "team", "what_the_team_does", "team_description")
 
 
-def _team_lines(research) -> list:
+def _team_lines(research, contact=None) -> list:
     """What the team does, out of the cache, uncut.
 
     A long cache note prints whole even though this document is meant to be
@@ -583,6 +614,11 @@ def _team_lines(research) -> list:
     a note can end by saying its org mapping is inferred rather than
     confirmed, and a version cut before that sentence turns an inference into a
     fact the user then repeats on the call.
+
+    Their own team, the one their title names, is read the way the interview pack
+    reads it (`interview_pack._team_of` and `_researched`: the cache's `teams`, and
+    `not_found` for a search that found nothing public). Read only from `team_context`,
+    a call prep said "not researched" about a team the pack had a sourced line for.
     """
     research = research or {}
     default = _research_source(research)
@@ -590,6 +626,15 @@ def _team_lines(research) -> list:
     for keyname in _TEAM_KEYS:
         for fact in _facts(research.get(keyname), default):
             out.append("- %s (source: %s)" % (fact.value, fact.source))
+    pack = _pack()
+    team = pack._team_of(_text((contact or {}).get("title")))
+    if team:
+        found, lines = pack._researched(research, team)
+        if found == "found":
+            out += ["- %s: %s" % (team, ln) for ln in lines]
+        elif found == "none":
+            out.append("- %s: nothing public found about it; ask them what it owns (source: "
+                       "%s)" % (team, default or RESEARCH_DIR))
     role_context = _fact(research.get("role_context"), default)
     if role_context is not None:
         out.append(_bullet("The role as posted", role_context))
@@ -953,15 +998,15 @@ def _money(value) -> str:
 
 # ---------------------------------------------------------------- questions
 
-# Titles that mean the person screens rather than hires. Spelled out rather than
-# stemmed because a bare `recruit` word boundary does not match "Recruiter",
-# which is the title that actually appears on these rows.
 # The marks on an answer that is profile wording, not something to say aloud.
 RAW_MARK = "[raw profile wording: rewrite to spoken first person before use]"
 NARRATIVE_POINTER = ("Tell the arc in your own words, not the profile's: see Personal "
                      "Narrative in 01-candidate-profile.md. Never read it out.")
 
-# One definition, read by the interview pack too (tools/interview_pack.py ANGLES).
+# Titles that mean the person screens rather than hires. Spelled out rather than
+# stemmed because a bare `recruit` word boundary does not match "Recruiter",
+# which is the title that actually appears on these rows. One definition, read by
+# the interview pack too (tools/interview_pack.py ANGLES).
 _SCREENER = re.compile(
     r"\b(?:recruiter|recruiting|recruitment|talent|sourcer|staffing|people ops|people partner|"
     r"hr)\b", re.I)
@@ -970,7 +1015,7 @@ _SCREENER = re.compile(
 _SCREEN_FIRST = ("Do you need sponsorship?", "Why are you looking?")
 
 
-def likely_questions(contact, role, profile_facts) -> list:
+def likely_questions(contact, role, profile_facts, research=None, application=None) -> list:
     """What they are likely to ask, with an answer drawn from the profile.
 
     Every answer is profile wording placed against a question, never a generated
@@ -982,12 +1027,36 @@ def likely_questions(contact, role, profile_facts) -> list:
     Gaps are the exception worth knowing about. A gap with a recorded framing
     becomes a question and an answer; a gap without one is left to
     `fit_assessment`, which says plainly that a framing still has to be written.
+
+    The questions are a networking call's; the answers the interview pack also gives
+    come from its own functions (`interview_pack.answer_for`, which reads the person's
+    `hard_answers` and knows a `motive` question), so the two documents never disagree.
+    A stock answer the person wrote in their 07-interview-prep.md is theirs and is placed
+    as it stands, unless it argues against this employer. "Why are you looking?" is their
+    reason: the stock answer, or asked of them first (ASK_MARK), never written for them
+    unasked. Work authorization with no stock answer is said in this reader's register
+    (`work_auth_for`), never as the profile's raw line. The call prep had a builder of its
+    own, and "Why are you looking?" never reached a document.
     """
     contact, facts = contact or {}, profile_facts or {}
+    if not facts:
+        return []
     source = _profile_source(facts)
     out = []
+    pack = _pack()
+    ctx = pack.call_ctx(contact, role, facts, research, application)
+    stock_file = pack._repo_rel(person.path(pack.STORIES_FILE))
 
     def add(question, answer, answer_source=source):
+        said = pack.answer_for({"question": question, "why": "", "source": ""}, ctx)
+        stock = said.get("prepared")
+        if stock:
+            answer = stock["answer"]
+            answer_source = stock["source"] + (", marked CONFIRM there: check it is still "
+                                               "true first" if stock.get("confirm") else "")
+        elif not _text(answer) and said.get("ask"):
+            answer = said["ask"]
+            answer_source = "%s, which holds no answer of yours to it yet" % stock_file
         fact = _fact(answer, answer_source)
         if fact is not None:
             out.append({"question": question, "answer": fact.value, "source": fact.source})
@@ -1000,7 +1069,7 @@ def likely_questions(contact, role, profile_facts) -> list:
         add("Tell me about yourself.", "%s %s" % (RAW_MARK, _text(facts.get("summary"))))
     # The narrative is never pasted: the profile says so, and a near-verbatim copy reached
     # a prep as the answer. The arc is the answer; the words are the person's own, on the day.
-    if _text(facts.get("narrative")):
+    if facts.get("narrative"):
         add(_ROUTE_QUESTION, NARRATIVE_POINTER)
     # Who introduced them, by name: `referred_by` holds a contact_id, and the answer once
     # printed the id itself.
@@ -1019,8 +1088,11 @@ def likely_questions(contact, role, profile_facts) -> list:
         if not gap["framing"]:
             continue
         add("How much %s have you done?" % gap["gap"], gap["framing"], gap["source"])
-    add("Do you need sponsorship?", facts.get("work_authorization"))
-    add("Why are you looking?", facts.get("motivation"))
+    if _text(facts.get("work_authorization")):
+        add("Do you need sponsorship?", work_auth_for(contact, application), NETWORKING_SOURCE)
+    else:
+        add("Do you need sponsorship?", "")
+    add("Why are you looking?", "")
 
     if _SCREENER.search(_text(contact.get("title"))):
         # A screening call opens on eligibility and on why the user is moving,
@@ -1284,8 +1356,8 @@ def fit_assessment(application, profile_facts) -> list:
                        % (gap["gap"], gap["framing"], gap["source"]))
         else:
             out.append("- Gap: %s. No framing recorded. Write one before the call rather "
-                       "than improvising it on the call. (source: %s)"
-                       % (gap["gap"], gap["source"]))
+                       "than improvising it on the call; asked, Claude drafts one, marked for "
+                       "you to confirm. (source: %s)" % (gap["gap"], gap["source"]))
     return out
 
 
@@ -1374,21 +1446,21 @@ def _flag_banned(lines, dislikes) -> list:
     return out
 
 
-def work_auth_for(contact) -> str:
+def work_auth_for(contact, application=None) -> str:
     """The work-authorization line in the register this reader gets. A recruiter or
-    anyone on the hiring side gets the employer-facing wording (WORK_AUTH["employer"] in
-    networking.py, or the senior register where the profile names none): the peer line
-    ("I can already work here") reached a recruiter on a screen."""
+    anyone on the hiring side (`on_hiring_side`) gets the employer-facing wording
+    (WORK_AUTH["employer"] in networking.py, or the senior register where the profile names
+    none): the peer line ("I can already work here") reached a recruiter on a screen."""
     contact = contact or {}
     # A booked call is not a hiring process by itself: most are a peer's coffee chat.
-    if is_recruiter(contact) or _text(contact.get("route")) == "hiring_team" or \
+    if on_hiring_side(contact, application) or \
             _text(contact.get("status")) == "referral_in_progress":
         return compose.WORK_AUTH.get("employer") or compose.WORK_AUTH["senior"]
     senior = tone.is_senior(_text(contact.get("title"))) or tone.is_senior(contact.get("seniority"))
     return compose.WORK_AUTH["senior" if senior else "peer"]
 
 
-def _tone_lines(contact) -> list:
+def _tone_lines(contact, application=None) -> list:
     """How to talk to this person, and how to write the note afterwards."""
     contact = contact or {}
     title = _text(contact.get("title"))
@@ -1400,10 +1472,11 @@ def _tone_lines(contact) -> list:
     else:
         out.append("- Register: peer. Plain and short, the way you would say it out loud.")
     if _text(contact.get("referred_by")) or _text(contact.get("route")).startswith("referral"):
-        if is_recruiter(contact):
-            out.append("- The referral is why this call exists, and the recruiter already "
-                       "knows who made it: the answer to \"how did you hear about us\", "
-                       "never the opener.")
+        if on_hiring_side(contact, application):
+            out.append("- The referral is why this call exists, and %s already knows who "
+                       "made it: the answer to \"how did you hear about us\", never the "
+                       "opener." % ("the recruiter" if is_recruiter(contact)
+                                    else "the hiring side"))
         else:
             out.append("- The referral is why this call exists. Name them early, not as a "
                        "footnote at the end.")
@@ -1415,7 +1488,7 @@ def _tone_lines(contact) -> list:
         # hiring.
         out.append("- There is a recorded hiring signal, under Who they are. Treat the call "
                    "as being about the role, not about whether there is one.")
-    out.append("- If work authorization comes up: \"%s.\"" % work_auth_for(contact))
+    out.append("- If work authorization comes up: \"%s.\"" % work_auth_for(contact, application))
     out.append("- Match their length afterwards. Two lines back to two lines; a paragraph "
                "in reply to one word reads as trying too hard.")
     out.append("- Do not repeat their own points back at them. Answer the shape of what "
@@ -1477,32 +1550,66 @@ def _same_employer(contact, other, what) -> None:
 RESEARCH_BEFORE_DAYS = 2
 
 
-LIVING = "interview_prep.md"         # tools/interview_pack.py LIVING
+def _pack():
+    """tools/interview_pack.py, which imports this module, so it is imported where it is
+    used: the call prep answers and reads team research through the pack's own functions,
+    one set of rules for both documents."""
+    import interview_pack
+    return interview_pack
+
+
+# A booked call with someone on the hiring side and no row in the tracker: a recruiter's
+# screen, or a referral that has reached one, before anyone registered the process.
+_BOOKED = ("call_booked", "referral_in_progress")
+
+
+def _unregistered_lines(contact) -> list:
+    """The redirect for a booked call on the hiring side with no tracker row: it is an
+    interview stage, which /interview prepares once the process is registered. /prep had
+    said nothing, while CLAUDE.md and prep.md send this case to /interview."""
+    contact = contact or {}
+    if _text(contact.get("status")) not in _BOOKED or not (
+            is_recruiter(contact) or _text(contact.get("route")) == "hiring_team"):
+        return []
+    company = _text(contact.get("company"))
+    action = _text(contact.get("next_action"))
+    stage = action if _INTERVIEW_STEP.search(action) and len(action) <= 40 else (
+        "Recruiter screen" if is_recruiter(contact) else "Interview")
+    due = _text(contact.get("next_action_due"))
+    when = " --date %s" % due if state.as_date(due) else " --date YYYY-MM-DD"
+    return ["**This call is a stage of a hiring process at %s with no row in the tracker yet: "
+            "prepare it with /interview %s. Register the process first, once: python3 "
+            "tools/interview_pack.py process \"%s\" --contact %s --role \"%s\" --stage \"%s\"%s. "
+            "This file stays the briefing on the person.**"
+            % (company, company, company, _contact_id(contact),
+               _text(contact.get("role")) or "<the role, as they named it>", stage, when), ""]
 
 
 def _process_lines(contact, application) -> list:
     """Where a live hiring process at this employer keeps its prep, and when this call is
     really one of its stages. A recruiter screen on a live process got a networking prep
     because /interview refused a process with no application; the answers then lived in
-    four places. The process's own document holds them, and this file points there."""
+    four places. The process's own document holds them, and this file points there. With
+    no row at all, a booked call on the hiring side is sent to /interview the same way."""
     if not application:
-        return []
+        return _unregistered_lines(contact)
     import outreach
     status = _text(application.get("status")).lower()
-    if status not in ("interview", "offer"):
+    if status not in LIVE_STATUSES:
         return []
+    living = _pack().LIVING
     folder = outreach.app_folder(_text(application.get("company")), _text(application.get("role")))
-    path = os.path.relpath(os.path.join(folder, LIVING), STATE_ROOT).replace(os.sep, "/")
+    path = os.path.relpath(os.path.join(folder, living), STATE_ROOT).replace(os.sep, "/")
     out = []
-    # A recruiter or the hiring team only: a peer's coffee chat at the same employer, or the
-    # referrer who started the process, is still a networking call.
-    if is_recruiter(contact) or _text(contact.get("route")) == "hiring_team":
+    # The hiring side only: a peer's coffee chat at the same employer, or the referrer who
+    # started the process, is still a networking call.
+    if on_hiring_side(contact, application):
         out.append("**This call is a stage of a live hiring process at %s (%s): prepare it with "
                    "/interview %s, whose document holds the answers. This file is the briefing "
                    "on the person.**" % (_text(application.get("company")),
                                           _text(application.get("role")),
                                           _text(application.get("company"))))
-    if os.path.exists(os.path.join(folder, LIVING)):
+    if os.path.exists(os.path.join(folder, living)):
         out.append("The process's own prep document, one for the whole process: %s" % path)
     return out + ([""] if out else [])
 
@@ -1586,11 +1693,11 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
         lines += ["**%s**" % need, ""]
     lines += _process_lines(contact, application)
 
-    lines += _section(SECTIONS[0], _who_lines(contact),
+    lines += _section(SECTIONS[0], _who_lines(contact, application),
                       "Only a name is recorded. Read the profile before dialling.")
     lines += _section(SECTIONS[1], _thread_lines(contact, threads, today),
                       "Nothing logged in %s." % THREADS_SOURCE)
-    lines += _section(SECTIONS[2], _team_lines(company_research),
+    lines += _section(SECTIONS[2], _team_lines(company_research, contact),
                       "%s. Ask them what the team owns; first-hand beats researched anyway."
                       % NOT_RESEARCHED)
     company = _company_lines(company_research, today)
@@ -1607,13 +1714,15 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
                       "%s." % NOT_RESEARCHED)
 
     asked = []
-    for item in likely_questions(contact, role, profile_facts):
+    for item in likely_questions(contact, role, profile_facts, company_research, application):
         said = (kept or {}).get(_qkey(item["question"]))
         if said:
             item = dict(item, answer=said[0], source=said[1])
         asked.append("- **Q.** %s" % item["question"])
-        answer = "\n".join("    " + ln if ln else "" for ln in
-                           _text(item["answer"]).split("\n")).strip()
+        # Line by line: an answer kept from the person, or a draft under its mark, keeps
+        # its lines, and the mark stays a line of its own.
+        answer = "\n".join("    " + _text(ln) if _text(ln) else "" for ln in
+                           str(item["answer"] or "").split("\n")).strip()
         asked.append("  **A.** %s%s" % (answer, " (source: %s)" % item["source"]
                                          if _text(item["source"]) else ""))
     lines += _section(SECTIONS[5], _flag_banned(asked, banned),
@@ -1623,12 +1732,14 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
     ask = ["- %s (source: %s)" % (q["question"], q["source"])
            for q in questions_for_them(company_research, role)]
     lines += _section(SECTIONS[6], _flag_banned(ask, banned),
-                      "Nothing researched to anchor a question on. Ask what the team owns "
-                      "and what the first six months need.")
+                      "%s: nothing to anchor a question on, and a question anyone could ask "
+                      "without reading is not one this file supplies. Research them first."
+                      % NOT_RESEARCHED)
     lines += _section(SECTIONS[7], _flag_banned(fit_assessment(application, profile_facts), banned),
-                      "Nothing recorded. Do not improvise a fit story on the call.",
+                      "Nothing recorded. Do not improvise a fit story on the call: prepare it "
+                      "before. Asked, Claude drafts one, marked for you to confirm.",
                       extra=roles + letter_fit)
-    lines += _section(SECTIONS[8], _flag_banned(_tone_lines(contact), banned),
+    lines += _section(SECTIONS[8], _flag_banned(_tone_lines(contact, application), banned),
                       "Nothing recorded about this person. Default to plain and short.")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -1757,14 +1868,71 @@ def unsayable(lines) -> list:
     return voice_check.spoken_findings(text)
 
 
+# What in an answer is a note to the person, never words they will say: a line under
+# "Notes:" (and everything after it), a line that opens "Note:", one wholly in italics, or a
+# quote. A note placed after an answer was read as part of it, so bullet notes failed the
+# answer as "written as bullet points", and an italic line above it was taken for its
+# opening (2026-10-20). Read by the interview pack and the call prep alike.
+_NOTES_START = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?notes?(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*$",
+                          re.I)
+_NOTE_LINE = re.compile(r"^\s*(?:(?:\*\*|__)?notes?(?:\*\*|__)?\s*:|>|\((?:note|notes)\b)", re.I)
+_ITALIC_LINE = re.compile(r"^\s*(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)\s*[.:]?\s*$")
+# A draft the person asked for: an example, an anecdote, a metric or a project they could
+# not recall, written for them to confirm or change. Interview prep refused to write one,
+# when drafting it is the job (2026-10-20); a draft is never a fact until they make it one.
+# The mark is a note (never said). Both checks list an answer still carrying it under its
+# own category, DRAFT, the way a reason still to ask is ASK: shown to the person, listed as
+# one to confirm, and never a rejection, because a draft they asked for is what was asked.
+DRAFT_MARK = "Draft: yours to confirm or change. Delete this line once it is true."
+_DRAFT_LINE = re.compile(r"^\s*(?:\*\*|__|\*|_)?draft(?:\*\*|__|\*|_)?\s*:", re.I)
+DRAFT_TODO = ("a draft you have not confirmed yet: make it true (or change it to what "
+              "happened), then delete its Draft line")
+DRAFT = "Draft"
+# A reason only the person can give (why they are looking, why each move), which Claude
+# asks them before anything is written: the interview pack's ASK YOU FIRST line.
+ASK = "Ask"
+ASK_MARK = "ASK YOU FIRST (Claude asks, once):"
+
+
+def spoken_lines(lines) -> list:
+    """The lines of an answer the person will say: every note, and a draft's mark, out."""
+    out, notes = [], False
+    for ln in lines or ():
+        if _NOTES_START.match(ln):
+            notes = True
+        if notes or _NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln) or _DRAFT_LINE.match(ln):
+            continue
+        out.append(ln)
+    return out
+
+
+def drafted(lines) -> bool:
+    """Does an answer still carry the mark of a draft the person has not confirmed?"""
+    return any(_DRAFT_LINE.match(ln) for ln in lines or ())
+
+
 def check_answers(text) -> list:
-    """[(question, why)] for every answer in a prep document not yet fit to say."""
+    """[(question, why)] for every answer in a prep document not yet fit to say, read the
+    way the interview pack reads its own: notes and a draft's mark are never words to say.
+    A draft the person asked for is listed as (DRAFT, question), and a reason still to ask
+    them as (ASK, question): neither is an answer that fails."""
     out = []
     for q, a, _src in answers_in(text):
         if a == NARRATIVE_POINTER:
             continue
-        out += [(q, why) for why in unsayable(a.split("\n"))]
+        lines = a.split("\n")
+        if ASK_MARK in a:
+            out.append((ASK, q))
+            continue
+        out += [(q, why) for why in unsayable(spoken_lines(lines))]
+        if drafted(lines):
+            out.append((DRAFT, q))
     return out
+
+
+def failures(found) -> list:
+    """The findings of a check that hold an answer back: everything but a draft to confirm."""
+    return [(q, why) for q, why in found if q != DRAFT]
 
 
 _GENERATED = re.compile(r"^<!-- generated answers: (\{.*\}) -->$", re.M)
@@ -1775,14 +1943,15 @@ def _digest(answer) -> str:
     return hashlib.sha1(" ".join(_text(answer).split()).encode("utf-8")).hexdigest()[:10]
 
 
-def generated(contact, application=None, profile_facts=None) -> dict:
+def generated(contact, application=None, profile_facts=None, company_research=None) -> dict:
     """{question key: digest} of the answers this file writes for them now: kept beside the
     version stamp, out of the document's body, so a rebuild can tell the person's rewrites
     from its own words."""
     contact = contact or {}
     role = _text((application or {}).get("role")) or _text(contact.get("role"))
     return {_qkey(i["question"]): _digest(i["answer"])
-            for i in likely_questions(contact, role, profile_facts)}
+            for i in likely_questions(contact, role, profile_facts, company_research,
+                                      application)}
 
 
 def said_answers(text) -> dict:
@@ -1876,7 +2045,7 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
         kept = {}
     text = prep_markdown(contact, company_research, application, profile_facts, threads, today,
                          open_roles=open_roles, draft=draft, never_say=never_say, kept=kept)
-    wrote = generated(contact, application, profile_facts)
+    wrote = generated(contact, application, profile_facts, company_research)
     new = (text + "\n" + stamp_line(as_of(contact, threads, company_research, application, today))
            + "\n" + ("<!-- generated answers: %s -->\n" % json.dumps(wrote, sort_keys=True)
                      if wrote else ""))
@@ -1953,10 +2122,18 @@ def _write_one(row, tracker, a, keep_if_same=False) -> str:
     if a.profile_facts:
         facts = json.load(open(a.profile_facts, encoding="utf-8"))
     else:
+        # The posting as the interview pack reads it (profile_facts.posting_in), so both
+        # documents name the same gaps: the tracker's notes are not the posting.
+        posting = ""
+        if application:
+            import outreach
+            posting = profile_facts.posting_in(outreach.app_folder(
+                _text(application.get("company")), _text(application.get("role"))))
         facts = profile_facts.build(
-            role=_text(application.get("role")) or _text(row.get("role")),
-            posting=_text(application.get("notes")))
+            role=_text(application.get("role")) or _text(row.get("role")), posting=posting)
     roles, draft = search_context(row, application, a.root)
+    # A skill they said yes to claiming here is no gap, as the interview pack reads it.
+    facts = profile_facts.without(facts, profile_facts.consented(draft))
     return write_prep(row,
                       company_research=load_research(row.get("company"), a.root),
                       application=application,
@@ -2058,9 +2235,15 @@ def main(argv=None) -> int:
             return 1
         for q, why_ in found:
             print("- %s: %s" % (q, why_))
-        print("%d answer(s) not fit to say yet." % len(found) if found else
-              "Every answer is fit to say aloud.")
-        return 1 if found else 0
+        held = failures(found)
+        drafts = len(found) - len(held)
+        asks = sum(1 for q, _w in held if q == ASK)
+        print("; ".join(x for x in (
+            "%d question(s) to ask you first: your own reasons" % asks if asks else "",
+            "%d answer(s) not fit to say yet" % (len(held) - asks) if len(held) > asks else "",
+            "%d draft(s) for you to confirm (%s)" % (drafts, DRAFT_TODO) if drafts else "")
+            if x) + "." if found else "Every answer is fit to say aloud.")
+        return 1 if held else 0
     if a.dry_run:
         print("would write %s; nothing written" % os.path.relpath(prep_path(row, a.root), a.root))
         return 0

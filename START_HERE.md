@@ -49,38 +49,42 @@ brief".
   the rest of this step.
 - **A phone or the web:** carry on here.
 
-Go to [claude.ai/code](https://claude.ai/code), start a new session, and choose your copy as
-the repository.
+Go to [claude.ai/code](https://claude.ai/code), start a new chat, and choose your copy.
 
-The first time only, change two settings of the cloud environment so it can make PDFs and
-reach job boards:
+**Once, so it can reach job sites (recommended, about a minute).** A cloud chat runs on a
+computer in the cloud that can only reach a few websites until you allow more. Claude calls
+that computer's settings an "environment". Do this from your first chat:
 
-<!-- claude-surface: cloud-environment -->
-Change the cloud environment's settings. At the time of writing: on the new-session screen
-at claude.ai/code, open the environment selector under the message box and edit the
-environment (in a running chat: the caret after its title, then Edit cloud environment); its
-Setup script and Network access are the two settings (official page:
-https://code.claude.com/docs/en/cloud-environments). Checked 2026-10-18.
+<!-- claude-surface: cloud-internet -->
+Let this chat reach job sites. At the time of writing (checked 2026-10-20; official page:
+https://code.claude.com/docs/en/cloud-environments):
+1. At the top of this chat, open the small arrow after its title and choose Edit cloud
+   environment.
+2. Set Network access to Full, then save.
+3. That is all: it reaches this chat within about a minute, with no new chat. Say "done" and
+   I'll search again.
 <!-- /claude-surface -->
 
-- **The setup script:** copy and paste this line exactly. You do not need to understand it:
-  it installs the tools that turn your resume into a PDF, once, and they are kept for next time.
+**Optional, so each chat starts faster.** Without this, Claude installs the tools that turn
+your resume into a PDF at the start of a chat, which takes a few minutes. Copy this line; you
+do not need to understand it:
 
-  ```
-  apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
-  ```
+```
+apt-get update -qq && apt-get install -y --no-install-recommends texlive-luatex texlive-latex-extra texlive-xetex texlive-fonts-recommended poppler-utils && pip3 install --upgrade cffi && pip3 install pytest pypdf pyyaml openpyxl ruff
+```
 
-- **The network setting:** the search has to reach job boards, and every employer's board
-  sits on its own hiring system's address. Choose full internet access, or a custom list
-  that keeps the default package managers and adds, to start with: `linkedin.com`,
-  `www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`, `api.lever.co`,
-  `api.ashbyhq.com`, `*.myworkdayjobs.com`, and `api.openalex.org` if your field publishes
-  research papers. Once Claude has found your employers' boards it tells you any other
-  address they need (`python3 tools/env_check.py --allowlist` lists them all). The details are in
-  [the cloud environment docs](https://code.claude.com/docs/en/cloud-environments#network-access).
+<!-- claude-surface: cloud-setup-script -->
+Make each new chat start with the PDF tools in place. At the time of writing (checked
+2026-10-20; official page: https://code.claude.com/docs/en/cloud-environments):
+1. At the top of this chat, open the small arrow after its title and choose Edit cloud
+   environment.
+2. Paste the line into Setup script, then save.
+3. It applies from your next new chat. In this one, Claude installs the same tools itself.
+<!-- /claude-surface -->
 
-Save, and start a new session so the settings apply. If you skip this, Claude can still
-help, but it will stop and say what is missing the first time it needs it.
+Skip both and Claude still works: it says, in a line, what it needs the first time it needs
+it. (Want to allow only the job sites rather than every website? [SETUP.md](SETUP.md) lists
+them.)
 
 ## 4. Say "set me up"
 
@@ -129,39 +133,43 @@ sets it up ([automation/README.md](automation/README.md)).
 
 ## On your own computer
 
-Everything works the same in a chat on your computer in the Claude desktop app, with your
-copy on your own disk, and the desktop app's own browser is where people's LinkedIn profiles
-are read. The brief runs in the cloud, so it arrives when your computer is off. So keep two
-chats: this one for everything you do, and the brief's, which Claude makes in step 5. Signed in
-with an Anthropic API key instead of a plan, everything works except the brief: scheduled
-tasks and cloud chats need a paid plan.
+**Recommended if you have a computer.** It can read people's LinkedIn profiles for you, and
+no website is blocked. Your brief still runs in the cloud, so it arrives when your computer
+is off. You need a Claude plan (Pro, Max, Team or Enterprise).
 
-1. Steps 1 and 2 above. Step 2 is what lets the brief, in the cloud, read your copy.
-2. Install the Claude desktop app: [claude.ai/download](https://claude.ai/download).
-3. Put your copy on your computer, then start a chat there on it:
+1. Steps 1 and 2 above: your private copy, and letting Claude see it.
+2. Put your copy on your computer:
 
    <!-- claude-surface: clone-copy -->
-   Put your copy on your computer. At the time of writing: on github.com/you/of your copy,
-   choose Code, then Open with GitHub Desktop, and choose where to keep it (official page:
-   https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop).
-   Checked 2026-10-18.
+   Put your copy on your computer. At the time of writing (checked 2026-10-20; official
+   page:
+   https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop):
+   1. Install GitHub Desktop from github.com/apps/desktop and sign in with your GitHub
+      account.
+   2. On your copy's page on github.com, choose Code, then Open with GitHub Desktop.
+   3. Choose where to keep it (your Documents folder is fine), then Clone.
    <!-- /claude-surface -->
+3. Start a chat on it:
 
    <!-- claude-surface: local-chat -->
-   Continue this in a chat on your computer. At the time of writing: open the Claude desktop
-   app, go to its Code tab, choose Local and then the folder of your copy (official page:
-   https://code.claude.com/docs/en/desktop-quickstart). Checked 2026-10-18.
+   Continue this in a chat on your computer. At the time of writing (checked 2026-10-20;
+   official page: https://code.claude.com/docs/en/desktop-quickstart):
+   1. Install the Claude desktop app from claude.ai/download if you do not have it, and sign
+      in.
+   2. Open its Code tab, at the top.
+   3. Under the message box, choose Local, then Open folder beside it, and pick the folder
+      GitHub Desktop made.
+   4. Say "set me up" there ("carry on" if you set up in the cloud before). It checks what
+      your computer needs and installs most of it itself.
    <!-- /claude-surface -->
-4. Say "set me up". Claude checks what your computer has and installs what it can itself.
-   What is left is one list, one command each, marked where it asks for your computer's
-   password or signs you in; paste each into Terminal (PowerShell on Windows), once. If your
+4. Claude then lists anything your computer still needs, one command each, and runs most of
+   them itself. The few marked as asking for your password are yours: paste each into
+   Terminal (PowerShell on Windows), once. One of them signs GitHub's command line in, so your
+   work is saved to your copy on GitHub, where your other chats and your brief see it. If your
    computer has no Python at all, that list cannot run, so here it is: on a Mac,
-   `xcode-select --install` (it asks for your password); on Windows,
-   `winget install Python.Python.3.12`. Until LaTeX is in, Claude can search and write but
-   cannot make or check the PDFs.
+   `xcode-select --install`; on Windows, `winget install Python.Python.3.12`.
 5. Say "set up my brief". Claude checks whether you already have one and never makes a
-   second. It always runs in the cloud, so it arrives when your computer is off. Claude makes
-   it itself where the chat has the tool for it; otherwise it asks you to do this, once:
+   second. It makes it itself where it can; otherwise it asks you to do this, once:
 
    <!-- claude-surface: routines-cloud -->
    Make the brief in the cloud. At the time of writing: type /schedule in a chat on your
@@ -178,24 +186,10 @@ tasks and cloud chats need a paid plan.
    2026-10-18.
    <!-- /claude-surface -->
 
-**How your work reaches GitHub from here.** A chat on your computer has no GitHub tools of
-its own, so Claude uses GitHub's command line, `gh`: step 4's list installs it, and
-`gh auth login` (yours, once) signs it in through your web browser. Claude then works on a
-branch, in a folder of its own beside your copy, made before anything else in that chat
-(`python3 tools/sync_app.py --worktree <name>`), so two chats on one computer never switch
-branches under each other, and lands
-it on master itself: it merges master into the branch first
-(`git fetch origin master && git merge origin/master`, so two chats' changes to your tracker
-or contact book are merged row by row on your computer), runs the checks, then
-`gh pr create --base master --fill` and `gh pr merge <number> --merge`, and checks the pull
-request says merged (`gh pr view <number> --json state`), because `gh` can report an error
-after a merge that worked.
-You do none of it; it is written here so you know what it is doing.
-
-**Already using it in the cloud?** Nothing moves: open your copy locally as in step 3 and
-carry on. Cloud and local chats can be mixed, because your copy on GitHub is what they share,
-and Claude merges each chat's work into it, so the brief sees it. Never archive the chats
-your brief is bound to.
+**Already using it in the cloud?** Nothing moves: do steps 2 and 3 above, and say "carry on".
+Cloud chats and chats on your computer share your copy on GitHub. Never delete the chat your
+brief runs in. What Claude does with git and GitHub on your computer, if you are curious, is
+in [RUNBOOK.md](RUNBOOK.md), step 4.
 
 **On a phone, or in a browser,** there is nothing to install: use claude.ai/code as in step 3.
 Finding people works there. To have profiles read too, paste the one or two that matter most,

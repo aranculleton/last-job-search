@@ -7,8 +7,10 @@ takes a person's name. `/interview` prepares a real interview and takes a compan
 tracked application, or on a process with no application, such as a referral that led to
 a recruiter's call. **A recruiter screen on a live hiring process is an interview stage**,
 referred or not, and goes to `/interview` (whose Step 0 registers the process when there is
-no application). When `prep.py` prints that this call is a stage of a live process, say so
-and run `/interview` instead; this file then stays the briefing on the person, and links to
+no application). When `prep.py` prints that this call is a stage of a live process, or of
+a process with no row in the tracker yet (a recruiter or the hiring team, with the call
+booked), say so and run `/interview` instead, registering the process first with the
+command it prints; this file then stays the briefing on the person, and links to
 the process's own document rather than repeating it. If the request is ambiguous, ask
 which one is meant.
 
@@ -44,15 +46,21 @@ Generates `documents/network/<contact_id>/prep.md` via `prep.write_prep()`.
    no fragments, no "At <Employer>:" openers, keeping the `(source: ...)` after it. The
    tool places profile wording against each question and marks the summary
    `[raw profile wording: ...]`, because profile prose is written, not said. The personal
-   narrative is an arc to tell in their own words and is never pasted. Never invent an
-   experience to answer a question. Then:
+   narrative is an arc to tell in their own words and is never pasted. Unasked, never
+   invent an experience to answer a question; asked for an example, an anecdote or a
+   metric they cannot recall, write a plausible one marked "Draft: yours to confirm or
+   change", as `/interview` rule 2 says. Then:
    ```bash
    python3 tools/network/prep.py "<contact>" --check
    ```
    It exits 1 while any answer is raw profile wording or reads as written (third person, a
-   resume verb opening, a label and a colon). Rewrite until it passes; never present an
-   answer it rejects. Rewritten answers are kept when the document is rebuilt, by you or by
-   the brief's `--stale-only`.
+   resume verb opening, a label and a colon), and while a reason only they can give is still
+   to ask (`Ask`: "Why are you looking?" with no stock answer of theirs). Rewrite until it
+   passes; never present an answer it rejects. A draft they asked for is listed under
+   `Draft`, as one for them to confirm, and never fails it: show it to them as a draft. The
+   answers the interview pack also gives (their stock answers, their reasons, work
+   authorization in this reader's words) come from the pack's own functions. Rewritten
+   answers are kept when the document is rebuilt, by you or by the brief's `--stale-only`.
 
 ## The document
 

@@ -231,8 +231,8 @@ caught at once. So between finding and writing there is a read, and
   built from the employer's company number (`--company-id`) and confirmed by the first page
   of results before it is kept, and the People tab's `?keywords=` address is not used, because LinkedIn drops
   it on load. **A profile read**, their own page, only then, and only for the few the person
-  will write to that day: as many as the requests that can still go today and three spare,
-  never above `READS_PER_RUN` (5), of whom at most two may be people nothing has placed yet.
+  will write to: as many as the requests left this week and three spare, never above
+  `READS_PER_RUN` (80), of whom at most ten may be people nothing has placed yet.
   Read its card first (top card and About, nothing scrolled), which decides most, and deep only
   where it cannot. Everyone else is drafted from what the cheaper reads showed, marked as
   waiting on a read. No change to the funnel may add a page load, shorten the pacing or add a
@@ -280,9 +280,10 @@ caught at once. So between finding and writing there is a read, and
   nothing clicked, and a stop for the day at any check or warning, or at a sign-in page soon
   after a page or a sign-in (`reading.py gate` and `stop`; a sign-out stop alone can be lifted
   once on their word, `reading.py resume`). The first sign-in is theirs to do, in
-  the pane, and is a wait rather than a stop (`reading.py signin`). The caps are
-  `PROFILE_READS_PER_HOUR` (8 an hour) and `PROFILE_READS_PER_DAY` (15), never more in
-  a day than the requests that can still go that day plus three, and at most
+  the pane, and is a wait rather than a stop (`reading.py signin`). The caps are 3.2.5's,
+  restored on 2026-10-20: `PROFILE_READS_PER_HOUR` (30 an hour) and `PROFILE_READS_PER_DAY`
+  (80), every kind of page together, never more in a day than the requests left this week
+  plus three (the pauses hold an hour to about 17), and at most
   `connections_per_day` (25) requests go in a day, inside the week's 50. That lowers
   the risk to their account; it does not remove it, because the terms forbid automated
   access at any pace. Never call this route safe.
@@ -328,9 +329,9 @@ the person's settings in `profile/networking.py`:
 
 | Reader | Work authorization (`ELIGIBILITY`) | The role wanted (`SAY_THE_ROLE`) | The ask | InMail length (`INMAIL_WORDS`) |
 |---|---|---|---|---|
-| recruiter | yes | yes | anything coming up that fits | about 150 words |
-| decision-maker | yes | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 150 words |
-| peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | 100 to 130 words |
+| recruiter | yes | yes | anything coming up that fits | about 170 words |
+| decision-maker | yes | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 170 words |
+| peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | about 130 words |
 
 The decision-maker's row is the message that drew a reply from a senior reader within
 three hours: who the sender is, with the years; one piece of real work with its numbers;
@@ -394,8 +395,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
     rests on nothing read; their name or employer alone does not count);
   - a **parallel in their path** (`parallel=`): `reading.py show` lists them, marked
     INFERRED, so the note hedges it once ("It looks like you moved into <X> from <Y>,
-    which is the move I'm hoping to make"). A generic fit ("useful on a team like yours")
-    is warned as presumptuous; their own path is the reason instead.
+    which is the move I'm hoping to make"). The composers do that themselves
+    (`compose.hedge()`): a common ground or parallel whose subject is the reader and which
+    their page does not state comes out with one hedge from the person's own (TEMPLATES
+    "hedge") or the bank; `hedged=False` leaves it as written. A generic fit ("useful on a
+    team like yours") is warned as presumptuous; their own path is the reason instead.
 
   **Never a pretext.** A note that says the sender read, saw or watched something of theirs
   ("I saw your package on GitHub") raises `UnconfirmedReading` unless `looked=True`, the
@@ -418,8 +422,10 @@ on Premium. That is the shape, and `first_note()` assembles it:
 - **Ask**: the person's `TEMPLATES` for this reader first, then their `ASK`, then the
   phrase bank's asks for this reader (`compose.py phrases`), chosen per contact
   (`variant_key=` the contact id) so a batch varies. Pass `ask=None` when the question
-  carries it. Never an exit ("if not, no worries"): it invites no reply, and a soft exit
-  belongs in a follow-up.
+  carries it. Never an exit ("if not, no worries"): it invites no reply. An easy no
+  belongs only in a later message that asks a favour, as the referral ask's "no problem
+  at all if not" does, and never as words that name the pressure ("no pressure either
+  way", under "Never name the thing you are disclaiming").
 
 **What a first note never does**, enforced by `AsksForTheJob` and by
 `validate(kind="connection")`:
@@ -444,8 +450,10 @@ language (`CONTRACTIONS` brings the old rule back for a person who wants it).
 
 ### Before it is shown: `compose.advise()`
 
-`validate()` is what must never go. `advise()` is what may go but reads worse than it
-should, each warning with its rewrite, and a warned draft is rewritten before it is shown:
+`validate()` is what must never go: a refused draft is rewritten and never shown.
+`advise()` is what may go but reads worse than it should, each warning with its rewrite.
+The draft is rewritten on its warnings before it is shown, and a warning the rewrite leaves
+standing is shown with the draft for the person to decide, never in place of the rewrite:
 
 - the phrases the person rejected: "sits close to", "is the kind of path", "I would value",
   "high on my list" and any praise of the company that fits any company, "the route I would
@@ -455,18 +463,55 @@ should, each warning with its rewrite, and a warned draft is rewritten before it
 - a list of three credentials in a row: name the one that matters to this reader;
 - hedges: one light hedge per inference ("I imagine", "I'm guessing", "probably", "it
   seems like"), never two in a sentence, never a disclaimer ("I can't know from the
-  outside");
+  outside"). A question and an offer on their terms ("if you think it might help, I can
+  send ...") hedge no claim and are never counted;
 - a claim about the reader written as fact. Each claim is STATED (their page says it, so
   say it plainly), INFERRED (from a title, an employer, a path: hedge it once) or a GUESS
-  (about their team or what would be useful to them: lightly, or better not at all);
-- a credential with no reason in its sentence: tie it to them ("which is why your
-  forecasting work interests me"), or cut it. A sentence with a number in it is evidence and
-  carries its own point;
-- an exit in a first message; the employer named late (with the reordering); an InMail
-  longer than its reader needs.
+  (about their team or what would be useful to them: lightly, or better not at all). A
+  fact their reading holds (their employers by name or initials, their title) is STATED,
+  and an asking close ("I'd love to join your team, or just hear more") claims nothing.
+  An inference has them as its subject ("You moved into pricing", "Your team builds the
+  forecasts"); "Your talk stuck with me" says what the sender felt, and is no claim;
+- a guess at what they see from their level or title ("you've probably seen a fair few
+  of the teams from a Staff role"): ask it, or cut it;
+- a credential with no reason in its sentence: tie it to them as a plain link ("the same
+  forecasting work your team does"), or cut it. A sentence with a number in it is evidence
+  and carries its own point;
+- a comparison that never says how ("goes a lot further than", "a step on from", "take my
+  work next"): bigger, more complex, more data, more senior;
+- their career read back to them ("you did X, then Y, then Z"): the one step that links to
+  yours; congratulations followed by a jobs ask in the same note; a metric dump (three
+  figures or more in a note, four in an InMail; "from 22% to 14%" counts once);
+- a content word said twice in one sentence ("consulting" twice in the line about you),
+  or in two sentences side by side ("now" twice running, always). A word the message's own
+  subject names (the reason for writing, the question, their team) may come back in the
+  next sentence: a message about pricing says "pricing". Names, numbers and the person's
+  fixed lines never count;
+- the person's own shorthand or contraction written out in full, where their VOICE in
+  `profile/networking.py` lists it ("I am" for someone who says "I'm", an employer's full
+  name for the short one they use). The composers write their VOICE themselves;
+- an exit in a first message ("no worries at all", "totally fine if not"); "I came across
+  your profile"; the employer named late (with the reordering); an InMail close
+  that asks nothing about their current work or team (`bare_close`); an InMail longer than
+  its reader needs (`compose.inmail_words()`: the length the person asked for with
+  `learned.py record ... --length inmail=<words>`, else `INMAIL_WORDS`).
 
 The person's own words are never warned about, and a check one of their rules outranks
-(`learned.py record --overrides <rule>`) is only mentioned.
+(`learned.py record --overrides <rule>`) is only mentioned, `advise()`'s own included.
+
+Praise to a stranger is a refusal, not a warning: `validate()` refuses "really interested
+me", "fascinating", "impressive", "the kind of work I'd like to do more of" and the like
+(`flattery`) in a sentence that reaches them, and the fix is the plain link between their
+path and the sender's. A sentence about the sender alone ("I've been fascinated by markdown
+pricing") is not praise of them. Every composer, the nudge, referral ask, email and warm
+intro included, refuses what `validate()` refuses for its kind, a phrase the person said
+never to use (`learned.py record --never-say`) among it.
+
+Each refusal carries the name of the check that made it, and voice_check's are its own
+("house-style", "ai-diction", "opener-hope"), so `learned.py record --overrides
+house-style` lifts that one check. A note to a hiring manager about an application already
+in is `validate(kind="message")`, with no length of its own (`outreach.check_note()` runs
+it): saying it was applied for is the point there, and a job ask everywhere else.
 
 **Then read it aloud.** `compose.READ_ALOUD` says how: the most natural spoken version,
 every fact, name and number kept, nothing added, their rules kept. Show it beside the
@@ -504,9 +549,23 @@ ask. Sized to the reader (the table above); the 200 words are a ceiling, not a t
 **subject** is who the sender is by default, the identity line that drew a reply
 (`compose.identity_subject()`: "<title>, ex-<the employers they left>", or `SUBJECT` in
 their networking.py), never "Quick question", "Job enquiry" or anything that asks for the
-job; `inmail_subject()` refuses those. A page that shows only Message to someone not
-connected sets their channel to InMail and says how many credits are left; `state.py sent
---channel inmail --subject "..."` spends one.
+job; `inmail_subject()` refuses those. Where the reason for writing names an employer the
+sender left, the subject names it first (`identity_subject(lead=)`). A page that shows only
+Message to someone not connected sets their channel to InMail and says how many credits are
+left; `state.py sent --channel inmail --subject "..."` spends one. An InMail answered within
+90 days gives its credit back (LinkedIn's own help, read through a web search), and the
+balance LinkedIn shows wins over the count until the month turns: `state.py inmail-credits
+<n>` keeps it. Nobody whose card or page shows a request already Pending gets one: `people`
+and `read` record that request as sent.
+
+**No two InMails in a round built alike.** Two went out with one subject, one paragraph
+order and one close, and the person asked why the structure was identical when it is meant
+to be personal to the company, the role, the level and the person. `inmail(order=)` is one
+of `INMAIL_ORDERS`: who you are first (the senior reader's default), why them first (a peer
+with common ground), or both together; `inmail(team="the pricing team")` closes on a real
+question about their current work. `compose.round_alike(drafts)` finds a subject, a
+paragraph order or a close two messages share, and `reading.py batch` (exit 11) and
+`reading.py draft` run it.
 Credits are scarce; reserve them for tier 1 at top-priority companies, or people
 unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
 Open Profile (their profile shows a Message button), and everything else is a connection
@@ -740,7 +799,11 @@ next session gets wrong.
 nag" asks them to hold the nagging in mind while they read. "No pressure either
 way" introduces pressure as a topic. Every one of them is the same move: the
 writer is uncomfortable about sending the message and hands that discomfort to
-the recipient instead of simply asking.
+the recipient instead of simply asking. The easy no a favour carries ("no problem
+at all if not", closing a referral ask) is not this move: it answers the favour
+asked and says nothing about the message itself, which is why a later message
+may carry it and a first one may not (`advise()` warns an exit only in a first
+note or an InMail).
 
 Cut the disclaimer and the awkwardness goes with it, because it was never in the
 question, only in the apology for asking. The `naming what you disclaim` rule in

@@ -70,7 +70,9 @@ def test_an_employer_that_interviewed_you_lifts_its_next_role(monkeypatch, tmp_p
 
 def test_a_skill_the_score_docks_is_a_gap_for_the_documents_too():
     # The example's FIT_MISSING docks Spark; its bridge map says nothing about it.
-    asked = [g.asked for g in bridges.gaps("You will build pipelines in PySpark every day.")]
-    assert "big-data engineering is not held" in asked
+    # Named by what the posting wrote, with the score's reason as its note: named by the
+    # reason, a pack asked "What is your experience with big-data engineering is not held?".
+    found = [(g.asked, g.note) for g in bridges.gaps("You will build pipelines in PySpark every day.")]
+    assert ("PySpark", "big-data engineering is not held") in found
     # A sentence the map already judged keeps the map's verdict, once.
     assert len(bridges.gaps("Chartered procurement (CIPS) is required.")) == 1

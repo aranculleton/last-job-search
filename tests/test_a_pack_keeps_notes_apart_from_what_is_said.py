@@ -189,3 +189,27 @@ def test_ask_them_asks_about_set_up_only_after_a_fact_about_set_up():
                                                    "is a team of twelve."), "")
     assert work and work[0]["question"].endswith(prep.TEAM_WORK_TAIL)
     assert shape and shape[0]["question"].endswith("Is that still how the team is set up?")
+
+
+# ------------------------------------------------------------ 6. drafts they asked for
+
+def test_a_draft_they_asked_for_is_said_and_listed_until_they_confirm_it(case, capsys):
+    # Interview prep refused to draft an anecdote or a metric the person could not recall
+    # (2026-10-20). A draft is written when asked, marked, and `check` lists it until the
+    # person makes it true and deletes the mark.
+    _process()
+    block = _block(_doc(), ABOUT)
+    path = _rewrite("### %s\n%s" % (ABOUT, block),
+                    "### %s\n%s\nI cut a weekly report from two days to two hours by moving "
+                    "it onto one pipeline.\n" % (ABOUT, P.DRAFT_MARK))
+    body = [P.DRAFT_MARK, "I cut a weekly report from two days to two hours."]
+    assert P.spoken(body) == ["I cut a weekly report from two days to two hours."]
+    assert P.drafted(body) and not P.drafted(body[1:])
+    # Listed under its own category, the way Ask and Research are: shown, to confirm, and
+    # never a failure that holds the document back.
+    assert (P.DRAFT, ABOUT) in P.check(path)
+    assert (P.DRAFT, ABOUT) not in P.failures(P.check(path))
+    P.main(["pack", FIRM, "--today", TODAY, "--write"])          # a rebuild keeps the draft
+    assert P.DRAFT_MARK in _block(_doc(), ABOUT)
+    _rewrite(P.DRAFT_MARK + "\n", "")
+    assert (P.DRAFT, ABOUT) not in P.check(path)

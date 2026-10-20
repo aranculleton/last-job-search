@@ -176,8 +176,9 @@ METHODS: dict[str, dict] = {
             (3, "2026-10-15", False, "asks whether you pay for LinkedIn Premium"),
             (4, "2026-10-19", False, "every STAR story ends on a Use for line naming the questions it answers"),
             (5, "2026-10-19", False, "the interview template's permit answer follows your own disclosure rule, and a stock answer can name the kinds of employer it is not for"),
+            (6, "2026-10-20", False, "the interview guide lets an answer be drafted when the person asks, marked for them to confirm, and points its examples at their own stories"),
         ),
-        "fingerprint": "05446dfa33327399",
+        "fingerprint": "46c6df4ed9596400",
     },
     # ---- what the build makes over time and keeps
     "prep-docs": {
@@ -205,9 +206,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", False, "business days skip your public holidays; a name is matched at its edges whatever it ends on"),
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
             (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
-            (13, "2026-10-20", False, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up"),
+            (13, "2026-10-20", True, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up; an answer drafted on request is marked as a draft; call preps answer from the interview pack's own answers (stock answers, why you are looking, work authorization), read the team research the pack reads, use the same posting, and send a booked screen with no application to /interview, so call preps already written are rebuilt, keeping what the person wrote"),
         ),
-        "fingerprint": "49cb05d9b71dd6d3",
+        "fingerprint": "cbf201e42df99552",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -263,9 +264,9 @@ METHODS: dict[str, dict] = {
             (22, "2026-10-19", False, "the PDF check finds Poppler where a Mac or Windows installs it, even when the shell's PATH lacks it; the voice check hears short spoken answers as spoken and catches a third-person headline; form answers read a profile with no screening.py"),
             (23, "2026-10-19", False, "RUNBOOK: what to do when two chats applied the same profile upgrade"),
             (24, "2026-10-20", False, "the voice check skips HTML comments; texmf's README says nothing links ~/texmf; the grounding auditor passes a pasted note's reader to validate()"),
-            (25, "2026-10-20", False, "an answer that opens on a short framing line is in the first person when it says I by its third sentence"),
+            (25, "2026-10-20", False, "an answer that opens on a short framing line is in the first person when it says I by its third sentence; an application's outreach note is checked by the same gate as every networking message"),
         ),
-        "fingerprint": "78c00e4738ecee9c",
+        "fingerprint": "aa00febb6377e660",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -285,9 +286,9 @@ METHODS: dict[str, dict] = {
             (8, "2026-10-19", True, "a pack treats waiting on someone's reply as leave them be, says booked only when the round has a date, quotes rows whole or cut at a word, carries every section of a hand-written outcome file, keeps its do-not-say list out of the voice check, and prepares a question you were told about as reported, with its source"),
             (9, "2026-10-19", True, "one living document per hiring process, a process with no application included: answers written to be said and checked, what each interviewer is assessing and wants to hear, the format, small talk with a purpose, and what the employer's people have been told"),
             (10, "2026-10-19", True, "the person's own reasons are asked, never drafted; stock answers matched through employer names and Use for:, and checked against the employer; what each person there was told, and which messages have no text; the warm route by stored status; the recruiter assumed for a screen; the format of this round only; which team, and the process at a screen; just arrived honoured; a posting file for every process"),
-            (11, "2026-10-20", True, "Likely questions is notes, never words to say, and never repeats an answer already written; a stock answer marked Not for this kind of employer, or holding a fill-in, is left out with the reason; notes beside an answer are kept and never checked; a rebuild keeps the person's own layout and never adds the Checking line twice; a screen asks its standard questions first; hooks are whole sentences"),
+            (11, "2026-10-20", True, "Likely questions is notes, never words to say, and never repeats an answer already written; a stock answer marked Not for this kind of employer, or holding a fill-in, is left out with the reason; notes beside an answer are kept and never checked; a rebuild keeps the person's own layout and never adds the Checking line twice; a screen asks its standard questions first; hooks are whole sentences; and an answer drafted on request carries a Draft line that check lists until the person confirms it"),
         ),
-        "fingerprint": "85cc60101210f4c4",
+        "fingerprint": "f04ac6c1e7568255",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -373,8 +374,10 @@ METHODS: dict[str, dict] = {
             (30, "2026-10-19", False, "reads go where cheap checks cannot decide, requests sent outside the app are recorded, people set aside are dropped rather than closed, and a result title keeps the employer however it is written"),
             (31, "2026-10-20", False, "first messages fitted to who reads them (work authorization and the role wanted by reader type), true reasons for writing (how they were found, a parallel in their path, a confirmed mutual connection; no claim to have read what the sender did not), contractions allowed, a late employer warned not refused, warnings with a rewrite for phrases that read as generated, stacked hedges, exits, unhedged claims and credentials with no reason, an InMail of subject and body in the shape that drew a reply, a phrase bank varied per contact, a read-aloud check, revenue titles skipped unless in the person's function, a peer given the standard length, a decision-maker given the senior work-authorization wording, the app's own asks in words the person's voice check passes, a note checked for the reader it was written for, a referrer's name kept capitalized, and ordinary sentences (wanting to understand how their role changed) no longer read as asking for the job"),
             (32, "2026-10-20", False, "a people page lists each card with the person's address and best first by how close the title is to their function, cutting IT support, operations and the like; a people search can be built from a company number and is confirmed by the first page of results; a sign-in page is an expired session or friction by the hours since the last page or sign-in"),
+            (33, "2026-10-20", False, "profile reads back to 3.2.5's caps (30 an hour, 80 a day), reading for the week's requests, no slow start before a signal, a lifted cap lifting the ramp and the loads cap, and the place check said once in a chat"),
+            (34, "2026-10-20", False, "the voice checks from one round (a round's InMails built alike, a bare close, guessing from a level, flattery, vague comparisons, hedges by default, repeated words, a VOICE setting), and the tool fixes (rows from readings, pending invitations, no Connect button, InMail refunds, company numbers, research titles, two a company, the time where they are, a page loaded too soon kept); and the reading limits: a read stops counting once its note is sent, the person's own caps outrank every preset cap of their period, one budget line before a round; and one check for every composer, agreeing with what the composers write (no warning on a sentence about the sender, on the topic word said again, or on a question; a note to someone connected checked at its own length; an outreach note checked as a message)"),
         ),
-        "fingerprint": "df2ede3b112ec1d7",
+        "fingerprint": "41fb599f6b93d46f",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -409,8 +412,10 @@ METHODS: dict[str, dict] = {
             (17, "2026-10-19", True, "a batch of queued notes is checked for sentences they share, so notes that all end the same way are written again"),
             (18, "2026-10-20", False, "sent invitations read card by card with each note kept, only requests the page can show called gone, names matched however written, Experience kept role by role with path parallels and mutual connections, a top card place unlike the current role's a caution, the channel set from the page only where it shows a degree, the whole About kept, and the files that change on every read kept out of the repo, or in the old file where this computer's ledger cannot be written"),
             (19, "2026-10-20", False, "a sign-in page hours after the last page is an expired session, not a stop; a sign-out stop is lifted on the person's word with reading.py resume, once a day, and the stop names it"),
+            (20, "2026-10-20", False, "the reading list sized to the week's requests, and its words"),
+            (21, "2026-10-20", False, "notes drafted with the new voice checks; unsent drafts are not redrafted, and reading.py batch flags any built alike"),
         ),
-        "fingerprint": "0f71e1066deed603",
+        "fingerprint": "93a27bd471ba9fcf",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -437,8 +442,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", False, "every employer board openroles reads is a live board, copies of one posting in a round are as old as the oldest, and an internal Workday site is caught at either of Workday's addresses"),
             (11, "2026-10-19", False, "pay is read with no currency mark, by the hour, under a heading, and per place; a posting it now reads below your cut line is cut on its next round, and nothing ruled out before needs looking at again"),
             (12, "2026-10-19", False, "a hiring process with no application is read as a process, never as an application to the same role"),
+            (13, "2026-10-20", False, "a round in the cloud tells the person, in plain words, the one fix when the chat's settings block the job sites"),
         ),
-        "fingerprint": "f2cef002458bdc32",
+        "fingerprint": "cd1651c6ecb67b79",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -586,7 +592,7 @@ KEEPS_NOTHING: dict[str, str] = {
                                 "nothing in a person's repo, and its watch runs in the app only",
     "tools/claude_surfaces.json": "the registry of what Claude's surfaces can do, dated and "
                                   "sourced: the app's words, read in place, never copied",
-    "tools/place.py": "says, once and then weekly, whether the chat suits the person's settings; its one "
+    "tools/place.py": "says, once in a chat, whether the chat suits the person's settings; its one "
                       "record, profile/place.json, is /setup's question and the work-place upgrade's",
     "tools/setup_env.sh": "sets up the container, which is new every session",
 }

@@ -165,3 +165,26 @@ def test_the_profiles_own_never_write_rules_are_checked_in_every_draft(profile):
     assert learned.adopt_profile_rules() == []
     learned.retire(1)
     assert learned.unadopted() == []
+
+
+def test_a_contradiction_says_which_entry_each_command_retires(profile, capsys):
+    # From a real round (2026-10-20): "Theirs is this one: retire 50; the earlier one:
+    # retire 51" was read as "this one is 50", when 50 was the earlier rule.
+    learned.main(["record", "--area", "messages", "--said", "open with the parallel",
+                  "--rule", "open every note with the shared path",
+                  "--applied-to", "networking.py OPENER"])
+    capsys.readouterr()
+    learned.main(["record", "--area", "messages", "--said", "open with a question",
+                  "--rule", "open every note with a question about their team",
+                  "--applied-to", "networking.py OPENER"])
+    out = capsys.readouterr().out
+    assert "CONTRADICTS entry 1" in out and "The new rule is entry 2" in out
+    assert "If the new rule stands: python3 tools/learned.py retire 1 (retires the earlier entry 1" in out
+    assert "If the earlier rule stands: python3 tools/learned.py retire 2 (retires the new entry 2)" in out
+    assert "Theirs is this one" not in out
+
+
+def test_a_rule_about_which_employers_to_pick_has_its_own_area(profile):
+    learned.main(["record", "--area", "targets", "--said", "no more banks this week",
+                  "--rule", "pick no new bank employers until next week"])
+    assert "no new bank employers" in learned.brief("targets")

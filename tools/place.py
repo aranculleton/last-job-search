@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Is this chat the right place for what the person set up? Said once, then weekly.
+"""Is this chat the right place for what the person set up? Said once in a chat.
 
 Where a chat runs decides what it can do. A cloud chat cannot use the browser on
 the person's computer unless the desktop app lends it one, a phone has no browser
@@ -15,10 +15,12 @@ changes a setting: where it offers a choice, the person makes it.
     python3 tools/place.py next [--works-on computer|phone|both]   # the exact next step
 
 `sync_app.py` runs the check after the day's sync and again in every later chat
-that day. A chat hears it once, then again after RETELL_DAYS while it still applies,
-and at once when its words change: told only once, a person who missed it, or who
-later wanted the right chat, never heard it again. The record of who was told is
-kept in .git, so it is never committed and never dirties the tree.
+that day. A chat hears it once, and again only when its words change, or after
+RETELL_DAYS while the computer it runs on is still missing a tool the work needs. Told
+weekly, a person who had already chosen heard "two chats work best, ask me how to move"
+again and again for no reason (2026-10-20), so a choice is offered once. A person who
+already has a chat on their computer is never asked to move. The record of who was told
+is kept in .git, so it is never committed and never dirties the tree.
 """
 from __future__ import annotations
 
@@ -61,6 +63,10 @@ TWO_CHATS = ("Two chats work best. One on your computer, for everything you do: 
              "up for you and arrives even when your computer is off.")
 SHORT_TWO_CHATS = ("Two chats work best: one on your computer for everything you do, and your "
                    "brief in the cloud. Ask me how to move.")
+# Said instead to a person who already has a chat on their computer (place.json
+# "computer_chat"): what this chat can do, with no move to make.
+SHORT_HAS_LOCAL = ("Finding people works here. Their profiles are read in your chat on your "
+                   "computer.")
 
 # The one line a chat with no browser of the person's says about reading. Finding
 # people never needs it (tools/network/sources.py, the ladder), so the line says what
@@ -151,21 +157,27 @@ def _say(eid: str, owner: str, name: str, goal: bool = True) -> str:
 
 
 def _continue_locally(owner: str, name: str, then: str) -> str:
-    """Goal first, then the way there at the time of writing, from the registry."""
-    return (_say("local-chat", owner, name) + f" Then say \"{then}\" there. If {name} is not "
-            "on your computer yet, put it there first. " + _say("clone-copy", owner, name, False))
+    """The way there, as numbered steps from the registry, each part headed by the day it
+    was checked: a person who had only ever used the cloud could not follow one long
+    sentence of destinations (2026-10-20)."""
+    import claude_surfaces
+    return ("Two parts, once. First, put your copy on your computer.\n"
+            + "\n".join(claude_surfaces.steps("clone-copy"))
+            + "\nThen start a chat on it.\n" + "\n".join(claude_surfaces.steps("local-chat"))
+            + f"\nOnce it is set up, say \"{then}\" there.")
 
 
 def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(),
           owner: str = "", name: str = "my-job-search", employer: str = "",
-          detail: bool = False, works: str = "") -> list:
+          detail: bool = False, works: str = "", has_local: bool = False) -> list:
     """What to tell the person about this chat's place. [] when it is right.
 
     `tools` is the browser tools this chat has (browser, chrome, chrome-off, enable),
     or None when unknown, which asks the chat to look before it says anything.
     `fixes` is env_check.local_fixes(): what this computer is missing. By default each
     message is two or three short sentences with no links; `detail` gives the steps,
-    each path dated with its official page, for a person who asked how.
+    each path dated with its official page, for a person who asked how. `has_local` is
+    True once a chat has run on their computer: nobody is asked to move who already has.
     """
     out = []
     have = None if tools is None else {str(t).lower() for t in tools} & BROWSERS
@@ -179,6 +191,9 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
                 out.append(CLOUD_LINK_NOW if detail else SHORT_LINK_NOW)
             if not signed_in and have & {"browser", "enable"}:
                 out.append(SIGN_IN_ONCE if detail else SHORT_SIGN_IN)
+        elif has_local and where != "local":
+            line = SHORT_HAS_LOCAL
+            out.append(line if have is not None else IF_NO_BROWSER + line)
         elif not detail:
             line = ({"phone": SHORT_REMOTE + " " + SHORT_PASTE,
                      "web": SHORT_REMOTE + " " + SHORT_PASTE,
@@ -200,7 +215,7 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
                 line = (f"{FINDING_WORKS} {CLOUD_LINK_NOT} {TWO_CHATS} "
                         f"{_continue_locally(owner, name, then)}")
             out.append(line if have is not None else IF_NO_BROWSER + line)
-    elif works in ("computer", "both") and where != "local":
+    elif works in ("computer", "both") and where != "local" and not has_local:
         # Not reading profiles in their browser, a person with a computer still does best
         # with two chats, and an existing one who set up in the cloud was never told.
         out.append((TWO_CHATS + " " + _continue_locally(owner, name, "carry on")) if detail
@@ -240,12 +255,38 @@ def _profile_file() -> str:
     return person.path(PLACE_FILE)
 
 
-def works_on() -> str:
+def _place() -> dict:
     try:
         with open(_profile_file(), encoding="utf-8") as fh:
-            return str(json.load(fh).get("works_on") or "")
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
     except Exception:  # no profile, no file, or a bad one: unknown
-        return ""
+        return {}
+
+
+def works_on() -> str:
+    return str(_place().get("works_on") or "")
+
+
+def has_local() -> bool:
+    """Has a chat ever run on the person's own computer? Then nobody asks them to move."""
+    return bool(_place().get("computer_chat"))
+
+
+def note_local(today: datetime.date | None = None) -> bool:
+    """Record, once, that a chat has run on their computer: the date it was first seen, in
+    profile/place.json beside their answer. Only into a profile that exists."""
+    try:
+        import person
+        if has_local() or not person.exists("person.json"):
+            return False
+        got = dict(_place(), computer_chat=(today or datetime.date.today()).isoformat())
+        with open(_profile_file(), "w", encoding="utf-8") as fh:
+            json.dump(got, fh, indent=2)
+            fh.write("\n")
+        return True
+    except Exception:  # a check must never break the sync that runs it
+        return False
 
 
 def record(answer: str, today: datetime.date | None = None) -> str:
@@ -258,9 +299,9 @@ def record(answer: str, today: datetime.date | None = None) -> str:
         raise SystemExit("place: no profile yet; /setup records the answer when it writes "
                          "the profile (Step 3)")
     p = _profile_file()
+    got = dict(_place(), works_on=answer, asked=(today or datetime.date.today()).isoformat())
     with open(p, "w", encoding="utf-8") as fh:
-        json.dump({"works_on": answer, "asked": (today or datetime.date.today()).isoformat()},
-                  fh, indent=2)
+        json.dump(got, fh, indent=2)
         fh.write("\n")
     return p
 
@@ -304,9 +345,11 @@ def _digest(lines) -> str:
 RETELL_DAYS = 7
 
 
-def told(chat: str, lines=None, today: datetime.date | None = None) -> bool:
-    """Was this chat told these words lately? A chat told an older wording is told the new
-    one at once, and the same words again after RETELL_DAYS."""
+def told(chat: str, lines=None, today: datetime.date | None = None,
+         retell: bool = False) -> bool:
+    """Was this chat told these words? A chat told an older wording is told the new one at
+    once. The same words come again only with `retell` (a computer still missing a tool),
+    after RETELL_DAYS."""
     try:
         with open(_told_path(), encoding="utf-8") as fh:
             got = json.load(fh)
@@ -320,6 +363,8 @@ def told(chat: str, lines=None, today: datetime.date | None = None) -> bool:
         rec = {"digest": rec, "on": ""}
     if not isinstance(rec, dict) or rec.get("digest") != _digest(lines):
         return False
+    if not retell:
+        return True
     try:
         on = datetime.date.fromisoformat(rec.get("on") or "")
     except ValueError:
@@ -367,6 +412,7 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
     where = surface(env)
     fixes = ()
     if where == "local":
+        note_local(today)
         try:
             import env_check
             fixes = env_check.local_fixes()
@@ -374,7 +420,7 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
             fixes = ()
     owner, name = repo()
     lines = check(where, setting(), tools, signed_in_ever(), fixes, owner, name, employer,
-                  works=works_on())
+                  works=works_on(), has_local=has_local())
     if once and chat:
         if not lines and _told_before(chat):
             # It had asked for something, and it is all here now: said once, so the
@@ -382,7 +428,7 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
             mark_told(chat, (), today)
             return ("Place check (Claude: tell the person this once, in your own words): "
                     "everything it asked for is in place now; nothing more to do.")
-        if told(chat, lines, today):
+        if told(chat, lines, today, retell=bool(fixes)):
             return ""
         mark_told(chat, lines, today)
     if not lines:
@@ -393,7 +439,7 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
             and any(claude_surfaces.say(e["id"], name=name, owner=owner) in l for l in lines)]
     warn = [w for w in (claude_surfaces.warning(e) for e in used) if w]
     return ("Place check (Claude: tell the person this at the end of your reply, in these "
-            "words; it comes back weekly while it still applies, never more. If they ask how, "
+            "words; it is said once in a chat, and again only when it changes. If they ask how, "
             "or say they want to move, give them what `python3 tools/place.py how` prints. "
             "When they say they have run what it asks, check again at once with `python3 "
             "tools/place.py check`, rather than waiting for the next day's sync. "
@@ -429,7 +475,7 @@ def main(argv=None) -> int:
     if a.cmd == "how":
         owner, name = repo()
         lines = check(surface(), setting(), tools, signed_in_ever(), (), owner, name,
-                      a.employer, detail=True, works=works_on())
+                      a.employer, detail=True, works=works_on(), has_local=has_local())
         print("\n".join(lines) or "place: this chat is the right place")
         return 0
     out = report(tools, a.employer, a.once)

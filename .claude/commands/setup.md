@@ -45,9 +45,8 @@ their answer: the exact next step for where this chat runs. When it says to clos
 setup starts again in the desktop app, where the question is asked once more. Otherwise
 carry on, and record the answer when the profile is written (Step 3.1).
 
-**Then check this session can do the whole job, and say so now, not at the end.** A setting
-changed in the cloud environment applies only to the next session, so a person told at the
-end has to come back; told now, they can change it while you work and use it next time.
+**Then check this session can do the whole job, and say so now, not at the end.** Told
+now, they can fix it while you work.
 
 ```bash
 python3 tools/env_check.py
@@ -56,21 +55,21 @@ python3 tools/env_check.py
 It reports LaTeX, Poppler, pypdf (including the broken-`cffi` case), bun, and every job
 board the app calls: LinkedIn, freehire, and every host the person's employer boards are
 read from, as openroles names them (the three most common systems' hosts before any board is
-on file). `python3 tools/env_check.py --allowlist` prints the domains a custom network policy
-needs, once the boards are on file. A host the network policy refuses is named as such, which a bare
-HTTP status could not tell apart from a host that answered. Its `where:` line says whether
-this is a cloud session or their own computer. **On their own computer**, first give this
-chat a folder of its own if the sync said it is in the main one
-(`python3 tools/sync_app.py --worktree setup`, then work there), then run
-`./tools/setup_env.sh` yourself and pass on only what it prints as theirs to do (an install
-that asks for the computer's password); a blocked host there is their own network, not a
-setting of ours. **In a cloud session**, if anything is missing or a
-host is blocked, give them the two settings from `START_HERE.md`
-step 3 (the setup script line, and the network setting with its allowed domains), with the way
-to them in the words `python3 tools/claude_surfaces.py say cloud-environment` prints, say
-that setup itself can carry on without them (web search still works for the research), and
-that the job search and the test resume need them, in a new session. If LaTeX is missing,
-`./tools/setup_env.sh` installs it for this session only.
+on file). A host this chat's cloud settings refuse is named as such, which a bare HTTP status
+could not tell apart from a host that answered. Its `where:` line says whether this is a
+cloud session or their own computer. **On their own computer**, first give this chat a
+folder of its own if the sync said it is in the main one (`python3 tools/sync_app.py
+--worktree setup`, then work there), then run `./tools/setup_env.sh` yourself and pass on
+only what it prints as theirs to do (an install that asks for the computer's password); a
+blocked site there is their own network, not a setting of ours. **In a cloud session**, run
+`./tools/setup_env.sh` yourself for anything missing (it installs for this chat), and when job
+sites are blocked give them, word for word, what the check prints under "Tell the person"
+(`python3 tools/env_check.py --say` prints it alone): what happened, the one recommended fix
+as numbered steps, and that setup carries on meanwhile. It takes effect in this chat within
+about a minute. Never use the words environment, proxy, domain or allowlist to them, except a
+button's own name; the custom list (`--allowlist`, SETUP.md) is only for someone who asks for
+it. The setup script (`claude_surfaces.py steps cloud-setup-script`) is optional and offered
+once, as a way to make each new chat start faster.
 
 Then look for an existing `profile/`. If there is one, this is an update, not a setup: ask what
 they want to change and go to that part of Step 1 (`--section <name>` does this directly:

@@ -83,7 +83,14 @@ curl -sS "$HTTPS_PROXY/__agentproxy/status"
 ```
 
 That is an environment policy denial, not a bug, and it is not something to route around.
-The fallback is `/apply <pasted posting text>`, which needs no network at all, and
+The fix is the cloud chat's network access: START_HERE.md, step 3, sets it to Full, which
+the person is told in plain words (`python3 tools/env_check.py --say`). To allow only the job
+sites instead, choose Custom, keep the default package managers, and add what
+`python3 tools/env_check.py --allowlist` prints: to start with `linkedin.com`,
+`www.linkedin.com`, `freehire.me`, `boards-api.greenhouse.io`, `api.lever.co`,
+`api.ashbyhq.com`, `*.myworkdayjobs.com`, and `api.openalex.org` for a field that publishes.
+Each new employer board can need one more, so a custom list needs keeping up. Meanwhile the
+fallback is `/apply <pasted posting text>`, which needs no network at all, and
 `run_round.py --from-scraped <earlier kept.json>`, which re-runs every free stage on a
 scrape that already succeeded (the earlier round must have run with `--keep-intermediates`,
 or its `00_scrape/` is already deleted).

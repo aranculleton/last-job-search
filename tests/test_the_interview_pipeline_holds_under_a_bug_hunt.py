@@ -359,12 +359,15 @@ def test_the_introduction_is_answered_with_a_name(state):
 def test_a_rebuild_never_freezes_the_tools_own_words(tmp_path):
     peer = {"contact_id": "larkspur_retail_castellan", "name": "Juno Castellan",
             "company": "Larkspur Retail", "title": "Data Analyst", "status": "call_booked"}
-    old = dict(FACTS, work_authorization="UK settled status. No sponsorship required.")
+    # The profile's summary, which the document places as it stands. (It once varied the
+    # work-authorization line; that answer is now the person's stock answer or their words
+    # for this reader, never the profile's raw line, so the line no longer reaches it.)
+    old = dict(FACTS, summary="Operations analyst with seven years of warehouse forecasts.")
     prep.write_prep(peer, profile_facts=old, today=TODAY, root=str(tmp_path))
-    new = dict(FACTS, work_authorization="British citizen. No sponsorship required.")
+    new = dict(FACTS, summary="Planning analyst who builds the forecasts a network orders from.")
     path = prep.write_prep(peer, profile_facts=new, today=TODAY, root=str(tmp_path))
     text = open(path, encoding="utf-8").read()
-    assert "British citizen" in text and "UK settled status" not in text
+    assert "a network orders from" in text and "seven years of warehouse" not in text
 
 
 def test_an_old_document_keeps_only_answers_said_in_the_first_person():

@@ -25,6 +25,8 @@ What it reads:
             even 401 or 404, is reachable.
 
     python3 tools/env_check.py --allowlist   # the domains a custom network policy needs
+    python3 tools/env_check.py --say         # what to tell the person when job sites are
+                                             # blocked in a cloud chat, in plain words, or nothing
 """
 from __future__ import annotations
 
@@ -85,8 +87,8 @@ def probe(url: str) -> tuple[str, str]:
     code = code.strip()
     verdict = classify(p.returncode, connect.strip(), code)
     detail = {"reachable": f"HTTP {code}",
-              "blocked": f"the network policy refused it (proxy {connect}); add the host "
-                         f"under the cloud environment's Allowed domains",
+              "blocked": f"blocked by this chat's cloud settings (proxy {connect}): the fix is "
+                         "below",
               "unreachable": (p.stderr.strip().splitlines() or [f"curl exit {p.returncode}"])[-1]
               }[verdict]
     return verdict, detail
@@ -116,6 +118,36 @@ def board_hosts() -> list[tuple[str, str]]:
         for host in found:
             if all(host != u.split("//", 1)[1] for _, u in out):
                 out.append((NAMES.get(kind, kind), f"https://{host}"))
+    return out
+
+
+def blocked_say(names) -> str:
+    """What the person is told when a cloud chat cannot reach job sites: what happened, the
+    one recommended fix as numbered steps from the registry, and what happens meanwhile.
+
+    It replaced "the network policy refused it (proxy 403); add the host under the cloud
+    environment's Allowed domains", which a person new to all of it could not act on: they
+    had never heard of an environment (2026-10-20). Full is recommended over a list of
+    sites because a list needs a new entry for each new employer's board."""
+    import claude_surfaces
+    names = [n for n in dict.fromkeys(names) if n]
+    what = ", ".join(names[:3]) + (" and others" if len(names) > 3 else "")
+    return "\n".join(
+        [f"This chat can't reach the job sites{' (' + what + ')' if what else ''}: it runs on "
+         "a computer in the cloud that only reaches a few websites until you allow more.",
+         "Recommended, once:"]
+        + claude_surfaces.steps("cloud-internet")
+        + ["Until then I'll search the web, which finds fewer jobs."])
+
+
+def blocked_names() -> list[str]:
+    """The job sites this chat's cloud settings refuse, probed now; [] off the cloud."""
+    if not CLOUD:
+        return []
+    out = []
+    for name, url in hosts() + board_hosts():
+        if probe(url)[0] == "blocked":
+            out.append(name)
     return out
 
 
@@ -245,6 +277,11 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["--allowlist"]:
         print("\n".join(allowlist()))
         return 0
+    if argv[:1] == ["--say"]:
+        names = blocked_names()
+        if names:
+            print(blocked_say(names))
+        return 0
     bad = 0
     print("where: " + ("a cloud session" if CLOUD else "this computer"))
 
@@ -275,14 +312,17 @@ def main(argv: list[str] | None = None) -> int:
          "" if shutil.which("bun") else "missing; ./tools/setup_env.sh installs it (the portal CLIs need it)")
 
     print("job boards")
-    for name, url in hosts():
+    blocked = []
+    for name, url in hosts() + board_hosts():
         verdict, detail = probe(url)
         line(f"{name} ({url.split('//')[1]})", verdict == "reachable", detail)
-    for name, url in board_hosts():
-        verdict, detail = probe(url)
-        line(f"{name} ({url.split('//')[1]})", verdict == "reachable", detail)
+        if verdict == "blocked":
+            blocked.append(name)
     print()
     print("all good" if not bad else f"{bad} problem(s) above")
+    if blocked:
+        print("\nTell the person, in these words, once:")
+        print(blocked_say(blocked))
     return 1 if bad else 0
 
 
