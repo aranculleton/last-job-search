@@ -214,12 +214,25 @@ def _first_sentence(text) -> str:
     return body[:m.start() + 1] if m else body
 
 
-def narrative(secs) -> bool:
+def has_narrative(secs) -> bool:
     """Does the profile hold a personal narrative? All a prep needs to know: the narrative
     is an arc the person tells in their own words, so the prep points at it
     (`prep.NARRATIVE_POINTER`) and never prints any of it."""
     return any(_blockquote_paragraphs(body) for heading, body in secs.items()
                if heading.lower().startswith("personal narrative"))
+
+
+def narrative(secs) -> str:
+    """The narrative's opening sentence, and the one on what the route taught where a
+    paragraph names it, condensed for a person's own use. The prep never prints it
+    (`has_narrative`); it is kept because a person's own tests call it."""
+    body = next((_blockquote_paragraphs(b) for h, b in secs.items()
+                 if h.lower().startswith("personal narrative")), [])
+    if not body:
+        return ""
+    opener = _first_sentence(body[0])
+    learned = next((p for p in body if "learning quickly" in p or "under pressure" in p), "")
+    return " ".join(x.strip() for x in (opener, _first_sentence(learned)) if x.strip())
 
 
 def summary(secs) -> str:
@@ -383,7 +396,7 @@ def build(role="", posting="", path=PROFILE_MD) -> dict:
     secs = sections(lines)
     facts = {
         "summary": summary(secs),
-        "narrative": narrative(secs),
+        "narrative": has_narrative(secs),
         "employers": employers(secs, lines),
         "strengths": strengths(secs, lines),
         "work_authorization": work_authorization(secs),

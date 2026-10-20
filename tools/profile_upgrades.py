@@ -1229,7 +1229,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "recruiters hear your work authorization in your own employer-facing words",
             _work_auth_employer, "add WORK_AUTH[\"employer\"] to profile/networking.py: the "
             "sentence the profile says to use with employers and recruiters, in its own words "
-            "(where it names none, the \"senior\" line); change nothing else", "edit", "~1 min",
+            "(where it names none, the \"senior\" line), and extend WORK_AUTH_CLAUSE so it "
+            "matches it; change nothing else", "edit", "~1 min",
             names=("networking.WORK_AUTH",), priority=2),
     Upgrade("country", "2026-10-14",
             "paper size, working week and market language that follow your country",

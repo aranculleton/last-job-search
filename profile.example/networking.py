@@ -94,9 +94,6 @@ WORK_AUTH = {
     # What a recruiter or an employer hears, on a call or a form.
     "employer": "I have settled status and full right to work in the UK, no sponsorship needed",
 }
-# The phrasings of the line above, once used to swap one register's line for the other's.
-# Nothing reads it since 2026-10-20 (the function that did had no callers); it is kept so a
-# profile that has it still loads, and it can be deleted.
 WORK_AUTH_CLAUSE = re.compile(
     r"(?:my\s+)?visa(?:'s| is)?(?:\s+all)?\s+sorted"
     r"|I have settled status and full right to work in the UK"

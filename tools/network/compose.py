@@ -168,6 +168,9 @@ SIGN_OFF = dict(_NET.SIGN_OFF)
 # hand-written draft run through validate() is refused on the same words the
 # composers refuse, instead of only the arguments this module assembled itself.
 _UNSUPPORTABLE = tone.UNSUPPORTED_CLAIM
+# The person's phrasings of their work-authorization line, which register() swaps for the
+# approved wording of the reader's register. A profile without it matches nothing.
+_WORK_AUTH_CLAUSE = getattr(_NET, "WORK_AUTH_CLAUSE", None) or re.compile(r"(?!)")
 
 
 # The opening furniture: the salutation, the courtesy line that follows it, and
@@ -782,6 +785,78 @@ HIRING_GROUND = re.compile(
 _LOOKING = re.compile(
     r"(?:,\s*|\s+)(?:and\s+)?(?:I'?m|I am|currently)\s+(?:looking|searching|open)\s+(?:for|to)\b.*$",
     re.I)
+
+
+DEFAULT_CLOSE = None
+DEFAULT_OPENER = None
+
+
+# Kept for the people whose own tests call it (profile/tests): no composer here uses it
+# now, and first_note() is the shape to use. A public name stays while a test may.
+def connection_note(name, hook, who_line, work_auth=None, seniority="peer",
+                    close=DEFAULT_CLOSE, opener=DEFAULT_OPENER, their=()) -> str:
+    """The brief 4.1 shape, inside the 300 character limit or not at all.
+
+    Hook first because a hook tied to that person is the only thing separating
+    this from a sweep, the who-line second because the named employers have to
+    be read before the reader decides, work authorization only when it removes
+    an objection, and a soft close because a five-second reply is the ask.
+
+    Raises TooLong rather than truncating. What to cut is a judgment about which
+    detail matters least, and a truncator always cuts the close, which is the
+    part that asks for the reply.
+    """
+    _no_reaction_waiting("connection note")
+    if not str(hook or "").strip():
+        raise ValueError(
+            "a connection note without a hook specific to this person is a template "
+            "sweep, and senior people spot it instantly")
+
+    if not str(who_line or "").strip():
+        raise ValueError("a connection note has to say who the sender is, with employers named")
+    if not str(close or "").strip():
+        raise ValueError(
+            "a connection note needs a close written for this person: it is the "
+            "sentence that asks for the reply, and it is the one sentence a "
+            "default ruins. A default close ends up identical in every message "
+            "sent, which is what a form looks like")
+    # With no opener the hook runs straight on from "Hi Wren," as one sentence,
+    # so it must NOT be capitalized the way a standalone sentence is.
+    # `_sentence()` upper-cases a leading lowercase letter, which is right
+    # after a full stop and wrong after a comma. `nudge()` already carried this
+    # fix; removing DEFAULT_OPENER gave `connection_note` the same problem and
+    # it rendered "Hi Sasha, Saw you are recruiting", a visible typo in the
+    # first line of an outbound message.
+    #
+    # Lowering it unconditionally was the same bug wearing the other face: a
+    # hook that legitimately opens on "I", "SQL" or "NASA" came out as
+    # "Hi Quinn, i moved teams last year", which is a typo in the one
+    # line every reader sees. `_after_greeting()` already drew that
+    # distinction for `inmail()` and is now the single place it is drawn.
+    if opener:
+        head = [f"{_greeting(name)} {opener}.", _sentence(hook)]
+    else:
+        head = [f"{_greeting(name)} {_after_greeting(hook, keep=their)}"]
+    parts = head + [_sentence(who_line),
+                    _checked_claim(work_auth, seniority) if work_auth else "",
+                    _sentence(close)]
+    note = " ".join(p for p in parts if p)
+    # Checked on the assembled note, not on the hook. Taking the hook alone
+    # forbade "I am an analyst in <City>" as an opening, which is the
+    # plainest and best one there is, and pushed every draft into explaining the
+    # reader's own job back to them. The note has to reach them; it does not
+    # have to reach them in the first sentence.
+    if not tone.reaches_them(note, their):
+        raise NoteIsAllAboutTheSender(
+            "nothing in this note reaches %s: it names no second person, and none "
+            "of their= appears in it. A stranger reading it learns who you are and "
+            "nothing about why you wrote to THEM. Name what you know about their "
+            "work, or pass their= with the employer, product or event the note "
+            "refers to." % (tone.first_name(name) or "them"))
+    limit = schema.LIMITS["connection_note_chars"]
+    if len(note) > limit:
+        raise TooLong("connection note", len(note), limit)
+    return _voice("connection note", note)
 
 
 def _about_me_for(common_ground, about_me):
@@ -1772,6 +1847,36 @@ def warm_intro(referrer_name, name, body, close=None, work_auth=None,
 
 # A check-in gives them nothing to answer: tone.CHECK_IN, the one list, which reply.py
 # reads too for a chase of theirs.
+# Kept for the people whose own tests call it (profile/tests): no composer here uses it
+# now, and first_note() is the shape to use. A public name stays while a test may.
+def register(text, seniority) -> str:
+    """Calibrate the surface of a finished draft to the recipient (brief 4.5).
+
+    Same content, different surface. Two things change and nothing else:
+    work-authorization phrasing becomes the approved wording for the register,
+    and a senior recipient's copy loses its exclamation marks and its "Hey".
+    Rewriting more than that would be editing the writer's argument, which is
+    not this function's business.
+
+    Refuses outright when the draft claims citizenship or permanent residency.
+    That is not a register problem and no phrasing fixes it.
+    """
+    s = str(text or "")
+    if not s.strip():
+        return s
+    m = _UNSUPPORTABLE.search(s)
+    if m:
+        raise UnsupportedClaim(
+            f"{m.group(0)!r} is not something the profile supports: "
+            f"{getattr(_NET, 'UNSUPPORTED_WHY', 'the profile does not hold that status')}.")
+    approved = WORK_AUTH["senior" if tone.is_senior(seniority) else "peer"]
+    s = _WORK_AUTH_CLAUSE.sub(lambda _m: approved, s)
+    if tone.is_senior(seniority):
+        s = re.sub(r"!+", ".", s)
+        s = re.sub(r"^hey\b", "Hi", s, flags=re.I | re.M)
+    return s
+
+
 CHECK_IN = tone.CHECK_IN
 
 
