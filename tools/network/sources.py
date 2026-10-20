@@ -644,8 +644,8 @@ def main(argv: list | None = None) -> int:
 # and 5, only enriches a short list of it. A run with no browser still delivers the
 # whole ranked list, says in one line what reading would add, and offers a paste
 # for at most reading.HAND_TOP people; it never asks for a screenshot of everyone.
-# Browser reads are capped at reading.READS_PER_RUN a run, on top of the hourly and
-# daily caps and the day's sends.
+# Browser reads are as many as the requests left this week and a spare
+# (reading.shortlist_cap), never above the hourly and daily caps.
 Rung = namedtuple("Rung", "id label yields cannot needs")
 LADDER = (
     Rung("connections", "your own LinkedIn connections export",
@@ -679,6 +679,7 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
     """
     import reading
     r = reading.route(list(tools or ()), consent)
+    cap = reading.shortlist_cap()[0] if r["route"] in ("browser", "enable") else 0
     export = _has_export() if has_export is None else has_export
     declined = CONNECTIONS_EXPORT == "declined"
     reads = r["route"] in ("browser", "enable")
@@ -692,7 +693,8 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
                    else "not on file yet: the connections-export upgrade asks")
         elif rung.id == "browser_read":
             usable = reads
-            why = (f"{r['browser']}, the best {reading.READS_PER_RUN} only, paced" if reads
+            why = (f"{r['browser']}, the best {cap}, enough for this week's requests, paced"
+                   if reads
                    else "no browser of yours in this chat" if reading.PROFILE_READS == "browser"
                    else f"PROFILE_READS is {reading.PROFILE_READS!r}")
         elif rung.id == "hand":
@@ -706,7 +708,7 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
         + ", without reading anyone's profile. Reading a profile adds their current role, "
         "shared history and recent posts; for the one or two who matter most, paste their "
         "profile, its Save to PDF, or screenshots, and I'll write to them from it.")
-    return {"rungs": rungs, "read": r["route"], "read_cap": reading.READS_PER_RUN if reads else 0,
+    return {"rungs": rungs, "read": r["route"], "read_cap": cap,
             "hand_top": 0 if reads else reading.HAND_TOP, "say": say}
 
 

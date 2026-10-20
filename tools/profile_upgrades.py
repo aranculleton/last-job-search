@@ -1324,30 +1324,30 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
-    "networking.PROFILE_READ_RISK": "\"careful\": the pace before the dial existed; normal or "
-    "fast only when the person writes it",
-    "networking.PROFILE_PAGES_PER_HOUR": "4 list pages an hour at careful",
-    "networking.PROFILE_PAGES_PER_DAY": "8 list pages a day at careful",
-    "networking.PROFILE_LOADS_PER_HOUR": "8 page loads of any kind an hour at careful, the one "
-    "shared cap there was before page kinds were counted apart",
-    "networking.PROFILE_LOADS_PER_DAY": "15 page loads of any kind a day at careful, as before",
+    "networking.PROFILE_READ_RISK": "\"careful\": the slowest pauses, those before the dial "
+    "existed; normal or fast only when the person writes it",
+    "networking.PROFILE_PAGES_PER_HOUR": "10 list pages an hour, inside the 30 pages of any kind",
+    "networking.PROFILE_PAGES_PER_DAY": "20 list pages a day, inside the 80 pages of any kind",
+    "networking.PROFILE_LOADS_PER_HOUR": "30 page loads of any kind an hour, 3.2.5's cap, so list "
+    "pages never add to it",
+    "networking.PROFILE_LOADS_PER_DAY": "80 page loads of any kind a day, 3.2.5's cap",
     "networking.PROFILE_READ_GAP_SECONDS": "45 to 240 seconds between pages at careful, as before",
     "networking.PROFILE_READ_GAP_MEDIAN": "90 seconds at careful, as before",
     "networking.PROFILE_READ_BREAK_AFTER": "a break after 3 to 7 pages at careful, as before",
     "networking.PROFILE_READ_DWELL_SECONDS": "20 to 60 seconds on a page read in full, as before",
     "networking.PROFILE_READ_CARD_DWELL_SECONDS": "20 to 60 seconds on a card at careful, the "
     "same as a full read, so nothing is shortened unless the person chooses it",
-    "networking.PROFILE_READS_PER_RUN": "5 people on a day's short list at most, as before, and "
-    "fewer when fewer requests can go that day",
-    "networking.PROFILE_READ_UNPLACED": "2 people nothing has placed yet, as before",
+    "networking.PROFILE_READS_PER_RUN": "80, the day's cap: the list is sized to the requests "
+    "left this week and three spare",
+    "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
     "networking.PROFILE_PASTE_TOP": "3 profiles offered for a paste, as before",
     "networking.PROFILE_READ_FRESH_DAYS": "a reading stands for 30 days, as before",
-    "networking.PROFILE_READ_SKIP_SPARE": "3 reads beyond the requests left today, as before",
+    "networking.PROFILE_READ_SKIP_SPARE": "3 reads beyond the requests left this week",
     "networking.PROFILE_SESSION_EXPIRY_HOURS": "4 hours: a sign-in page that long after the last "
                                                 "page or sign-in is a session that expired, not "
                                                 "friction; within it, the day stops as before",
-    "networking.PROFILE_READ_RAMP": "5 pages an hour until a clean day of reading, then 8: lower "
-    "than before only on a first day, or after a signal",
+    "networking.PROFILE_READ_RAMP": "only after LinkedIn shows a signal: 5 pages an hour the "
+    "next day, then 10, 20 and 30 on clean days; before any signal, no ramp",
     "networking.PROFILE_READ_BREAK_MINUTES": "a break of 5 to 12 minutes, chosen at random, "
                                              "between bursts of browser reads; shortening it "
                                              "raises the risk to their LinkedIn account, so only "
@@ -1365,11 +1365,11 @@ SAFE_DEFAULTS: dict[str, str] = {
     "search.HOURS_PER_YEAR": "2,080 hours, a full-time year of 40 hours a week, to read a band "
                              "stated by the hour as a year's pay; a market that works fewer "
                              "hours sets its own",
-    "networking.PROFILE_READS_PER_DAY": "15 browser reads a day, and never more than the requests "
-                                        "that can still go that day plus three; raising it raises "
-                                        "the risk to their LinkedIn account",
-    "networking.PROFILE_READS_PER_HOUR": "8 browser reads an hour with varied pauses around a "
-                                            "minute and a half, the pace of writing to each",
+    "networking.PROFILE_READS_PER_DAY": "80 browser reads a day, 3.2.5's cap, and never more than "
+                                        "the requests left this week plus three; raising it "
+                                        "raises the risk to their LinkedIn account",
+    "networking.PROFILE_READS_PER_HOUR": "30 browser reads an hour, 3.2.5's cap; the varied "
+                                            "pauses around a minute and a half hold it to about 17",
     "networking.UNSUPPORTED_WHY": "the reason printed beside an unsupported-status finding in a "
                                   "resume or letter; unset, it says 'check it'",
     "networking.OPENALEX": "off: research papers find people only in fields that publish, and "

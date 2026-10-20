@@ -110,10 +110,9 @@ PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
 # machine rhythm or a burst is what automation checks look for. LinkedIn
 # publishes no thresholds and its terms forbid automated access at any pace, so
 # nothing here makes a browser read safe: these lower the risk and do not remove
-# it. A read is for someone the person will send to today, so the day's reads stop
-# at the requests left today (state.platform_budget) and SKIP_SPARE more, for the
-# people a read rules out; 15 a day and 8 an hour are the ceilings, the pace of
-# someone writing each note by hand.
+# it. A read is for someone the person will write to, so the day's reads stop at the
+# requests left this week (state.platform_budget) and SKIP_SPARE more, for the people
+# a read rules out; 80 a day and 30 an hour are the ceilings (pace.py says why).
 #
 # The pace now, and why. Between two pages: a gap drawn from a log-normal curve
 # with its middle at GAP_MEDIAN (90 seconds), never under 45 seconds or over 240,
@@ -125,15 +124,16 @@ PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
 # publishes no rate, so these are a judgement of how long a person spends reading
 # a profile and writing a note, not a measured safe limit. What is measured is the
 # failure they replaced: an even 25 to 75 second gap with a break on exactly every
-# fifth read, and caps of 30 an hour and 80 a day, which is a rhythm a machine has
-# and a person does not.
+# fifth read, which is a rhythm a machine has and a person does not. 3.3.0 also cut the
+# caps from 30 an hour and 80 a day to 8 and 15; they are 30 and 80 again since
+# 2026-10-20, and these pauses hold an hour to about 17 in practice (simulated).
 #
 # The person owns the trade-off: every limit below is a setting in profile/networking.py,
-# and one dial, PROFILE_READ_RISK, sets them all from a named preset ("careful" by default,
-# which is this pace exactly; "normal"; "fast"). tools/network/pace.py holds them in one
-# place, each with its default and why, and `reading.py limits` prints them. No preset but
-# careful applies unless they write it, and no setting here shortens anything they have not
-# set themselves.
+# and one dial, PROFILE_READ_RISK, sets the pauses from a named preset ("careful" by
+# default, which is this pace exactly; "normal"; "fast"). tools/network/pace.py holds them
+# in one place, each with its default and why, and `reading.py limits` prints them. No
+# preset but careful applies unless they write it, and no setting here shortens anything
+# they have not set themselves.
 import pace  # noqa: E402
 
 READS_PER_HOUR = pace.value("reads_per_hour")
@@ -179,14 +179,14 @@ STOP_FILE = ("documents", "network", ".reads_stopped.json")
 # the connections export) make the list. Then one-page reads, each page holding many
 # people: the sent-invitations list (who already has a request pending, for everyone
 # at once) and a people search narrowed to the employer (headline, place and degree for
-# a dozen people a load). Only then a profile read, of their own page, for the few the
-# person will write to that day, as its card when that decides it. The day's list is
-# sized to the requests that can still go today (and SKIP_SPARE for those a read rules
-# out), never above READS_PER_RUN, and at most UNVERIFIED_ON_SHORTLIST of it may be people
-# nothing has placed in the person's city yet. READS_PER_RUN was 10 and is 5 since 3.7.0:
-# in one session (2026-10-19) five of seven profile reads went on facts a cheaper check had
+# a dozen people a load). Only then a profile read, of their own page, for the people the
+# person will write to, as its card when that decides it. The day's list is sized to the
+# requests left this week (and SKIP_SPARE for those a read rules out), never above
+# READS_PER_RUN, and at most UNVERIFIED_ON_SHORTLIST of it may be people nothing has
+# placed in the person's city yet. READS_PER_RUN was 10, then 5 in 3.7.0, when five of
+# seven profile reads in one session (2026-10-19) went on facts a cheaper check had
 # already shown (a request already pending, a city elsewhere, a role outside their
-# function).
+# function). Those checks now run first, so since 2026-10-20 it is the day's cap.
 READS_PER_RUN = pace.value("reads_per_run")
 UNVERIFIED_ON_SHORTLIST = pace.value("unplaced")
 HAND_TOP = pace.value("paste_top")
@@ -1373,14 +1373,14 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
             return {"route": "browser", "browser": label, "usable": True,
                     "do": ("`reading.py signin` first when it says so, then read each profile "
                            "in " + label + ", nothing clicked"),
-                    "say": (f"I'll read the LinkedIn profiles of the best {READS_PER_RUN} I find, "
+                    "say": (f"I'll read the LinkedIn profiles of the people worth writing to, "
                             f"in {label}, one at a time, clicking nothing.{first}"),
                     "signin": not signed_in}
         if "enable" in have:
             return {"route": "enable", "browser": pane, "usable": True,
                     "do": "call enable__mcp__remote-devices__Claude_Browser, then `reading.py "
                           "signin` when it says so, and read each profile, nothing clicked",
-                    "say": (f"I'll read the LinkedIn profiles of the best {READS_PER_RUN} I find, "
+                    "say": (f"I'll read the LinkedIn profiles of the people worth writing to, "
                             f"in {pane}, one at a time, clicking nothing.{first}"),
                     "signin": not signed_in}
         import place
@@ -1809,13 +1809,15 @@ def resume(reason: str, now: datetime.datetime | None = None) -> dict:
     return rec
 
 
-def sends_left_today(today: datetime.date | None = None) -> int | None:
-    """Connection requests the person can still send today, or None when unknown."""
+def sends_left_week(today: datetime.date | None = None) -> int | None:
+    """Connection requests the person can still send this week, or None when unknown. A
+    day's reading prepares the week's requests, as 3.2.5 did: bound to the day's requests
+    alone, with 25 a day and 50 a week, a sitting could never prepare the week."""
     try:
         import state
         b = state.platform_budget(state.load_contacts(), state.load_threads(),
                                   today or datetime.date.today())
-        return int(b.get("connections_left_today"))
+        return int(b.get("connections_left"))
     except Exception:  # noqa: BLE001  the cap is a ceiling; without the book it stands alone
         return None
 
@@ -1826,12 +1828,12 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
 
     kind is "go"; "wait" (the pause after the last page: a short wait, `at` says when);
     "later" (an hourly cap or the ramp: later today, at `at`); or "tomorrow" (stopped for
-    the day, a daily cap, or enough read for the requests that can still go today).
+    the day, a daily cap, or enough read for the requests left this week).
     `profile` is False for a one-page read (PAGE_KINDS), which has caps of its own and
     which the send-day cap does not hold: that cap is about the people written to, and a
     list page writes to nobody. All loads together have caps as well, and the hourly one
-    rises with clean days of reading (pace.hourly_ceiling). `sends_left` is the requests
-    left today; -1 reads it from the contact book.
+    is lower for a while after LinkedIn shows a signal (pace.hourly_ceiling). `sends_left`
+    is the requests left this week; -1 reads it from the contact book.
     """
     now = now or datetime.datetime.now()
     why = stopped(now.date())
@@ -1849,19 +1851,19 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
     if len(mine) >= kind_day:
         return {"kind": "tomorrow", "at": None,
                 "why": f"{kind_day} {'profiles' if profile else 'list pages'} read today "
-                       f"({kind_name}); the rest wait for tomorrow or a paste"}
+                       f"({kind_name}); the rest are read tomorrow"}
     if len(today) >= LOADS_PER_DAY:
         return {"kind": "tomorrow", "at": None,
                 "why": f"{LOADS_PER_DAY} pages loaded today (PROFILE_LOADS_PER_DAY); the rest "
-                       "wait for tomorrow or a paste"}
+                       "are read tomorrow"}
     if profile:
-        left = sends_left_today(now.date()) if sends_left == -1 else sends_left
+        left = sends_left_week(now.date()) if sends_left == -1 else sends_left
         people = [x for x in today if x["kind"] == "profile"]
         if left is not None and len(people) >= left + SKIP_SPARE:
             return {"kind": "tomorrow", "at": None,
                     "why": f"{len(people)} profiles read today, enough for the {left} "
-                           "request(s) that can still go today: a profile is read only for "
-                           "someone sent to that day. The rest wait for tomorrow"}
+                           "request(s) left this week: a profile is read only for someone "
+                           "to write to"}
     window = now - datetime.timedelta(minutes=HOUR_MINUTES)
     hour = [x for x in loads if x["when"] > window]
     hour_mine = [x for x in hour if (x["kind"] == "profile") == profile]
@@ -1901,9 +1903,9 @@ def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = 
 def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1) -> tuple:
     """(profiles that may still be read today, the limit that binds, said plainly).
 
-    The queue printed the daily cap alone ("80 left today") while the hourly cap of 8
+    The queue once printed the daily cap alone ("80 left today") while an hourly cap of 8
     was what held: the binding one is the smallest of the day, the hour, all loads, the
-    ramp and the requests that can still go today."""
+    ramp and the requests left this week."""
     now = now or datetime.datetime.now()
     loads = _loads()
     hour_ago = now - datetime.timedelta(minutes=HOUR_MINUTES)
@@ -1920,10 +1922,10 @@ def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1
               (max(0, ceiling - len(hour)), f"{ceiling} pages an hour in all ("
                + ("PROFILE_LOADS_PER_HOUR" if why_ceiling == "loads_per_hour" else why_ceiling)
                + ")")]
-    left = sends_left_today(now.date()) if sends_left == -1 else sends_left
+    left = sends_left_week(now.date()) if sends_left == -1 else sends_left
     if left is not None:
         limits.append((max(0, left + SKIP_SPARE - len(profiles)),
-                       f"the {left} request(s) that can still go today, and {SKIP_SPARE} spare"))
+                       f"the {left} request(s) left this week, and {SKIP_SPARE} spare"))
     n, what = min(limits, key=lambda x: x[0])
     return n, what
 
@@ -2021,16 +2023,16 @@ def _gone(contact_id: str, contacts, today: datetime.date) -> str:
 
 
 def shortlist_cap(sends_left: int | None = -1, today: datetime.date | None = None) -> tuple:
-    """(how many may be on today's list, why): the requests that can still go today and
-    SKIP_SPARE for those a read rules out, never above READS_PER_RUN."""
-    left = sends_left_today(today) if sends_left == -1 else sends_left
+    """(how many may be on today's list, why): the requests left this week and SKIP_SPARE
+    for those a read rules out, never above READS_PER_RUN."""
+    left = sends_left_week(today) if sends_left == -1 else sends_left
     if left is None:
         return READS_PER_RUN, f"PROFILE_READS_PER_RUN {READS_PER_RUN}"
     need = left + SKIP_SPARE
     if need >= READS_PER_RUN:
-        return READS_PER_RUN, (f"PROFILE_READS_PER_RUN {READS_PER_RUN}; {left} request(s) can "
-                               "still go today")
-    return need, f"the {left} request(s) that can still go today, and {SKIP_SPARE} spare"
+        return READS_PER_RUN, (f"PROFILE_READS_PER_RUN {READS_PER_RUN}; {left} request(s) "
+                               "left this week")
+    return need, f"the {left} request(s) left this week, and {SKIP_SPARE} spare"
 
 
 def placed(contact_id: str, contacts=None) -> bool:
@@ -2061,7 +2063,7 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
     the people a list no longer needs leave it by themselves (`_gone`: read on an earlier
     day, or past a first note in the contact book), and `remove` takes one off by hand.
     Only the people still to read today, and those read today, count toward the cap
-    (`shortlist_cap`, sized to the requests that can still go today), and at most
+    (`shortlist_cap`, sized to the requests left this week), and at most
     UNVERIFIED_ON_SHORTLIST of them may be people nothing has placed in a city yet
     (`placed`): the rest of those wait for a one-page read or a public finding.
     """
@@ -3457,7 +3459,7 @@ def main(argv: list | None = None) -> int:
                 return EXIT["check"] if why_ else EXIT["unknown"]
         if source == "browser" and not on_shortlist(a.contact_id):
             raise SystemExit(f"reading: {a.contact_id} is not on today's short list. A browser "
-                             f"read is for the day's best {READS_PER_RUN} only: rank everyone "
+                             "read is for the people on today's list only: rank everyone "
                              "found, then `reading.py shortlist <ids, best first>`")
         try:
             new = parse(text, name=contact.get("name", ""), company=contact.get("company", ""),
@@ -3536,7 +3538,7 @@ def _cli_next(a) -> int:
                   f"({', '.join(left[:5])}). Today needs its own: run the day's check "
                   "(python3 tools/sync_app.py --if-stale --on \"<this session's model>\"), "
                   f"then python3 tools/network/reading.py shortlist {' '.join(left[:READS_PER_RUN])}"
-                  " (it sizes today's list to the requests that can go today), then "
+                  " (it sizes today's list to the requests left this week), then "
                   "reading.py next --wait again")
             return EXIT["new_day"]
         done = [i for i in _shortlist_file(datetime.date.today()) if _read_on(i, today)]

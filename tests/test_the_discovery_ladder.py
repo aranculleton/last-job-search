@@ -53,11 +53,13 @@ def test_a_chat_with_no_browser_still_gets_the_whole_list_and_is_asked_for_nothi
                                          ([], "hand")])
 def test_a_chat_with_a_browser_reads_the_best_few_and_one_without_offers_a_paste(tools, route, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    monkeypatch.setattr(reading, "sends_left_week", lambda today=None: 12)
     got = sources.ladder(tools)
     assert got["read"] == route
     reads = route in ("browser", "enable")
-    # Deep reads are for the few written to that day; one-page reads screen the rest.
-    assert got["read_cap"] == (reading.READS_PER_RUN if reads else 0) and reading.READS_PER_RUN == 5
+    # Deep reads are for the people written to this week, and a spare for those a read rules
+    # out; one-page reads screen the rest.
+    assert got["read_cap"] == ((12 + reading.SKIP_SPARE) if reads else 0)
     assert (got["say"] == "") == reads
 
 

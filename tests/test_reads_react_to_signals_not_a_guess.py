@@ -43,18 +43,26 @@ def _profile_load(cid, when, gap=60):
 
 # ------------------------------------------------------------------ one dial, every limit
 
-def test_careful_is_the_old_pace_value_for_value():
-    for name, old in (("reads_per_hour", 8), ("reads_per_day", 15), ("gap_seconds", (45, 240)),
-                      ("gap_median", 90), ("break_after", (3, 7)), ("break_minutes", (5, 12)),
-                      ("dwell_seconds", (20, 60)), ("reads_per_run", 5), ("unplaced", 2),
-                      ("paste_top", 3), ("fresh_days", 30), ("loads_per_hour", 8),
-                      ("loads_per_day", 15)):
+def test_the_caps_are_3_2_5s_at_every_preset_and_careful_keeps_its_pauses():
+    # The maintainer's word, 2026-10-20: 3.3.0's 8 an hour and 15 a day were too slow to
+    # be worth having, and 3.2.5's 30 and 80 came back. The pauses were not part of it.
+    for risk in pace.PRESET_NAMES:
+        for name, cap in (("reads_per_hour", 30), ("reads_per_day", 80), ("loads_per_hour", 30),
+                          ("loads_per_day", 80), ("reads_per_run", 80)):
+            assert pace.value(name, risk) == cap, (risk, name)
+    for name, old in (("gap_seconds", (45, 240)), ("gap_median", 90), ("break_after", (3, 7)),
+                      ("break_minutes", (5, 12)), ("dwell_seconds", (20, 60)),
+                      ("card_dwell_seconds", (20, 60)), ("paste_top", 3), ("fresh_days", 30)):
         assert pace.value(name, "careful") == old, name
+    assert pace.DEFAULT_PRESET == "careful"
+    # No preset reads a list page more often than the profiles' own pace allows.
+    for risk in pace.PRESET_NAMES:
+        assert pace.value("pages_per_day", risk) <= pace.value("loads_per_day", risk)
 
 
 def test_the_dial_sets_every_limit_and_a_setting_beats_it(monkeypatch):
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READ_RISK="fast"))
-    assert pace.preset() == "fast" and pace.value("reads_per_hour") == 20
+    assert pace.preset() == "fast" and pace.value("reads_per_hour") == 30
     assert pace.value("gap_seconds") == (25, 150)
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
         PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=6, PROFILE_READ_GAP_SECONDS=(60, 300)))
@@ -63,7 +71,7 @@ def test_the_dial_sets_every_limit_and_a_setting_beats_it(monkeypatch):
     # Unreadable: the preset, said so; an unknown dial: careful.
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR="lots",
                                                            PROFILE_READ_RISK="reckless"))
-    assert pace.preset() == "careful" and pace.value("reads_per_hour") == 8
+    assert pace.preset() == "careful" and pace.value("reads_per_hour") == 30
     assert "could not be read" in pace.source("reads_per_hour")
 
 
@@ -79,7 +87,7 @@ def test_every_limit_is_named_with_its_reason_in_one_report():
 def test_limits_prints_the_value_the_source_and_what_binds_now(here, capsys):
     assert reading.main(["limits"]) == 0
     out = capsys.readouterr().out
-    assert "PROFILE_READ_RISK" in out and "PROFILE_READS_PER_RUN = 5 (the careful preset)" in out
+    assert "PROFILE_READ_RISK" in out and "PROFILE_READS_PER_RUN = 80 (the careful preset)" in out
     assert "the limit that binds" in out
 
 
@@ -147,13 +155,17 @@ def test_a_page_that_did_not_render_is_not_a_read(here, monkeypatch, capsys):
     assert [x["kind"] for x in pace.friction()] == ["not_rendering"]
 
 
-def test_the_ramp_starts_low_rises_on_clean_days_and_falls_back_after_a_signal(monkeypatch):
+def test_the_ramp_comes_only_after_a_signal_and_rises_on_clean_days(monkeypatch):
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READ_RISK="fast"))
     today = NOW.date()
     days = [NOW - datetime.timedelta(days=d) for d in (3, 2, 1)]
-    assert pace.hourly_ceiling(today, [], {})[0] == 5
-    assert pace.hourly_ceiling(today, days[-1:], {})[0] == 10
-    assert pace.hourly_ceiling(today, days, {})[0] == 20
+    # Before LinkedIn has shown anything, a first day reads at the cap: no slow start.
+    assert pace.hourly_ceiling(today, [], {}) == (30, "loads_per_hour")
+    # After a signal, it starts low and rises one step a clean day.
+    old = {"friction": [{"at": (NOW - datetime.timedelta(days=4)).isoformat(), "kind": "slow"}]}
+    assert pace.hourly_ceiling(today, [], old)[0] == 5
+    assert pace.hourly_ceiling(today, days[-1:], old)[0] == 15
+    assert pace.hourly_ceiling(today, days, old) == (30, "loads_per_hour")
     signalled = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(), "kind": "slow"}]}
     assert pace.hourly_ceiling(today, days, signalled)[0] == 5
 
@@ -180,19 +192,27 @@ def test_the_list_drops_people_read_before_or_closed_and_counts_only_who_is_left
         {"kind": "browser", "at": yesterday.isoformat(), "date": yesterday.date().isoformat()}]})
     # A list from earlier today, before the release: six, two of them done with.
     reading._save_shortlist(["p0", "p1", "p2", "p3", "p4", "p5"], NOW.date())
-    got = reading.shortlist(["p6"], NOW.date(), contacts=contacts, sends_left=10)
+    got = reading.shortlist(["p6"], NOW.date(), contacts=contacts, sends_left=2)
     assert set(got["pruned"]) == {"p1", "p2"}
     assert got["ids"] == ["p0", "p3", "p4", "p5", "p6"] and got["cap"] == 5
-    got = reading.shortlist(["p7"], NOW.date(), contacts=contacts, remove=["p0"], sends_left=10)
+    got = reading.shortlist(["p7"], NOW.date(), contacts=contacts, remove=["p0"], sends_left=2)
     assert got["removed"] == ["p0"] and "p7" in got["ids"] and "p0" not in got["ids"]
 
 
-def test_the_list_is_sized_to_the_requests_left_today(here):
+def test_the_list_is_sized_to_the_requests_left_this_week(here, monkeypatch):
     contacts = [{"contact_id": f"q{i}", "location": "Leeds"} for i in range(6)]
     got = reading.shortlist([c["contact_id"] for c in contacts], NOW.date(), contacts=contacts,
                             sends_left=1)
     assert got["cap"] == 1 + reading.SKIP_SPARE and len(got["ids"]) == 4
-    assert "1 request(s) that can still go today" in got["why"]
+    assert "1 request(s) left this week" in got["why"]
+    # Read from the contact book, it is the week's requests, not today's: with 25 a day and
+    # 50 a week, a list sized to the day could never prepare the week in one sitting.
+    import state
+    budget = {"connections_left": 40, "connections_left_today": 25}
+    monkeypatch.setattr(state, "platform_budget", lambda *a, **k: budget)
+    monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
+    assert reading.sends_left_week(NOW.date()) == 40
+    assert reading.shortlist_cap(today=NOW.date())[0] == 40 + reading.SKIP_SPARE
 
 
 # ------------------------------------------------------------------ reads off the critical path

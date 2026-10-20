@@ -6,10 +6,14 @@ terms forbid automated access at any pace, and LinkedIn publishes no thresholds,
 here is safe: each lowers the risk and none removes it. What this file adds is a way to
 react to what actually happens instead of guessing a number once and making every run slow:
 
-- **One dial**, PROFILE_READ_RISK in profile/networking.py: "careful" (the default, and the
-  pace before the dial existed), "normal" or "fast". Every limit below takes its value from
-  the preset, and a setting the person writes for one limit beats the preset. No preset
-  but careful applies unless the person writes it.
+- **The caps are 3.2.5's**: 30 profile pages an hour and 80 a day, every kind of page
+  together, at every preset. 3.3.0 cut them to 8 and 15, and with a reading list of 5 and a
+  slow first day that read about five people a day while a person could send 25 requests;
+  the maintainer restored them on 2026-10-20. A person who wants fewer writes their own.
+- **One dial for the pauses**, PROFILE_READ_RISK in profile/networking.py: "careful" (the
+  default), "normal" or "fast" sets how long the pauses between pages are, how long a page
+  is read and how often a longer break comes. Careful's pauses are unchanged since 3.3.0.
+  A setting the person writes for one limit beats the preset.
 - **Signals, not guesses.** Every page load is recorded with what it showed. A sign-in wall
   within `expiry_hours` of the last page or sign-in (or a second sign-out in a day), a
   security check or CAPTCHA, an "unusual activity" banner or an HTTP 999 page stops reads
@@ -20,9 +24,10 @@ react to what actually happens instead of guessing a number once and making ever
   that takes far longer to load than the person's own recent pages, is a soft signal: the
   next pause doubles, and a second soft signal within the hour stops the day. The friction
   log keeps every signal, dated, across days.
-- **A ramp on clean history.** The pages-an-hour ceiling starts low and rises one step for
-  each clean day of reading since the last signal (5, then the preset's next steps), never
-  above the preset or the person's own setting.
+- **A ramp after a signal.** Once LinkedIn has shown a signal, the pages-an-hour ceiling
+  starts low the next day and rises one step for each clean day of reading (5, then the
+  preset's next steps), never above the cap or the person's own setting. Before any signal
+  there is no ramp: a first day reads at the cap, as 3.2.5 did.
 - **Pages counted by kind.** A list page (the sent-invitations list, an employer's people,
   a people search) screens ten people in one load and is not the footprint of a profile
   page, so each kind has its own caps, and all loads together have one more.
@@ -67,30 +72,31 @@ PRESET_NAMES = ("careful", "normal", "fast")
 DEFAULT_PRESET = "careful"
 
 # Every limit: (what it controls, why, careful, normal, fast). The profile setting that
-# overrides it is SETTING[name]. Careful is the pace of the release before the dial, value
-# for value, so a person who never touches the dial reads exactly as fast as before.
+# overrides it is SETTING[name]. The caps (pages an hour and a day, the list, the unplaced)
+# are the same at every preset: 3.2.5's, restored on the maintainer's word of 2026-10-20.
+# The dial sets the pauses, and careful's pauses are 3.3.0's, value for value.
 LIMITS = {
     "reads_per_hour": (
         "profile pages read in any rolling hour",
-        "the pace of someone reading a few profiles and writing each note by hand",
-        8, 12, 20),
+        "3.2.5's cap, about one every two minutes; careful's pauses hold an hour to about 17",
+        30, 30, 30),
     "reads_per_day": (
-        "profile pages read in a day, before the requests left today bind it lower",
-        "a profile is read only for someone written to that day",
-        15, 25, 40),
+        "profile pages read in a day, before the requests left this week bind it lower",
+        "3.2.5's cap: enough to prepare a whole week's requests in one sitting",
+        80, 80, 80),
     "pages_per_hour": (
         "list pages (sent invitations, an employer's people, a people search) in an hour",
         "one list page screens about ten people, so few are needed",
-        4, 6, 10),
+        10, 10, 10),
     "pages_per_day": (
-        "list pages in a day", "the same, over a day", 8, 12, 20),
+        "list pages in a day", "the same, over a day", 20, 20, 20),
     "loads_per_hour": (
         "all page loads together in an hour, profiles and list pages",
-        "what LinkedIn sees is pages loaded, whatever they held; careful keeps the one shared "
-        "cap there was before page kinds were counted apart",
-        8, 16, 26),
+        "what LinkedIn sees is pages loaded, whatever they held: 3.2.5's 30 an hour, now "
+        "over every kind of page, so list pages never add to the footprint",
+        30, 30, 30),
     "loads_per_day": (
-        "all page loads together in a day", "the same, over a day", 15, 30, 52),
+        "all page loads together in a day", "the same, over a day", 80, 80, 80),
     "gap_seconds": (
         "the pause between two pages, shortest and longest",
         "a steady machine rhythm is what automation checks look for, so the gap varies",
@@ -116,15 +122,15 @@ LIMITS = {
         (20, 60), (10, 30), (8, 20)),
     "reads_per_run": (
         "the most people on one day's short list for profile reads",
-        "it was 10, then 5 since 3.7.0: in one session five of seven profile reads went on "
-        "facts a cheaper check had already shown (a request pending, a city elsewhere, a role "
-        "outside their function), so the day's list is sized to the requests left today and "
-        "this is only its ceiling",
-        5, 10, 15),
+        "it was 10, then 5 in 3.7.0, when five of seven profile reads went on facts a cheaper "
+        "check had already shown (a request pending, a city elsewhere, a role outside their "
+        "function). Those checks now run before any read, so the list is sized by need, the "
+        "requests left this week and a spare, and this is only its ceiling, the day's cap",
+        80, 80, 80),
     "unplaced": (
         "of those, the most nothing has placed in the person's city yet",
         "a place rules many out, and a list page places a dozen at once",
-        2, 3, 4),
+        10, 10, 15),
     "paste_top": (
         "how many profiles a paste is offered for, with no browser",
         "the best few, never everyone", 3, 5, 8),
@@ -136,9 +142,10 @@ LIMITS = {
         "profile reads allowed beyond the requests left today",
         "for the people a read rules out", 3, 3, 4),
     "ramp": (
-        "pages an hour allowed on each clean day of reading since the last signal",
-        "start low and rise on clean history, never above the preset or the person's setting",
-        (5, 8), (5, 10, 12), (5, 10, 20)),
+        "pages an hour allowed on each clean day of reading after LinkedIn showed a signal",
+        "after a signal, start low and rise on clean days, never above the cap or the "
+        "person's setting; before any signal there is no ramp",
+        (5, 10, 20, 30), (5, 10, 20, 30), (5, 15, 30)),
     "expiry_hours": (
         "hours after the last page load from which LinkedIn's sign-in page is a session that "
         "expired, not a sign-out",
@@ -444,13 +451,18 @@ def clean_days(today: datetime.date, loads: list, data: dict | None = None) -> i
 
 
 def hourly_ceiling(today: datetime.date, loads: list, data: dict | None = None) -> tuple:
-    """(pages an hour allowed now, why): the ramp's step for the clean days so far, never
-    above loads_per_hour. A signal today puts the ramp back to its first step tomorrow."""
-    steps = value("ramp")
+    """(pages an hour allowed now, why): the cap, or after LinkedIn has shown a signal the
+    ramp's step for the clean days since, never above loads_per_hour. A signal today puts the
+    ramp back to its first step tomorrow. Before any signal there is no ramp: a first day
+    read at five an hour was the slow start 3.2.5 never had."""
     top = value("loads_per_hour")
+    if not friction(data):
+        return top, "loads_per_hour"
+    steps = value("ramp")
     n = clean_days(today, loads, data)
     step = steps[min(n, len(steps) - 1)]
     if step >= top:
         return top, "loads_per_hour"
-    return step, ("the ramp: %d clean day(s) of reading since the last signal, step %d of %d "
-                  "(PROFILE_READ_RAMP %s)" % (n, min(n, len(steps) - 1) + 1, len(steps), steps))
+    return step, ("the ramp after LinkedIn's last signal: %d clean day(s) of reading since, "
+                  "step %d of %d (PROFILE_READ_RAMP %s)" % (n, min(n, len(steps) - 1) + 1,
+                                                            len(steps), steps))

@@ -18,13 +18,11 @@ LINKEDIN_PLAN = "premium"
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
 # where they copy the page when they open it to send the request.
 PROFILE_READS = "paste"
-# How many profiles a browser read opens: at most this many in an hour and in a
-# day, with varied pauses between them, and never more in a day than the requests
-# Morgan can still send that day. It is Morgan's own LinkedIn account reading, and
-# LinkedIn's terms forbid automated access at any pace: these lower the risk of a
-# restriction and do not remove it, and raising them raises it.
-PROFILE_READS_PER_HOUR = 8
-PROFILE_READS_PER_DAY = 15
+# How fast a browser read goes is the app's (tools/network/pace.py: 30 profiles an hour
+# and 80 a day at most, varied pauses, never more in a day than the requests Morgan can
+# send this week) unless set here, for example PROFILE_READS_PER_DAY = 15. It is
+# Morgan's own LinkedIn account reading, and LinkedIn's terms forbid automated access at
+# any pace: lower numbers lower the risk of a restriction and do not remove it.
 
 # Research papers as a discovery source (tools/network/openalex.py): for a field
 # where the people worth meeting publish. Morgan's does not.

@@ -143,18 +143,20 @@ def test_the_break_is_the_persons_to_set_and_is_recorded_as_a_break():
 def test_the_short_list_adds_and_never_replaces(here):
     import state
     placed = [{"contact_id": f"p{i}", "location": "Manchester"} for i in range(9)]
-    got = reading.shortlist(["p0", "p1", "p2"], TODAY, contacts=placed)
+    got = reading.shortlist(["p0", "p1", "p2"], TODAY, contacts=placed, sends_left=2)
     assert got["ids"] == ["p0", "p1", "p2"]
-    got = reading.shortlist(["p3", "p4", "p5", "p6"], TODAY, contacts=placed)
-    assert got["ids"][:3] == ["p0", "p1", "p2"] and len(got["ids"]) == reading.READS_PER_RUN
+    got = reading.shortlist(["p3", "p4", "p5", "p6"], TODAY, contacts=placed, sends_left=2)
+    assert got["ids"][:3] == ["p0", "p1", "p2"] and len(got["ids"]) == 2 + reading.SKIP_SPARE
     assert got["full"] == ["p5", "p6"]
     del state
 
 
-def test_no_more_than_two_unplaced_people_a_day(here):
-    contacts = [{"contact_id": f"u{i}", "location": ""} for i in range(4)]
+def test_no_more_than_the_unplaced_cap_of_people_nothing_has_placed(here):
+    n = reading.UNVERIFIED_ON_SHORTLIST
+    contacts = [{"contact_id": f"u{i}", "location": ""} for i in range(n + 2)]
     got = reading.shortlist([c["contact_id"] for c in contacts], TODAY, contacts=contacts)
-    assert got["ids"] == ["u0", "u1"] and got["unplaced"] == ["u2", "u3"]
+    assert got["ids"] == [f"u{i}" for i in range(n)]
+    assert got["unplaced"] == [f"u{n}", f"u{n + 1}"]
     # A one-page read that placed someone lets them on.
     reading.from_list("u2", {"name": "Idris Corrie", "location": "Salford", "title": "Analyst"},
                       "Kestrel Mutual")
@@ -171,11 +173,17 @@ def test_the_queue_names_the_limit_that_binds(here):
     assert n == reading.READS_PER_HOUR - 5 and "an hour" in what
 
 
-def test_with_no_clean_day_yet_the_ramp_binds_first(here):
+def test_a_first_day_reads_at_the_cap_and_only_a_signal_brings_the_ramp(here, monkeypatch):
+    import pace
+    monkeypatch.setenv("LJS_LEDGER", str(here / "ledger"))
     now = datetime.datetime(2026, 10, 19, 15, 0)
     _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(3)])
     n, what = reading.reads_left(now, sends_left=None)
-    assert n == 2 and "the ramp" in what           # 5 an hour on the first day, 3 read
+    assert n == reading.READS_PER_HOUR - 3 and "the ramp" not in what
+    pace.record_friction("slow", "a page took far longer than usual",
+                         now - datetime.timedelta(days=1))
+    n, what = reading.reads_left(now, sends_left=None)
+    assert n == 2 and "the ramp" in what           # 5 an hour the day after a signal, 3 read
 
 
 # ------------------------------------------------------------ 7. the top card

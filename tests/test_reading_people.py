@@ -251,24 +251,27 @@ def test_a_pdf_export_gives_the_current_employer_too():
     assert _read(PDF, source="pdf")["current"] == "Fernhill Freight"
 
 
-def test_browser_reads_are_paced_like_a_person_writing_to_a_few_people():
-    # A read is for someone sent to that day. The old 30 an hour and 80 a day read a
-    # week's requests in one sitting (a person's whole weekly allowance in a day),
-    # which a person writing each note by hand would never do.
+def test_browser_reads_have_3_2_5s_caps_and_a_persons_pauses():
+    # 3.3.0 cut the caps to 8 an hour and 15 a day, which read about five people a day
+    # while a person could send 25 requests. The maintainer restored 3.2.5's 30 and 80 on
+    # 2026-10-20, enough to prepare a whole week's requests in one sitting. The pauses
+    # between pages, which keep the rhythm a person's and not a machine's, are unchanged.
     import schema
-    assert reading.READS_PER_DAY <= 20 and reading.READS_PER_HOUR <= 10
-    assert reading.READS_PER_DAY <= schema.LIMITS["connections_per_day"] + reading.SKIP_SPARE
+    assert reading.READS_PER_DAY == 80 and reading.READS_PER_HOUR == 30
+    assert reading.LOADS_PER_DAY == 80 and reading.LOADS_PER_HOUR == 30
+    assert schema.LIMITS["connections_per_week"] + reading.SKIP_SPARE <= reading.READS_PER_DAY
     assert reading.GAP_SECONDS[0] >= 40 and reading.BREAK_SECONDS[0] >= 180
     assert reading.DWELL_SECONDS[0] >= 20
 
 
-def test_a_day_reads_no_more_than_it_can_send(tmp_path, monkeypatch):
+def test_a_day_reads_no_more_than_the_week_can_send(tmp_path, monkeypatch):
     now = datetime.datetime(2026, 10, 17, 15, 0, 0)
     _browse(tmp_path, monkeypatch, [now.replace(hour=9) + datetime.timedelta(minutes=20 * i)
                                     for i in range(5)])
     assert reading.browser_gate(now, sends_left=10) == ""
     held = reading.browser_gate(now, sends_left=2)          # 5 read, 2 left to send, 3 spare
-    assert "read only for someone sent to that day" in held
+    assert "left this week" in held and "read only for someone to write to" in held
+    assert "paste" not in held
 
 
 def test_a_week_of_requests_is_never_sent_in_one_day():
