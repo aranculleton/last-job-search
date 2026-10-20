@@ -661,6 +661,35 @@ def _missing_texts() -> str:
     return ("%d message(s) that drew a reply are logged without their words" % n) if n else ""
 
 
+# The wording the app's own defaults used to put in a person's voice settings: "I am" and
+# "I would" at every sentence start, and an ask that repeated in every note. The person
+# said it read "like someone who just learned English as a second language".
+_STIFF = re.compile(r"^I am\b|\.\s+I am\b|^I would\b|\.\s+I would\b|how (?:your|the) team works",
+                    re.I)
+
+
+def _stiff_voice() -> str:
+    """Their OPENER, ABOUT_ME or ASK in the stiff form the app used to write, and not a
+    choice they recorded (learned.py locked)."""
+    if not person.exists("networking.py"):
+        return ""
+    found = _probe("import json, person, learned; n = person.module('networking'); "
+                   "locked = ' '.join(learned.locked()); "
+                   "print(json.dumps([k for k in ('OPENER', 'ABOUT_ME', 'ASK') "
+                   "if str(getattr(n, k, '') or '') and k not in locked]))")
+    try:
+        names = json.loads(found) if found else []
+    except ValueError:
+        return ""
+    stiff = []
+    for name in names:
+        got = _probe("import person; print(getattr(person.module('networking'), %r, ''))" % name)
+        if _STIFF.search(got):
+            stiff.append(name)
+    return ("%s in profile/networking.py still in the stiff wording the app used to write "
+            "(\"I am\", \"I would\" at every sentence start)" % ", ".join(stiff)) if stiff else ""
+
+
 def _campaign_notes() -> str:
     """Notes kept by hand for an employer with a hiring process, from before its living prep
     document existed: what was decided in them is lost to the next chat until it is folded
@@ -1134,6 +1163,22 @@ REGISTRY: tuple[Upgrade, ...] = (
                 "you paste them in once, so I can learn from what worked?",
             why_ask="Drafts follow the shape of your messages that got replies, and a message "
                     "kept without its words can't be one of them."),
+    Upgrade("voice-refresh", "2026-10-19",
+            "your saved intro and ask rewritten the way you write, so every note stops "
+            "opening on \"I am\" and ending on the same line",
+            _stiff_voice, "Show the person their OPENER, ABOUT_ME and ASK from "
+            "profile/networking.py beside a rewrite in their own voice: contractions, plain "
+            "English, built from their messages that drew replies (python3 "
+            "tools/network/compose.py examples) and every rule python3 tools/learned.py brief "
+            "messages lists, with every fact kept. After a yes, write the new values (and, "
+            "where they want variety, TEMPLATES with two or three asks), then record it: "
+            "python3 tools/learned.py record --area voice --said \"<their words>\" --rule "
+            "\"<the new voice>\" --applied-to \"profile/networking.py ABOUT_ME\" (and ASK)",
+            "question", "~3 min", priority=2, needs="you", conditional=True,
+            ask="Your saved intro and ask use stiff wording, like \"I am\" and \"I would\". "
+                "Can I rewrite them the way you write, from your messages that got replies?",
+            why_ask="Every first note is built from them, so the stiffness lands in every "
+                    "message you send."),
     Upgrade("campaign-notes", "2026-10-19",
             "notes you kept by hand for an interview, before its prep document existed, "
             "folded into it so the next chat has them",

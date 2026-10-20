@@ -289,7 +289,8 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "learned-choices", "profile-reads",
                                                                  "connections-export", "work-place",
                                                                  "profile-consistency",
-                                                                 "campaign-notes", "message-texts"}
+                                                                 "campaign-notes", "message-texts",
+                                                                 "voice-refresh"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
@@ -744,3 +745,14 @@ def test_messages_that_drew_replies_without_their_words_are_asked_for_once(profi
     state.save_threads([dict(out, full_text="Hi Juno, hope you're well."), back],
                        str(st / "network_threads.csv"))
     assert U.by_id("message-texts").pending() == ""
+
+
+def test_a_saved_voice_in_the_old_stiff_wording_is_offered_a_rewrite(profile, monkeypatch):
+    net = profile / "networking.py"
+    text = net.read_text(encoding="utf-8")
+    assert U.by_id("voice-refresh").pending() == ""          # the example's own voice
+    net.write_text(text.replace(
+        'ASK = "Would you have 15 minutes for a few questions sometime"',
+        'ASK = "I would love to hear how your team works"'), encoding="utf-8")
+    assert "ASK in profile/networking.py" in U.by_id("voice-refresh").pending()
+    assert "rewrite them the way you write" in U.by_id("voice-refresh").ask
