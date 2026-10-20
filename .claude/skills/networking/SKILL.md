@@ -395,8 +395,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
     rests on nothing read; their name or employer alone does not count);
   - a **parallel in their path** (`parallel=`): `reading.py show` lists them, marked
     INFERRED, so the note hedges it once ("It looks like you moved into <X> from <Y>,
-    which is the move I'm hoping to make"). A generic fit ("useful on a team like yours")
-    is warned as presumptuous; their own path is the reason instead.
+    which is the move I'm hoping to make"). The composers do that themselves
+    (`compose.hedge()`): a common ground or parallel whose subject is the reader and which
+    their page does not state comes out with one hedge from the person's own (TEMPLATES
+    "hedge") or the bank; `hedged=False` leaves it as written. A generic fit ("useful on a
+    team like yours") is warned as presumptuous; their own path is the reason instead.
 
   **Never a pretext.** A note that says the sender read, saw or watched something of theirs
   ("I saw your package on GitHub") raises `UnconfirmedReading` unless `looked=True`, the
@@ -459,15 +462,39 @@ should, each warning with its rewrite, and a warned draft is rewritten before it
   outside");
 - a claim about the reader written as fact. Each claim is STATED (their page says it, so
   say it plainly), INFERRED (from a title, an employer, a path: hedge it once) or a GUESS
-  (about their team or what would be useful to them: lightly, or better not at all);
-- a credential with no reason in its sentence: tie it to them ("which is why your
-  forecasting work interests me"), or cut it. A sentence with a number in it is evidence and
-  carries its own point;
-- an exit in a first message; the employer named late (with the reordering); an InMail
-  longer than its reader needs.
+  (about their team or what would be useful to them: lightly, or better not at all). A
+  fact their reading holds (their employers by name or initials, their title) is STATED,
+  and an asking close ("I'd love to join your team, or just hear more") claims nothing;
+- a guess at what they see from their level or title ("you've probably seen a fair few
+  of the teams from a Staff role"): ask it, or cut it;
+- a credential with no reason in its sentence: tie it to them as a plain link ("the same
+  forecasting work your team does"), or cut it. A sentence with a number in it is evidence
+  and carries its own point;
+- a comparison that never says how ("goes a lot further than", "a step on from", "take my
+  work next"): bigger, more complex, more data, more senior;
+- their career read back to them ("you did X, then Y, then Z"): the one step that links to
+  yours; congratulations followed by a jobs ask in the same note; a metric dump (three
+  figures or more in a note, four in an InMail; "from 22% to 14%" counts once);
+- a content word said twice in one sentence or in two side by side ("consulting" twice in
+  the line about you, "now" twice running); names, numbers and the person's fixed lines
+  never count;
+- the person's own shorthand or contraction written out in full, where their VOICE in
+  `profile/networking.py` lists it ("I am" for someone who says "I'm", an employer's full
+  name for the short one they use). The composers write their VOICE themselves;
+- an exit in a first message ("no worries at all", "totally fine if not"); "I came across
+  your profile"; the employer named late (with the reordering); an InMail close
+  that asks nothing about their current work or team (`bare_close`); an InMail longer than
+  its reader needs (`compose.inmail_words()`: the length the person asked for with
+  `learned.py record ... --length inmail=<words>`, else `INMAIL_WORDS`).
 
 The person's own words are never warned about, and a check one of their rules outranks
-(`learned.py record --overrides <rule>`) is only mentioned.
+(`learned.py record --overrides <rule>`) is only mentioned, `advise()`'s own included.
+
+Praise to a stranger is a refusal, not a warning: `validate()` refuses "really interested
+me", "fascinating", "impressive", "the kind of work I'd like to do more of" and the like
+(`flattery`), and the fix is the plain link between their path and the sender's. A phrase
+the person said never to use (`learned.py record --never-say`) is refused by `validate()`
+and by every composer, the nudge, referral ask, email and warm intro included.
 
 **Then read it aloud.** `compose.READ_ALOUD` says how: the most natural spoken version,
 every fact, name and number kept, nothing added, their rules kept. Show it beside the
@@ -505,9 +532,19 @@ ask. Sized to the reader (the table above); the 200 words are a ceiling, not a t
 **subject** is who the sender is by default, the identity line that drew a reply
 (`compose.identity_subject()`: "<title>, ex-<the employers they left>", or `SUBJECT` in
 their networking.py), never "Quick question", "Job enquiry" or anything that asks for the
-job; `inmail_subject()` refuses those. A page that shows only Message to someone not
-connected sets their channel to InMail and says how many credits are left; `state.py sent
---channel inmail --subject "..."` spends one.
+job; `inmail_subject()` refuses those. Where the reason for writing names an employer the
+sender left, the subject names it first (`identity_subject(lead=)`). A page that shows only
+Message to someone not connected sets their channel to InMail and says how many credits are
+left; `state.py sent --channel inmail --subject "..."` spends one.
+
+**No two InMails in a round built alike.** Two went out with one subject, one paragraph
+order and one close, and the person asked why the structure was identical when it is meant
+to be personal to the company, the role, the level and the person. `inmail(order=)` is one
+of `INMAIL_ORDERS`: who you are first (the senior reader's default), why them first (a peer
+with common ground), or both together; `inmail(team="the pricing team")` closes on a real
+question about their current work. `compose.round_alike(drafts)` finds a subject, a
+paragraph order or a close two messages share, and `reading.py batch` (exit 11) and
+`reading.py draft` run it.
 Credits are scarce; reserve them for tier 1 at top-priority companies, or people
 unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
 Open Profile (their profile shows a Message button), and everything else is a connection

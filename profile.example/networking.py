@@ -59,6 +59,16 @@ ASK = "Would you have 15 minutes for a few questions sometime"
 # Each is shown here at the app's default; a person's /setup writes theirs.
 # Opening a sentence on "I'm" or "I'd": "allow", "warn" or "refuse".
 CONTRACTIONS = "allow"
+# How the person sounds in a message (tools/network/advice.py voice()), read by the
+# composers and by compose.advise(). "contractions": True writes "I'm", "I'd", "it's" where
+# speech has them, and advise() flags the stiff full form ("I am", "I would"). "shorthand"
+# is the person's own short names, {full form: what they say}: an employer people know by a
+# short name, "macro" for macroeconomics. The composers write the shorthand and advise()
+# flags the full form. Never a deliberate typo. Empty, as here, nothing changes; Morgan's
+# could be:
+#   VOICE = {"contractions": True,
+#            "shorthand": {"Saltmarsh Analytics": "Saltmarsh", "macroeconomics": "macro"}}
+VOICE = {"contractions": False, "shorthand": {}}
 # Work authorization in a first message, by who reads it; a message can still override it.
 ELIGIBILITY = {"recruiter": True, "decision_maker": True, "peer": False}
 # Saying the role wanted in a first message. Asking for the job stays a recruiter's alone.

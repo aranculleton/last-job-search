@@ -1319,6 +1319,8 @@ SAFE_DEFAULTS: dict[str, str] = {
                                "a peer is not; before, only a recruiter",
     "networking.INMAIL_WORDS": "a warning only, past 170 words to a decision-maker or recruiter "
                                "and 130 to a peer; the 200-word ceiling is unchanged",
+    "networking.VOICE": "no contractions suggested and no shorthand used: every draft reads "
+                        "exactly as before until the person lists how they speak",
     "networking.EMPLOYERS_FIRST": "\"warn\": a late employer is a warning with the reordering, "
                                   "never a refusal, as the message that drew a reply had it",
     "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
