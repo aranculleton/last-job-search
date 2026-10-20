@@ -88,7 +88,6 @@ FOUND_OUT = "### What you found out"
 FOUND_EMPTY = "- Nothing yet: each line added here, with its source, stays."
 NOTES_EMPTY = "- Nothing yet: anything you want kept, write it here."
 TO_WRITE = "[to write: said aloud, first person, whole sentences, contractions welcome]"
-LAST_UPDATED = re.compile(r"^Last updated (\d{4}-\d{2}-\d{2})\.", re.M)
 _STAGES_MARK = re.compile(r"^<!-- stages: (.*?) -->$", re.M)
 
 # One screen is what is read in the minutes before: five questions, three hooks,
@@ -408,7 +407,7 @@ MOTIVES = (
               r"moves\b",
      "What made you take each move{moves}? A line each, in your own words.",
      "walk me through your career; the moves between jobs; why did you leave"),
-    ("why_us", r"^why (?:this (?:company|firm|team)|us|join us|{company})\b|\bwhy (?:do you want|"
+    ("why_us", r"^why (?:this (?:company|firm|team)|us|join us|{company})(?!\w)|\bwhy (?:do you want|"
                r"would you like) to (?:work|join)\b|\bwhat (?:attracts|draws) you\b|"
                r"\bwhy (?:are you )?interested\b",
      "What draws you to {company} in particular, beyond what anyone could read on its website?",
@@ -418,8 +417,9 @@ MOTIVES = (
      "Where do you want to be in a few years? A sentence or two, in your own words.",
      "where do you see yourself in five years; long-term goals"),
 )
-# What /interview asks before anything is written for one of these, and what `check` holds on.
-ASK_MARK = "ASK YOU FIRST (Claude asks, once):"
+# What /interview asks before anything is written for one of these, and what `check` holds on
+# (prep.py holds it, so the call prep's check reads the same mark).
+ASK_MARK = prep.ASK_MARK
 
 
 def motive(question, company="") -> str:
@@ -440,7 +440,7 @@ def motive_ask(kind, ctx) -> str:
     current = [_text(e.get("company")) for e in ctx["facts"].get("employers") or []
                if isinstance(e, dict) and "present" in _text(e.get("dates")).lower()]
     return ask.format(company=ctx["company"], current=current[0] if current else "where you are",
-                      moves=" (%s)" % ", then ".join(reversed(employers[:4])) if len(employers) > 1
+                      moves=" (%s)" % ", then ".join(reversed(employers)) if len(employers) > 1
                       else "")
 
 
@@ -590,7 +590,7 @@ def _next_stage(stages, today="") -> dict:
 # A process came through a person, not a portal, so its posting may not be held at all. Its
 # folder still gets a job_posting.md, as every application folder has one: one without it
 # turned the person's own CI red on the app's folder test, and they could not land work.
-POSTING_NOT_HELD = "The posting's text is not held yet."
+POSTING_NOT_HELD = profile_facts.POSTING_NOT_HELD
 
 
 def write_posting(folder, company, role, posting="", source="", today="") -> str:
@@ -685,9 +685,10 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                          "build the prep with pack." % (_text(have.get("role")), company,
                                                         _text(have.get("status")),
                                                         _text(have.get("date")), company))
+    # "declined: no referral" is the opposite of one: read as `_referred` reads it.
     referral = (_text(c.get("status")) == "referral_in_progress"
                 or _text(c.get("route")).startswith("referral")
-                or "referr" in _text(c.get("outcome")).lower())
+                or _said_referral(_text(c.get("outcome"))))
     process = dict(status="interview",
                    channel="referral" if referral else ("recruiter" if prep.is_recruiter(c)
                                                        else "contact"),
@@ -796,12 +797,20 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
     assumed = ""
     if not _text(with_):
         with_ = assumed = _lead_interviewer({"company": company, "row": row}, contacts, stage)
-    raw = _read(os.path.join(folder, "job_posting.md"))
-    # A process's placeholder is not a posting: nothing in it may be read as a requirement.
-    posting = "" if POSTING_NOT_HELD in raw and "BEGIN-UNTRUSTED-" not in raw \
-        else untrusted.unfence(raw)
+    # One reader of the posting for the pack and the call prep: a process's placeholder is
+    # not a posting, and nothing in it may be read as a requirement.
+    posting = profile_facts.posting_in(folder)
     threads = state.load_threads(os.path.join(root, "network_threads.csv")) \
         if threads is None else threads
+    draft = what_works.draft_for(row, what_works.drafts(root))
+    facts = profile_facts.build(role=role, posting=posting)
+    gaps_hard = bridges.gaps(" ".join(x for x in (role, posting) if x))
+    # A skill they said yes to claiming on this application is on the resume: it is a
+    # question to expect (gap_lines), never a gap. Left in, the pack told them to claim it
+    # and never to claim it, one section apart.
+    yes = profile_facts.consented(draft)
+    gaps_hard = [g for g in gaps_hard if _text(g.asked).casefold() not in yes]
+    facts = profile_facts.without(facts, yes)
     return {
         "company": company, "role": role, "row": row, "folder": folder, "today": today,
         "stage": stage, "step": what_works.stage_step(stage), "date": date, "with": with_,
@@ -815,10 +824,10 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         [ln.rstrip() for ln in _read(os.path.join(folder, "form_fields.txt")).splitlines()
          if ln.strip()],
         "outreach_sent": os.path.exists(os.path.join(folder, "outreach.md")),
-        "draft": what_works.draft_for(row, what_works.drafts(root)),
+        "draft": draft,
         "research": prep.load_research(company, root),
-        "facts": profile_facts.build(role=role, posting=posting),
-        "gaps_hard": bridges.gaps(" ".join(x for x in (role, posting) if x)),
+        "facts": facts,
+        "gaps_hard": gaps_hard,
         "stories": stories(), "answers": hard_answers(),
         "bank": what_works.bank(root), "contacts": contacts, "threads": threads,
         "map": dict(story_map or {}),
@@ -951,6 +960,21 @@ def _form_value(ctx, pattern) -> tuple:
                  and not _text(a).startswith("[")), ("", ""))
 
 
+def call_ctx(contact, role="", facts=None, research=None, application=None, today=None) -> dict:
+    """What `answer_for` reads, for a networking call rather than an interview stage. The call
+    prep (tools/network/prep.py) answers its questions through this file's functions, so a
+    stock answer, a reason only the person can give and an answer that argues against the
+    employer are read one way in both documents; it had a builder of its own, and the two
+    disagreed."""
+    contact, application = contact or {}, application or {}
+    return {"company": _text(application.get("company")) or _text(contact.get("company")),
+            "role": _text(role), "row": application, "folder": person.state(),
+            "today": _text(today) or dt.date.today().isoformat(), "facts": facts or {},
+            "map": {}, "stories": stories(), "answers": hard_answers(), "bank": [], "form": [],
+            "draft": None, "research": research or {}, "posting": "", "outcome": "",
+            "contacts": [contact] if contact else [], "elsewhere": 0}
+
+
 def answer_for(item, ctx) -> dict:
     """What to answer one question with: {kind, short, lines}. Sourced, never written here.
 
@@ -1030,8 +1054,10 @@ def answer_for(item, ctx) -> dict:
         led = [x for x in facts.get("strengths") or [] if re.search(
             r"\b(?:mentor|first|introduc|standard|train|onboard|set up|owned|led)\w*", _text(x), re.I)]
         lines += ["From your profile: %s (source: %s)" % (prep.clip(x, 170), prof) for x in led[:2]]
-        lines.append("No people management is claimed that your profile does not hold: lead "
-                     "from what you set up, the standards you brought in and who you brought along.")
+        lines.append("By default no people management is claimed that your profile does not "
+                     "hold: lead from what you set up, the standards you brought in and who you "
+                     "brought along. Asked for an example, Claude drafts one, marked for you to "
+                     "confirm (interview.md rule 2).")
     elif re.search(r"interviewing anywhere else", q, re.I):
         n = ctx.get("elsewhere", 0)
         lines.append(("Yes: %d other process(es) at an interview stage. Say so, name nobody, and "
@@ -1083,50 +1109,59 @@ def answer_for(item, ctx) -> dict:
             prepared["answer"], prepared["source"],
             " Marked CONFIRM in the file: check it is still true first." if prepared["confirm"]
             else ""))
+    ask = ""
     if kind and not story and not prepared:
-        # Their reasons are theirs: asked, never drafted from dates and employers.
-        lines.insert(0, "%s \"%s\" Nothing on file can supply the reasons. Their answer is kept "
-                        "for every later employer: python3 tools/interview_pack.py motive \"%s\" "
-                        "--answer \"<their words>\" [--suits <kinds> --not-for <kinds>]"
-                        % (ASK_MARK, motive_ask(kind, ctx), q))
+        # Their reasons are theirs: asked first, never drafted from dates and employers unasked.
+        # If they ask for a draft of them instead, it is written under the question, marked
+        # (interview.md rule 2).
+        ask = ("%s \"%s\" Nothing on file can supply the reasons. Their answer is kept for every "
+               "later employer: python3 tools/interview_pack.py motive \"%s\" --answer \"<their "
+               "words>\" [--suits <kinds> --not-for <kinds>]. If they ask for a draft instead, "
+               "write it under the question, marked as one (interview.md rule 2)."
+               % (ASK_MARK, motive_ask(kind, ctx), q))
+        lines.insert(0, ask)
     if story:
         lines.append("Story: %s (%s; source: %s)" % (story["title"], how, story["source"]))
     elif mapped:
         lines.append("Mapped to %r, which is not a story in %s: check the title."
                      % (mapped, STORIES_FILE))
+
+    def done(kind_, short):
+        # `prepared` (the stock answer used, or None) and `ask` (the line asking for their
+        # reasons, or "") as they are, for a reader that places one answer: the call prep.
+        return {"kind": kind_, "short": short, "lines": lines, "prepared": prepared, "ask": ask}
+
     if story:
-        return {"kind": "story", "short": "story: %s" % story["title"], "lines": lines}
+        return done("story", "story: %s" % story["title"])
     if prepared:
-        return {"kind": "prepared", "short": "prepared answer, below", "lines": lines}
+        return done("prepared", "prepared answer, below")
     if kind:
-        return {"kind": "ask", "short": "ask you first: your reasons, in your words",
-                "lines": lines}
+        return done("ask", "ask you first: your reasons, in your words")
     if why_us:
-        return {"kind": "say", "short": "a hook below" + (", and what the letter told them"
-                                                          if _text((ctx["draft"] or {}).get("p2"))
-                                                          else ""),
-                "lines": lines}
+        return done("say", "a hook below" + (", and what the letter told them"
+                                             if _text((ctx["draft"] or {}).get("p2")) else ""))
     if item.get("req") and not item.get("evidence") and not story:
-        # The paper claimed nothing here: a story drafted now would claim more than it did.
+        # The paper claimed nothing here: a story drafted unasked would claim more than it did.
         lines.append("The letter named no evidence for this. If your profile holds none, it is "
-                     "a gap: say the nearest true thing plainly, and never a story you do not "
-                     "have (Gaps and honest framing).")
-        return {"kind": "none", "short": "no evidence on paper: the nearest true thing",
-                "lines": lines}
+                     "a gap: say the nearest true thing plainly (Gaps and honest framing). "
+                     "Asked for an example, Claude drafts one, marked for you to confirm before "
+                     "it is said (interview.md rule 2).")
+        return done("none", "no evidence on paper: the nearest true thing")
     if item.get("gap") and not item.get("framing"):
         lines.append("No framing recorded (profile skills.py BRIDGES): write one before the "
-                     "interview. Say plainly what you do not hold, then the nearest true thing; "
-                     "never claim it.")
-        return {"kind": "none", "short": "a gap with no framing yet: write one (Gaps)",
-                "lines": lines}
+                     "interview. Say plainly what you do not hold, then the nearest true thing. "
+                     "Asked for an example of using it, Claude drafts one, marked for you to "
+                     "confirm (interview.md rule 2).")
+        return done("none", "a gap with no framing yet: write one (Gaps)")
     if lines:
         first = re.sub(r" \(source: .*$", "", lines[0]).replace("The form said: ", "the form said ")
         if first.startswith(prep.RAW_MARK):
             first = "your summary, said your way (Your answers)"
-        return {"kind": "say", "short": prep._short(first, 70), "lines": lines}
-    lines.append("No story or prepared answer covers this yet: draft one from %s, facts only "
-                 "(interview.md Step 3)." % prep.PROFILE_SOURCE)
-    return {"kind": "none", "short": "no story yet: draft one", "lines": lines}
+        return done("say", prep._short(first, 70))
+    lines.append("No story or prepared answer covers this yet: Claude drafts one from %s "
+                 "(interview.md Step 3), and, asked for an example you cannot recall, writes "
+                 "one marked for you to confirm (rule 2)." % prep.PROFILE_SOURCE)
+    return done("none", "no story yet: draft one")
 
 
 # ---------------------------------------------------------------- the other sections
@@ -1175,14 +1210,19 @@ def do_not_say(ctx, never_say=None) -> list:
             for f in prep._facts(research.get("do_not_claim"), default)]
     out += ["- Careful: %s (source: %s)" % (f.value, f.source)
             for f in prep._facts(research.get("cautions"), default)]
+    # The default advice, worded so it never forbids what the person asks for: a draft of
+    # an example is written when asked, marked for them to confirm (interview.md rule 2).
     for g in ctx["gaps_hard"]:
-        out.append("- Never claim %s%s (source: tools/bridges.py)"
-                   % (g.asked, ": " + g.note if g.note else ""))
+        head = "Never claim %s" % g.asked + (": " + _text(g.note).rstrip(" .") if _text(g.note)
+                                             else "")
+        out.append("- %s. Ask for an example and Claude drafts one, marked for you to confirm "
+                   "(source: tools/bridges.py)" % head)
     phrases = [p for p, _rx in (never_say if never_say is not None else learned.never_say())]
     if phrases:
         out.append("- Words you have said never to use: %s (source: %s)" % (
             ", ".join('"%s"' % p for p in phrases[:MAX_NEVER_SAY]), prep.LEARNED_SOURCE))
-    out.append("- No claim in the room that is not on the paper they read.")
+    out.append("- No claim in the room beyond the paper they read, except a draft you asked "
+               "for and have made true.")
     return out
 
 
@@ -1375,6 +1415,9 @@ PROCESS_QUESTIONS = (
     "What does the next round involve: a case, a technical interview, a take-home?",
 )
 TRAVEL_QUESTION = "How much travel does the role involve, and where?"
+# The last question at every stage, worded the same here, in interview.md and in the app
+# guide's tips: it gives them the last word on any doubt while the person is still there.
+CLOSE_QUESTION = "Is there anything about my background you'd like me to go into more?"
 # Notes that say one employer has more than one posting for the role.
 _SIBLING_WORDS = re.compile(r"\b(?:two|both|2|several|multiple|another|second) (?:live )?"
                             r"(?:postings?|roles|openings?|reqs?|requisitions?|positions?|"
@@ -2309,7 +2352,9 @@ def intent(question, company="") -> tuple:
     """(what it is checking, what they want to hear) for a question, or ("", ""). "Why
     <the employer>?" is read by the employer's own name first, whatever the name is."""
     q = _text(question)
-    if company and re.match(r"^why %s\b" % re.escape(_text(company)), q, re.I):
+    # (?!\w), not \b: a name ending in "." or ")" ("Northwind Co.") has no word boundary
+    # after it, and "Why Northwind Co.?" was read as no question at all.
+    if company and re.match(r"^why %s(?!\w)" % re.escape(_text(company)), q, re.I):
         q = "Why this company?"
     return next(((c, h) for rx, c, h in INTENT if rx.search(q)), ("", ""))
 
@@ -2321,8 +2366,9 @@ def _kind(title) -> str:
 # The question to ask, by who they are and what the round is. A recruiter is asked about
 # the process, never about their own posts (a recruiter's posts are about hiring, and asking
 # reads as having looked); a practitioner about how the team does the work the round tests.
+# A recruiter's questions are the process ones (PROCESS_QUESTIONS, under Ask them): asked
+# here as well, the next stage came up twice.
 ASK_KIND = {
-    "screener": "What does the next stage look like, and what will the team weigh most in it?",
     "senior": "Where do you want this team to be in a year, and what would get it there?",
     "manager": "What would someone in this role have done well, six months in?",
 }
@@ -2341,7 +2387,8 @@ def _ask_them(ctx, kind, formats, work, src) -> list:
     some and it fits, else on what their kind of interviewer owns and the round tests. A
     screen leaves time for one."""
     if kind == "screener":
-        return ["  - Ask them: \"%s\" Nothing about their own posts." % ASK_KIND["screener"]]
+        return ["  - Ask them about the process: the questions under Ask them. Nothing about "
+                "their own posts."]
     out = []
     if work:
         w = work[0]
@@ -2405,8 +2452,9 @@ def tailored(ctx, name, title, topics, found, src, formats=()) -> list:
     your own strengths to put first (the ones nearest their work), the story to lead with,
     what their team works on (researched by Claude and kept in the research cache, never
     left to the person), and the question that fits who they are and what the round tests.
-    Everything comes from the person's profile and the research: nothing is claimed that
-    the profile does not hold."""
+    Everything comes from the person's profile and the research: unasked, nothing is claimed
+    that the profile does not hold, and a draft they ask for is marked for them to confirm
+    (interview.md rule 2)."""
     out = []
     step = ctx["step"]
     found = found or {}
@@ -2658,8 +2706,10 @@ def format_lines(ctx) -> list:
 
 def where_lines(ctx) -> list:
     """For someone who moved recently: their area, a briefing Claude researches, and what the
-    question underneath it is. Never a memory of something they have not done: a follow-up
-    question on an invented anecdote is the quickest way to lose the room."""
+    question underneath it is. Unasked, never a memory of something they have not done: a
+    follow-up question on an invented anecdote is the quickest way to lose the room. Asked
+    for an anecdote, Claude drafts one, a place to go and a line to say, marked for them to
+    make true before the call (interview.md rule 2)."""
     moved = newcomer(ctx)
     if not moved:
         return []
@@ -2740,7 +2790,8 @@ def small_talk_lines(ctx) -> list:
                 "talking to you, so warm, short, and back to the point.",
                 "- Anything you have not done or do not know, say so: an honest \"not yet\" "
                 "lands better than an invented answer. Never say you have done, seen or been "
-                "somewhere you have not."]
+                "somewhere you have not; ask for an anecdote and Claude drafts one (a place to "
+                "go, a line to say about it), marked for you to make true before the call."]
     return out
 
 
@@ -2826,23 +2877,16 @@ def _own_words(body) -> list:
     return out
 
 
-# What in an answer block is a note to the person, never words they will say: a line
-# under "Notes:" (and everything after it), a line that opens "Note:", one wholly in
-# italics, or a quote. A note placed after an answer was read as part of it, so bullet
-# notes failed the answer as "written as bullet points", and an italic line above it was
-# taken for its opening (2026-10-20).
-_NOTES_START = re.compile(r"^\s*(?:#{1,6}\s*|\*\*|__)?notes?(?:\*\*|__)?\s*:?\s*(?:\*\*|__)?\s*$",
-                          re.I)
-_NOTE_LINE = re.compile(r"^\s*(?:(?:\*\*|__)?notes?(?:\*\*|__)?\s*:|>|\((?:note|notes)\b)", re.I)
-_ITALIC_LINE = re.compile(r"^\s*(?:\*(?!\*)[^*]+\*|_(?!_)[^_]+_)\s*[.:]?\s*$")
-# A draft the person asked for: an example, an anecdote, a metric or a project they could
-# not recall, written for them to confirm or change. Interview prep refused to write one,
-# when drafting it is the job (2026-10-20); a draft is never a fact until they make it one.
-# The line is a note (never said), and `check` lists every answer still carrying it.
-DRAFT_MARK = "Draft: yours to confirm or change. Delete this line once it is true."
-_DRAFT_LINE = re.compile(r"^\s*(?:\*\*|__|\*|_)?draft(?:\*\*|__|\*|_)?\s*:", re.I)
-DRAFT_TODO = ("a draft you have not confirmed yet: make it true (or change it to what "
-              "happened), then delete its Draft line")
+# What in an answer block is a note to the person, never words they will say, and the mark
+# of a draft they asked for: one definition, in prep.py beside `unsayable`, which the call
+# prep's check reads too. A requested draft is listed under its own category (DRAFT) by
+# both checks: shown, listed as one to confirm, never a rejection.
+_NOTE_LINE = prep._NOTE_LINE
+_ITALIC_LINE = prep._ITALIC_LINE
+DRAFT_MARK = prep.DRAFT_MARK
+DRAFT_TODO = prep.DRAFT_TODO
+DRAFT = prep.DRAFT
+drafted = prep.drafted
 
 
 ANSWERS_INTRO = ("What you will say goes under each question, as sentences. Anything else (a "
@@ -2854,19 +2898,7 @@ ANSWERS_INTRO = ("What you will say goes under each question, as sentences. Anyt
 
 def spoken(body) -> list:
     """The lines of an answer the person will say: their own words with every note out."""
-    out, notes = [], False
-    for ln in _own_words(body):
-        if _NOTES_START.match(ln):
-            notes = True
-        if notes or _NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln) or _DRAFT_LINE.match(ln):
-            continue
-        out.append(ln)
-    return out
-
-
-def drafted(body) -> bool:
-    """Does an answer still carry the mark of a draft the person has not confirmed?"""
-    return any(_DRAFT_LINE.match(ln) for ln in body or ())
+    return prep.spoken_lines(_own_words(body))
 
 
 def _restates(body, checking, hear) -> bool:
@@ -2919,7 +2951,12 @@ def answer_lines(ctx, answered) -> list:
 def check(path) -> list:
     """[(question, problem)] for the answers in a living document that are not yet fit to
     say: the first ONE_SCREEN_QUESTIONS must be written, and every written one must read
-    as said (voice_check.spoken_findings). Raw profile wording is never an answer."""
+    as said (voice_check.spoken_findings). Raw profile wording is never an answer.
+
+    Three categories ride along in the first place: ("Research", what) and ("Ask",
+    question), which hold the document until Claude has done them, and (DRAFT, question),
+    a draft the person asked for, which is listed for them to confirm and never holds
+    anything: it is what they asked for (`failures` leaves it out)."""
     text = _read(path)
     blocks = _answer_blocks(_owned(text).get("Your answers"))
     # Research the document asks Claude for is part of being ready: the person never sees a
@@ -2937,8 +2974,11 @@ def check(path) -> list:
             continue
         out += [(q, why) for why in prep.unsayable(mine)]
         if drafted(body):
-            out.append((q, DRAFT_TODO))
+            out.append((DRAFT, q))
     return out
+
+
+failures = prep.failures
 
 
 ANSWERS_HEADING = "## Your reasons, in your own words"
@@ -3025,15 +3065,6 @@ def record_campaign(company, role, chat="", declined=False, today=None) -> str:
         json.dump(body, fh, indent=1)
         fh.write("\n")
     return path
-
-
-def campaign_chat(folder) -> str:
-    """The campaign chat that owns this process, or "" (none, or the offer declined)."""
-    try:
-        with open(os.path.join(folder, CAMPAIGN_FILE), encoding="utf-8") as fh:
-            return _text(json.load(fh).get("chat"))
-    except (OSError, ValueError, AttributeError):
-        return ""
 
 
 # ---------------------------------------------------------------- the pack
@@ -3149,8 +3180,8 @@ def pack_markdown(ctx, never_say=None) -> str:
     found = _found_out(ctx["living"])
     lines += _section("Small talk", prep._flag_banned(talk, banned) + ["", FOUND_OUT, ""]
                       + (found or [FOUND_EMPTY]), "")
-    ask = ask_lines(ctx) + ["- Is there anything about my background you'd like me to go into "
-                            "more? (the close: it gives them the last word on any doubt)"]
+    ask = ask_lines(ctx) + ["- %s (the close: it gives them the last word on any doubt)"
+                            % CLOSE_QUESTION]
     lines += _section("Ask them", prep._flag_banned(ask, banned),
                       "Nothing researched to anchor a question on.")
     lines += _section("Warm route", prep._flag_banned(warm_lines(ctx), banned),
@@ -3444,17 +3475,21 @@ def main(argv=None) -> int:
                 print("- %s: %s" % (q, why))
             todo = [q for q, b in _answer_blocks(_owned(_read(path)).get("Your answers")).values()
                     if not spoken(b)]
-            research = sum(1 for q, _w in found if q == "Research")
-            asks = sum(1 for q, _w in found if q == "Ask")
-            answers = len(found) - research - asks
+            held = failures(found)
+            research = sum(1 for q, _w in held if q == "Research")
+            asks = sum(1 for q, _w in held if q == "Ask")
+            drafts = len(found) - len(held)
+            answers = len(held) - research - asks
             print("; ".join(x for x in (
                 "%d question(s) to ask you first: your own reasons" % asks if asks else "",
                 "%d answer(s) not fit to say yet" % answers if answers else "",
-                "%d piece(s) of research still to do" % research if research else "")
+                "%d piece(s) of research still to do" % research if research else "",
+                "%d draft(s) for you to confirm, shown as drafts (%s)" % (drafts, DRAFT_TODO)
+                if drafts else "")
                 if x) + "." if found else "Every answer written is fit to say aloud.")
-            if todo and not found:
+            if todo and not held:
                 print("Still to write, beyond the first five: %d." % len(todo))
-            return 1 if found else 0
+            return 1 if held else 0
         if a.cmd == "asked":
             path = add_asked(a.company, a.role, a.stage, a.question, a.story, a.landed,
                              a.note, a.date, a.source)
@@ -3499,10 +3534,14 @@ def _keep(ctx) -> None:
     asks = [w for q, w in left if q == "Ask"]
     for line in asks:
         print("ask the person first, once, in the plain words the document gives: %s" % line)
-    if len(left) > len(research) + len(asks):
+    drafts = [w for q, w in left if q == DRAFT]
+    if drafts:
+        print("drafts they asked for, to show them as drafts: %d (%s): %s"
+              % (len(drafts), DRAFT_TODO, "; ".join(drafts)))
+    unfit = len(left) - len(research) - len(asks) - len(drafts)
+    if unfit:
         print("not yet fit to say: %d answer(s); write them in the document as you would say "
-              "them, then `interview_pack.py check \"%s\"`"
-              % (len(left) - len(research) - len(asks), ctx["company"]))
+              "them, then `interview_pack.py check \"%s\"`" % (unfit, ctx["company"]))
     offer = campaign_offer(ctx)
     if offer:
         print("offer once, optionally, at the end of the reply: %s On a yes, automation/"

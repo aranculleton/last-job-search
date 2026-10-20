@@ -205,8 +205,11 @@ def test_a_draft_they_asked_for_is_said_and_listed_until_they_confirm_it(case, c
     body = [P.DRAFT_MARK, "I cut a weekly report from two days to two hours."]
     assert P.spoken(body) == ["I cut a weekly report from two days to two hours."]
     assert P.drafted(body) and not P.drafted(body[1:])
-    assert (ABOUT, P.DRAFT_TODO) in P.check(path)
+    # Listed under its own category, the way Ask and Research are: shown, to confirm, and
+    # never a failure that holds the document back.
+    assert (P.DRAFT, ABOUT) in P.check(path)
+    assert (P.DRAFT, ABOUT) not in P.failures(P.check(path))
     P.main(["pack", FIRM, "--today", TODAY, "--write"])          # a rebuild keeps the draft
     assert P.DRAFT_MARK in _block(_doc(), ABOUT)
     _rewrite(P.DRAFT_MARK + "\n", "")
-    assert (ABOUT, P.DRAFT_TODO) not in P.check(path)
+    assert (P.DRAFT, ABOUT) not in P.check(path)

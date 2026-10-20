@@ -11,8 +11,8 @@ every document alike.
 Everything here is read from files that already exist:
 
   `01-candidate-profile.md`   the summary, the employers and their evidence,
-                              the narrative, the work authorization and the
-                              deal-breakers
+                              whether there is a narrative to point at, the work
+                              authorization and the deal-breakers
   `tools/bridges.py`          the gaps, and the honest sentence to answer each
                               one with
 
@@ -50,10 +50,6 @@ ROOT = os.path.dirname(os.path.dirname(_HERE))
 PROFILE_MD = person.file("candidate_profile", "01-candidate-profile.md")
 _NET = person.module("networking") if person.exists("networking.py") else None
 
-# How many employers reach the document. The two most recent answer "what have
-# you built that is closest to this", and a third is already more history than a
-# thirty-minute call has room for.
-MAX_EMPLOYERS = 3
 MAX_EVIDENCE = 3
 MAX_STRENGTHS = 3
 
@@ -161,7 +157,10 @@ def _bullets(body, stop_at_bold_lead=True) -> list:
 
 
 def employers(secs, lines=None) -> list:
-    """Each role as `{company, title, dates, evidence}`, most recent first.
+    """Each role as `{company, title, dates, evidence}`, most recent first, every one of
+    them: "walk me through the moves" names them all, and a cap of three left the earliest
+    employer out of it. A reader that wants fewer takes fewer (`_closest_work`, the first;
+    `strengths`, the first two).
 
     Reserve Experience is deliberately not read. It is opt-in per role by the
     profile's own instruction, and a call is not the place to volunteer it.
@@ -185,7 +184,7 @@ def employers(secs, lines=None) -> list:
                     "title": _plain(m.group("title")),
                     "dates": _plain(m.group("dates")),
                     "evidence": evidence})
-    return out[:MAX_EMPLOYERS]
+    return out
 
 
 def _experience_headings(secs, lines=None) -> set:
@@ -215,21 +214,12 @@ def _first_sentence(text) -> str:
     return body[:m.start() + 1] if m else body
 
 
-def narrative(secs) -> str:
-    """The unusual-route answer, in the profile's framing, condensed to what a call needs.
-
-    The profile says the person's own words are for picking what to say and how
-    to frame it, never to be pasted, so the first and last movements of it are
-    taken and the rest left on the page: the route and what it taught, without
-    the detail the profile says not to lead on.
-    """
-    body = _blockquote_paragraphs(
-        secs.get("Personal Narrative (candidate's own words)", []))
-    if not body:
-        return ""
-    opener = _first_sentence(body[0])
-    learned = next((p for p in body if "learning quickly" in p or "under pressure" in p), "")
-    return " ".join(x.strip() for x in (opener, _first_sentence(learned)) if x.strip())
+def narrative(secs) -> bool:
+    """Does the profile hold a personal narrative? All a prep needs to know: the narrative
+    is an arc the person tells in their own words, so the prep points at it
+    (`prep.NARRATIVE_POINTER`) and never prints any of it."""
+    return any(_blockquote_paragraphs(body) for heading, body in secs.items()
+               if heading.lower().startswith("personal narrative"))
 
 
 def summary(secs) -> str:
@@ -341,6 +331,45 @@ def gaps_for(text) -> list:
         out.append({"gap": a.asked, "framing": a.line,
                     "source": "tools/bridges.py"})
     return out
+
+
+# What a process's job_posting.md says while its posting is not held: a placeholder, which
+# nothing may read as a requirement (tools/interview_pack.py writes it).
+POSTING_NOT_HELD = "The posting's text is not held yet."
+
+
+def posting_in(folder) -> str:
+    """The posting an application's folder holds (job_posting.md), unfenced, or "" for none
+    or a process's placeholder. The one reader, so the gaps the interview pack and the call
+    prep name come from the same text: the call prep read the tracker's notes as the
+    posting, and missed a gap the pack showed."""
+    import untrusted
+    try:
+        with open(os.path.join(folder, "job_posting.md"), encoding="utf-8") as fh:
+            raw = fh.read()
+    except OSError:
+        return ""
+    if POSTING_NOT_HELD in raw and "BEGIN-UNTRUSTED-" not in raw:
+        return ""
+    return untrusted.unfence(raw)
+
+
+def consented(draft) -> set:
+    """The skills the person said yes to claiming on this application (the draft's
+    `consented_skills`), casefolded: on the resume they are a question to expect, never a
+    gap. Left among the gaps, the pack told them to claim one and never to claim it."""
+    return {" ".join(str(k).split()).casefold()
+            for k in (draft or {}).get("consented_skills") or () if str(k).strip()}
+
+
+def without(facts, skills) -> dict:
+    """`facts` with every gap named in `skills` (casefolded names) taken out."""
+    if not skills or not facts.get("gaps"):
+        return facts
+    gaps = [g for g in facts["gaps"] if " ".join(str(g.get("gap")).split()).casefold()
+            not in skills]
+    out = {k: v for k, v in facts.items() if k != "gaps"}
+    return dict(out, gaps=gaps) if gaps else out
 
 
 def build(role="", posting="", path=PROFILE_MD) -> dict:
