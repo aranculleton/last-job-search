@@ -166,13 +166,24 @@ it. LinkedIn is never fetched from a session.
      `claude_surfaces.py steps linkedin-people-at-employer` says;
      keep that address with `python3 tools/network/reading.py search-url --company
      "<employer>" --place "<city>" --learn "<the address>"`, and from then on `search-url
-     --company "<employer>" --place "<city>" --keywords "<their function>"` builds the next
-     one. One load, behind `reading.py gate --page`, its text piped to `python3
-     tools/network/reading.py people - --company "<employer>"`. It screens a dozen people for
-     one page (their headline, place, degree, and whether a request is already Pending), the
-     cheap checks a profile read was being spent on, and says apart who the cards place at the
-     employer, who elsewhere (out) and who they do not place (kept, for the profile read to
-     settle). Only the few who pass and will be written to today go to a profile read.
+     --company "<employer>" --place "<city>" --function` builds the next one, searching the
+     person's own function titles (`TITLE_SETS` "function", quoted and joined with OR;
+     `--keywords` for anything else). Where the employer's LinkedIn company number is known,
+     `--company-id <n>` builds it without the hand-filtered address; it stays unconfirmed
+     until `people` reads the first page of results, which says how many there work there
+     ("7 of 10 at <employer>") and keeps the number, or says it is someone else's. One load,
+     behind `reading.py gate --page`. Where the browser tool can run a script on the page,
+     run `reading.py extractor --list`'s read-only snippet and pipe its JSON to `python3
+     tools/network/reading.py people - --company "<employer>"`: every card comes with the
+     person's profile address. Otherwise pipe the page text, which has none. It screens a
+     dozen people for one page (their headline, place, degree, and whether a request is
+     already Pending), the cheap checks a profile read was being spent on, says apart who the
+     cards place at the employer, who elsewhere (out) and who they do not place (kept, for the
+     profile read to settle), cuts a function that is never a route to theirs (IT support,
+     help desk, operations and the like, never one of their own words), and lists the rest
+     best first: their own titles, then a role in their function, then the rest. Never write
+     a script of your own to read the page. Only the few who pass and will be written to
+     today go to a profile read.
 
    Measured over two employers in one city on 2026-10-18: the plain query shape
    `queries_for()` now writes ("<employer> <one title> <city>") found 14 people named at the
@@ -318,7 +329,11 @@ it. LinkedIn is never fetched from a session.
         person; `reading.py limits` prints every one, its value, where it came from and why.
         Never open two pages at once.
       - **Signals, not a guess.** A security check or CAPTCHA, an "unusual activity" banner, an
-        HTTP 999 page, or the sign-in page after they signed in stops the day's reads at once.
+        HTTP 999 page, or the sign-in page within four hours of the last page or sign-in (or a
+        second sign-out that day) stops the day's reads at once. The sign-in page on the first
+        page of the day, or hours after the last, is a session that expired: ask them to sign in,
+        nothing stops. After a clean sign-in, a sign-out stop is lifted only on their word, once
+        a day: `reading.py resume --reason "<their words>"`. Never edit the ledger by hand.
         A page that does not render, or one far slower to load than their recent ones (pass
         `--load-seconds` when the browser tool times it), doubles the next pause, and a second
         within the hour stops the day. Each is kept, dated, in the friction log (`reading.py

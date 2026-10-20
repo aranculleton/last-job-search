@@ -11,8 +11,12 @@ react to what actually happens instead of guessing a number once and making ever
   the preset, and a setting the person writes for one limit beats the preset. No preset
   but careful applies unless the person writes it.
 - **Signals, not guesses.** Every page load is recorded with what it showed. A sign-in wall
-  after signing in, a security check or CAPTCHA, an "unusual activity" banner or an HTTP 999
-  page stops reads for the day at once (a hard signal). A page that does not render, or one
+  within `expiry_hours` of the last page or sign-in (or a second sign-out in a day), a
+  security check or CAPTCHA, an "unusual activity" banner or an HTTP 999 page stops reads
+  for the day at once (a hard signal). A sign-in wall on the first page of the day, or that
+  long after the last, is a session that expired: a sign-in, no stop and no signal. A
+  sign-out stop is the one the person may lift, once a day, after a clean sign-in
+  (`reading.py resume`); the signal stays in the log, marked as they said. A page that does not render, or one
   that takes far longer to load than the person's own recent pages, is a soft signal: the
   next pause doubles, and a second soft signal within the hour stops the day. The friction
   log keeps every signal, dated, across days.
@@ -135,6 +139,12 @@ LIMITS = {
         "pages an hour allowed on each clean day of reading since the last signal",
         "start low and rise on clean history, never above the preset or the person's setting",
         (5, 8), (5, 10, 12), (5, 10, 20)),
+    "expiry_hours": (
+        "hours after the last page load from which LinkedIn's sign-in page is a session that "
+        "expired, not a sign-out",
+        "a sign-in page the next morning, signed back into with no check, is how an expired "
+        "session looks; one within minutes of a page is friction and stops the day",
+        4, 4, 4),
 }
 # The profile/networking.py name for each limit. Three are older than the dial and keep
 # their names; the rest are new and optional.
@@ -157,6 +167,7 @@ SETTING = {
     "fresh_days": "PROFILE_READ_FRESH_DAYS",
     "skip_spare": "PROFILE_READ_SKIP_SPARE",
     "ramp": "PROFILE_READ_RAMP",
+    "expiry_hours": "PROFILE_SESSION_EXPIRY_HOURS",
 }
 _PAIRS = {"gap_seconds", "break_after", "break_minutes", "dwell_seconds", "card_dwell_seconds"}
 # Each read written out, so tools/profile_names.py lists every one of them.
@@ -179,6 +190,7 @@ _MINE = {
     "fresh_days": lambda: getattr(_NET, "PROFILE_READ_FRESH_DAYS", None),
     "skip_spare": lambda: getattr(_NET, "PROFILE_READ_SKIP_SPARE", None),
     "ramp": lambda: getattr(_NET, "PROFILE_READ_RAMP", None),
+    "expiry_hours": lambda: getattr(_NET, "PROFILE_SESSION_EXPIRY_HOURS", None),
 }
 
 
@@ -371,6 +383,22 @@ SOFT_WINDOW_MINUTES = 60
 SLOW_FLOOR_SECONDS = 15         # never "slow" below this, however quick the rest were
 SLOW_FACTOR = 3                 # a load this many times the person's own median is slow
 SLOW_SAMPLE = 10
+
+
+def confirm_benign(kind: str, day: str, why: str, now: datetime.datetime | None = None) -> bool:
+    """The person's word that the day's last signal of this kind was benign: it stays in the
+    log, marked, and still counts for the ramp. True when one was found."""
+    found = []
+
+    def mark(d):
+        rows = [x for x in d.get("friction") or [] if isinstance(x, dict)
+                and x.get("kind") == kind and str(x.get("at", ""))[:10] == day]
+        if rows:
+            rows[-1]["benign"] = "person confirmed benign: " + " ".join(str(why).split())[:200]
+            rows[-1]["confirmed_at"] = (now or datetime.datetime.now()).isoformat(timespec="seconds")
+            found.append(rows[-1])
+    update(mark)
+    return bool(found)
 
 
 def record_friction(kind: str, words: str = "", now: datetime.datetime | None = None) -> dict:

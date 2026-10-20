@@ -147,7 +147,9 @@ def _two_chats_one_update(tmp_path):
     for i, chat in enumerate((a, b)):
         _git(chat, "fetch", "-q", app, "master")
         # A minute apart: two real chats never make the same commit, though a fast test can.
-        when = "2026-10-20T08:0%d:00" % i
+        # Minutes before now, never a fixed time: a chat's turn is OWNER_MINUTES from its
+        # sync, read against the clock, and a fixed date failed these once the day moved on.
+        when = "@%d +0000" % (int(time.time()) - 300 + 60 * i)
         subprocess.run(["git", "-C", chat, "-c", "user.name=t", "-c", "user.email=t@example.com",
                         "merge", "-q", "--no-ff", "--allow-unrelated-histories", "FETCH_HEAD",
                         "-m", "Sync from the app: 1 new commit(s)"], capture_output=True,
