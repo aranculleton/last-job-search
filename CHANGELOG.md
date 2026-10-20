@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.9.0] - 2026-10-20
+
 ### Added
 
 - **A sign-out stop has a way back, on your word.** After a clean sign-in, `python3
