@@ -40,6 +40,32 @@ make sense to somebody whose repo just received it.
   the number, and "only 2 of 10" says it is someone else's and refuses it.
 - **Search for your own function.** `search-url --function` searches your own function
   titles (`TITLE_SETS` "function" in profile/networking.py), each quoted and joined with OR.
+- **Interview prep drafts what you ask for.** Ask for an example, an anecdote, metrics, a
+  project or a way you might have used a tool, and it writes a plausible one under its question
+  with a "Draft: yours to confirm or change" line, never a refusal and never a question about
+  whether it happened. `interview_pack.py check` lists every answer still marked until you make
+  it true and delete the line. A draft never reaches your profile, a resume, a letter, a form or
+  a message until you confirm it. Before, it refused, citing "never write a memory the person
+  does not have".
+- **One line before a round says what you can read and what holds you.** `reading.py
+  shortlist` ends on it, and `reading.py budget` prints it alone: "Reads today: up to N
+  profile(s) and M list page(s). What binds: ...", with the exact line in profile/networking.py
+  that changes it. Before, you learned which setting held you only from a wait mid-run.
+- **The time where they are, at every hand-over.** `reading.py draft`, `queue` and a new
+  `reading.py send-time <ids>` print the current time in the recipient's city (from their
+  location when it maps to one time zone for certain, else your own `TIMEZONE` or `HOME_CITY`).
+  Nothing is held back. Five InMails went out between six and seven in the morning there.
+- **Many company numbers kept at once**: `reading.py company-ids "Employer A=1234" "Employer
+  B=5678"`, each unconfirmed until a first page of results confirms it. A `search-url` with no
+  stored filter now says plainly that a keyword search returns people who do not work there,
+  and how to get the number.
+- **Your InMail balance, as LinkedIn shows it.** An InMail answered within 90 days gives its
+  credit back (LinkedIn's help, read through a web search), and `state.py inmail-credits <n>`
+  keeps the balance you see until the month turns. It said "0 of 5 left" while LinkedIn showed
+  3.
+- **A voice setting**, `VOICE` in profile/networking.py: your shorthand for employers and
+  whether you speak in contractions, applied to every note and checked by `advise()`. Absent,
+  nothing changes.
 - **A "targets" area for what you learn it.** A rule about which employers to pick (`learned.py
   record --area targets`) has its own area, read by `/rank`; it used to go under "messages".
 
@@ -59,6 +85,39 @@ make sense to somebody whose repo just received it.
   of a restriction on the account. A number you set in profile/networking.py is kept; a
   profile that set `PROFILE_READ_RISK` to normal or fast gets the new caps with its own
   pauses. No profile upgrade: these are defaults.
+- **Your caps outrank the presets, and a read stops counting once its note is sent.** A cap
+  you set for an hour or a day in profile/networking.py outranks every preset cap of that
+  period (list pages, all page loads, the day's list, the slow start after a signal), and
+  `reading.py limits` says it was raised to yours. The requests LinkedIn allows a day are not
+  a reading cap and are never lifted. Only the profiles read and not yet written to count
+  against the requests still to go: 18 read, ten of them already sent to, stopped a run as
+  "enough for the 13 left". Notes unanswered for more than 45 days no longer count against
+  the two people a company.
+- **A round's messages are each built for their reader.** Two InMails in one round went out
+  with one subject, one paragraph order and one close. `compose.round_alike()` finds a subject,
+  a paragraph order or a close two messages share, and `reading.py batch` (exit 11) and
+  `reading.py draft` run it. `inmail()` takes `order=` (who you are first for a senior reader,
+  why them first for a peer with common ground, or both together) and `team=`, which closes on
+  a real question about their current work; the subject names first a past employer you share
+  with them.
+- **What a note says about them is hedged by default** ("I imagine you moved ..."), unless
+  their own page says it; a fact read off their page, and your closing ask, are no longer
+  warned as inferences. A hedge never makes a note too long to send: it goes as written
+  instead.
+- **New warnings on a draft, each with its fix**: a close that asks nothing about their work
+  (an InMail), guessing what they see from their level ("from a Staff role you've probably
+  seen ..."), a comparison that never says how ("goes a lot further than"), a word said twice
+  close together, a career read back to them as a list ("you did X, then Y, then Z"),
+  congratulations followed by a jobs ask, a dump of figures, and more exit lines ("no worries
+  at all", "totally fine if not"). Praise from a stranger ("really interested me",
+  "fascinating", "impressive", "the kind of work I'd like to do more of") is refused, with
+  the plain link between your path and theirs as the fix. "I came across your profile" is
+  gone from how a note says it found them.
+- **The length you asked for is the length it checks**: `learned.py record --length
+  inmail[:reader]=N` sets it, and `advise()`'s own warnings honour `--overrides`.
+- **A people page ranks research-only titles (research scientist, ML researcher) below your
+  function** when yours is not research, never cuts them, and says once when a first page has
+  nobody in your function in your city.
 - **A cap you lift is lifted everywhere.** A `PROFILE_READS_PER_HOUR` you set above the
   loads cap now raises it too, and the slow start after a signal no longer holds you below
   your own hourly number unless you set `PROFILE_READ_RAMP` yourself. Any wait for an hourly
@@ -125,6 +184,23 @@ make sense to somebody whose repo just received it.
 - **Two rules that apply to the same file or section are not a contradiction.** `CONTRADICTS`
   for two rules on one setting (`networking.py OPENER`) stays; two rules on
   `07-interview-prep.md` or `profile/CLAUDE.md` are two rules.
+- **A person read but never put in the contact book is no longer a send lost.** `state.py
+  sent` and `reading.py draft` make their row from what was read, or record against the same
+  person's row under another id (same LinkedIn address, or the same name at that employer),
+  never a second row. Three InMails were unlogged until rows were added by hand.
+- **A short list refuses an id that names nobody** (not in the contact book, nothing read about
+  them), instead of keeping it until `read` failed on it.
+- **A page loaded too soon is kept, never refused.** It was already open and its text taken;
+  refused, it had to be loaded again. The breach of your own pace is logged apart from
+  LinkedIn's signals, the next pause is longer by the one it skipped, and a page loaded after
+  the day was stopped still exits as a stop, so a run reads nothing more today.
+- **A request already pending is seen**: "Pending" on a card or a profile marks it as sent,
+  and keeps the person off InMail and new-note lists. Two people were nearly sent an InMail
+  credit while a request to them was already waiting.
+- **A profile with no Connect button says so**, and `draft` warns before writing a connection
+  note to them.
+- **A never-say phrase is refused in a follow-up, a referral ask, an email and a warm intro
+  too**, not only in a first note, and one typed with a curly apostrophe is caught.
 - **A contradiction says which entry each command retires.** "Theirs is this one: retire 50;
   the earlier one: retire 51" read as though 50 were the new rule. It now says "If the new rule
   stands: retire 50 (retires the earlier entry 50, <date>)" and the reverse.
