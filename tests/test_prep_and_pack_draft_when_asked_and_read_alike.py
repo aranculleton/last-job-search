@@ -182,7 +182,9 @@ def test_the_call_prep_offers_the_draft_too():
     assert any("asked, Claude drafts one, marked for you to confirm" in ln for ln in fit)
     doc = prep.prep_markdown(PEER, {}, None, {}, [], TODAY, never_say=NO_NEVER)
     fit_section = _section(doc, "Fit, honestly")
-    assert "Do not improvise" not in fit_section and "asked, Claude drafts one" in fit_section
+    # The words a person's own test pins stay, with the draft offered beside them.
+    assert "Do not improvise a fit story on the call" in fit_section
+    assert "Claude drafts one, marked for you to confirm" in fit_section
 
 
 def test_check_numbers_skips_an_answer_marked_as_a_draft(tmp_path):
@@ -448,9 +450,11 @@ def test_dead_code_is_gone_and_the_narrative_check_is_nobodys_in_particular():
     assert not hasattr(bridges, "bridge_for")
     assert not hasattr(profile_facts, "MAX_EMPLOYERS")
     assert not hasattr(prep, "LIVING")
-    source = inspect.getsource(profile_facts)
-    assert "learning quickly" not in source and "under pressure" not in source
+    # The prep asks only whether there is a narrative, by a check that names no one's words;
+    # narrative() itself stays because a person's own tests call it.
+    assert "learning quickly" not in inspect.getsource(profile_facts.has_narrative)
     assert profile_facts.build().get("narrative") is True
+    assert callable(profile_facts.narrative)
     text = inspect.getsource(prep)
     assert not re.search(r"which is the title that actually appears on these rows\.\n# The marks",
                          text)

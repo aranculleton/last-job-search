@@ -208,7 +208,7 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
             (13, "2026-10-20", True, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up; an answer drafted on request is marked as a draft; call preps answer from the interview pack's own answers (stock answers, why you are looking, work authorization), read the team research the pack reads, use the same posting, and send a booked screen with no application to /interview, so call preps already written are rebuilt, keeping what the person wrote"),
         ),
-        "fingerprint": "bacf55c59b5c0bf6",
+        "fingerprint": "cbf201e42df99552",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -377,7 +377,7 @@ METHODS: dict[str, dict] = {
             (33, "2026-10-20", False, "profile reads back to 3.2.5's caps (30 an hour, 80 a day), reading for the week's requests, no slow start before a signal, a lifted cap lifting the ramp and the loads cap, and the place check said once in a chat"),
             (34, "2026-10-20", False, "the voice checks from one round (a round's InMails built alike, a bare close, guessing from a level, flattery, vague comparisons, hedges by default, repeated words, a VOICE setting), and the tool fixes (rows from readings, pending invitations, no Connect button, InMail refunds, company numbers, research titles, two a company, the time where they are, a page loaded too soon kept); and the reading limits: a read stops counting once its note is sent, the person's own caps outrank every preset cap of their period, one budget line before a round; and one check for every composer, agreeing with what the composers write (no warning on a sentence about the sender, on the topic word said again, or on a question; a note to someone connected checked at its own length; an outreach note checked as a message)"),
         ),
-        "fingerprint": "4c3c17e348a09369",
+        "fingerprint": "41fb599f6b93d46f",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

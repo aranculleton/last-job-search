@@ -1736,8 +1736,8 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
                       "without reading is not one this file supplies. Research them first."
                       % NOT_RESEARCHED)
     lines += _section(SECTIONS[7], _flag_banned(fit_assessment(application, profile_facts), banned),
-                      "Nothing recorded. Prepare the fit story before the call, not on it; "
-                      "asked, Claude drafts one, marked for you to confirm.",
+                      "Nothing recorded. Do not improvise a fit story on the call: prepare it "
+                      "before. Asked, Claude drafts one, marked for you to confirm.",
                       extra=roles + letter_fit)
     lines += _section(SECTIONS[8], _flag_banned(_tone_lines(contact, application), banned),
                       "Nothing recorded about this person. Default to plain and short.")

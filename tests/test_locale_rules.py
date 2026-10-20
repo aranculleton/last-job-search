@@ -307,7 +307,8 @@ def test_validate_lifts_what_it_lifted(text, kind):
     assert compose._voice_findings(text, kind) == _voice_findings_now(text, kind)
     # And nothing voice_check finds is lost: tone reports the rest under its own name.
     vk = kind or "connection"
-    found = {v.rule for v in compose.validate(text, vk, _all=True)}
+    got = compose.validate(text, vk, _all=True)
+    found = {v.rule for v in got} | {compose._check_of(v) for v in got}
     for f in _old_lift(_old_hard(text), compose._OWN_VOICE if vk in ("connection", "inmail")
                        else compose._THREAD_WARMTH if vk in ("reply", "referral_ask", "nudge",
                                                              "email", "intro")
@@ -347,7 +348,8 @@ def test_the_outreach_note_check_is_validate_for_a_message(text):
         reader="decision_maker")]
     got = outreach.check_note(text)
     assert got == own_checks(text) + gate
-    rules_ = {p.split(":", 1)[0] for p in got}
+    rules_ = ({p.split(":", 1)[0] for p in got}
+              | {p.split(":", 2)[1].strip() for p in got if p.startswith("reads_as_generated:")})
     assert {v.rule for v in tone.check(text, recipient_seniority="senior", name="Sam")} <= rules_
     for f in _old_hard(text):
         assert TONE_NAME.get(f["rule"], f["rule"]) in rules_, (f, rules_)

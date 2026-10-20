@@ -37,7 +37,10 @@ GREET = "Hi Wren, we both worked at Oakmere Foods."
 
 
 def rules(found):
-    return {getattr(a, "rule", None) for a in found}
+    """Every rule name a finding answers to: its own, and for a draft that reads as
+    generated, voice_check's name for the check inside it ("house-style")."""
+    return ({getattr(a, "rule", None) for a in found}
+            | {compose._check_of(a) for a in found if hasattr(a, "text")}) - {""}
 
 
 def _entries(monkeypatch, **row):
@@ -165,7 +168,9 @@ def test_hope_youre_well_is_allowed_in_every_follow_up():
 def test_a_voice_check_finding_is_under_its_own_name_and_an_override_lifts_it(monkeypatch):
     text = f"{GREET} Would love to hear if you have anything coming up."
     found = compose.validate(text, "message", name="Wren Halloway")
-    assert "house-style" in rules(found) and "reads_as_generated" not in rules(found)
+    # One rule name a person's own tests look for, with the check's own name inside it.
+    assert {v.rule for v in found if compose._check_of(v) == "house-style"} == \
+        {"reads_as_generated"}
     _entries(monkeypatch, overrides=["house-style"])
     assert "house-style" not in rules(compose.validate(text, "message", name="Wren Halloway"))
     assert "your_rule_outranks" in rules(compose.advise(text, "message", name="Wren Halloway"))
@@ -316,10 +321,11 @@ def test_every_composer_refuses_what_validate_refuses_for_its_kind(build):
 # ------------------------------------------------------------ what was removed, what stays
 
 def test_dead_code_is_gone_and_the_compatibility_aliases_stay():
-    for mod, name in ((compose, "connection_note"), (compose, "register"),
-                      (compose, "DEFAULT_CLOSE"), (compose, "DEFAULT_OPENER"),
-                      (compose, "_never_said"), (advice, "claims"), (advice, "EXIT_FIX")):
+    for mod, name in ((compose, "_never_said"), (advice, "claims"), (advice, "EXIT_FIX")):
         assert not hasattr(mod, name), name
+    # Public names a person's own tests call stay, though nothing in the app uses them.
+    for name in ("connection_note", "register", "DEFAULT_CLOSE", "DEFAULT_OPENER"):
+        assert hasattr(compose, name), name
     assert compose.HookIsAboutTheSender is compose.NoteIsAllAboutTheSender
     assert tone.hook_reaches_them is tone.reaches_them
 
@@ -353,3 +359,18 @@ def test_the_docs_say_one_thing_about_warnings_and_lengths():
     auditor = _read(".claude", "agents", "grounding-auditor.md")
     rest = auditor.split("The rules that are not", 1)[1].split("5.", 1)[0]
     assert "em dash" not in rest and "documents.spelling" not in rest
+
+
+def test_a_composer_refuses_what_a_first_note_does_and_leaves_the_rest_as_warnings():
+    # Refused on every finding, an email with a "CV" file name could not even be composed to
+    # be shown; a person's own test composes one and expects validate() to warn on it.
+    text = compose.email("Wren Halloway", "Forecasting role", "Thanks for the call today.",
+                         "Body paragraph.", "Happy to talk any afternoon next week.",
+                         attachment="Morgan_Example_CV_KM.pdf")
+    assert "Morgan_Example_CV_KM.pdf" in text
+    assert compose.GATE_REFUSES >= {"reads_as_generated", "person_dislikes", "em_dash"}
+    try:
+        compose.nudge("Wren Halloway", "just checking in, did you get a chance to look?")
+        raise AssertionError("a check-in was composed")
+    except compose.Refused:
+        pass

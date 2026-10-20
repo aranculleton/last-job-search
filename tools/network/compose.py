@@ -656,12 +656,22 @@ class Refused(ReadsAsGenerated):
 _COMPOSER_LENGTH = frozenset({"too_long", "too_short"})
 
 
+# What a composer refuses, as first_note() does: what reads as generated, a phrase the
+# person said never to use, a dash, a stock phrase, a check-in, a claim the profile cannot
+# back and a placeholder left in. The rest of what validate() finds (a spelling, a
+# lowercase start, two thanks) is a warning shown with the draft, never a refusal: refused,
+# an email with a "CV" file name could not be composed to be shown at all.
+GATE_REFUSES = frozenset({"reads_as_generated", "person_dislikes", "em_dash", "banned_phrase",
+                          "check_in", "unsupported_claim", "unfilled_placeholder"})
+
+
 def _gate(kind: str, text: str, what: str, **kw) -> str:
-    """Refuse a composed message on what validate() refuses for its kind, the way TooLong
-    refuses length. The nudge, the referral ask, the email and the warm intro ran only the
-    never-say check, and nudge() returned "just checking in" with an em dash in it
-    (2026-10-20): one gate now, the one a hand-written draft meets."""
-    found = [v for v in validate(text, kind, **kw) if v.rule not in _COMPOSER_LENGTH]
+    """Refuse a composed message on what a first note is refused for (GATE_REFUSES), the
+    way TooLong refuses length. The nudge, the referral ask, the email and the warm intro
+    ran only the never-say check, and nudge() returned "just checking in" with an em dash
+    in it (2026-10-20): one gate now. The other findings stay validate()'s, as warnings."""
+    found = [v for v in validate(text, kind, **kw)
+             if v.rule not in _COMPOSER_LENGTH and v.rule in GATE_REFUSES]
     if found:
         theirs = any(v.rule == "person_dislikes" for v in found)
         raise Refused(
@@ -1978,15 +1988,25 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     # straight here, which got `tone.check` and nothing else. Same rules, same
     # message, different door, and the door without the check is the one a
     # model uses when the composer's shape does not fit what it wants to say.
-    # Each finding goes under voice_check's own rule name ("house-style",
-    # "ai-diction"), so `learned.py record --overrides house-style` lifts that one
-    # check and nothing else: under one name for all of them, it lifted none.
+    # Each finding keeps the one rule name a draft that reads as generated has always had
+    # (people's own tests look for "reads_as_generated"), and its text opens on
+    # voice_check's own rule name ("house-style: ..."), so `learned.py record --overrides
+    # house-style` lifts that one check and nothing else: under the one name alone, an
+    # override lifted none or all of them.
     for f in _voice_findings(text, k):
-        out.append(tone.Violation(f["rule"], f"{f['match']} -> {f['fix']}"))
+        out.append(tone.Violation("reads_as_generated",
+                                  f"{f['rule']}: {f['match']} -> {f['fix']}"))
     if _all:
         return out
     over = _overrides()
-    return [v for v in out if v.rule not in over]
+    return [v for v in out if v.rule not in over and _check_of(v) not in over]
+
+
+def _check_of(v) -> str:
+    """voice_check's own rule name for a reads-as-generated finding, else ""."""
+    if v.rule != "reads_as_generated":
+        return ""
+    return str(v.text).split(":", 1)[0].strip()
 
 
 def _overrides() -> set:
@@ -2076,7 +2096,7 @@ def advise(message, kind, name=None, seniority="peer", employers=(), reader=None
                               "your recorded rule outranks this check, so it is only mentioned")
                 for v in validate(message, kind, name=name, seniority=seniority,
                                   employers=employers, reader=rtype, _all=True)
-                if v.rule in over]
+                if v.rule in over or _check_of(v) in over]
     return out
 
 
