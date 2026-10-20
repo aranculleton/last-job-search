@@ -1,8 +1,8 @@
 """A round of messages is personal to each reader, and plain.
 
 From the builder notes of one networking round (2026-10-20): each item below needed a
-rewrite by hand after validate() and advise() had passed the draft. Two InMails built the
-same way, a close with nothing to answer, a guess at what someone sees from their level,
+rewrite by hand after validate() and advise() had passed the draft. A pair of InMails built
+the same way, a close with nothing to answer, a guess at what someone sees from their level,
 praise from a stranger, comparisons that never said how, inferences written as fact, a fact
 from their page and the close warned as inferences, a length warning that ignored what the
 person asked for, a word said twice, a voice with no shorthand, and the reactions recorded
@@ -198,7 +198,7 @@ def test_an_inference_about_them_comes_out_hedged_once():
 def test_a_fact_read_off_their_page_and_the_close_are_not_inferences():
     r = {"headline": "", "about": "", "items": [],
          "experience": [{"employer": "QMX", "title": "Economist"},
-                        {"employer": "KMB", "title": "Senior Economist"}]}
+                        {"employer": "KMB", "title": "Economist"}]}
     fact = "I noticed you started out as an economist before QMX and KMB."
     assert advice.provenance(fact, r) == advice.STATED
     assert "unhedged_inference" not in rules(advice.check(fact, "connection", reading=r))
@@ -277,8 +277,9 @@ def test_the_persons_voice_is_written_by_the_composers_and_checked(monkeypatch):
                               variant_key="v")
     assert "I'm an analyst who studied macro." in note
     # Their employer stays as written: the shorthand is the sender's own.
-    assert advice.spoken("I found you on Saltmarsh Analytics' page",
-                         keep=("Saltmarsh Analytics",)) == "I found you on Saltmarsh Analytics' page"
+    assert advice.spoken("I found you on the Saltmarsh Analytics people page",
+                         keep=("Saltmarsh Analytics",)) == \
+        "I found you on the Saltmarsh Analytics people page"
     assert compose.employers_early("Hi Ana, I was at Saltmarsh for a year.",
                                    ["Saltmarsh Analytics"]) == []
 

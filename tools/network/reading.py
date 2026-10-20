@@ -2663,7 +2663,7 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
     # sentences differed and whose shape did not.
     for a, b, shape in compose.alike(notes):
         out.append(("same shape", shape, [a, b]))
-    # The InMails in a round: one subject, one paragraph order or one close for two readers
+    # A round's InMails: one subject, one paragraph order or one close for two readers
     # was "identical in structure" too (2026-10-20).
     out += compose.round_alike(notes)
     return out

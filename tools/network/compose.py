@@ -1557,7 +1557,7 @@ def shared_employer(text: str, their=()) -> str:
 # The order an InMail's paragraphs take. The message that drew a reply from a senior reader
 # said who the sender was, then the work, then why them (me_first); a peer who shares
 # something with the sender reads that first (them_first); me_and_them puts who the sender
-# is beside why them. Two InMails in one round in one order were "identical in structure"
+# is beside why them. A pair of InMails in one round in one order was "identical in structure"
 # (2026-10-20): `inmail_order()` chooses by reader and reason, and `round_alike()` finds two
 # that still match.
 INMAIL_ORDERS = ("me_first", "them_first", "me_and_them")
@@ -2135,8 +2135,8 @@ def alike(notes: dict) -> list:
 
 # ---------------------------------------------------------------- a round's InMails alike
 #
-# Two InMails in one round went out with the same subject, the same paragraph order and the
-# same close: "why is the structure identical for both, it's supposed to personalise
+# A pair of InMails in one round went out with the same subject, the same paragraph order
+# and the same close: "why is the structure identical for both, it's supposed to personalise
 # everything based on company, role, level, the person" (2026-10-20). `alike()` compares the
 # sentences of first notes; a message with room is compared by what a reader sees of its
 # build: the subject, what each paragraph does, and how it ends.
