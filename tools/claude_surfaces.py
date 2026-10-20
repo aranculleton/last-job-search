@@ -42,7 +42,9 @@ PATH = os.path.join(ROOT, "tools", "claude_surfaces.json")
 BANNED = re.compile(r"\b(?:press(?:es)?|clicks?|taps?|shortcut|keystroke|finds?(?! me\b))\b",
                     re.I)
 # A block names its entry, and "claim" after the id carries the claim rather than the path.
-BLOCK = re.compile(r"^([ \t]*)<!-- claude-surface: ([a-z0-9-]+(?: claim)?) -->\n(.*?)\n[ \t]*"
+# An empty block is allowed and filled: with the body's line required, an empty block's
+# match ran on to the next block's end and the sync wrote one over the other (2026-10-20).
+BLOCK = re.compile(r"^([ \t]*)<!-- claude-surface: ([a-z0-9-]+(?: claim)?) -->\n(.*?)\n?[ \t]*"
                    r"<!-- /claude-surface -->", re.S | re.M)
 # The docs a person reads, which carry the registry's words in marked blocks. Claude's
 # own instructions point at an entry by id instead (`show <id>`).
@@ -142,19 +144,35 @@ def mentions(text: str, reg=None) -> list:
 
 
 def render(eid: str, reg=None) -> str:
-    """An entry as a doc block carries it, for a reader who is not in a chat: the path,
-    or the claim for "<id> claim" and for an entry with no path."""
+    """An entry as a doc block carries it, for a reader who is not in a chat: its numbered
+    steps where it has them, else the path, or the claim for "<id> claim" and for an entry
+    with no path. A beginner given one long sentence of destinations did not know where to
+    start (2026-10-20), so steps come one action a line."""
     want_claim = eid.endswith(" claim")
     e = entry(eid.split()[0], reg)
+    if not want_claim and e.get("steps"):
+        goal = e.get("goal", "")
+        page = official(e)
+        head = ((goal[:1].upper() + goal[1:] + ". ") if goal else "") + (
+            f"At the time of writing (checked {e['verified_on']}"
+            + (f"; official page: {page}" if page else "") + "):")
+        return "\n".join([head] + [f"{i}. {s}" for i, s in enumerate(e["steps"], 1)])
     text = "" if want_claim else say(e["id"], name="of your copy", owner="you", reg=reg)
     return f"{text or e['claim']} Checked {e['verified_on']}."
 
 
 def block(eid: str, indent: str = "", reg=None, width: int = 92) -> str:
-    """A marked block as a doc carries it: the rendered entry, wrapped, at `indent`."""
+    """A marked block as a doc carries it: the rendered entry, wrapped, at `indent`, each
+    numbered step on its own line."""
     import textwrap
-    body = textwrap.fill(render(eid, reg), width=width, initial_indent=indent,
-                         subsequent_indent=indent, break_long_words=False, break_on_hyphens=False)
+    lines = render(eid, reg).split("\n")
+    out = [textwrap.fill(lines[0], width=width, initial_indent=indent, subsequent_indent=indent,
+                         break_long_words=False, break_on_hyphens=False)]
+    for line in lines[1:]:
+        out.append(textwrap.fill(line, width=width, initial_indent=indent,
+                                 subsequent_indent=indent + "   ", break_long_words=False,
+                                 break_on_hyphens=False))
+    body = "\n".join(out)
     return f"{indent}<!-- claude-surface: {eid} -->\n{body}\n{indent}<!-- /claude-surface -->"
 
 

@@ -1128,7 +1128,7 @@ REGISTRY: tuple[Upgrade, ...] = (
             command=("python3", "tools/interview_pack.py", "postings"),
             paths=("documents/applications/*/job_posting.md",), priority=1, conditional=True),
     Upgrade("runtime-files", "2026-10-19",
-            "the files that change on every profile read kept out of your repo, so the "
+            "the files that change on every profile read kept out of your copy on GitHub, so the "
             "day's update check never stops on them",
             _runtime_files, "python3 tools/network/reading.py move-runtime", "instant",
             command=("python3", "tools/network/reading.py", "move-runtime"),

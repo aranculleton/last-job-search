@@ -13,34 +13,47 @@
     "linked to their computer", "linked to your computer", "Cmd+Shift+B", "Ctrl+Shift+B",
     "globe icon", "Browser tools",
     "Get a copy of your data", "Download your data", "larger download", "Connections filter",
-    "Current company filter", "Manage invitations", "Sent tab"
+    "Current company filter", "Manage invitations", "Sent tab", "Open folder", "Local group"
   ],
   "entries": [
     {
       "id": "local-chat",
-      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, on a folder chosen there with the Local environment. The desktop app includes Claude Code, so nothing else needs installing for it.",
+      "claim": "A chat on the person's own computer runs in the Claude desktop app's Code tab, with Local chosen under the message box and a folder opened beside it. The desktop app includes Claude Code, so nothing else needs installing for it, and it needs a Pro, Max, Team or Enterprise plan.",
       "goal": "continue this in a chat on your computer",
-      "how": "open the Claude desktop app, go to its Code tab, choose Local and then the folder {name}",
+      "how": "in the Claude desktop app (claude.ai/download), its Code tab, with Local chosen under the message box and the folder {name} opened beside it",
+      "steps": [
+        "Install the Claude desktop app from claude.ai/download if you do not have it, and sign in.",
+        "Open its Code tab, at the top.",
+        "Under the message box, choose Local, then Open folder beside it, and pick the folder GitHub Desktop made.",
+        "Say \"set me up\" there (\"carry on\" if you set up in the cloud before). It checks what your computer needs and installs most of it itself."
+      ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "The desktop app includes Claude Code, so you don't need to install Node.js or the CLI to use the Code tab."},
-        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Select Local for your machine"}
+        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "select the top entry in the Local group"},
+        {"url": "https://code.claude.com/docs/en/desktop-quickstart", "quote": "Claude Code requires a Pro, Max, Team, or Enterprise subscription."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18; Claude Code 2.1.302",
+      "verified_on": "2026-10-20",
+      "verified_against": "code.claude.com docs read 2026-10-20; Claude Code 2.1.302",
       "ui_sensitive": true
     },
     {
       "id": "clone-copy",
-      "claim": "GitHub Desktop puts a copy of a repository on the computer from the repository's page on GitHub.",
+      "claim": "GitHub Desktop, installed and signed in to GitHub, puts a copy of a repository on the computer from the repository's page on GitHub.",
       "goal": "put your copy on your computer",
-      "how": "on github.com/{owner}/{name}, choose Code, then Open with GitHub Desktop, and choose where to keep it",
+      "how": "with GitHub Desktop installed (github.com/apps/desktop) and signed in, on github.com/{owner}/{name} choose Code, then Open with GitHub Desktop, then Clone",
+      "steps": [
+        "Install GitHub Desktop from github.com/apps/desktop and sign in with your GitHub account.",
+        "On your copy's page on github.com, choose Code, then Open with GitHub Desktop.",
+        "Choose where to keep it (your Documents folder is fine), then Clone."
+      ],
       "sources": [
-        {"url": "https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop", "quote": "To clone and open the repository with GitHub Desktop, click Open with GitHub Desktop."}
+        {"url": "https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop", "quote": "To clone and open the repository with GitHub Desktop, click Open with GitHub Desktop."},
+        {"url": "https://docs.github.com/en/desktop/adding-and-cloning-repositories/cloning-a-repository-from-github-to-github-desktop", "quote": "Sign in to GitHub and GitHub Desktop before you start to clone."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "docs.github.com read 2026-10-18",
+      "verified_on": "2026-10-20",
+      "verified_against": "docs.github.com and github.com/apps/desktop read 2026-10-20",
       "ui_sensitive": true
     },
     {
@@ -189,16 +202,56 @@
     },
     {
       "id": "cloud-environment",
-      "claim": "A cloud environment's setup script and network access are edited from the environment selector under the message box on the new-session screen at claude.ai/code, or, for a running chat, from the caret after its title (Edit cloud environment). A change applies to the next chat.",
-      "goal": "change the cloud environment's settings",
+      "claim": "A cloud chat runs on a cloud computer whose settings Anthropic calls an environment: its setup script and its network access. They are edited from the environment selector under the message box on the new-session screen at claude.ai/code, or, for a running chat, from the caret after its title (Edit cloud environment). A change to network access reaches chats already running within about a minute; a change to the setup script applies to the next new chat.",
+      "goal": "change this chat's cloud settings",
       "how": "on the new-session screen at claude.ai/code, open the environment selector under the message box and edit the environment (in a running chat: the caret after its title, then Edit cloud environment); its Setup script and Network access are the two settings",
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "Add, edit, and archive environments from the environment selector under the message box on the screen where you start a new session at claude.ai/code ."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-20",
+      "verified_against": "code.claude.com docs read 2026-10-20",
+      "ui_sensitive": true
+    },
+    {
+      "id": "cloud-setup-script",
+      "claim": "A cloud environment's setup script runs when a new chat's cloud computer is built, and is kept for later chats, so tools it installs are there from the start. It is in the same settings as network access. A change reaches the next new chat; one already running gets it only when its computer is rebuilt.",
+      "goal": "make each new chat start with the PDF tools in place",
+      "how": "in the same settings (the small arrow after this chat's title, then Edit cloud environment), the line pasted into Setup script and saved",
+      "steps": [
+        "At the top of this chat, open the small arrow after its title and choose Edit cloud environment.",
+        "Paste the line into Setup script, then save.",
+        "It applies from your next new chat. In this one, Claude installs the same tools itself."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "open the environment settings dialog and enter your script in the Setup script field"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."}
       ],
       "status": "documented",
-      "verified_on": "2026-10-18",
-      "verified_against": "code.claude.com docs read 2026-10-18",
+      "verified_on": "2026-10-20",
+      "verified_against": "code.claude.com docs read 2026-10-20",
+      "ui_sensitive": true
+    },
+    {
+      "id": "cloud-internet",
+      "claim": "A cloud chat's network access is one of None, Trusted (the default: package registries, GitHub and cloud SDKs only), Full (any website) or Custom (the person's own list). Job sites are not on the Trusted list, so a cloud chat on the default cannot reach them. Set to Full, a running chat reaches them within about a minute, with no new chat.",
+      "goal": "let this chat reach job sites",
+      "how": "at the top of this chat, the small arrow after its title, then Edit cloud environment, with Network access set to Full",
+      "steps": [
+        "At the top of this chat, open the small arrow after its title and choose Edit cloud environment.",
+        "Set Network access to Full, then save.",
+        "That is all: it reaches this chat within about a minute, with no new chat. Say \"done\" and I'll search again."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The default level, Trusted, allows package registries and other allowlisted domains."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."},
+        {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "its existing sessions follow the new setting within about a minute"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-20",
+      "verified_against": "code.claude.com docs read 2026-10-20",
       "ui_sensitive": true
     },
     {

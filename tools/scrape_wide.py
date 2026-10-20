@@ -799,6 +799,21 @@ def canary(jobage: int = CANARY_JOBAGE,
     return out
 
 
+def blocked_say(refusing: dict[str, str]) -> str:
+    """In a cloud chat, when a portal refused because this chat's cloud settings block its
+    site: the plain words and the fix for the person (tools/env_check.py), else "". The
+    round said "DOWN linkedin: refused the probe" and the chat told a beginner the boards
+    were "blocked from this environment", which said nothing they could act on."""
+    if not refusing or not CLOUD:
+        return ""
+    try:
+        import env_check
+        names = env_check.blocked_names()
+        return env_check.blocked_say(names) if names else ""
+    except Exception:  # noqa: BLE001  a message must never break a round
+        return ""
+
+
 def canary_report(health: dict[str, tuple[bool, str]]) -> tuple[str, bool]:
     """A human line per portal, and whether every portal is usable."""
     lines, ok, silent = [], True, False
@@ -1206,8 +1221,13 @@ def main() -> int:
             _say(line, a.log)
         if not ok:
             down = [n for n, (h, _) in health.items() if not h]
+            say = blocked_say(not_searched(health))
+            if say:
+                _say("Tell the person, in these words, once:", a.log)
+                for line in say.splitlines():
+                    _say("  " + line, a.log)
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()},
-                       "not_searched": not_searched(health)},
+                       "not_searched": not_searched(health), "say": say},
                       open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)
     skipped = not_searched(health)
     for skill in [k for k, v in on.items() if v and portals.short(k) in skipped]:

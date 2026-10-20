@@ -1389,7 +1389,7 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                    "installed and no Chrome window is connected to it. For now, for the one or "
                    f"two who matter most, send {hand} and I'll do the rest.")
         else:
-            # The same words the place check says once, then weekly (tools/place.py): the
+            # The same words the place check says once in a chat (tools/place.py): the
             # choice is offered, never made for them, and the setting is not changed.
             owner, name = place.repo()
             # A read was asked for here, so this is the person asking how: the full steps.
