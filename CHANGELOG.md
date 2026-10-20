@@ -41,6 +41,98 @@ make sense to somebody whose repo just received it.
   whether to fold it in, so what was decided in it reaches the next chat. Profile upgrade:
   campaign-notes.
 
+- **A turn cannot end over a reaction nobody recorded.** "Record each reaction" was an
+  instruction, and one chat redrafted on nine corrections and recorded none. The app now
+  ships one hook (`tools/learned.py hook`, the only entry in the security guard's allowlist,
+  never a start-of-session hook): a message of yours that reads as a reaction goes on that
+  chat's list, every composer and `reading.py draft` refuse to draft over it, and the turn
+  cannot end until it is recorded or skipped with a reason (`learned.py skip`). Claude Code
+  may ask you once to allow the project's hook. No profile upgrade: it arrives with the update.
+- **What you said is kept as you said it, and shown back.** A recorded reaction prints the
+  one-line rule it gives, in your words; lists the earlier rules it contradicts, with both
+  dates, so you say which stands (`--replaces <n>`); and can outrank a check by name
+  (`--overrides <rule>`), so your voice wins over a default once you have said so.
+- **An edit you made before sending teaches the voice by itself.** When a send is logged
+  with its words and they differ from the draft, the change is recorded as your preference.
+- **The reason for writing is true.** A note can say how you found someone (a search of
+  the team, the people page, a referral, a speaker list), a parallel in their own path, or a
+  mutual connection you confirmed. A note that says you read, saw or watched something of
+  theirs is refused unless you say you did: "I saw your package on GitHub" went to someone
+  found through a search of the team.
+- **A reading gives reasons that are about the reader.** Their Experience is kept role by
+  role, and from it come path parallels, marked inferred ("they moved into <employer> from
+  consulting, the move you are hoping to make"). Mutual connections and followers the page
+  names are offered to you to confirm, never asserted. A top card whose city differs from
+  the current role's own place is a caution.
+- **Warnings with a rewrite, before anything is shown** (`compose.advise()`): the phrases
+  you rejected ("sits close to", "is the kind of path", "I would value", "high on my list",
+  "the route I would most like to follow", "which teams to look at and how to approach
+  them", "Data scientist here", a closing question asking how to get hired, a test question
+  in place of an honest ask), a list of three credentials, stacked hedges and disclaimers
+  ("I can't know from the outside"), an exit in a first message ("if not, no worries"), a
+  claim about the reader written as fact, a credential with no reason in its sentence, and
+  an InMail longer than its reader needs. Your own words are never warned about.
+- **Who reads it decides what it says.** A recruiter, a decision-maker and a peer are told
+  different things, each a setting in your networking.py: work authorization and the role
+  you want go to a recruiter and a decision-maker by default, never a peer unless one
+  message says so; only a recruiter is asked about roles. A decision-maker's ask is the one
+  that drew a reply: "Would love to hear if you have anything coming up, or know the right
+  person to speak to." No profile upgrade: each has a stated default.
+- **A note that points to the right person.** A new shape names the kind of team or work
+  and ends on a question the reader can answer by naming someone, which makes a helpful
+  reply easy without asking for anything.
+- **A phrase bank, so a batch varies without a model call.** The opener and the ask are
+  chosen per contact from your own `TEMPLATES`, then your `OPENER` and `ASK`, then the app's
+  natural variants (`compose.py phrases` lists them).
+- **Read it aloud.** A spoken rewrite is shown beside the draft, and kept only if
+  `compose.read_aloud()` finds every fact, name and number kept and nothing added.
+- **Your own messages that drew replies come first** (`compose.py examples`): drafts follow
+  their shape and wording ahead of any default.
+- **Every send keeps its words.** `state.py sent` refuses a send without the words that went
+  (a request with no note aside), and an InMail without its subject, which the message log
+  now keeps. Messages that drew a reply but were logged without their words are asked for
+  once. Profile upgrade: message-texts.
+- **A send recorded wrong can be put right.** `state.py resent` corrects the day, words or
+  subject of the last message to someone, with the follow-up date moved to match; `state.py
+  unsend` takes one that did not go off the log and puts its words back in their draft. A
+  batch recorded as drafted asks once whether any went with edits.
+- **InMail channel and credits.** A page that shows only Message to someone not connected
+  sets their channel to InMail and says how many credits are left; recording an InMail says
+  how many remain.
+- **A second chat learns at once that an update is taken.** A chat that takes an update's
+  upgrades pushes a claim to your repository, after checking nobody else's covers it; of two
+  chats that synced the same update a minute apart, the second sees the first's claim before
+  anything lands on master. The upgrade plan names what the sync listed and is already in
+  place.
+- **Your own tests kept in line with each update, by themselves.** The sync records which
+  of your own tests an update broke, and an upgrade brings each in line: one that checks
+  behaviour the update changed is updated to the change, and one that reads the app's code
+  as text is rewritten to run it and check what it does. Nothing is deleted or weakened; a
+  test of a part the update removed is still your call. Profile upgrade: own-tests.
+- **Your saved intro and ask, rewritten in your voice on your yes.** Where they are still in
+  the stiff wording the app used to write ("I am", "I would" at every sentence start), you
+  are asked once whether to rewrite them from your messages that got replies. Profile
+  upgrade: voice-refresh.
+- **Reads react to what LinkedIn shows, not a guess.** One risk dial (`PROFILE_READ_RISK`:
+  careful, the old pace; normal; fast) sets every reading limit, each a setting with its
+  reason (`reading.py limits` prints them). A check, a sign-out or an error 999 stops the
+  day's reads; a page that does not render or loads far slower than yours usually do doubles
+  the next pause, and a second within the hour stops the day. A ramp starts a new day slow
+  after any friction. List pages (the sent invitations, a people search) have their own caps.
+- **One count a computer.** Every worktree and every chat on one computer shares one ledger
+  of pages loaded, outside the repo, so two chats on one account no longer each read a full
+  day.
+- **Reads run off the critical path.** `reading.py next --wait` waits in the background
+  until the next page may load, and the chat drafts and shows the notes already read
+  meanwhile. A card read (`--mode card`) settles most keep-or-skip decisions without
+  scrolling.
+- **A people search narrowed to the employer.** Once you have filtered one search by hand,
+  `reading.py search-url` builds the next from it; a plain keyword search with the
+  employer's name in it is not the employer filter, and found almost nobody who worked there.
+- **The day's short list is sized by need**: the requests that can still go today and a
+  spare, never above the setting. `reading.py shortlist --remove` takes someone off; people
+  since read or closed drop off by themselves.
+
 ### Changed
 
 - **Your stock answers are found, and checked against the employer.** A heading that names
@@ -70,6 +162,37 @@ make sense to somebody whose repo just received it.
   first owns the rest; `--take` still hands them over when no other chat is open. RUNBOOK.md,
   "Two chats applied the same profile upgrade", says what to do if it happens anyway.
 
+- **Contractions are fine.** "I'm" and "I'd" may open a sentence again: forcing "I am" and
+  "I would" made notes read, in your words, "like someone who just learned English as a
+  second language". `CONTRACTIONS` brings the old rule back if you want it. No profile
+  upgrade: "allow" is the default.
+- **A late employer is a warning with the reordering, not a refusal**, as the message that
+  drew a reply had it, naming its target in the third paragraph (`EMPLOYERS_FIRST`).
+- **A job-ask finding names the phrase and what to write instead**, and no longer spans two
+  clauses: "...the work I want to be doing, and I'm looking for my next role" passes.
+- **The InMail is a subject and a body, in the shape that drew a reply.** Who you are, with
+  the years; one piece of real work with its numbers; why this person, eligibility by
+  reader, the open ask; your sign-off. Its subject is who you are by default ("<title>,
+  ex-<employers>"), and `compose.inmail()` returns both parts, so the check no longer needs a
+  "Subject:" line. That is what changes in a test of your own that expects the old order.
+- **The brief note's length for a senior reader is a setting** (`SENIOR_NOTE_CHARS`, 220).
+- **The "reaches the recipient" refusal names the word to add.**
+- **A merge settles a field both chats changed by which change was later**, and says which
+  it kept and what the other side had; only where neither is later does git stop.
+- **prep.py --all leaves a document alone when only its date would change**, and counts the
+  ones already current: two chats that each rewrote every prep conflicted on all of them.
+- **A chat on your computer is told first to take a folder of its own** while it is still
+  in your main folder.
+- **A slow job board spends its time on the searches that matter most.** Your own boards
+  that wait between requests fit only part of their searches into 20 minutes, and which ones
+  ran was an accident of list order. Page one of every search at your first place now goes
+  first and the places further out last. The round says up front how many will fit, at the
+  pace it measured last time, and when a board stops it names the searches it did not send.
+- **A buried employer says what to do**, and offers the note reordered where moving
+  sentences is enough.
+- **A skip prints the exact command that closes the contact**, quoted so it runs as
+  printed, to run once you have confirmed nothing else is needed from them.
+
 ### Fixed
 
 - **No sentence you never use is put in your mouth.** The prep said `Say "I made the move"`
@@ -81,6 +204,50 @@ make sense to somebody whose repo just received it.
 - **A posting's cut line is not your pay band.** The consistency check read a screening
   rule ("a range topping out between ... is ranked down, not cut") as a band that disagreed
   with your target.
+
+- **What changes on every profile read stays out of your repo.** The stop, the day's list,
+  the list-page reads and the sign-in were kept in documents/network; once committed, every
+  read left the repo dirty and the sync refused to run, and with it the day's update check.
+  They live only in your computer's ledger now, and an older copy's files are moved there.
+  Profile upgrade: runtime-files.
+- **A read waiting past midnight says a new day began** and what to do, instead of saying
+  nothing was left.
+- **The sent-invitations list reads each card as its own person, and keeps the note it
+  shows.** A note under a sent request was read as the next person's name; it is now that
+  request's note, logged with the send.
+- **A request is called no longer pending only where the page can show it.** The list loads
+  only its newest requests, and every one missing was reported as gone (in one session, 415
+  of 425). Anything older is listed as not checked.
+- **A name on a card matches the contact however it is written**: a nickname in brackets,
+  letters after the name with or without dots, a middle name, an honorific or pronouns.
+- **LinkedIn's own cards on a people search are never read as people**, and **a people page
+  says who works where**: at the employer, elsewhere (ruled out), or not placed (kept for
+  the profile read).
+- **Sales, account, business development, go-to-market, partnerships and customer success
+  titles are skipped as revenue roles**, unless the role itself is in your function, and the
+  skip says what it found.
+- **The employer a headline names wins over an organisation badge on the card**, and **the
+  whole About is kept for grounding**, shown short.
+- **A peer gets the standard note length**, never the senior reader's 220.
+- **The voice check skips HTML comments**, so an interview pack's stage line is not read as
+  two em dashes.
+- **A portal that refuses every request is stopped, and the round says why.** The same
+  failure five times running with no success between stops that portal for the round, and
+  every progress line names the cause (403 Forbidden, 429 Too Many Requests, timeout).
+- **A job board that cannot work this round is found before it is searched, and named
+  first.** An answer that will not change within a round (401, 403, 407, 451, LinkedIn's
+  999, a board saying THROTTLED, a sandbox redirect, robots.txt, a missing credential) marks
+  the board down with what it said, and the check's report reaches round.log as it is
+  written.
+- **Progress lines stop repeating**: printed when they change, and once more when the portal
+  finishes; only portals still sending show minutes left.
+- **Your round summaries folder holds only round summaries.** The slow boards' resume point
+  moved from `documents/rounds/.sweep.json` to `documents/rounds/.sweep/cursor.json`, so a
+  check of yours that reads every `documents/rounds/*.json` stops failing after a round.
+  Profile upgrade: sweep-cursor-moved.
+- **Two chats on one computer no longer take the resume fonts from each other.**
+  `setup_env.sh` never creates, changes or removes anything in your home directory; every
+  compile uses that copy's own `texmf/`. No profile upgrade: nothing in your repo changes.
 
 ## [3.7.0] - 2026-10-19
 
