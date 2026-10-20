@@ -54,7 +54,7 @@ make sense to somebody whose repo just received it.
 - **The time where they are, at every hand-over.** `reading.py draft`, `queue` and a new
   `reading.py send-time <ids>` print the current time in the recipient's city (from their
   location when it maps to one time zone for certain, else your own `TIMEZONE` or `HOME_CITY`).
-  Nothing is held back. Five InMails went out between six and seven in the morning there.
+  Nothing is held back. In one round, five InMails went out between six and seven in the morning there.
 - **Many company numbers kept at once**: `reading.py company-ids "Employer A=1234" "Employer
   B=5678"`, each unconfirmed until a first page of results confirms it. A `search-url` with no
   stored filter now says plainly that a keyword search returns people who do not work there,
@@ -93,7 +93,7 @@ make sense to somebody whose repo just received it.
   against the requests still to go: 18 read, ten of them already sent to, stopped a run as
   "enough for the 13 left". Notes unanswered for more than 45 days no longer count against
   the two people a company.
-- **A round's messages are each built for their reader.** Two InMails in one round went out
+- **A round's messages are each built for their reader.** In one round, two InMails went out
   with one subject, one paragraph order and one close. `compose.round_alike()` finds a subject,
   a paragraph order or a close two messages share, and `reading.py batch` (exit 11) and
   `reading.py draft` run it. `inmail()` takes `order=` (who you are first for a senior reader,
@@ -187,7 +187,7 @@ make sense to somebody whose repo just received it.
 - **A person read but never put in the contact book is no longer a send lost.** `state.py
   sent` and `reading.py draft` make their row from what was read, or record against the same
   person's row under another id (same LinkedIn address, or the same name at that employer),
-  never a second row. Three InMails were unlogged until rows were added by hand.
+  never a second row. In one round, three InMails were unlogged until rows were added by hand.
 - **A short list refuses an id that names nobody** (not in the contact book, nothing read about
   them), instead of keeping it until `read` failed on it.
 - **A page loaded too soon is kept, never refused.** It was already open and its text taken;
