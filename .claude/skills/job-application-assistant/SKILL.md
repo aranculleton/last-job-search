@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.5
+framework_version: 1.5.6
 ---
 
 # Job Application Assistant

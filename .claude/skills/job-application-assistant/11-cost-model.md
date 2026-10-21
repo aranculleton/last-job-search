@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.5
+framework_version: 1.1.6
 ---
 
 # Cost Model for the Application Lifecycle
