@@ -100,3 +100,12 @@ Cy Marlow               # invented, tests/test_a_list_page_gives_addresses_and_r
 Dee Hollis              # invented, the same test
 Help Desk Technician    # a job title, the same test
 Robert Hallowey     # invented, a one-letter typo of Halloway, tests/test_one_person_in_two_rows_is_raised.py
+# Columns of LinkedIn's data export, as its parsers name them: tools/network/export.py reads them.
+Started On              # an export column (Positions.csv, Certifications.csv), not a name
+Finished On             # an export column (Positions.csv, Certifications.csv), not a name
+Maiden Name             # an export column (Profile.csv), not a name
+Birth Date              # an export column (Profile.csv), not a name
+Zip Code                # an export column (Profile.csv), not a name
+Geo Location            # an export column (Profile.csv), not a name
+Twitter Handles         # an export column (Profile.csv), not a name
+Instant Messengers      # an export column (Profile.csv), not a name

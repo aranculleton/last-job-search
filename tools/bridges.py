@@ -122,6 +122,52 @@ def _held(name: str) -> list:
     return [item for item, rx in _HELD_RX if rx.search(name)]
 
 
+# A skill the profile already covers under another name is not asked about. A held part
+# covers the whole it belongs to (Azure Data Factory is Azure, Redshift is AWS), and a
+# listed synonym covers its term (model serving is model deployment). The question asked
+# whether the person could claim "Azure" of somebody whose profile lists Azure Data
+# Factory, and "model deployment" of somebody who lists model serving and MLflow.
+#
+# This only removes a question. It never puts a word on a document: a covered skill is
+# not a yes, so the skills line still prints only what the inventory holds, as it is
+# named there. (what a posting asks, as a pattern on the name it gave; the held
+# inventory names that cover it.) A profile adds its field's own in skills.py COVERED_BY.
+COVERED_BY = [
+    (r"^(?:microsoft\s+)?azure(?:\s+cloud)?$",
+     r"\bazure\s+(?:data factory|sql|synapse|databricks|machine learning|ml|functions|"
+     r"data lake|blob|cosmos)"),
+    (r"^(?:aws|amazon web services)$",
+     r"\baws\b|\b(?:amazon\s+)?(?:s3|redshift|sagemaker|athena|glue|emr|kinesis|lambda|ec2|"
+     r"dynamodb)\b"),
+    (r"^(?:gcp|google cloud(?: platform)?)$",
+     r"\bbig\s?query\b|\bvertex ai\b|\bdataflow\b|\bcloud composer\b|\bgoogle cloud\b|\bgcp\b"),
+    (r"^(?:model (?:deployment|serving)|deploying models|model productioni[sz]ation)$",
+     r"\bmodel (?:deployment|serving)\b|\bdeploying models\b|\bmodel productioni[sz]ation\b"),
+    (r"^(?:ci ?/ ?cd|continuous (?:integration|delivery|deployment))$",
+     r"\bci ?/ ?cd\b|\bcontinuous (?:integration|delivery|deployment)\b|\bgithub actions\b|"
+     r"\bgitlab ci\b|\bjenkins\b"),
+    (r"^(?:etl|elt)$", r"\betl\b|\belt\b"),
+    (r"^postgres(?:ql)?$", r"\bpostgres(?:ql)?\b"),
+    (r"^(?:kubernetes|k8s)$", r"\bkubernetes\b|\bk8s\b"),
+    (r"^(?:llms?|large language models?)$", r"\bllms?\b|\blarge language models?\b"),
+    (r"^version control$", r"\bgit\b|\bgithub\b|\bgitlab\b|\bbitbucket\b"),
+    (r"^(?:apache\s+)?spark$", r"\bpyspark\b|\bspark\b"),
+]
+COVERED_BY = COVERED_BY + [tuple(c) for c in getattr(_SKILLS, "COVERED_BY", None) or ()]
+_COVERED_RX = [(re.compile(asked, re.I), re.compile(by, re.I)) for asked, by in COVERED_BY]
+
+
+def covered_by(name: str) -> list:
+    """The held inventory items that already cover a skill asked for under another name:
+    its parts, or its synonyms. [] when nothing does."""
+    asked = re.sub(r"\s+", " ", str(name or "")).strip(" .,;:()")
+    out = []
+    for asked_rx, by_rx in _COVERED_RX:
+        if asked_rx.search(asked):
+            out += [h for h, _rx in _HELD_RX if by_rx.search(h) and h not in out]
+    return out
+
+
 def family_bridges(text, skip=frozenset()):
     """A near bridge for each tool the text names that the person does not hold, from one
     they do hold in the same family. Never one the text names that they hold."""
@@ -157,7 +203,7 @@ def unheld_asked(text):
 
     def add(name, have=(), why=""):
         name = re.sub(r"\s+", " ", str(name)).strip(" .,;:()")
-        if not name or _held(name):
+        if not name or _held(name) or covered_by(name):
             return
         got = out.setdefault(name.casefold(), {"skill": name, "have": [], "why": why})
         got["have"] += [h for h in have if h not in got["have"]]

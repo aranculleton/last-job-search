@@ -98,8 +98,9 @@ METHODS: dict[str, dict] = {
             (14, "2026-10-19", False, "a metro name is matched at its edges the way every other name is; nothing to search again"),
             (15, "2026-10-21", False, "/add-portal says a board robots.txt disallows is built only on the person's yes while they are present, never by a background upgrade"),
             (16, "2026-10-21", False, "Employer boards are read while the portals are searched, share one body cap and one portal runner, and honour a round's own seen file"),
+            (17, "2026-10-21", False, "robots_check splits reading a policy from deciding; same verdicts"),
         ),
-        "fingerprint": "b61849ab14d348f5",
+        "fingerprint": "55a92cbd99a800f7",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -136,8 +137,9 @@ METHODS: dict[str, dict] = {
                                     "an employer abroad hiring where you live posts them in"),
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "salary and market research reads the one company-research cache and its freshness rule"),
+            (6, "2026-10-21", False, "Wording"),
         ),
-        "fingerprint": "4ed21873e30e4440",
+        "fingerprint": "65e065d7e5984969",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -213,8 +215,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-21", False, "A call prep is written before the employer is researched, saying so at the top, and a prepared answer that states where the person lives or moved from is flagged when that employer was told another place"),
             (16, "2026-10-21", True, "Nothing personal read about a contact (age, family, health, religion, politics, sexuality) is shown, and the answer check flags an answer far over its time or saying we where they asked what you did"),
             (17, "2026-10-21", False, "bridges.py gains the learn-or-show nudge; preps unchanged"),
+            (18, "2026-10-21", False, "bridges.py gains COVERED_BY; no document text changes"),
         ),
-        "fingerprint": "97f38f44282549da",
+        "fingerprint": "85bc62801200759a",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -223,6 +226,7 @@ METHODS: dict[str, dict] = {
                "documents/applications/<slug>/draft.json, then tools/verify_batch.sh on them; "
                "never one already sent",
         "files": ("templates/*", "tools/render_application.py", "tools/fit_to_page.py",
+                  "tools/posting_profile.py",
                   "tools/skills_block.py", "tools/allocate.py", "tools/bullet_library.py",
                   "tools/docpaths.py", "tools/doc_name.py", "tools/outreach.py",
                   "tools/screening_answers.py", "tools/record_drafts.py", "tools/stage_picks.py",
@@ -276,8 +280,10 @@ METHODS: dict[str, dict] = {
             (28, "2026-10-21", False, "New checks: the resume's text layer holds every line of its draft in order, a letter copying six or more words of the posting is flagged, a character the font cannot print or a font left out stops the render, counts must count the same thing, and a keyword report"),
             (29, "2026-10-21", False, "The outreach note check skips the greeting rule its stand-in name would trip"),
             (30, "2026-10-21", False, "stage points out a file name in capitals when it is picked; dead code removed"),
+            (31, "2026-10-21", False, "RUNBOOK names export.py and own_profile.py"),
+            (32, "2026-10-21", False, "Staging prints what each posting is and holds a fixed-term contract, pay for another place, an application already in or a second role at one employer until the person answers; a listed skill the posting names in a phrase is kept; no question about a skill the profile covers under another name"),
         ),
-        "fingerprint": "2aad2b66623bcb32",
+        "fingerprint": "2ef946c607c2449c",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -318,8 +324,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-17", False, "one company-research cache (tools/company_research.py): load, save, the freshness rule in one constant, and the workflow's research stage following the employer researcher"),
             (3, "2026-10-19", False, "a cached finding's age is read the one way every tool reads a date"),
             (4, "2026-10-19", False, "a site answering 503 has a fallback, a fact known only from a search summary is labelled unread, and teams and how the employer interviews are kept for the pack"),
+            (5, "2026-10-21", False, "Research fetches through company_research.py fetch: robots.txt first, crawl delay kept, a feed or sitemap behind a bot check, a note per host, 12 requests an employer a day, fresh facts never fetched again, quotes checked, saves that append"),
         ),
-        "fingerprint": "efea1c5929a0e202",
+        "fingerprint": "2ef0e0a66a2816ab",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
@@ -336,7 +343,7 @@ METHODS: dict[str, dict] = {
         "files": ("tools/network/compose.py", "tools/network/advice.py", "tools/network/tone.py",
                   "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
-                  "tools/network/sources.py", "tools/network/why.py",
+                  "tools/network/sources.py", "tools/network/why.py", "tools/network/export.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -396,8 +403,9 @@ METHODS: dict[str, dict] = {
             (37, "2026-10-21", False, "The networking skill says both title searches go first, as sources.py does, and that its tiers are not the scraper's"),
             (38, "2026-10-21", False, "An automatic reply is not a reply, one person in two rows is raised, a note must greet the person it is for, invisible characters hide nothing from the checks, and what has worked is judged by Fisher's exact test at 20 a group"),
             (39, "2026-10-21", False, "Dead code removed"),
+            (40, "2026-10-21", False, "The LinkedIn export's messages and invitations come into the message log, pending invitations are listed for withdrawal, and the person's own profile is looked over when due"),
         ),
-        "fingerprint": "4205b26230945031",
+        "fingerprint": "3750b6dc902de1ff",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -469,8 +477,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-21", False, "The bar says when an employer is on none of the profile's lists, and reads a judgement recorded once with bar.py judge"),
             (16, "2026-10-21", False, "The tracker status vocabulary lives in one place; an older interviewing spelling reads as a live interview"),
             (17, "2026-10-21", True, "Pay for your own place read with the one place matcher, regions beside remote judged by whether they take in your country, one degree list and an abbreviation-aware sentence splitter, cut wording defined once, Hybrid and Sr. variants are one posting, the extracted screen cuts pay only below the cut line, and the throttle reads each state file once"),
+            (18, "2026-10-21", False, "throttle.py gains a public same_title wrapper"),
         ),
-        "fingerprint": "f06c4b3695772ae0",
+        "fingerprint": "3c5ce9d044561d24",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -531,6 +540,9 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "
                            "runs; keeps nothing",
     "tools/local_path.sh": "the same, for the shell scripts; keeps nothing",
+    "tools/network/own_profile.py": "looks over the person's own LinkedIn profile when due; its "
+                                    "one record, documents/network/own_profile_review.json, is "
+                                    "kept by the own-profile-review upgrade and by `due`",
     "tools/told.py": "records, when asked, the place each employer heard in person.json; "
                      "what that changes in a pack or a note is versioned with those",
     "tools/profile_consistency.py": "reads the profile and names what disagrees; the person "

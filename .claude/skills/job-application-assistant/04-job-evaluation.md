@@ -1,5 +1,5 @@
 ---
-framework_version: 1.0.6
+framework_version: 1.0.7
 ---
 
 # Job Evaluation Framework
@@ -341,7 +341,12 @@ prints the key. A near-miss on a different spelling just costs a cache miss and 
 `tools/company_research.py` and nowhere else: every command, agent, workflow and the call
 prep reads it from there, so it changes in one place. `python3 tools/company_research.py
 "Acme Corp"` prints the file, its age and whether it is fresh; `--save <findings.json>`
-merges new findings in, keeping every field they do not name.
+merges new findings in, keeping every field they do not name and appending facts rather
+than replacing them, and `fetch "Acme Corp" --urls ...` is the one way its pages are read
+(robots.txt, the crawl delay, a budget, a note per host in `company_research/_hosts.json`,
+and a fresh fact never fetched again). Research for a posting in another country than the
+cached entity's is kept in `<key>--<cc>.json`, so two countries' facts never mix; the plain
+file stays the one the joins read.
 
 **Schema** (fields mirror the Company Research Checklist's own categories above):
 ```json

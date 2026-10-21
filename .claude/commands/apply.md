@@ -149,7 +149,7 @@ review cycle again; a rejected angle here costs fifteen lines.
        --posting-file "$SCRATCH/apply/posting.txt" --url "<posting URL>" --location "<location>" \
        --fit <the Step 1 score> --deadline "<YYYY-MM-DD, if stated>"
    ```
-   It picks the filename, never one another application was sent under, writes `picks.json` and `apps_in.json`, and prints the skills question Step 1 asks. Record each answer before anything else:
+   It picks the filename, never one another application was sent under, writes `picks.json` and `apps_in.json`, prints what code read from the posting (terms, pay, years, degree, place, a repost, the employer), and prints the skills question Step 1 asks. A posting with a surprise in it (a fixed-term contract, pay for another place, an application already in there) is held out of `picks.json` with a plain question: ask it, then `consent "$SCRATCH/apply" <slug> --draft` (or `--skip`). Record each answer before anything else:
    ```bash
    python3 tools/stage_picks.py consent "$SCRATCH/apply" <slug> --yes <skill> ... --no <skill> ...
    ```

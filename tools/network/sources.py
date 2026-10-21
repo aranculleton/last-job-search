@@ -762,9 +762,8 @@ def import_connections(src: str, dest: str | None = None) -> str:
     kept. The file starts with a few lines of notes above its header, which
     state.first_degree() finds; one with no connection under a "First Name" header is
     refused, and nothing is saved."""
-    import tempfile
     import zipfile
-    import state
+    import export
     dest = dest or person.state("documents", "linkedin", "Connections.csv")
     note = ""
     if zipfile.is_zipfile(src):
@@ -787,11 +786,11 @@ def import_connections(src: str, dest: str | None = None) -> str:
         with open(src, "rb") as fh:
             data = fh.read()
     text = data.decode("utf-8-sig", errors="replace")
-    with tempfile.TemporaryDirectory() as tmp:
-        probe = os.path.join(tmp, "Connections.csv")
-        with open(probe, "w", encoding="utf-8", newline="") as fh:
-            fh.write(text)
-        count = len(state.first_degree(probe))
+    # The one reader of every export file (tools/network/export.py), which state.first_degree
+    # reads through too: a header in any case, below its notes.
+    got = export.parse(text, "connections")
+    count = sum(1 for r in got["rows"]
+                if str(r.get("First Name") or "").strip() or str(r.get("Last Name") or "").strip())
     if not count:
         raise ValueError("that file has no connections in it: no row under a \"First Name\" "
                          "header, which is how LinkedIn writes Connections.csv")

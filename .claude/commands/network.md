@@ -90,6 +90,14 @@ it. LinkedIn is never fetched from a session.
    first to message, as a message (route `connection`), at no cost to the budget, before
    any search. Without the export, the `connections-export` upgrade asks for it, and asks
    again later after a no.
+   **Their own history, if they attach it** (messages.csv and Invitations.csv; the steps:
+   `python3 tools/claude_surfaces.py steps linkedin-export-files`): `python3
+   tools/network/export.py history --from <the zip>` says what it would add to the message log,
+   joined by profile address or a careful name match, and who is not in the contact book;
+   `--apply` writes it, and a second run adds nothing. Nothing is sent.
+   **Their own profile, now and then:** `python3 tools/network/own_profile.py due` prints one line
+   only when a look is worth it, and nothing otherwise. Act on that line alone: ask its question
+   once, at the end of the reply.
 
 2. **Check the budget before searching.** `state.platform_budget(contacts, threads,
    today)` returns the connection requests and InMail credits left on the person's

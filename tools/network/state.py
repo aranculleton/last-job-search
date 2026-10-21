@@ -276,17 +276,38 @@ def _bare(token: str) -> str:
     return _NON_ALNUM.sub("", _fold(token).lower())
 
 
+# A post-nominal no list can hold: a professional body's letters in capitals ("FIRP",
+# "GMS", "CHRL"). LinkedIn's export writes a name as the person typed it, letters and
+# all, and "<Given> <Surname>, FIRP, GMS" became the surname "GMS", the id "<employer>_gms"
+# and a name that matched nobody in the contact book.
+_ABBREVIATION = re.compile(r"[A-Z][A-Z0-9&./-]{1,9}")
+
+
+def _post_nominals(chunk_tokens, head_tokens, head) -> bool:
+    """Is a chunk after a comma letters after a name, not the given name of a reversed one?
+
+    Credentials always are. Capitals are too, but only after a full name ("Wren
+    Halloway, FIRP"): "Halloway, Wren" and "HALLOWAY, WREN" keep both halves."""
+    if not chunk_tokens:
+        return False
+    if all(_bare(t) in _CREDENTIALS for t in chunk_tokens):
+        return True
+    return (len(head_tokens) >= 2 and any(ch.islower() for ch in head)
+            and all(_ABBREVIATION.fullmatch(t.strip(".,;")) for t in chunk_tokens))
+
+
 def person_name(name: str | None) -> str:
     """The bare first-and-last name: pronouns, honorifics and credentials removed."""
     s = _PAREN.sub(" ", str(name or ""))
     s = _TRAILER.split(s)[0]
     chunks = [c.strip() for c in s.split(",")]
     tokens = chunks[0].split()
+    head = list(tokens)
     for chunk in chunks[1:]:
         extra = chunk.split()
-        # "Wren Halloway, MSc, CFA" drops the credential chunks. "Halloway, Wren" is a
-        # name written back to front and keeps both halves.
-        if extra and all(_bare(t) in _CREDENTIALS for t in extra):
+        # "Wren Halloway, MSc, CFA" and "Wren Halloway, FIRP, GMS" drop the letters after
+        # the name. "Halloway, Wren" is a name written back to front and keeps both halves.
+        if _post_nominals(extra, head, chunks[0]):
             continue
         tokens.extend(extra)
     tokens = [t for t in tokens if _bare(t) not in _HONORIFICS]
@@ -443,19 +464,20 @@ def first_degree(path=None) -> list:
     Connections.csv with a few lines of notes above the header, so the header is found
     rather than assumed to be line one. Saved into documents/linkedin/ by `sources.py
     import-connections`, it is the one source of who the person is already connected
-    with, which no search can see.
+    with, which no search can see. Read through `export.read()`, the one reader for every
+    export file, so a header in another case or spacing is read too.
     """
+    import zipfile
+    import export
     path = path or person.local_state("documents", "linkedin", "Connections.csv")
     try:
-        with open(path, encoding="utf-8-sig", newline="") as fh:
-            lines = fh.read().splitlines()
-    except OSError:
+        got = export.read("connections", path)
+    except (OSError, ValueError, zipfile.BadZipFile):
         return []
-    start = next((i for i, ln in enumerate(lines) if ln.lower().startswith("first name")), None)
-    if start is None:
+    if not got["usable"]:
         return []
     out = []
-    for row in csv.DictReader(lines[start:]):
+    for row in got["rows"]:
         name = " ".join(x for x in (row.get("First Name"), row.get("Last Name")) if x).strip()
         if not name:
             continue
@@ -2684,6 +2706,19 @@ def main(argv=None) -> int:
                                     f"then record it: state.py withdraw {i['contact_id']}",
                  "first_message": "; accepted, nothing said yet: a first message, not a nudge",
                  }.get(i["kind"], ""))
+    import zipfile
+    import export
+    if any(i["kind"] == "request_pending" for i in items):
+        print("  Withdrawing is done on LinkedIn, by you; the steps: " + export.WITHDRAW_STEPS)
+    # Invitations sent from LinkedIn itself and never accepted, from the export: the log
+    # knows only the requests it recorded, and the backlog counts against how many
+    # LinkedIn lets the person send. A broken export never stops this view.
+    try:
+        waiting = export.pending_lines(export.pending(contacts, threads, a.today))
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile):
+        waiting = []
+    if waiting:
+        print("\n" + "\n".join(waiting))
 
     b = platform_budget(contacts, threads, a.today)
     print(f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "

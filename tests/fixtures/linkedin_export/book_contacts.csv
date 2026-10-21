@@ -1,0 +1,7 @@
+contact_id,name,title,company,company_key,location,linkedin_url,email,tier,route,route_detail,referred_by,signal,signal_date,first_contacted,channel,status,next_action,next_action_due,outcome,linked_application,notes
+larkspur_retail_castellan,Juno Castellan,Analytics Manager,Larkspur Retail,larkspur retail,"Leeds, England, United Kingdom",https://www.linkedin.com/in/example-juno-castellan,,2,alumni,University of Leeds alumni,,,,2026-09-10,linkedin,in_conversation,,,,,invented contact
+fernhill_freight_halloway,Wren Halloway,Head of Supply Chain Analytics,Fernhill Freight,fernhill freight,"Manchester, England, United Kingdom",https://www.linkedin.com/in/example-wren-halloway,,2,cold,,,,,2026-09-21,linkedin,awaiting_reply,,,,,invented contact
+fernhill_freight_haldane,Corwin Haldane,Planning Manager,Fernhill Freight,fernhill freight,"Manchester, England, United Kingdom",,,2,cold,,,,,2026-09-25,linkedin,awaiting_reply,,,,,invented contact
+kestrel_mutual_smith,Robert Smith,Data Manager,Kestrel Mutual,kestrel mutual,"Manchester, England, United Kingdom",,,3,cold,,,,,,,not_contacted,,,,,invented contact
+fernhill_freight_okonedo,Hal Okonedo,Planning Lead,Fernhill Freight,fernhill freight,"Manchester, England, United Kingdom",https://www.linkedin.com/in/example-hal-okonedo,,2,cold,,,,,2026-09-15,connection,awaiting_reply,,,,,invented contact
+kestrel_mutual_varga,Tamsin Varga,Analytics Lead,Kestrel Mutual,kestrel mutual,"Manchester, England, United Kingdom",https://www.linkedin.com/in/example-tamsin-varga,,2,cold,,,,,,,not_contacted,,,,,invented contact

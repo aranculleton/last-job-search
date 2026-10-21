@@ -959,6 +959,12 @@ def _same_title(a, b) -> bool:
     return bool(x) and x == title_key(b)
 
 
+def same_title(a, b) -> bool:
+    """`_same_title` under a public name: tools/posting_profile.py asks it at staging
+    whether a pick is the role already applied to."""
+    return _same_title(a, b)
+
+
 def _as_score(value) -> float | None:
     """A tracker `fit_rating` as a number, or None. It is hand-typed as "63/100"."""
     m = re.search(r"\d+(?:\.\d+)?", str(value or ""))

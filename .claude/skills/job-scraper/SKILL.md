@@ -359,7 +359,9 @@ employer, score them, then surface only the **highest scorer**. Record the other
 `status: "skipped"` with the reason `same-employer duplicate: <the surfaced role> scored higher
 this run`. Never present three roles at one company and ask the user to choose; that is the
 choice this step exists to make. If the top two are within 3 points and genuinely different
-functions, surface one and mention the other in a single clause.
+functions, surface one and mention the other in a single clause. The same rule holds at
+drafting: when a person's picks name two roles at one employer, `tools/stage_picks.py stage`
+holds both and asks which one to draft, unless they say both (`--both`).
 
 ### Step 3: Tiered scoring (cheap knockout first, full framework second)
 

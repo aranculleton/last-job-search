@@ -22,6 +22,40 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Staging reads each posting by code before anything is drafted.** It reports:
+  - permanent or a contract, and when it ends;
+  - the stated pay, and whose place it is for;
+  - years and degree asked;
+  - where and how the job is worked;
+  - whether it is a repost;
+  - what is already running at that employer.
+
+  A pick with a surprise in it is held, with a plain question, until you answer: a short
+  fixed-term contract, pay for another place, an application already in, a referral in
+  flight. No model spends anything on it while it waits. Two roles at one employer ask
+  which one to draft, unless you say both (`--both`).
+- **Your own LinkedIn profile is looked over now and then, for red flags only.** The
+  things that would stop people replying, never polish:
+  - a city that is not where you are;
+  - a current job missing or different from your resume;
+  - titles or dates more than a month off;
+  - a certificate you do not hold;
+  - a profile too thin to trust;
+  - a confidential search on show.
+
+  It runs once, then again only when your profile's facts change or outreach is plainly not
+  working (a run of unanswered first notes, sized from your own reply rate), and never more
+  than once in 30 days. `python3 tools/network/own_profile.py due` costs nothing and says
+  nothing when it is not due. It reads your LinkedIn data export, or a paste; LinkedIn is
+  never fetched. Profile upgrade: own-profile-review
+- **Your LinkedIn export's messages and invitations come into the message log**
+  (`python3 tools/network/export.py history --apply`). They are joined to your contact book
+  by profile address, or by a careful name match, so the app sees who you wrote to, who
+  replied, who is owed a reply and where a resume was attached. Running it twice adds
+  nothing, and nothing is sent.
+- **Invitations nobody accepted in three weeks are listed, oldest first**, with LinkedIn's
+  own steps to withdraw them (the app never withdraws anything). Each one you withdraw is
+  recorded so it is never suggested again.
 - **A whole round on invented postings is pinned in the tests**, from the job boards to the
   shortlist, so a change that moves which postings a round finds or how they rank fails
   until it is named.
@@ -83,6 +117,16 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Employer research is much cheaper.** It fetches through one script
+  (`company_research.py fetch`), which:
+  - reads robots.txt first and keeps the crawl delay;
+  - falls back to the site's feed or sitemap when a page is behind a bot check;
+  - keeps a note per host, so the next agent and the next round skip a known-dead route;
+  - stops at 12 requests per employer per day;
+  - never fetches a fresh cached fact again;
+  - checks every quote against the page.
+
+  Research saved for a posting in another country is kept apart from the home entity's.
 - **A round is faster, and finds and ranks the same postings.**
   - Employer boards are read while the job boards are searched, not after.
   - The health check asks every board at once.
@@ -138,6 +182,16 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A second save of an employer's research no longer replaces the first.** Saves now add
+  to the file. Two agents researching one employer at once had lost all but one agent's
+  facts.
+- **A skill you listed is kept on the skills line when the posting names it inside a phrase**
+  ("online experimentation" for A/B testing and experiment design).
+- **You are not asked about a skill your profile covers under another name**: Azure when you
+  hold Azure Data Factory, model deployment when you list model serving. This only removes
+  questions; it never adds a skill to a document.
+- **A name written with letters after it ("Corwin Haldane, FIRP, GMS") keeps its surname.**
+  It was read as the surname "GMS" and matched nobody.
 - **The pay band for your own place is read with the one place matcher.** "Wholesale" is no
   longer Sale, and "(UK remote)" is home.
 - **The extracted-fields screen cuts pay only below your cut line**, as the free screen

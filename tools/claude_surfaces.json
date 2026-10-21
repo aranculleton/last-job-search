@@ -314,6 +314,49 @@
       "ui_sensitive": true
     },
     {
+      "id": "linkedin-withdraw-invitation",
+      "claim": "A LinkedIn member takes back a connection request nobody has answered from the list of sent requests still waiting: My Network, then Manage, then the Sent tab, with Withdraw beside each name. It goes one at a time (there is no way to withdraw many at once), the person is not told, and the same person cannot be invited again for up to three weeks. LinkedIn says many invitations left pending can lead to a restriction on sending more, and that an invitation expires after six months. Only the member can do it: the app never withdraws anything. Checked through a web search of LinkedIn's own help pages: a session never fetches linkedin.com.",
+      "goal": "withdraw a connection request nobody has accepted",
+      "how": "on LinkedIn, My Network, then Manage, then the Sent tab, with Withdraw beside each name",
+      "steps": [
+        "On LinkedIn, open My Network, then Manage (it says See all when invitations to you are waiting), then the Sent tab.",
+        "Withdraw beside a name takes that request back. It goes one at a time, so start with the oldest.",
+        "They are not told, and you cannot invite the same person again for up to three weeks.",
+        "Tell me who you withdrew, and I will record it so they are never suggested again."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/a568295",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a568295", "quote": "You won't be able to resend an invite to the same recipient for up to three weeks", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a551012", "quote": "Many invitations that have been ignored, left pending, or marked as spam by recipients can lead to a temporary restriction", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a546712", "quote": "Invitations expire after six months", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-21",
+      "verified_against": "LinkedIn's help pages a568295, a551012 and a546712 as a web search summarised them on 2026-10-21 (not fetched, so the quotes are the summary's words, not the pages')",
+      "ui_sensitive": true
+    },
+    {
+      "id": "linkedin-export-files",
+      "claim": "LinkedIn's copy of a member's own data comes as a ZIP of CSV files. Among them: messages.csv (their messages), Invitations.csv (connection requests sent and received), Connections.csv, and, for their own profile, Profile.csv, Positions.csv, Education.csv, Skills.csv and Certifications.csv. The larger download holds them all. The shorter list of items offered Invitations and Profile when a person tried it on 2026-10-19; whether its Profile item carries positions, skills and certifications is not confirmed. The file and column names come from independent parsers of the export, not from LinkedIn's help. Checked through a web search of LinkedIn's own help page: a session never fetches linkedin.com.",
+      "goal": "get your LinkedIn messages, invitations and own profile as files",
+      "how": "on LinkedIn, Settings & Privacy, then Data privacy, then Get a copy of your data, with the larger download chosen",
+      "steps": [
+        "On LinkedIn, open Settings & Privacy, then Data privacy, then Get a copy of your data (some accounts call it Download your data).",
+        "Choose the larger download, the whole archive, and request it. LinkedIn may ask for your password.",
+        "LinkedIn emails you a link anything from about ten minutes to a day later, and it works for 72 hours. Attach the ZIP, or only the files you want me to read: messages.csv and Invitations.csv for your history; Profile.csv, Positions.csv, Education.csv, Skills.csv and Certifications.csv for your own profile."
+      ],
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/50191",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/50191", "quote": "If you select the larger download, you'll receive an email within 24 hours.", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "https://raw.githubusercontent.com/tdimino/claude-code-minoan/main/skills/integration-automation/linkedin-export/references/linkedin-export-format.md", "quote": "Invitations.csv"},
+        {"url": "observation: one person's request on 2026-10-19", "quote": "The shorter list offered Articles, Invitations, Profile, Recommendations and Registration, and no Connections; nothing arrived after 15 minutes."}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-21",
+      "verified_against": "LinkedIn's help page 50191 as a web search returned it on 2026-10-19 (not fetched), a third-party description of the export's files fetched on 2026-10-21, a second parser's code (juanmanueldaza/linkedin2md, parsers/network.py) read that day for the invitations' columns, and one person's own request on 2026-10-19",
+      "ui_sensitive": true
+    },
+    {
       "id": "linkedin-people-tab",
       "claim": "An employer's LinkedIn Page has a People tab listing the members who have linked their profile to it, with their job titles and how each is connected to the person viewing. A session reads one load of it, in the person's own browser, nothing clicked: a dozen people's headlines and connection degree for one page, before any one profile is read. A people search narrowed to the employer (linkedin-people-at-employer) shows where each is based as well.",
       "goal": "see who works at one employer",

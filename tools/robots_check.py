@@ -52,32 +52,56 @@ def _fetch(url, ua):
 from openroles.robots import _groups, _match, allowed, is_robots_body  # noqa: E402,F401
 
 
-def gate(url):
+def read_policy(url, fetch=None):
+    """(robots.txt body, why) for the site `url` is on; the body is None when permission
+    is unconfirmed and "" when the site publishes no policy (a 404).
+
+    Read as Claude-User first and as a browser when that is refused, because a firewall
+    usually blocks robots.txt too. `fetch(url, user_agent) -> (body, status)` is the
+    transport: curl by default; tools/company_research.py passes its own, so a research
+    run reads each site's policy the same way this check does.
+    """
+    fetch = fetch or _fetch
     parts = urlsplit(url)
-    path = unquote(parts.path) or '/'
-    if parts.query:
-        path += '?' + parts.query
     robots = f'{parts.scheme}://{parts.netloc}/robots.txt'
-    body, last = None, 'no attempt'
+    last = 'no attempt'
     for ua in ('Claude-User', BROWSER):
         try:
-            text, code = _fetch(robots, ua)
+            text, code = fetch(robots, ua)
         except Exception as e:
             last = type(e).__name__; continue
         if code == 404:
-            return 0, 'ALLOWED - no robots.txt published'
+            return '', 'no robots.txt published'
         if code == 200:
             if not is_robots_body(text):
                 last = 'HTTP 200 but the body is not a robots.txt'
                 continue
-            body = text; break
+            return text, ''
         last = 'HTTP %d' % code
+    return None, last
+
+
+def decide(body, url):
+    """(0, why) when this policy lets `url` be fetched, (1, why) when it does not."""
     if body is None:
-        return 1, 'UNCONFIRMED (%s) - do not retry, go to step 3' % last
+        return 1, 'UNCONFIRMED - do not retry, go to step 3'
+    if body == '':
+        return 0, 'ALLOWED - no robots.txt published'
+    parts = urlsplit(url)
+    path = unquote(parts.path) or '/'
+    if parts.query:
+        path += '?' + parts.query
     for a in ('Claude-User', '*'):
         if not allowed(body, a, path):
             return 1, f'DISALLOWED for {a} - do not retry, go to step 3'
     return 0, 'ALLOWED - robots.txt permits this path'
+
+
+def gate(url):
+    body, last = read_policy(url)
+    if body is None:
+        return 1, 'UNCONFIRMED (%s) - do not retry, go to step 3' % last
+    return decide(body, url)
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:

@@ -1,0 +1,210 @@
+"""What a posting is gets read by code at staging, and a surprise is asked before drafting.
+
+One shortlisted role turned out, only after its research agent had finished, to be a
+fixed-term contract in a finance department ending in four months. The posting said
+so, and the shortlist and the staging step both had the text and showed none of it.
+Two roles at one employer were drafted side by side, when one role per employer is the
+rule. Staging now prints a code-only profile of each pick, holds a pick with a fatal or
+surprising property out of picks.json until the person answers, and asks which role to
+draft when two share an employer. Every employer, role and posting here is invented.
+"""
+from __future__ import annotations
+
+import csv
+import datetime as dt
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "tools"))
+
+import posting_profile as PP  # noqa: E402
+import stage_picks  # noqa: E402
+
+TODAY = dt.date(2026, 10, 21)
+CONTRACT = ("Finance Data Analyst. Oakmere Foods is looking for an analyst to join "
+            "our finance department in Salford, two days a week in the office. This is a "
+            "fixed-term contract ending in four months, covering the year-end close. "
+            "Salary: £40,000 - £45,000 per annum. You will need at least 3 years "
+            "of experience in SQL and Excel.")
+PERMANENT = ("Demand Planning Analyst. A permanent, full-time role in our Manchester team, "
+             "hybrid. Salary: £46,000 - £52,000 per annum. You will need at least "
+             "4 years of experience in forecasting. A bachelor's degree in a numerate "
+             "subject, or equivalent experience, is required.")
+ABROAD_PAY = ("Data Analyst. You will join our analytics team. The base salary range for this "
+              "role in New York is $120,000 - $140,000 per year.")
+
+
+def _row(company="Oakmere Foods", title="Finance Data Analyst", desc=CONTRACT,
+         url="https://jobs.example/oakmere/1", location="Salford, England, United Kingdom"):
+    return {"company": company, "title": title, "url": url, "portal": "pasted",
+            "location": location, "desc": desc}
+
+
+def _stage(tmp_path, *rows, picks=None, tracker=(), both=False):
+    return stage_picks.stage(str(tmp_path), picks or [str(i + 1) for i in range(len(rows))],
+                             rows=list(tracker), root=str(tmp_path), shortlist=list(rows),
+                             both=both, today=TODAY)
+
+
+def _json(tmp_path, name):
+    return json.loads((tmp_path / name).read_text(encoding="utf-8"))
+
+
+# ------------------------------------------------------------------ the profile
+
+def test_a_short_fixed_term_contract_is_found_in_the_body():
+    t = PP.terms(CONTRACT, "Finance Data Analyst", TODAY)
+    assert t["kind"] == "fixed-term" and t["months"] == 4 and t["ends_about"] == "2027-02-20"
+    assert PP.terms("A 12-month fixed-term contract until 31 March 2027.", "", TODAY)["ends"] \
+        == "2027-03-31"
+    assert PP.terms(PERMANENT, "", TODAY)["kind"] == "permanent"
+    assert PP.terms("This is not a contract role; it is permanent.", "", TODAY)["kind"] == "permanent"
+    # Contracts in the work, temporary tables, a secondment on offer: none is how the job is held.
+    for text, title in (("You will review supplier contracts and contract terms.", "Contract Analyst"),
+                        ("Experience with temporary tables in SQL Server.", "Data Analyst"),
+                        ("We offer secondment opportunities across the group.", "Analyst")):
+        assert PP.terms(text, title, TODAY)["kind"] == "not stated", (text, title)
+    assert PP.terms("", "Data Analyst (Contract)", TODAY)["kind"] == "contract"
+    assert PP.terms("", "Planner - 12 Month FTC", TODAY)["kind"] == "fixed-term"
+
+
+def test_the_profile_reads_pay_years_degree_and_place():
+    prof = PP.read(_row(desc=PERMANENT, location="Manchester"), PERMANENT, rows=[], today=TODAY)
+    lines = PP.lines(prof)
+    assert "pay: GBP 46,000 to 52,000" in lines
+    assert "years: asks 4+, you have 7" in lines
+    assert "degree: a bachelor's degree, required, or equivalent experience" in lines
+    assert any(line.startswith("where: Manchester, hybrid [PASS") for line in lines)
+    assert PP.questions(prof, _row(desc=PERMANENT)) == []
+
+
+def test_a_pay_band_for_another_place_or_currency_is_asked_about():
+    prof = PP.read(_row(desc=ABROAD_PAY), ABROAD_PAY, rows=[], today=TODAY)
+    assert prof["pay"]["where"].startswith("another currency")
+    assert [q["id"] for q in PP.questions(prof, _row())] == ["pay_elsewhere"]
+    london = "Salary: £60,000 - £70,000 per annum for this role in London."
+    prof = PP.read(_row(desc=london), london, rows=[], today=TODAY)
+    assert prof["pay"]["where"] == "elsewhere: london"
+
+
+# ------------------------------------------------------------------ staging holds what needs an answer
+
+def test_a_contract_is_held_out_of_the_draft_until_the_person_says_draft_it(tmp_path):
+    p = _stage(tmp_path, _row())[0]
+    assert [q["id"] for q in p["hold"]] == ["contract"]
+    assert "short fixed-term contract (about 4 months" in p["hold"][0]["question"]
+    assert _json(tmp_path, "picks.json") == []
+    assert _json(tmp_path, "held.json")[0]["slug"] == p["slug"]
+    # The researcher and the drafter see it too, above the fence, as derived values.
+    head = Path(p["file"]).read_text(encoding="utf-8").split("BEGIN-UNTRUSTED-")[0]
+    assert "- terms: fixed-term contract, about 4 months" in head
+    assert "year-end close" not in head
+    got = stage_picks.consent(str(tmp_path), p["slug"], draft=True)
+    assert got["answered"] == ["contract"] and got["hold"] == []
+    assert [x["slug"] for x in _json(tmp_path, "picks.json")] == [p["slug"]]
+    assert stage_picks.waiting(str(tmp_path)) == []
+
+
+def test_a_person_who_wants_contracts_is_not_asked(tmp_path, monkeypatch):
+    monkeypatch.setattr(PP, "wants_contracts", lambda: True)
+    p = _stage(tmp_path, _row())[0]
+    assert p["hold"] == [] and len(_json(tmp_path, "picks.json")) == 1
+
+
+def test_an_application_already_in_or_the_same_role_before_is_asked(tmp_path):
+    sent = {"date": "2026-10-10", "company": "Oakmere Foods", "role": "Pricing Analyst",
+            "status": "applied"}
+    p = _stage(tmp_path, _row(desc=PERMANENT, title="Demand Planning Analyst",
+                              location="Manchester"), tracker=[sent])[0]
+    assert [q["id"] for q in p["hold"]] == ["application_in"]
+    assert "Pricing Analyst, sent 2026-10-10" in p["hold"][0]["question"]
+    closed = dict(sent, role="Demand Planning Analyst", status="rejected", date="2026-08-01")
+    p = _stage(tmp_path / "b", _row(desc=PERMANENT, title="Demand Planning Analyst",
+                                    location="Manchester"), tracker=[closed])[0]
+    assert [q["id"] for q in p["hold"]] == ["applied_before"]
+
+
+def test_a_referral_in_flight_and_a_posting_ruled_out_before_are_asked(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    (state / "job_scraper").mkdir(parents=True)
+    cols = ["contact_id", "name", "title", "company", "company_key", "status", "next_action"]
+    with open(state / "network_contacts.csv", "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=cols)
+        w.writeheader()
+        w.writerow({"contact_id": "oakmere_halloway", "name": "Wren Halloway", "title": "Finance Lead",
+                    "company": "Oakmere Foods", "company_key": "oakmere foods",
+                    "status": "referral_in_progress", "next_action": ""})
+    (state / "job_scraper" / "seen_jobs.json").write_text(json.dumps({"seen": {
+        "https://jobs.example/oakmere/1": {
+            "company": "Oakmere Foods", "title": "Demand Planning Analyst",
+            "url": "https://jobs.example/oakmere/1", "first_seen": "2026-09-30",
+            "location": "Manchester", "status": "excluded", "basis": "person",
+            "exclusion_reason": "the person said: not this team"}}}), encoding="utf-8")
+    monkeypatch.setenv("LJS_STATE", str(state))
+    p = _stage(tmp_path / "r", _row(desc=PERMANENT, title="Demand Planning Analyst",
+                                    location="Manchester"))[0]
+    ids = [q["id"] for q in p["hold"]]
+    assert "referral" in ids and "ruled_out" in ids
+    referral = next(q["question"] for q in p["hold"] if q["id"] == "referral")
+    assert referral.startswith("Wren Halloway, Finance Lead has put your name forward")
+
+
+def test_a_repost_is_shown_but_not_asked(tmp_path, monkeypatch):
+    state = tmp_path / "state"
+    (state / "job_scraper").mkdir(parents=True)
+    (state / "job_scraper" / "seen_jobs.json").write_text(json.dumps({"seen": {
+        "https://jobs.example/oakmere/old": {
+            "company": "Oakmere Foods", "title": "Demand Planning Analyst",
+            "url": "https://jobs.example/oakmere/old", "first_seen": "2026-10-01",
+            "location": "Manchester", "status": "new"}}}), encoding="utf-8")
+    monkeypatch.setenv("LJS_STATE", str(state))
+    row = _row(desc=PERMANENT, title="Demand Planning Analyst", location="Manchester")
+    prof = PP.read(row, PERMANENT, rows=[], today=TODAY)
+    assert prof["seen"]["repost"] and prof["seen"]["days"] == 20
+    assert "seen: first seen 2026-10-01 (20 days ago) under another link: looks like a repost" \
+        in PP.lines(prof)
+    assert PP.questions(prof, row) == []
+
+
+# ------------------------------------------------------------------ one role per employer
+
+def test_two_roles_at_one_employer_ask_which_unless_the_person_says_both(tmp_path):
+    a = _row(desc=PERMANENT, title="Demand Planning Analyst", location="Manchester",
+             url="https://jobs.example/oakmere/a")
+    b = _row(desc=PERMANENT, title="Pricing Analyst", location="Manchester",
+             url="https://jobs.example/oakmere/b")
+    staged = _stage(tmp_path, a, b)
+    assert all([q["id"] for q in p["hold"]] == ["one_per_employer"] for p in staged)
+    assert "Which one should I draft?" in staged[0]["hold"][0]["question"]
+    assert _json(tmp_path, "picks.json") == []
+    stage_picks.consent(str(tmp_path), staged[1]["slug"], draft=True)
+    assert [p["role"] for p in _json(tmp_path, "picks.json")] == ["Pricing Analyst"]
+    other = _json(tmp_path, "held.json")[0]
+    assert other["status"] == "skipped" and "you chose Pricing Analyst" in other["skip_reason"]
+    both = _stage(tmp_path / "both", a, b, both=True)
+    assert all(p["hold"] == [] for p in both) and len(_json(tmp_path / "both", "picks.json")) == 2
+
+
+def test_a_plain_permanent_pick_goes_straight_to_the_draft(tmp_path):
+    p = _stage(tmp_path, _row(desc=PERMANENT, title="Demand Planning Analyst",
+                              location="Manchester"))[0]
+    assert p["hold"] == [] and [x["slug"] for x in _json(tmp_path, "picks.json")] == [p["slug"]]
+    assert not (tmp_path / "held.json").exists()
+
+
+def test_the_command_line_prints_the_profile_and_the_question(tmp_path):
+    posting = tmp_path / "posting.txt"
+    posting.write_text(CONTRACT, encoding="utf-8")
+    out = subprocess.run([sys.executable, str(ROOT / "tools" / "stage_picks.py"), "single",
+                          str(tmp_path / "apply"), "--company", "Oakmere Foods", "--role",
+                          "Finance Data Analyst", "--posting-file", str(posting),
+                          "--location", "Salford, England, United Kingdom"],
+                         capture_output=True, text=True, cwd=ROOT, env=dict(os.environ))
+    assert out.returncode == 0, out.stderr
+    assert "terms: fixed-term contract, about 4 months" in out.stdout
+    assert "ASK THE PERSON BEFORE DRAFTING" in out.stdout and "--draft" in out.stdout
+    assert "Nothing to draft yet" in out.stdout

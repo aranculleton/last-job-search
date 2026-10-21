@@ -398,6 +398,35 @@ def _connections_export() -> str:
             "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
 
 
+def _own_profile_review() -> str:
+    """Pending until the person's own LinkedIn profile has been looked over once, or while a
+    no stands (asked again after REASK_DAYS). Later looks are tools/network/own_profile.py
+    `due`'s, not an upgrade's: it runs from every networking run and prints nothing until
+    something has changed or outreach is plainly not working."""
+    if _mod("networking") is None:
+        return ""
+    path = person.state("documents", "network", "own_profile_review.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            if (json.load(fh) or {}).get("reviews"):
+                return ""
+    except (OSError, ValueError, AttributeError):
+        pass
+    if "own-profile-review" in asked():
+        u = by_id("own-profile-review")
+        return again("own-profile-review", u.ask_version, u.changed)
+    return ("your own LinkedIn profile has never been looked over for anything that would "
+            "stop people replying (documents/network/own_profile_review.json)")
+
+
+def _own_profile_steps() -> str:
+    """After a yes: the export's profile files, from the registry's dated steps, or a paste."""
+    return "\n".join(_surface_steps("linkedin-export-files")
+                     + ["Or paste your profile's text here instead (headline, location, About, "
+                        "each job with its dates, certifications). I only read it; nothing is "
+                        "sent."])
+
+
 def _contract() -> str:
     try:
         import portals
@@ -1043,6 +1072,26 @@ REGISTRY: tuple[Upgrade, ...] = (
                                     + ["I only read it. Nothing is sent to anyone."]),
             why_ask="People you already know can be messaged directly, with no connection "
                     "request, and they reply far more often than strangers."),
+    Upgrade("own-profile-review", "2026-10-21",
+            "your own LinkedIn profile looked over once for anything that would stop people "
+            "replying: a wrong city, a job that does not match your resume, a certificate you "
+            "do not hold, a confidential search on show",
+            _own_profile_review, "after a yes, get their own profile: the export's profile "
+            "files saved with `python3 tools/network/export.py save <file>... --only profile`, "
+            "or their paste written into the shape `python3 tools/network/own_profile.py shape` "
+            "prints (their page read in their own browser only where PROFILE_READS is "
+            "\"browser\"). Then `python3 tools/network/own_profile.py check`, ask its yes-or-no "
+            "questions once, then `own_profile.py brief` and judge it as it says; record what "
+            "they decide with `own_profile.py decide`, and a finding they do not care about "
+            "with `own_profile.py dismiss`. A no is `python3 tools/profile_upgrades.py --no "
+            "own-profile-review`", "question", "~5 min",
+            priority=3,
+            needs="you",
+            ask="Want me to look over your own LinkedIn profile once, for anything that would "
+                "stop people replying?",
+            steps=_own_profile_steps,
+            why_ask="A stranger reads your profile before replying, and one thing in it that "
+                    "contradicts your resume can cost every note you send."),
     Upgrade("profile-reads", "2026-10-17",
             "a note to each person built from their own profile, not a search snippet",
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "
@@ -1417,6 +1466,8 @@ SAFE_DEFAULTS: dict[str, str] = {
     "skills.MAX_PER_LINE": "six items a line unless the person wants another number",
     "skills.FAMILIES": "none: the app's own families of interchangeable tools apply "
                        "(tools/bridges.py); a field's own are added here",
+    "skills.COVERED_BY": "none: the app's own parts and synonyms apply (tools/bridges.py); "
+                         "it only removes a question, so absent costs one extra question",
     "skills.MIN_PER_CATEGORY": "one item makes a line worth printing; rarely changed",
     "networking.NOT_HIRING_REASON": "a neutral sentence any field reads correctly",
     "networking.NOT_HIRING_TITLES": "the built-in revenue titles, the same list every older "
