@@ -143,6 +143,10 @@ def changed(root: str = ROOT, base: str = "origin/master") -> list[str] | None:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print("usage: python3 tools/personal_paths.py [--personal | --app | "
+              "--only-personal-changed]")
+        return 0
     if "--only-personal-changed" in argv:
         # For ./tools/ci_local.sh: exit 0, listing them, when every change since master is
         # the person's own (their data, their profile, their tests); 1 otherwise, and when

@@ -44,6 +44,10 @@ it. LinkedIn is never fetched from a session.
    profile URL first, which finds the same person under a nickname or a new employer.
    A company whose `company_research/<key>.json` `network_presence` record still
    holds (`discovery.presence_ruled_out(company, today)`) is out until its review date.
+   An employer is out on the bar only when `tools/bar.py` says `excluded`. A `none` whose
+   reason says "not on your employer lists yet" is unjudged, not failing: judge its pay,
+   prestige and signal once (`bar.py judge "<employer>" <verdict> "<why>"`), then apply the
+   person's own rule about the bar.
    **Who already has a request pending, for everyone at once**, where this chat reads in a
    browser (step 5's route is `browser` or `enable`): once a session, before any profile, read
    LinkedIn's sent-invitations list (`python3 tools/claude_surfaces.py show

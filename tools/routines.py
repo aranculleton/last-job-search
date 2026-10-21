@@ -189,6 +189,10 @@ def load(path: str | None = None) -> dict:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print("usage: python3 tools/routines.py check [<registry>] | stub <id> | brief\n\n"
+              + __doc__.split("\n\n")[1])
+        return 0
     if not argv or argv[0] not in ("check", "stub", "brief"):
         print(__doc__.split("\n\n")[1])
         return 2

@@ -26,7 +26,8 @@ def _positional_commands() -> list[str]:
             text = open(os.path.join(ROOT, base, f), encoding="utf-8").read()
             at = re.search(r"__name__ == ['\"]__main__['\"]", text)
             main = text[at.start():] if at else ""
-            if main and re.search(r"sys\.argv\[\d\]|for \w+ in sys\.argv\[1:\]|\" \"\.join\(sys\.argv",
+            if main and re.search(r"sys\.argv\[\d\]|for \w+ in sys\.argv\[1:\]|\" \"\.join\(sys\.argv"
+                                  r"|main\(sys\.argv\[1:\]\)",
                                   main + text):
                 out.append(os.path.join(base, f))
     return out

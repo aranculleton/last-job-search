@@ -177,6 +177,9 @@ def example_sets(module: str) -> set:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print("usage: python3 tools/profile_names.py [<module> | person] [--missing]")
+        return 0
     missing_only = "--missing" in argv
     wanted = [a for a in argv if not a.startswith("--")]
     names = collect()
