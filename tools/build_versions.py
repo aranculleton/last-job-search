@@ -287,8 +287,9 @@ METHODS: dict[str, dict] = {
             (9, "2026-10-19", True, "one living document per hiring process, a process with no application included: answers written to be said and checked, what each interviewer is assessing and wants to hear, the format, small talk with a purpose, and what the employer's people have been told"),
             (10, "2026-10-19", True, "the person's own reasons are asked, never drafted; stock answers matched through employer names and Use for:, and checked against the employer; what each person there was told, and which messages have no text; the warm route by stored status; the recruiter assumed for a screen; the format of this round only; which team, and the process at a screen; just arrived honoured; a posting file for every process"),
             (11, "2026-10-20", True, "Likely questions is notes, never words to say, and never repeats an answer already written; a stock answer marked Not for this kind of employer, or holding a fill-in, is left out with the reason; notes beside an answer are kept and never checked; a rebuild keeps the person's own layout and never adds the Checking line twice; a screen asks its standard questions first; hooks are whole sentences; and an answer drafted on request carries a Draft line that check lists until the person confirms it"),
+            (12, "2026-10-21", True, "a question about what you would do differently is no longer matched to the stock answer for why now; an employer your own catalogue calls professional services is a consulting firm; a fact still to confirm is never printed as where you live; advice and guesses in outcome.md are never what you were told; a rebuild keeps the round's fuller name and the stories the last build used"),
         ),
-        "fingerprint": "f04ac6c1e7568255",
+        "fingerprint": "09ea01593dc95368",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -443,8 +444,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-19", False, "pay is read with no currency mark, by the hour, under a heading, and per place; a posting it now reads below your cut line is cut on its next round, and nothing ruled out before needs looking at again"),
             (12, "2026-10-19", False, "a hiring process with no application is read as a process, never as an application to the same role"),
             (13, "2026-10-20", False, "a round in the cloud tells the person, in plain words, the one fix when the chat's settings block the job sites"),
+            (14, "2026-10-21", False, "sector.kind reads what the person's catalogue calls an employer, for the interview pack; screening unchanged"),
         ),
-        "fingerprint": "cd1651c6ecb67b79",
+        "fingerprint": "3e86e189a62ef562",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

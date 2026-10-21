@@ -114,6 +114,20 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     return V_UNKNOWN, "not a name on file and the posting settles nothing"
 
 
+def kind(company: str | None) -> str:
+    """What the person's own catalogue (employers.py) says this employer is, in its words:
+    NOT_TECH's ("professional services", "bank"), "technology company" or "software product"
+    for the two tech lists, and "" for a name it does not hold. Nothing is guessed."""
+    c = " %s " % _norm(str(company or "").split("|")[0])
+    if not c.strip():
+        return ""
+    if _in(c, TECH_COMPANIES):
+        return "technology company"
+    if _in(c, ADJACENT_COMPANIES):
+        return "software product"
+    return next((what for name, what in NOT_TECH.items() if _in(c, {name})), "")
+
+
 def keep(company: str | None, posting: str = "", include_unknown: bool = False) -> bool:
     """Does this row survive a tech-and-tech-adjacent filter?"""
     v, _ = verdict(company, posting)
