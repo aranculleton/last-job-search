@@ -53,12 +53,22 @@ def test_the_same_field_changed_two_ways_is_left_for_a_person():
     assert problems and "<<<<<<<" in out and "interview" in out and "rejected" in out
 
 
-def test_a_log_keeps_the_file_line_ending():
+def test_a_log_takes_the_line_ending_the_repo_keeps_it_with():
+    """Changed 2026-10-21, deliberately: this pinned that a merge keeps ours' CRLF. The state
+    files are kept with plain endings (.gitattributes eol=lf), and a chat branch from before
+    that rule wrote CRLF back into its merge with master, so the next sync stopped on a file
+    whose rows had not changed. A state file now merges to plain endings; any other file keeps
+    its own; an ending the attributes name is the one written."""
     head = "contact_id,date,direction,full_text\r\n"
     base = head + "reed,2026-10-01,out,Hi\r\n"
-    out, _ = M.merge_csv(base, base + "reed,2026-10-05,in,Hello\r\n",
-                         base + "moss,2026-10-05,out,Hi\r\n", "network_threads.csv")
+    ours, theirs = base + "reed,2026-10-05,in,Hello\r\n", base + "moss,2026-10-05,out,Hi\r\n"
+    out, _ = M.merge_csv(base, ours, theirs, "network_threads.csv")
+    assert out == (base + "reed,2026-10-05,in,Hello\r\nmoss,2026-10-05,out,Hi\r\n").replace(
+        "\r\n", "\n")
+    out, _ = M.merge_csv(base, ours, theirs, "contacts_by_hand.csv")
     assert out == base + "reed,2026-10-05,in,Hello\r\nmoss,2026-10-05,out,Hi\r\n"
+    out, _ = M.merge_csv(base, ours, theirs, "network_threads.csv", ending="\r\n")
+    assert "\r\n" in out and "\r\r" not in out
 
 
 def test_seen_postings_merge_by_posting():
@@ -100,6 +110,49 @@ def test_git_uses_it_for_a_real_merge(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
     assert open(tracker).read() == (HEAD + ROW_A + ROW_B
                                     + "2026-10-03,Larkspur Retail,Analyst,applied,\n")
+
+
+def test_a_chat_branch_from_before_plain_endings_does_not_bring_crlf_back(tmp_path):
+    """From the sync audit, 2026-10-21: the state files gained `eol=lf`. A chat branch from
+    before it, its contact book saved with CRLF, merged master; the merged file kept ours'
+    CRLF, git then showed it changed with no row changed, and the next sync stopped."""
+    repo = str(tmp_path)
+    _git(repo, "init", "-q", "-b", "master")
+    os.makedirs(os.path.join(repo, "tools"))
+    with open(os.path.join(ROOT, "tools", "merge_state.py")) as f, \
+            open(os.path.join(repo, "tools", "merge_state.py"), "w") as g:
+        g.write(f.read())
+    older = "".join("%s merge=ljs-state\n" % p for p in (
+        "job_search_tracker.csv", "network_contacts.csv", "network_threads.csv"))
+    with open(os.path.join(repo, ".gitattributes"), "w") as g:
+        g.write(older)
+    book = os.path.join(repo, "network_contacts.csv")
+    rows = "contact_id,name,status\r\nc1,Juno Castellan,awaiting_reply\r\n" \
+           "c2,Corwin Haldane,in_conversation\r\n"
+    with open(book, "w", newline="") as fh:
+        fh.write(rows)
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "the release before")
+    M.install(repo)
+    _git(repo, "checkout", "-qb", "chat/c")
+    with open(book, "w", newline="") as fh:
+        fh.write(rows.replace("c2,Corwin Haldane,in_conversation", "c2,Corwin Haldane,call_booked"))
+    _git(repo, "commit", "-qam", "a call booked")
+    _git(repo, "checkout", "-q", "master")
+    with open(os.path.join(ROOT, ".gitattributes")) as f, \
+            open(os.path.join(repo, ".gitattributes"), "w") as g:
+        g.write(f.read())
+    _git(repo, "add", ".gitattributes")
+    _git(repo, "add", "--renormalize", "network_contacts.csv")
+    _git(repo, "commit", "-qm", "this release")
+    _git(repo, "checkout", "-q", "chat/c")
+    r = _git(repo, "merge", "-q", "--no-edit", "master")
+    assert r.returncode == 0, r.stdout + r.stderr
+    # Read as bytes: text mode would turn every CRLF into a plain line end on the way in.
+    merged = subprocess.run(["git", "-C", repo, "show", "HEAD:network_contacts.csv"],
+                            capture_output=True).stdout
+    assert b"\r" not in merged and b"c2,Corwin Haldane,call_booked" in merged
+    assert _git(repo, "status", "--porcelain", "--untracked-files=no").stdout == ""
 
 
 # ------------------------------------------------------------------ one chat per update
@@ -222,7 +275,11 @@ def test_a_chat_the_claim_reached_starts_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(merge_state, "install", lambda root: None)
     monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
     assert P.main(["--after-sync"]) == 0
-    assert "belong to another chat" in capsys.readouterr().out
+    said = capsys.readouterr().out
+    assert "belong to another chat" in said
+    # Said once: the line read "its sync has not reached master yet, and none of its
+    # changes has reached master yet" (the sync audit, 2026-10-21).
+    assert said.count("reached master yet") == 1, said
     # The day's record is written in the repo the sync ran in. Into the repo running the
     # tests, it told every other worktree sharing its git folder that it was behind
     # (2026-10-21: helpers' test runs in four worktrees went red on one another's record).
@@ -231,13 +288,66 @@ def test_a_chat_the_claim_reached_starts_nothing(tmp_path, monkeypatch, capsys):
     assert json.loads(capsys.readouterr().out) == []
 
 
+def _worktrees_of_one_repo(tmp_path):
+    """A person's repo on one computer, with two chats each in a worktree of its own (as
+    `sync_app.py --worktree` makes them), and the app commit both are about to take."""
+    main = str(tmp_path / "repo")
+    subprocess.run(["git", "init", "-q", "-b", "master", main], check=True)
+    _git(main, "commit", "-q", "--allow-empty", "-m", "the person's start")
+    _git(main, "remote", "add", "origin", str(tmp_path / "origin.git"))
+    app = str(tmp_path / "app")
+    subprocess.run(["git", "init", "-q", "-b", "master", app], check=True)
+    _git(app, "commit", "-q", "--allow-empty", "-m", "app 3.9.1")
+    a, b = str(tmp_path / "repo-a"), str(tmp_path / "repo-b")
+    _git(main, "worktree", "add", "-q", "-b", "chat/a", a)
+    _git(main, "worktree", "add", "-q", "-b", "chat/b", b)
+    _git(main, "fetch", "-q", app, "master:refs/remotes/app/master")
+    return main, a, b
+
+
+def _take_the_update(chat):
+    import sync_app
+    r = _git(chat, "merge", "-q", "--no-ff", "--allow-unrelated-histories", "app/master",
+             "-m", "Sync from the app: 1 new commit(s)")
+    assert r.returncode == 0, r.stderr
+    sync_app._record_check(chat)
+
+
+def test_two_chats_that_took_the_same_update_never_call_each_other_older(tmp_path, monkeypatch):
+    """From the sync audit, 2026-10-21: the record of the last sync sat in the git folder
+    every worktree shares, so a second chat's sync of the same update told the first that it
+    was older, its --plan stopped, and nobody applied the upgrades."""
+    import sync_app
+    monkeypatch.setattr(sync_app, "is_the_app", lambda root=None: False)
+    main, a, b = _worktrees_of_one_repo(tmp_path)
+    _take_the_update(a)
+    _take_the_update(b)                               # its own merge commit, a minute later
+    assert sync_app.behind_sync(a) == "" and sync_app.behind_sync(b) == ""
+    # Each keeps its own day's check: one chat's sync is not the other's.
+    _git(main, "worktree", "add", "-q", "-b", "chat/c", str(tmp_path / "repo-c"))
+    for chat, stamped in ((a, True), (b, True), (str(tmp_path / "repo-c"), False)):
+        monkeypatch.setattr(sync_app, "ROOT", chat)
+        assert (sync_app.last_checked() != "") is stamped, chat
+    # An /upgrade worktree made from a commit before the sync is still told so.
+    old = str(tmp_path / "upgrade-old")
+    _git(main, "worktree", "add", "-q", "--detach", old, "master")
+    assert "older than the last update" in sync_app.behind_sync(old)
+    # One made from where a chat's sync left it is not.
+    new = str(tmp_path / "upgrade-new")
+    _git(main, "worktree", "add", "-q", "--detach", new,
+         _git(a, "rev-parse", "HEAD").stdout.strip())
+    assert sync_app.behind_sync(new) == ""
+
+
 def test_the_app_itself_keeps_no_record_of_a_sync_and_is_never_behind_one(tmp_path):
     """The app takes no updates, so a record in its git folder only ever came from its own
     tests, and `behind_sync` then stopped `--plan` in every other worktree of it."""
     import sync_app
     app = str(tmp_path / "app")
     _git(str(tmp_path), "init", "-q", app)
-    _git(app, "remote", "add", "origin", sync_app.APP_URL)
+    # The app as this run knows it: LJS_APP_URL moves it (a rehearsal sets it for every
+    # command, the local CI included), and with the fixed URL here this failed there.
+    _git(app, "remote", "add", "origin", sync_app.app_url())
     _git(app, "commit", "-q", "--allow-empty", "-m", "one")
     sync_app._record_check(app)
     assert not os.path.exists(os.path.join(app, ".git", "ljs-last-sync-head"))

@@ -54,6 +54,17 @@ for _p in (os.path.join(_HERE, "network"), _HERE):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import person as _person  # noqa: E402
+
+# Run with no profile (the app itself, or before /setup), the imports below read it and the
+# command crashed with a traceback, `--help` included. It says so plainly instead.
+if __name__ == "__main__" and not _person.exists():
+    if set(sys.argv[1:]) & {"-h", "--help"}:
+        print(__doc__.strip())
+        raise SystemExit(0)
+    print("%s: no profile/ yet: /setup builds one." % "interview_pack")
+    raise SystemExit(1)
+
 import bridges  # noqa: E402
 import csv_store  # noqa: E402
 import learned  # noqa: E402
@@ -381,11 +392,17 @@ def told_here(ctx) -> dict:
         if (not title or _text(r.get("source")) or company_key(r.get("company")) != k
                 or _same_round(r.get("stage"), ctx.get("stage"))):
             continue
-        out.setdefault(title.lower(), "told here at the %s" % (_text(r.get("stage"))
-                                                               or "an earlier stage"))
+        out.setdefault(title.lower(), "told here %s" % (_at(r.get("stage")) if _text(
+            r.get("stage")) else "at an earlier stage"))
     for name in ctx.get("earlier") or ():
         for title in _kept_map(_read(os.path.join(ctx["folder"], name))).values():
             out.setdefault(_text(title).lower(), "the answer in %s" % name)
+    # The living document's last build, when it was for another round: what it prepared is
+    # what that round heard.
+    built = ctx.get("built") or {}
+    if built.get("stage") and not _same_round(built["stage"], ctx.get("stage")):
+        for title in (built.get("stories") or {}).values():
+            out.setdefault(_text(title).lower(), "prepared here %s" % _at(built["stage"]))
     return out
 
 
@@ -398,7 +415,7 @@ def _fixed_story(item, ctx) -> tuple:
     if mapped:
         return (next((s for s in ctx["stories"] if s["title"].lower() == _text(mapped).lower()),
                      None), "mapped")
-    kept = _text(ctx.get("kept_map", {}).get(q)).lower()
+    kept = _kept_story(q, ctx).lower()
     story = next((s for s in ctx["stories"] if s["title"].lower() == kept), None) if kept else None
     if story is not None:
         return story, "as the last build answered it"
@@ -420,6 +437,14 @@ def plan_stories(questions, ctx) -> dict:
     the session mapped or the last build kept is never moved: it is claimed before anything
     is matched."""
     told = told_here(ctx)
+    # A story that landed at this employer in an earlier round is one they have heard: its
+    # lift from the bank there made it outscore every fresh story, so a final round was
+    # prepared with what the behavioural round had just heard (2026-10-21). The bank still
+    # lifts what landed elsewhere, and still marks down what fell flat here.
+    k = company_key(ctx["company"])
+    bank = [r for r in ctx["bank"] or () if not (
+        company_key(r.get("company")) == k and not _same_round(r.get("stage"), ctx.get("stage"))
+        and _text(r.get("landed")).lower() == "yes")]
     claimed: dict[str, str] = {}
     open_ = []
     for i, item in enumerate(questions):
@@ -427,7 +452,7 @@ def plan_stories(questions, ctx) -> dict:
         if story is not None:
             claimed.setdefault(story["title"].lower(), item["question"])
         elif not ctx["map"].get(item["question"]):
-            ranked = story_scores(_match_text(item["question"]), ctx["stories"], ctx["bank"])
+            ranked = story_scores(_match_text(item["question"]), ctx["stories"], bank)
             if ranked:
                 open_.append((i, item["question"], ranked))
     out = {}
@@ -707,6 +732,55 @@ def _kept_map(living) -> dict:
         if m:
             out[m.group(1)] = m.group(2)
     return out
+
+
+def last_build(folder) -> dict:
+    """{"stage", "stories": {question: story}} of the living document's last build: the stage
+    it was built for (its record, else its own "Next:" line) and the stories its one screen
+    gave each question. {} when there is none."""
+    living = _read(os.path.join(folder, LIVING))
+    if not living:
+        return {}
+    record = built_record(folder) or {}
+    m = _NEXT.search(living)
+    stage = _text(record.get("stage")) or (m.group(1).strip() if m else "")
+    return {"stage": stage, "stories": _kept_map(living)}
+
+
+def kept_stories(folder, stage) -> dict:
+    """{question: story} a rebuild keeps from the last build, for the same round only: a
+    story was kept wherever matching had chosen it, so a final round re-told what the
+    behavioural round had told (2026-10-21). With a record of the build, only the stories the
+    session mapped (--map) are kept; matching chooses the rest again, across the whole plan.
+    A document from before the record keeps each story for its first question only, so an
+    older build's story on two questions is not carried on."""
+    built = last_build(folder)
+    if not built or not _same_round(built.get("stage"), stage):
+        return {}
+    record = built_record(folder)
+    if record is not None:
+        got = record.get("mapped") or {}
+        return {str(q): str(t) for q, t in got.items() if _text(t)} \
+            if isinstance(got, dict) else {}
+    out, seen = {}, set()
+    for q, title in built["stories"].items():
+        if title.lower() not in seen:
+            seen.add(title.lower())
+            out[q] = title
+    return out
+
+
+def _kept_story(question, ctx) -> str:
+    """The story the last build kept for this question, unless it was told at this employer
+    in an earlier round: "" when matching decides."""
+    kept = _text((ctx.get("kept_map") or {}).get(question))
+    return "" if not kept or kept.lower() in told_here(ctx) else kept
+
+
+def _at(stage) -> str:
+    """"at the Phone screen", "in Round 2 (behavioural)": a stage as a sentence names it."""
+    stage = _text(stage)
+    return "in %s" % stage if re.match(r"(?i)(?:round|stage)\b", stage) else "at the %s" % stage
 
 
 def _same_round(a, b) -> bool:
@@ -989,7 +1063,8 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         "stories": stories(), "answers": hard_answers(),
         "bank": what_works.bank(root), "contacts": contacts, "threads": threads,
         "map": dict(story_map or {}),
-        "kept_map": _kept_map(_read(os.path.join(folder, LIVING))),
+        "kept_map": kept_stories(folder, stage),
+        "built": last_build(folder),
         "earlier": sorted(f for f in _listdir(folder)
                           if f.startswith("interview_prep_") and f != pack_name(stage)),
         "rework": _rework_lines(_read(os.path.join(folder, LIVING))
@@ -1150,11 +1225,11 @@ def answer_for(item, ctx) -> dict:
         story = next((s for s in ctx["stories"] if s["title"].lower() == _text(mapped).lower()),
                      None)
     how = "mapped"
-    if not mapped and ctx.get("kept_map", {}).get(q):
+    if not mapped and _kept_story(q, ctx):
         # The story the last build gave it, while that story is still in the file: a rebuild
         # never drops a choice the session made. A story since renamed or removed is passed
         # over quietly, and matching takes it from there.
-        kept = _text(ctx["kept_map"][q]).lower()
+        kept = _kept_story(q, ctx).lower()
         story = next((s for s in ctx["stories"] if s["title"].lower() == kept), None)
         how = "as the last build answered it"
     # What the letter evidenced comes first: the interviewer read it, and a story that
@@ -1547,7 +1622,11 @@ def landmines(ctx) -> list:
     def why(question):
         found = _why_answer(question, ctx)
         if found:
-            return ["Prepared: %s (source: %s)" % (found["answer"], found["source"])]
+            # The same check as the answer under Your answers: printed here unmarked, a stock
+            # answer naming the place this employer did not hear was the thing to say.
+            where = places_told.clash(found["answer"], ctx["company"])
+            return (["Careful: %s." % where] if where else []) + [
+                "Prepared: %s (source: %s)" % (found["answer"], found["source"])]
         return ["Nothing on file says why, and only you can: Claude asks you once, in your words, "
                 "and keeps the answer for every later employer (python3 tools/interview_pack.py "
                 "motive \"%s\" --answer \"<your words>\"). Never drafted from the dates." % question]
@@ -3446,7 +3525,12 @@ def check(path) -> list:
         if drafted(body):
             out.append((DRAFT, q))
     for q, body in elsewhere.values():
-        out += [(q, why) for why in prep.unsayable(spoken(body), q, seconds)]
+        mine = spoken(body)
+        # Read the same way as Your answers, the place they told this employer included.
+        where = places_told.clash(" ".join(mine), company) if company else ""
+        if where:
+            out.append((q, where))
+        out += [(q, why) for why in prep.unsayable(mine, q, seconds)]
         if drafted(body):
             out.append((DRAFT, q))
     return out
@@ -3801,13 +3885,349 @@ def handkept_notes(tracker=None, contacts=None) -> list:
     return out
 
 
+# ---------------------------------------------------------------- a rebuild keeps their lines
+
+# A living document is finished by hand: questions added under Ask them, answers under a
+# heading of their own, sections for the next round, the close. A rebuild kept only the
+# sections it knew (Your answers, To rework, Notes, what they found out) and dropped the rest
+# without a word: on a copy of a real repo, a hand-finished document for a process with
+# rounds still to come lost 94 lines (2026-10-21). So a rebuild now changes only what this
+# tool wrote. What it wrote last time is kept beside the document (BUILT), and every line of
+# the document that is not in it is the person's: a section of their own stays whole, after
+# the section it followed; a line inside one of the tool's sections stays where it was, the
+# tool's own lines around it refreshed; a line of the tool's they changed or removed stays
+# as they left it while the tool's version of it has not changed. Before anything is
+# written, every line of theirs is looked for in the new document, and if one is missing the
+# document is left as it was and the rebuild says so.
+BUILT = ".interview_prep.built.json"
+# A document built before BUILT existed has no record of what the tool wrote: a line in one
+# of its sections that the new build does not write may be the person's or an older build's.
+# None is dropped: they are kept together at the end of Notes, under this heading, for the
+# session to sort (moving the person's where they belong, deleting the rest), and said.
+LEFTOVER_HEAD = "### Kept from the version before this one"
+LEFTOVER_NOTE = ("These lines were in the document before this rebuild, in sections this tool "
+                 "writes, and it no longer writes them. Any you wrote: move them where you want "
+                 "them. The rest: delete them.")
+_TITLE = re.compile(r"^# Interview prep: .+ at .+$")
+_SECTION_HEAD = re.compile(r"^## (.+?)\s*$")
+# What only this tool writes, never a person: read as the tool's in a document with no record.
+_TOOL_LINE = re.compile(r"^(?:Last updated \S+\. Next: |<!-- stages: .* -->$|%s|%s$|%s$|%s$|"
+                        r"Every fact carries its source, and anything unsourced was left out\.$|"
+                        r"- From: |%s|- Nothing yet: each line you add here, with its source, "
+                        r"stays\.$|- %s$|- %s$|- Your own answer is under Your answers\.$)"
+                        % (re.escape(INTENT_MARK), re.escape(TO_WRITE), re.escape(ANSWERS_INTRO),
+                           re.escape(LIVE_LINE), re.escape(FOUND_EMPTY), re.escape(REWORK_EMPTY),
+                           re.escape(NOTES_EMPTY[2:])))
+
+
+class WouldLose(ValueError):
+    """A rebuild that would drop what the person wrote, or replace a document they wrote by
+    hand: nothing is written, and the message says why in plain words."""
+
+
+def built_path(folder) -> str:
+    return os.path.join(folder, BUILT)
+
+
+def built_record(folder) -> dict | None:
+    """What the last build wrote into this process's living document ({"generated": text,
+    "stage", "mapped": {question: story}}), or None when no build recorded it (a document
+    from before the record, or a record a merge left unreadable)."""
+    try:
+        with open(built_path(folder), encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) and isinstance(data.get("generated"), str) else None
+
+
+def _doc_sections(lines) -> list:
+    """[(title, [lines])]: what comes before the first "## " heading under "", then each
+    "## " section, heading line first. A heading inside a fenced block is not a section."""
+    out, fenced = [("", [])], False
+    for ln in lines:
+        if ln.lstrip().startswith("```"):
+            fenced = not fenced
+        m = None if fenced else _SECTION_HEAD.match(ln)
+        if m:
+            out.append((m.group(1), [ln]))
+        else:
+            out[-1][1].append(ln)
+    return out
+
+
+def _known(sections) -> dict:
+    """{title: index} for the sections this tool writes (the preamble included), each by its
+    first appearance: a second "## Notes" is a section of the person's own."""
+    out = {}
+    for i, (title, _lines) in enumerate(sections):
+        if (title == "" or title in SECTIONS) and title not in out:
+            out[title] = i
+    return out
+
+
+def _matched(a, b) -> dict:
+    """{index in a: index in b} for the lines the two share, in order. A blank line never
+    starts a match: matched on its own, the blank after a section's last line was paired with
+    one higher up, and the line between was written twice."""
+    import difflib
+    out = {}
+    for i, j, size in difflib.SequenceMatcher(lambda ln: not ln.strip(), a, b,
+                                              autojunk=False).get_matching_blocks():
+        for k in range(size):
+            out[i + k] = j + k
+    return out
+
+
+def _not_in(lines, base) -> list:
+    """The lines of `lines` that `base` does not hold, as often as each appears there."""
+    from collections import Counter
+    gen = Counter(base)
+    out = []
+    for ln in lines:
+        if gen[ln]:
+            gen[ln] -= 1
+        else:
+            out.append(ln)
+    return out
+
+
+def _tools_own(line) -> bool:
+    """A line only this tool writes and only it may change: the date and stage line, the
+    stages it was built for, a marker, a placeholder, a research request."""
+    return bool(_TOOL_LINE.match(line)) or "RESEARCH FIRST (Claude" in line
+
+
+def _as_built(bc, oc) -> list:
+    """`oc` with the tool's own lines as it wrote them: one changed by hand (an older
+    rebuild's doubled stages line) is the tool's again, and one removed is put back where it
+    was. Everything else in `oc` stays as it is."""
+    keep = [ln for ln in oc if not (_tools_own(ln) and ln not in bc)]
+    for i, ln in enumerate(bc):
+        if _tools_own(ln) and keep.count(ln) < bc[:i + 1].count(ln):
+            keep.insert(min(i, len(keep)), ln)
+    return keep
+
+
+def _merge3(base, ours, new) -> tuple:
+    """One section, three ways: `base` what the tool wrote last time, `ours` the document now,
+    `new` what the tool writes now. A stretch only the tool changed takes the tool's; one only
+    the person changed takes theirs; where both changed it, the tool's new lines and then
+    every line of theirs. A line of theirs the tool now carries itself (an answer it keeps
+    under its question, wherever in the section they wrote it) is written once, where the
+    tool puts it. Returns (the section, the lines in it that are the person's, which the
+    result must hold)."""
+    from collections import Counter
+    mo, mn = _matched(base, ours), _matched(base, new)
+    from_base = set(mn.values())
+    carried = Counter(ln.rstrip() for j, ln in enumerate(new) if j not in from_base and ln.strip())
+    # A line all three hold, never a blank one: the stretches between are compared.
+    sync = [i for i in range(len(base)) if base[i].strip() and i in mo and i in mn]
+    out, mine, pb, po, pn = [], [], -1, -1, -1
+
+    def placed(lines, bc):
+        """`lines` (a stretch of theirs) less the lines of theirs the tool carries, and the
+        blank line that followed one."""
+        gen, got, skip_blank = Counter(bc), [], False
+        for ln in lines:
+            if gen[ln]:
+                gen[ln] -= 1
+                got.append(ln)
+                skip_blank = False
+            elif ln.strip() and carried[ln.rstrip()]:
+                carried[ln.rstrip()] -= 1
+                skip_blank = True
+            elif not ln.strip() and skip_blank:
+                skip_blank = False
+            else:
+                got.append(ln)
+                skip_blank = False
+        return got
+
+    for i in sync + [len(base)]:
+        oi = mo[i] if i < len(base) else len(ours)
+        ni = mn[i] if i < len(base) else len(new)
+        bc, nc = base[pb + 1:i], new[pn + 1:ni]
+        oc = _as_built(bc, ours[po + 1:oi])
+        theirs = _not_in(oc, bc)
+        mine += theirs
+        if oc == bc or oc == nc:
+            out += nc
+        elif nc == bc:
+            out += placed(oc, bc)
+        else:
+            extra = placed(theirs, [])
+            while extra and not extra[-1].strip():
+                extra.pop()
+            while extra and not extra[0].strip():
+                extra.pop(0)
+            out += nc + extra
+        if i < len(base):
+            out.append(new[ni])
+        pb, po, pn = i, oi, ni
+    return out, mine
+
+
+def _before_bracket(line) -> str:
+    """A line up to its first bracket: what the tool writes before "(source: ...)", "(as the
+    last build answered it; ...)" and the like, which change from one build to the next."""
+    lead = line.split(" (", 1)[0].rstrip()
+    return lead if " (" in line and len(lead.strip(" -*")) >= 15 else ""
+
+
+def _legacy(ours, new_doc, title, new=()) -> list:
+    """The lines of one section of a document with no record of what the tool wrote that the
+    new document does not hold. A line only this tool ever writes (_TOOL_LINE), a question
+    heading in Your answers with nothing of theirs under it, and a line the new build writes
+    again in this section with only its bracket changed (its source, how a story was chosen)
+    are the tool's own and go; anything else is kept, never guessed at. `new_doc` is a
+    Counter of the new document's lines, used up as they are found; `new` the section as the
+    tool writes it now."""
+    leads = {_before_bracket(ln) for ln in new} - {""}
+    left = []
+    for i, ln in enumerate(ours):
+        k = ln.rstrip()
+        if new_doc[k]:
+            new_doc[k] -= 1
+            continue
+        if not ln.strip() or _TOOL_LINE.match(ln) or (i == 0 and title):
+            continue
+        if _before_bracket(ln) in leads:
+            continue
+        if title == "" and _TITLE.match(ln):
+            continue
+        if title == "Your answers" and ln.startswith("### "):
+            j = i + 1
+            while j < len(ours) and not re.match(r"^#{2,3} ", ours[j]):
+                j += 1
+            if all(not x.strip() or _TOOL_LINE.match(x) for x in ours[i + 1:j]):
+                continue
+        left.append(ln)
+    return left
+
+
+def merge_living(old, new, base=None) -> tuple:
+    """(the document to write, the lines kept from an older build at the end of Notes) for
+    a rebuild of `old` as `new`, given `base`, what the tool wrote last time (None: no record).
+    It raises WouldLose when `old` is a document this tool did not build, or when a line the
+    person wrote would be missing from the result."""
+    from collections import Counter
+    if not str(old or "").strip():
+        return new, []
+    o_lines, n_lines = old.splitlines(), new.splitlines()
+    first = next((ln for ln in o_lines if ln.strip()), "")
+    if base is None and not _TITLE.match(first):
+        raise WouldLose("the interview prep there was written by hand, not built by this tool, "
+                        "so a rebuild would replace it: it is kept as it is and nothing was "
+                        "written. Only if the person wants the tool's document as well: rename "
+                        "that file (to prep_notes.md, say) and build again, and the new "
+                        "document lists it as notes of theirs to fold in")
+    O, N = _doc_sections(o_lines), _doc_sections(n_lines)
+    B = _doc_sections(base.splitlines()) if base is not None else None
+    ko, kb = _known(O), (_known(B) if B is not None else {})
+    # The person's own sections, each after the section of the tool's it followed.
+    after: dict = {}
+    anchor = ""
+    for i, (title, lines) in enumerate(O):
+        if ko.get(title) == i:
+            anchor = title
+        else:
+            after.setdefault(anchor, []).append(lines)
+    new_doc = Counter(ln.rstrip() for ln in n_lines)
+    mine, leftovers, out = [], [], []
+    for title, lines in N:
+        merged = list(lines)
+        if title in ko:
+            ours = O[ko[title]][1]
+            if B is not None and title in kb:
+                merged, theirs = _merge3(B[kb[title]][1], ours, lines)
+                mine += theirs
+            else:
+                left = _legacy(ours, new_doc, title, lines)
+                leftovers += left
+                mine += left
+        if title == "Notes" and leftovers:
+            # Notes now holds something: its placeholder goes, as the next build drops it.
+            merged = [ln for ln in merged if ln.strip() != NOTES_EMPTY]
+            while merged and not merged[-1].strip():
+                merged.pop()
+            merged += ["", LEFTOVER_HEAD, "", LEFTOVER_NOTE, ""] + leftovers + [""]
+        out += merged
+        for own in after.get(title, []):
+            mine += own
+            if out and out[-1].strip():
+                out.append("")
+            out += own
+    text = "\n".join(out).rstrip() + "\n"
+    lost = _missing(mine, text)
+    if lost:
+        raise WouldLose("%d line(s) you wrote would have been lost (the first: \"%s\"), so "
+                        "the document is kept as it was and nothing was written"
+                        % (len(lost), clip_line(lost[0])))
+    return text, leftovers
+
+
+def clip_line(line, n=70) -> str:
+    line = " ".join(str(line).split())
+    return line if len(line) <= n else line[:n - 3].rstrip() + "..."
+
+
+def _missing(lines, text) -> list:
+    """The lines of `lines` (blank ones aside) that `text` does not hold, as often as each
+    appears: what a rebuild would lose."""
+    from collections import Counter
+    have = Counter(ln.rstrip() for ln in str(text).splitlines())
+    out = []
+    for ln in lines:
+        k = ln.rstrip()
+        if not k.strip():
+            continue
+        if have[k]:
+            have[k] -= 1
+        else:
+            out.append(ln)
+    return out
+
+
+def _rebuild(ctx, never_say=None) -> tuple:
+    """(the document a rebuild writes, the lines kept at the end of Notes from an older build,
+    what the tool itself wrote)."""
+    new = pack_markdown(ctx, never_say)
+    path = living_path(ctx)
+    record = built_record(ctx["folder"])
+    try:
+        text, leftovers = merge_living(_read(path), new, record["generated"] if record else None)
+    except WouldLose as exc:
+        raise WouldLose("%s: %s" % (_rel(path), exc)) from None
+    return text, leftovers, new
+
+
+def rebuilt(ctx, never_say=None) -> tuple:
+    """(the living document as a rebuild would write it now, the lines kept at the end of
+    Notes from an older build), from what is on disk; it raises WouldLose (see merge_living)."""
+    text, leftovers, _new = _rebuild(ctx, never_say)
+    return text, leftovers
+
+
 def write_pack(ctx, never_say=None) -> str:
-    """Write the living document beside the application and return its path. What the
-    person wrote in it is kept."""
+    """Write the living document beside the application and return its path. Every line the
+    person wrote in it is kept (merge_living); what was kept from an older build at the end
+    of Notes is in ctx["kept_from_before"]; it raises WouldLose, writing nothing, when a line of
+    theirs would be lost."""
     path = living_path(ctx)
     os.makedirs(ctx["folder"], exist_ok=True)
+    text, leftovers, new = _rebuild(ctx, never_say)
     with open(path, "w", encoding="utf-8") as fh:
-        fh.write(pack_markdown(ctx, never_say))
+        fh.write(text)
+    # The stories the session chose (--map), kept for this round alone: a later round
+    # chooses afresh, preferring one not yet told at this employer.
+    mapped = {q: t for q, t in dict(ctx.get("kept_map") or {}, **(ctx.get("map") or {})).items()
+              if _text(t)}
+    with open(built_path(ctx["folder"]), "w", encoding="utf-8") as fh:
+        json.dump({"generated": new, "stage": ctx["stage"], "mapped": mapped}, fh, indent=1,
+                  ensure_ascii=False)
+        fh.write("\n")
+    ctx["kept_from_before"] = leftovers
     return path
 
 
@@ -3885,9 +4305,15 @@ BANDS = ("Strong", "Solid", "Gap")
 MIN_QUOTE_WORDS = 3
 _FOLD_QUOTES = str.maketrans({"‘": "'", "’": "'", "“": '"', "”": '"',
                               "–": "-", "—": "-", " ": " "})
-_SCORE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:/|out of)\s*\d+\b|\b(?:scored?|scoring|rating|rated|"
-                    r"marks?|points?)\b[^.]{0,20}?\d|\b\d+\s*%\s*(?:ready|there|of the way|"
-                    r"match|fit|likely|chance)\b", re.I)
+# A score is a number given as one: "7/10", "4 out of 5", "scored 82", "a rating of 3", "80%
+# ready". A note that only mentions a rating model and a count three words on ("the credit
+# rating model you built across 3 teams") was refused as a score (2026-10-21).
+_SCORE = re.compile(r"\b\d+(?:\.\d+)?\s*(?:/|out of)\s*\d+\b|"
+                    r"\b(?:scored?|scoring|rated|rating|marked|graded?)\s+(?:of\s+|at\s+|as\s+|"
+                    r"an?\s+|a\s+solid\s+|a\s+strong\s+)?\d+(?:\.\d+)?\b(?!\s*(?:%|[a-z]+s\b))|"
+                    r"\b(?:score|rating|mark|grade)\s*(?::|=|of)\s*\d|"
+                    r"\b\d+(?:\.\d+)?\s+(?:points?|marks?)\s+(?:out of|from)\b|"
+                    r"\b\d+\s*%\s*(?:ready|there|of the way|match|fit|likely|chance)\b", re.I)
 _VERDICT = re.compile(r"\b(?:no[- ]hire|strong hire|hireable|offer[- ]ready|would be hired|"
                       r"(?:they|we|i)(?:'d| would| will| should) (?:hire|reject|pass|fail|"
                       r"advance) you|you(?:'d|'ll| would| will)? (?:get|land|win) (?:the|this|"
@@ -4076,8 +4502,8 @@ def main(argv=None) -> int:
             # One command from a booked call to its document: the prep is built and kept now.
             ctx = gather(row["company"], row["role"], a.stage, a.date, a.with_, a.today,
                          format_=a.format_)
-            sys.stdout.write(pack_markdown(ctx))
-            _keep(ctx)
+            if not _show(ctx, write=True):
+                return 1
             if a.stage and not a.date:
                 print("no date given: the stage is on record, but the brief cannot remind you "
                       "of it until it has one (run this again with --date)")
@@ -4144,19 +4570,49 @@ def main(argv=None) -> int:
             story_map = {}
         ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map,
                      format_=a.format_)
-        sys.stdout.write(pack_markdown(ctx))
-        if a.write:
-            _keep(ctx)
+        if not _show(ctx, write=a.write):
+            return 1
     except (LookupError, ValueError, OSError) as exc:
         print("interview_pack: %s" % exc, file=sys.stderr)
         return 1
     return 0
 
 
+def _show(ctx, write=False) -> bool:
+    """Print the living document as a rebuild writes it (every line the person wrote kept),
+    and with `write`, write it (`_keep`). False when it was not written: a line of theirs
+    would have been lost, or the document there is one they wrote by hand, said in a line.
+    Without `write` that is only a note: the pack is shown as the tool builds it."""
+    try:
+        if write:
+            path = write_pack(ctx)
+            text = _read(path)
+        else:
+            text, _left = rebuilt(ctx)
+    except WouldLose as exc:
+        sys.stdout.write(pack_markdown(ctx))
+        print("interview_pack: %s%s" % ("" if write else "if written: ", exc), file=sys.stderr)
+        return not write
+    sys.stdout.write(text)
+    if write:
+        _report(ctx, path)
+    return True
+
+
 def _keep(ctx) -> None:
     """Write the living document and say what is left before it goes to the person."""
-    path = write_pack(ctx)
+    _report(ctx, write_pack(ctx))
+
+
+def _report(ctx, path) -> None:
+    """What is left before the document just written goes to the person."""
     print("\nwritten: %s" % _rel(path))
+    left = ctx.get("kept_from_before") or []
+    if left:
+        print("kept from the version before this one: %d line(s) this tool no longer writes "
+              "are at the end of Notes, under \"%s\". Read them: move any the person wrote "
+              "where it belongs, delete the rest, then build again." % (len(left),
+                                                                     LEFTOVER_HEAD[4:]))
     left = check(path)
     research = [w for q, w in left if q == "Research"]
     for line in research:

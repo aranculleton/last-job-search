@@ -65,6 +65,17 @@ for _p in (_HERE, os.path.dirname(_HERE)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
+import person as _person  # noqa: E402
+
+# Run with no profile (the app itself, or before /setup), the imports below read it and the
+# command crashed with a traceback, `--help` included. It says so plainly instead.
+if __name__ == "__main__" and not _person.exists():
+    if set(sys.argv[1:]) & {"-h", "--help"}:
+        print(__doc__.strip())
+        raise SystemExit(0)
+    print("%s: no profile/ yet: /setup builds one." % "prep")
+    raise SystemExit(1)
+
 import company_research as research_cache  # noqa: E402
 import compose  # noqa: E402
 import learned  # noqa: E402
@@ -513,34 +524,89 @@ def _referrer_advice(contact, application=None) -> str:
 # posts, and a post about a new baby, an illness or an election reached "Who you are meeting"
 # and the small talk as something to bring up. None of it is professional, all of it is what
 # an interviewer is not allowed to ask about, and it is not the candidate's to raise either.
-# The words are a person's own circumstances, never a field of work: "health insurer" and
-# "an election-results model" stay.
+# What is judged is a person's own life, said about themselves or those close to them: "my
+# diagnosis", "our IVF journey", "voted today", "a mum of two". A field of work is never
+# personal however its words read, so "the retirement plans team", "mental health services",
+# "a cancer research charity", "a medical diagnostics company", "political science", "our
+# family of brands", "the report came out this week" and "turning 12 spreadsheets into one"
+# all stay: the first version cut every one of those and kept a miscarriage, a heart attack
+# and "voted today" (2026-10-21).
+_CLOSE = (r"(?:wife|husband|spouse|partner|fianc[eé]e?|kids?|children|sons?|daughters?|baby|"
+          r"babies|twins|toddler|little one|mum|mom|mother|dad|father|parents?|brother|sister|"
+          r"sibling|grand(?:son|daughter|child(?:ren)?|ma|pa|mother|father)|nan|gran|aunt|uncle|"
+          r"cousin|nephew|niece|boyfriend|girlfriend|best friend)")
+_MINE = r"\b(?:my|our|his|her|their)\s+(?:late\s+|beloved\s+|lovely\s+|little\s+|new\s+)?"
 SENSITIVE = (
-    ("age", re.compile(r"\b(?:\d{1,3}(?:st|nd|rd|th) birthday|birthday|turn(?:ed|ing|s)? "
-                       r"(?:[1-9]0|\d{2})\b|\d{2}[- ]years?[- ]old|born in (?:19|20)\d{2}|"
-                       r"retir(?:e|ed|ing|ement) (?:party|plans?|next year|soon))", re.I)),
-    ("family", re.compile(r"\b(?:my|his|her|their|our) (?:wife|husband|spouse|fianc[eé]e?|kids?|"
-                          r"children|sons?|daughters?|baby|babies|twins|mum|mom|mother|dad|"
-                          r"father|family|grand(?:son|daughter|child(?:ren)?|ma|pa))\b|"
-                          r"\b(?:pregnan\w*|maternity|paternity|parental leave|newborn|"
-                          r"new (?:mum|mom|dad|parent)|wedding|got married|honeymoon|divorc\w*)\b",
-                          re.I)),
-    ("health", re.compile(r"\b(?:diagnos\w*|cancer|chemo\w*|tumou?r|illness|sick leave|surgery|"
-                          r"my (?:health|recovery)|mental health|depression|anxiety|adhd|autis\w*|"
-                          r"dyslexi\w*|disabilit\w*|disabled|chronic (?:pain|illness|condition)|"
-                          r"neurodivergen\w*|therapy|therapist|burn[- ]?out|long covid|"
-                          r"hospitali[sz]ed|in hospital)\b", re.I)),
-    ("religion", re.compile(r"\b(?:church|mosque|synagogue|faith|religio\w*|pray\w*|bible|quran|"
-                            r"torah|christian\w*|muslim|islam\w*|jewish|judaism|hindu\w*|sikh\w*|"
-                            r"buddhis\w*|catholic\w*|ramadan|eid|diwali|hanukk?ah|passover|easter|"
-                            r"christmas|god bless|blessed)\b", re.I)),
-    ("politics", re.compile(r"\b(?:political|politics|politician\w*|vot(?:e|ed|ing) for|ballot|"
-                            r"campaign(?:ed|ing) for|(?:labour|conservative|liberal democrat|green|"
-                            r"reform|republican|democratic|liberal) party|democrats|republicans|"
-                            r"tory|tories|brexit|protest\w*|activis\w*|petition)\b", re.I)),
-    ("sexuality", re.compile(r"\b(?:gay|lesbian|bisexual|queer|lgbt\w*|pride (?:month|march|"
-                             r"parade)|transgender|non[- ]binary|sexual orientation|sexuality|"
-                             r"coming out|came out|my (?:boyfriend|girlfriend))\b", re.I)),
+    ("age", re.compile(
+        r"\b(?:my|his|her|their)\s+(?:\d{1,3}(?:st|nd|rd|th)\s+)?birthday\b|"
+        r"\bhappy\s+(?:\d{1,3}(?:st|nd|rd|th)\s+)?birthday\b|\bbirthday\s+(?:today|week|"
+        r"celebrations?|party)\b|"
+        r"\b(?:turn(?:ed|ing|s)?|celebrat(?:e|ed|ing)|hit|hitting)\s+(?:the\s+big\s+)?"
+        r"[1-9]0\b(?=\s*(?:[.!,;)]|$|today|tomorrow|this|next|last|on\b|in\b|years?\b(?!\s+of)|"
+        r"and\b))|"
+        r"\b(?:i'?m|i am|as an?|now)\s+(?:an?\s+)?\d{2}[- ]years?[- ]old\b|"
+        r"\b\d{2}\s+(?:today|years young)\b|\bi was born in (?:19|20)\d{2}\b|"
+        r"\b(?:my|his|her|their)\s+retirement\b(?!\s+(?:plans?|savings|products?|accounts?|"
+        r"income|funds?|market|business|team)\b)|\bretirement (?:party|do)\b|"
+        r"\b(?:i|she|he)\s*(?:'m|'s|'ve|am|have|has|is|just|finally|will be|'ll be)?\s*"
+        r"(?:just\s+|finally\s+)?retir(?:ed|ing)\b(?!\s+(?:the|our|a|an|it|them|its|their|old|"
+        r"legacy|that|these|those)\b)", re.I)),
+    ("family", re.compile(
+        _MINE + _CLOSE + r"\b(?!\s+of\b)|"
+        r"\b(?:mum|mom|mother|dad|father|parent)\s+(?:of|to)\s+(?:one|two|three|four|five|\d|"
+        r"twins|a\b)|"
+        r"\b(?:i'?m|i am|we'?re|we are|she'?s|she is)\s+(?:\w+\s+)?pregnant\b|"
+        r"\b(?:my|our|her)\s+pregnancy\b|\bexpecting\s+(?:our|my|a|their)\s+(?:first|second|"
+        r"third|baby|child|little)\b|\bnew\s+(?:mum|mom|dad|parent)s?\b|"
+        r"\bwelcom(?:ed|ing)\s+(?:our|my|a|their)\s+(?:\w+\s+)?(?:baby|son|daughter|twins|"
+        r"little)\b|\b(?:on|from|back from|after|returning from|my|her|his)\s+(?:maternity|"
+        r"paternity|parental|adoption)\s+leave\b|"
+        r"\b(?:ivf|miscarriage|stillbirth|fertility (?:treatment|journey))\b|"
+        r"\b(?:my|our)\s+(?:wedding|engagement|honeymoon|divorce)\b|\b(?:got|getting|just)\s+"
+        r"(?:married|engaged|divorced)\b|\bgriev(?:e|ed|ing)\b|\bbereave\w*|\bpassed away\b|"
+        r"\b(?:funeral|in loving memory|rest in peace)\b|\blost\s+my\s+" + _CLOSE + r"\b", re.I)),
+    ("health", re.compile(
+        r"\b(?:my|her|his|their)\s+(?:own\s+)?(?:health|recovery|diagnosis|illness|condition|"
+        r"surgery|operation|treatment|chemo\w*|radiotherapy|therapy|therapist|cancer|tumou?r|"
+        r"depression|anxiety|adhd|autism|dyslexia|disability|burn[- ]?out|long covid|"
+        r"mental health|heart attack|stroke|scan results)\b|"
+        r"\b(?:i|she|he|we)\s+(?:was|am|'m|were|have been|got|had been)\s+(?:\w+\s+)?"
+        r"(?:diagnosed|hospitali[sz]ed|in hospital|signed off)\b|\bdiagnosed with\b|"
+        r"\b(?:heart attack|in remission|cancer[- ]free|on sick leave|signed off sick)\b|"
+        r"\brecovering\s+(?:from|well|after)\b|\b(?:sober|sobriety)\b|"
+        r"\bopen(?:ly)?\s+about\s+(?:my\s+|our\s+|their\s+)?(?:own\s+)?(?:burn[- ]?out|"
+        r"depression|anxiety|grief|mental health|illness|diagnosis|adhd|autism|recovery)\b|"
+        r"\b(?:i|i'?ve|i was|we)\s+(?:\w+\s+)?burn(?:ed|t)\s+out\b|"
+        r"\b(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|twelve)\s+(?:days?|weeks?|"
+        r"months?|years?)\s+(?:sober|clean|cancer[- ]free)\b|"
+        r"\bliving with\s+(?:adhd|autism|depression|anxiety|cancer|ms|diabetes|a disability|"
+        r"chronic \w+)\b|\b(?:i'?m|i am|as an?)\s+(?:autistic|disabled|neurodivergent|"
+        r"dyslexic)\b|\bchronic\s+(?:pain|illness)\b", re.I)),
+    ("religion", re.compile(
+        r"\b(?:happy|merry|blessed|joyous|joyful)\s+(?:christmas|easter|eid|diwali|hanukk?ah|"
+        r"passover|ramadan|vaisakhi|holi|rosh hashanah|yom kippur|lunar new year|navratri)\b|"
+        r"\b(?:eid|ramadan)\s+mubarak\b|\bchag sameach\b|\bshana tova\b|"
+        r"\b(?:my|our)\s+(?:church|mosque|synagogue|temple|gurdwara|faith|parish|congregation)\b|"
+        r"\bpray(?:ing|ers?)?\s+for\b|\b(?:i|we)\s+(?:pray|prayed)\b|\bgod bless\b|"
+        r"\bbible study\b|\bbreaking (?:my|our|the) fast\b|\biftar\b|\bsuhoor\b|"
+        r"\bfasting\b(?!\s+(?:glucose|insulin|blood|plasma|state|times?|data|tests?|levels?))|"
+        r"\bobserving\s+(?:ramadan|lent|shabbat|the sabbath)\b", re.I)),
+    ("politics", re.compile(
+        r"\b(?:i|we)\s+(?:just\s+)?voted\b|\bvoted\s+(?:today|this morning|early|for)\b|"
+        r"\b(?:proud|went|going|go|out)\s+to\s+vote\b|\bevery vote counts\b|"
+        r"\bpolling (?:station|day)\b|\bget out (?:and|to) vote\b|\bmy vote\b|"
+        r"\b(?:campaign(?:ed|ing)?|canvass(?:ed|ing)?|volunteer(?:ed|ing)?)\s+for\s+(?:the\s+)?"
+        r"(?:labour|conservatives?|tor(?:y|ies)|liberal|lib dems?|greens?|reform|snp|plaid|"
+        r"democrats?|republicans?|ndp|bloc)\b|\b(?:labour|conservative|tory|liberal democrat|"
+        r"green|reform|republican|democratic|ndp)\s+party\s+member\b|\bmember of the\s+"
+        r"(?:\w+\s+){0,2}party\b|\b(?:marched|marching|joined)\s+(?:in|at|the)\s+(?:the\s+)?"
+        r"(?:march|protest|rally)\b|\bsign(?:ed)? the petition\b", re.I)),
+    ("sexuality", re.compile(
+        r"\b(?:i'?m|i am|as an?|proud(?:ly)?|proud to be)\s+(?:a\s+)?(?:gay|lesbian|bisexual|bi|"
+        r"queer|trans|transgender|non[- ]binary|pansexual|asexual)\b|\bhappy pride\b|"
+        r"\bpride (?:month|march|parade|weekend)\b|\bat pride\b|\b(?:came|coming)\s+out\s+"
+        r"(?:as|to)\b|\bcoming out (?:day|story)\b|\bmy (?:same[- ]sex )?(?:boyfriend|"
+        r"girlfriend)\b|\bsexual orientation\b", re.I)),
 )
 
 
@@ -1847,8 +1913,26 @@ def as_of(contact, threads=(), research=None, application=None, today=None) -> s
                       + [list(r) for r in rows]
                       + [_text(research.get("fetched_date")) or ("cached" if research else ""),
                          _text(application.get("status")), _text(application.get("role")),
-                         bool(research_needed(contact, research, today))])
+                         bool(research_needed(contact, research, today))]
+                      + _answers_from(contact))
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
+
+
+def _answers_from(contact) -> list:
+    """What else a prep's answers are checked against: the place this employer was told
+    (tools/told.py) and the person's stock answers and stories. Left out of the digest,
+    recording what an employer heard, or rewriting a stock answer, left a live prep saying
+    the old thing until someone rebuilt it by hand (2026-10-21)."""
+    import hashlib
+    told_here = places_told.place(_text(contact.get("company")))
+    try:
+        with open(person.path("07-interview-prep.md"), encoding="utf-8") as fh:
+            stock = hashlib.sha1(fh.read().encode("utf-8")).hexdigest()[:12]
+    except (OSError, person.NoProfile):
+        stock = ""
+    # Nothing to add while neither is there, so a prep written before either existed is
+    # still current.
+    return [told_here, stock] if told_here or stock else []
 
 
 _Q_LINE = re.compile(r"^- \*\*Q\.\*\* (.+?)\s*$")
@@ -2142,8 +2226,24 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
     call with the same person overwrites the same file: a folder of six dated
     prep docs for one contact is six documents nobody reads.
     """
+    return render_prep(contact, company_research, application, profile_facts, threads, today,
+                       root, open_roles, draft, never_say, keep_if_same)[0]
+
+
+def _restamp(old: str, new: str) -> str:
+    """`old` with the stamp `new` ends on: what a document whose body is current needs, so
+    that it is not found stale, and rendered again, on every later run."""
+    m = _STAMP.search(new)
+    return _STAMP.sub(lambda _m: m.group(0), old) if m else old
+
+
+def render_prep(contact, company_research=None, application=None, profile_facts=None,
+                threads=(), today=None, root=STATE_ROOT, open_roles=(), draft=None,
+                never_say=None, keep_if_same=False, dry_run=False) -> tuple:
+    """(path, what): the prep document written, or with `dry_run` only worked out, and what
+    became of it: "written", "restamped" (its body was current and only its stamp changed,
+    with `keep_if_same`) or "current" (nothing to change)."""
     path = prep_path(contact, root)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
         with open(path, encoding="utf-8") as fh:
             kept = said_answers(fh.read())
@@ -2158,12 +2258,23 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
     old = _read(path)
     # In a rewrite of them all, a document that would change only its date is left as it
     # is: two chats that each regenerated every prep wrote the same documents a day apart,
-    # and all 217 conflicted. Asked for one contact, it is written, date and all.
+    # and all 217 conflicted. Asked for one contact, it is written, date and all. Its stamp
+    # is brought up to date (one line, the same in every chat): left behind, the document
+    # read as stale and was rendered again on every daily run, and a dry run counted it as
+    # one to write though the real run wrote nothing (2026-10-21).
     if keep_if_same and old is not None and _same_but_dated(old, new):
-        return path
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(new)
-    return path
+        fresh = _restamp(old, new)
+        if fresh == old:
+            return path, "current"
+        if not dry_run:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(fresh)
+        return path, "restamped"
+    if not dry_run:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(new)
+    return path, "written"
 
 
 # ---------------------------------------------------------------- loading
@@ -2216,6 +2327,11 @@ def find_application(contact, tracker_rows) -> dict:
 
 
 def _write_one(row, tracker, a, keep_if_same=False) -> str:
+    """One prep document written (`_render_one`); its path."""
+    return _render_one(row, tracker, a, keep_if_same)[0]
+
+
+def _render_one(row, tracker, a, keep_if_same=False, dry_run=False) -> tuple:
     """One prep document, with the profile facts built when none were passed.
 
     Nothing ever passed a `--profile-facts` file, so every document on disk had
@@ -2240,16 +2356,17 @@ def _write_one(row, tracker, a, keep_if_same=False) -> str:
     roles, draft = search_context(row, application, a.root)
     # A skill they said yes to claiming here is no gap, as the interview pack reads it.
     facts = profile_facts.without(facts, profile_facts.consented(draft))
-    return write_prep(row,
-                      company_research=load_research(row.get("company"), a.root),
-                      application=application,
-                      profile_facts=facts,
-                      threads=state.load_threads(a.threads),
-                      today=a.today,
-                      root=a.root,
-                      open_roles=roles,
-                      draft=draft,
-                      keep_if_same=keep_if_same)
+    return render_prep(row,
+                       company_research=load_research(row.get("company"), a.root),
+                       application=application,
+                       profile_facts=facts,
+                       threads=state.load_threads(a.threads),
+                       today=a.today,
+                       root=a.root,
+                       open_roles=roles,
+                       draft=draft,
+                       keep_if_same=keep_if_same,
+                       dry_run=dry_run)
 
 
 def main(argv=None) -> int:
@@ -2304,20 +2421,29 @@ def main(argv=None) -> int:
                 continue
             todo.append((row, path))
         if a.dry_run:
-            for _row, path in todo:
-                print("would %s %s" % ("rewrite" if os.path.exists(path) else "write",
-                                       os.path.relpath(path, a.root)))
-            print("%d prep documents would be written (prep v%d); nothing written"
-                  % (len(todo), generator_version()))
+            # What a real run would write, worked out the way it works it out: a document
+            # whose only change would be its date is counted as current, as the run leaves it.
+            would = same = 0
+            for row, path in todo:
+                existed = os.path.exists(path)
+                _p, what = _render_one(row, tracker, a, keep_if_same=True, dry_run=True)
+                if what == "written":
+                    would += 1
+                    print("would %s %s" % ("rewrite" if existed else "write",
+                                           os.path.relpath(path, a.root)))
+                else:
+                    same += 1
+            print("%d prep documents would be written (prep v%d)%s; nothing written"
+                  % (would, generator_version(),
+                     "; %d already current" % same if same else ""))
             return 0
         wrote = same = 0
-        for row, path in todo:
-            before = _read(path)
-            _write_one(row, tracker, a, keep_if_same=True)
-            if _read(path) == before:
-                same += 1
-            else:
+        for row, _path in todo:
+            _p, what = _render_one(row, tracker, a, keep_if_same=True)
+            if what == "written":
                 wrote += 1
+            else:
+                same += 1
         print("%d prep documents written%s%s" % (
             wrote, " (live conversations only, older than prep v%d or whose contact or thread "
             "has changed since; the rest are rebuilt by /prep when a call needs them)"

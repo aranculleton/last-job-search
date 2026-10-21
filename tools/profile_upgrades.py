@@ -594,6 +594,12 @@ def _move_and_area() -> str:
     # single is said for everyone, and the question is answered for good. Without it the
     # change stayed pending for someone who would never state one place, and a no lasted a
     # month.
+    # "[CONFIRM: when you moved]": what this change's own instruction writes when the profile
+    # cannot say. It is a question for the person, which `unconfirmed-facts` asks; counted
+    # as pending here as well, this change could never finish, and /upgrade undid its own
+    # work every session (2026-10-21).
+    if CONFIRM.search(moved):
+        return ""
     if not re.fullmatch(r"none|just arrived|per employer|(?:by\s+)?\d{4}-\d{2}(?:-\d{2})?",
                         moved, re.I):
         return ("person.json identity.moved is %r, not a date or \"none\": the interview pack's "
@@ -1974,10 +1980,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Profile upgrades: {len(rows)} pending, being applied by another chat "
                   f"until {elsewhere}.")
         elif rows:
-            done = (f"{len(landed)} of its changes are on master already" if landed
-                    else "none of its changes has reached master yet")
+            done = (f", and {len(landed)} of its changes are on master already" if landed
+                    else ", and none of its changes has reached master yet")
+            if why_theirs == "claimed" and not landed:
+                done = ""        # OWNER_WHY says it already: said twice, it read as a stutter
             print(f"Profile upgrades: {len(rows)} pending. They belong to another chat until "
-                  f"{elsewhere}: {OWNER_WHY[why_theirs]}, and {done}. "
+                  f"{elsewhere}: {OWNER_WHY[why_theirs]}{done}. "
                   f"Claude: start nothing and ask nothing about them; merge master first "
                   f"({MERGE_MASTER}). After {elsewhere} the next sync hands what is still pending "
                   "to this chat. If the person says no other chat is open, take them now: "

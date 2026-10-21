@@ -135,7 +135,10 @@ def changed(root: str = ROOT, base: str = "origin/master") -> list[str] | None:
     if fork.returncode:
         return None
     out = set()
-    for args in (("diff", "--name-only", "-z", fork.stdout.strip()),
+    # Both sides of a rename: an app file moved into a personal folder is an app file gone,
+    # and with renames read as one change only the new, personal, path was listed, so the
+    # light local CI skipped the app's checks (2026-10-21).
+    for args in (("diff", "--name-only", "--no-renames", "-z", fork.stdout.strip()),
                  ("ls-files", "--others", "--exclude-standard", "-z")):
         r = subprocess.run(["git", "-C", root, *args], capture_output=True)
         out.update(p for p in r.stdout.decode("utf-8", "replace").split("\0") if p)
