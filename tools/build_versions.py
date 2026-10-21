@@ -397,7 +397,7 @@ METHODS: dict[str, dict] = {
             (38, "2026-10-21", False, "An automatic reply is not a reply, one person in two rows is raised, a note must greet the person it is for, invisible characters hide nothing from the checks, and what has worked is judged by Fisher's exact test at 20 a group"),
             (39, "2026-10-21", False, "Dead code removed"),
         ),
-        "fingerprint": "ce17a4fd3244ad23",
+        "fingerprint": "4205b26230945031",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
