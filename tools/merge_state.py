@@ -120,9 +120,11 @@ def _keyed(rows: list[dict], fields) -> dict:
 
 
 def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
-              settled: list | None = None) -> tuple[str, list[str]]:
+              settled: list | None = None, ending: str | None = None) -> tuple[str, list[str]]:
     """`later(key, field, ours, theirs)` says which side changed a field last (see
-    `git_later`); what it settled is appended to `settled`."""
+    `git_later`); what it settled is appended to `settled`. `ending` is the line ending to
+    write: by default a state file's is plain (LF), as .gitattributes asks, and any other
+    file keeps ours'."""
     fields = KEYS.get(name)
     hb, rb = _read(base)
     ho, ro = _read(ours)
@@ -167,7 +169,12 @@ def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
     for k in T:
         if k not in O:
             out.append(place(k))
-    ending = "\r\n" if ours.split("\n", 1)[0].endswith("\r") else "\n"
+    if ending is None:
+        # The state files are kept with plain endings (.gitattributes: eol=lf). Ours' ending
+        # was kept, so a chat branch from before that rule wrote CRLF back into a merge with
+        # master, and the next sync stopped on a file no row of which had changed (2026-10-21).
+        ending = "\n" if name in KEYS or not ours.split("\n", 1)[0].endswith("\r") \
+            else "\r\n"
     buf = io.StringIO(newline="")
     w = csv.DictWriter(buf, fieldnames=head, restval="", extrasaction="ignore",
                        lineterminator=ending)
@@ -363,8 +370,16 @@ def git_later(path: str):
     return later
 
 
+def eol(path: str) -> str | None:
+    """The line ending .gitattributes asks for `path` ("\n" for eol=lf, "\r\n" for
+    eol=crlf), or None when it names none or git cannot say."""
+    got = _git("check-attr", "eol", "--", path).strip()
+    value = got.rsplit(": ", 1)[-1] if got else ""
+    return {"lf": "\n", "crlf": "\r\n"}.get(value)
+
+
 def merge(base: str, ours: str, theirs: str, path: str, later=None,
-          settled: list | None = None) -> tuple[str, list[str]]:
+          settled: list | None = None, ending: str | None = None) -> tuple[str, list[str]]:
     name = os.path.basename(path)
     if name.endswith(".json"):
         try:
@@ -374,7 +389,7 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
             return ours, [f"{path}: not JSON on one side ({e})"]
         merged, problems = merge_json(b, o, t, later=later, settled=settled)
         return json.dumps(merged, indent=2, ensure_ascii=False) + "\n", problems
-    return merge_csv(base, ours, theirs, name, later=later, settled=settled)
+    return merge_csv(base, ours, theirs, name, later=later, settled=settled, ending=ending)
 
 
 # Exit codes. 0 merged; 1 merged with real conflicts marked for a person. Anything
@@ -406,7 +421,7 @@ def main(argv: list[str]) -> int:
     settled: list[str] = []
     try:
         text, problems = merge(read(base_p), read(ours_p), read(theirs_p), path,
-                               later=git_later(path), settled=settled)
+                               later=git_later(path), settled=settled, ending=eol(path))
     except Exception as e:  # noqa: BLE001  nothing is written; git's line merge takes over
         print(f"merge_state: could not merge {path} ({type(e).__name__}: {e}); "
               "git's line merge marks the conflicts instead", file=sys.stderr)

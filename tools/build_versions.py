@@ -217,8 +217,9 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-21", True, "Nothing personal read about a contact (age, family, health, religion, politics, sexuality) is shown, and the answer check flags an answer far over its time or saying we where they asked what you did"),
             (17, "2026-10-21", False, "bridges.py gains the learn-or-show nudge; preps unchanged"),
             (18, "2026-10-21", False, "bridges.py gains COVERED_BY; no document text changes"),
+            (19, "2026-10-21", True, "What is personal about a contact is read as their own life (IVF, an illness, a vote, a death), never a field of work (pensions, mental health services, cancer research), so a call prep shows their work and leaves their life out; recording what an employer heard or changing a stock answer rebuilds a live prep; and the daily run's dry run counts only what a real run writes"),
         ),
-        "fingerprint": "85bc62801200759a",
+        "fingerprint": "7a61b19d7984acd8",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -295,7 +296,9 @@ METHODS: dict[str, dict] = {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
         "gives": "the prep pack for each interview still running rewritten the current way",
         "run": "for each tracker row at `interview`, /interview <company> again, its pack "
-               "written beside the old one",
+               "written beside the old one. A pack the person wrote by hand is refused and "
+               "left as it is (exit 1, said in a plain line): that pack is done, so record "
+               "the version once the others are rebuilt",
         "files": (".claude/commands/interview.md", "tools/interview_pack.py"),
         "versions": (
             _first(),
@@ -316,8 +319,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-21", False, "Packs choose stories across the whole plan, say they are for before and after an interview and never during one, list where the resume invites a push, quote-check mock feedback, flag over-long and all-we answers, and drop anything personal read about a person"),
             (16, "2026-10-21", False, "process_channel is read by the drafting step too; no pack changes"),
             (17, "2026-10-21", False, "The pack says which resume each contact at the employer was sent, from the message log"),
+            (18, "2026-10-21", True, "A rebuild changes only what the tool wrote: every line and section you wrote stays where you put it, a rebuild that would lose one writes nothing, and a document written by hand is never rebuilt over; a later round is prepared with stories that employer has not heard; and the place each employer heard is checked only where an answer says where you live, under any heading and where they will push"),
         ),
-        "fingerprint": "c5cf1084ebb3fb2b",
+        "fingerprint": "ef5621729bf2b790",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",

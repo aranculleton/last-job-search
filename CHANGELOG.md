@@ -276,6 +276,29 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Rebuilding an interview pack keeps every line and section you wrote, where you put it.**
+  The tool keeps a record of what it wrote (`.interview_prep.built.json`) and changes only
+  its own lines. A rebuild that would lose a line of yours writes nothing and says so, and a
+  prep you wrote by hand is never rebuilt over. Live packs are rebuilt again on this update.
+- **A place is flagged only where an answer says where you live or moved**, never on a
+  sentence about work ("I moved our reporting to dbt") or on the place that employer heard;
+  "Where they will push" gets the same check as your answers.
+- **A later interview round is prepared with stories that employer has not heard.**
+- **What is personal about an interviewer or a contact means their own life**, never a field
+  of work, so call preps show the work they post about and leave their life out.
+- **Several chats at once:** a chat branch from before plain line endings no longer brings
+  CRLF back on merge, and two chats on one computer that both take an update no longer tell
+  each other they are out of date.
+- **The "when you moved" upgrade can finish**, and the app's own tests pass inside a sync
+  rehearsal. The rehearsal starts from a commit only `origin/master` holds and says plainly
+  when a commit is not there.
+- **The light local checks run the app's checks when an app file is moved into a personal
+  folder.**
+- **The daily call-prep run's dry run counts only what it would write**, a prep it leaves
+  alone is no longer re-rendered every day, and a told place or a changed stock answer
+  refreshes live call preps.
+- **Mock feedback about a rating model is not refused as a score**, and `--help` works on
+  `interview_pack.py` and `prep.py` with no profile.
 - **Numbers written as words are checked like digits**, in the resume and the letter:
   "twelve years", "a third of", "halved", "doubled" and "the fifth consecutive year". A
   summary or a letter bullet is checked against your profile alone, so a posting's figures

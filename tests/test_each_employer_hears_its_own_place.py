@@ -93,7 +93,15 @@ def test_per_employer_answers_the_moved_question_for_good(case):
     data["identity"]["area"] = "[CONFIRM: where you live]"
     json.dump(data, open(path, "w", encoding="utf-8"))
     person.reset()
-    assert U.by_id("move-and-area").pending()
+    # Changed 2026-10-21, deliberately: this was pending. A marker is what this change's own
+    # instruction writes when the profile cannot say, so counted as pending it could never
+    # finish; the question is the person's, and unconfirmed-facts asks it.
+    assert U.by_id("move-and-area").pending() == ""
+    assert any("when you moved" in what for _f, what in U.unconfirmed())
+    data["identity"]["moved"] = "sometime last year"
+    json.dump(data, open(path, "w", encoding="utf-8"))
+    person.reset()
+    assert U.by_id("move-and-area").pending()           # a value that is neither is pending
     data["identity"].update(moved=told.PER_EMPLOYER, area=told.PER_EMPLOYER)
     json.dump(data, open(path, "w", encoding="utf-8"))
     person.reset()

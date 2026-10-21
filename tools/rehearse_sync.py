@@ -155,6 +155,32 @@ def everyday(reh: Rehearsal, chat: str, root: str, env: dict, ci: bool) -> None:
              "" if not status else "files changed or left behind")
 
 
+def start_commit(repo: str, ref: str, origin: str) -> tuple[str, str]:
+    """(the commit of the person's repo the rehearsal starts from, made the master of the
+    bare copy `origin`, or "", and a plain line to say). The bare copy holds only the repo's
+    branches, so a start held only by origin/master (a cloud checkout on no branch, a local
+    master behind it) was "not a commit" of a repo that had it (2026-10-21): it is fetched
+    by its hash."""
+    sha = _git("rev-parse", "--verify", "-q", ref + "^{commit}", cwd=repo).stdout.strip()
+    if not sha:
+        app = _git("rev-parse", "--verify", "-q", ref + "^{commit}", cwd=HERE).stdout.strip()
+        if app:
+            return "", (f"{ref} is a commit of the app, not of {repo}: the app commit to "
+                        f"rehearse goes in --app, and --ref names where their repo starts")
+        return "", f"{ref} is not a commit of {repo}: name one of its branches or commits"
+    said = ""
+    if _git("cat-file", "-e", sha + "^{commit}", cwd=origin).returncode:
+        r = _git("-c", "protocol.version=2", "fetch", "-q", "--no-tags", "--upload-pack",
+                 "git -c uploadpack.allowAnySHA1InWant=true upload-pack", repo, sha, cwd=origin)
+        if r.returncode or _git("cat-file", "-e", sha + "^{commit}", cwd=origin).returncode:
+            return "", (f"{ref} ({sha[:12]}) is in {repo} but could not be copied: "
+                        f"{(r.stderr or r.stdout).strip()[:200]}")
+        said = f"{ref} ({sha[:12]}) is on no branch of {repo}: copied by its commit"
+    if _git("update-ref", "refs/heads/master", sha, cwd=origin).returncode:
+        return "", f"{ref} ({sha[:12]}) could not be made the copy's master"
+    return sha, said
+
+
 def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
     tmp = tempfile.mkdtemp(prefix="ljs_rehearse_")
     reh = Rehearsal()
@@ -162,7 +188,8 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
         app, origin = os.path.join(tmp, "app"), os.path.join(tmp, "origin.git")
         home = os.path.join(tmp, "home")
         os.makedirs(home)
-        sha = _git("rev-parse", app_ref, cwd=HERE).stdout.strip()
+        # --verify: plain rev-parse echoes a name it cannot find, which read as a commit.
+        sha = _git("rev-parse", "--verify", "-q", app_ref + "^{commit}", cwd=HERE).stdout.strip()
         if not sha:
             print(f"rehearse_sync: {app_ref} is not a commit of this app")
             return 2
@@ -175,10 +202,12 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
                 print(f"rehearse_sync: could not make the copies: {' '.join(cmd[:3])}: "
                       f"{(r.stderr or r.stdout).strip()[:300]}")
                 return 2
-        start = _git("rev-parse", ref, cwd=repo).stdout.strip()
-        if not start or _git("update-ref", "refs/heads/master", start, cwd=origin).returncode:
-            print(f"rehearse_sync: {ref} is not a commit of {repo}")
+        start, said = start_commit(repo, ref, origin)
+        if not start:
+            print(f"rehearse_sync: {said}")
             return 2
+        if said:
+            print(f"rehearse_sync: {said}")
         cloud, local = os.path.join(tmp, "cloud"), os.path.join(tmp, "theirs")
         for d in (cloud, local):
             _git("clone", "-q", origin, d, cwd=tmp)
@@ -228,11 +257,12 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
             reh.note("computer", "land on master after it", r.returncode == 0, r.stderr,
                      "" if r.returncode == 0 else "push refused")
         print(reh.report())
-        if keep:
-            print(f"\nThe copies are kept in {tmp}")
         return 0 if all(s[2] for s in reh.steps) else 1
     finally:
-        if not keep:
+        # Said however the run ended: a run that stopped early kept its copies in silence.
+        if keep:
+            print(f"\nThe copies are kept in {tmp}")
+        else:
             shutil.rmtree(tmp, ignore_errors=True)
 
 

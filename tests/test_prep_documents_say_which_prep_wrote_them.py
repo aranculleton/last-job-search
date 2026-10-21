@@ -160,7 +160,13 @@ def test_a_release_rewrites_only_live_conversations_and_never_for_a_date(tmp_pat
         assert prep.main(["--stale-only", *args]) == 0
         out = capsys.readouterr().out
         assert "0 prep documents written" in out and "1 already current" in out
-        assert live.read_text(encoding="utf-8") == older
+        # Its body and date are left as they were. Changed 2026-10-21, deliberately: the stamp
+        # is brought up to date (one line, the same in every chat), where it was left too,
+        # so the document read as stale and was rendered again on every daily run.
+        after = live.read_text(encoding="utf-8")
+        assert re.sub(r"<!-- prep v[^\n]*-->", "", after) == \
+            re.sub(r"<!-- prep v[^\n]*-->", "", older)
+        assert "Written 2026-10-02." in after and not prep.stale(str(live))
         # Asked for one contact, it is written, date and all.
         assert prep.main(["kestrel_haldane_two", *args]) == 0
         assert "Written 2026-10-15." in _doc(tmp_path, "kestrel_haldane_two").read_text("utf-8")

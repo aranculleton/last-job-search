@@ -406,18 +406,30 @@ def sync() -> int:
 STAMP = "ljs-last-sync"
 
 
-def _stamp_path(root: str | None = None) -> str | None:
-    root = root or ROOT
-    r = subprocess.run(["git", "-C", root, "rev-parse", "--git-common-dir"], text=True,
-                       capture_output=True)
-    d = r.stdout.strip()
-    if r.returncode or not d:
+def _git_dirs(root: str) -> tuple[str, str] | None:
+    """(this checkout's own git folder, the folder every worktree of the repo shares), both
+    absolute; the same folder in the repo's main checkout. None outside git."""
+    r = subprocess.run(["git", "-C", root, "rev-parse", "--absolute-git-dir", "--git-common-dir"],
+                       text=True, capture_output=True)
+    got = r.stdout.split("\n")
+    if r.returncode or len(got) < 2 or not got[0].strip() or not got[1].strip():
         return None
-    return os.path.join(d if os.path.isabs(d) else os.path.join(root, d), STAMP)
+    own, common = got[0].strip(), got[1].strip()
+    return own, common if os.path.isabs(common) else os.path.normpath(os.path.join(root, common))
+
+
+def _stamp_path(root: str | None = None) -> str | None:
+    """Where this checkout keeps the day's check: its own git folder. Each worktree, a second
+    chat on the same computer in a folder of its own, keeps its own record: one shared by all
+    of them told a chat that had taken an update it was older than another chat's sync of
+    the same update, and its own --if-stale that another chat's check was its own
+    (2026-10-21). In the main checkout this is the folder every worktree shares, as before."""
+    dirs = _git_dirs(root or ROOT)
+    return os.path.join(dirs[0], STAMP) if dirs else None
 
 
 def last_checked() -> str:
-    """The date (YYYY-MM-DD) of the last successful sync here, or "" if none."""
+    """The date (YYYY-MM-DD) of the last successful sync in this checkout, or "" if none."""
     p = _stamp_path()
     try:
         with open(p, encoding="utf-8") as fh:
@@ -438,14 +450,20 @@ def _record_check(root: str | None = None) -> None:
         try:
             with open(p, "w", encoding="utf-8") as fh:
                 fh.write(datetime.date.today().isoformat() + "\n")
-            # The commit the sync left this repo on, beside the date, in the folder every
-            # worktree of it shares: an /upgrade worktree made from an older commit lists the
-            # wrong upgrades, and `behind_sync()` says so instead.
-            head = subprocess.run(["git", "-C", root, "rev-parse", "HEAD"], text=True,
-                                  capture_output=True).stdout.strip()
+            # The commit the sync left this checkout on, and the app commit it took: an
+            # /upgrade worktree made from an older commit lists the wrong upgrades, and
+            # `behind_sync()` says so instead.
+            def g(*args):
+                return subprocess.run(["git", "-C", root, *args], text=True,
+                                      capture_output=True).stdout.strip()
+            head = g("rev-parse", "HEAD")
+            app = g("rev-parse", "--verify", "-q", APP + "^{commit}")
+            if app and subprocess.run(["git", "-C", root, "merge-base", "--is-ancestor", app,
+                                       "HEAD"], capture_output=True).returncode:
+                app = ""
             if head:
                 with open(p + "-head", "w", encoding="utf-8") as fh:
-                    fh.write(head + "\n")
+                    fh.write(head + "\n" + (app + "\n" if app else ""))
         except OSError:
             pass
 
@@ -487,9 +505,34 @@ _STATE_FILES = ("job_search_tracker.csv", "network_contacts.csv", "network_threa
                 "job_scraper/seen_jobs.json", "documents/interview/question_bank.csv")
 
 
+def _sync_records(root: str) -> list[tuple[float, str, str]]:
+    """[(when, head, app commit)] for every sync recorded in this repo: this checkout's own
+    when it has one, else every worktree's (a worktree made for /upgrade has none of its
+    own), newest first."""
+    own = _stamp_path(root)
+    paths = [own + "-head"] if own and os.path.exists(own + "-head") else []
+    if not paths:
+        import glob
+        dirs = _git_dirs(root)
+        if dirs:
+            paths = [os.path.join(dirs[1], STAMP + "-head")] + glob.glob(
+                os.path.join(dirs[1], "worktrees", "*", STAMP + "-head"))
+    out = []
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                got = fh.read().split()
+            out.append((os.path.getmtime(path), got[0] if got else "",
+                        got[1] if len(got) > 1 else ""))
+        except OSError:
+            continue
+    return sorted((r for r in out if r[1]), reverse=True)
+
+
 def behind_sync(root: str | None = None) -> str:
     """A plain line when this checkout is older than the last sync in this repo (a worktree
-    made from a commit before it), else "". Never in the app itself. Never raises."""
+    made from a commit before it), else "". A checkout that took the same app commit in a
+    sync of its own is not older. Never in the app itself. Never raises."""
     root = root or ROOT
 
     def g(*args):
@@ -497,17 +540,20 @@ def behind_sync(root: str | None = None) -> str:
     try:
         if is_the_app(root):
             return ""
-        p = _stamp_path(root)
-        with open(p + "-head", encoding="utf-8") as fh:
-            head = fh.read().strip()
+        known = [(h, a) for _t, h, a in _sync_records(root)
+                 if not g("cat-file", "-e", h + "^{commit}").returncode]
     except (OSError, TypeError):
         return ""
-    if not head or g("cat-file", "-e", head + "^{commit}").returncode:
+    if not known:
         return ""
-    if g("merge-base", "--is-ancestor", head, "HEAD").returncode != 1:
-        return ""
+    for head, app in known:
+        if g("merge-base", "--is-ancestor", head, "HEAD").returncode != 1:
+            return ""
+        if app and not g("cat-file", "-e", app + "^{commit}").returncode and \
+                g("merge-base", "--is-ancestor", app, "HEAD").returncode == 0:
+            return ""
     return ("This checkout is older than the last update of this repo, so it would list the "
-            "wrong changes. Update it first: git merge %s, then run this again." % head[:12])
+            "wrong changes. Update it first: git merge %s, then run this again." % known[0][0][:12])
 
 
 def stale() -> bool:
