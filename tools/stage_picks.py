@@ -21,6 +21,7 @@ belongs to a different application.
     python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...] [--both]
     python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N]
     python3 tools/stage_picks.py consent <round_dir> <pick> --yes A B --no C [--draft | --skip]
+    python3 tools/stage_picks.py audit <round_dir> [--only <slug> ...] [--json]
     python3 tools/stage_picks.py assemble <round_dir>
 
 **Every skill a posting names that the profile does not hold is asked about first.**
@@ -68,12 +69,20 @@ A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
                          `hold` questions; `consent --draft` moves one to picks.json
     apps_in.json         the shortlist rows with `abbr`, for tools/outreach.py
 
-`assemble` reads each `<round_dir>/audit_<slug>.json` the workflow's audit stage
-writes (the whole audit: verdict, corrected draft, changes and residual risks)
-and writes `<round_dir>/drafts.json` with the posting text and the abbreviation
-filled in. A draft the audit rejected is never rendered: it is reported with
-the audit's reasons. A pick with no audited draft is reported, never silently
-dropped. An older audit file holding the corrected draft alone, as a
+`audit` is the grounding audit of each `<round_dir>/draft_<slug>.json` the workflow's
+drafter writes, done by code first (tools/draft_audit.py): every rule the draft must
+meet, and every question about its claim map. It writes `audit_<slug>.json` with the
+verdict `pass` (nothing for the model to judge) or `needs_model`, and merges the model
+auditor's `model_audit_<slug>.json` when there is one, re-checking its corrected draft.
+`--only` audits just the roles that will be sent; `--json` prints only what fails.
+
+`assemble` reads each `<round_dir>/audit_<slug>.json` (the whole audit: verdict,
+corrected draft, changes and residual risks) and writes `<round_dir>/drafts.json`
+with the posting text and the abbreviation filled in. A draft the audit rejected is
+never rendered: it is reported with the audit's reasons. Nor is one still waiting on
+the model auditor, one changed since its audit, or one audited against a profile that
+has changed since. A pick with no audited draft is reported, never silently dropped.
+An older audit file, from the agent auditor or holding the corrected draft alone, as a
 one-element list, is still read.
 """
 
@@ -517,6 +526,31 @@ def _audited(got) -> tuple[str, dict | None, list[str]]:
     return "", got, []
 
 
+def audit(round_dir: str, only=()) -> list[dict]:
+    """The grounding audit of each draft, code first: tools/draft_audit.audit_round."""
+    import draft_audit
+    return draft_audit.audit_round(round_dir, only)
+
+
+def _held_back(got) -> str:
+    """Why an audit record written by `audit` may not be rendered yet, or "".
+
+    A record from the agent auditor has no `mechanical` part and is read as before."""
+    if not isinstance(got, dict) or not isinstance(got.get("mechanical"), dict):
+        return ""
+    mech = got["mechanical"]
+    if str(got.get("verdict") or "") == "needs_model":
+        why = ", ".join(mech.get("reasons") or []) or "a question code cannot settle"
+        return f"waiting on the model auditor ({why})"
+    import draft_audit
+    import draft_pack
+    if isinstance(got.get("draft"), dict) and mech.get("draft_md5") != draft_audit.md5(got["draft"]):
+        return "changed since it was audited: run stage_picks.py audit again"
+    if mech.get("rules_hash") and mech["rules_hash"] != draft_pack.rules_hash():
+        return "the profile changed since it was audited: run stage_picks.py audit again"
+    return ""
+
+
 def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
     """(drafts, picks with no audited draft, picks the audit rejected, with why)."""
     with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
@@ -547,6 +581,11 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
         if not isinstance(d, dict):
             missing.append(p["company"])
             continue
+        held = _held_back(got)
+        if held:
+            missing.append(f"{p['company']} ({held})")
+            continue
+        d = {k: v for k, v in d.items() if k != "check_output"}
         with open(p["file"], encoding="utf-8") as fh:
             text = fh.read()
         posting = untrusted.unfence(text)
@@ -607,6 +646,27 @@ def _report(staged: list[dict], round_dir: str) -> None:
     print(f"\nargs for the draft-applications workflow: {os.path.join(round_dir, 'picks.json')}")
 
 
+def _report_audit(results: list[dict]) -> None:
+    said = {"pass": "pass   ", "fixed": "fixed  ", "needs_model": "MODEL  ", "reject": "REJECT ",
+            "missing": "MISSING"}
+    for r in results:
+        mech = r.get("mechanical") or {}
+        why = ""
+        if r["verdict"] == "needs_model":
+            why = "needs the model auditor: " + ", ".join(mech.get("reasons") or [])
+        elif r["verdict"] == "missing":
+            why = f"no draft_{r['slug']}.json"
+        elif r.get("old"):
+            why = "audited by the agent auditor"
+        else:
+            why = "code checks clean" if r["verdict"] == "pass" else ""
+        print(f"{said.get(r['verdict'], r['verdict']):8} {r['slug']:<28} {why}")
+    waiting = [r["slug"] for r in results if r["verdict"] == "needs_model"]
+    if waiting:
+        print("\nThe model auditor reads only these, one call each (python3 tools/draft_audit.py "
+              "packet <round_dir> <slug> prints what it reads): " + ", ".join(waiting))
+
+
 def main() -> int:
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
@@ -638,9 +698,24 @@ def main() -> int:
     c.add_argument("--draft", action="store_true",
                    help="they answered the held questions with: draft it")
     c.add_argument("--skip", action="store_true", help="they said not to draft this pick")
+    au = sub.add_parser("audit", help="the grounding audit of each draft, code first")
+    au.add_argument("round_dir")
+    au.add_argument("--only", nargs="+", default=[],
+                    help="the slugs to audit: the roles that will be sent")
+    au.add_argument("--json", action="store_true",
+                    help="print only what fails, as JSON (what the drafter reads)")
     a = sub.add_parser("assemble")
     a.add_argument("round_dir")
     args = ap.parse_args()
+    if args.cmd == "audit":
+        results = audit(args.round_dir, args.only)
+        if args.json:
+            import draft_audit
+            print(json.dumps([draft_audit.failing(r) for r in results], indent=1,
+                             ensure_ascii=False))
+        else:
+            _report_audit(results)
+        return 0 if all(r["verdict"] in ("pass", "fixed") for r in results) else 1
     if args.cmd == "consent":
         p = consent(args.round_dir, args.pick, args.yes, args.no, draft=args.draft,
                     skip=args.skip)

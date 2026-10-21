@@ -22,6 +22,38 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **Drafting a batch costs far less, with the same checks.**
+  - A drafting pack (`tools/draft_pack.py build`) compiles, once by code, everything every
+    drafter used to read for itself: your facts under stable ids, your rules and learned
+    rules, the voice corpus and the field contract. It is one cached prefix for the whole
+    batch.
+  - Each posting is then drafted in one call. It returns the draft with a map of which
+    fact each sentence rests on, and code checks it, so the drafter repairs from only what
+    fails.
+  - The grounding audit is code first (`stage_picks.py audit`, `tools/draft_audit.py`). Only
+    a draft code flags reaches the model auditor, which reads one small packet.
+    `model_audit: "all"` sends every draft to it.
+  - What a batch cost, per posting and stage, is kept in `cost.json` (`tools/draft_cost.py`).
+  - Measured by size, not yet in a live run: a drafter's fixed reading drops from about 16k
+    tokens to about 3k on the example person, and from about 45 tool calls to 3 to 7.
+- **`reading.py estimate` says how long the day's profile reads will take** before they start,
+  so you choose between speed and tailoring before anything is drafted. `reading.py
+  meanwhile` lists the notes to write while a page waits. A recruiter whose card says
+  enough is drafted card-only, shown as card-only, with no read.
+- **`state.py nudge` and `state.py message` log a later message with its words**, never the
+  same words twice on one day. Before, `sent` refused a follow-up and 62 sends in one day
+  were added to the message log by hand.
+- **A `dm` message kind** for a first message to someone you are already connected to: no
+  subject, and LinkedIn's message limit.
+- **Drafts are checked together.** The batch check flags one sentence frame with the nouns
+  swapped, the same opening or the same close across the batch, and two notes to one
+  employer that share a sentence. `reading.py drafts` saves a batch only when it all
+  passes.
+- **Messages you approved are shown to the drafter first.** `learned.py approve` keeps a
+  message whole, with its channel and reader, when you say it is good ("great, both sent",
+  "more of this"). `learned.py brief messages` shows the best matches above the rules.
+- **One title search feeds every employer it found**, grouped by employer and checked against
+  what the search ruled out. It never prints an empty employer.
 - **Staging reads each posting by code before anything is drafted.** It reports:
   - permanent or a contract, and when it ends;
   - the stated pay, and whose place it is for;
@@ -117,6 +149,23 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A first note with nothing read is refused** unless it is marked card-only, and a card-only
+  note is shown to you as one. 20 notes had been saved and passed with nobody read.
+- **A draft obeys the same company limit as the read list**: no third cold note at an
+  employer where two are already waiting on a reply.
+- **Your own words outrank the house style in every kind of message**, nudges included.
+- **The weekly connection budget says it is the app's planning cap, not LinkedIn's**, and
+  names the setting that changes it (`CONNECTIONS_PER_WEEK`).
+- **What happened is said as it happened**, never as "a LinkedIn warning": "a sign-in page
+  on 20 Oct, a near-empty paste today". A page that came back nearly empty no longer slows
+  the next day's reading. It still doubles the next pause, and two in an hour still stop
+  reading for the day.
+- **Where a contact sits is a note, never a skip.** A recruiter, or anyone whose role says
+  remote or national, gets no note at all.
+- **The profile extractor returns the top card, About, Experience and Education** whatever
+  order the page uses, and every read says to scroll to the very end first.
+- **A draft no longer needs an outreach body.** One is written by its own small step only
+  when wanted.
 - **Employer research is much cheaper.** It fetches through one script
   (`company_research.py fetch`), which:
   - reads robots.txt first and keeps the crawl delay;
@@ -182,6 +231,16 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A short paste of a page that loaded is no longer "did not render".** A labelled paste or a
+  structured extract is read as the page. A page read before it was scrolled to its end,
+  with no Experience on it, is asked for again rather than counted as a failure.
+- **"Responsible AI at Scale" in a headline is not an employer called Scale**, so a skip rests
+  on where someone really works.
+- **"Any data roles open?" is refused to recruiters too**, and a question about whether the
+  reader is the right person is refused for everyone, judged by its shape.
+- **The warnings fire on the right things.** Your own who-line is not a list of credentials,
+  a fact from their own headline is not an inference, and a vague "what your team spends
+  its days on" is caught like "how your team works".
 - **A second save of an employer's research no longer replaces the first.** Saves now add
   to the file. Two agents researching one employer at once had lost all but one agent's
   facts.

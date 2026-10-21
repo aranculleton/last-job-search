@@ -242,10 +242,19 @@ caught at once. So between finding and writing there is a read, and
   it on load. **A profile read**, their own page, only then, and only for the few the person
   will write to: as many as the requests left this week and three spare, never above
   `READS_PER_RUN` (80), of whom at most ten may be people nothing has placed yet.
-  Read its card first (top card and About, nothing scrolled), which decides most, and deep only
-  where it cannot. Everyone else is drafted from what the cheaper reads showed, marked as
-  waiting on a read. No change to the funnel may add a page load, shorten the pacing or add a
-  click unless the person sets it in their profile.
+  Scroll each page to the very end before taking its text: on the current layout Experience
+  and Education appear only then, and a read with no Experience is read again from the same
+  page (`read` exits 14). Before any read, say how long it takes (`reading.py estimate`: "Reading
+  these 20 takes about 60 minutes today") and let the person choose between waiting for notes
+  written from each page and notes from the cards alone, each saved `--card-only` and shown as
+  card-only. A recruiter whose card says enough (`reading.card_enough`) is drafted from it with
+  no read. A first note with nothing read is otherwise refused (`reading.py draft`,
+  `compose.validate(contact=)`). No change to the funnel may add a page load, shorten the
+  pacing or add a click unless the person sets it in their profile.
+- **One title search, many employers.** A search with no employer in it feeds every employer
+  it finds: `sources.py harvest <results.json>` and `reading.py people <file>`, each with no
+  `--company`, group the people by the employer each names and leave out employers the
+  search has ruled out.
 - **Every limit is the person's, behind one dial.** `PROFILE_READ_RISK` in
   `profile/networking.py` picks a preset (`careful`, the default and the pace before the dial;
   `normal`; `fast`) and every limit derives from it, each overridable on its own
@@ -258,12 +267,16 @@ caught at once. So between finding and writing there is a read, and
   the first page of the day, or hours after the last, is a session that expired: the person
   signs in and nothing stops. A sign-out stop is the one they may lift, once, after a clean
   sign-in, on their own word (`reading.py resume --reason "<their words>"`), and the signal
-  stays in the log, marked; a page that does not render or loads far slower than usual doubles the next pause,
-  and a second within the hour stops the day. The friction log keeps each, dated, across days,
-  and the pages-an-hour ceiling ramps up only on clean days since the last one (5, then the
-  preset's next steps). The count is one per computer, so every worktree's chat shares it.
+  stays in the log, marked; a page that came back nearly empty (no name, no section, no
+  structured extract: never a short paste of a page that loaded) or loads far slower than
+  usual doubles the next pause, and a second within the hour stops the day. The friction log
+  keeps each, dated, across days, and the pages-an-hour ceiling ramps up only on clean days
+  since the last one (5, then the preset's next steps); a page that came back nearly empty
+  never moves the ramp. Say what happened ("a sign-in page on 20 Oct"), never "a LinkedIn
+  warning" unless LinkedIn showed one. The count is one per computer, so every worktree's chat shares it.
 - **Reads never block the chat.** `reading.py next --wait` runs in the background and names
-  who to read once a page may load; the drafts for those already read are shown meanwhile.
+  who to read once a page may load; meanwhile the chat writes and shows the notes it can
+  (`reading.py meanwhile`), so the person sends one batch while the next is read.
   When the person is at the keyboard, the fast path beats any pace: `reading.py queue --urls`
   for the addresses, and one paste back.
 - **The route is chosen, never asked.** `reading.py route` reads which browser the chat
@@ -273,8 +286,11 @@ caught at once. So between finding and writing there is a read, and
   anything; a path comes from `tools/claude_surfaces.py`, with its official page.
 - **Read, judge, next.** How many are read is however many it takes to fill the run's
   batch with people worth writing to, the way a round runs until its yield target.
-  `reading.verdict()` skips someone the page shows has moved on, is based elsewhere or
-  holds a role the search filters out, and the next person is read instead.
+  `reading.verdict()` skips someone the page shows has moved on or holds a role the search
+  filters out, and the next person is read instead. Where a contact sits is a caution, never
+  a skip (the location gate is for where the person would work), and a recruiter or anyone
+  whose role says Remote or national is not cautioned. A headline's "at <phrase>" is never
+  the employer when the card or Experience names another ("Responsible AI at Scale").
 - **Their public work.** A talk, an article, a podcast, code, a quote in the press,
   and their posts as a search engine shows them. Never a people-search or data-broker
   site.
@@ -414,7 +430,18 @@ on Premium. That is the shape, and `first_note()` assembles it:
   ("I saw your package on GitHub") raises `UnconfirmedReading` unless `looked=True`, the
   sender's own word that they did: a reading the chat did is not the sender having looked.
   No two notes in a batch say the same thing (`reading.same_ground()`), and none is built
-  the same way (`reading.py batch` reports "same shape").
+  the same way (`reading.py batch` reports "same shape"). What a batch is judged on is its
+  frames, not one phrase: one sentence with the nouns swapped ("<years of X>, which I imagine
+  <employer> values"), one opening after the greeting or one close across more than a third
+  of the batch, or two notes to people at one employer sharing a sentence, saves none of
+  them (`reading.py draft` and `drafts` check every save, exit 11). A phrase the person
+  reuses for strangers at different employers is theirs; the house style in one message is
+  a stock phrase, and the person's own (`OWN_VOICE`, their `OPENER` and `ASK`) is allowed in
+  every kind of message.
+- **The company limit holds at the draft too.** `reading.PER_EMPLOYER` (two) people at one
+  employer while nobody there has answered, counting those waiting on a reply and the notes
+  already queued: `reading.employer_full_line()` is the one test, read by the short list,
+  every draft saved and `reading.py batch`.
 - **About me** defaults to one modest line, `ABOUT_ME` in
   `profile/networking.py`, that also says the candidate is looking, as context
   rather than a demand, in the shape "I work in data science, ex-<Employer> and
@@ -457,6 +484,18 @@ Contractions are fine: "I'm" and "I'd" open sentences in natural English, and fo
 and "I would" made the defaults read like someone who just learned English as a second
 language (`CONTRACTIONS` brings the old rule back for a person who wants it).
 
+**To a recruiter, and to anyone: never "any jobs?", never "are you the right person?".**
+"Any data roles open in <city>?", "does hiring sit with your team, or someone else?", "do your
+searches cover it, or is that another team?" and "or someone better to ask?" read as "any
+jobs?" and "are you useful to me?". `validate()` refuses the blunt job ask for every reader
+(`asks_for_the_job`) and the gatekeeping question by its shape (`gatekeeping`). A pointer asked
+openly ("Would you know the right person to speak to about it?") is neither.
+
+**What they approved is the model.** A message the person approved ("great, both sent",
+"almost perfect", "more of this") is kept whole with `learned.py approve`, and
+`learned.py brief messages --channel <c> --reader <r>` prints the best matches above the
+rules, before any draft of that kind. The hook notes an approval the way it notes a reaction.
+
 ### Before it is shown: `compose.advise()`
 
 `validate()` is what must never go: a refused draft is rewritten and never shown.
@@ -468,15 +507,20 @@ standing is shown with the draft for the person to decide, never in place of the
   "high on my list" and any praise of the company that fits any company, "the route I would
   most like to follow", "which teams to look at and how to approach them", "Data scientist
   here" as an opener, a closing question asking how to get hired, a test question in place
-  of an honest ask;
-- a list of three credentials in a row: name the one that matters to this reader;
+  of an honest ask, and a vague ask about how their team works or spends its days, caught
+  by its shape ("I'd love to hear what your team spends its days on");
+- a list of three credentials in a row: name the one that matters to this reader. Never the
+  person's own who-line (as `ABOUT_ME` sets it, or as it stands in a message they approved),
+  and never a list with a place in it ("moved from Leeds to Manchester, ex-<A> and <B>");
 - the person's own city, in a draft to an employer that heard another place
   (`company=` the reader's employer; `tools/told.py` keeps what each employer heard);
 - hedges: one light hedge per inference ("I imagine", "I'm guessing", "probably", "it
   seems like"), never two in a sentence, never a disclaimer ("I can't know from the
   outside"). A question and an offer on their terms ("if you think it might help, I can
   send ...") hedge no claim and are never counted;
-- a claim about the reader written as fact. Each claim is STATED (their page says it, so
+- a claim about the reader written as fact (a fact their headline holds, said in other words,
+  is STATED: "you recruit for ML and AI" from "Talent Acquisition, Machine Learning & AI").
+  Each claim is STATED (their page says it, so
   say it plainly), INFERRED (from a title, an employer, a path: hedge it once) or a GUESS
   (about their team or what would be useful to them: lightly, or better not at all). A
   fact their reading holds (their employers by name or initials, their title) is STATED,
@@ -588,7 +632,14 @@ characters and a handful of personalised notes a month, Premium's is 300 with In
 credits. With no plan recorded the free limits apply, because a note short enough for free
 is short enough for Premium. When the month's notes are spent, the request goes with no
 note and the drafted note follows as a message once they accept (`platform_budget()` says
-so).
+so). The 50 requests a week (25 a day) are the app's planning cap, not LinkedIn's, which
+publishes no number: `CONNECTIONS_PER_WEEK` in `profile/networking.py` changes the week,
+and `state.py`'s BUDGET line says which applies.
+
+**A message to someone already connected** (first degree) is `kind="dm"` in
+`compose.validate()`: no subject and no credit, LinkedIn's message limit
+(`schema.LIMITS["message_chars"]`), and the first-note rules, since it is a first message.
+A nudge in that thread is still `kind="nudge"`, and a later message `kind="reply"`.
 
 **Email, when they give an address.** A strong signal, and it happens often.
 Resume attached, a short context paragraph so they do not have to find the
@@ -952,3 +1003,7 @@ almost always one.
 - `/reply <contact>`, classify a live thread and draft the reply
 - `/threads`, what is owed, what is due, what has gone cold
 - `/prep <contact>`, prep document for a booked call
+- `state.py nudge <id> --text-file <file>` logs a nudge that went, with its words;
+  `state.py message <id> ...` any other later message (`--texts <file.json>` for several)
+- `reading.py estimate [N]` says how long N reads take today; `reading.py meanwhile` the notes
+  to write while a page waits; `reading.py drafts <file.json>` saves a batch checked together

@@ -106,7 +106,9 @@ it. LinkedIn is never fetched from a session.
    budget the moment they go. There is no point producing fifteen drafts against five
    remaining slots. Size the run to the week's budget, net of the queue, and say what it
    is and how many can go today (`connections_left_today`, 25 by default inside the
-   week's 50): the rest stay queued and go on the following days. Show drafts as they
+   week's 50, the app's planning cap rather than LinkedIn's, which publishes no number;
+   `CONNECTIONS_PER_WEEK` in `profile/networking.py` changes it): the rest stay queued and go
+   on the following days. Show drafts as they
    are ready, five at a time, never only once the whole batch has been read.
    `note` and `inmail_note` say what to do when a limit is reached: a request with no
    note and the draft sent as a message after they accept, and no InMail on a free
@@ -141,7 +143,11 @@ it. LinkedIn is never fetched from a session.
      places in the person's market ranks below those it does. A title search that keeps nobody
      at an employer is remembered, and the next run there searches the group's next title
      instead (`sources.spent_titles`): at large employers the first titles found mostly people
-     elsewhere or in other functions. A post's date comes from its own link, never from the
+     elsewhere or in other functions. **One title search can feed every employer at once**:
+     a search with no employer in it ("<title> <city>"), harvested with no `--company`
+     (`sources.harvest_across`), groups the people by the employer each result names, leaves
+     out employers the search has ruled out (`sources.ruled_out`), and never files a result
+     that names no employer under one. A post's date comes from its own link, never from the
      search tool's page age, and a post over six months old makes nobody a candidate.
      `discovery.resolve_result(url, company)` turns a post permalink
      into the author's profile plus the post's exact date (carry it as `signal_date`; a
@@ -212,6 +218,11 @@ it. LinkedIn is never fetched from a session.
      a script of your own to read the page. Only the few who pass and will be written to
      today go to a profile read.
 
+   A people search by title across employers, in the browser, is the same read with no
+   `--company`: `reading.py search-url --keywords "<title>" --place "<city>"` builds it and
+   `reading.py people <file>` groups the cards by the employer each names, checking each the
+   way `sources.ruled_out` does.
+
    Measured over two employers in one city on 2026-10-18: the plain query shape
    `queries_for()` now writes ("<employer> <one title> <city>") found 14 people named at the
    employer for the searches that found 5 in the old one, which quoted a literal
@@ -279,8 +290,15 @@ it. LinkedIn is never fetched from a session.
    so the read, the draft and the send all find them. It takes at most
    `reading.PER_EMPLOYER` (2) people an employer, and the people there already waiting on a
    reply count against the two: it names them and adds nobody past it.
-   Everyone else is drafted from what the search and the one-page reads showed, and their note
-   opens on the WAITS ON A READ line until a later day's read. Score each again after the read, which adds shared history, activity
+   **Say the time first, and let the person choose.** Before any read, `python3
+   tools/network/reading.py estimate` says how long today's list takes at the pace already set
+   ("Reading these 20 takes about 60 minutes today ..."; the `shortlist` output ends on it too).
+   Tell the person in those words and let them choose: wait for the reads and get notes written
+   from each page, or have notes now from the cards alone, each saved `--card-only` and shown
+   to them as card-only. Never choose card-only for them. A recruiter whose card names them a
+   recruiter at the employer and places them in the person's market needs no read
+   (`reading.card_enough`): `shortlist` leaves them off and their note is drafted from the card,
+   saved marked CARD ONLY. Score each again after the read, which adds shared history, activity
    and reach, and read the next on the list when one is skipped. With no browser, nobody is
    read: present the list and offer a paste for the best `reading.HAND_TOP` (3) only
    (`reading.py queue`, which lists those three). **The fast path, with no automation at
@@ -321,7 +339,8 @@ it. LinkedIn is never fetched from a session.
       when that is all that is known, or `unknown` for an undated talk or podcast, never a
       made-up day; a post needs at least its month), then run
       `reading.py verdict <contact_id>`: someone a public page shows has moved on or is
-      based elsewhere is skipped here, without a LinkedIn visit. Never a people-search or
+      no longer there is skipped here, without a LinkedIn visit; where someone sits is said,
+      never a skip. Never a people-search or
       data-broker site (`reading.BROKERS`; the tool refuses them), and never a fetch of
       linkedin.com from this session: its robots.txt disallows it and it answers HTTP 999.
    2. **Their profile, in the person's own browser, once**, only for the people still
@@ -346,10 +365,12 @@ it. LinkedIn is never fetched from a session.
       - **Read only the people a request goes to today.** A read is spent on someone the
         person is about to write to, never on a list for later: `gate` caps the day's reads
         at the connection requests still left today plus three for people a read rules out.
-      - **Reads run off the critical path.** Run `python3 tools/network/reading.py next --wait`
-        in the background (the Bash tool's background mode): it exits when the next page may
-        load, naming who to read and their address, and in the meantime the chat drafts and
-        shows the notes for the people already read, each as soon as its read completes. Never
+      - **Reads run off the critical path, while the person sends.** Run `python3
+        tools/network/reading.py next --wait` in the background (the Bash tool's background
+        mode): it exits when the next page may load, naming who to read and their address, and
+        in the meantime the chat drafts and shows the notes it can write now (`reading.py
+        meanwhile` lists them: those read today, and recruiters whose card says enough), so the
+        person sends the last batch while the next is read. Never
         poll a clock, and never sleep in the foreground. When it says `new day` (exit 13), a wait ran
         past midnight: do what it prints (the day's check, then today's list). When `next` says `done` (exit 12),
         show any draft not yet shown and tell the person the run is done, with a notification
@@ -375,25 +396,34 @@ it. LinkedIn is never fetched from a session.
         page of the day, or hours after the last, is a session that expired: ask them to sign in,
         nothing stops. After a clean sign-in, a sign-out stop is lifted only on their word, once
         a day: `reading.py resume --reason "<their words>"`. Never edit the ledger by hand.
-        A page that does not render, or one far slower to load than their recent ones (pass
+        A page that came back nearly empty (no name, no section of a profile, nothing of a
+        structured extract), or one far slower to load than their recent ones (pass
         `--load-seconds` when the browser tool times it), doubles the next pause, and a second
-        within the hour stops the day. Each is kept, dated, in the friction log (`reading.py
+        within the hour stops the day. A short paste of a page that loaded is a page, not this. Each is kept, dated, in the friction log (`reading.py
         friction`; `friction --kind <kind> --words "<what it showed>"` keeps one the chat saw
-        itself), and a signal puts the ramp back to its first step. The count, the stop and the
+        itself), and a check, a sign-in page out of turn or a slow load puts the ramp back to
+        its first step; a page that came back nearly empty never moves it. Tell the person what
+        happened in the words `friction` prints ("a sign-in page on 20 Oct"), never "a
+        LinkedIn warning" unless LinkedIn showed one. The count, the stop and the
         list are one per computer, shared by every worktree's chat.
-      - **One pass per profile, its card first.** Open their `linkedin_url` in a new tab. A
-        card read (`--mode card`, the default for `next`) stays the time `next` gave on the top
-        card and About, scrolling nothing: their headline, place, current employer and About
-        decide most keep or skip. Read deep (`--mode deep`) only where the card cannot decide
-        or the note needs their Experience or Activity: stay the time given, scrolling the same
-        profile down to its end at reading pace so the sections LinkedIn loads late are on the
-        page. Click nothing, read the whole page text once, close the tab, and pipe the text to
+      - **One pass per profile, scrolled to the very end.** Open their `linkedin_url` in a new
+        tab and scroll it slowly to the very bottom before taking its text: on the current
+        layout the page holds the top card and the Activity feed until then, and Experience and
+        Education appear only at the end. A card read (`--mode card`, the default for `next`)
+        stays the time `next` gave; their headline, place, current employer, About and
+        Experience decide most keep or skip. Read deep (`--mode deep`) where the note needs
+        their Activity too. A read with no Experience in its text exits 14 ("scroll"): scroll
+        the same page to its end and read it again, no new page loaded (`--no-experience` only
+        when their page has none at all). Click nothing, read the whole page text once, close the tab, and pipe the text to
         `python3 tools/network/reading.py read <contact_id> - --source browser --mode <card or
         deep>`. Where
         the browser tool can run a script on the page, run `reading.py extractor`'s read-only
         snippet instead and pipe its JSON to `read <contact_id> - --source browser --json`: the
-        same text, cut to the sections a reading keeps, never re-typed by hand. It clicks,
-        scrolls and loads nothing.
+        top card, About, Experience and Education, found whatever order the page puts them in
+        (`extractor --activity` adds Activity and Featured), never re-typed by hand. It clicks,
+        scrolls and loads nothing. Without a browser script, a short structured paste of the
+        same parts reads as the page: `Headline: ...`, `Location: ...`, `About: ...`, one
+        `Experience: <title> | <employer> | <dates> | <place>` line a role, `Education: ...`.
         That one read keeps everything a note and the send need: the headline, the current
         role and employer (the top card's employer when Experience did not load), the
         location, the connection degree and whether Connect, Message, Follow or Pending
@@ -418,8 +448,10 @@ it. LinkedIn is never fetched from a session.
    3. **After each read, the verdict.** `read` prints it, and `reading.py verdict
       <contact_id>` repeats it: KEEP (exit 0), SKIP with the reason (exit 3), or NOT READ
       YET (exit 10) when nothing of their own page was read, whatever public findings say. A
-      snippet can be months old, and the page shows that someone has moved on, is based
-      elsewhere, holds a role the search filters out, or already has a request pending. A skip
+      snippet can be months old, and the page shows that someone has moved on, holds a role
+      the search filters out, or already has a request pending. Where they are is said as a
+      caution, never a skip: a contact elsewhere can still refer the person, and a recruiter,
+      or anyone whose role says Remote or national, is not even cautioned. A skip
       is recorded with the command it prints, once the person has confirmed nothing else is
       needed from them: `reading.py skip <contact_id> --reason "<why>"`
       closes them with the reason and removes their draft, so they never surface again. A
@@ -478,7 +510,10 @@ it. LinkedIn is never fetched from a session.
    decides what it says, and `variant_key=` the contact id so the ask and opener vary.
    **Start from the person's own messages that drew replies**
    (`python3 tools/network/compose.py examples`): their shape and wording come before
-   any default. Then `compose.validate(kind="connection", title=..., name=<their name>)` on
+   any default. Then `compose.validate(kind="connection", title=..., name=<their name>,
+   contact=<their id>)` (it refuses a first note with nothing read about them unless the person
+   chose card-only, `card_only=True`; `kind="dm"` is a first message to someone already
+   connected: no subject, LinkedIn's message limit) on
    each (with the name, a note greeting anybody else is refused), and
    `compose.advise(..., company=<their employer>)`. A draft `validate()` refuses is rewritten and never shown; a
    draft is rewritten on `advise()`'s warnings first, and a warning the rewrite leaves
@@ -529,6 +564,15 @@ it. LinkedIn is never fetched from a session.
      or a close (`compose.round_alike()`).
    - The referral ask is a different message, `compose.referral_ask()`, sent
      only after they have engaged.
+   - Never ask a recruiter "any roles open?", nor anyone whether they are the right person
+     ("does hiring sit with you, or someone else?"): `validate()` refuses both shapes for every
+     reader (`asks_for_the_job`, `gatekeeping`).
+   - **Messages they approved come first.** `python3 tools/learned.py brief messages --channel
+     <channel> --reader <reader>` prints the messages the person approved, best match first,
+     above the rules: their shape is the one to follow. When the person approves a message
+     ("great, both sent", "more of this"), keep it in the same turn: `python3 tools/learned.py
+     approve --said "<their words>" --text-file <the message> --channel <channel> --reader
+     <reader>`.
 
 7. **Write state.** New contacts at `not_contacted`, with tier, route,
    route_detail, `found_via` (the kind from step 3 that surfaced them), the quoted
@@ -538,11 +582,19 @@ it. LinkedIn is never fetched from a session.
    `maybe_in_book` the person has not answered. `state.py`'s RECONCILE lists any pair
    that got in anyway as `possible_duplicate`. **Write each
    draft to `documents/network/<contact_id>/draft.md`** with
-   `python3 tools/network/reading.py draft <contact_id> <file|->`, and commit it with the
+   `python3 tools/network/reading.py draft <contact_id> <file|->` (a batch at once, checked
+   together: `reading.py drafts <file.json>`), and commit it with the
    contacts: a draft that lives only in the chat is gone when the session ends, and the
    next run would skip the contact as already queued. A note for someone nothing was
-   read about opens on a `WAITS ON A READ` line, so `reading.py queue` lists it and nobody
-   sends it as it stands; it is rewritten from a reading the same way.
+   read about is refused unless the person chose card-only (`--card-only`): it is saved under a
+   `CARD ONLY` line and shown to them as card-only, and `reading.py queue` offers it a read. A
+   placeholder written before anyone is read (the networking upgrade's) is `--wait-for-read`:
+   saved under `WAITS ON A READ`, never sent as it stands.
+   Every save is checked against the notes already waiting: one frame with the nouns swapped,
+   one opening or one close across the batch, or two notes at one employer sharing a sentence,
+   saves none of them (exit 11); and a note at an employer already holding
+   `reading.PER_EMPLOYER` people waiting on a reply or queued is refused, by the same test as
+   the short list.
 
 ## Present
 
@@ -566,8 +618,9 @@ send or follow-up pack written for the person. Each person's **evidence**
 written as confirmed, and "verified" means the result's own title named them at the
 employer on that date, not that their profile was read.
 
-A note with no page read behind it says so on its own line: "Rests on the search result
-only." Under the list, once, the line `sources.py ladder` prints, which offers a paste for
+A note with no page read behind it says so on its own line: "Card only: written from their
+card and the search result, nothing of their own page read." It is never shown as a note
+written from their page. Under the list, once, the line `sources.py ladder` prints, which offers a paste for
 the best three at most; never ask for everyone's. When the reads are in the browser, list
 who was read, who was skipped after the read and why, and how many were read.
 
@@ -606,7 +659,12 @@ refused, because a message logged without them can never teach what works. After
 a batch as drafted, ask once whether any went with edits or on another day, and correct
 each with `state.py resent <contact_id> --text-file <file> [--date <day>]`; one that did not
 go at all comes off the log with `state.py unsend <contact_id>`, its words back in the draft.
-It does the three steps below at once:
+**A later message goes by its own command**, with its words, never by hand: `python3
+tools/network/state.py nudge <contact_id> --text-file <file>` for a nudge after silence, and
+`state.py message <contact_id> --text-file <file>` for anything else (a reply, a thank-you, the
+first words after they accepted a request that carried none). Several at once:
+`--texts <file.json>` ({id: words}) or `--draft`. The same words to the same person on the same
+day are never logged twice. `state.py sent` does the three steps below at once:
 
 1. **The message**, appended to `network_threads.csv` (`state.load_threads()`, then
    `state.save_threads()`): `contact_id`, `date` the day it went, `direction` `out`,

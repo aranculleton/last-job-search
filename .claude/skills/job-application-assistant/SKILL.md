@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.5
+framework_version: 1.5.6
 ---
 
 # Job Application Assistant
@@ -27,6 +27,9 @@ When the user provides a job posting (URL or text), follow this workflow:
 
 ### Step 3: Write Cover Letter
 - The letter comes from the same draft object as the resume in Step 2, under `03-writing-style.md` (critical: no em or en dashes, no cliches) and `06-cover-letter-templates.md`, connecting specific experience to the role's requirements.
+
+### Drafting several, or from a round
+- A batch, or `/apply` through the pipeline, is drafted by the `draft-applications` workflow, not by hand: `tools/stage_picks.py stage`, then `tools/draft_pack.py build` (the drafting pack: the profile's facts with ids, the person's rules, the voice corpus and the field contract, compiled by code so no drafter re-reads them), then the workflow, then `tools/stage_picks.py audit` (the grounding audit, code first; the model auditor reads only what it flags) and `assemble`. RUNBOOK.md step 2 has the commands.
 
 ### Step 3b: Record the Application
 - On the pipeline path, `/apply` Step 2 already records it (`tools/record_drafts.py`). The rest of this step is for a custom template, once both documents exist. A CV or cover letter drafted alone is not yet an application.

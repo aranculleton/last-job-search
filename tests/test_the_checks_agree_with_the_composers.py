@@ -152,21 +152,29 @@ def test_asking_who_to_speak_to_is_not_a_job_ask_and_a_job_ask_still_is():
 
 # ------------------------------------------------------------ 6. warmth in a follow-up
 
-def test_hope_youre_well_is_allowed_in_every_follow_up():
+def test_hope_youre_well_is_allowed_in_every_follow_up(monkeypatch):
     text = "Hi Wren, hope you're well. Any word back from the hiring manager?"
     assert compose.validate(text, "nudge", name="Wren Halloway") == []
     assert compose.validate(text, "intro", name="Wren Halloway") == []
     assert "house-style" not in rules(compose.validate(text, "email", name="Wren Halloway"))
     assert compose.nudge("Wren Halloway", "hope you're well. Any word back from the hiring "
                          "manager?").startswith("Hi Wren, hope you're well.")
-    # A cold message with no OWN_VOICE of its own still refuses it.
+    # Changed 2026-10-21: the person's own words outrank the app's default in every kind of
+    # message, a cold one too (their OWN_VOICE has the phrase, and it is their OPENER).
+    assert "house-style" not in rules(compose.validate(text, "message", name="Wren Halloway"))
+    # With no OWN_VOICE and no OPENER of their own, a cold message still refuses it.
+    import re
+    monkeypatch.setattr(compose, "_OWN_VOICE", re.compile(r"(?!x)x"))
+    monkeypatch.setattr(compose, "OPENER", "")
     assert "house-style" in rules(compose.validate(text, "message", name="Wren Halloway"))
 
 
 # ------------------------------------------------------------ 7. one finding, its own name
 
 def test_a_voice_check_finding_is_under_its_own_name_and_an_override_lifts_it(monkeypatch):
-    text = f"{GREET} Would love to hear if you have anything coming up."
+    # A stock phrase that is not the person's own (theirs are lifted in every kind since
+    # 2026-10-21): "would welcome a conversation".
+    text = f"{GREET} I would welcome a conversation if you have anything coming up."
     found = compose.validate(text, "message", name="Wren Halloway")
     # One rule name a person's own tests look for, with the check's own name inside it.
     assert {v.rule for v in found if compose._check_of(v) == "house-style"} == \

@@ -45,7 +45,12 @@ def test_the_workflow_carries_both_fields_into_the_draft():
         text = fh.read()
     props = text.split("const DRAFT_PROPS", 1)[1].split("\n}\n", 1)[0]
     assert "contact_person:" in props and "req_id:" in props
-    assert "- contact_person: the research's named_contact" in text
+    # Updated 2026-10-21: the field contract moved out of the workflow's drafting prompt
+    # into the drafting pack (tools/draft_pack.py), which every drafter is given instead
+    # of reading the profile and the guides for itself. The rule is the same; it is read
+    # from the pack the drafter actually sees.
+    import draft_pack
+    assert "- contact_person: the research's named_contact" in draft_pack.static_pack()
 
 
 def test_a_named_contact_and_the_requisition_reach_the_row():

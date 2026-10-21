@@ -1622,7 +1622,9 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     rows = [r for r in threads_for(threads, cid) if _direction(r) == "out"]
     if rows:
         raise ValueError(f"{contact.get('name') or cid} already has a message logged on "
-                         f"{rows[-1].get('date')}: nothing to record")
+                         f"{rows[-1].get('date')}: a later message is logged with "
+                         f"state.py nudge {cid} (a chase after silence) or state.py message "
+                         f"{cid} (a reply, or anything else), with its words")
     words_needed()
     if channel == "connection" and outside and body:
         scenario = "connection_note"
@@ -1653,6 +1655,100 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     contact["next_action_due"] = add_business_days(day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
     _drop_draft(cid)
     return row
+
+
+def _same_words_sent(a: str, b: str) -> bool:
+    return " ".join(str(a or "").lower().split()) == " ".join(str(b or "").lower().split())
+
+
+FOLLOW_UP_KINDS = ("nudge", "message")
+
+
+def followed_up(contacts, threads, contact_id, today, text="", date=None, channel="",
+                subject="", kind="message") -> dict:
+    """Record a later message to someone already written to: a nudge after silence
+    (`kind="nudge"`), or any other message in the thread (`kind="message"`: a reply to them,
+    a thank-you, the first words after they accepted a request that carried none). The
+    words are required, as for `sent`. `state.py sent` refused every one of these ("already
+    has a message logged"), and a day's 62 follow-ups were added to the threads file by hand
+    (2026-10-21).
+
+    Returns {"row", "said"}: the message row, and a line for anything worth telling the
+    person (a second nudge, which the rules say never to send, is logged and said). Raises
+    ValueError for a contact not in the book, one nothing has been logged to yet (that is
+    `sent`), a nudge where they spoke last (a reply is owed, not a nudge), a message with no
+    words, and a true duplicate: the same words to the same person on the same day.
+    Both lists change in place; the caller saves them."""
+    if kind not in FOLLOW_UP_KINDS:
+        raise ValueError(f"kind is one of {', '.join(FOLLOW_UP_KINDS)}, not {kind!r}")
+    day = _need_date(date or today, "date")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    name = contact.get("name") or cid
+    body = _paragraphs(text)
+    if not body:
+        raise ValueError("the words that went are needed, so this message can teach what "
+                         "works: --text-file <file> with the message as sent, or --draft")
+    rows = [r for r in threads_for(threads, cid) if _direction(r)]
+    outs = [r for r in rows if _direction(r) == "out" and not is_withdrawal(r)]
+    if not outs:
+        raise ValueError(f"nothing is logged as sent to {name} yet: the first message is "
+                         f"state.py sent {cid}")
+    for r in outs:
+        if (str(r.get("date") or "") == day.isoformat()
+                and _same_words_sent(r.get("full_text"), body)):
+            raise ValueError(f"already logged: the same words to {name} on {day.isoformat()}")
+    said = [r for r in rows if said_something(r)]
+    they_last = bool(said) and _direction(said[-1]) == "in"
+    spoke = [r for r in outs if not is_bare_request(r)]
+    if kind == "nudge" and they_last:
+        raise ValueError(f"{name} wrote last ({said[-1].get('date')}): a reply is owed, not a "
+                         f"nudge. Log it with state.py message {cid}")
+    if they_last:
+        scenario = "reply"
+    elif not spoke:
+        scenario = "first_message"       # after a request that said nothing
+    else:
+        # A second message with no reply between is a chase, whatever the command: the
+        # nudge count (owed, what_works) reads it as one.
+        scenario = "nudge"
+    last_out = outs[-1]
+    accepted = any(is_acceptance(r) for r in rows)
+    chan = str(channel or "").strip().lower()
+    if not chan:
+        chan = channel_of(last_out) or channel_of(contact) or "message"
+        if chan == "connection" and (accepted or scenario != "first_message"):
+            chan = "message"             # once connected, a message, never another request
+    note = ""
+    if scenario == "nudge":
+        before = max(_trailing_outbound(rows), 1) - 1
+        if before >= schema.MAX_NUDGES:
+            note = (f"that is nudge {before + 1} to {name}; the rule is {schema.MAX_NUDGES}. "
+                    "Logged because it went; nothing more goes until they reply")
+    summary = {"nudge": f"Nudge sent ({chan})", "reply": f"Reply sent ({chan})",
+               "first_message": f"First {chan} sent, after they accepted"}[scenario]
+    row = {"contact_id": cid, "date": day.isoformat(), "direction": "out", "channel": chan,
+           "scenario": scenario, "summary": summary, "full_text": body,
+           "subject": " ".join(str(subject or "").split())}
+    threads.append(row)
+    stored = str(contact.get("status") or "").strip()
+    if stored in DERIVABLE or stored in ("", "connected_no_reply", "gone_cold"):
+        contact["status"] = derive_status(threads_for(threads, cid))
+    if not str(contact.get("first_contacted") or "").strip():
+        contact["first_contacted"] = day.isoformat()
+    due = add_business_days(day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+    if scenario == "nudge":
+        contact["next_action"] = ("Nudged: nothing more unless they reply. If still silent by "
+                                  f"the date, close it: state.py set {cid} --status gone_cold")
+    elif str(contact.get("status") or "") in DERIVABLE:
+        contact["next_action"] = "One nudge if no reply"
+    waiting = DERIVABLE | {"connected_no_reply"}
+    contact["next_action_due"] = due if str(contact.get("status") or "") in waiting \
+        else contact.get("next_action_due", "")
+    _drop_draft(cid)
+    return {"row": row, "said": note}
 
 
 def _drop_draft(contact_id: str) -> bool:
@@ -2068,6 +2164,75 @@ def _cli_sent(argv) -> int:
     return 0 if done else 1
 
 
+def _cli_followed_up(argv, kind) -> int:
+    ap = argparse.ArgumentParser(
+        prog=f"state.py {kind}",
+        description=("Record a nudge that went: a chase after silence, with its words."
+                     if kind == "nudge" else
+                     "Record a later message that went (a reply, a thank-you, the first words "
+                     "after they accepted), with its words."))
+    ap.add_argument("contact_ids", nargs="+")
+    ap.add_argument("--text-file", default="", help="the message as sent, with any edits")
+    ap.add_argument("--texts", default="", metavar="FILE.json",
+                    help="several at once: {\"<contact_id>\": \"<the words as sent>\", ...}")
+    ap.add_argument("--draft", action="store_true",
+                    help="it went exactly as drafted: log each one's draft.md")
+    ap.add_argument("--date", default="", help="the day it went (default today)")
+    ap.add_argument("--channel", default="",
+                    choices=("", "message", "connection", "inmail", "email", "intro"),
+                    help="default: the thread's own; a message once they are connected")
+    ap.add_argument("--subject", default="")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    if a.text_file and len(a.contact_ids) > 1:
+        print(f"{kind}: --text-file is one person's message; name one contact, or use --texts")
+        return 1
+    texts = {}
+    if a.texts:
+        import json
+        with open(a.texts, encoding="utf-8") as fh:
+            texts = {str(k): str(v) for k, v in (json.load(fh) or {}).items()}
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    done = 0
+    for cid in a.contact_ids:
+        before = None
+        if a.text_file:
+            with open(a.text_file, encoding="utf-8") as fh:
+                text = fh.read()
+            before = _draft_of(cid)
+        elif cid in texts:
+            text, before = texts[cid], _draft_of(cid)
+        elif a.draft:
+            text = _draft_of(cid)
+            if text is None:
+                print(f"  not recorded: {cid} has no draft to log")
+                continue
+        else:
+            text = ""
+        try:
+            got = followed_up(contacts, threads, cid, a.today, text=text, date=a.date or None,
+                              channel=a.channel, subject=a.subject, kind=kind)
+        except ValueError as e:
+            print(f"  not recorded: {cid}: {e}")
+            continue
+        if before is not None:
+            _learn_edit(cid, text, draft=before)
+        done += 1
+        row = got["row"]
+        after = (already_contacted(contacts, contact_id=cid) or {}).get("next_action", "")
+        print(f"  {cid}: {row['summary'].lower()} on {row['date']}"
+              + (f"; next: {after}" if after else ""))
+        if got["said"]:
+            print(f"    {got['said']}")
+    if done:
+        save_threads(threads, a.threads)
+        save_contacts(contacts, a.contacts)
+    print(f"{kind}: {done} recorded")
+    return 0 if done else 1
+
+
 def _cli_inmail_credits(argv) -> int:
     ap = argparse.ArgumentParser(
         prog="state.py inmail-credits",
@@ -2103,9 +2268,7 @@ def _draft_of(cid: str) -> str | None:
             draft = fh.read()
     except (ImportError, OSError, ValueError):
         return None
-    if draft.startswith(reading.WAITS_ON_A_READ):
-        draft = draft.split("\n\n", 1)[-1]
-    return draft
+    return reading.note_body(draft)
 
 
 def _learn_edit(cid: str, sent_text: str, draft: str | None = None) -> None:
@@ -2654,7 +2817,19 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
         "inmail_words": schema.LIMITS["inmail_words"],
         "note": note,
         "inmail_note": "" if inmail_limit else NO_INMAIL,
+        "connections_limit_source": schema.weekly_cap_source(),
     }
+
+
+def budget_line(b: dict) -> str:
+    """The BUDGET line `state.py` prints: the requests left this week and today, whose cap
+    that is (the app's planning cap unless the person set their own) and the setting that
+    changes it, and the InMail credits left. "50 left" read as LinkedIn's own limit, and the
+    one way to change it was a setting nothing named (2026-10-21)."""
+    return (f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "
+            f"this week ({b['connections_left_today']} of them today); the "
+            f"{b['connections_limit']} is {b.get('connections_limit_source') or schema.weekly_cap_source()}. "
+            f"InMail {b['inmails_left']} left this month ({b['inmails_source']})")
 
 
 # ---------------------------------------------------------------- CLI
@@ -2668,6 +2843,8 @@ def main(argv=None) -> int:
         return _cli_sent(argv[1:])
     if argv[:1] == ["text"]:
         return _cli_text(argv[1:])
+    if argv[:1] in (["nudge"], ["message"]):
+        return _cli_followed_up(argv[1:], argv[0])
     if argv[:1] == ["resent"]:
         return _cli_resent(argv[1:])
     if argv[:1] == ["unsend"]:
@@ -2721,9 +2898,7 @@ def main(argv=None) -> int:
         print("\n" + "\n".join(waiting))
 
     b = platform_budget(contacts, threads, a.today)
-    print(f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "
-          f"this week ({b['connections_left_today']} of them today), "
-          f"InMail {b['inmails_left']} left this month ({b['inmails_source']})")
+    print(budget_line(b))
     if b["note"]:
         print("  " + b["note"])
 

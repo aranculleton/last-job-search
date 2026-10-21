@@ -12,7 +12,9 @@ What is owed, what is due, what has gone cold.
 3. `state.owed(contacts, threads, today)` returns both kinds of debt: threads
    where they replied and we have not, and threads where we are past the
    follow-up window with no nudge sent.
-4. `state.platform_budget()` for the week's remaining capacity.
+4. `state.platform_budget()` for the week's remaining capacity. Its 50 a week is the app's
+   planning cap, not LinkedIn's (`CONNECTIONS_PER_WEEK` in `profile/networking.py` changes it),
+   and the BUDGET line `state.py` prints says so.
 5. `state.link_to_applications()` to show where a thread and an application at
    the same employer relate.
 6. `python3 tools/network/own_profile.py due`: it prints a line only when a look at their own
@@ -57,7 +59,10 @@ progress can be pointed at a live application.
 
 Finish with the platform budget and the single highest-value next action.
 
-A message the person says went, a first note or a nudge, is recorded the way `/network`
-says under "When they say a note went": the outbound row with its full text, then the
-contact's `status`, `next_action` and `next_action_due`. After a nudge, which is the only
+A message the person says went is recorded by command, with its words: a first note with
+`python3 tools/network/state.py sent <contact_id> --draft` (or `--text-file`), a nudge with
+`state.py nudge <contact_id> --text-file <file>`, and any other later message with
+`state.py message <contact_id> --text-file <file>` (`--texts <file.json>` for several at once).
+Each writes the outbound row with its full text and the contact's `status`, `next_action` and
+`next_action_due`, and the same words to the same person on one day are never logged twice. After a nudge, which is the only
 one, `next_action` is to close the thread out if they stay silent, not another nudge.

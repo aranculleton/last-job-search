@@ -29,8 +29,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
    to answer, and `reply.following_up_is_honest(rows, today)` says whether an apology
    for the gap is owed.
 
-4. **Read what they have taught it**: `python3 tools/learned.py brief messages`; its rules
-   outrank the guidance's defaults. For a nudge, also `python3 tools/what_works.py brief
+4. **Read what they have taught it**: `python3 tools/learned.py brief messages --channel
+   <channel> --reader <reader>`: the messages they approved first, then the rules, which
+   outrank the guidance's defaults. A reply they approve is kept with `learned.py approve`. For a nudge, also `python3 tools/what_works.py brief
    messages --channel <channel>`: the follow-ups that drew replies are the shape to match.
    **Get the guidance.** `reply.guidance()` gives the move, the target length
    derived from their message, what not to do, and any action owed outside the
@@ -48,7 +49,10 @@ Usage: `/reply <contact name or company>`, then paste their message.
    they say it went, dated the day it went: a draft is not a message, and logging it early
    makes the thread read as waiting on them before anything was sent (the same rule
    `/network` keeps for a first note). Every row carries its full text in `full_text`: a
-   message logged without its text can never become an example of what works.
+   message logged without its text can never become an example of what works. Ours is logged
+   by command, with the words as sent: `python3 tools/network/state.py message <contact_id>
+   --text-file <file>` (a nudge after silence: `state.py nudge <contact_id> --text-file
+   <file>`); `--texts <file.json>` takes several at once.
 
    The log decides three statuses by itself (`state.DERIVABLE`: `not_contacted`,
    `awaiting_reply`, `replied_needs_response`). Everything else is stored on the contact

@@ -59,6 +59,23 @@ snapshot if the brief's directory is still being edited, regenerate the text lay
 PDF yourself rather than trusting a dump next to it, and name the version you audited in
 the verdict.
 
+## A drafting batch: one packet, and only the judgment
+
+In the `draft-applications` workflow you read no file. The drafter returned a claim map
+(each sentence and the ids it rests on), and `tools/draft_audit.py` has already run
+everything above that code can run: every rule in point 3, the person's answers in point
+5, rule 9 against every letter sent and the rest of the batch, and, for points 1 and 2,
+each sentence's numbers, skills, verb, tense and qualifiers against the evidence it cites,
+Reserve Experience, certifications, and every employer fact against the research. You are
+called only when it raised something it cannot settle. `python3 tools/draft_audit.py
+packet <round_dir> <slug>` prints all you need: the draft, each sentence beside its
+evidence, the research facts with their cautions, the flags, the rules code cannot check,
+and the md5 of the version you audit (the fixed version: that one). Rule on every flag,
+read every sentence against its evidence, and write `model_audit_<slug>.json` as the packet
+describes; `python3 tools/stage_picks.py audit <round_dir> --only <slug>` re-checks your
+corrected draft and accepts your verdict only when no rule is still broken and every flag
+left has your ruling.
+
 ## Someone else's document
 
 When the brief says the document is for someone other than the candidate, nothing in the

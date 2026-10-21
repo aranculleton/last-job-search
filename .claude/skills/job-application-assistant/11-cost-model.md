@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.5
+framework_version: 1.1.6
 ---
 
 # Cost Model for the Application Lifecycle
@@ -23,10 +23,44 @@ Measured on real runs in this repo:
 | **Mechanical screen** | **0** | every extraction | `tools/score_posting.py`, over EXTRACTED FIELDS. Cuts on stated facts, flags judgments. |
 | **Full weighted scoring** | **~19k** | postings the estimate promoted | Was ~70k before `profile/12-scoring-brief.md`. Still the dominant cost. Ration it. |
 | Adversarial verify | ~40k | postings scoring 70+ | Only where it could change a decision. |
-| Drafting resume + letter | ~30k | per application | Mostly the drafter's own context. |
-| **Reviewers** | **~110k each** | 2 per application | Second-largest cost. Worth it: has caught real errors. |
+| Drafting resume + letter | see below | per application | One call from the drafting pack (`tools/draft_pack.py`). |
+| Grounding audit | 0, then one model call if flagged | per application | Code first (`tools/draft_audit.py`); the model reads one packet. |
 
-The two dominant costs are full scoring and reviewers. Everything below follows from that.
+The dominant cost is full scoring. Drafting was the other, until it was measured.
+
+## Drafting a batch: what it cost, and what changed
+
+Measured on one batch of ten postings at eight employers (2026-10-21, as the Workflow tool
+reported it): research agents 147k to 213k tokens each; drafters about 200k to 230k with 44
+to 46 tool calls and 7 to 8 minutes each; auditors about the same again. Roughly 550k to
+650k tokens an application. Most of it was the same reading done by every agent: each
+drafter read about 35k tokens of the same static files (the profile, `03-writing-style.md`,
+`06-cover-letter-templates.md`, the positioning brief, `tools/bridges.py`, the field
+contract, `render_application.build()`, two letters) and carried them through every tool
+call, and each auditor re-read most of it and re-ran the checks the drafter had just run.
+
+What runs now (RUNBOOK.md step 2):
+
+| Stage | What it reads | Model |
+|---|---|---|
+| Research | the employer's own pages (unchanged; a cheaper fetch script is to replace it) | sonnet |
+| Draft | the pack (a few thousand tokens, the same bytes for the whole batch, so cached), the posting, the research facts: one call, no file reads, at most two repairs from the code audit's failures | strongest |
+| Code audit | the claim map against the evidence, and every existing check | none |
+| Model audit | one packet, under 10k tokens, and only for a draft the code audit flagged | strongest |
+| Outreach body | the letter's two paragraphs, only when the person wants a note written | strongest |
+
+Static reading per drafter, from the files' own sizes (characters / 4, an approximation):
+the example person's was about 16k tokens of files and is a 3k pack. A long profile makes
+a longer pack (every fact and rule is kept; nothing is cut to meet the 6k target), but the
+same profile made every drafter's reading longer by more. The auditor's reading (about 13k
+for the example person, before the posting and the draft) is gone: the code audit costs
+nothing, and the packet, about 3k for the example person, is read only when a draft is
+flagged. **A live before-and-after of tokens and time has not been run**: the next
+batch through the Workflow tool is that measurement, recorded with `tools/draft_cost.py`.
+
+What did not get cheaper, on purpose: drafting and the model audit stay on the strongest
+model, and every check the auditor ran still runs (the code audit's, or the model's when
+code cannot settle it). `verify_batch.sh` and the PDF read are unchanged.
 
 **Two screens, and they are not alternatives.** The table lists both because both run, on
 different inputs at different points, and confusing them wastes a round.
@@ -76,7 +110,7 @@ error is expensive does.
 | Adversarial verification | **sonnet**, `effort: high` | Needs scepticism more than raw capability; the prompt supplies the adversarial frame. |
 | Company research and targeting | **sonnet** | Fetching, reading and summarizing. |
 | **Grounding and rules audit** | **default (the session's own)** | Where the expensive mistakes hide. This agent catches a metric attached to the wrong model, a "most recently" that contradicts the dates printed below it, and a superseded corporate strategy presented as current. Never downgrade it. |
-| Drafting | **default** | The main loop, holding the whole context. |
+| Drafting | **default** | One call per posting, from the drafting pack. Never downgraded. |
 
 In a Workflow script this is `opts.model` and `opts.effort` per `agent()` call. Omit both to
 inherit the session model when unsure: an inherited default is a smaller mistake than a wrong
@@ -105,7 +139,9 @@ These look like savings and are not:
 
 - **The second reviewer.** Two parallel reviewers with different jobs cost the same as one doing
   both serially, and catch more, because the grounding audit is not competing with a research pass
-  for the same context.
+  for the same context. In a batch the grounding half is now code first: what the reviewer
+  checked mechanically runs in `tools/draft_audit.py`, and the model reads only what code
+  flags. That cut the re-reading, never a check.
 - **Independent verification of company claims.** Rule 5 in `03-writing-style.md`. Exercised, it
   keeps catching things: a stale strategy, a superseded plan, snippet figures that disagree
   with the live page.

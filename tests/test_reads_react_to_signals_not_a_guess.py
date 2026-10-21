@@ -225,7 +225,9 @@ def test_next_names_who_to_read_and_says_done_at_the_end(here, monkeypatch, caps
     reading.shortlist(["r1"], datetime.date.today(), contacts=people, sends_left=10)
     assert reading.main(["next", "--mode", "card"]) == reading.EXIT["ok"]
     out = capsys.readouterr().out
-    assert "Wren Allard" in out and "wren-allard-example" in out and "nothing scrolled" in out
+    # Since 2026-10-21 every read scrolls to the very end first: Experience and Education
+    # are on the page only then.
+    assert "Wren Allard" in out and "wren-allard-example" in out and "very end" in out
     _profile_load("r1", datetime.datetime.now())
     assert reading.main(["next"]) == reading.EXIT["done"]
     assert "done: nothing left to read" in capsys.readouterr().out
