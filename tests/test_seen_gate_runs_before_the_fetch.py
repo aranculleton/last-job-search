@@ -54,11 +54,18 @@ def seen_file(entries):
 
 
 class TestTheGateIsTheThrottlesOwnDecision(unittest.TestCase):
-    def test_prefilter_imports_ruled_out_rather_than_restating_it(self):
-        src = (ROOT / "tools" / "prefilter.py").read_text(encoding="utf-8")
-        self.assertIn("from throttle import ruled_out", src,
-                      "a second implementation of the cross-run gate would drift, "
-                      "and it drifts towards dropping roles that should surface")
+    def test_prefilter_asks_ruled_out_rather_than_restating_it(self):
+        # A second implementation of the cross-run gate would drift, and it drifts
+        # towards dropping roles that should surface. Whatever throttle.ruled_out says
+        # is what the prefilter drops: stand in a ruling of its own and read it back.
+        url = "https://example.com/jobs/77"
+        path = seen_file({url: {"url": url, "status": "new"}})
+        self.addCleanup(os.unlink, path)
+        from unittest import mock
+        with mock.patch.object(T, "ruled_out",
+                               lambda entries: ({T.norm(url): "the throttle's own ruling"}, {})):
+            self.assertEqual("the throttle's own ruling", P.already_ruled_out(path)(posting(url)))
+        self.assertEqual("", P.already_ruled_out(path)(posting(url)))
 
     def test_an_excluded_posting_is_dropped_before_hydrate(self):
         url = "https://example.com/jobs/1"
@@ -162,22 +169,31 @@ class TestAgainstTheRealSeenFile(unittest.TestCase):
                            "changed shape or the matching broke")
 
 
+def _stage(calls, name):
+    return next(cmd for cmd, _ in calls if cmd[1].endswith(name))
+
+
+def test_run_round_passes_seen_to_prefilter_by_default(drive_round):
+    # Read off what the round hands the prefilter, not off how run_round.py spells it.
+    calls, _ = drive_round()
+    assert "--seen" in _stage(calls, "prefilter.py")
+    assert "--keep-ruled-out" not in _stage(calls, "prefilter.py")
+    # There must be a way to re-evaluate everything previously excluded, for when the
+    # scoring rules change, and the seen file is still read for first sightings.
+    calls, _ = drive_round("--no-seen-read")
+    pre = _stage(calls, "prefilter.py")
+    assert "--seen" in pre and "--keep-ruled-out" in pre
+    assert "--keep-ruled-out" in _stage(calls, "throttle.py")
+
+
+def test_the_escape_hatch_reaches_an_expanded_round(drive_round):
+    """--expand re-invokes this script; a flag it drops is a flag that lies."""
+    _, spawned = drive_round("--expand", "--no-seen-read")
+    (wider,) = spawned
+    assert "--no-seen-read" in wider and "--round" in wider
+
+
 class TestTheRoundWiresItUp(unittest.TestCase):
-    def test_run_round_passes_seen_to_prefilter_by_default(self):
-        src = (ROOT / "tools" / "run_round.py").read_text(encoding="utf-8")
-        self.assertIn('prefilter += ["--seen"', src)
-        self.assertIn("no_seen_read", src,
-                      "there must be a way to re-evaluate everything previously "
-                      "excluded, for when the scoring rules change")
-
-    def test_the_escape_hatch_reaches_an_expanded_round(self):
-        """--expand re-invokes this script; a flag it drops is a flag that lies."""
-        src = (ROOT / "tools" / "run_round.py").read_text(encoding="utf-8")
-        # The widened round's call, which now also clears the bodies it handed on
-        # after it returns, so it is no longer the return statement itself.
-        expansion = src.split("subprocess.call(", 1)[1]
-        self.assertIn('"--no-seen-read"', expansion)
-
     def test_prefilter_accepts_the_flag(self):
         r = subprocess.run([sys.executable, str(ROOT / "tools" / "prefilter.py"), "--help"],
                            capture_output=True, text=True)
@@ -194,3 +210,15 @@ def _no_rescreen(monkeypatch):
     """These pin how a ruling holds. Whether a better screen re-judges it is
     tests/test_build_versions.py's, so the app's own re-run versions are held off."""
     monkeypatch.setenv("LJS_RESCREEN", "off")
+
+
+def test_the_rounds_own_seen_file_and_tracker_reach_every_stage_that_reads_them(drive_round):
+    """A replayed round, or one run with --no-seen-read, judged careers-site pages against
+    the repo's seen file, and fit read the repo's tracker, whatever the round was given."""
+    calls, _ = drive_round("--seen", "/x/seen.json", "--tracker", "/x/tracker.csv",
+                           "--no-seen-read")
+    by = {os.path.basename(cmd[1]): cmd for cmd, _ in calls}
+    scrape, fit = by["scrape_wide.py"], by["fit.py"]
+    assert scrape[scrape.index("--seen") + 1] == "/x/seen.json"
+    assert "--keep-ruled-out" in scrape
+    assert fit[fit.index("--tracker") + 1] == "/x/tracker.csv"

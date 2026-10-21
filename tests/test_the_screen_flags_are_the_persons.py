@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import importlib
 import os
-import re
 import sys
 from unittest import mock
 
@@ -52,10 +51,17 @@ def _rule(name):
     return next(r for r in discovery.DISQUALIFIERS if r.name == name)
 
 
-def test_the_revenue_reason_is_the_persons():
+def test_the_revenue_reason_is_the_persons(monkeypatch):
     assert "dressed as technical" in _rule("revenue_role").reason      # the example's own
-    src = open(os.path.join(ROOT, "tools", "network", "discovery.py"), encoding="utf-8").read()
-    default = re.search(r'"NOT_HIRING_REASON",\s*"([^"]+)"', src).group(1)
+    # A profile that sets none gets the app's default, which names no field: read off
+    # the rule the tool builds without the setting, not off its source.
+    monkeypatch.delattr(person.module("networking"), "NOT_HIRING_REASON")
+    try:
+        fresh = importlib.reload(discovery)
+        default = next(r for r in fresh.DISQUALIFIERS if r.name == "revenue_role").reason
+    finally:
+        monkeypatch.undo()
+        importlib.reload(discovery)
     assert "technical" not in default and "your function" in default
 
 
@@ -70,3 +76,16 @@ def test_a_nurse_can_take_their_own_job_off_the_spam_list():
             assert not rule.pattern.search(text)
         finally:
             importlib.reload(discovery)
+
+
+def test_the_extracted_screen_cuts_pay_where_the_free_screen_does():
+    # The extracted-fields screen cut at the walk-away floor, while the free screen and
+    # CLAUDE.md cut only below the cut line and rank the rest: a role the free screen
+    # kept was dropped on the model path. The example's cut line is 32,000 and its
+    # floor 42,000.
+    under_floor = score_posting.screen(dict(RECORD, salary_max=38_000))
+    assert under_floor["score_it"] and not under_floor["cuts"], under_floor
+    assert any("38,000" in f and "never a cut" in f for f in under_floor["flags"])
+    below_line = score_posting.screen(dict(RECORD, salary_max=30_000))
+    assert not below_line["score_it"] and "30,000" in below_line["cuts"][0]
+    assert score_posting.screen(dict(RECORD, salary_max=50_000))["score_it"]

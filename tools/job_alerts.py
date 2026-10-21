@@ -41,9 +41,7 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
-import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -56,7 +54,7 @@ SKILL = "linkedin-search"
 # of its own ("analyst-2024000-programme-4012345678"), and the first run is not
 # the id.
 JOB_LINK = re.compile(r"linkedin\.com/(?:comm/)?jobs/view/(?:[\w%.-]*-)?(\d{6,})(?=[/?#&\"'<>\s]|$)", re.I)
-BODY_CAP = 20_000
+from hydrate import BODY_CAP  # noqa: E402  the one cap on a posting's body
 # Few and gentle: an alert batch is tens of postings, not thousands.
 WORKERS = 3
 
@@ -111,18 +109,15 @@ def detail(jid: str, timeout: int = 60) -> tuple[dict | None, str | None]:
     """LinkedIn's posting page for one id, through the linkedin-search CLI."""
     try:
         cli = portals.cli(SKILL)
-        with tempfile.TemporaryFile("w+", encoding="utf-8") as fh:   # a file, not a pipe: see scrape_wide.run
-            p = subprocess.run(["node", "--no-warnings", cli, "detail", jid, "--format", "json"],
-                               stdout=fh, stderr=subprocess.PIPE, text=True, timeout=timeout,
-                               env=dict(os.environ, NODE_USE_ENV_PROXY="1"))
-            fh.seek(0)
-            raw = fh.read()
-        if p.returncode != 0 or not raw.strip():
-            err = (p.stderr or "").strip().splitlines()
-            return None, f"detail exit {p.returncode}: {err[-1][:120] if err else 'no output'}"
-        return json.loads(raw), None
     except Exception as e:
         return None, f"{type(e).__name__}: {str(e)[:120]}"
+    # portals.run_cli: stdout to a file, and a refusal kept wherever stderr says it.
+    d, err = portals.run_cli(["node", "--no-warnings", cli, "detail", jid, "--format", "json"],
+                             timeout=timeout,
+                             empty=lambda d: not (d.get("description") or d.get("title")))
+    if err:
+        return None, f"detail {err}"
+    return (d, None) if isinstance(d, dict) else (None, "detail returned no posting")
 
 
 def row(jid: str, date: str, d: dict) -> dict:

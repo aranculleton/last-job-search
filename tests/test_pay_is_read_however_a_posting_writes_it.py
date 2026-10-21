@@ -64,3 +64,30 @@ def test_what_is_not_a_band_in_their_currency_is_not_read(market, text):
 
 def test_a_single_labelled_figure_still_reads_and_a_401k_is_not_a_band(market):
     assert T.salary_range("Salary: $105,000 plus a 401k match.")[:2] == (105_000, 105_000)
+
+
+# The band for their own place is chosen by the one place matcher the residence cut
+# uses. The pay reader kept a copy that matched a metro town inside any word and the
+# home country only in the case the profile wrote it, so with a metro holding Sale and
+# Bury, a "wholesale" desk and a Canterbury office both read as home, and a band
+# marked "(UK remote)" did not. The example person lives in Greater Manchester.
+@pytest.mark.parametrize("text,band", [
+    # Neither band is theirs: the highest, as for any posting with no home band.
+    ("Salary: £30,000 - £33,000 on our wholesale desk; £50,000 - £60,000 in London.",
+     (50_000, 60_000)),
+    ("Salary: £30,000 - £33,000 (Canterbury); £50,000 - £60,000 (London).",
+     (50_000, 60_000)),
+    # Their country, however the posting cases it.
+    ("Salary: £70,000 - £80,000 (US remote); £50,000 - £60,000 (UK remote).",
+     (50_000, 60_000)),
+    # Their own metro, written as a town on its own, still wins.
+    ("Salary: £50,000 - £60,000 (London); £40,000 - £45,000 (Sale).", (40_000, 45_000)),
+])
+def test_their_own_place_is_read_as_a_place_not_inside_a_word(text, band):
+    assert T.salary_range(text)[:2] == band
+
+
+def test_the_pay_reader_and_the_residence_cut_agree_on_home():
+    for part in ("(Wholesale team, London)", "(Canterbury)", "remote within the UK",
+                 "(Bury)", "Manchester, NH"):
+        assert T._home(part) == T._names_home(part), part

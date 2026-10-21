@@ -22,6 +22,35 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **A whole round on invented postings is pinned in the tests**, from the job boards to the
+  shortlist, so a change that moves which postings a round finds or how they rank fails
+  until it is named.
+- **`round.log` records each stage's start, end and duration**, and one line for every
+  request to a board with a crawl delay, so a slow round says where its time went.
+- **Hidden markup, invisible characters and tag characters are taken out of posting
+  bodies** before anything reads them. A requirement split by an invisible character is
+  now read. (Adapted from an MIT-licensed project's posting guard, credited in the code.)
+- **One person in two rows of the contact book is raised, never merged.** A nickname, an
+  initial, a reversed name or a one-letter typo is flagged by `state.py` and before
+  discovery adds a row.
+- **Two weeks of silence after an interview shows on the due list**, asking for a status
+  note or the outcome, never a nudge.
+- **`/upskill` says which gaps to learn and which to show evidence for**, and counts what
+  stopped the postings you skipped.
+- **Mock interview feedback quotes your own words.** Each note quotes a run of what you
+  said, checked against your answer before it is shown, with a Strong, Solid or Gap band.
+  It never gives a score or a hiring verdict (`interview_pack.py feedback`).
+- **The pack lists where your resume invites a push**: a short stay, a gap between jobs, or
+  a title the role may doubt. Each comes with the likely follow-up and the honest framing.
+- **Every pack says it is for before and after an interview, never during one.** Claude
+  never records or transcribes an interview.
+- **The resume's text layer is checked against its draft** (`verify_pdf.py --roundtrip`, run
+  by `verify_batch.sh`). Every line the draft put on the page must be there, in order, and
+  any line that is missing or out of order is named.
+- **A letter that copies the posting is flagged**: six words or more of it in the resume
+  summary or the letter.
+- **A keyword report per application** (`verify_pdf.py --keywords`): on the page, held but
+  not placed, and not held. It reports only and never adds anything.
 - **Tell each employer your own place.** If you tell one employer you are somewhere other
   than your profile says, record it once: `python3 tools/told.py "<Employer>" "<place>"`.
   That employer's interview pack then says what it heard, drops the moved-recently small
@@ -54,6 +83,42 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **A round is faster, and finds and ranks the same postings.**
+  - Employer boards are read while the job boards are searched, not after.
+  - The health check asks every board at once.
+  - A board with a crawl delay fetches its postings in a queue of its own, still its
+    delay apart, and the fetch says how far it has got.
+  - Measured offline on the pinned round: the scrape went from 18.8 to 10.8 seconds, and
+    the whole simulated round from about 77 to 64 seconds.
+  - Estimated for a real round: about 34 minutes down to 27 to 29. Real boards have not
+    been timed.
+  - Two orders change: postings tied on every score now always come out in the same order,
+    and one posting found under two addresses is one row.
+- **A region beside "remote" is judged by whether it takes in your country.** For someone in
+  the UK, "Remote - North America" now fails and "Remote - EMEA" passes. A home the region
+  table cannot place is still flagged for a look.
+- **The screen and the score share one list of degrees** (MBA, advanced, graduate and
+  doctoral degrees, M.S.). "U.S.", "Ph.D." or "yrs." no longer ends a sentence. An MBA or a
+  graduate degree required now costs the score it should.
+- **"(Hybrid)" and "Sr." versions of a posting are the same posting**, for its age and for a
+  ruling on it.
+- **A posting's sentences are split once, not fifteen times.** Results are unchanged.
+- **"What has worked" reports a difference only when it is real**: Fisher's exact test, at
+  least 20 in each group, corrected for every comparison made. In simulation the old rule
+  called noise "clear" a third to a half of the time; the new one almost never does. A
+  route's reply rate now moves a person's score only on that evidence.
+- **`/gmail-sync` treats email as untrusted data** and uses read-only tools. It reads a
+  rejection before an offer, ignores newsletters and alerts, records a hiring freeze as a
+  hold, notes a reply owed, and quotes the sentence behind each change.
+- **`/html-report` shows interview rates with their numbers** by channel and sector, and
+  says "too few to compare" where they are.
+- **The tracker's status words live in one place.** An older "interviewing" spelling reads
+  as a live interview everywhere.
+- **The pack chooses stories across the whole plan.** No two questions share a story when
+  another fits nearly as well. A later round prefers a story not yet told at that employer,
+  and a story you mapped is never moved.
+- **An answer far over its time, or one that says "we" where they asked what you did, is
+  flagged** in the pack's and the call prep's checks.
 - **A release rewrites far fewer call preps.** It rebuilds only the preps for live
   conversations: someone who replied, a call booked or a referral in flight. Before, every
   release rewrote all of them: 220 in one repo, twice when two chats synced, though most
@@ -73,6 +138,51 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The pay band for your own place is read with the one place matcher.** "Wholesale" is no
+  longer Sale, and "(UK remote)" is home.
+- **The extracted-fields screen cuts pay only below your cut line**, as the free screen
+  does. A range under your floor is ranked with a flag.
+- **The screen's cut wording is defined once**, so eligibility, internal-only and language
+  rulings rest on their own settings. Pay rulings in C$, A$, R$ or kr are read back.
+- **Careers-site pages honour a round's own seen file and `--no-seen-read`**, and fit reads
+  the round's own tracker.
+- **The throttle reads each state file once**, and refuses a contact book with merge
+  conflict markers.
+- **The location gate reads other countries written in capitals**, every state CSV is read
+  through one reader, and `seen_jobs.json` is read as UTF-8.
+- **A board's refusal is recorded** when a detail fetch or a job alert is refused.
+- **An out-of-office reply is not a reply.** It no longer makes a contact warm or owed an
+  answer, and the one nudge waits until two working days after they are back. "No longer
+  with the company" says to close the contact and find who holds the role now.
+- **A message that greets someone other than its recipient is refused**, and no recorded
+  preference lifts that.
+- **An invisible character pasted into a message no longer hides a banned phrase**, a
+  check-in or a name from the checks.
+- **An application's quiet clock starts from the employer's last recorded word**, not the
+  application date. The nudge dates are unchanged.
+- **`/gmail-sync` looks for late replies to applications closed for silence**, and skips
+  an approved change whose row moved since it was shown.
+- **Nothing personal read about a person reaches a pack or a call prep**: their age, family,
+  health, religion, politics or sexuality. A field of work is not personal: "health insurer"
+  stays.
+- **A count must count the same thing.** "12 stores" in the profile no longer grounds
+  "12 clients".
+- **A character the font cannot print, or a font left out of the PDF, stops the render** in
+  plain words. Before, the document was produced with the character missing.
+- **The guides say one thing each, and say what the code does.** Nineteen places where two
+  guides disagreed, or a guide disagreed with the code, now agree with the code:
+  - A claim is grounded when one of the profile's grounding sources carries it (by default
+    the candidate profile, its summary and the bullet library). The candidate profile wins
+    a disagreement, and the disagreement is reported. An older resume, a draft or the chat
+    is never a source.
+  - A board's robots.txt refusal is overridden only on your yes, while you are there, never
+    by a background upgrade.
+  - En dashes are banned in the guides as they are in the checks.
+  - The networking and application follow-up clocks are told apart.
+  - The networking skill says both title searches go first.
+
+  Rules that were written out in several places now live in one, with a pointer from the
+  others. A new test keeps every pointer naming a heading that exists.
 - **The consistency check stops flagging two things that are not clashes.** A posting rule
   ("a range whose maximum is below 100,000 is a cut") is no longer read as a second
   walk-away floor. "Asked directly, state the expiry plainly" is no longer read as

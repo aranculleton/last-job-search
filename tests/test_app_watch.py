@@ -77,7 +77,10 @@ def test_a_pull_request_description_is_checked(tmp_path, monkeypatch):
     assert findings == ["pull request #9: denylist entry 1 (Zorblax Quux)"]
 
 
-def test_the_sync_runs_it_after_every_successful_sync():
-    src = open(os.path.join(ROOT, "tools", "sync_app.py"), encoding="utf-8").read()
-    body = src[src.index("    rc = sync()\n    if rc == 0:"):src.index("def own_tests")]
-    assert "_record_check()" in body and "app_watch()" in body
+def test_the_sync_runs_it_after_every_successful_sync(sync_steps):
+    # Run the sync and read what it did, rather than search its source for the call.
+    rc, steps = sync_steps()
+    assert rc == 0
+    assert steps.index("sync") < steps.index("_record_check") < steps.index("app_watch")
+    rc, steps = sync_steps(sync_rc=1)
+    assert rc == 1 and "app_watch" not in steps and "_record_check" not in steps

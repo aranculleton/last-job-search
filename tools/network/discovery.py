@@ -325,21 +325,6 @@ def _clean(term: str | None) -> str:
     return re.sub(r"\s+", " ", (term or "").strip())
 
 
-def _quote_title(term: str) -> str:
-    """Titles are always quoted. Unquoted, "head of data" matches any profile
-    holding the three words anywhere, which is most of them."""
-    return '"%s"' % _clean(term)
-
-
-def _quote_term(term: str) -> str:
-    """Company and location: quoted only when multi-word, matching brief 3.1's
-    worked example, which leaves a one-word company bare."""
-    t = _clean(term)
-    if not t:
-        return ""
-    return '"%s"' % t if " " in t else t
-
-
 def _title_groups(titles, mode):
     """Two groups of titles, one per query.
 

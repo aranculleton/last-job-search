@@ -12,6 +12,11 @@ Usage: `/reply <contact name or company>`, then paste their message.
    a confidence and the matched evidence. Show the user which scenario and why,
    because a misread scenario produces a confidently wrong reply.
 
+   **When the scenario is `auto_reply`** (an out-of-office, a "no longer with the
+   company"), draft nothing. Log it inbound with scenario `auto_reply` (step 6) and tell
+   the person what `reply.guidance()` gives as the next action: wait until they are back,
+   or close the contact and find who holds the role now. It is not a reply.
+
 3. **Check it is worth continuing.** `reply.should_continue()`. After two
    explicit nos, recommend a warm close instead of a reply. Say so plainly.
    A "not hiring, but happy to chat" is not a no, and a thread at `call_booked` or

@@ -69,3 +69,37 @@ def test_the_command_says_so_instead_of_a_traceback(conflicted, tmp_path):
                        capture_output=True, text=True, env=env, timeout=120)
     assert r.returncode == 1 and "Traceback" not in r.stderr
     assert "network_contacts.csv has unresolved merge-conflict markers" in r.stderr
+
+
+def test_the_throttle_refuses_a_conflicted_contact_book(conflicted):
+    # The throttle read the contact book with its own DictReader and no marker check, so
+    # a warm route or a referral hold could rest on the side of a conflict that lost.
+    for read in (throttle.warm_routes, throttle.pending_outreach, throttle.referral_holds):
+        with pytest.raises(csv_store.Conflicted, match="network_contacts.csv"):
+            read(str(conflicted))
+
+
+def test_a_conflicted_message_log_falls_back_to_the_stored_column(tmp_path, capsys):
+    log = tmp_path / "network_threads.csv"
+    log.write_text("contact_id,direction,date,channel,body\n"
+                   "<<<<<<< ours\n"
+                   "fernhill_haldane,out,2026-08-01,linkedin,hello\n"
+                   "=======\n"
+                   "fernhill_haldane,in,2026-08-05,linkedin,happy to talk\n"
+                   ">>>>>>> theirs\n", encoding="utf-8")
+    rows = [{"contact_id": "fernhill_haldane", "name": "Corwin Haldane",
+             "company": "Fernhill Freight", "status": "awaiting_reply"}]
+    assert throttle._derived_statuses(rows, str(log)) == {}
+    assert "network_threads.csv has unresolved merge-conflict markers" in capsys.readouterr().err
+
+
+def test_a_short_row_reads_its_missing_cells_as_blanks(tmp_path):
+    # Three readers kept their own DictReader, which gives None for a short row's missing
+    # cells; csv_store.read_rows, the one reader, gives blanks.
+    import doc_name
+    import followups
+    path = tmp_path / "job_search_tracker.csv"
+    path.write_text("date,company,role,status,notes\n2026-09-01,Acme\n", encoding="utf-8")
+    for read in (what_works._csv, followups._rows, doc_name.tracker_rows):
+        (row,) = read(str(path))
+        assert row["status"] == "" and row["notes"] == "", read

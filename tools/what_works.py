@@ -19,6 +19,7 @@ so recording a result is all it takes for the next draft to use it.
     python3 tools/what_works.py brief interviews
     python3 tools/what_works.py event --contact <contact_id>
     python3 tools/what_works.py event --company "<employer>"
+    python3 tools/what_works.py rates [--by channel|sector|fit_band|role_type]
 
 - `brief messages` is read before a networking message is drafted: the reply rate,
   any difference clear enough not to be chance, and the messages that drew a
@@ -36,17 +37,19 @@ so recording a result is all it takes for the next draft to use it.
   and the stories that landed. /interview reads it before building a pack.
 - `event` is the one-line audit run when a result arrives (/outcome, a reply logged
   by /reply): what this result had, and what the rates are now.
+- `rates` is the interview rate of each channel, sector, fit band or role type with
+  the number it rests on, as JSON: what /html-report draws, instead of counts.
 
 Small numbers lie, so a difference is reported only when both groups have at
-least `MIN_GROUP` decided cases and the gap is unlikely to be chance (a
-two-proportion test at 95%). Until then it says so, and shows the examples alone.
+least `MIN_GROUP` decided cases and the gap is unlikely to be chance: Fisher's
+exact test, at 5% shared across every comparison the brief made (`clear`). Until
+then it says so, and shows the examples alone.
 Every brief is a few lines: it is read before drafting, so it is kept cheap.
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import functools
 import glob
@@ -73,15 +76,21 @@ REPLY_WAIT_DAYS = 14
 # An application still `applied` after this many days is counted as unanswered:
 # the throttle's own number, which `tools/followups.py` stops chasing at too.
 SILENT_DAYS = throttle.SILENCE_DAYS
-# The smallest group a rate is compared on.
-MIN_GROUP = 8
-# |z| for a difference unlikely to be chance (two-sided, 95%).
+# The smallest group a rate is compared on. Below about twenty decided cases a
+# group's rate swings by tens of points on one result, so a difference read from
+# it is mostly the luck of who answered.
+MIN_GROUP = 20
+# The chance of calling noise a clear difference that a whole brief may take, split
+# across every comparison it makes (`differences`).
+ALPHA = 0.05
+# The old two-proportion rule's |z|, kept for any test that names it; nothing reads it.
 CLEAR_Z = 1.96
 EXEMPLARS = 3
 EXEMPLAR_CHARS = 500
 
-WIN = frozenset({"interview", "offer", "hired", "offer_declined", "offer declined"})
-LOSS = frozenset({"rejected", "no_response", "no response"})
+# The tracker's own vocabulary (throttle.py), never a copy of it.
+WIN = throttle.REACHED_INTERVIEW
+LOSS = throttle.LOST
 
 _ROUTE_GROUP = (("alumni", "alumni"), ("referral", "warm intro"), ("mutual", "warm intro"),
                 ("intro", "warm intro"), ("inbound", "inbound"), ("job_posting", "named on a posting"),
@@ -99,11 +108,11 @@ def _date(value):
 
 
 def _csv(path: str) -> list[dict]:
+    """The rows, through csv_store.read_rows, the one state-file reader: a conflicted file
+    is refused, and a short row's missing cells read as blanks, never None."""
     import csv_store
-    csv_store.refuse_conflicts(path)
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
+        return csv_store.read_rows(path)
     except OSError:
         return []
 
@@ -128,20 +137,44 @@ def _rate(hit: int, n: int) -> str:
     return "%d of %d (%d%%)" % (hit, n, round(100 * hit / n)) if n else "none yet"
 
 
-def clear(a_hit: int, a_n: int, b_hit: int, b_n: int) -> bool:
-    """Is the gap between two rates unlikely to be chance? Both groups at MIN_GROUP."""
+def fisher_p(a_hit: int, a_n: int, b_hit: int, b_n: int) -> float:
+    """Fisher's exact test, two-sided: how often two groups sharing one rate split at
+    least this unevenly by chance. Counted exactly from the hypergeometric weights, with
+    no approximation, which is what small groups need (written here; stdlib only)."""
+    a_hit, a_n, b_hit, b_n = (max(0, int(x)) for x in (a_hit, a_n, b_hit, b_n))
+    if not a_n or not b_n:
+        return 1.0
+    k, n = a_hit + b_hit, a_n + b_n
+
+    def weight(x):
+        return math.comb(a_n, x) * math.comb(b_n, k - x)
+    seen = weight(a_hit)
+    tail = sum(w for w in (weight(x) for x in range(max(0, k - b_n), min(a_n, k) + 1))
+               if w <= seen)
+    return min(1.0, tail / math.comb(n, k))
+
+
+def clear(a_hit: int, a_n: int, b_hit: int, b_n: int, comparisons: int = 1) -> bool:
+    """Is the gap between two rates unlikely to be chance? Both groups at MIN_GROUP.
+
+    Fisher's exact test at ALPHA divided by `comparisons`, the number of pairs the
+    caller looked at to find this one. Taking the best and the worst group of several
+    features and testing them as if they were the only pair called noise a clear
+    difference in a third of briefs where every group had the same true rate.
+    """
     if a_n < MIN_GROUP or b_n < MIN_GROUP:
         return False
-    p = (a_hit + b_hit) / (a_n + b_n)
-    if p in (0.0, 1.0):
-        return False
-    z = (a_hit / a_n - b_hit / b_n) / math.sqrt(p * (1 - p) * (1 / a_n + 1 / b_n))
-    return abs(z) >= CLEAR_Z
+    return fisher_p(a_hit, a_n, b_hit, b_n) < ALPHA / max(1, int(comparisons))
 
 
 def differences(cases: list[dict], features: tuple[str, ...], what: str) -> list[str]:
-    """One line per feature whose best and worst groups differ clearly."""
-    out = []
+    """One line per feature whose best and worst groups differ clearly.
+
+    Every pair of big groups in every feature counts as a comparison made, because the
+    best and the worst are picked from all of them, and `clear` is asked to hold the
+    gap to that many.
+    """
+    tested = []
     for f in features:
         groups: dict[str, list[int]] = {}
         for c in cases:
@@ -151,11 +184,14 @@ def differences(cases: list[dict], features: tuple[str, ...], what: str) -> list
                 g[0] += 1 if c["won"] else 0
                 g[1] += 1
         big = [(v, h, n) for v, (h, n) in groups.items() if n >= MIN_GROUP]
-        if len(big) < 2:
-            continue
+        if len(big) >= 2:
+            tested.append((f, big))
+    comparisons = sum(len(big) * (len(big) - 1) // 2 for _f, big in tested)
+    out = []
+    for f, big in tested:
         best = max(big, key=lambda x: (x[1] / x[2], x[2]))
         worst = min(big, key=lambda x: (x[1] / x[2], -x[2]))
-        if best is not worst and clear(best[1], best[2], worst[1], worst[2]):
+        if best is not worst and clear(best[1], best[2], worst[1], worst[2], comparisons):
             out.append("By %s: %s %s %s; %s %s %s." % (
                 f.replace("_", " "), best[0], what, _rate(best[1], best[2]),
                 worst[0], what, _rate(worst[1], worst[2])))
@@ -713,6 +749,36 @@ def bullet_wins() -> dict:
     return dict(_bullet_wins(person.state()))
 
 
+# ------------------------------------------------------------------ rates, for a dashboard
+
+# What a rate can be read by: the features `brief search` compares.
+RATE_FEATURES = ("channel", "sector", "fit_band", "role_type")
+
+
+def rates(tracker: list[dict], by: str = "channel", today=None) -> dict:
+    """The interview rate of each group, with its n, for a dashboard to draw.
+
+    {"by", "groups": [{"group", "reached", "decided", "rate", "enough"}], "waiting",
+    "min_group"}. A count per channel ("12 portal, 3 referral") says nothing about which
+    one works; a rate does, with the number it rests on beside it. Only decided
+    applications count (application_cases): one inside SILENT_DAYS with no answer yet is
+    `waiting`, never a miss. `enough` is False under MIN_GROUP: a rate to show with its
+    n, and never one to compare. Biggest group first.
+    """
+    if by not in RATE_FEATURES:
+        raise ValueError("rates are read by one of %s, not %r" % (", ".join(RATE_FEATURES), by))
+    groups: dict[str, list[int]] = {}
+    for c in application_cases(tracker, today):
+        g = groups.setdefault(c.get(by) or "not recorded", [0, 0])
+        g[0] += 1 if c["won"] else 0
+        g[1] += 1
+    rows = [{"group": k, "reached": h, "decided": n, "rate": round(h / n, 3),
+             "enough": n >= MIN_GROUP} for k, (h, n) in groups.items()]
+    rows.sort(key=lambda r: (-r["decided"], r["group"]))
+    return {"by": by, "groups": rows, "waiting": _waiting(tracker, _today(today)),
+            "min_group": MIN_GROUP}
+
+
 # ------------------------------------------------------------------ CLI
 
 def main(argv=None) -> int:
@@ -728,11 +794,17 @@ def main(argv=None) -> int:
     g.add_argument("--contact", help="contact_id whose reply was just logged")
     g.add_argument("--company", help="employer whose application result was just recorded")
     e.add_argument("--role", default="", help="with --company: the role whose result it was")
-    for p in (b, e):
+    r = sub.add_parser("rates", help="the interview rate of each group with its n, as JSON, "
+                                     "for /html-report")
+    r.add_argument("--by", choices=RATE_FEATURES, default="channel")
+    for p in (b, e, r):
         p.add_argument("--today")
     a = ap.parse_args(argv)
     import state
     tracker = _csv(person.state("job_search_tracker.csv"))
+    if a.cmd == "rates":
+        print(json.dumps(rates(tracker, a.by, a.today), indent=1))
+        return 0
     if a.cmd == "brief" and a.area == "messages":
         out = brief_messages(state.load_contacts(), state.load_threads(), a.today,
                              a.route, a.channel, a.tier)

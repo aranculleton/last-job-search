@@ -20,7 +20,7 @@ export const meta = {
 //
 // Models follow .claude/skills/job-application-assistant/11-cost-model.md:
 // research is fetching and summarising (sonnet); drafting and the grounding
-// audit inherit the session's strongest model and are never downgraded,
+// audit inherit the session's own model and are never downgraded,
 // because they are where a false claim would reach an employer.
 if (!args || !args.today || !args.round_dir || !Array.isArray(args.picks)) {
   throw new Error('draft-applications needs args {today, round_dir, picks[]}; stage with tools/stage_picks.py first')

@@ -69,9 +69,13 @@ def test_a_message_still_inside_its_wait_is_not_counted_as_a_failure():
 
 
 def test_nothing_is_concluded_from_a_handful():
+    # Updated 2026-10-21 with clear()'s own rule: Fisher's exact test, at least MIN_GROUP
+    # (20) a group. 6 of 8 against 1 of 8 was "clear" under the old z-test at 8 a group;
+    # groups that small swing by tens of points on one result.
     assert not W.clear(2, 7, 0, 7)                  # groups under MIN_GROUP
-    assert not W.clear(3, 10, 2, 10)                # a gap that could be chance
-    assert W.clear(6, 8, 1, 8)                      # a gap that is unlikely to be
+    assert not W.clear(6, 8, 1, 8)                  # under it too, however wide the gap
+    assert not W.clear(8, 20, 5, 20)                # a gap that could be chance
+    assert W.clear(14, 20, 2, 20)                   # a gap that is unlikely to be
 
 
 def test_the_brief_shows_the_closest_winning_message_and_its_shape():
@@ -87,16 +91,17 @@ def test_the_brief_shows_the_closest_winning_message_and_its_shape():
 
 
 def test_a_clear_difference_is_reported_with_both_counts():
+    # Twenty a group since 2026-10-21 (MIN_GROUP); ten a group is now too few to call.
     contacts, threads = [], []
-    for i in range(10):
-        for route, replied in (("alumni_school", i < 7), ("cold", i < 1)):
+    for i in range(20):
+        for route, replied in (("alumni_school", i < 14), ("cold", i < 2)):
             cid = "%s_%d" % (route, i)
             contacts.append({"contact_id": cid, "name": cid, "route": route})
             threads.append(_row(cid, "2026-08-01", "out", "Hi, a question?"))
             if replied:
                 threads.append(_row(cid, "2026-08-03", "in", "Yes."))
     out = W.brief_messages(contacts, threads, TODAY)
-    assert "By route: alumni answered 7 of 10 (70%); cold answered 1 of 10 (10%)." in out
+    assert "By route: alumni answered 14 of 20 (70%); cold answered 2 of 20 (10%)." in out
 
 
 TRACKER = [

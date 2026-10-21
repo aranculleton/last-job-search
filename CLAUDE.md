@@ -25,9 +25,13 @@ imported here:
 
 @profile/CLAUDE.md
 
-`profile/01-candidate-profile.md` is the source of truth for every fact about them. The
-summary above is a working copy for quick reference; where the two disagree, the profile
-wins, and the disagreement is a bug to fix rather than a choice to make. The rest of
+`profile/01-candidate-profile.md` is the source of truth for every fact about them. A claim
+is **grounded** when a file `person.json` `grounding.sources` names carries it: by default
+`01-candidate-profile.md`, the summary above and `bullets.py`, the set `tools/check_numbers.py`
+reads. An older resume, a tailored draft or the chat is never a source until the fact is
+written into `01`. The summary is a working copy for quick reference; where the sources
+disagree, `01` wins, and the disagreement is a bug to report and fix rather than a choice to
+make. The rest of
 `profile/` is the same person in the form the tools read (`person.json`, `roles.py`,
 `bullets.py`, `skills.py`, `search.py`, `employers.py`, `boards.py`, `networking.py`,
 `claims.py`, `screening.py`) and the documents written from it: `02-behavioral-profile.md`,
@@ -191,21 +195,11 @@ later. Before
 merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
-**On the person's own computer** a chat has no GitHub tools: `gh` is the route, and
-`place.py` lists it (and `gh auth login`, theirs) when it is missing. **Each local chat
-works in a folder of its own, made before any other work** (the sync's first line says so
-while a chat is still in the main folder): `python3 tools/sync_app.py --worktree <name>` makes
-`../<repo>-<name>` on a new, unique branch from master, and every command runs there; two
-chats in one folder switch branches under each other and fight over git's index. Files git
-does not carry (the connections export) are read from the main folder. Then: commit,
-`git fetch origin master && git merge origin/master` (the sync sets the row-by-row driver on
-their computer too), `./tools/ci_local.sh`, `git push -u origin HEAD`,
-`gh pr create --base master --fill`, `gh pr merge <number> --merge`, and check
-`gh pr view <number> --json state -q .state` says MERGED: the exit code can be non-zero after
-a merge that worked, when gh fails to fast-forward a stale local master. Keep no local master
-(`git switch --detach origin/master` after), and `git worktree remove <folder>` once it has
-landed. When the desktop app refuses the merge ("merge without review"), the person merges
-or approves it: say so once and stop, never retry. RUNBOOK.md step 4 has the commands.
+**On the person's own computer** a chat has no GitHub tools and lands its work with `gh`,
+and **each local chat works in a folder of its own, made before any other work**
+(`python3 tools/sync_app.py --worktree <name>`): two chats in one folder switch branches
+under each other. RUNBOOK.md step 4 has the commands, how to tell a merge worked, and what
+to do when the desktop app refuses one.
 
 The one thing that is **not** negotiable in the other direction: do not push to master
 without CI green. It is the branch every other chat starts from, so a broken master
@@ -257,11 +251,9 @@ third-party data) or `gmail_sync/state.json`.
   package at a time, and a no-op when they are present. The line in its header, pasted into
   the cloud environment's setup script (where: `python3 tools/claude_surfaces.py say
   cloud-environment`), caches it. It is not a SessionStart hook, on purpose:
-  `tools/security_guards.py` keeps that allowlist empty.
-- **`texlive-fonts-extra` is not installed**: moderncv's `fontawesome5` and `academicons` are
-  vendored in `texmf/`. `File fontawesome5.sty not found` means `TEXMFHOME` was not set;
-  `fit_to_page.py` sets it, and a compile by hand needs `export TEXMFHOME="$PWD/texmf"` first.
-- **A pyo3 panic from `tools/verify_pdf.py`** is a broken `cffi`: `pip3 install --upgrade cffi`.
+  `tools/security_guards.py` keeps that allowlist empty. SETUP.md, "A. Fresh cloud
+  container", says why each piece is there and what its errors mean (`File fontawesome5.sty
+  not found` is an unset `TEXMFHOME`; a pyo3 panic from `verify_pdf.py` is a broken `cffi`).
 - **A job board the session cannot reach** may be blocked by the chat's cloud settings: check
   `curl -sS "$HTTPS_PROXY/__agentproxy/status"` for `connect_rejected`. That is a policy
   denial, not a bug: do not route around it. Tell the person what `python3 tools/env_check.py
@@ -325,7 +317,7 @@ run by name with the Workflow tool:
 
 | Workflow | Args | What it does |
 |---|---|---|
-| `draft-applications` | `{today, round_dir, picks}`, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), draft object (strongest), grounding and rules audit (strongest). Writes `round_dir/audit_<slug>.json`. |
+| `draft-applications` | `{today, round_dir, picks}`, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), draft object and grounding and rules audit (both on the session's own model). Writes `round_dir/audit_<slug>.json`. |
 | `repo-audit` | optional `{focus}` | Four sonnet readers over docs, code, networking state and records, a sceptic per slice that re-checks every finding against the cited lines, then one ranking pass. Read-only. |
 
 Two of the **subagents** in `.claude/agents/` carry the same split for a single `/apply`, an
@@ -334,7 +326,7 @@ Two of the **subagents** in `.claude/agents/` carry the same split for a single 
 | Subagent | Model | Use it for |
 |---|---|---|
 | `employer-researcher` | sonnet | One employer's facts from its own pages, located independently, quoted, cached in `company_research/<key>.json` |
-| `grounding-auditor` | inherits the strongest | The last read before anything reaches an employer or a contact: profile grounding, `check_claims`, `check_numbers`, `voice_check`, `compose.validate()` |
+| `grounding-auditor` | none set: the session's own | The last read before anything reaches an employer or a contact: profile grounding, `check_claims`, `check_numbers`, `voice_check`, `compose.validate()` |
 
 `tools/lint_skills.py` checks their frontmatter, and a test pins the two models, so the
 auditor cannot be quietly downgraded. The drafting path is three commands around one
@@ -348,14 +340,11 @@ python3 tools/stage_picks.py consent "$SCRATCH/r1" acme --yes Looker --no Spark 
 python3 tools/stage_picks.py assemble "$SCRATCH/r1"                              # drafts.json
 ```
 
-**A skill a posting names that the profile does not hold is the person's call, every time**,
-even one they once said they lack: `stage` prints one short question per pick, asked as
-written (the reason only if they ask why), and `consent` records each answer. Read the
-posting too, and ask the same way about any other skill it names that the profile lacks and
-the question missed. A yes is for that application: it prints on the skills line as the
-posting spells it. Where they say they hold it generally, that is a fact: write it into
-`01-candidate-profile.md` and `skills.py` `ITEMS` (out of `NOT_HELD`) in the same turn. The
-workflow drafts nothing and `assemble` assembles nothing while a question waits.
+**A skill a posting names that the profile does not hold is the person's call, every time**:
+`stage` prints one short question per pick, asked as written, `consent` records each answer,
+and the workflow drafts nothing and `assemble` assembles nothing while a question waits.
+`/apply` Steps 1c and 2 have the rest: a skill the question missed, what a yes puts on the
+page, and a general yes written into the profile in the same turn.
 
 Then RUNBOOK.md step 3. `stage` **never reuses a name another application was sent under**:
 a second role at an employer gets a role token (`Acme_DemandPlanning`), and `fit_to_page.py`
@@ -429,14 +418,11 @@ met, 2 when it is missed (a thin market) and 1 when a stage broke.
   `network_contacts.csv` is, and anyone named in that file is a row in it
 
 ## Workflow for New Job Applications
-1. User provides a job posting (URL or text)
+1. User provides a job posting (URL or text): `/apply` takes it from there.
 2. **Always evaluate fit first** against `profile/04-job-evaluation.md`: run the gates, score the four weighted dimensions, report the 0-100 score and band. Present this before drafting anything.
-3. If good fit: create a targeted resume (`cv/<Prefix>_Resume_<ABBR>.tex`) and cover letter (`cover_letters/<Prefix>_Cover_Letter_<ABBR>.tex`), where `<Prefix>` is `person.json` `identity.file_prefix`. Filenames are human-looking, never machine-shaped: see the File naming table in `05-cv-templates.md`
-   - Bullets are **allocated per posting** by `tools/allocate.py` from the full themed library in `tools/bullet_library.py`; never hand-pick from a fixed set. The renderer enforces a fixed section order (Summary, Experience, Skills, Education, Certifications), reverse-chronological experience, a Skills block of a few lines under the person's own headings (`profile/skills.py` `LABELS`), and no Core Competencies section (see "Layout rules the generator enforces" in `05-cv-templates.md`)
-   - Also write `documents/applications/<slug>/job_posting.md` and `outreach.md` via `python3 tools/outreach.py <drafts.json> <apps_in.json>`. The outreach note is a sub-80-word LinkedIn message to the hiring manager or recruiter, built from the letter's verified company fact; sending it is the user's call, but every application gets one
-   - The same command keeps `draft.json` in that folder, the object both documents are rendered from, with the posting named rather than copied. After a renderer fix, `python3 tools/fit_to_page.py documents/applications/<slug>/draft.json` re-renders an unsent application from it
+3. If good fit, and they say to: one application and a batch take the same pipeline (`/apply` Step 2; RUNBOOK.md steps 2 to 4). Bullets are **allocated per posting** by `tools/allocate.py`, never hand-picked; the renderer enforces the layout (`05-cv-templates.md`, "Layout rules the generator enforces"); filenames are human-looking (`<Prefix>_Resume_<ABBR>`, the File naming table in `05`); every application gets an outreach note and a kept `draft.json` (`tools/outreach.py`); and a finding is fixed in the draft object, never by hand in the `.tex`.
 4. **Verify both documents** (the Verification Checklist, below)
-5. Prepare interview talking points based on the role requirements and your strengths
+5. Prepare interview talking points from the role's requirements and the person's strengths (`/interview`)
 
 **Important:** the profile can add document rules of its own (`profile/CLAUDE.md`). They are
 followed exactly like the ones here.
@@ -453,15 +439,16 @@ the yield target is met (at least 5 postings at 60+, 2 of them 75+); then presen
 table, highest first, with the scores, the salary read, deadlines, referral links, a
 clickable apply link on every row and what needs checking. **Stop there and ask** which to
 take forward: draft nothing unless that request asked for it, and before drafting anything,
-ask whether they have already applied and record the answer, and ask about every skill a
-posting names that their profile does not hold (staging prints the question; only their yes
-puts one on the page).
+ask whether they have already applied and record the answer, and ask the skills question
+staging prints (above).
 
-**Rank down, do not cut.** The hard cuts are only the ones no framing survives: an
-eligibility bar the profile cannot clear, a language requirement, a professional credential
-gate, a role whose core is a discipline the person does not hold, a posting open to existing
-staff only, and a stated pay range whose top is below the person's cut line (or a knockout
-on their own triage card). A missing skill, a year of experience, a preferred degree or a
+**Rank down, do not cut.** The hard cuts are only the ones no framing survives, each cut on
+a quoted sentence: an eligibility bar the profile cannot clear, a language requirement (or a
+title written in another language), a location the profile's Location table fails, a
+professional credential gate, a role whose core is a discipline the person does not hold, a
+posting open to existing staff only, a stated pay range whose top is below the person's cut
+line, and a knockout on their own triage card. The job-scraper skill says what each one
+means. A missing skill, a year of experience, a preferred degree or a
 posted range under target is a scoring input, and a posting with no stated
 salary loses nothing. Never pad a thin run with sub-60 postings, and never relax a gate or
 the location filter to hit the number; say what was tried instead. **The rules every search
@@ -471,71 +458,42 @@ the company throttle, salary, tiered scoring): the job-scraper skill, which load
 
 ## Networking and Outreach
 
-The other half of the search. `.claude/skills/networking/` and `tools/network/`
-handle finding the right people at target employers, composing every outbound
-message type, managing live threads, and preparing for the calls that come out
-of them.
+The other half of the search: finding the right people at target employers, composing every
+outbound message, managing live threads and preparing for the calls that come out of them
+(`.claude/skills/networking/` and `tools/network/`; commands `/network`, `/reply`, `/threads`,
+`/prep`). It is an **extension of this system, not a parallel one**: `tools/company_key.py`
+joins a contact at an employer's initials and an application to its legal name into one key,
+and company findings cache in the existing `company_research/`.
 
-It is an **extension of this system, not a parallel one**. `tools/company_key.py`
-is the join: a contact at an employer's initials and an application to its legal name
-resolve to one key, so threads and applications at the same employer link
-automatically. Company findings cache in the existing `company_research/`.
+State lives in `network_contacts.csv` and `network_threads.csv` beside the tracker, committed
+by the persistence loop above. **Status is derived from the messages wherever the log can know
+it**, so it cannot drift from the evidence. What the log cannot know (a call booked, a
+referral in flight, a conversation gone cold, a close) is stored on the contact row by
+whoever learns it, and wins over the log.
 
-State lives in `network_contacts.csv` and `network_threads.csv` beside the
-tracker. **Status is derived from the messages wherever the log can know it**, so
-it cannot drift from the evidence. What the log cannot know (a call booked, a referral in
-flight, a conversation gone cold, a close) is stored on the contact row by whoever learns
-it, and wins over the log.
+**Every networking rule is in the networking skill, and enforced in code**: the search budget
+(`tools/network/sources.py`), alumni and referral routes before cold, tier 1 only on a quoted
+live hiring signal, reading each person before writing to them (`reading.py`, `/network`
+step 5), who reads a message and what it may say (`compose.READER_TYPES`), `compose.advise()`,
+warm intros, the follow-up cadence, when to stop, and never surfacing someone already
+contacted. Load the skill before any outreach. What a session needs before it does:
 
-Commands: `/network` (discovery), `/reply` (draft inside a thread), `/threads`
-(what is owed), `/prep` (call prep).
-
-**The rules that matter most**, all enforced in code rather than remembered:
-
-- A fixed search budget: at most `sources.SEARCHES_PER_COMPANY` (four) searches per employer
-  across every kind of source, `sources.SEARCHES_PER_RUN` (five) for the kinds searched once a
-  run, and inside that the two LinkedIn title searches go first (`sources.TITLE_SEARCHES`, the
-  one kind measured to name people in bulk), three a hard ceiling never meant to be reached
-  (`discovery.queries_for()`). On top, at most `sources.CHECKS_PER_COMPANY` (three) profile
-  checks for the best name-only people (`sources.to_check`). `sources.py` prints the run's
-  searches.
-- Alumni and referral routes before cold. The response-rate gap is large.
-- Tier 1 requires a **quoted** live hiring signal, shown as evidence.
-- **Read each person before writing to them** (`tools/network/reading.py`, `/network` step 5):
-  their profile, in the person's own browser when `PROFILE_READS` is `"browser"` or pasted
-  by them, and their public work. A note's common ground rests on what was read
-  (`first_note(reading=)` refuses one that does not), and no two notes say the same thing.
-  No LinkedIn profile is ever fetched from a session. Finding people uses no LinkedIn
-  account at all (a web search and their own export), so it cannot get anyone restricted;
-  only the optional read uses their account, capped and paced. The jobs search reads
-  LinkedIn's public listings with no account and **stays on**: only the person switches it
-  off, never a session.
-- **Outreach is for referrals, in three stages that are never compressed into one:** a
-  first note that asks for a conversation (`compose.first_note()`), the conversation, then
-  a referral ask for one linked role (`compose.referral_ask()`). **Who reads it decides what
-  it says** (`compose.READER_TYPES`, each a setting in `profile/networking.py`): work
-  authorization and the role wanted go to a recruiter and a decision-maker by default, never
-  to a peer unless that message asks; only a recruiter is asked about roles. The reason for
-  writing is true: how they were found (`how_found=`), a parallel in their own path, a mutual
-  connection the person confirmed, or the common ground, and a note never says the sender
-  read or saw something of theirs unless the sender did (`looked=True`). Before showing a
-  draft, `compose.advise()` too: the draft is rewritten on its warnings (an exit line,
-  stacked hedges, a claim written as fact, a credential with no reason) first, and a
-  warning the rewrite leaves standing is shown with the draft for the person to decide,
-  never in place of the rewrite. See "Composition" in the networking skill.
-- Connection notes are 200 characters on a free LinkedIn plan and 300 on Premium
-  (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard. `compose.py` raises, never truncates.
-- A warm intro leads with the referrer's name in the first sentence.
-- Follow up after 5 to 7 **business** days, one nudge only.
-- After two nos, stop.
-- Never surface someone already contacted.
+- **Outreach is for referrals, in three stages never compressed into one:** a first note that
+  asks for a conversation (`compose.first_note()`), the conversation, then a referral ask for
+  one linked role (`compose.referral_ask()`).
+- **Who reads a first note decides what it says** (`compose.READER_TYPES`, each a setting in
+  `profile/networking.py`): a recruiter and a decision-maker may be told the role wanted and
+  the person's work authorization, and a decision-maker gets the open ask ("anything coming
+  up"); asking whether they are hiring, or for a referral, is a recruiter's alone; a peer is
+  told neither unless that message asks.
+- Before a draft is shown, `compose.advise()`: the draft is rewritten on its warnings first,
+  and a warning the rewrite leaves standing is shown with the draft for the person to decide,
+  never in place of the rewrite.
+- Connection notes are the plan's limit, 200 characters on a free LinkedIn plan and 300 on
+  Premium (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard: `compose.py` raises, never truncates.
+- No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays on**:
+  only the person switches it off, never a session.
 - Never claim anything not in `profile/01-candidate-profile.md`.
-
-Commit these alongside application artefacts:
-
-```bash
-git add -f network_contacts.csv network_threads.csv documents/network/
-```
 
 ## A step on another company's site is checked before it is given
 
@@ -688,8 +646,9 @@ if something is missing there, fix the state file, not the view.
 **Commit and push whenever a unit of work finishes**, not once at the end (the `git add`
 lines are in the persistence rule above): a session that runs out of context mid-task loses
 everything uncommitted. **The tracker only knows what was recorded.** A candidate applies to
-things directly, so before drafting anything ask whether they have already applied, and
-record the answer either way.
+things directly, which is why the already-applied question (Job Search Behaviour, above) comes
+before anything is drafted: a yes is a tracker row at `applied` with the date they give
+(`/apply` Step 1c), and a no is recorded by the `drafted` row the draft writes.
 
 ## Verification Checklist
 

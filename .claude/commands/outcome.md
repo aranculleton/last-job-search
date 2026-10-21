@@ -103,6 +103,8 @@ Enter this branch from the `followup` argument (Step 0) or from the offer under 
 
 **Candidates come from `python3 tools/followups.py`, never from a clock of this command's own.** It is the one the morning brief and `tools/open_actions.py --due` read, so the three never disagree: the first nudge is due 7 days after the application went, the second 7 days after the first was logged as sent (the `followed up YYYY-MM-DD` marker below), at most two, and the chase stops after a week of silence following the second. It holds a nudge, and prints why, while an interview, an offer or a referral runs at that employer, or while the row's notes say `DO NOT CHASE`. It names who each nudge goes to, or says nobody is on file. Only an application whose status is neither final nor `drafted` can be due, and it narrows that to `applied`: a `drafted` row was never sent, and one at `interview` or `offer` is a live process, not a quiet one. Present the applications it lists as due as a table (company, role, nudge number, due date, who it goes to) and draft only for the ones the user picks; show the held ones with their reason and draft nothing for them.
 
+**One more case reaches this branch from `tools/open_actions.py --due`, not from `followups.py`:** an `interview` row with no word for 14 days since its last stage and nothing booked (`open_actions.INTERVIEW_QUIET_DAYS`). It is never a nudge: the due list asks whether to send a short status note or to record what happened. `/outcome followup <company>` drafts the status note (the same rules as below, the question being where the process stands), logged the same way, `followed up YYYY-MM-DD` and `followup_YYYY-MM-DD.md`. After two with no word, the list asks only for the outcome.
+
 `/gmail-sync`'s 30-day staleness flag (its Step 9) is a different thing: a read-only alarm that a row has been forgotten entirely, not a nudge.
 
 **Drafting.** First `python3 tools/learned.py brief messages` (and `brief voice`): the rules there are the person's own and outrank the defaults below. Then, for each selected application:
@@ -120,7 +122,7 @@ Enter this branch from the `followup` argument (Step 0) or from the offer under 
 
 If the user decides not to send, log nothing.
 
-**Termination.** When an application hits two follow-ups and stays silent, do not offer a third. This is the moment to continue in this same command's Step 2: note how long it has been since last contact and let the user decide whether to record `no_response` - as ever, no imposed cutoff. And if the user mentions an actual response while in this branch (an interview invitation, a rejection), drop out of the branch and record it through the normal Step 2 flow.
+**Termination.** When an application hits two follow-ups and stays silent, do not offer a third. This is the moment to continue in this same command's Step 2: note how long it has been since last contact and let the user decide whether to record `no_response` now. If they leave it, nothing here closes it; the brief does, once the chase has ended (`followups.py --close-quiet`: a week after the second follow-up, or 45 days of silence), with a dated note on the row. And if the user mentions an actual response while in this branch (an interview invitation, a rejection), drop out of the branch and record it through the normal Step 2 flow.
 
 ---
 

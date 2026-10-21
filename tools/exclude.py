@@ -88,26 +88,24 @@ INDENT = 2
 _ROW = re.compile(r"^\|\s*(\d+)\s*\|")
 # A reason that names its blocker: "blocker 4", "Blocker #4".
 _CITES_BLOCKER = re.compile(r"\bblocker\s*#?\s*(\d+)\b", re.I)
-# The screens' own wording for a cut, as tools/prefilter.py and tools/text_screen.py
-# write it, and the settings each one reads. Only wording that no other cut shares:
-# a reason written in other words names no part and rests on the whole rules.
+# The prefilter's own wording for a cut, and the settings each one reads. Only wording
+# that no other cut shares: a reason written in other words names no part and rests on
+# the whole rules. The text screen's cuts are read in its own words, from the one table
+# it writes them from (text_screen.cut_settings).
 _SCREEN_WORDING = (
     (re.compile(r"pre-?filter\b[^:]*:\s*title:", re.I), ("POSITIVE", "NEGATIVE")),
     (re.compile(r"pre-?filter\b[^:]*:\s*location:", re.I), ("LOCATION",)),
     (re.compile(r"internal Workday site", re.I), ("WORKDAY_INTERNAL_SITES",)),
-    (re.compile(r"stated range tops out at \S+, below\b", re.I), ("SALARY_CUT_BELOW",)),
-    (re.compile(r"professional designation stated as a requirement", re.I),
-     ("DESIGNATION", "DESIGNATED_TITLE")),
-    (re.compile(r"research-grade ML is the core of the role", re.I), ("RESEARCH_ML",)),
-    (re.compile(r"\bjob title is in \w+:", re.I), ("TITLE_LANGUAGE",)),
-    (re.compile(r"open to the employer's own staff only", re.I),
-     ("INTERNAL_ONLY", "INTERNAL_ONLY_TITLE")),
-    (re.compile(r"eligibility gate: a requirement to live in another country", re.I),
-     ("LOCATION",)),
-    (re.compile(r"eligibility gate: (?!a requirement to live in another country)", re.I),
-     ("ELIGIBILITY", "ENTITLED", "PERMIT_ACCEPTED", "ELIGIBILITY_STATUS_TERMS",
-      "ELIGIBILITY_NOT_BY_PERMIT", "ELIGIBILITY_ALWAYS")),
 )
+
+
+def _screen_cut_settings(reason: str) -> list:
+    """The settings the text screen's own cuts in `reason` rest on, or [] without one."""
+    try:
+        import text_screen
+    except Exception:                     # no profile search.py: no screen to cite
+        return []
+    return text_screen.cut_settings(reason)
 
 
 def _stable(value) -> str:
@@ -153,8 +151,12 @@ def rules_parts() -> dict:
     """{part: fingerprint} for each part of the rules a ruling can rest on alone.
 
     "triage #N" is one blocker row on the triage card, "evaluation" the evaluation
-    framework, and "search.py NAME" one gate setting. A part that is not there has no
-    entry, so a ruling resting on a removed blocker lapses.
+    framework, and "search.py NAME" one gate setting. A blocker that is not there has
+    no entry, so a ruling resting on a removed blocker lapses. A gate setting the
+    profile leaves unset is a part all the same, at the app's default: a ruling the
+    screen made under that default rests on it, and lapses the day the person sets it.
+    It used to have no entry, so such a ruling could not name it and rested on the
+    whole rules, lapsing on any change to them.
     """
     parts = {}
     for line in _doc(RULE_DOCS[0]).decode("utf-8", "replace").splitlines():
@@ -165,9 +167,8 @@ def rules_parts() -> dict:
     if evaluation:
         parts["evaluation"] = _short(evaluation)
     s = _search()
-    for name in GATE_NAMES:
-        if s is not None and hasattr(s, name):
-            parts[f"search.py {name}"] = _short(_stable(getattr(s, name)))
+    for name in GATE_NAMES if s is not None else ():
+        parts[f"search.py {name}"] = _short(_stable(getattr(s, name, None)))
     return parts
 
 
@@ -182,15 +183,10 @@ def part_lines() -> list:
     if _doc(RULE_DOCS[1]):
         out.append(("evaluation", "the evaluation framework, " + RULE_DOCS[1]))
     s = _search()
-    for name in GATE_NAMES:
-        if s is not None and hasattr(s, name):
-            out.append((f"search.py {name}", "the gate setting in profile/search.py"))
+    for name in GATE_NAMES if s is not None else ():
+        out.append((f"search.py {name}", "the gate setting in profile/search.py"
+                    + ("" if hasattr(s, name) else ", not set: the app's default")))
     return out
-
-
-def _languages() -> list:
-    s = _search()
-    return [str(g[0]) for g in getattr(s, "LANGUAGE_GATE", None) or () if g and g[0]]
 
 
 def cited(reason: str, parts: dict | None = None) -> list:
@@ -207,10 +203,7 @@ def cited(reason: str, parts: dict | None = None) -> list:
     for wording, names in _SCREEN_WORDING:
         if wording.search(reason):
             found += [f"search.py {g}" for g in names]
-    langs = _languages()
-    if langs and re.search(r"\b(?:%s) stated as a requirement" % "|".join(map(re.escape, langs)),
-                           reason, re.I):
-        found += ["search.py LANGUAGE_GATE", "search.py LANGUAGES_HELD"]
+    found += [f"search.py {g}" for g in _screen_cut_settings(reason)]
     out = [p for p in dict.fromkeys(found) if p in parts]
     # Named, but not all of it is here any more: rest on the whole rules, never on half.
     return out if len(out) == len(dict.fromkeys(found)) else []

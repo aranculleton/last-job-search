@@ -286,6 +286,177 @@ def verify_pdf(pdf_path, expected_pages=None, min_chars=1, required_text=(), dum
     return extractor, extracted_text, actual_pages
 
 
+# ------------------------------------------------------------------ the round trip
+#
+# Every check above asks whether the text layer is readable. None asked whether it says
+# what the draft put on the page. An unescaped % ate the rest of a bullet, a glyph the font
+# lacks dropped a letter from a name, and a swallowed brace lost a skills line: the PDF was
+# one page, its text extracted cleanly, and every check passed a document that said
+# something other than the draft. draft.json is the ground truth, so each line it put on
+# the page (contact lines, headings, the summary, each role's employer, title and dates,
+# each bullet, each skills line, education, certifications) must be in the text layer, in
+# page order. Hyphenation, spacing and punctuation are set aside; letters, digits and the
+# symbols a figure carries (% and currency signs among them) are not.
+#
+# The idea, a field-by-field recovery of a known draft from the extracted text with each
+# field claimed once, in order, is the one Resume-Matcher's ats_parse/roundtrip.py uses
+# (github.com/srbhr/Resume-Matcher, Apache-2.0). No code was taken from it.
+
+# How much a page break may put inside one line (a footer, a page number) and still let the
+# two halves count as the line, in kept characters.
+ROUNDTRIP_GAP = 200
+_KEEP = set("%\u00a3$\u20ac&+@#")
+
+
+def tex_plain(text):
+    """A LaTeX field as the page prints it: escapes undone, commands dropped, their text kept."""
+    s = str(text or "")
+    s = re.sub(r"\\blockline\{([^{}]*)\}\{", r"\1: {", s)
+    s = re.sub(r"\\href\{[^{}]*\}\{([^{}]*)\}", r"\1", s)
+    s = re.sub(r"\\kern\s*-?[\d.]*\s*(?:pt|em|ex|mu)?", "", s)
+    for name, char in (("pounds", "\u00a3"), ("texteuro", "\u20ac"), ("euro", "\u20ac"),
+                       ("textasciitilde", "~"), ("textasciicircum", "^"),
+                       ("textbullet", "\u2022"), ("textendash", "-")):
+        s = re.sub(r"\\%s(?![a-zA-Z])(?:\{\})?" % name, char, s)
+    s = re.sub(r"\\([&%$#_{}])", r"\1", s)
+    s = s.replace("\\\\", " ")
+    s = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?", "", s)
+    return " ".join(s.replace("{", "").replace("}", "").replace("~", " ").split())
+
+
+def canon(text):
+    """Only what a reader cannot lose without the line saying something else: letters,
+    digits and the symbols a figure carries. Spaces, hyphens (a hyphenated line break
+    among them) and punctuation go."""
+    import unicodedata
+    folded = unicodedata.normalize("NFKC", fold_typography(text)).casefold()
+    return "".join(ch for ch in folded if ch.isalnum() or ch in _KEEP)
+
+
+def roundtrip_fields(draft):
+    """[(label, [(what, text)])] for one draft, in page order: each group's lines may come
+    in any order among themselves (a role's employer, title and dates share a line or two),
+    and each group comes after the one before it."""
+    import copy
+    import person
+    import render_application as R
+    gen = R.gen
+    d = R.build(copy.deepcopy(draft))
+    ident = person.get("identity") or {}
+    docs = person.get("documents") or {}
+    heads = docs.get("headings") or {}
+    header = [("your name", ident.get("name", ""))]
+    header += [(what, ident.get(key, "")) for what, key in (
+        ("your location", "location"), ("your phone", "phone"), ("your email", "email"))]
+    if ident.get("linkedin"):
+        header.append(("your LinkedIn", ident.get("linkedin_label") or "LinkedIn"))
+    header += [("the contact line", x) for x in docs.get("resume_extra") or []]
+    groups = [("Contact details", [(w, t) for w, t in header if str(t).strip()])]
+    for key in gen.section_order():
+        heading = heads.get(key, key.capitalize())
+        if key == "certifications" and not getattr(gen._ROLES, "CERTIFICATIONS", ""):
+            continue
+        groups.append(("the heading %s" % heading, [("heading", heading)]))
+        if key == "summary":
+            groups.append(("%s (the summary)" % heading, [("summary", tex_plain(d["summary"]))]))
+        elif key == "experience":
+            for j in d["jobs"]:
+                groups.append(("%s, its heading line" % j["employer"], [
+                    ("employer", "%s, %s" % (j["employer"], j["loc"])), ("title", j["title"]),
+                    ("dates", j["dates"])]))
+                groups += [("%s, bullet %d" % (j["employer"], i), [("bullet", tex_plain(b))])
+                           for i, b in enumerate(j["bullets"], 1)]
+        elif key == "skills":
+            groups += [("%s, line %d" % (heading, i), [("skills line", tex_plain(ln))])
+                       for i, ln in enumerate(str(d["skills"]).splitlines(), 1) if ln.strip()]
+        elif key == "education":
+            groups.append((heading, [("education", tex_plain(
+                "%s %s" % (gen._ROLES.EDUCATION, d.get("edu", gen.EDU_STD))))]))
+        else:
+            groups.append((heading, [("certifications", tex_plain(gen._ROLES.CERTIFICATIONS))]))
+    return groups
+
+
+def _find(hay, words, pos):
+    """(start, end) of `words` in the kept text at or after `pos`, or None. A page break may
+    sit inside one line: two halves within ROUNDTRIP_GAP of each other count."""
+    needle = canon(" ".join(words))
+    if not needle:
+        return pos, pos
+    at = hay.find(needle, pos)
+    if at >= 0:
+        return at, at + len(needle)
+    for k in range(1, len(words)):
+        first, second = canon(" ".join(words[:k])), canon(" ".join(words[k:]))
+        a = hay.find(first, pos) if first and second else -1
+        while a >= 0:
+            b = hay.find(second, a + len(first), a + len(first) + ROUNDTRIP_GAP + len(second))
+            if b >= 0:
+                return a, b + len(second)
+            a = hay.find(first, a + 1)
+    return None
+
+
+def roundtrip(groups, text):
+    """What the text layer lacks or holds out of order, as plain lines; [] when every line
+    the draft put on the page is there, in order."""
+    hay = canon(text)
+    pos, last, out = 0, "", []
+    for label, fields in groups:
+        ends = []
+        for _what, field in fields:
+            words = str(field).split()
+            hit = _find(hay, words, pos)
+            if hit:
+                ends.append(hit[1])
+                continue
+            show = " ".join(words[:10]) + (" ..." if len(words) > 10 else "")
+            if _find(hay, words, 0):
+                out.append("out of order: %s (\"%s\") comes before %s" % (label, show, last))
+                continue
+            got = max((k for k in range(1, len(words)) if _find(hay, words[:k], pos)), default=0)
+            out.append("missing: %s (\"%s\"): %s" % (
+                label, show, "the text layer has it only as far as \"%s\"" % " ".join(
+                    words[max(0, got - 6):got]) if got else "it is not in the text layer at all"))
+        if ends:
+            pos = max(ends)
+        last = label
+    return out
+
+
+def roundtrip_pdf(pdf_path, drafts_path, abbr=""):
+    """(findings, how many lines were checked, extractor) for the resume `pdf_path`, against
+    its draft in `drafts_path` (a drafts.json or a kept draft.json)."""
+    import fit_to_page
+    import render_application as R
+    drafts, _ = fit_to_page.load(drafts_path)
+    mine = [d for d in drafts if not abbr or abbr in (d.get("abbr"), R.final_abbr(d))]
+    if len(mine) != 1:
+        raise VerificationError("%s holds %s draft for %s: name it with --abbr" % (
+            drafts_path, "no" if not mine else "more than one", abbr or "this resume"))
+    groups = roundtrip_fields(mine[0])
+    text, _pages, extractor = extract_text_layer(pdf_path)
+    return roundtrip(groups, text), sum(len(f) for _l, f in groups), extractor
+
+
+def keywords_pdf(pdf_path, drafts_path, abbr=""):
+    """The keyword coverage report for one resume, as plain lines: the posting's terms on
+    the page, held but not on it, and not held (never to add). A report only."""
+    import fit_to_page
+    import render_application as R
+    import skills_block
+    drafts, _ = fit_to_page.load(drafts_path)
+    mine = [d for d in drafts if not abbr or abbr in (d.get("abbr"), R.final_abbr(d))]
+    if len(mine) != 1:
+        raise VerificationError("%s holds %s draft for %s: name it with --abbr" % (
+            drafts_path, "no" if not mine else "more than one", abbr or "this resume"))
+    if not str(mine[0].get("posting") or "").strip():
+        return ["no posting kept with this draft, so nothing to measure against"]
+    text, _pages, _extractor = extract_text_layer(pdf_path)
+    return skills_block.coverage_lines(skills_block.coverage(
+        mine[0]["posting"], text, mine[0].get("consented_skills") or ()))
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Verify a PDF's page count and ATS-readable text layer."
@@ -310,6 +481,19 @@ def build_parser():
         help="write the extracted text layer to this path (UTF-8)",
     )
     parser.add_argument(
+        "--roundtrip",
+        metavar="DRAFTS",
+        help="check instead that every line the draft in this drafts.json (or draft.json) put "
+             "on the page is in the text layer, in order; exit 1 naming what is missing",
+    )
+    parser.add_argument(
+        "--keywords",
+        metavar="DRAFTS",
+        help="report instead which of the posting's terms the page carries, which are held "
+             "but not on it, and which are not held; a report, never an edit",
+    )
+    parser.add_argument("--abbr", default="", help="which draft, with --roundtrip or --keywords")
+    parser.add_argument(
         "--require",
         choices=("pypdf",),
         help="read with this extractor only; exit %d when it is unavailable" % EXIT_NO_READER,
@@ -319,6 +503,30 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if args.keywords:
+        try:
+            lines = keywords_pdf(args.pdf, args.keywords, args.abbr)
+        except (VerificationError, OSError, ValueError, KeyError) as exc:
+            print(f"Error: {args.pdf}: {exc}", file=sys.stderr)
+            return 1
+        for line in lines:
+            print(line)
+        return 0
+    if args.roundtrip:
+        try:
+            found, checked, extractor = roundtrip_pdf(args.pdf, args.roundtrip, args.abbr)
+        except (VerificationError, OSError, ValueError, KeyError) as exc:
+            print(f"Error: {args.pdf}: {exc}", file=sys.stderr)
+            return 1
+        if found:
+            print(f"Round trip: {args.pdf}: the text layer does not say what the draft put on "
+                  f"the page (extractor: {extractor}):")
+            for line in found:
+                print(f"  - {line}")
+            return 1
+        print(f"Round trip: {args.pdf}: all {checked} lines the draft put on the page are in "
+              f"the text layer, in order (extractor: {extractor})")
+        return 0
     try:
         extractor, text, pages = verify_pdf(
             args.pdf,

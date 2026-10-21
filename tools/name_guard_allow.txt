@@ -99,3 +99,4 @@ Ops Keynote Night       # invented event, the same test
 Cy Marlow               # invented, tests/test_a_list_page_gives_addresses_and_ranks_by_function.py
 Dee Hollis              # invented, the same test
 Help Desk Technician    # a job title, the same test
+Robert Hallowey     # invented, a one-letter typo of Halloway, tests/test_one_person_in_two_rows_is_raised.py

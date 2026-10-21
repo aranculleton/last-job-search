@@ -38,9 +38,7 @@ import functools
 import json
 import os
 import re
-import subprocess
 import sys
-import tempfile
 import threading
 import time
 from collections import Counter, deque
@@ -49,6 +47,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
 import portals  # noqa: E402
+from hydrate import BODY_CAP  # noqa: E402
 from prefilter import annotate, age_days, stamp_copies  # noqa: E402
 
 # --------------------------------------------------------------- portal CLIs
@@ -121,64 +120,11 @@ def defaults(cloud: bool | None = None) -> tuple:
 def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
     """(parsed JSON, None) on success; (None, reason) on any failure.
 
-    Failures used to vanish: a blocked or rate-limited portal just produced a
-    smaller file with exit 0 and nothing said so. Every failure now has a
-    reason, and main() counts them per portal and refuses to look healthy
-    when more than a quarter of the requests failed.
-
-    ## Why stdout goes to a FILE and not a pipe
-
-    A live round reported `freehire: 327/441 requests failed` with
-    `JSONDecodeError: Unterminated string starting at: line 363`. Run one at a
-    time the same queries succeed every time; run ten at once and all ten fail,
-    each returning 65,381 or 65,443 or 65,203 bytes. That is 64 KiB, a pipe
-    buffer.
-
-    Node writes to stdout ASYNCHRONOUSLY when stdout is a pipe and
-    SYNCHRONOUSLY when it is a regular file. A CLI that calls `process.exit()`
-    after writing therefore loses whatever has not drained, and under
-    concurrency nothing drains: one query's 160 KB of JSON arrives as the
-    first 64 KB, cut mid-string. Exit status is 0, because as far as the
-    process is concerned it wrote and exited.
-
-    The failure is silent in the worst way. A truncated body is not an error
-    the portal reported, it is a portal that looks slow, and three quarters of
-    one of the two enabled sources was being thrown away every round.
-
-    A temporary file costs nothing and removes the buffer entirely. The fix is
-    on this side on purpose: the portal CLIs are plug-ins, `/add-portal`
-    scaffolds more of them, and every one written the same way would carry the
-    same bug.
-
-    ## Why the reason is not always stderr's last line
-
-    One person's board printed `THROTTLED: ... redirecting searches to /sandbox
-    (robots.txt disallows it); not followed.` and then its JSON error, and only the
-    JSON reached the round. A line that names a refusal is kept wherever it falls, and
-    exit 0 with nothing found and a refusal said is a refusal, not an empty market.
-    """
-    env = dict(os.environ, NODE_USE_ENV_PROXY="1")
-    try:
-        with tempfile.TemporaryFile("w+", encoding="utf-8") as fh:
-            p = subprocess.run(cmd, stdout=fh, stderr=subprocess.PIPE,
-                               text=True, timeout=timeout, env=env)
-            fh.seek(0)
-            out = fh.read()
-        said = _refusal(p.stderr)
-        if p.returncode != 0:
-            err = (p.stderr or "").strip().splitlines()
-            why = said or (err[-1].strip()[:120] if err else "no stderr")
-            return None, f"exit {p.returncode}: {why}"
-        if not out.strip():
-            return None, f"exit 0: {said}" if said else "empty output"
-        got = json.loads(out)
-        if said and isinstance(got, dict) and not got.get("results"):
-            return None, f"exit 0: {said}"
-        return got, None
-    except subprocess.TimeoutExpired:
-        return None, f"timeout after {timeout}s"
-    except Exception as e:
-        return None, f"{type(e).__name__}: {str(e)[:120]}"
+    tools/portals.py run_cli, the one runner for a portal's CLI (hydrate.py and
+    job_alerts.py use it too): it says why stdout goes to a file and not a pipe, and
+    why a line where a board refused is kept wherever it falls in stderr. Kept here
+    by name, because tests and a person's own tests stand in for it here."""
+    return portals.run_cli(cmd, timeout)
 
 
 # ------------------------------------------------------- why a request failed
@@ -187,36 +133,20 @@ def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
 # answered every request with 403 Forbidden, and a board of the person's own had said
 # it was being redirected to a page its robots.txt disallows. A failure is now named by
 # its cause, and a cause that will not change within a round (a refusal) is caught by
-# the probe, before any sweep time is spent on that portal.
-_REFUSAL = re.compile(r"\bTHROTTLED\b|/sandbox\b|robots\.txt\s+disallows|disallowed by "
-                      r"robots\.txt|\bMISSING_CREDENTIALS\b")
+# the probe, before any sweep time is spent on that portal. What counts as a refusal
+# is portals.REFUSAL_LINE.
+_REFUSAL = portals.REFUSAL_LINE
+_EXIT = portals.EXIT_PREFIX
+_refusal = portals.refusal
 # An HTTP status where an error names one: after "HTTP", "status" or "failed:", or
 # followed by its reason phrase. Never any three digits: a truncated body's
 # JSONDecodeError says "line 363 column 412".
 _STATUS = re.compile(r"(?:\b(?:HTTP|[Ss]tatus|failed:?)\s*(\d{3})\b|\b(\d{3})(?=\s+[A-Z][a-z]))"
                      r"((?:\s+[A-Z][A-Za-z]*)*)")
-_EXIT = re.compile(r"^exit -?\d+:\s*")
 # The answers that will not change within a round: refused credentials, forbidden,
 # a proxy that will not carry the request, unavailable for legal reasons, and the 999
 # LinkedIn sends a machine it is refusing. A 429 or a 5xx is worth asking again later.
 REFUSING_STATUS = (401, 403, 407, 451, 999)
-
-
-def _refusal(text: str | None) -> str:
-    """The line in which a portal said it is refusing (THROTTLED, a sandbox redirect,
-    robots.txt, a missing credential), as it said it, or ""."""
-    for line in str(text or "").splitlines():
-        line = _EXIT.sub("", line.strip())
-        if not _REFUSAL.search(line):
-            continue
-        try:
-            body = json.loads(line)
-            if isinstance(body, dict) and body.get("error"):
-                line = str(body["error"])
-        except ValueError:
-            pass
-        return line[:200]
-    return ""
 
 
 def _status(err: str | None) -> tuple[int, str] | None:
@@ -294,6 +224,11 @@ def linkedin(q: str, loc: str, page: int, jobage: int,
     return out, err
 
 
+def _capped(text):
+    """A body cut to as much as any stage reads (hydrate.BODY_CAP); anything else as it is."""
+    return text[:BODY_CAP] if isinstance(text, str) else text
+
+
 def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
     d, err = run(["node", "--no-warnings", FREEHIRE(), "search", "-q", q,
                   "--country", PORTAL_COUNTRY, "--jobage", str(jobage), "--limit", "25",
@@ -303,7 +238,7 @@ def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
         out.append({"id": str(r.get("id")), "title": r.get("title"),
                     "company": r.get("company"), "url": r.get("url"),
                     "location": r.get("location"), "date": (r.get("date") or "")[:10],
-                    "portal": "freehire", "desc": r.get("description")})
+                    "portal": "freehire", "desc": _capped(r.get("description"))})
     return out, err
 
 
@@ -324,7 +259,7 @@ def contract(skill: str, q: str, loc: str | None, page: int,
     whole = not portals.has_detail(skill)
     out = []
     for r in (d or {}).get("results", []):
-        text = r.get("description") or None
+        text = _capped(r.get("description") or None)
         out.append({"id": None if r.get("id") is None else str(r.get("id")),
                     "title": r.get("title"), "company": r.get("company"),
                     "url": r.get("url"), "location": _remote_mark(r.get("location"), remote),
@@ -408,9 +343,32 @@ def unsent_line(name: str, rest: list[tuple], total: int, why: str, show: int = 
             f"the first: {first}{more}. Later rounds reach them (documents/rounds/.sweep/).")
 
 
+_REQUESTS_LOCK = threading.Lock()
+
+
+def request_line(skill: str, task: tuple, got: int, new: int | None, err: str | None,
+                 secs: float, at: str | None = None) -> str:
+    """One paced request as a line of the round's log: when, which board, what it asked,
+    what came back and how long it took. Short, because a round sends hundreds."""
+    at = at or dt.datetime.now().strftime("%H:%M:%S")
+    what = f"failed ({cause(err)})" if err else (
+        f"{got} row{'' if got == 1 else 's'}" + (f", {new} new" if new is not None else ""))
+    return f"{at} request {portals.short(skill)} {describe(task)}: {what}, {secs:.1f}s"
+
+
+def _log_request(path: str | None, line: str) -> None:
+    if not path:
+        return
+    try:
+        with _REQUESTS_LOCK, open(path, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except OSError:
+        pass
+
+
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
           clock=time.monotonic, tally: "Tally | None" = None,
-          on_rows=None, log=None) -> tuple[list[dict], int, list[str]]:
+          on_rows=None, log=None, requests=None) -> tuple[list[dict], int, list[str]]:
     """Every request for one person's portal, one at a time, `crawl-delay` apart.
 
     Its own thread, so a board that asks for five seconds between requests
@@ -418,6 +376,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
     before the first request too: the health probe has just asked. It says up
     front when the requests will not all fit its budget, stops at SWEEP_BUDGET or
     SWEEP_MAX_FAILS failures in a row, and names what it did not send and why.
+
+    `requests`, a file, gets one line per request (request_line), with how many of
+    its rows were new to the round when `on_rows` says so by returning a count.
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
     start, streak, sent, last, why = clock(), 0, 0, "", ""
@@ -439,6 +400,7 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             break
         if delay:
             sleep(delay)
+        began = clock()
         try:
             got, err = (contract(skill, q, loc, pg, jobage, remote=True) if remote
                         else contract(skill, q, loc, pg, jobage))
@@ -450,8 +412,13 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             failed.append(err)
             last = cause(err)
         rows += got
+        new = None
         if on_rows and got:
-            on_rows(list(got))
+            new = on_rows(list(got))
+        if requests:
+            _log_request(requests, request_line(
+                skill, task, len(got), new if isinstance(new, int) else (0 if not got else None),
+                err, clock() - began))
         if tally is not None:
             tally.sent = sent
             if err:
@@ -622,15 +589,25 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
         n = sum(1 for j in jobs if j[0] == portal)
         t = tallies.setdefault(portal, Tally(portal, min(n, cap) if cap else n, workers, cap))
         t.queued, t.ends = n, start + budget
-    queue, rows, lock = deque(jobs), [], threading.Lock()
+    # One queue a portal, each in the order given, every job numbered by its place in
+    # that order. A single queue was walked from the front on every take, past every
+    # job of a portal that had stopped or reached its cap, which grows with the square
+    # of the queue: the next job is the lowest-numbered head among portals that may
+    # send, which is the same job, found by looking at one head a portal.
+    queues: dict[str, deque] = {portal: deque() for portal in mine}
+    for n, job in enumerate(jobs):
+        queues[job[0]].append((n, job))
+    rows, lock = [], threading.Lock()
 
     def take():
         now = clock()
         if now - start >= budget:
             return "done", None
-        waits = []
-        for i, job in enumerate(queue):
-            t = tallies[job[0]]
+        waits, best = [], None
+        for portal, q in queues.items():
+            if not q:
+                continue
+            t = tallies[portal]
             if t.stopped or (t.cap and t.sent + t.active >= t.cap):
                 continue
             if t.until > now:
@@ -639,7 +616,11 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
             if t.active >= t.limit:
                 waits.append(0.2)                    # its share of the workers is busy
                 continue
-            del queue[i]
+            if best is None or q[0][0] < queues[best][0][0]:
+                best = portal
+        if best is not None:
+            _n, job = queues[best].popleft()
+            t = tallies[best]
             t.active += 1
             t.queued -= 1
             return "go", job
@@ -690,7 +671,7 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
     for th in threads:
         th.join()
     for portal, t in tallies.items():
-        left = sum(1 for j in queue if j[0] == portal)
+        left = len(queues.get(portal, ()))
         if not left or t.stopped:
             if left:
                 t.failed.append(f"{left} request(s) not sent: {t.stopped}")
@@ -775,16 +756,26 @@ def canary(jobage: int = CANARY_JOBAGE,
                        functools.partial(contract, skill, word, loc, 1,
                                          max(jobage, CANARY_JOBAGE))))
         wanted.add(portals.short(skill))
-    for name, fn in probes:
-        if name not in wanted:
-            continue
+    probes = [(name, fn) for name, fn in probes if name in wanted]
+
+    def ask(fn):
         began = time.monotonic()
         try:
             rows_, err = fn()
         except Exception as e:                      # a build or resolve failure
-            out[name] = (False, f"{type(e).__name__}: {str(e)[:150]}")
+            return None, f"{type(e).__name__}: {str(e)[:150]}", None
+        return rows_, err, time.monotonic() - began
+
+    # Every portal at once: one request each, to hosts of their own, and the round
+    # waited for each in turn (one board's probe alone took up to half a minute).
+    # The answers are read in the order the probes are listed, as before.
+    with ThreadPoolExecutor(max_workers=max(1, len(probes))) as ex:
+        answers = list(ex.map(lambda p: ask(p[1]), probes))
+    for (name, _fn), (rows_, err, took) in zip(probes, answers):
+        if took is None:
+            out[name] = (False, err)
             continue
-        PROBE_SECONDS[name] = time.monotonic() - began
+        PROBE_SECONDS[name] = took
         if err and refused(err):
             out[name] = (False, REFUSED + refused(err))
         elif err:
@@ -862,11 +853,13 @@ def merge_alerts(seen: dict[str, dict], alerts: list[dict]) -> int:
 
     LinkedIn's search gives a slugged URL and an alert the bare one, so the
     same posting is matched on its LinkedIn id, not its URL."""
+    from lookup_score import norm
     have = {str(r.get("id")) for r in seen.values() if r.get("portal") == "linkedin"}
     added = 0
     for r in alerts:
         jid = str(r.get("id"))
-        if r.get("url") and jid not in have and r["url"] not in seen:
+        if (r.get("url") and jid not in have and r["url"] not in seen
+                and norm(r["url"]) not in seen):
             seen[r["url"]] = r
             have.add(jid)
             added += 1
@@ -1133,6 +1126,19 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
     return 2 if bad or partial else 0
 
 
+def _employer_boards(today: dt.date, seen: str | None = None,
+                     keep_ruled_out: bool = False) -> tuple[list[dict], dict[str, str], dict[str, str]]:
+    """(rows, {employer: why it was quiet}, {employer: what it left out}) from every
+    employer board in profile/boards.py (tools/ats_boards.py). An error is raised to
+    whoever waits for the answer, which reports it and carries on. `seen` and
+    `keep_ruled_out` are the round's own: a replayed round, or one run with
+    --no-seen-read, judged careers-site pages against the repo's file instead."""
+    from ats_boards import fetch_all as _ats_fetch
+    notes: dict[str, str] = {}
+    rows, quiet = _ats_fetch(notes=notes, today=today, seen=seen, keep_ruled_out=keep_ruled_out)
+    return rows, quiet, notes
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", help="the directory the scrape's files go in (required)")
@@ -1144,6 +1150,10 @@ def main() -> int:
                          "computer (profile/search.py SCRAPE_PAGES sets their own)")
     ap.add_argument("--jobage", type=int, default=14)
     ap.add_argument("--today", default=None)
+    ap.add_argument("--seen", default=None,
+                    help="the round's seen_jobs.json, for the employer boards (default: the repo's)")
+    ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
+                    help="employer boards keep postings already ruled out (run_round --no-seen-read)")
     ap.add_argument("--workers", type=int, default=None,
                     help=f"default {CLOUD_WORKERS} in the cloud, {LOCAL_WORKERS} on their own "
                          "computer (SCRAPE_WORKERS)")
@@ -1153,6 +1163,8 @@ def main() -> int:
     ap.add_argument("--budget", type=int, default=POOL_BUDGET,
                     help="seconds the LinkedIn and freehire requests may take, in all")
     ap.add_argument("--log", default=None, help="a file the progress lines are appended to")
+    ap.add_argument("--request-log", dest="request_log", default=None,
+                    help="a file that gets one line per request a paced board sends")
     ap.add_argument("--finish", action="store_true",
                     help="no requests: write the scrape's files from what a killed run left "
                          f"in {PARTIAL}, and exit 2")
@@ -1212,9 +1224,19 @@ def main() -> int:
     # On stdout it reached the round's log only when the scrape stage had ended, so a
     # portal answering 403 and a board redirecting to a sandbox were named after
     # their sweeps rather than before. A portal that refused is sent nothing more.
+    from run_round import took
+    began = time.monotonic()
+
+    def timing(what: str, since: float) -> None:
+        # Where a round's time goes, in the round's log: the pool, the paced boards and
+        # the employer boards run side by side, and the stage's total says nothing of which
+        # one it waited for.
+        _say(f"timing: {what} {took(time.monotonic() - since)}", a.log)
+
     health: dict[str, tuple[bool, str]] = {}
     if not a.skip_canary:
         health = canary(a.jobage, on)
+        timing("the health probes took", began)
         report, ok = canary_report(health)
         _say("portal health:", a.log)
         for line in report.splitlines():
@@ -1244,11 +1266,23 @@ def main() -> int:
     mine: dict[str, list[tuple]] = {}
     lock = threading.Lock()
 
+    from lookup_score import norm as _norm
+
     def landed(rows_):
+        """Add rows to the round, the first copy of a posting kept; how many were new.
+
+        A posting is its address as lookup_score.norm reads it, the key every later
+        stage matches on: LinkedIn gives one posting under www. and a country's
+        subdomain, bare and with a slug, and both copies were fetched and scored."""
+        new = 0
         with lock:
             for r in rows_:
-                if r.get("url"):
-                    seen.setdefault(r["url"], r)
+                url = r.get("url")
+                key = (_norm(url) or url) if url else None
+                if key and key not in seen:
+                    seen[key] = r
+                    new += 1
+        return new
 
     for task in tasks:
         if task[0] not in ("li", "lir", "fh"):
@@ -1257,7 +1291,8 @@ def main() -> int:
                                  for k, ts in mine.items()}
     paced = ThreadPoolExecutor(max_workers=max(1, len(mine)))
     sweeps = {paced.submit(sweep, skill, ts, a.jobage, tally=tallies[portals.short(skill)],
-                           on_rows=landed, log=a.log): portals.short(skill)
+                           on_rows=landed, log=a.log, requests=a.request_log):
+              portals.short(skill)
               for skill, ts in mine.items()}
     jobs = []
     for task in tasks:
@@ -1287,8 +1322,23 @@ def main() -> int:
 
     ticker = threading.Thread(target=progress, daemon=True)
     ticker.start()
+    # The employer boards are read while the portals are searched, on hosts of their
+    # own, and their rows are added below where they always were, after every portal's.
+    boards = ThreadPoolExecutor(max_workers=1)
+    searching = time.monotonic()
+    boards_took: list = []
+
+    def read_boards():
+        try:
+            return _employer_boards(today, a.seen, a.keep_ruled_out)
+        finally:
+            boards_took.append(time.monotonic() - searching)
+    employer_boards = boards.submit(read_boards)
+    boards.shutdown(wait=False)
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
                            on_rows=landed)
+    if jobs:
+        timing("LinkedIn and freehire finished after", searching)
     swept: dict[str, int] = {}
     for f in as_completed(sweeps):
         portal = sweeps[f]
@@ -1302,6 +1352,8 @@ def main() -> int:
             failed.setdefault(portal, []).extend(errs)
         landed(rows_)
     paced.shutdown()
+    if mine:
+        timing("the paced boards finished after", searching)
     done.set()
     ticker.join()
     for name, t in pool_tallies.items():
@@ -1333,10 +1385,17 @@ def main() -> int:
     #
     # Additive and best-effort. A board that stops resolving is reported, never
     # fatal, and the portals still carry the round.
+    #
+    # They are read on their own thread from the moment the portals start
+    # (_employer_boards), and used to be read only now, after every paced board had
+    # spent its budget: minutes of a round spent waiting for requests that need
+    # nothing from the portals. Their rows still join here, after every portal's, so
+    # where one posting comes from two sources the portal's copy is still the one kept.
     try:
-        from ats_boards import fetch_all as _ats_fetch
-        ats_notes: dict[str, str] = {}
-        ats_rows, ats_quiet = _ats_fetch(notes=ats_notes, today=today)
+        waiting = time.monotonic()
+        ats_rows, ats_quiet, ats_notes = employer_boards.result()
+        _say(f"timing: the employer boards finished after {took(boards_took[0])}, "
+             f"waited for {took(time.monotonic() - waiting)} here", a.log)
         landed(ats_rows)
         ats_by: dict[str, int] = {}
         for r in ats_rows:

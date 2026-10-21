@@ -1,0 +1,69 @@
+{
+ "exit": 2,
+ "dropped": [
+  {
+   "id": "gh-7002",
+   "title": "HGV Driver",
+   "company": "Wrenfield Freight Ltd",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7002",
+   "location": "Manchester, United Kingdom",
+   "date": "2026-10-16",
+   "portal": "greenhouse",
+   "desc": "Night trunking runs between our depots.",
+   "deadline": null,
+   "prefilter_reason": "title: a warehouse or driving role, not analytics",
+   "location_verdict": "PASS",
+   "location_reason": "Greater Manchester (manchester)",
+   "age_days": 4,
+   "prefilter": "title: a warehouse or driving role, not analytics"
+  },
+  {
+   "id": "4000000119",
+   "title": "Data Analyst",
+   "company": "Acme Analytics",
+   "url": "https://www.linkedin.com/jobs/view/4000000119",
+   "location": "London, England, United Kingdom",
+   "date": "2026-10-15",
+   "portal": "linkedin",
+   "desc": null,
+   "prefilter_reason": "location: on-site outside the Greater Manchester (london)",
+   "location_verdict": "FAIL",
+   "location_reason": "on-site outside the Greater Manchester (london)",
+   "age_days": 5,
+   "prefilter": "location: on-site outside the Greater Manchester (london)"
+  },
+  {
+   "id": "4000000120",
+   "title": "Supply Chain Analyst",
+   "company": "Oakmere Foods",
+   "url": "https://www.linkedin.com/jobs/view/4000000120",
+   "location": "Manchester, England, United Kingdom",
+   "date": "2026-09-25",
+   "portal": "linkedin",
+   "desc": null,
+   "prefilter_reason": "age: posted 25 days ago, past the 14-day hard limit",
+   "location_verdict": "PASS",
+   "location_reason": "Greater Manchester (manchester)",
+   "age_days": 25,
+   "prefilter": "age: posted 25 days ago, past the 14-day hard limit"
+  }
+ ],
+ "health": {
+  "portals_down": [
+   "lockedboard",
+   "quietboard"
+  ],
+  "detail": {
+   "linkedin": "1 results",
+   "freehire": "1 results",
+   "cityboard": "1 results",
+   "lockedboard": "refused the probe, so nothing more is sent to it this round: THROTTLED: redirecting searches to /sandbox (robots.txt disallows it); not followed.",
+   "nationalboard": "1 results",
+   "quietboard": "0 results for the probe query in its search"
+  },
+  "not_searched": {
+   "lockedboard": "THROTTLED: redirecting searches to /sandbox (robots.txt disallows it); not followed."
+  },
+  "say": ""
+ }
+}

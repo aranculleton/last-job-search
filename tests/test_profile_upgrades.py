@@ -830,3 +830,13 @@ def test_the_example_is_judged_on_its_own_files_never_the_repo_it_runs_in(
     assert U.by_id("own-tests").pending() == ""
     assert [(u.id, why) for u, why in U.pending()] == []
     assert os.path.isfile(person.state("job_search_tracker.csv"))
+
+
+def test_a_name_read_through_a_one_argument_getter_is_listed():
+    # network/reply.py reads HOME_COUNTRY, HOME_ADJECTIVE and HOME_CITY through
+    # `def _w(name): ... getattr(_NET, name, "")`. Only two-argument wrappers were read,
+    # so HOME_ADJECTIVE, read nowhere else, was missing from every check of a profile.
+    import profile_names
+    names = profile_names.collect()["networking"]
+    assert "tools/network/reply.py:69" in names["HOME_ADJECTIVE"]["where"]
+    assert not names["HOME_ADJECTIVE"]["required"]

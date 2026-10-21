@@ -1,5 +1,5 @@
 ---
-framework_version: 2.2.2
+framework_version: 2.2.3
 ---
 
 # Agent guidelines
@@ -18,8 +18,9 @@ It is a pointer, not a second copy. Nothing here is the source of truth for anyt
 ## Read these, in this order
 
 1. **[`CLAUDE.md`](CLAUDE.md)** is the real entry point. Candidate profile, operating
-   rules, what routes to which command, the persistence rule, and the verification
-   checklist. If you read one file, read that one. Then read `profile/CLAUDE.md`, the
+   rules, what routes to which command, the persistence rule, and where the verification
+   checklist is (`.claude/skills/job-application-assistant/verification-checklist.md`). If
+   you read one file, read that one. Then read `profile/CLAUDE.md`, the
    person: `CLAUDE.md` pulls it in with an `@profile/CLAUDE.md` line that only Claude Code
    follows.
 2. **[`RUNBOOK.md`](RUNBOOK.md)** is one round end to end, portals to sent applications,

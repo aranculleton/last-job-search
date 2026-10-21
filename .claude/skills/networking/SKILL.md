@@ -49,9 +49,11 @@ done correctly*.
 | `prep.py` | Call prep documents, for a call that came out of a thread |
 | `profile_facts.py` | The candidate half of a prep document, read from the profile |
 
-**Never hand-write a message without running `compose.validate()` on it.** The
-tone rules exist because each one was a correction made in practice; the checker
-is how they stop being re-learned.
+**Never hand-write a message without running `compose.validate()` on it**, with the
+recipient's `name=`: a draft that greets anybody else ("Hi Tamsin," on a note for Riley
+Chen, which a shuffled batch produces) is refused as `greeting_wrong_name`, and no
+recorded rule lifts that. The tone rules exist because each one was a correction made
+in practice; the checker is how they stop being re-learned.
 
 ## This skill and its four commands
 
@@ -132,9 +134,11 @@ robots.txt allows.
 Each employer gets at most `sources.SEARCHES_PER_COMPANY` (four) searches across all
 its kinds, every kind taking a turn before any takes a second, and the kinds searched
 once for the whole run (alumni, rosters, meetups, awards) share `SEARCHES_PER_RUN`
-(five). The LinkedIn title search inside that is one query, two if the first returns
-nothing usable or the company has several relevant sub-teams: `discovery.queries_for()`
-returns at most two, and **never more than three** whatever the caller passes. Searches
+(five). Inside that, the LinkedIn title searches go first, both of them
+(`sources.TITLE_SEARCHES`, two: the one kind measured to name people in bulk);
+`discovery.queries_for()` returns at most two, and **never more than three** whatever the
+caller passes. On top of the four, at most `sources.CHECKS_PER_COMPANY` (three) searches
+check the profile of the best name-only people a page named (`sources.to_check`). Searches
 that return nothing at all are
 `no_results`, which proves nothing: try a roster, record nothing.
 Queries that return people of whom none fits are `no_relevant_presence`: record it
@@ -147,6 +151,9 @@ next month.
 caps. Do not route around them.
 
 ### Tiers
+
+These tiers rank people. The job-scraper skill's Tiers 1 to 4 are its scoring stages, a
+different thing.
 
 1. **Live hiring intent.** The snippet quotes a post saying they are hiring.
    Converts far better than anything else, because the person has a live need
@@ -670,6 +677,14 @@ text.** `state.derive_status` reads that row as `connected_no_reply`, never as a
 reply, and the nudge clock runs from its date. Reading the direction alone would
 count an acceptance as an answer, make the employer a warm route and refuse the
 nudge because "they answered".
+
+**An automatic reply is not a reply either.** An out-of-office or a "no longer with
+the company" template logged inbound (scenario `auto_reply`, or recognised from its words
+by `state.auto_reply()`, in English and a few other languages) changes nothing: the
+thread still waits on them, the employer is not a warm route, no reply is owed, and it
+never counts as a message that drew a reply. An away message's return date holds the
+nudge until two working days after it (`state.AWAY_GRACE_BUSINESS_DAYS`); a "no longer
+with" means closing the contact and finding who holds the role now.
 
 The blind spot that remains: the repo cannot see LinkedIn, so it only knows
 someone accepted when the candidate says so. Every `awaiting_reply` row is

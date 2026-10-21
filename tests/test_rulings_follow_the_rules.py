@@ -214,3 +214,80 @@ def test_one_of_several_identical_reasons_is_picked_by_its_address(tmp_path):
     import pytest
     with pytest.raises(ValueError):
         exclude.lift("", path=path)            # neither words nor an address: nothing named
+
+
+# ---------------------------------------------------------------- the screen's own words
+
+# Postings the example's screen cuts, one per kind of cut, written by the screen itself.
+_SCREEN_CUTS = {
+    "eligibility": "You must hold British nationality as a condition of employment.",
+    "internal only": "This vacancy is open to current employees only.",
+    "another language": "Fluency in Spanish is essential for this role.",
+    "the gated language": "Fluency in Welsh is essential.",
+    "pay": "The salary range is £28,000 - £31,000.",
+    "residence": "Candidates must be based in the United States.",
+    "designation": "Membership of CIPS is mandatory; ACCA required.",
+}
+
+
+def _screen_reason(desc):
+    import text_screen
+    cuts = text_screen.screen({"title": "Data Analyst", "desc": desc})["cuts"]
+    assert cuts, desc
+    return "; ".join(cuts)
+
+
+def test_every_cut_the_screen_writes_names_the_settings_it_rests_on():
+    # Eligibility, internal-only and another-language cuts named nothing: the reader
+    # kept its own copy of the screen's words, and read only the languages the profile
+    # gates, and a setting the profile left unset was no part at all. They rested on the
+    # whole rules and lapsed on any change to them, so the next round paid to fetch and
+    # screen every one again.
+    want = {"eligibility": "search.py ELIGIBILITY", "internal only": "search.py INTERNAL_ONLY",
+            "another language": "search.py LANGUAGES_HELD",
+            "the gated language": "search.py LANGUAGE_GATE", "pay": "search.py SALARY_CUT_BELOW",
+            "residence": "search.py LOCATION", "designation": "search.py DESIGNATION"}
+    for kind, desc in _SCREEN_CUTS.items():
+        assert want[kind] in exclude.cited(_screen_reason(desc)), kind
+
+
+def test_a_screen_ruling_outlives_a_change_to_another_part(tmp_path, monkeypatch):
+    path = _seen(tmp_path)
+    for i, (kind, desc) in enumerate(_SCREEN_CUTS.items()):
+        if kind != "pay":
+            exclude.add(URL + str(i), _screen_reason(desc), "Data Analyst", "Oakmere Foods",
+                        path=path)
+    entries = json.load(open(path))["seen"]
+    assert all(e["rests_on"] != exclude.ALL for e in entries.values())
+    s = exclude.person.module("search")
+    monkeypatch.setattr(s, "SALARY_CUT_BELOW", s.SALARY_CUT_BELOW + 1000, raising=False)
+    urls, _ = throttle.ruled_out(entries)
+    assert len(urls) == len(entries)
+
+
+def test_a_ruling_on_an_unset_setting_lapses_when_the_person_sets_it(tmp_path, monkeypatch):
+    import re
+    path = _seen(tmp_path)
+    exclude.add(URL, _screen_reason(_SCREEN_CUTS["internal only"]), "Data Analyst",
+                "Oakmere Foods", path=path)
+    s = exclude.person.module("search")
+    monkeypatch.setattr(s, "INTERNAL_ONLY", re.compile(r"\binternal only\b", re.I), raising=False)
+    urls, _ = throttle.ruled_out(json.load(open(path))["seen"])
+    assert urls == {}
+
+
+def test_a_pay_ruling_is_read_back_in_any_currency(monkeypatch):
+    import text_screen
+    for mark in ("C$", "CA$", "A$", "R$", "kr ", "£"):
+        # A market that writes its money this way, as the screen is built for it.
+        values, labelled = text_screen.money_parser(mark.strip(), "")
+        monkeypatch.setattr(text_screen, "money_values", values)
+        monkeypatch.setattr(text_screen, "labelled_value", labelled)
+        monkeypatch.setattr(text_screen, "CUR", mark)
+        reason = _screen_reason(_SCREEN_CUTS["pay"].replace("£", mark))
+        assert throttle.range_top(reason) == 31_000, reason
+        # Under the cut line, it still cuts: read as no figure, it was released as stale.
+        assert not throttle.is_stale_exclusion(reason), reason
+    for reason, top in (("range tops out at CA$28,000", 28_000), ("salary up to A$28,000", 28_000),
+                        ("range R$20,000 - R$28,000", 28_000), ("tops out at kr 28 000", 28_000)):
+        assert throttle.range_top(reason) == top, reason

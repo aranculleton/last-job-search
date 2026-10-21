@@ -107,13 +107,22 @@ class BothEntryPointsGoThroughIt(unittest.TestCase):
     """A second compile path that skipped the check is the whole bug again."""
 
     def test_neither_entry_point_calls_subprocess_directly(self):
-        src = (ROOT / "tools" / "fit_to_page.py").read_text(encoding="utf-8")
-        body = src[src.index("def compile_resume"):src.index("def body_words")]
-        self.assertNotIn("subprocess.run", body,
-                         "compile_resume/compile_letter must delegate to "
-                         "_compile, which is where the failure check lives")
-        for engine in ("lualatex", "xelatex"):
-            self.assertIn(engine, body)
+        # compile_resume and compile_letter must delegate to _compile, which is where
+        # the failure check lives: with the engine producing nothing, each one fails
+        # loudly, and each runs its own engine.
+        engines = []
+
+        def nothing(cmd, cwd=None, capture_output=False, **kw):
+            engines.append(cmd[0])
+            return _Result(0, b"")
+        with mock.patch.object(F.subprocess, "run", side_effect=nothing), \
+                mock.patch.object(F, "resume_pdf", return_value="/nonexistent/r.pdf"), \
+                mock.patch.object(F, "letter_pdf", return_value="/nonexistent/l.pdf"):
+            with self.assertRaises(F.CompileFailed):
+                F.compile_resume("Acme")
+            with self.assertRaises(F.CompileFailed):
+                F.compile_letter("Acme")
+        self.assertEqual(["lualatex", "xelatex"], engines)
 
 
 if __name__ == "__main__":

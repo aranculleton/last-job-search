@@ -23,10 +23,8 @@ from __future__ import annotations
 
 import argparse
 import csv
-import inspect
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -440,7 +438,6 @@ def test_a_hiring_manager_on_a_live_process_hears_the_referrer_when_asked():
 def test_the_call_prep_supplies_no_generic_question_when_nothing_is_researched():
     doc = prep.prep_markdown(PEER, {}, None, {}, [], TODAY, never_say=NO_NEVER)
     assert "six months" not in _section(doc, "Ask them")
-    assert "Generic questions are deliberately absent" in inspect.getsource(prep)
 
 
 # ------------------------------------------------------------ 14. nothing dead, nothing personal
@@ -450,11 +447,11 @@ def test_dead_code_is_gone_and_the_narrative_check_is_nobodys_in_particular():
     assert not hasattr(bridges, "bridge_for")
     assert not hasattr(profile_facts, "MAX_EMPLOYERS")
     assert not hasattr(prep, "LIVING")
-    # The prep asks only whether there is a narrative, by a check that names no one's words;
+    # The prep asks only whether there is a narrative, by a check that names no one's words:
+    # a narrative told in anybody's words counts, and an empty heading does not.
     # narrative() itself stays because a person's own tests call it.
-    assert "learning quickly" not in inspect.getsource(profile_facts.has_narrative)
+    told = {"Personal Narrative": ["> I taught music for six years before I moved into data."]}
+    assert profile_facts.has_narrative(told)
+    assert not profile_facts.has_narrative({"Personal Narrative": [""]})
     assert profile_facts.build().get("narrative") is True
     assert callable(profile_facts.narrative)
-    text = inspect.getsource(prep)
-    assert not re.search(r"which is the title that actually appears on these rows\.\n# The marks",
-                         text)

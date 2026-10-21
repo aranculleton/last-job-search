@@ -47,8 +47,7 @@ From the normalised data compute:
 
 - **Total applications**
 - **By status bucket:** count per bucket
-- **By sector:** count per unique sector value
-- **By channel:** portal vs online vs referral vs other
+- **By sector and by channel, as rates with their n:** run `python3 tools/what_works.py rates --by sector` and `python3 tools/what_works.py rates --by channel` (JSON). Each group is `reached` of `decided`: the applications with a result, counted the way `what_works.py brief search` counts them, so the dashboard and the brief never disagree. A count per channel ("12 portal, 3 referral") says nothing about which one works; a rate does, with the number it rests on beside it. A group with `enough` false (under `min_group` decided) is shown with its n and the words "too few to compare", never ranked against the others. Say once how many applications are `waiting` (sent, no answer yet): they are in no rate.
 - **By year/season:** group by the `date` field (which may be a year like `2025` or a full date)
 - **Funnel rates:** what % progressed past resume screen (reached Interview or beyond). Compute stage-reached from history, not current status: an application counts as having reached a stage when its current status implies it **or** its merged `outcome.md` stage checkboxes (Step 1.2) show the stage was reached - a `rejected` row whose outcome file ticks an interview stage reached Interview, and a `hired` row reached every stage before Hired. Current status alone structurally undercounts every earlier stage: a finished search would read as though nobody ever interviewed.
 - **Rejection rate:** true rejections (`rejected`, `no_response`) ÷ applications with a final outcome. `offer_declined` (the candidate turned the offer down - a success) and `withdrawn` (candidate-initiated) are not rejections and stay out of the numerator; Interview and Offer rows are still unresolved, so they stay out of the denominator along with Active. The Rejected/Closed status *bucket* still groups all closed rows for the doughnut - the rate just must not reuse the bucket blindly.
@@ -107,12 +106,12 @@ Write a single self-contained HTML file. All CSS is inline in a `<style>` block.
 ### Charts (inline SVG)
 
 1. **Status doughnut** - slices for each status bucket, colours from the palette above
-2. **By sector bar** (horizontal) - company count per sector, sorted descending
-3. **By channel bar** - portal / online / referral / other, the same four groups as Step 2 (`/apply` writes `portal` for a posting from a job portal)
+2. **By sector bar** (horizontal) - the interview rate per sector from Step 2's `rates --by sector`, each bar labelled with its n (`3 of 11, 27%`), groups ordered by `decided`, most first; a group with `enough` false drawn in a muted colour and labelled "too few to compare"
+3. **By channel bar** - the same, per channel, from `rates --by channel` (`/apply` writes `portal` for a posting from a job portal). Never a bare count: a bar's length is a rate, and its label carries the n
 4. **Application funnel** (horizontal bar) - Applied → Interview → Offer → Hired, each bar = count reaching that stage, derived per Step 2's funnel rule (current status **plus** the merged `outcome.md` stage checkboxes), so a candidate who interviewed and was later rejected still counts in the Interview bar
 5. **By year or season bar** - applications per group from Step 2's year/season grouping, oldest first
 
-Build each chart as a hand-written `<svg>` element: compute bar lengths/doughnut arc angles from the stats in Step 2 and emit the `<rect>`/`<path>`/`<circle>` and `<text>` elements directly - no charting library, no `<canvas>`. Each `<svg>` has `role="img"` and an `aria-label` summarizing the chart (e.g. "Status breakdown: 3 Active, 2 Interview, 1 Offer"). Wrap each in a `<div class="chart-card">` with an `<h3>` title above. Remember to escape any label/value text drawn into `<text>` nodes per the escaping rule above.
+Build each chart as a hand-written `<svg>` element: compute bar lengths/doughnut arc angles from the stats in Step 2 and emit the `<rect>`/`<path>`/`<circle>` and `<text>` elements directly - no charting library, no `<canvas>`. Each `<svg>` has `role="img"` and an `aria-label` summarizing the chart (e.g. "Status breakdown: 3 Active, 2 Interview, 1 Offer"; "By channel: referral 3 of 5 reached interview, portal 2 of 21"). Wrap each in a `<div class="chart-card">` with an `<h3>` title above. Remember to escape any label/value text drawn into `<text>` nodes per the escaping rule above.
 
 ### Table: columns to include
 

@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.4
+framework_version: 1.1.5
 ---
 
 # Cost Model for the Application Lifecycle
@@ -75,15 +75,21 @@ error is expensive does.
 | Full weighted scoring | **sonnet** | Bounded judgment against an explicit rubric. |
 | Adversarial verification | **sonnet**, `effort: high` | Needs scepticism more than raw capability; the prompt supplies the adversarial frame. |
 | Company research and targeting | **sonnet** | Fetching, reading and summarizing. |
-| **Grounding and rules audit** | **default (strongest)** | Where the expensive mistakes hide. This agent catches a metric attached to the wrong model, a "most recently" that contradicts the dates printed below it, and a superseded corporate strategy presented as current. Never downgrade it. |
+| **Grounding and rules audit** | **default (the session's own)** | Where the expensive mistakes hide. This agent catches a metric attached to the wrong model, a "most recently" that contradicts the dates printed below it, and a superseded corporate strategy presented as current. Never downgrade it. |
 | Drafting | **default** | The main loop, holding the whole context. |
 
 In a Workflow script this is `opts.model` and `opts.effort` per `agent()` call. Omit both to
 inherit the session model when unsure: an inherited default is a smaller mistake than a wrong
 downgrade.
 
+**"Strongest" means the session's own model.** The drafting and the grounding audit set no
+model, so they run on whatever the session runs on, and are never moved to a cheaper one.
+When the session's model is not strong enough for a piece of work, `tools/model_guide.py`
+says so (at the day's sync, and with `--on` before the work), and its one line goes first in
+the reply.
+
 **The one rule that overrides cost:** anything that could put a false claim in front of an employer
-runs on the strongest model available. Cheapness is never a reason to risk a fabrication.
+runs on the strongest model available, which is the session's own (above). Cheapness is never a reason to risk a fabrication.
 
 **The corollary, learned by measuring:** a cheap model may *extract* and it may *reject on a
 quoted fact*, but it may not *judge*. Two attempts to move the fit score onto cheap machinery

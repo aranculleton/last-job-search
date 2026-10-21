@@ -30,7 +30,6 @@ caller can branch on it.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import re
@@ -106,7 +105,9 @@ def _query_pairs(query: str) -> dict:
 
 
 def load_seen() -> dict:
-    with open(SEEN) as fh:
+    # UTF-8 by name, as it is written (ensure_ascii=False): on a computer whose default
+    # is cp1252 an accented employer name was misread, or the read failed.
+    with open(SEEN, encoding="utf-8") as fh:
         return json.load(fh)["seen"]
 
 
@@ -161,18 +162,14 @@ def tracker_rows_for(key: str | None, company: str | None) -> list[dict]:
     of its name. This is the check /apply relies on before drafting, and a raw
     name comparison said nothing about an application to "Acme Analytics Inc."
     when asked about "Acme Analytics"."""
-    if not os.path.exists(TRACKER):
-        return []
     import csv_store
-    csv_store.refuse_conflicts(TRACKER)
     co = company_key(company) if company else ""
     out = []
-    with open(TRACKER, newline="", encoding="utf-8") as fh:
-        for row in csv.DictReader(fh):
-            if key and norm(row.get("source")) == key:
-                out.append(row)
-            elif co and company_key(row.get("company")) == co:
-                out.append(row)
+    for row in csv_store.read_rows(TRACKER):
+        if key and norm(row.get("source")) == key:
+            out.append(row)
+        elif co and company_key(row.get("company")) == co:
+            out.append(row)
     return out
 
 

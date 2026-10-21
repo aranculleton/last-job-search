@@ -31,6 +31,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -248,7 +249,7 @@ _NUM = r"(\d{1,2}|" + "|".join(WORD_NUM) + r")"
 # or older ... criminal background check" reads as a bar.
 YEARS = re.compile(
     r"\b" + _NUM + r"\s*(?:\+|(?:\s*(?:-|–|—|to)\s*" + _NUM + r"))?\s*(?:\+\s*)?"
-    r"(?:years?|yrs?)\b\s*"
+    r"(?:years?|yrs?)\b\.?\s*"
     r"(?:(?:of|in|’|'|working|relevant|progressive|professional|hands[- ]on|"
     r"related|industry|practical|proven|demonstrated|direct|prior|full[- ]time|"
     r"solid|strong|recent|previous|combined|equivalent|total|minimum|"
@@ -304,7 +305,13 @@ def under_minimum_qualifications(text, sentence):
         return False
     return bool(MINIMUM_HEADING.search(text[max(0, i - 700):i]))
 
-DEGREE = re.compile(r"\b(master'?s?|msc|m\.s\.|mba|ph\.?d|doctorate|graduate degree|advanced degree)\b", re.I)
+# A graduate degree, however a posting names it. One definition: tools/fit.py docks
+# points on this pattern (fit.GRAD) and the screen flags on it, and while each kept
+# its own the score read no degree in "An MBA is required", "an advanced degree in
+# statistics" or "a graduate degree" that the screen flagged, and the screen read
+# none in "M.S. in statistics" or "a doctoral degree" that the score docked.
+DEGREE = re.compile(r"\b(?:master|msc|m\.sc\.?|m\.s\.?|mba|ph\.?\s?d\.?|doctora\w*"
+                    r"|(?:post-?)?graduate degree|advanced degree)(?:'?s)?(?![\w'])", re.I)
 # "Master" is a data-architecture word before it is a degree. A posting can
 # list "master data management" among its data skills and be flagged as
 # stating a graduate requirement. `mastering`, `master plan` and
@@ -395,15 +402,42 @@ _SECTION_HEADING = re.compile(
     r"|you (?:will|'ll) (?:have|bring|need))\b)", re.I)
 
 
+# A full stop that ends an abbreviation, not a sentence. Split there, "5+ yrs. of
+# experience" lost its bar ("5+ yrs." alone has no experience phrase), "Ph.D. in
+# statistics required." lost the word "required", and "must be U.S. citizens" lost
+# the status. An initialism ("U.S.", "Ph.D.", "e.g.", "a.m.") is a letter and a full
+# stop after another full stop; the words are those a posting abbreviates mid-sentence.
+# Only where the next word carries on in lower case or with a figure: "based in the
+# U.S. We are an equal opportunity employer" is two sentences, and joined, the second
+# would excuse the first. A lone capital ("Python or R.") is a sentence end.
+ABBREVIATIONS = ("vs", "approx", "min", "max", "yrs", "yr", "incl", "inc", "ltd", "co",
+                 "etc", "dr", "mr", "mrs", "ms", "st", "sr", "jr", "sc")
+SENTENCE_END = re.compile(
+    r"(?<=[.!?;])(?:(?<!\.[A-Za-z]\.)"
+    + "".join(r"(?<!\b(?i:%s)\.)" % a for a in ABBREVIATIONS)
+    + r"\s+|\s+(?![\sa-z0-9]))|\n+")
+
+
 def sentences(text: str) -> list[str]:
     """Sentences, with run-together bullet lists broken back apart.
 
     Only over-long pieces are split further. Ordinary prose is left exactly as
     it was, because the aggressive break would cut it at every proper noun; a
     piece three times the median length is a list, not a sentence.
+
+    Every gate reads a posting's sentences, so one posting's body is split about
+    fifteen times across the screen, the opportunity score, fit and the bar, and the
+    split was most of what those stages cost. The split of a body is kept for the
+    next reader (`_split`); each caller gets its own list, so none can change
+    another's.
     """
+    return list(_split(text or ""))
+
+
+@functools.lru_cache(maxsize=128)
+def _split(text: str) -> tuple:
     out = []
-    for piece in re.split(r"(?<=[.!?;])\s+|\n+", text or ""):
+    for piece in SENTENCE_END.split(text):
         piece = piece.strip()
         if not piece:
             continue
@@ -411,7 +445,7 @@ def sentences(text: str) -> list[str]:
             out.extend(_break_bullets(piece))
         else:
             out.append(piece)
-    return out
+    return tuple(out)
 
 
 # The shortest thing a bullet can be. Without a floor the capitalised-word rule
@@ -561,10 +595,13 @@ _BAND_SPLIT = re.compile(r"[,;]\s+(?=\D{0,40}\d)|\s+(?:and|or)\s+(?=\D{0,40}\d)"
 
 
 def _home(text: str) -> bool:
-    """Does `text` name the person's own place: their metro or their country?"""
-    low = str(text or "").lower()
-    return any(m and str(m).lower() in low for m in _places.METRO) or \
-        bool(_places.HOME_COUNTRY_RX.search(text or ""))
+    """Does `text` name the person's own place: their metro, region or country?
+
+    The one place matcher the residence cut uses (`_names_home`). This kept its own,
+    which matched a metro town inside any word and the country only as written, so a
+    "wholesale" desk read as the town of Sale, "Canterbury" as Bury, and a band marked
+    "(UK remote)" as somewhere else: the wrong band was the one cut or scored."""
+    return _names_home(str(text or ""))
 
 
 def _bands(s: str, loose: bool) -> list:
@@ -732,11 +769,11 @@ def research_ml_flag(text):
 
 
 def _states_a_degree(sentence: str) -> bool:
-    """Is the degree word in this sentence a qualification or a data-modelling term?"""
-    m = DEGREE.search(sentence)
-    if not m:
-        return False
-    return not NOT_A_DEGREE.match(sentence, m.start())
+    """Does this sentence name a degree as a qualification, not as a data-modelling term?
+
+    Every degree word is read, the way tools/fit.py reads them: "master data" first
+    does not hide "a Master's degree is required" later in the same sentence."""
+    return any(not NOT_A_DEGREE.match(sentence, m.start()) for m in DEGREE.finditer(sentence))
 
 
 # Under this a body is a snippet, not a posting: what it states is read, and
@@ -855,6 +892,77 @@ def residence_cut(text: str) -> str | None:
     return None
 
 
+# What each cut says, and the search.py settings that decide it. The screen writes its
+# reasons from these words, and two readers take them back: tools/exclude.py, for what
+# a ruling rests on (`cut_settings`), and tools/throttle.py, for whether a ruling still
+# cuts (`GATE_CUT_WORDS`) and the pay it quotes (`pay_cut_top`). Each kept its own copy
+# of the wording, and they drifted: eligibility, internal-only and other-language
+# rulings named no setting, so they rested on the whole rules and lapsed on any change
+# to them, and a pay ruling in "C$" or "kr" quoted no figure anybody could read back.
+CUTS = {
+    "eligibility": (ELIGIBILITY_CUT_REASON,
+                    ("ELIGIBILITY", "ENTITLED", "PERMIT_ACCEPTED", "ELIGIBILITY_STATUS_TERMS",
+                     "ELIGIBILITY_NOT_BY_PERMIT", "ELIGIBILITY_ALWAYS")),
+    "residence": ("eligibility gate: a requirement to live in another country", ("LOCATION",)),
+    "internal_only": ("open to the employer's own staff only",
+                      ("INTERNAL_ONLY", "INTERNAL_ONLY_TITLE")),
+    "salary": ("stated range tops out at", ("SALARY_CUT_BELOW",)),
+    "language": ("stated as a requirement", ("LANGUAGE_GATE", "LANGUAGES_HELD")),
+    "title_language": ("job title is in", ("TITLE_LANGUAGE",)),
+    "designation": ("professional designation stated as a requirement",
+                    ("DESIGNATION", "DESIGNATED_TITLE")),
+    "research_ml": ("research-grade ML is the core of the role", ("RESEARCH_ML",)),
+}
+PAY_CUT = "stated range tops out at {cur}{top:,}, below {cur}{line:,}"
+_PAY_CUT_READ = re.compile(r"stated range tops out at \D{0,6}?(\d{1,3}(?:,\d{3})+|\d+), below\b")
+_CUT_READ = {
+    # The profile's own words, and the app's opening for them that older rulings carry.
+    "eligibility": re.compile(re.escape(ELIGIBILITY_CUT_REASON) + r":"
+                              r"|eligibility gate: (?!a requirement to live in another country)",
+                              re.I),
+    "salary": _PAY_CUT_READ,
+    "title_language": re.compile(r"\bjob title is in \w+:", re.I),
+}
+_LANGUAGE_CUT = re.compile(r"([^:;\"]{1,60}?) stated as a requirement\b", re.I)
+# Every cut but pay, which is judged against today's cut line rather than read as a
+# verdict: what tools/throttle.py reads as a ruling that still cuts.
+GATE_CUT_WORDS = re.compile("|".join(
+    re.escape(words) for code, (words, _) in CUTS.items() if code not in ("salary", "language")),
+    re.I)
+
+
+def _language_cut(reason: str) -> bool:
+    """Does the reason carry a language cut, in the words the screen wrote it?"""
+    gated = tuple(str(g[0]).lower() for g in LANGUAGE_GATE)
+    for m in _LANGUAGE_CUT.finditer(reason):
+        what = m.group(1).strip().lower()
+        if (gated and what.endswith(gated)) or OTHER_LANGUAGE.search(what):
+            return True
+    return False
+
+
+def cut_settings(reason: str) -> list:
+    """The search.py settings the screen's cuts in `reason` rest on, in its own words.
+
+    Empty when the reason holds none of the screen's cuts."""
+    text = str(reason or "")
+    found = []
+    for code, (words, names) in CUTS.items():
+        read = _CUT_READ.get(code)
+        hit = (_language_cut(text) if code == "language"
+               else read.search(text) if read is not None
+               else re.search(re.escape(words), text, re.I))
+        if hit:
+            found += names
+    return list(dict.fromkeys(found))
+
+
+def pay_cut_top(reason: str):
+    """The top of the range a pay cut the screen wrote quotes, whatever the currency."""
+    m = _PAY_CUT_READ.search(str(reason or ""))
+    return int(m.group(1).replace(",", "")) if m else None
+
+
 def screen(job: dict) -> dict:
     text = (job.get("desc") or "")
     cuts, flags = [], []
@@ -868,20 +976,20 @@ def screen(job: dict) -> dict:
 
     e = eligibility_cut(text)
     if e:
-        cuts.append(f'{ELIGIBILITY_CUT_REASON}: "{e}"')
+        cuts.append(f'{CUTS["eligibility"][0]}: "{e}"')
     else:
         w = residence_cut(text)
         if w:
-            cuts.append(f'eligibility gate: a requirement to live in another country: "{w}"')
+            cuts.append(f'{CUTS["residence"][0]}: "{w}"')
 
     i = internal_only(job.get("title") or "", text)
     if i:
-        cuts.append(f'open to the employer\'s own staff only: "{i}"')
+        cuts.append(f'{CUTS["internal_only"][0]}: "{i}"')
 
     hi, q = salary_max(text)
     if hi is not None and hi < ABSURD_SALARY:
-        cuts.append(f'stated range tops out at {CUR}{hi:,}, below {CUR}{ABSURD_SALARY:,}: '
-                    f'a different job level, not a negotiation: "{q}"')
+        cuts.append(PAY_CUT.format(cur=CUR, top=hi, line=ABSURD_SALARY)
+                    + f': a different job level, not a negotiation: "{q}"')
     elif hi is not None and hi < SALARY_FLOOR:
         flags.append(f'stated range tops out at {CUR}{hi:,}, under the {CUR}{SALARY_FLOOR:,} '
                      f'target; a decision input, never a cut, because a posted range '
@@ -891,14 +999,14 @@ def screen(job: dict) -> dict:
         for s in sentences(text):
             m = required.search(s)
             if m and not soft.search(s):
-                cuts.append(f'{lang} stated as a requirement: "{evidence(s, m)}"')
+                cuts.append(f'{lang} {CUTS["language"][0]}: "{evidence(s, m)}"')
                 break
 
     softs = [soft for _, _, soft in LANGUAGE_GATE]
     for s in sentences(text):
         m = OTHER_LANGUAGE.search(s)
         if m and LANGUAGE_REQUIRED.search(s) and not any(x.search(s) for x in softs):
-            cuts.append(f'{m.group(0)} stated as a requirement: "{evidence(s, m)}"')
+            cuts.append(f'{m.group(0)} {CUTS["language"][0]}: "{evidence(s, m)}"')
             break
 
     # A title written in another language is that language's job: the whole
@@ -906,7 +1014,8 @@ def screen(job: dict) -> dict:
     title_lang = getattr(_S, "TITLE_LANGUAGE", None)
     head = (job.get("title") or "") + " " + text[:200]
     if title_lang and title_lang[1].search(head):
-        cuts.append(f'job title is in {title_lang[0]}: "{(job.get("title") or head)[:120]}"')
+        cuts.append(f'{CUTS["title_language"][0]} {title_lang[0]}: '
+                    f'"{(job.get("title") or head)[:120]}"')
 
     # Measured from the years held (see tools/fit.py), not from fixed numbers.
     n, q = stated_years(text)
@@ -917,11 +1026,11 @@ def screen(job: dict) -> dict:
 
     d = designation_cut(text)
     if d:
-        cuts.append(f'professional designation stated as a requirement: "{d}"')
+        cuts.append(f'{CUTS["designation"][0]}: "{d}"')
 
     r, hits = research_ml_flag(text)
     if r:
-        cuts.append(f'research-grade ML is the core of the role ({hits}): "{r}"')
+        cuts.append(f'{CUTS["research_ml"][0]} ({hits}): "{r}"')
 
     for s in sentences(text) if getattr(_S, "DEGREE_FLAGS", True) else ():
         if not _states_a_degree(s) or PREFERRED.search(s):

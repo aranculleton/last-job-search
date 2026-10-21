@@ -95,20 +95,13 @@ Every rule below follows from that.
 
 ## Master is the trunk
 
-1. **Start by pulling master.** `git fetch origin master && git merge origin/master`,
-   before writing anything, not before pushing. Another session may have merged since
-   this container was built.
-2. **Finish by getting the work onto master.** Not "pushed to the branch": on master.
-   Open the PR, get CI green (`./tools/ci_local.sh` on a private repo, Actions on the
-   public app), merge it. A branch left behind is work the next session
-   cannot see and will duplicate.
-3. **Never leave a merged branch around**, and never start new work on an old one.
-4. If the work genuinely cannot be finished this session, say so in the last message and
-   name the branch, so the next session is told where to look.
-
-The one thing not negotiable in the other direction: **do not push to master without CI
-green.** It is the branch every other session starts from, so a broken master breaks all
-of them at once.
+The rules are in CLAUDE.md, "Master is the trunk. Finish on it, start from it.", which every
+session reads. In short: start with `python3 tools/sync_app.py --pull` (CLAUDE.md, "Start of
+every session", step 1), never a bare `git merge`, because the sync refuses a master whose
+history was rewritten; finish with the work on master through a pull request, merged with CI
+green (`./tools/ci_local.sh` on a private repo, Actions on the public app); leave no merged
+branch; and name the branch when the work cannot be finished. **Never push to master
+without CI green**: it is the branch every other session starts from.
 
 ## Releasing
 

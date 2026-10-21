@@ -180,10 +180,27 @@ def test_the_denylist_remembers_a_row_taken_out_of_the_state_files(tmp_path):
     assert [r["company"] for r in build_app._csv(str(tracker))] == ["Larkspur Retail"]
     ever = {r["company"] for r in build_app._csv_ever(str(tracker))}
     assert ever == {"Fernhill Freight", "Larkspur Retail"}
-    # Every state file the denylist reads, it reads with its history.
-    src = open(os.path.join(ROOT, "tools", "build_app.py"), encoding="utf-8").read()
-    body = src[src.index("def denylist("):src.index("def main(")]
-    assert "_csv(person.state(" not in body and body.count("_csv_ever(person.state(") == 4
+    # Every state file the denylist reads, it reads with its history: a row taken out
+    # of the tracker, the contact book and the message log is still on the list.
+    contacts, threads = tmp_path / "network_contacts.csv", tmp_path / "network_threads.csv"
+    tracker.write_text("company,role,contact_person\nLarkspur Retail,Analyst,\n"
+                       "Quayside Foods,Analyst,Shirin Example\n")
+    contacts.write_text("contact_id,name,company\ncorwin_haldane,Corwin Haldane,Quayside Foods\n")
+    threads.write_text("contact_id,date,direction\nodell_marrowfen,2026-09-01,outbound\n")
+    git("add", "-A")
+    git("commit", "-qm", "rows that are scrubbed next")
+    tracker.write_text("company,role,contact_person\nLarkspur Retail,Analyst,\n")
+    contacts.write_text("contact_id,name,company\n")
+    threads.write_text("contact_id,date,direction\n")
+    git("commit", "-qam", "scrubbed")
+    import person
+    old = os.environ.get(person.STATE_ENV)
+    os.environ[person.STATE_ENV] = str(tmp_path)
+    try:
+        tokens = set(build_app.denylist())
+    finally:
+        os.environ[person.STATE_ENV] = old
+    assert {"=Quayside Foods", "Shirin Example", "Corwin Haldane", "odell_marrowfen"} <= tokens
 
 
 def test_a_tool_family_entry_is_set_aside_and_nothing_else_in_the_file(tmp_path, monkeypatch):

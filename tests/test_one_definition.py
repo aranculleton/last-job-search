@@ -76,3 +76,33 @@ def test_a_skill_the_score_docks_is_a_gap_for_the_documents_too():
     assert ("PySpark", "big-data engineering is not held") in found
     # A sentence the map already judged keeps the map's verdict, once.
     assert len(bridges.gaps("Chartered procurement (CIPS) is required.")) == 1
+
+
+def test_the_score_and_the_screen_read_the_same_degrees():
+    # The score kept a narrower pattern: these were flagged by the screen and cost
+    # nothing in fit, and "M.S." and "doctoral" were docked by fit and never flagged.
+    assert fit.GRAD is text_screen.DEGREE
+    for s in ("An MBA is required.", "An advanced degree in statistics is required.",
+              "A graduate degree is required.", "M.S. in statistics required.",
+              "A doctoral degree is required.", "Ph.D. in economics required."):
+        assert fit._degree_ask(s) == fit.DEMAND_HARD, s
+        flags = text_screen.screen({"title": "Data Analyst", "desc": s})["flags"]
+        assert any("graduate degree stated as required" in f for f in flags), s
+    for s in ("Master data management experience required.", "Scrum Master certification.",
+              "Bachelor's or Master's degree in Mathematics."):
+        assert not fit._degree_ask(s), s
+
+
+def test_the_years_caps_fit_documents_are_the_ones_it_charges(monkeypatch):
+    # fit.YEARS_SLACK_CAP said one thing and the costs were written inline as another,
+    # so changing the setting changed nothing.
+    body = ("Requirements: you have 17+ years of experience in supply chain forecasting "
+            "with SQL and Python, demand planning and inventory optimisation.")
+    job = {"title": "Supply Chain Analyst", "company": "Oakmere Foods", "desc": body,
+           "location_verdict": "PASS"}
+    def cost():
+        return next(int(w.split()[0]) for w in fit.fit(job)["fit_why"] if "stated 17+" in w)
+    before = cost()
+    assert fit.YEARS_HELD + 9 <= 17                  # the top band
+    monkeypatch.setitem(fit.YEARS_SLACK_CAP, 9, 0.0)
+    assert cost() == -fit.YEARS_COST[9] != before

@@ -6,7 +6,9 @@ What is owed, what is due, what has gone cold.
 
 1. `state.load_contacts()` and `state.load_threads()`.
 2. `state.reconcile()` first. A stored status that disagrees with the message
-   history is a bug: report it rather than papering over it.
+   history is a bug: report it rather than papering over it. A `possible_duplicate`
+   is two rows at one employer that may be one person (a nickname, an initial, a
+   reversed name, a letter's typo): ask the person, and never merge them yourself.
 3. `state.owed(contacts, threads, today)` returns both kinds of debt: threads
    where they replied and we have not, and threads where we are past the
    follow-up window with no nudge sent.

@@ -83,3 +83,42 @@ def test_a_probe_reads_a_board_once_and_a_careers_site_not_at_all(boards_web, mo
     out = ats_boards.probe({"Acme": ("rippling", "acme"), "Acme Careers": ("careersite", host)})
     assert out == {"Acme": "1 open, 1 in range", "Acme Careers": "1 job pages listed"}
     assert not any("/jobs/r0" in u or "/job/1/" in u for u, _ in boards_web.calls)
+
+
+def _two_careers_sites(boards_web):
+    page = ('<script type="application/ld+json">{"@type": "JobPosting", "title": "Data Analyst",'
+            ' "jobLocation": {"address": {"addressLocality": "Manchester"}}}</script>')
+    boards = {}
+    for name in ("acme", "brindle"):
+        host = f"careers.{name}.example"
+        boards_web.robots[host] = (200, "User-agent: *\nAllow: /\n")
+        boards_web.routes[f"{host}/sitemap.xml"] = (
+            f"<urlset><url><loc>https://{host}/job/1/data-analyst</loc></url></urlset>", None)
+        boards[name.title() + " Careers"] = ("careersite", host)
+    boards_web.routes["/job/1/"] = (page, None)
+    return boards
+
+
+def test_a_round_reads_its_own_rulings_once_for_every_careers_site(boards_web, monkeypatch,
+                                                                   tmp_path):
+    # The skip was built for each careers-site employer from the repo's seen file, so a
+    # round's own --seen was never read and its --no-seen-read ("judge everything again")
+    # still skipped every page it had once ruled out.
+    import json
+    import prefilter
+    boards = _two_careers_sites(boards_web)
+    seen = tmp_path / "seen_jobs.json"
+    url = "https://careers.acme.example/job/1/data-analyst"
+    seen.write_text(json.dumps({"seen": {url: {
+        "url": url, "title": "Data Analyst", "company": "Acme Careers", "status": "excluded",
+        "basis": "person", "exclusion_reason": "not a company I want to work for",
+        "excluded_date": "2026-10-01"}}}))
+    built = []
+    real = prefilter.already_ruled_out
+    monkeypatch.setattr(prefilter, "already_ruled_out",
+                        lambda *a, **k: built.append(a) or real(*a, **k))
+    rows, _ = ats_boards.fetch_all(boards, seen=str(seen))
+    assert sorted(r["url"] for r in rows) == ["https://careers.brindle.example/job/1/data-analyst"]
+    assert len(built) == 1 and built[0][0] == str(seen)
+    rows, _ = ats_boards.fetch_all(boards, seen=str(seen), keep_ruled_out=True)
+    assert len(rows) == 2

@@ -450,6 +450,56 @@ def spoken_findings(answer: str) -> list[str]:
     return out
 
 
+# Two things the register test cannot see without the question. An answer far longer than
+# the moment allows reads well and is cut off when said: people speak at about 150 words a
+# minute (a rule of thumb, not a measurement), a screen answer has about 60 to 90 seconds and
+# a story in a later round about two minutes, and it is flagged once it would run past that
+# by a quarter again. And "we" counted as first person above, so an answer that said "we"
+# throughout passed, where the question asked what the person did and "we" is exactly what
+# hides it: for those questions, "I" is the test.
+SPOKEN_WPM = 150
+SCREEN_SECONDS = 90
+ANSWER_SECONDS = 120
+LONG_FACTOR = 1.25
+OWN_WE_MIN = 3
+_I_WORD = re.compile(r"\b(?:i|i'm|i've|i'd|i'll|me|my|mine|myself)\b", re.I)
+_WE_WORD = re.compile(r"\b(?:we|we're|we've|we'd|we'll|us|our|ours|ourselves)\b", re.I)
+_WHAT_YOU_DID = re.compile(
+    r"\b(?:a time (?:when )?you|give (?:me )?an example|an example of (?:a time|when)|"
+    r"describe a (?:time|situation|project|moment)|what did you (?:do|build|change|own|decide|"
+    r"learn)|what was your (?:role|part|contribution)|how did you\b|walk me through (?:a|the|"
+    r"your) (?:project|piece of work|model|analysis)|tell me about (?:a|your|the) (?:project|"
+    r"model|analysis|piece of work)|a project (?:in|end to end)|you (?:led|built|owned|delivered|"
+    r"ran|changed)\b|your (?:own )?experience (?:with|of|in))", re.I)
+
+
+def asks_what_you_did(question: str) -> bool:
+    """Does the question ask what the person did, not what a team did or what they think?"""
+    return bool(_WHAT_YOU_DID.search(str(question or "").replace("’", "'")))
+
+
+def answer_findings(answer: str, question: str = "", seconds: int = 0) -> list[str]:
+    """Why an answer to `question` is not ready to say in the `seconds` it has, beyond the
+    register (spoken_findings): far too long to say in its time, or "we" where they asked
+    what you did. [] when neither."""
+    text = " ".join(str(answer or "").replace("’", "'").split())
+    words = len(text.split())
+    out = []
+    if seconds and words > SPOKEN_WPM * seconds / 60 * LONG_FACTOR:
+        said = round(words * 60 / SPOKEN_WPM / 10) * 10
+        out.append("about %d seconds said aloud (%d words at about %d a minute), where an answer "
+                   "here has about %d: cut it to about %d words" % (
+                       said, words, SPOKEN_WPM, seconds, SPOKEN_WPM * seconds // 60))
+    if question and asks_what_you_did(question):
+        mine, ours = len(_I_WORD.findall(text)), len(_WE_WORD.findall(text))
+        opening = " ".join(sentences(text)[:3]) or text
+        if ours and (ours >= OWN_WE_MIN and ours > mine or not _I_WORD.search(opening)
+                     and words >= SPOKEN_SHORT_WORDS):
+            out.append("says \"we\" %d time(s) and \"I\" %d where they asked what you did: say "
+                       "what you did, as \"I\", and name the team once" % (ours, mine))
+    return out
+
+
 ALLOWABLE = frozenset({"house-style"})
 
 

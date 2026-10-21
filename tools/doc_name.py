@@ -20,7 +20,6 @@ files away.
 """
 from __future__ import annotations
 
-import csv
 import os
 import re
 import sys
@@ -109,11 +108,11 @@ def is_shouty(name: str) -> bool:
 
 
 def tracker_rows(path: str = TRACKER) -> list[dict]:
+    """The rows, through csv_store.read_rows, the one state-file reader: a conflicted file
+    is refused, and a short row's missing cells read as blanks, never None."""
     import csv_store
-    csv_store.refuse_conflicts(path)
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
+        return csv_store.read_rows(path)
     except OSError:
         return []
 

@@ -8,7 +8,7 @@ Follow these steps **exactly in order**. Do not skip steps.
 
 This is not bookkeeping. A fact that exists only in chat **will be treated as unsupported by a later session and stripped from drafts as a fabrication.** Anything absent from the sources does not exist as far as future drafting is concerned, and the loss is silent - a real achievement quietly disappears from every subsequent CV.
 
-This rule is the input side of the grounding audit (the workflow's audit stage in Step 2, or Step 3 on the custom-template path), not a competitor to it. The audit is deliberately strict: an ungrounded claim is removed, and it cannot tell a fabrication from a real fact the user stated out loud last week. That strictness is correct, and it is exactly why confirmed facts have to reach the sources in the same turn they surface. Write to `profile/01-candidate-profile.md` specifically - it is one of the audit's three sources, so a fact recorded there is grounded on the next run. Adding a fact to `01` that `profile/CLAUDE.md` and the master CV simply do not mention is an absence, not a contradiction, and does not trip the audit's profile-consistency warning; if the new fact *corrects* something either of those states, fix it there too rather than leaving the two sources disagreeing.
+This rule is the input side of the grounding audit (the workflow's audit stage in Step 2, or Step 3 on the custom-template path), not a competitor to it. The audit is deliberately strict: an ungrounded claim is removed, and it cannot tell a fabrication from a real fact the user stated out loud last week. That strictness is correct, and it is exactly why confirmed facts have to reach the sources in the same turn they surface. Write to `profile/01-candidate-profile.md` specifically - it is the first of the audit's grounding sources (`profile/person.json` `grounding.sources`; CLAUDE.md, "The person"), so a fact recorded there is grounded on the next run. Adding a fact to `01` that `profile/CLAUDE.md` or `bullets.py` simply does not mention is an absence, not a contradiction, and does not trip the audit's profile-consistency warning; if the new fact *corrects* something either of those states, fix it there too rather than leaving the two sources disagreeing.
 
 **Token-efficiency rules for this workflow:**
 - Never re-Read a file whose contents are already in your context from an earlier step. If you read it in Step 1, it is still available in Step 2.
@@ -130,8 +130,8 @@ a skill they once said they lack: only they know whether they use it and never s
 since, or can back it up, and the word left off can be the one an ATS screens on. Read the
 posting too, and ask the same way about any other skill it names that the profile lacks.
 
-The tracker knows only what was recorded here (CLAUDE.md, "Never assume the tracker is
-complete"). A yes is recorded as a tracker row at `applied` with the date they give, and
+The tracker knows only what was recorded here (CLAUDE.md, "Memory": "The tracker only knows
+what was recorded"). A yes is recorded as a tracker row at `applied` with the date they give, and
 nothing is drafted.
 
 **Stop until the user answers.** A rejected angle after drafting costs the whole drafting and
@@ -188,7 +188,7 @@ Also read the most recent existing CV and cover letter files for concrete struct
 - Read any existing `cv/<Prefix>_Resume_*<CV_EXT>` file as a structural reference
 - Read any existing `cover_letters/<Prefix>_Cover_Letter_*<COVER_EXT>` or `cover_letters/Cover_*<COVER_EXT>` file as a structural reference
 
-*The source of truth for facts is `profile/01-candidate-profile.md`, then `profile/CLAUDE.md`'s Candidate Profile section, and the candidate's current resume where `profile/CLAUDE.md` names one. Existing tailored resumes may be read for structure and phrasing only, never as a source of claims. Do **not** read `cv/main_example.tex` as a fact source: it is an unpopulated upstream template and contributes nothing.*
+*A claim is grounded when a file `profile/person.json` `grounding.sources` names carries it (CLAUDE.md, "The person": by default `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section and `profile/bullets.py`), and `01` wins where they disagree. Existing tailored resumes, and an older resume `profile/CLAUDE.md` names, may be read for structure and phrasing only, never as a source of claims: a fact only they carry is written into `01` first. Do **not** read `cv/main_example.tex` as a fact source: it is an unpopulated upstream template and contributes nothing.*
 
 ### Requirement coverage (both documents)
 - **Every requirement the posting states gets addressed - matched or honestly gapped, never silently omitted.** A stated requirement the candidate lacks (a tool, a clearance, years of experience) is never volunteered as a gap: the resume states none, and the letter answers it with the honest neighbour `tools/bridges.py` records, or not at all (rule 8 of `03-writing-style.md`). A concession is written only where the requirement is so prominent that silence would read as evasion, and never in the closing. Build the requirement list from Step 1 and check both drafts against it before Step 3.
@@ -209,7 +209,7 @@ Also read the most recent existing CV and cover letter files for concrete struct
   `pdftotext -layout -enc UTF-8 <a known one-page resume>.pdf - | grep -c .` returns 50 for a
   resume that fits. A draft carrying more than roughly 10 experience bullets plus 3 competencies plus three
   tail sections will spill; cut before the first compile, not after the third.
-- **Grounding Audit:** Before writing to disk, audit all tailored bullet points against the source-of-truth chain: `profile/01-candidate-profile.md` + `profile/CLAUDE.md`'s Candidate Profile section to verify that all dates, roles, and metrics match exactly (zero profile drift or fabrication).
+- **Grounding Audit:** Before writing to disk, audit all tailored bullet points against the grounding sources (`profile/person.json` `grounding.sources`; by default `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section and `profile/bullets.py`) to verify that all dates, roles, and metrics match exactly (zero profile drift or fabrication).
 
 ### Cover Letter (`cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>`)
 - **Write in the Document language** set in `profile/CLAUDE.md`'s Identity section and `profile/person.json` (`documents.spelling`), with only the per-posting exception rule 7 in `03-writing-style.md` allows. A posting requiring a language outside the candidate's Languages table already failed the Language Gate in Step 1 and was never reached here.
@@ -273,11 +273,11 @@ adds the targeting critique to its research, as suggestions for the drafter, who
 
 | Reviewer | `model` | Why |
 |---|---|---|
-| **A - grounding and rules** (`grounding-auditor`) | none: the subagent inherits the session's, i.e. the strongest available | This is where the expensive mistakes hide. It catches a metric attached to the wrong model, a "most recently" that contradicts the dates printed six lines below it, and a superseded corporate strategy presented as current. **Never downgrade it.** |
+| **A - grounding and rules** (`grounding-auditor`) | none: the subagent inherits the session's own model, which `11-cost-model.md` calls the strongest | This is where the expensive mistakes hide. It catches a metric attached to the wrong model, a "most recently" that contradicts the dates printed six lines below it, and a superseded corporate strategy presented as current. **Never downgrade it.** |
 | **B - research and targeting** (`employer-researcher`) | sonnet, set by the subagent | Fetching, reading and summarizing pages against an explicit brief. |
 
 The one rule that overrides cost: anything that could put a false claim in front of an employer
-runs on the strongest model available. Reviewer A is that check, so it never gets a cheaper model
+runs on the session's own model, never a cheaper one (`11-cost-model.md`). Reviewer A is that check, so it never gets a cheaper model
 to save tokens. The reviewer gets a fresh context, so pass the drafts **inline in the prompt** below (do not make the reviewer Read them). Scope the reviewer's file reads to content-critique essentials only - the reviewer does not need the template structure files (`05`, `06`) to critique content, since those govern structural/toolchain concerns the drafter already applied.
 
 ### The prompt below is shared. Cut it down per agent - do not send it whole to both.
@@ -326,11 +326,12 @@ Read these reference files - and only these - to ground your critique:
 - `.claude/skills/job-application-assistant/03-writing-style.md`
 - `profile/04-job-evaluation.md`
 - `profile/CLAUDE.md` (specifically the Candidate Profile section)
+- any other file `profile/person.json` `grounding.sources` names (by default `profile/bullets.py`)
 
 Do NOT read `05-cv-templates.md` or `06-cover-letter-templates.md` - those govern template structure the drafter already applied and are not needed for content critique.
 
 ### 3. Factual Grounding Audit
-Compare every date, employer, job title, and quantitative metric in both drafts against `profile/01-candidate-profile.md` + `profile/CLAUDE.md`'s Candidate Profile section. A claim is grounded if EITHER supports it. Mismatches between those two sources themselves must be reported to the user as a profile-consistency warning rather than treated as draft drift. Draft mismatches must be flagged as Part A edits with `"reason": "grounding"` so they can be distinguished from style changes. Keep the tolerance honest: reframed emphasis is fine; changed facts and escalated numbers are not.
+Compare every date, employer, job title, and quantitative metric in both drafts against the grounding sources: `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section, and any other file `profile/person.json` `grounding.sources` names (by default `profile/bullets.py`). A claim is grounded if ANY of them supports it; where they disagree, `01-candidate-profile.md` wins. Mismatches between those sources themselves must be reported to the user as a profile-consistency warning rather than treated as draft drift. Draft mismatches must be flagged as Part A edits with `"reason": "grounding"` so they can be distinguished from style changes. Keep the tolerance honest: reframed emphasis is fine; changed facts and escalated numbers are not.
 
 ### 4. Drafts to Review
 Both drafts are provided inline below. Do NOT use the Read tool on the draft files - use these exact texts.
@@ -636,7 +637,7 @@ Check whether the posting or the portal it came from asks for free-text fields t
 
 > "This posting has free-text application fields I can draft too - [name the specific fields, e.g. a self-introduction paragraph and structured project entries]. Want those drafted?"
 
-**Only on yes**, read `08-application-forms.md` and draft the fields per its rules, grounded against the same three-source union as the CV and cover letter. Save per that file's "Output format" section. **On no, or when the posting has no such fields, say nothing further and move on** - this is an optional addition and never changes the default two-document output.
+**Only on yes**, read `08-application-forms.md` and draft the fields per its rules, grounded against the same sources as the CV and cover letter (`grounding.sources`; CLAUDE.md, "The person"). Save per that file's "Output format" section. **On no, or when the posting has no such fields, say nothing further and move on** - this is an optional addition and never changes the default two-document output.
 
 ### Next Steps
 - **Submitted?** `/outcome <company>` moves the `drafted` row to `applied` and starts the per-application record that `/interview` preps from and `tools/what_works.py` counts.

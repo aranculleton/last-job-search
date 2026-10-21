@@ -99,3 +99,20 @@ def test_a_kept_draft_run_again_keeps_its_posting(tmp_path):
     assert (folder / "job_posting.md").read_text(encoding="utf-8") == archived
     assert "kept the archived job_posting.md" in r.stdout
     assert json.loads(kept.read_text(encoding="utf-8"))[0]["posting_from"] == "job_posting.md"
+
+
+def test_a_name_in_capitals_is_said_when_it_is_picked(tmp_path, capsys):
+    # doc_name.is_shouty was documented as "the check" for a shouted file name and was
+    # never called: a board that writes the employer in capitals gave a resume named
+    # in capitals, and nothing said so.
+    shortlist = [{"company": "HARBOUR FREIGHT LTD", "title": "Data Analyst",
+                  "desc": "Own demand forecasting in SQL and Python.", "url": "https://x.example/1"},
+                 {"company": "Quayside Foods", "title": "Data Analyst",
+                  "desc": "Own demand forecasting in SQL and Python.", "url": "https://x.example/2"}]
+    staged = stage_picks.stage(str(tmp_path / "r1"), ["1", "2"], rows=[], root=str(tmp_path),
+                               shortlist=shortlist)
+    assert [p["abbr"] for p in staged] == ["HARBOURFREIGHT", "QuaysideFoods"]
+    err = capsys.readouterr().err
+    assert "HARBOURFREIGHT is the employer's name in capitals" in err
+    assert "'harbour freight ltd': 'HarbourFreight'" in err
+    assert "QuaysideFoods" not in err
