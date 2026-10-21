@@ -440,6 +440,43 @@ def _record_check() -> None:
             pass
 
 
+def plain_state_endings(root: str | None = None) -> str:
+    """Give the state files plain line endings once, in a commit of their own that changes no
+    row, wherever .gitattributes asks for them and the committed copy still has CRLF. Without
+    it the rule made every committed CRLF state file read as changed in a fresh checkout, and
+    the next sync, which pulls master only into a clean folder, stopped (found by
+    tools/rehearse_sync.py on a real repo, 2026-10-21). Returns the line to say, or ""."""
+    root = root or ROOT
+
+    def g(*args):
+        return subprocess.run(["git", "-C", root, *args], text=True, capture_output=True)
+    paths = [ln.split(":")[0] for ln in g("check-attr", "eol", "--", *_STATE_FILES)
+             .stdout.splitlines() if ln.rstrip().endswith(": eol: lf")]
+    if not paths:
+        return ""
+    eol = g("ls-files", "--eol", "--", *paths).stdout.splitlines()
+    need = [ln.split("\t", 1)[1] for ln in eol if "\t" in ln
+            and ln.split()[0] in ("i/crlf", "i/mixed")]
+    if not need or g("diff", "--quiet", "--", *need).returncode not in (0, 1):
+        return ""
+    # Their own uncommitted edits to these files stay theirs: never folded into this commit.
+    if g("diff", "--quiet", "HEAD", "--", *need).returncode == 1 and \
+            g("diff", "--quiet", "--ignore-cr-at-eol", "HEAD", "--", *need).returncode == 1:
+        return ""
+    g("add", "--renormalize", "--", *need)
+    r = g("commit", "-q", "-m", "State files: plain line endings (no row changed)",
+          "--", *need)
+    if r.returncode:
+        return ""
+    return ("state files: %s given plain line endings, no row changed, so a chat that saves "
+            "them with another program no longer changes every line" % ", ".join(need))
+
+
+# The state files .gitattributes keeps with plain line endings.
+_STATE_FILES = ("job_search_tracker.csv", "network_contacts.csv", "network_threads.csv",
+                "job_scraper/seen_jobs.json", "documents/interview/question_bank.csv")
+
+
 def behind_sync() -> str:
     """A plain line when this checkout is older than the last sync in this repo (a worktree
     made from a commit before it), else "". Never raises."""
@@ -757,6 +794,9 @@ def main(argv: list[str]) -> int:
         if git("rev-parse", "HEAD", check=False).stdout.strip() != before:
             own_tests()
         app_watch()
+        said = plain_state_endings()
+        if said:
+            print("sync_app: " + said)
         upgrades("--after-sync")
         model_check(a.on)
         place_check(a.tools)

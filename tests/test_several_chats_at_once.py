@@ -490,3 +490,65 @@ def test_a_state_file_rewritten_with_crlf_endings_changes_only_its_changed_row(t
     assert stat[:2] == ["1", "1"], stat
     assert b"\r" not in subprocess.run(["git", "-C", str(repo), "show", ":network_contacts.csv"],
                                        capture_output=True).stdout
+
+
+def test_committed_crlf_state_files_are_made_plain_once_so_the_next_sync_can_pull(tmp_path):
+    """Found by tools/rehearse_sync.py on a real repo (2026-10-21): its tracker was committed
+    with CRLF endings and its contact book and message log mixed. Once .gitattributes asked
+    for plain endings, every fresh checkout read them as changed, and the next sync stopped.
+    The sync now makes them plain once, in a commit of their own that changes no row."""
+    import sync_app
+    repo = str(tmp_path / "r")
+    os.makedirs(repo)
+    _git(repo, "init", "-q")
+    rows = ["contact_id,name,status", "c1,Juno Castellan,awaiting_reply",
+            "c2,Corwin Haldane,in_conversation"]
+    with open(os.path.join(repo, "network_contacts.csv"), "wb") as fh:
+        fh.write(("\r\n".join(rows) + "\r\n").encode())
+    with open(os.path.join(repo, "job_search_tracker.csv"), "wb") as fh:
+        fh.write(b"company,role\r\nOakmere Foods,Analyst\n")      # mixed
+    _git(repo, "add", "-A")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "old")
+    shutil.copy(os.path.join(ROOT, ".gitattributes"), os.path.join(repo, ".gitattributes"))
+    _git(repo, "add", ".gitattributes")
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "attrs")
+    env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
+               GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com")
+    old_env = dict(os.environ)
+    os.environ.update(env)
+    try:
+        said = sync_app.plain_state_endings(repo)
+        assert "no row changed" in said and "network_contacts.csv" in said
+        assert _git(repo, "status", "--porcelain").stdout.strip() == ""
+        assert b"\r" not in subprocess.run(["git", "-C", repo, "show", "HEAD:network_contacts.csv"],
+                                           capture_output=True).stdout
+        assert _git(repo, "diff", "--ignore-cr-at-eol", "HEAD~1", "HEAD").stdout == ""
+        assert sync_app.plain_state_endings(repo) == ""                 # once
+    finally:
+        os.environ.clear()
+        os.environ.update(old_env)
+
+
+def test_their_uncommitted_edits_are_never_folded_into_the_line_ending_commit(tmp_path):
+    import sync_app
+    repo = str(tmp_path / "r")
+    os.makedirs(repo)
+    _git(repo, "init", "-q")
+    shutil.copy(os.path.join(ROOT, ".gitattributes"), os.path.join(repo, ".gitattributes"))
+    _git(repo, "add", ".gitattributes")
+    _git(repo, "-c", "core.autocrlf=false", "-c", "user.name=t", "-c", "user.email=t@example.com",
+         "commit", "-qm", "attrs")
+    path = os.path.join(repo, "network_contacts.csv")
+    with open(path, "wb") as fh:
+        fh.write(b"contact_id,status\r\nc1,awaiting_reply\r\n")
+    # Committed with CRLF in the index by switching the attribute off for one add.
+    _git(repo, "-c", "core.attributesFile=/dev/null", "add", "--renormalize", ".")
+    subprocess.run(["git", "-C", repo, "update-index", "--add", "--cacheinfo",
+                    "100644,%s,network_contacts.csv" % subprocess.run(
+                        ["git", "-C", repo, "hash-object", "-w", "--no-filters", path],
+                        capture_output=True, text=True).stdout.strip()], check=True)
+    _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "crlf")
+    with open(path, "wb") as fh:
+        fh.write(b"contact_id,status\r\nc1,call_booked\r\n")           # their edit
+    assert sync_app.plain_state_endings(repo) == ""
+    assert b"call_booked" in open(path, "rb").read()

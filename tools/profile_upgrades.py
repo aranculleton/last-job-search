@@ -1887,6 +1887,11 @@ def main(argv: list[str] | None = None) -> int:
         # no stamp, so every tool the new copy brought said "not checked for updates today"
         # straight after the update.
         sync_app._record_check()
+        # And the state files get plain line endings in their own commit, from here too: the
+        # copy of sync_app.py that ran this sync may predate it.
+        said = sync_app.plain_state_endings(ROOT)
+        if said:
+            print("profile upgrades: " + said)
     if a.after and rows and _personal_repo() and not owner_elsewhere():
         # Pushed before this chat decides it owns them: of two chats that both found no other
         # claim, git takes one push and refuses the other, and the refused one sees the
