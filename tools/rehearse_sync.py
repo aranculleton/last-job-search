@@ -81,7 +81,7 @@ class Rehearsal:
     def report(self) -> str:
         lines = []
         failed = [s for s in self.steps if not s[2]]
-        for chat, step, ok, secs, why, out in self.steps:
+        for chat, step, ok, secs, why, _out in self.steps:
             lines.append(f"  {'PASS' if ok else 'FAIL'}  {chat:<9} {step:<44} {secs:6.1f}s"
                          + (f"  ({why})" if why else ""))
         for chat, step, _ok, _secs, why, out in failed:

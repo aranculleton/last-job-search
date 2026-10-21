@@ -54,7 +54,8 @@ It is what makes the brief this person's rather than a template:
    every prep written before its contact's status, next action or thread changed (answers
    already rewritten to be said are kept). Say in one line how many it rebuilt, and when
    one is for a call in the next two days, put it in the three things below. A prep that
-   prints `RESEARCH FIRST` is listed there too, as research to run, never sent on as it is.
+   prints `RESEARCH NEXT` is listed there too, as research to run, and the prep is shown
+   as it is meanwhile, marked as not researched yet.
 
 ## 2. Since the last brief
 

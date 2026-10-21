@@ -71,6 +71,7 @@ import learned  # noqa: E402
 import person  # noqa: E402
 import profile_facts  # noqa: E402
 import state  # noqa: E402
+import told as places_told  # noqa: E402
 import tone  # noqa: E402
 import voice_check  # noqa: E402
 import what_works  # noqa: E402
@@ -1631,10 +1632,13 @@ def research_needed(contact, company_research, today=None) -> str:
                 and _A_CALL.search(_text(contact.get("next_action")))))
     if not soon or not _text(contact.get("company")):
         return ""
-    return ("RESEARCH FIRST: the call is %s and nothing is researched about %s. Claude: run the "
-            "employer-researcher subagent (company_research/), then this prep again, before "
-            "this goes to the person." % ("on " + due.isoformat() if due else "booked",
-                                          _text(contact.get("company"))))
+    # Never a wait before the person has anything: two hours before a call, "research first,
+    # then this again, before it goes to the person" held a finished draft back (2026-10-21).
+    return ("RESEARCH NEXT: the call is %s and nothing is researched about %s. Claude: show the "
+            "person this prep now (it says at the top that the company is not researched yet), "
+            "run the employer-researcher subagent (company_research/) in the background, then "
+            "this prep again, and show them the updated one." % (
+                "on " + due.isoformat() if due else "booked", _text(contact.get("company"))))
 
 
 def prep_markdown(contact, company_research=None, application=None, profile_facts=None,
@@ -1690,7 +1694,8 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
               "unsourced was left out rather than guessed at.", ""]
     need = research_needed(contact, company_research, today)
     if need:
-        lines += ["**%s**" % need, ""]
+        lines += ["**Not researched yet: %s.** The company section fills in when the research "
+                  "arrives, and an updated prep follows." % _text(contact.get("company")), ""]
     lines += _process_lines(contact, application)
 
     lines += _section(SECTIONS[0], _who_lines(contact, application),
@@ -1725,6 +1730,9 @@ def prep_markdown(contact, company_research=None, application=None, profile_fact
                            str(item["answer"] or "").split("\n")).strip()
         asked.append("  **A.** %s%s" % (answer, " (source: %s)" % item["source"]
                                          if _text(item["source"]) else ""))
+        where = places_told.clash(item["answer"], _text(contact.get("company")))
+        if where:
+            asked.append("  - careful: %s" % where)
     lines += _section(SECTIONS[5], _flag_banned(asked, banned),
                       "No profile facts were passed in, so no answers are drafted. Prepare "
                       "them before the call rather than in it.")
@@ -1934,13 +1942,18 @@ def drafted(lines) -> bool:
     return any(_DRAFT_LINE.match(ln) for ln in lines or ())
 
 
-def check_answers(text) -> list:
+def check_answers(text, company="") -> list:
     """[(question, why)] for every answer in a prep document not yet fit to say, read the
     way the interview pack reads its own: notes and a draft's mark are never words to say.
     A draft the person asked for is listed as (DRAFT, question), and a reason still to ask
-    them as (ASK, question): neither is an answer that fails."""
+    them as (ASK, question): neither is an answer that fails. With `company`, an answer that
+    may say the wrong place to that employer (tools/told.py) fails."""
     out = []
     for q, a, _src in answers_in(text):
+        where = places_told.clash(" ".join(spoken_lines(a.split("\n"))), company) \
+            if company else ""
+        if where:
+            out.append((q, where))
         if a == NARRATIVE_POINTER:
             continue
         lines = a.split("\n")
@@ -2275,7 +2288,7 @@ def main(argv=None) -> int:
         path = prep_path(row, a.root)
         try:
             with open(path, encoding="utf-8") as fh:
-                found = check_answers(fh.read())
+                found = check_answers(fh.read(), _text(row.get("company")))
         except OSError:
             print("prep: no %s yet: write it first" % os.path.relpath(path, a.root),
                   file=sys.stderr)

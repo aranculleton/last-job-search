@@ -274,7 +274,12 @@ checks show as skipped and cost nothing. Every check in that file is a script in
 ```bash
 ./tools/ci_local.sh            # every check CI runs, under two minutes
 ./tools/ci_local.sh --quick    # skips the LaTeX compile
+./tools/ci_local.sh --full     # the app's own suites too, when only your own files changed
 ```
+
+When every change since master is the person's own (`tools/personal_paths.py`), the app's own
+suites are skipped, saying so: they test the app, which did not change. Their own tests, every
+state and profile file read the way the tools read them, the guards and the leak scan still run.
 
 A clean run is the evidence, and merging on it is allowed. Say in the PR that
 `ci_local.sh` was green and name anything it reported as SKIP. Dispatch the workflow by

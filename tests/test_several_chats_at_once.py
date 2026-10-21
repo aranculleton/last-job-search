@@ -223,8 +223,29 @@ def test_a_chat_the_claim_reached_starts_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
     assert P.main(["--after-sync"]) == 0
     assert "belong to another chat" in capsys.readouterr().out
+    # The day's record is written in the repo the sync ran in. Into the repo running the
+    # tests, it told every other worktree sharing its git folder that it was behind
+    # (2026-10-21: helpers' test runs in four worktrees went red on one another's record).
+    assert os.path.exists(os.path.join(b, ".git", "ljs-last-sync-head"))
     assert P.main(["--plan"]) == 0
     assert json.loads(capsys.readouterr().out) == []
+
+
+def test_the_app_itself_keeps_no_record_of_a_sync_and_is_never_behind_one(tmp_path):
+    """The app takes no updates, so a record in its git folder only ever came from its own
+    tests, and `behind_sync` then stopped `--plan` in every other worktree of it."""
+    import sync_app
+    app = str(tmp_path / "app")
+    _git(str(tmp_path), "init", "-q", app)
+    _git(app, "remote", "add", "origin", sync_app.APP_URL)
+    _git(app, "commit", "-q", "--allow-empty", "-m", "one")
+    sync_app._record_check(app)
+    assert not os.path.exists(os.path.join(app, ".git", "ljs-last-sync-head"))
+    with open(os.path.join(app, ".git", "ljs-last-sync-head"), "w") as fh:
+        fh.write(_git(app, "rev-parse", "HEAD").stdout)
+    _git(app, "commit", "-q", "--allow-empty", "-m", "two")
+    _git(app, "checkout", "-q", "HEAD~1")
+    assert sync_app.behind_sync(app) == ""
 
 
 def test_a_claim_is_never_staked_over_a_sync_that_landed(tmp_path, monkeypatch, capsys):

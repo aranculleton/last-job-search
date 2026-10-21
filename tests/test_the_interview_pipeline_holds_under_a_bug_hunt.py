@@ -390,7 +390,7 @@ def test_a_next_step_due_soon_is_a_call_only_when_it_says_so():
                "next_action_due": "2026-10-20"}
     assert prep.research_needed(contact, {}, today=TODAY) == ""
     contact["next_action"] = "Coffee chat at 10"
-    assert prep.research_needed(contact, {}, today=TODAY).startswith("RESEARCH FIRST")
+    assert prep.research_needed(contact, {}, today=TODAY).startswith("RESEARCH NEXT")
 
 
 def test_a_process_never_hides_an_earlier_rejection(state):

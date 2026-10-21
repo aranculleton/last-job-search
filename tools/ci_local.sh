@@ -25,6 +25,12 @@
 #
 #     ./tools/ci_local.sh            everything available
 #     ./tools/ci_local.sh --quick    skip the LaTeX compile
+#     ./tools/ci_local.sh --full     everything, even when only the person's own files changed
+#
+# In a person's repo, when every change since master is their own (contacts, tracker,
+# message log, documents, profile/), the app's own suites are skipped, saying so: they
+# test the app, which did not change, and a data-only change waited 2.5 minutes on them
+# twice (2026-10-21). Their own tests, the state files, the guards and the leak scan run.
 #
 # Exit 0 clean, 1 a real failure. Optional checks whose tooling is absent are
 # reported as SKIP and never silently pass.
@@ -46,8 +52,26 @@ elif [ -x .venv/bin/python ]; then
   PY=".venv/bin/python"
 fi
 
-QUICK=0
-[ "${1:-}" = "--quick" ] && QUICK=1
+QUICK=0; FULL=0
+for arg in "$@"; do
+  [ "$arg" = "--quick" ] && QUICK=1
+  [ "$arg" = "--full" ] && FULL=1
+done
+DATA_ONLY=0; CHANGED=""
+if [ "$FULL" = "0" ] && [ -f profile/person.json ]; then
+  if CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"; then
+    DATA_ONLY=1
+  fi
+fi
+# Run the app's own check, unless only the person's own files changed.
+app_check() {                  # app_check <runner> <name> <args...>
+  local runner="$1" name="$2"; shift 2
+  if [ "$DATA_ONLY" = "1" ]; then
+    skip "$name" "only your own files changed; --full runs it"
+  else
+    "$runner" "$name" "$@"
+  fi
+}
 
 PASS=0; FAIL=0; SKIP=0
 failed_names=""
@@ -100,8 +124,12 @@ echo
 
 echo "lint"
 run "skills, commands and settings" "$PY" tools/lint_skills.py
-run_py_module ruff "ruff (bugs only, see .ruff.toml)" \
-    "$PY" -m ruff check --no-cache tools/ templates/ tests/
+if [ "$DATA_ONLY" = "1" ]; then
+  skip "ruff (bugs only, see .ruff.toml)" "only your own files changed; --full runs it"
+else
+  run_py_module ruff "ruff (bugs only, see .ruff.toml)" \
+      "$PY" -m ruff check --no-cache tools/ templates/ tests/
+fi
 # The scoring baseline is a person's own (their screened postings, in
 # profile/tests/fixtures), so the app has none to check, and that is not a skip.
 if [ -f profile/tests/fixtures/score_baseline.json ]; then
@@ -143,7 +171,34 @@ fi
 
 echo
 echo "tests"
-run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q
+if [ "$DATA_ONLY" = "1" ]; then
+  echo "  only your own files changed since master ($(printf '%s\n' "$CHANGED" | grep -c .)): the app's"
+  echo "  own suites test the app, which did not change, so they are skipped (--full runs them)"
+  skip "pytest (the app's suite, on the example person)" "only your own files changed"
+else
+  run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m pytest tests -q
+fi
+# The person's own files, read the way the tools read them: every state file (no merge
+# markers, every row parses) and every profile file (each module loads, person.json parses).
+# The app's suites never read these; they run on the example person.
+if [ -f profile/person.json ]; then
+  PYTHONDONTWRITEBYTECODE=1 run "your state and profile files read cleanly" "$PY" -c '
+import glob, json, os, sys
+sys.path[:0] = ["tools", "tools/network"]
+import csv_store, person
+for f in ("job_search_tracker.csv", "network_contacts.csv", "network_threads.csv",
+          "documents/interview/question_bank.csv"):
+    if os.path.exists(f):
+        csv_store.read_rows(f)
+for f in ("job_scraper/seen_jobs.json", "job_scraper/do_not_target.json"):
+    if os.path.exists(f):
+        csv_store.refuse_conflicts(f)
+        json.load(open(f, encoding="utf-8"))
+person.data("person")
+for f in sorted(glob.glob(person.path("*.py"))):
+    person.module(os.path.basename(f)[:-3])
+'
+fi
 # The person's own suite, against their profile, in its own process: the tools
 # read the profile once at import, so the two suites cannot share one.
 if [ -d profile/tests ]; then
@@ -188,8 +243,8 @@ else
       && "$FLOOR_ENV/bin/pip" install -q pytest >/dev/null 2>&1
   fi
   if "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
-    run "$FLOOR_NAME" "$FLOOR_ENV/bin/python" -m pytest tests -q -p no:cacheprovider
-    if [ -d profile/tests ]; then
+    app_check run "$FLOOR_NAME" "$FLOOR_ENV/bin/python" -m pytest tests -q -p no:cacheprovider
+    if [ -d profile/tests ] && { [ "$DATA_ONLY" = "0" ] || printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
       PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV/bin/python" \
         -m pytest profile/tests -q -p no:cacheprovider
     fi
@@ -227,6 +282,10 @@ echo "portal CLIs"
 if command -v bun >/dev/null 2>&1; then
   for d in .agents/skills/*/cli; do
     [ -f "$d/package.json" ] || continue
+    # Only the portals that changed, when nothing of the app did.
+    if [ "$DATA_ONLY" = "1" ] && ! printf '%s\n' "$CHANGED" | grep -q "^${d%/cli}/"; then
+      continue
+    fi
     run "typecheck $(basename "$(dirname "$d")")" bash -c \
       "cd '$d' && bun install --silent && bun run typecheck"
   done
@@ -238,6 +297,8 @@ echo
 echo "documents"
 if [ "$QUICK" = "1" ]; then
   skip "example CV and cover letter compile" "--quick"
+elif [ "$DATA_ONLY" = "1" ]; then
+  skip "example CV and cover letter compile" "only your own files changed; --full runs it"
 elif command -v lualatex >/dev/null 2>&1 && command -v xelatex >/dev/null 2>&1; then
   # The icon packages are vendored, not installed: texmf/README.md.
   export TEXMFHOME="$PWD/texmf"

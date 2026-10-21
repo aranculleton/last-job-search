@@ -1840,7 +1840,7 @@ def main(argv: list[str] | None = None) -> int:
         # An /upgrade worktree made from a commit before the sync lists the upgrades of an
         # older app, and named an upgrade it did not have as a KeyError.
         import sync_app
-        behind = sync_app.behind_sync()
+        behind = sync_app.behind_sync(ROOT)
         if behind:
             print(behind)
             return 2
@@ -1886,7 +1886,7 @@ def main(argv: list[str] | None = None) -> int:
         # And the day's check is recorded: a sync run by an older copy of sync_app.py wrote
         # no stamp, so every tool the new copy brought said "not checked for updates today"
         # straight after the update.
-        sync_app._record_check()
+        sync_app._record_check(ROOT)
         # And the state files get plain line endings in their own commit, from here too: the
         # copy of sync_app.py that ran this sync may predate it.
         said = sync_app.plain_state_endings(ROOT)
