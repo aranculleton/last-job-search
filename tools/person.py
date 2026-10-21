@@ -249,6 +249,9 @@ def reset() -> None:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print("usage: python3 tools/person.py dir | get <dotted.key>")
+        return 0
     try:
         if argv[:1] == ["dir"]:
             print(directory())

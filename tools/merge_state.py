@@ -385,6 +385,10 @@ COULD_NOT = 3
 
 
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print("usage: python3 tools/merge_state.py %O %A %B %P  (git runs it as the merge "
+              "driver for the state files; tools/sync_app.py sets that up)")
+        return 0
     if sys.version_info[:2] < FLOOR:
         print(f"merge_state: Python {FLOOR[0]}.{FLOOR[1]} or newer is needed; this is "
               f"{platform.python_version()} (python3 tools/env_check.py says how to install it)",

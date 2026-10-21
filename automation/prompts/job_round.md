@@ -26,8 +26,11 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    says), 1 a stage broke (diagnose it and say so; never paper over it). A portal the
    health probe reports DOWN goes in the message's first line: a quiet board is not a
    thin market.
-2. From the shortlist, drop anything failing the candidate's bar (`tools/bar.py`, and the
-   target sectors and exclusions in `profile/CLAUDE.md`), any employer with a live interview
+2. Judge every employer the bar does not know yet, once each (`python3 tools/bar.py
+   unjudged`, then `bar.py judge "<employer>" <verdict> "<why>"`): a "none" that says "not on
+   your employer lists yet" has not failed the bar. Then, from the shortlist, drop anything
+   failing the candidate's bar (`tools/bar.py`, and the target sectors and exclusions in
+   `profile/CLAUDE.md`), any employer with a live interview
    process or referral hold, anything already drafted or applied to in
    `job_search_tracker.csv`, and anything posted more than 7 days ago. One role per
    employer. Keep warm-route warnings ("DO NOT APPLY COLD") visible next to the role.

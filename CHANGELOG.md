@@ -34,6 +34,14 @@ make sense to somebody whose repo just received it.
 - **"Both are right, leave it."** When the consistency check flags a line that is right on
   purpose, `python3 tools/profile_consistency.py --reviewed <file>:<line>` records that.
   It is not raised again until that sentence changes.
+- **An employer the bar does not know is judged once, not failed.** The bar scored a global
+  bank, a financial-data firm and a fintech "none" because the person's employer lists were
+  written for another sector, and "none" read as failing the bar, so networking would have
+  passed them over. The verdict now says "not on your employer lists yet".
+  `python3 tools/bar.py unjudged` lists such employers in the newest shortlist.
+  `python3 tools/bar.py judge "<employer>" prestige "<why>"` records a judgement once, and
+  every later verdict reads it. Your own lists and hard rules still come first. The job
+  round and `/network` judge these employers before applying the bar.
 - **A rehearsal before each release.** `python3 tools/rehearse_sync.py <a person's repo>`
   takes the update the way a cloud chat and a computer chat would, on copies, then runs the
   day's checks and lands a change. Nothing of the real repo is touched. Its first run found
@@ -98,6 +106,9 @@ make sense to somebody whose repo just received it.
 - **A sync no longer stops on line endings.** State files already committed with Windows
   line endings read as changed in a fresh copy. They are given plain endings once, in a
   commit of their own that changes no row.
+- **`--help` prints how to use five more tools** (the merge driver, `person.py`,
+  `personal_paths.py`, `profile_names.py`, `routines.py`). Two of them did their work
+  instead.
 - **The app's own tests no longer tell other copies they are behind.** A test run wrote the
   day's sync record into the git folder every copy of a repo shares, and `/upgrade` in the
   other copies then stopped with "older than the last update". The record now goes to the

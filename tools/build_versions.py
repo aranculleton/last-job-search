@@ -267,8 +267,9 @@ METHODS: dict[str, dict] = {
             (23, "2026-10-19", False, "RUNBOOK: what to do when two chats applied the same profile upgrade"),
             (24, "2026-10-20", False, "the voice check skips HTML comments; texmf's README says nothing links ~/texmf; the grounding auditor passes a pasted note's reader to validate()"),
             (25, "2026-10-20", False, "an answer that opens on a short framing line is in the first person when it says I by its third sentence; an application's outreach note is checked by the same gate as every networking message"),
+            (26, "2026-10-21", False, "RUNBOOK names bar.py judge and unjudged"),
         ),
-        "fingerprint": "aa00febb6377e660",
+        "fingerprint": "12d92e5c936340e8",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -382,8 +383,9 @@ METHODS: dict[str, dict] = {
             (33, "2026-10-20", False, "profile reads back to 3.2.5's caps (30 an hour, 80 a day), reading for the week's requests, no slow start before a signal, a lifted cap lifting the ramp and the loads cap, and the place check said once in a chat"),
             (34, "2026-10-20", False, "the voice checks from one round (a round's InMails built alike, a bare close, guessing from a level, flattery, vague comparisons, hedges by default, repeated words, a VOICE setting), and the tool fixes (rows from readings, pending invitations, no Connect button, InMail refunds, company numbers, research titles, two a company, the time where they are, a page loaded too soon kept); and the reading limits: a read stops counting once its note is sent, the person's own caps outrank every preset cap of their period, one budget line before a round; and one check for every composer, agreeing with what the composers write (no warning on a sentence about the sender, on the topic word said again, or on a question; a note to someone connected checked at its own length; an outreach note checked as a message)"),
             (35, "2026-10-21", False, "compose.advise(company=) warns of a draft naming the person's own city to an employer told another; state.py set changes a contact's status, next action, date or notes by command"),
+            (36, "2026-10-21", False, "/network judges an employer the bar does not know yet instead of reading its none as a fail"),
         ),
-        "fingerprint": "ab7e85348c097808",
+        "fingerprint": "1ece5390c3a85035",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -450,8 +452,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-19", False, "a hiring process with no application is read as a process, never as an application to the same role"),
             (13, "2026-10-20", False, "a round in the cloud tells the person, in plain words, the one fix when the chat's settings block the job sites"),
             (14, "2026-10-21", False, "sector.kind reads what the person's catalogue calls an employer, for the interview pack; screening unchanged"),
+            (15, "2026-10-21", False, "The bar says when an employer is on none of the profile's lists, and reads a judgement recorded once with bar.py judge"),
         ),
-        "fingerprint": "3e86e189a62ef562",
+        "fingerprint": "de74aad2624e2892",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -466,8 +469,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-17", False, "how to set up the brief from a session on your own computer"),
             (5, "2026-10-18", False, "finds an existing brief by the registry or its prompt, never its title, so a second is never made"),
             (6, "2026-10-18", False, "the words for making the brief from a computer come from the registry, and Claude never starts a cloud chat from its own shell"),
+            (7, "2026-10-21", False, "The job round judges employers the bar does not know yet before applying the bar"),
         ),
-        "fingerprint": "e80ecf2bb60066a6",
+        "fingerprint": "e258c3dde2ac882c",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
