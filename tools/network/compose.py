@@ -2032,16 +2032,71 @@ EXAMPLE_FACTS = ("names {what}, from the approved note to {who}: an example give
                  "person's own reading")
 
 
-def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -> list:
-    """[tone.Violation] for a first note that carries the name or the employer of somebody an
-    approved example was written for (learned.py approve), when it is for someone else. A
-    note to someone at one employer was copied from an approved note to someone at another,
-    that person's employer and the talk they gave included, and passed (2026-10-21).
+def _referrers(given, row, book) -> tuple:
+    """(names, employer keys) of whoever referred this reader: `given`, and their row's
+    `referred_by`, a contact id or a name as `prep.referrer_name` reads it. A warm intro
+    leads with the referrer's name, and saving one read it as a name lifted from an
+    approved example when the example was the note to that referrer (2026-10-21)."""
+    import state
+    names, keys = [], set()
+    for raw in (given, (row or {}).get("referred_by")):
+        raw = str(raw or "").strip()
+        if not raw:
+            continue
+        hit = next((c for c in book if str(c.get("contact_id") or "").strip() == raw), None)
+        if hit is None:
+            hit = next((c for c in book if state._match_name(c.get("name"))
+                        == state._match_name(raw)), None)
+            names.append(raw)
+        if hit is not None:
+            names.append(str(hit.get("name") or ""))
+            k = company_key.key(hit.get("company") or "")
+            if k:
+                keys.add(k)
+    return [n for n in names if n], keys
 
-    Their full name, or their surname, anywhere; their employer when this reader works
-    somewhere else and it is none of the person's own employers (an alumni note names
-    those). A referrer named in the note is theirs to name. Nothing is judged for a reader
-    nobody can tell apart from the example's."""
+
+def _reader_words(contact, row) -> str:
+    """Everything known about the reader that may name an employer: what was read about
+    them (their history, headline, About, posts) and their row's title and route. An
+    employer found there is theirs to name, even when an example's reader works there."""
+    got = {}
+    if contact:
+        try:
+            import reading as _reading
+            got = _reading.load(contact) or {}
+        except (ImportError, ValueError):
+            got = {}
+    parts = [got.get(k) for k in ("headline", "about", "current", "company")]
+    parts += [" ".join(str(e.get(k) or "") for k in ("employer", "title"))
+              for e in got.get("experience") or () if isinstance(e, dict)]
+    parts += [i.get("text") for i in got.get("items") or () if isinstance(i, dict)]
+    for group in ((got.get("shared") or {}).get("employers") or ()):
+        if isinstance(group, dict):
+            parts += [group.get("name")] + list(group.get("aka") or [])
+    parts += [(row or {}).get(k) for k in ("title", "route_detail")]
+    return " ".join(str(p) for p in parts if p)
+
+
+# The end of a name in a note, its possessive included: "Ana Castellan's talk" is her name,
+# and the apostrophe hid it from the check.
+_NAME_END = r"(?:['\u2019]s)?(?![\w'\u2019-])"
+
+
+def _surname_alone(word: str, plain: str) -> bool:
+    """Is an example reader's surname in the note as a name on its own, not inside a
+    longer one? "Castellan Partners" is an employer that shares a word with Ana
+    Castellan, and was refused as her name (2026-10-21)."""
+    for m in re.finditer(r"(?<![\w'-])" + re.escape(word) + _NAME_END, plain):
+        if not re.match(r"\s+[A-Z][\w'-]*", plain[m.end():]):
+            return True
+    return False
+
+
+def example_fact_names(text, contact: str = "", name: str = "", referrer: str = "") -> list:
+    """[(what, whose example)] for each name or employer an approved example was written
+    for that this note carries, when the note is for someone else (`example_facts`), less
+    any the person said is this reader's own (`reading.py draft --own-facts`)."""
     try:
         import learned
         examples = [x for x in learned.approved() if str(x.get("contact_id") or "").strip()]
@@ -2052,6 +2107,8 @@ def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -
         return []
     import state
     book = learned.contact_book()
+    row = next((c for c in book if str(c.get("contact_id") or "").strip() == contact), {}) \
+        if contact else {}
     r_name, r_company = learned.example_reader({"contact_id": contact}, book) if contact \
         else ("", "")
     r_name = name or r_name
@@ -2059,6 +2116,9 @@ def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -
             for n in [r.get("employer")] + ([r["known_as"]] if isinstance(r.get("known_as"), str)
                                              else list(r.get("known_as") or []))
             if company_key.key(n)}
+    ref_names, ref_keys = _referrers(referrer, row, book)
+    ref_names = {state._match_name(n) for n in ref_names}
+    theirs = None                       # what is known about the reader, read once if needed
     plain = tone._visible(str(text or ""))
     out, seen = [], set()
     for x in examples:
@@ -2067,30 +2127,74 @@ def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -
             continue
         e_name, e_company = learned.example_reader(x, book)
         same_person = bool(e_name) and state._match_name(e_name) == state._match_name(r_name)
-        if same_person or (referrer and state._match_name(referrer) == state._match_name(e_name)):
+        if same_person or (e_name and state._match_name(e_name) in ref_names):
             continue
         found = []
         words = [w for w in re.findall(r"[^\W\d_][\w'-]*", e_name) if len(w) >= 3]
         full = " ".join(words)
         r_surname = state.surname(r_name).lower() if r_name else ""
         if len(words) > 1 and re.search(r"(?<![\w'-])" + r"\s+".join(map(re.escape, words))
-                                        + r"(?![\w'-])", plain, re.I):
+                                        + _NAME_END, plain, re.I):
             found.append(full)
-        elif len(words) > 1 and words[-1].lower() != r_surname and re.search(
-                r"(?<![\w'-])" + re.escape(words[-1]) + r"(?![\w'-])", plain):
+        elif (len(words) > 1 and words[-1].lower() != r_surname
+              and _surname_alone(words[-1], plain)):
             found.append(words[-1])
         key = company_key.key(e_company)
-        if (key and r_company and key != company_key.key(r_company) and key not in mine):
+        # Their employer is never a fact of the example's when it is one of the person's own
+        # (an alumni note names those), the reader's own now or before, or the referrer's.
+        if key and r_company and key != company_key.key(r_company) and key not in mine \
+                and key not in ref_keys:
             pat = learned.employer_pattern(e_company)
             m = pat.search(plain) if pat is not None else None
             if m:
-                found.append(m.group(0))
+                if theirs is None:
+                    theirs = _reader_words(contact, row)
+                if not pat.search(theirs):
+                    found.append(m.group(0))
         for what in found:
             if (what.lower(), cid) not in seen:
                 seen.add((what.lower(), cid))
-                out.append(tone.Violation("example_facts", EXAMPLE_FACTS.format(
-                    what=what, who=e_name or cid)))
+                out.append((what, e_name or cid))
+    if out and contact:
+        try:
+            import reading as _reading
+            kept = _reading.own_facts(contact)
+        except (ImportError, ValueError):
+            kept = set()
+        out = [(w, who) for w, who in out if w.lower() not in kept]
     return out
+
+
+def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -> list:
+    """[tone.Violation] for a first note that carries the name or the employer of somebody an
+    approved example was written for (learned.py approve), when it is for someone else. A
+    note to someone at one employer was copied from an approved note to someone at another,
+    that person's employer and the talk they gave included, and passed (2026-10-21).
+
+    Their full name, or their surname standing as a name; their employer when this reader
+    works somewhere else and it is none of the person's own employers (an alumni note names
+    those), nothing read about this reader names it (their past employer), and it is not
+    the referrer's. A referrer named in the note is theirs to name: the one passed, and the
+    one their row's `referred_by` names. Nothing is judged for a reader nobody can tell
+    apart from the example's. A refusal that is wrong is lifted for this reader, with the
+    person's reason kept: `reading.py draft <id> <file> --own-facts "<why>"`."""
+    return [tone.Violation("example_facts", EXAMPLE_FACTS.format(what=what, who=who))
+            for what, who in example_fact_names(text, contact=contact, name=name,
+                                                referrer=referrer)]
+
+
+def book_names(contact: str = "", extra=()) -> list:
+    """Everybody else a note could be for: the contact book's names other than `contact`'s,
+    and `extra` (a batch's). What `tone.wrong_greeting` reads a short greeting against."""
+    try:
+        import learned
+        book = learned.contact_book()
+    except (ImportError, SystemExit):
+        book = []
+    contact = str(contact or "").strip()
+    return [str(c.get("name") or "") for c in book
+            if str(c.get("contact_id") or "").strip() != contact and c.get("name")] \
+        + [n for n in extra or () if n]
 
 
 def validate(message, kind, name=None, seniority="peer", employers=(),
@@ -2129,7 +2233,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     # `live_thread` means. Without it a reply such as "That's great, thank you
     # Riley" fails on the one rule that is scoped to cold messages.
     out = list(tone.check(text, recipient_seniority=seniority, name=name,
-                          live_thread=(k in ("reply", "referral_ask"))))
+                          live_thread=(k in ("reply", "referral_ask")),
+                          others=book_names(contact) if contact else ()))
     if k in FIRST_MESSAGE_KINDS:
         out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth)
     if k in FIRST_MESSAGE_KINDS + ("nudge",):

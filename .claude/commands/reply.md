@@ -58,7 +58,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
    one of two files, and `reply.guidance()` names both in `which_resume`, beside the next
    action (show it with the action owed outside the thread): for a role they named, one drafted for
    them (`python3 tools/stage_picks.py single <dir> ... --for-contact <contact_id>`, so the
-   tracker row and the folder are filed under them); with no role named, the person's
+   tracker row and the folder are filed under them; add `--referral-field` when they said
+   to apply and name them as the referrer: it goes in through the portal, never to them,
+   so no message is logged and RECONCILE asks for none); with no role named, the person's
    current one (`stage_picks.py single <dir> --for-contact <contact_id>` says which and
    records it). When it goes, the message is logged with the file: `state.py message
    <contact_id> --attached <file> --text-file <file>`. A resume sent from another chat is

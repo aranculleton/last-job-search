@@ -104,7 +104,7 @@ GATE = {
         "Remote, United Kingdom", "Remote, Northgate", "Manchester",
         "Manchester, England, United Kingdom", "Manchester, UK", "Hybrid - Manchester",
         "Manchester | Remote", "Greater Manchester", "Greater Manchester Area",
-        "Manchester Area, United Kingdom", "Manchester, NH", "Manchester, NH, US", "Salford",
+        "Manchester Area, United Kingdom", "Salford",
         "Salford, England, United Kingdom", "MediaCity UK, Salford", "Media City", "MediaCity",
         "Salford Quays", "Stockport, Cheshire", "Stockport, England, United Kingdom",
         "Trafford", "Stretford", "Stretford, England, United Kingdom", "Sale",
@@ -119,6 +119,9 @@ GATE = {
         "North West England", "New York, NY", "San Diego, CA", "Austin, TX", "EMEA", "Europe",
         "Northgate", "Northgate, Wexmoor", "Wexmoor", "Somewhere, Nowhere"],
     "FAIL": [
+        # Changed on purpose: these passed as Greater Manchester. A home town's name
+        # beside another country's state is that place (places.subdivision_abroad).
+        "Manchester, NH", "Manchester, NH, US",
         "Remote, India", "Remote - Germany", "Remote - Canada",
         # Changed on purpose: the EU leaves out the UK, the example's home, so a role
         # remote within it is abroad (tools/places.py region_includes_home).
@@ -150,7 +153,11 @@ REMOTE_FAILS = [
 # region words. EMEA and Europe take in the UK, so a role remote within them passes;
 # the EU does not, so it fails (above). A home the table cannot place still flags
 # (tests/test_where_the_work_can_be_done_from.py).
-REMOTE_FLAGS: list = []
+# Changed on purpose: a remote role anchored in a US state is not a nominal office for
+# somebody in the UK (places.subdivision_abroad), so these are flagged for Tier 2, as
+# "Remote - Canada" is failed and the same places with the country named are.
+REMOTE_FLAGS: list = ["Manchester, NH", "New York, NY", "San Diego, CA", "Austin, TX",
+                      "Cambridge, MA"]
 # fit.py prices a FLAG by its reason, so those are held to the word.
 FLAG_REASONS = {
     "location not recognized; Tier 2 decides": [

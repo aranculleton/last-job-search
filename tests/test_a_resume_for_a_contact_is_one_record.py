@@ -271,6 +271,21 @@ def test_a_referral_through_the_same_contact_does_not_hold_the_draft(repo, monke
                              for_contact="kestrel_mutual_ansgar", today=TODAY)[0]["for_contact"]
 
 
+def test_a_role_named_with_no_posting_asks_for_the_posting(repo, capsys, monkeypatch):
+    # A role was named, so the resume is tailored to it: the missing piece is its posting,
+    # never "No role named", which sends the current CV and notes it on their row.
+    monkeypatch.setattr(sys, "argv", ["stage_picks.py", "single", str(repo / "r1"),
+                                      "--for-contact", CID, "--company", "Oakmere Foods",
+                                      "--role", "Demand Planning Analyst"])
+    with pytest.raises(SystemExit) as stop:
+        stage_picks.main()
+    said = str(stop.value)
+    assert "no posting file for Demand Planning Analyst" in said and "--posting-file" in said
+    assert "No role named" not in said + capsys.readouterr().out
+    assert not (repo / "r1" / "picks.json").exists()
+    assert "CV to send" not in _load(repo)[0][0]["notes"]
+
+
 def test_with_no_role_named_the_current_resume_goes_and_is_recorded(repo, capsys, monkeypatch):
     run = ["stage_picks.py", "single", str(repo / "r1"), "--for-contact", CID]
     monkeypatch.setattr(sys, "argv", run)

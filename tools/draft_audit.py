@@ -250,11 +250,13 @@ def research_hash(research: dict | None) -> str:
     """A short hash of the research lines the drafter is shown (draft_pack.research_lines,
     and the workflow's own copy of them). The drafter writes it into the draft; the audit
     hashes research_<slug>.json the same way, so "F2" is shown to be one fact in both.
-    FNV-1a over the UTF-16 code units, which a workflow script computes the same way."""
+    FNV-1a over the UTF-16 code units, which a workflow script computes the same way. A
+    lone surrogate (an emoji cut in half in a quote) is one code unit there too, so it is
+    hashed as one here rather than stopping the audit of the whole batch."""
     import draft_pack
     text = draft_pack.research_lines(research)
     h = 0x811C9DC5
-    data = text.encode("utf-16-le")
+    data = text.encode("utf-16-le", errors="surrogatepass")
     for i in range(0, len(data), 2):
         h ^= data[i] | (data[i + 1] << 8)
         h = (h * 0x01000193) & 0xFFFFFFFF
@@ -305,9 +307,23 @@ def _numbers(text: str) -> set:
     return check_numbers.claims(text)
 
 
+def json_text(obj, **kw) -> str:
+    """`obj` as JSON, readable (ensure_ascii=False) unless it holds a lone surrogate (an
+    emoji cut in half in a quote), which no UTF-8 file or terminal can hold: then escaped,
+    which json.load reads back the same. One such character stopped the batch's audit."""
+    text = json.dumps(obj, ensure_ascii=False, **kw)
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        text = json.dumps(obj, ensure_ascii=True, **kw)
+    return text
+
+
 def md5(obj) -> str:
-    return hashlib.md5(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode("utf-8")
-                       ).hexdigest()
+    """The draft's fingerprint. Valid text hashes as it always did; a lone surrogate in it
+    is kept as written (surrogatepass) rather than stopping the audit."""
+    return hashlib.md5(json.dumps(obj, sort_keys=True, ensure_ascii=False).encode(
+        "utf-8", errors="surrogatepass")).hexdigest()
 
 
 def _skill_rx():
@@ -410,11 +426,19 @@ def malformed(d: dict) -> list[dict]:
     return out
 
 
+def _name_words(name: str) -> set:
+    """A name's words, accents folded and case ignored: "Zoë" is "zoe", "Søren" "soren",
+    and a name in another script keeps its letters."""
+    from company_key import fold
+    return {w for w in re.findall(r"[^\W\d_]+", fold(str(name or "")).casefold())
+            if w not in _TITLES}
+
+
 def _same_person(a: str, b: str) -> bool:
     """Whether two ways of writing a name are one person: the name with a title ("Dr")
-    in front of it, and the name alone."""
-    x = {w for w in re.findall(r"[a-z]+", str(a).lower()) if w not in _TITLES}
-    y = {w for w in re.findall(r"[a-z]+", str(b).lower()) if w not in _TITLES}
+    in front of it, and the name alone, with or without its accents ("Núñez" and
+    "Nunez")."""
+    x, y = _name_words(a), _name_words(b)
     return bool(x) and bool(y) and (x <= y or y <= x)
 
 
@@ -1007,7 +1031,7 @@ def write_note(round_dir: str, slug: str, note: dict) -> str:
             "for_draft": md5(final)}
     path = os.path.join(round_dir, f"outreach_{slug}.json")
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(body, fh, indent=1, ensure_ascii=False)
+        fh.write(json_text(body, indent=1))
         fh.write("\n")
     return path
 
@@ -1034,7 +1058,7 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
                          "that version")
     path = os.path.join(round_dir, f"model_audit_{slug}.json")
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(verdict, fh, indent=1, ensure_ascii=False)
+        fh.write(json_text(verdict, indent=1))
         fh.write("\n")
     return path
 
@@ -1059,13 +1083,34 @@ def _summary_line(mech: dict) -> str:
             f"grounding question(s): {', '.join(mech['reasons'])}")
 
 
+# How a job is held or where it is done, written as its own part of a title ("(Fixed
+# Term, 12 months)", ", maternity cover", "- Hybrid"): never which role it is.
+_TERM_WORDS = {"fixed", "term", "ftc", "temporary", "temp", "permanent", "contract",
+               "contractor", "freelance", "full", "part", "time", "fte", "month", "months",
+               "week", "weeks", "year", "years", "maternity", "paternity", "parental", "leave",
+               "cover", "secondment", "hybrid", "remote", "onsite", "on", "site", "office",
+               "based", "home", "flexible", "working"}
+_ROLE_STOP = {"a", "an", "and", "the", "of", "for", "to", "in", "at", "with", "on", "amp"}
+
+
 def _role_words(title) -> set:
+    """The words that name a role, whatever order a title puts them in: requisition
+    codes, gender markers, the job's terms and "and"/"of" left out. "Analyst, Pricing &
+    Underwriting (fixed term, 12 months) - REQ1234" is {analyst, pricing, underwriting}."""
+    import doc_name
+    core = doc_name.role_core(title)
+    parts = [p for p in re.split(r"\s[-\u2013\u2014|]\s|[,;()\[\]]", core) if p.strip()]
+    kept = [p for p in parts
+            if not set(re.findall(r"[a-z]+", p.lower())) <= _TERM_WORDS | _ROLE_STOP
+            or not re.search(r"[a-z]", p.lower())]
+    text = " ".join(kept) if kept else core
     try:
         import throttle
-        key = throttle.title_key(title)
+        key = throttle.title_key(text)
     except Exception:
-        key = re.sub(r"[^a-z0-9]+", " ", str(title or "").lower())
-    return set(key.split())
+        key = re.sub(r"[^a-z0-9]+", " ", str(text or "").lower())
+    words = set(key.split()) - _ROLE_STOP
+    return {w for w in words if not w.isdigit()} or words
 
 
 def other_role(d: dict, pick: dict) -> str:
@@ -1074,14 +1119,15 @@ def other_role(d: dict, pick: dict) -> str:
     Every round file is named by the company's slug, so a draft left from an earlier pick
     at the same employer (its claims role) sat under the name of the next one (its
     pricing role), and was audited against the new posting and assembled under the new
-    file name. The role is matched loosely, by its words, because a drafter writes it
-    "as posted, without requisition noise"."""
+    file name. The role must be this pick's: the same words, in any order, once the
+    requisition noise a drafter leaves out is gone. One title's words inside the other's
+    is another role ("Data Analyst" is not the "Senior Data Analyst" staged after it)."""
     from company_key import key
     a, b = key(str(d.get("company") or "")), key(str(pick.get("company") or ""))
     if a and b and a != b:
         return f"the draft is for {d.get('company')}, not {pick.get('company')}"
     x, y = _role_words(d.get("role")), _role_words(pick.get("role"))
-    if x and y and not (x <= y or y <= x):
+    if x and y and x != y:
         return f"the draft is for {d.get('role')!r}, not this pick's {pick.get('role')!r}"
     return ""
 
@@ -1115,7 +1161,7 @@ def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
                   "stale": stale, "inputs": inputs(round_dir, slug), "mechanical": None,
                   "model": None}
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump(record, fh, indent=1, ensure_ascii=False)
+            fh.write(json_text(record, indent=1))
             fh.write("\n")
         return {"slug": slug, "verdict": "stale", "why": stale, "path": path}
     posting = _posting_of(pick)
@@ -1159,7 +1205,7 @@ def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
               "inputs": inputs(round_dir, slug), "mechanical": mech,
               "model": model if isinstance(model, dict) else None}
     with open(path, "w", encoding="utf-8") as fh:
-        json.dump(record, fh, indent=1, ensure_ascii=False)
+        fh.write(json_text(record, indent=1))
         fh.write("\n")
     return {"slug": slug, "verdict": verdict, "mechanical": mech, "path": path}
 
@@ -1489,7 +1535,7 @@ def main(argv=None) -> int:
             raise SystemExit(f"{a.cmd}: not one JSON object ({e})") from None
         (write_verdict if a.cmd == "verdict" else write_note)(a.round_dir, a.slug, _one(obj))
         [result] = audit_round(a.round_dir, only=[a.slug])
-        print(json.dumps([failing(result)], indent=1, ensure_ascii=False))
+        print(json_text([failing(result)], indent=1))
         return 0 if result["verdict"] in ("pass", "fixed", "reject") else 1
     if a.cmd == "packet":
         text = packet(a.round_dir, a.slug)

@@ -124,15 +124,34 @@ def for_contact(draft: dict, meta: dict, contacts: list[dict] | None = None) -> 
     if c is None and got("for_contact_name"):
         c = {"contact_id": cid, "name": got("for_contact_name"),
              "_channel": got("for_contact_channel")}
-    return c
+    if c is None:
+        return None
+    route = _route_of(c, got("for_contact_route"))
+    out = dict(c, _route=route)
+    if route == _state().ROUTE_PORTAL:
+        out["_channel"] = "referral"     # named as the referrer on the application
+    return out
+
+
+def _route_of(contact: dict, staged: str = "") -> str:
+    """How a resume made for them goes: as staging said, or, for a pick staged before the
+    route was carried, from their thread, the way staging reads it (state.resume_route)."""
+    state = _state()
+    route = staged or str((contact or {}).get("_route") or "")
+    if route:
+        return route
+    path = person.state("network_threads.csv")
+    threads = state.load_threads(path) if os.path.exists(path) else []
+    return state.resume_route(threads, str((contact or {}).get("contact_id") or "").strip())
 
 
 def made_for_note(contact: dict) -> str:
-    """The words in a tracker row's notes that say who its resume was made for."""
+    """The words in a tracker row's notes that say who its resume was made for, and how it
+    goes (state.route_words): to them, or through the portal with their name as referrer."""
     state = _state()
     name = state.person_name(contact.get("name")) or str(contact.get("name") or "")
     return (f"Made for {name} ({str(contact.get('contact_id') or '').strip()}), who asked for "
-            "it: it goes to them, not through the portal.")
+            f"it: {state.route_words(_route_of(contact))}.")
 
 
 def _row_for(draft: dict, meta: dict, today: str, round_name: str,

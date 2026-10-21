@@ -45,6 +45,7 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py queue                  # drafts waiting with no fresh reading
     python3 tools/network/reading.py paste <file|->         # several profiles in one paste, split by ---
     python3 tools/network/reading.py draft <contact_id> <file|->   # a note to draft.md, marked if unread
+                                                   # [--own-facts "<why>"]: what the example check found is theirs
     python3 tools/network/reading.py gate [--wait [--timeout S]]  # may a browser page load go now
     python3 tools/network/reading.py resume --reason R             # lift a sign-out stop, on their word
     python3 tools/network/reading.py invitations <file|->          # the sent-invitations list, once
@@ -2533,7 +2534,8 @@ def queue(contacts: list, today: datetime.date | None = None) -> list:
             continue                     # a recruiter's card says enough: no read waits
         if waits_on_read(cid) or not read_recently(got, today):
             out.append(c)
-        elif compose.example_facts(_draft_note(cid), contact=cid, name=c.get("name", "")):
+        elif compose.example_facts(_draft_note(cid), contact=cid, name=c.get("name", ""),
+                                   referrer=c.get("referred_by", "")):
             out.append(c)
     return out
 
@@ -2672,6 +2674,56 @@ def write_draft(contact_id: str, note: str, name: str = "", card_only: bool = Fa
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as fh:
         fh.write(draft_text(contact_id, note, name, card_only=card_only))
+    return p
+
+
+# A name or employer an approved example was written for, which the person says is this
+# reader's own: the referrer's employer, a past employer of theirs nothing read shows. The
+# example check refuses it (compose.example_facts) and no recorded rule lifts that check
+# for everyone, so the person lifts it for this one reader, for what it found, with their
+# reason kept beside the draft. A later note naming something else is checked as ever.
+OWN_FACTS = "own_facts.json"
+
+
+def own_facts_path(contact_id: str) -> str:
+    return os.path.join(os.path.dirname(path(contact_id)), OWN_FACTS)
+
+
+def own_facts(contact_id: str) -> set:
+    """What the person said this reader's note may name (lower case), from own_facts.json."""
+    try:
+        with open(own_facts_path(contact_id), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return set()
+    return {str(k.get("what") or "").strip().lower() for k in (got or {}).get("kept") or ()
+            if isinstance(k, dict) and str(k.get("what") or "").strip()}
+
+
+def keep_own_facts(contact_id: str, found, reason: str, today: str = "") -> str:
+    """Record that the note to this reader may name each (what, whose example) in `found`,
+    on the person's word (`reason`). Returns the file's path."""
+    reason = " ".join(str(reason or "").split())
+    if not reason:
+        raise SystemExit("reading: --own-facts needs the person's reason: --own-facts "
+                         "\"<why it is this reader's own>\"")
+    p = own_facts_path(contact_id)
+    try:
+        with open(p, encoding="utf-8") as fh:
+            got = json.load(fh) or {}
+    except (OSError, ValueError):
+        got = {}
+    kept = [k for k in got.get("kept") or () if isinstance(k, dict)]
+    have = {str(k.get("what") or "").lower() for k in kept}
+    for what, who in found:
+        if what.lower() not in have:
+            kept.append({"what": what, "example_for": who, "reason": reason[:300],
+                         "date": today or datetime.date.today().isoformat()})
+            have.add(what.lower())
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump({"kept": kept}, fh, indent=1, ensure_ascii=False)
+        fh.write("\n")
     return p
 
 
@@ -4033,6 +4085,15 @@ def record_pending(contact_id: str, today: datetime.date | None = None, row: dic
             "it; off the queue, the InMail and the new-note lists")
 
 
+def own_facts_from_json(raw: str) -> dict:
+    """{contact_id: the person's reason} for each note in the `drafts` JSON given one:
+    {"<id>": {"note": "...", "own_facts": "<why>"}}."""
+    got = json.loads(raw)
+    return {str(cid): str(v.get("own_facts") or "") for cid, v in (got or {}).items()
+            if isinstance(v, dict) and str(v.get("own_facts") or "").strip()} \
+        if isinstance(got, dict) else {}
+
+
 def notes_from_json(raw: str, card_only: bool = False) -> dict:
     """{contact_id: (note, card_only)} from the `drafts` JSON."""
     got = json.loads(raw)
@@ -4055,17 +4116,23 @@ NO_READING_SAVE = ("not saved. Nothing was read about {who}, so this note rests 
                    "tools/network/reading.py estimate <how many>")
 
 
-def save_drafts(batch: dict) -> int:
+def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
     """Save first notes ({contact_id: (note, card_only)}) to their draft files, each checked
     the way one is (the greeting is theirs; something was read, or the note is card-only),
     then all of them together with the queue already waiting (`alike`: one skeleton with
     the nouns swapped, one opening, one close). A batch too alike saves none of its notes:
     twenty notes from one template were saved one by one, each passing alone (2026-10-21).
-    Returns the exit code."""
+    `own_facts_why` ({contact_id: the person's reason}) lifts the example check for what it
+    found in that note (`keep_own_facts`). Returns the exit code."""
     import state
     import tone
     contacts = state.load_contacts()
+    own_facts_why = own_facts_why or {}
     ready, added_lines, refused = {}, [], 0
+    # Who else each note could be for: a greeting that only starts this reader's name is
+    # read against the book and the batch (tone.wrong_greeting).
+    batch_names = {cid: (load(cid) or {}).get("name", "") for cid in batch
+                   if not any(c.get("contact_id") == cid for c in contacts)}
     for cid, (note, card_only) in batch.items():
         waits = card_only == WAITS_ON_A_READ
         card_only = bool(card_only) and not waits
@@ -4096,16 +4163,28 @@ def save_drafts(batch: dict) -> int:
             row = row or {}
         # A batch of notes saved one by one: a note shuffled onto the wrong person greets
         # somebody else, and the person pastes it by hand. Never saved.
-        wrong = tone.wrong_greeting(note, row.get("name", ""))
+        import compose
+        others = compose.book_names(cid, [n for k, n in batch_names.items() if k != cid])
+        wrong = tone.wrong_greeting(note, row.get("name", ""), others)
         if wrong:
             print(f"reading: not saved. The note {wrong[0].text}: fix the greeting (or save it "
                   "under the right contact's id) and save it again.")
             refused += 1
             continue
-        import compose
-        leaked = compose.example_facts(note, contact=cid, name=row.get("name", ""))
-        if leaked:
-            print(f"reading: {cid}: not saved. The note {leaked[0].text}.")
+        leaked = compose.example_fact_names(note, contact=cid, name=row.get("name", ""),
+                                            referrer=row.get("referred_by", ""))
+        if leaked and str(own_facts_why.get(cid) or "").strip():
+            keep_own_facts(cid, leaked, own_facts_why[cid])
+            print(f"reading: {cid}: the note names {', '.join(w for w, _ in leaked)}, from an "
+                  f"approved note to {leaked[0][1]}; kept on your word "
+                  f"({' '.join(own_facts_why[cid].split())[:120]}), for this reader only")
+        elif leaked:
+            what, who = leaked[0]
+            print(f"reading: {cid}: not saved. The note "
+                  f"{compose.EXAMPLE_FACTS.format(what=what, who=who)}. If it is "
+                  f"{row.get('name') or cid}'s own (their past employer, the person who "
+                  "referred you), save it again with --own-facts \"<why>\" (in a drafts "
+                  "file, \"own_facts\": \"<why>\"), and the reason is kept.")
             refused += 1
             continue
         got = load(cid) or {}
@@ -4224,9 +4303,12 @@ def main(argv: list | None = None) -> int:
                     help="a placeholder written before anyone is read (the networking upgrade's): "
                          "saved under WAITS ON A READ, never sent as it stands, and listed by "
                          "`queue` for a read")
+    dr.add_argument("--own-facts", default="", metavar="WHY",
+                    help="the name or employer the example check found is this reader's own "
+                         "(their past employer, your referrer): saved, with your reason kept")
     dd = sub.add_parser("drafts", help="a batch of first notes, checked together before any is "
                                        "saved: {\"<id>\": \"<note>\"} or {\"<id>\": {\"note\": "
-                                       "..., \"card_only\": true}}")
+                                       "..., \"card_only\": true, \"own_facts\": \"<why>\"}}")
     dd.add_argument("file", help="the JSON, or - for stdin")
     dd.add_argument("--card-only", action="store_true", help="every note in it is card-only")
     qu = sub.add_parser("queue", help="drafts waiting with no fresh reading")
@@ -4599,13 +4681,15 @@ def main(argv: list | None = None) -> int:
             batch = {a.contact_id: (note, bool(a.card_only))}
             if a.wait_for_read:
                 batch = {a.contact_id: (note, WAITS_ON_A_READ)}
+            why = {a.contact_id: a.own_facts} if a.own_facts.strip() else {}
         else:
             raw = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
             try:
                 batch = notes_from_json(raw, card_only=bool(a.card_only))
+                why = own_facts_from_json(raw)
             except ValueError as e:
                 raise SystemExit(f"reading: {e}") from None
-        return save_drafts(batch)
+        return save_drafts(batch, own_facts_why=why)
     if a.cmd == "batch":
         import state
         notes = queued_notes(state.load_contacts())

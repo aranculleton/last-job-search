@@ -256,39 +256,289 @@ _LANGUAGE_SOFT = re.compile(
     r"|[:(,\-]\s*an?\s+(?:\w+\s+)?advantage\b"
     r"|\b(?:is|are|be)\s+(?:\w+\s+)?(?:beneficial|helpful|useful)\b"
     r"|\bnot\s+(?:a\s+)?(?:required|requirement|essential|mandatory|necessary|needed)\b"
-    r"|\boptional\b", re.I)
+    # "essential, not optional" is the opposite of optional.
+    r"|(?<!\bnot\s)(?<!\bnever\s)\boptional\b", re.I)
+# The preference words a language line adds to the screen's own. Of the screen's
+# equal-opportunity words (ENCOURAGE) only these are about what is asked for: "Spanish
+# speakers are encouraged to apply", "Spanish speakers welcome", "preference for Spanish
+# speakers", "we do not require Spanish". "Priority" and "accommodate" are about clients
+# and colleagues: "Fluent Portuguese is required to support our priority accounts" and
+# "Fluent Spanish is required to accommodate our clients" passed as nice-to-haves.
+_LANGUAGE_INVITED = re.compile(
+    r"\bencouraged?\b|\bwelcome[ds]?\b(?!\s+(?:our|the|your|their|new|visitors|guests|"
+    r"customers|clients)\b)|\bpreference\b"
+    r"|\b(?:do|does|will)\s+not\s+require\b|\b(?:don'?t|doesn'?t)\s+require\b", re.I)
+# The other ways a posting writes a nice-to-have, each of which cut a second language:
+# "Fluent Spanish is a huge plus", "Desired: fluent Spanish", "Bonus: Spanish fluency",
+# "Fluent Spanish, an asset", "Fluent Portuguese would be great", "Extra points for fluent
+# Spanish". "An asset" counts only where it ends the phrase ("an asset to the team"), not
+# as "an asset manager"; "would be" only as a wish, never "is great".
+_LANGUAGE_PLUS = re.compile(
+    r"\ban?\s+(?:\w+\s+)?plus\b"
+    r"|^\W*(?:desired|desirable|bonus|pluses|plus|nice[- ]to[- ]have|good[- ]to[- ]have)\s*:"
+    r"|\ban?\s+(?:\w+\s+)?asset\b(?=\s*(?:[.,;:)!]|$)|\s+(?:to|for|in|on|but|and|if|when|"
+    r"though|although|as)\b)"
+    r"|\badvantageous\b|\bwould\s+be\s+(?:\w+\s+)?(?:great|nice|ideal|good|valuable|appreciated)\b"
+    r"|\bextra\s+points?\b|\bsets?\s+you\s+apart\b|\ban?\s+(?:\w+\s+)?differentiator\b"
+    r"|\bappreciated\b|\bhighly\s+valued\b|\bgood[- ]to[- ]have\b", re.I)
 
 
-def _language_preferred(sentence: str) -> bool:
-    """Does the sentence name what it asks for as a preference, not a requirement?"""
-    return bool(PREFERRED.search(sentence) or ENCOURAGE.search(sentence)
-                or _LANGUAGE_SOFT.search(sentence))
+# ---------------------------------------------------------------------------
+# One clause of a sentence. A preference word is about what its own clause asks for,
+# not about anything else the sentence says: "Fluent Hindi is required, and a degree in
+# statistics is preferred" was read as Hindi a preference, so a stated requirement
+# passed. A sentence is cut into clauses at a semicolon, and at a comma or a conjunction
+# ("and", "but", "while") only where the words on each side make a clause of their own:
+# a verb on both sides, and a subject of its own on the right. So "Fluency in Spanish
+# and Portuguese is a plus" and "Japanese is preferred but not required" stay one
+# clause, and so does a reduced clause in front ("Although not essential, Spanish would
+# help"). Brackets are read as part of the clause they sit in.
+# ---------------------------------------------------------------------------
+_CLAUSE_SEP = re.compile(r"\s*;\s*"
+                         r"|\s*(?:(?<!\d),|,(?!\d))\s*(?:(?:and|but|while|whilst|whereas|yet)\s+)?"
+                         r"|\s+(?:and|but|while|whilst|whereas|yet)\s+", re.I)
+_CLAUSE_VERB = re.compile(
+    r"\b(?:is|are|was|were|be|been|will|would|should|could|can|may|might|must|shall|"
+    r"has|have|had|do|does|did|needs?|requires?|required|essential|mandatory|necessary|"
+    r"preferred|desirable|welcomed?|optional|helps?|matters?)\b"
+    r"|\ban?\s+(?:\w+\s+)?(?:plus|asset|advantage|bonus|must)\b", re.I)
+# A clause that carries on the one before it: no subject of its own ("but not required",
+# "and is a plus", ", while not essential") or one pointing back to it ("but this is not
+# essential"). A word like "although" in front is read past: ", although Python is a
+# plus" has a subject of its own.
+_NO_SUBJECT = re.compile(
+    r"(?:(?:although|though|while|whilst|whereas|if|when|unless|even if|even though)\s+)?"
+    # "and it would be great to have Tableau" has a subject of its own: the "it" is
+    # the one a wish opens with, not one pointing back.
+    r"(?!it\s+(?:would|will|could|might|is|'s)\s+(?:be\s+)?(?:\w+\s+){0,2}(?:to|if)\b)"
+    r"(?:it|this|that|which|these|those|they|both|either|neither|not|never|nor|also|so|"
+    r"then|still|just|even|very|highly|strongly|is|are|was|were|be|being|been|will|would|"
+    r"should|could|can|may|might|must|shall|has|have|had|do|does|did|preferred|preferably|"
+    r"ideally|required|essential|optional|desirable|mandatory|necessary)\b", re.I)
+# A reduced clause, with no subject, in front of the one it qualifies.
+_REDUCED = re.compile(
+    r"(?:although|though|while|whilst|if|when|whereas|unless|even if|even though)\s+"
+    r"(?:not\b|never\b|preferred\b|required\b|essential\b|optional\b|desirable\b|"
+    r"mandatory\b|necessary\b|an?\s+(?:\w+\s+)?(?:plus|asset|advantage|bonus)\b)", re.I)
+_BRACKET = re.compile(r"\([^()]*\)")
+
+
+@functools.lru_cache(maxsize=256)
+def _clause_parts(s: str) -> tuple:
+    """(clauses, parts) of `s`: each clause and each piece between two separators, as
+    (start, end), in order. A separator inside brackets is not one."""
+    brackets = [b.span() for b in _BRACKET.finditer(s)]
+    seps = [m for m in _CLAUSE_SEP.finditer(s)
+            if m.start() > 0 and not any(a < m.start() < b for a, b in brackets)]
+    parts, start = [], 0
+    for m in seps:
+        parts.append((start, m.start(), s[m.start():m.end()].strip() == ";"))
+        start = m.end()
+    parts.append((start, len(s), False))
+    verb = [bool(_CLAUSE_VERB.search(s[c:d])) for c, d, _ in parts]
+    # The right side of a break runs up to its first verb: "and Portuguese, Italian or
+    # French is a plus" is one clause with its own subject, though its first piece has no
+    # verb. reach[i] is the last piece that side takes in, from piece i.
+    reach = list(range(len(parts)))
+    for i in range(len(parts) - 2, -1, -1):
+        if not verb[i] and not parts[i][2]:
+            reach[i] = reach[i + 1]
+    clauses, (a, b, hard) = [], parts[0]
+    pieces, left_verb = 1, verb[0]
+    for i, (c, d, next_hard) in enumerate(parts[1:], 1):
+        left = s[a:b].strip()
+        right = s[c:parts[reach[i]][1]].strip()
+        own = (left_verb and not (pieces == 1 and _REDUCED.match(left))
+               and any(verb[i:reach[i] + 1]) and not _NO_SUBJECT.match(right))
+        if hard or own:
+            clauses.append((a, b))
+            a, b, pieces, left_verb = c, d, 1, verb[i]
+        else:
+            b, pieces, left_verb = d, pieces + 1, left_verb or verb[i]
+        hard = next_hard
+    clauses.append((a, b))
+    return tuple(clauses), tuple((c, d) for c, d, _ in parts)
+
+
+def _clause_of(s: str, pos: int) -> tuple:
+    """(start, end) of the clause of `s` that holds position `pos`."""
+    clauses, _ = _clause_parts(s)
+    return next(((a, b) for a, b in clauses if a <= pos < b), clauses[-1])
+
+
+_SOME_LANGUAGE = re.compile(r"\b(?:" + _ANY_LANGUAGE + r")\b", re.I)
+# A preference word followed by a language, with nothing between that ends a phrase.
+_INTRODUCES = re.compile(r"[^,;:()]*?\b(?:" + _ANY_LANGUAGE + r")\b", re.I)
+
+
+def _language_preferred(sentence: str, m, lost_start: bool = False,
+                        lost_end: bool = False) -> bool:
+    """Is the language at match `m` named as a preference, not a requirement?
+
+    Read in the clause that holds it, less a bracket about another language ("Spanish
+    fluency is required (we do not require French)") and less a preference word that
+    introduces another language after a comma ("Fluent Spanish required, ideally with
+    some Portuguese"). `lost_start` and `lost_end` say a quote was cut at that end: what
+    its first or last piece says is not known to belong to this clause, so it is not read.
+    """
+    s = sentence or ""
+    clauses, parts = _clause_parts(s)
+    a, b = next(((x, y) for x, y in clauses if x <= m.start() < y), clauses[-1])
+    own = list(s[a:b])
+
+    def blank(x, y):
+        for i in range(max(x, a), min(y, b)):
+            own[i - a] = " "
+
+    for edge in ([parts[0]] if lost_start else []) + ([parts[-1]] if lost_end else []):
+        if not edge[0] <= m.start() < edge[1]:
+            blank(*edge)
+    for br in _BRACKET.finditer(s, a, b):
+        if not br.start() <= m.start() < br.end() and _SOME_LANGUAGE.search(br.group(0)):
+            blank(*br.span())
+    text = "".join(own)
+    for rx in (PREFERRED, _LANGUAGE_SOFT, _LANGUAGE_INVITED, _LANGUAGE_PLUS):
+        for p in rx.finditer(text):
+            at = a + p.start()
+            if (m.end() <= at and re.search(r"[,;:(]", s[m.end():at])
+                    and _INTRODUCES.match(text, p.end())):
+                continue                # "..., ideally with some Portuguese": another's
+            return True
+    return any(soft.search(text) for _, _, soft in LANGUAGE_GATE)
+
+
+def _languages_named(sentence: str):
+    """Every language the candidate does not hold that `sentence` names as a language, as
+    matches, in order."""
+    s = sentence or ""
+    for m in OTHER_LANGUAGE.finditer(s):
+        if not _UNAMBIGUOUS_RX.fullmatch(m.group(0)):
+            yield m                     # an English word, matched only beside its cue
+        elif (_CUE_BEFORE.search(s[max(0, m.start() - 100):m.start()])
+                or _CUE_AFTER.match(s, m.end())):
+            yield m
 
 
 def other_language_named(sentence: str):
     """The first language the candidate does not hold that `sentence` names as a language,
     as a match, or None. Its text is what a cut names ("Spanish", "fluent in German")."""
-    s = sentence or ""
-    for m in OTHER_LANGUAGE.finditer(s):
-        if not _UNAMBIGUOUS_RX.fullmatch(m.group(0)):
-            return m                    # an English word, matched only beside its cue
-        if (_CUE_BEFORE.search(s[max(0, m.start() - 100):m.start()])
-                or _CUE_AFTER.match(s, m.end())):
-            return m
-    return None
+    return next(_languages_named(sentence), None)
+
+
+def _language_asked(sentence: str, lost_start: bool = False, lost_end: bool = False):
+    """The first language `sentence` names as a language and not as a preference in its
+    own clause, as a match, or None."""
+    return next((m for m in _languages_named(sentence)
+                 if not _language_preferred(sentence, m, lost_start, lost_end)), None)
 
 
 def other_language_cut(sentence: str):
     """The language match a sentence states as a requirement, or None.
 
     A language the candidate does not hold, named as a language, in a sentence with a
-    requirement word and no preference word, that the profile's own language rows
-    (search.py LANGUAGE_GATE) do not call a nice-to-have."""
-    if _language_preferred(sentence) or any(soft.search(sentence)
-                                            for _, _, soft in LANGUAGE_GATE):
+    requirement word, that its own clause names as no preference (the screen's preference
+    words, and the profile's own nice-to-have patterns in search.py LANGUAGE_GATE). Each
+    language named is read: "Bilingual in Spanish is a plus, and fluent Mandarin is
+    required" states Mandarin as a requirement."""
+    s = sentence or ""
+    if not LANGUAGE_REQUIRED.search(s):
         return None
-    m = other_language_named(sentence)
-    return m if m is not None and LANGUAGE_REQUIRED.search(sentence) else None
+    return _language_asked(s)
+
+
+
+# A heading that makes everything under it a nice-to-have: "Nice to have:", "Preferred
+# qualifications:", "Bonus points if you have:", "Desirable:". A second language listed
+# under one was cut as a requirement: the screen reads a body line by line (sentences()
+# splits at every line break), and the line under the heading says only "Fluency in
+# Spanish or Portuguese". The heading holds until the next heading ("Requirements:",
+# "Must have:") or a paragraph after a blank line that is not part of the list.
+_LIST_ITEM = re.compile(r"\s*(?:[-*+\u2022\u2023\u25aa\u25cf\u00b7\u2043\u2013]|\d{1,2}[.)])\s")
+_PREFERENCE_HEADING = re.compile(
+    r"\b(?:(?:nice|good|great)[- ]to[- ]haves?|preferred|preferably|desired|desirable|bonus|"
+    r"pluses|plus|advantageous|advantages?|ideally|optional|assets?|would be (?:great|nice)|"
+    r"stand(?:s)? out|set you apart|even better|not (?:required|essential|a must))\b", re.I)
+_REQUIRED_HEADING = re.compile(r"\b(?:requir\w*|must|essential|mandatory|minimum|basic)\b", re.I)
+# A line with no colon is a heading only when it is nothing but one.
+_BARE_HEADING = re.compile(
+    r"(?:(?:nice|good|great)[- ]to[- ]haves?|bonus(?: points)?|pluses|desirable|desired|"
+    r"(?:preferred|desired|desirable|additional|bonus)\s+(?:qualifications|skills|experience|"
+    r"requirements|criteria)|(?:minimum|basic|required|key)\s+(?:qualifications|requirements|"
+    r"skills|criteria)|requirements|qualifications|responsibilities|must[- ]haves?|essentials?|"
+    r"essential\s+(?:skills|criteria|requirements)|about (?:you|the role|the team|us|this role)|"
+    r"what you(?:'ll| will)? (?:do|bring|need)|who you are|benefits|what we offer)", re.I)
+
+
+def _heading(line: str):
+    """The heading a line is, without its markup, or None: a short line ending in a colon,
+    or a line that is nothing but a heading ("Nice to have", "Requirements")."""
+    h = re.sub(r"^[\s#*_>]+|[\s*_]+$", "", line or "")
+    if h.endswith(":"):
+        h = h[:-1].strip(" *_")
+        return h if 0 < len(h) <= 60 and not re.search(r"[.!?;]", h) else None
+    return h if _BARE_HEADING.fullmatch(h) else None
+
+
+def _is_preference_heading(h: str) -> bool:
+    """Does a heading mark what is under it as a nice-to-have, and nothing as required?"""
+    rest = re.sub(r"\bnot (?:required|essential|a must)\b", " ", h, flags=re.I)
+    return bool(_PREFERENCE_HEADING.search(h)) and not _REQUIRED_HEADING.search(rest)
+
+
+def _preference_scopes(text: str) -> list:
+    """[(start, end)] of the text under each heading that marks it a nice-to-have."""
+    scopes, start, content, gap, pos = [], None, False, False, 0
+    for line in (text or "").splitlines(keepends=True):
+        at, pos = pos, pos + len(line)
+        if not line.strip():
+            gap = gap or (start is not None and content)
+            continue
+        h = _heading(line)
+        if h is not None:
+            if start is not None:
+                scopes.append((start, at))
+            start = pos if _is_preference_heading(h) else None
+            content = gap = False
+            continue
+        if start is not None and gap and not _LIST_ITEM.match(line):
+            scopes.append((start, at))
+            start = None
+        content, gap = True, False
+    if start is not None:
+        scopes.append((start, len(text or "")))
+    return scopes
+
+
+def _gate_row_cut(sentence: str, row, lost_start: bool = False, lost_end: bool = False):
+    """The match at which one of the profile's own language rows (search.py LANGUAGE_GATE)
+    states its language as a requirement in `sentence`, or None.
+
+    The row's own patterns decide first, as they always did: its requirement pattern has
+    to match, and its nice-to-have pattern anywhere in the sentence excuses it. The
+    screen's own nice-to-have reading excuses it too, in the clause that holds the
+    language: "Fluency in Welsh is a huge plus" and "Bilingual French would be great"
+    were cut because the row's own nice-to-have words did not include them."""
+    s = sentence or ""
+    _, required, soft = row
+    m = required.search(s)
+    if m is None or soft.search(s):
+        return None
+    names = list(re.finditer(r"\b" + re.escape(str(row[0])) + r"\b", s, re.I))
+    at = (next((n for n in names if m.start() <= n.start() < m.end()), None)
+          or (min(names, key=lambda n: abs(n.start() - m.start())) if names else m))
+    return None if _language_preferred(s, at, lost_start, lost_end) else m
+
+
+def _under_preference(text: str) -> list:
+    """sentences(text), each with whether it sits under a nice-to-have heading."""
+    scopes = _preference_scopes(text)
+    out, pos = [], 0
+    for s in sentences(text):
+        at = text.find(s, pos) if scopes else -1
+        if at >= 0:
+            pos = at
+        out.append((s, at >= 0 and any(a <= at < b for a, b in scopes)))
+    return out
 
 ELIGIBILITY = getattr(_S, "ELIGIBILITY", _NEVER)
 ENTITLED = getattr(_S, "ENTITLED", _NEVER)
@@ -372,6 +622,9 @@ def under_minimum_qualifications(text, sentence):
     Looks back a short way from where the sentence starts rather than inside
     it, because the heading is nearly always its own line above.
     """
+    text, sentence = text or "", sentence or ""
+    if not sentence:
+        return False
     if EDUCATION_LABEL.search(sentence):
         return True
     i = text.find(sentence[:60])
@@ -465,17 +718,32 @@ _BULLET_BREAK = re.compile("(%s)" % _BULLET_BREAK.pattern)
 # boundary whatever sits in front of them: a "5+ years of experience in data
 # science" bar follows "Who We're Looking For" immediately after a sentence of
 # company boast, and without this the boast and the bar stay in one sentence
-# and the boast wins. The heading stays with the text it introduces,
-# which is why this is a lookahead.
-_SECTION_HEADING = re.compile(
-    r"(?=\b(?:who (?:you are|we(?:'re| are)? looking for)"
+# and the boast wins. The heading stays with the text it introduces: the
+# break is taken where it starts.
+_HEADING_WORDS = (
+    r"\b(?:who (?:you are|we(?:'re| are)? looking for)"
     r"|what (?:you(?:'ll| will)? do|we(?:'re| are)? looking for|you(?:'ll| will)? bring)"
     r"|the impact you(?:'ll| will)? have"
     r"|(?:minimum|preferred|basic|required|key)\s+qualifications"
     r"|qualifications|requirements|responsibilities|what you need"
     r"|about (?:you|the role|the team|this role)"
     r"|your (?:profile|background|experience)"
-    r"|you (?:will|'ll) (?:have|bring|need))\b)", re.I)
+    r"|you (?:will|'ll) (?:have|bring|need))\b")
+# Read as a span, so "Preferred Qualifications" is one heading and not "Preferred" left
+# on its own with a second heading at "Qualifications".
+_HEADING_SPAN = re.compile(_HEADING_WORDS, re.I)
+# A heading inside a piece is written as one: a capital to open it and, after it, a colon,
+# a dash, a capital, a figure or a bullet. The words alone are ordinary prose as often:
+# "Actuarial qualifications are not required" was split at "qualifications", "Candidates
+# who meet the requirements will be invited" at "requirements", and each half was read
+# as its own sentence, so a cut, a flag or a lift lost the words beside it.
+_AFTER_HEADING = re.compile(r"\s*(?:[:\-\u2013\u2022*]|$)|\s+[A-Z0-9]")
+
+
+def _headings_in(piece: str) -> list:
+    """Where each section heading written as one starts inside `piece`, past its start."""
+    return [m.start() for m in _HEADING_SPAN.finditer(piece)
+            if m.start() and piece[m.start()].isupper() and _AFTER_HEADING.match(piece, m.end())]
 
 
 # A full stop that ends an abbreviation, not a sentence. Split there, "5+ yrs. of
@@ -542,8 +810,7 @@ def _break_bullets(piece: str) -> list:
     # boundary is whitespace and is consumed; a heading is a lookahead and stays
     # with the block it introduces.
     breaks = sorted([(m.start(), m.end(), False) for m in _BULLET_BREAK.finditer(piece)]
-                    + [(m.start(), m.start(), True)
-                       for m in _SECTION_HEADING.finditer(piece) if m.start()])
+                    + [(i, i, True) for i in _headings_in(piece)])
     out, start = [], 0
     for begin, after, heading in breaks:
         if begin < start or (not heading and begin - start < MIN_PIECE):
@@ -579,7 +846,7 @@ def _is_run_together(piece: str) -> bool:
     # A bar can follow "Who We're Looking For" one clause after a sentence of
     # company boast, and while they share a sentence the boast rule wins and the
     # bar is never seen.
-    if any(m.start() for m in _SECTION_HEADING.finditer(piece)):
+    if _headings_in(piece):
         return True
     # Counted the same way the split takes them, which is the only count that
     # means anything: three raw boundaries is an ordinary sentence with three
@@ -596,6 +863,7 @@ def evidence(sentence: str, match, width: int = 90) -> str:
     something else entirely: the reader is asked to accept "French stated as a
     requirement" under a quote about warehouse audits.
     """
+    sentence = sentence or ""
     if match is None:
         return sentence[:200]
     start = max(match.start() - width, 0)
@@ -754,6 +1022,11 @@ def _states_ineligibility(s: str) -> bool:
     """Does this sentence state, as a condition, a status the candidate lacks?"""
     if not ELIGIBILITY.search(s) or ENCOURAGE.search(s):
         return False
+    # The status named only to say it is not needed, in its own clause: "U.S.
+    # citizenship is not a requirement for this role" read "requirement" as the condition.
+    if all(_NOT_NEEDED.search(s[a:b]) for a, b in
+           (_clause_of(s, m.start()) for m in ELIGIBILITY.finditer(s))):
+        return False
     # "must be legally entitled to work in <country>" alone is met by a
     # candidate who is; only a status term beside it, with a condition cue,
     # is a bar.
@@ -771,6 +1044,30 @@ def _states_ineligibility(s: str) -> bool:
 # "Citizen or Permanent Resident." because the next word is capitalised, which is how a
 # new sentence starts and also how a status is written. The status was never read whole.
 _ENDS_ON_INITIALISM = re.compile(r"(?<![A-Za-z.])(?:[A-Za-z]\.){2,}$")
+# An initialism that is the place itself, after a preposition and "the": "able to work in
+# the U.S." ends its sentence there, and joined to "Citizenship is not a requirement for
+# this role." it read as a condition on U.S. citizenship.
+_PLACE_INITIALISM = re.compile(
+    r"\b(?:in|within|across|throughout|outside|inside|into|of|to|from|at|for|around)"
+    r"\s+the\s+(?:[A-Za-z]\.){2,}$", re.I)
+
+
+def _joined_states_ineligibility(s: str, after: str) -> bool:
+    """Do `s`, ending on an initialism, and the sentence `after` it state together, as a
+    condition, a status the candidate lacks?
+
+    Only when the status runs across the join ("must be a U.S." and "Citizen or
+    Permanent Resident."), the initialism is not the place itself ("in the U.S."), the
+    sentence after it says nothing to excuse it (an equal opportunity line, or "is not a
+    requirement"), and the two together pass every check one sentence does. Joined, a
+    sentence ending on a place and one that says citizenship is not needed made a
+    permanent cut out of neither."""
+    if _PLACE_INITIALISM.search(s) or ENCOURAGE.search(after) or _NOT_NEEDED.search(after):
+        return False
+    joined = s + " " + after
+    if not any(m.start() < len(s) < m.end() for m in ELIGIBILITY.finditer(joined)):
+        return False
+    return _states_ineligibility(joined)
 
 
 def eligibility_cut(text: str) -> str | None:
@@ -783,10 +1080,9 @@ def eligibility_cut(text: str) -> str | None:
     for i, s in enumerate(parts):
         if _states_ineligibility(s):
             return s[:220]
-        if i + 1 < len(parts) and _ENDS_ON_INITIALISM.search(s):
-            joined = s + " " + parts[i + 1]
-            if _states_ineligibility(joined):
-                return joined[:220]
+        if (i + 1 < len(parts) and _ENDS_ON_INITIALISM.search(s)
+                and _joined_states_ineligibility(s, parts[i + 1])):
+            return (s + " " + parts[i + 1])[:220]
     return None
 
 
@@ -830,6 +1126,24 @@ _NOT_NEEDED = re.compile(
     re.I)
 
 
+def _credential_lifted(s: str) -> bool:
+    """Does `s` say a credential it names is a preference or not needed, in the clause that
+    names it ("CIMA desirable", "actuarial exams would be an advantage", "No actuarial
+    exams are needed")?
+
+    The gate was lifted by any equal opportunity, welcome, accommodation or "priority"
+    sentence that named the profession ("We welcome applicants from all backgrounds to
+    our actuarial team", "Reasonable accommodations are available for actuarial exams"),
+    and by a preference about something else in the same sentence. Those say nothing
+    about whether the role needs the credential."""
+    for m in DESIGNATION.finditer(s):
+        a, b = _clause_of(s, m.start())
+        own = s[a:b]
+        if PREFERRED.search(own) or _LANGUAGE_SOFT.search(own) or _NOT_NEEDED.search(own):
+            return True
+    return False
+
+
 def designation_cut(text, title: str = ""):
     """The sentence stating a professional designation as a condition, or None.
 
@@ -837,12 +1151,18 @@ def designation_cut(text, title: str = ""):
     that IS the designation, or a qualification line demanding progress toward
     one, is. Held designations are none of these, so any match is a real bar.
     """
+    text = text or ""
     lifted = False
     for s in sentences(text):
         if not DESIGNATION.search(s):
             continue
-        if PREFERRED.search(s) or ENCOURAGE.search(s) or _NOT_NEEDED.search(s):
+        if _credential_lifted(s):
             lifted = True
+            continue
+        # An equal opportunity, welcome or support line is not a bar, and it lifts
+        # nothing either: "We welcome applicants from all backgrounds to our actuarial
+        # team" says nothing about whether the role needs the credential.
+        if PREFERRED.search(s) or ENCOURAGE.search(s) or _NOT_NEEDED.search(s):
             continue
         if DESIGNATION_REQUIRED.search(s):
             return s[:200]
@@ -851,7 +1171,7 @@ def designation_cut(text, title: str = ""):
     # posting's own title that has to name it, where there is one: "Data Analyst to
     # support our actuarial pricing team" names the team, not the role, and a data role
     # beside an actuarial function was cut as a credential gate. A sentence saying the
-    # credential is a preference or not needed lifts it.
+    # credential is a preference or not needed lifts it; nothing else does.
     head = title if title else text[:400]
     if (not lifted and DESIGNATED_TITLE.search(head)
             and len(DESIGNATED_TITLE.findall(text)) >= 3):
@@ -871,6 +1191,7 @@ def research_ml_flag(text):
     evaluation and uncertainty estimation, and a full application used to be
     written for it.
     """
+    text = text or ""
     hits = {m.group(0).lower() for m in RESEARCH_ML.finditer(text)}
     if len(hits) < RESEARCH_ML_MIN:
         return None, 0
@@ -979,6 +1300,7 @@ def _abroad_places(s: str) -> list:
 
 def resides_abroad(s: str) -> bool:
     """Does this one sentence require the candidate to live in a country that is not theirs?"""
+    s = s or ""
     reside = RESIDE.search(s)
     if not reside and not re.search(r"\bonly\b|\bremote\b|\brestricted\b|\blimited\b", s, re.I):
         return False
@@ -998,10 +1320,24 @@ def resides_abroad(s: str) -> bool:
     for m in _countries_named(s):
         if _hours_after(s, m):
             continue
-        if (_BEFORE_PLACE.search(s[max(0, m.start() - 60):m.start()])
-                or _AFTER_PLACE.match(s[m.end():m.end() + 50])):
+        if _restricted_to(s, m):
             return True
-    return False
+    # A region beside the restriction, with no word about living there: "open to
+    # candidates in APAC only", "remote within North America". The location gate fails
+    # "Remote - APAC" for somebody outside it (places.region_takes_in_home), and this cut
+    # read a region only beside a RESIDE word, so the two gates disagreed on one posting.
+    # Read the same way: a region that leaves home out cuts, one that takes it in passed
+    # above, and one the table cannot place never cuts.
+    near, _ = _places.region_takes_in_home(
+        s, keep=lambda m: not _hours_after(s, m) and _restricted_to(s, m))
+    return near is False
+
+
+def _restricted_to(s: str, m) -> bool:
+    """Is the place at match `m` named as the only place hired from: "only hire in the
+    US", "remote within the US", "US residents only"?"""
+    return bool(_BEFORE_PLACE.search(s[max(0, m.start() - 60):m.start()])
+                or _AFTER_PLACE.match(s[m.end():m.end() + 50]))
 
 
 def residence_cut(text: str) -> str | None:
@@ -1095,17 +1431,30 @@ def _quoted_words(quote: str) -> str:
 def _language_refused(what: str, quote: str) -> bool:
     """Would today's screen refuse this language cut, on the sentence it quotes?
 
-    False for anything but the second-language reading this re-judges: the profile's
-    own language rows (LANGUAGE_GATE) are read as they always were. Only what changed
-    is asked again, a preference word in the sentence and a cue beside the name, because
-    both sit right beside the name the quote is centred on; the requirement word may
-    sit further off than the quote reaches, and is not."""
+    Only what changed is asked again, a preference word in the language's own clause and
+    a cue beside the name, because both sit right beside the name the quote is centred
+    on; the requirement word of a second language may sit further off than the quote
+    reaches, and is not. A cut for the profile's own language (search.py LANGUAGE_GATE)
+    is asked again only where its row still finds the requirement in the quote. Every
+    language the quote names is asked, the profile's own and any other, so a sentence
+    today's screen cuts for another language holds, and where the quote was cut short,
+    its first or last piece is not read as part of the clause: what it belonged to is not
+    in the quote. A preference word in another clause ("Fluent Spanish is required, and a
+    degree in statistics is preferred") releases nothing. A heading above the line is not
+    in the quote, so a cut under one is never released here."""
     what = what.strip().lower()
-    gated = tuple(str(g[0]).lower() for g in LANGUAGE_GATE)
-    if not what or (gated and what.endswith(gated)) or not OTHER_LANGUAGE.search(what):
-        return False
     q = _quoted_words(quote)
-    return bool(q) and (_language_preferred(q) or other_language_named(q) is None)
+    if not what or not q:
+        return False
+    row = next((g for g in LANGUAGE_GATE if what.endswith(str(g[0]).lower())), None)
+    if row is not None:
+        if row[1].search(q) is None:
+            return False
+    elif not OTHER_LANGUAGE.search(what):
+        return False
+    cut_start, cut_end = quote.strip().startswith("..."), quote.strip().endswith("...")
+    return (all(_gate_row_cut(q, g, cut_start, cut_end) is None for g in LANGUAGE_GATE)
+            and _language_asked(q, cut_start, cut_end) is None)
 
 
 def ruling_refused(reason: str) -> bool:
@@ -1115,10 +1464,12 @@ def ruling_refused(reason: str) -> bool:
     refuse each one on the sentence the ruling quotes; any other cut, or any words the
     screen did not write, and the ruling stands. Re-judged: the second-language cut,
     which read a language named only as a nice-to-have ("Bilingual in Spanish is a plus")
-    or a nationality word ("Spanish and Portuguese markets") as a requirement; and the
+    or a nationality word ("Spanish and Portuguese markets") as a requirement; the
     requirement to live in another country, which read the person's own country written
     as a code ("remote within the US" for somebody in the US) and a time zone ("based in
-    a US time zone") as somewhere to live. Those rulings were kept for good, resting on
+    a US time zone") as somewhere to live; and the eligibility cut, which joined "able to
+    work in the U.S." to "Citizenship is not a requirement for this role." and read the
+    two as a condition on citizenship. Those rulings were kept for good, resting on
     settings the person never changed; this lets
     tools/throttle.py ruled_out release them on the next round, with nobody asking, and
     the posting is screened again when a round finds it. A ruling today's screen makes
@@ -1136,6 +1487,10 @@ def ruling_refused(reason: str) -> bool:
             # The quote is the whole sentence when it is shorter than the 220 characters
             # the cut keeps; a longer one cannot be judged again from what is left.
             if len(quote) >= 220 or resides_abroad(quote):
+                return False
+        elif words.lower() == CUTS["eligibility"][0].lower():
+            # The same 220 characters; a joined pair is read again as a pair.
+            if len(quote) >= 220 or eligibility_cut(quote):
                 return False
         elif words.lower().endswith(CUTS["language"][0]):
             if not _language_refused(words[:-len(CUTS["language"][0])], quote):
@@ -1183,15 +1538,16 @@ def screen(job: dict) -> dict:
                      f'target; a decision input, never a cut, because a posted range '
                      f'is a starting position and is often stale: "{q}"')
 
-    for lang, required, soft in LANGUAGE_GATE:
-        for s in sentences(text):
-            m = required.search(s)
-            if m and not soft.search(s):
-                cuts.append(f'{lang} {CUTS["language"][0]}: "{evidence(s, m)}"')
+    under = _under_preference(text)
+    for row in LANGUAGE_GATE:
+        for s, preferred in under:
+            m = None if preferred else _gate_row_cut(s, row)
+            if m is not None:
+                cuts.append(f'{row[0]} {CUTS["language"][0]}: "{evidence(s, m)}"')
                 break
 
-    for s in sentences(text):
-        m = other_language_cut(s)
+    for s, preferred in under:
+        m = None if preferred else other_language_cut(s)
         if m is not None:
             cuts.append(f'{m.group(0)} {CUTS["language"][0]}: "{evidence(s, m)}"')
             break

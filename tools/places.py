@@ -210,6 +210,78 @@ def known_country_in(text: str):
     return None
 
 
+# The states and provinces a remote location is anchored to, and the country each is in.
+# "Remote, CA", "Remote - CA" and "Remote, California" passed clean for somebody in the UK,
+# Germany or India: the gate knew countries and regions, and a state is neither. A code
+# is read as a posting writes it, as a whole part in capitals: "IN" is Indiana, "DE"
+# Delaware and "CA" California, and a code that is also the person's own country's
+# ("CA" for somebody in Canada, "IN" in India, "DE" in Germany) is left to the reading
+# of their own country.
+_US_STATES = {
+    "AL": "alabama", "AK": "alaska", "AZ": "arizona", "AR": "arkansas", "CA": "california",
+    "CO": "colorado", "CT": "connecticut", "DE": "delaware", "DC": "district of columbia",
+    "FL": "florida", "GA": "georgia", "HI": "hawaii", "ID": "idaho", "IL": "illinois",
+    "IN": "indiana", "IA": "iowa", "KS": "kansas", "KY": "kentucky", "LA": "louisiana",
+    "ME": "maine", "MD": "maryland", "MA": "massachusetts", "MI": "michigan",
+    "MN": "minnesota", "MS": "mississippi", "MO": "missouri", "MT": "montana",
+    "NE": "nebraska", "NV": "nevada", "NH": "new hampshire", "NJ": "new jersey",
+    "NM": "new mexico", "NY": "new york", "NC": "north carolina", "ND": "north dakota",
+    "OH": "ohio", "OK": "oklahoma", "OR": "oregon", "PA": "pennsylvania", "RI": "rhode island",
+    "SC": "south carolina", "SD": "south dakota", "TN": "tennessee", "TX": "texas",
+    "UT": "utah", "VT": "vermont", "VA": "virginia", "WA": "washington",
+    "WV": "west virginia", "WI": "wisconsin", "WY": "wyoming"}
+_CA_PROVINCES = {
+    "AB": "alberta", "BC": "british columbia", "MB": "manitoba", "NB": "new brunswick",
+    "NL": "newfoundland and labrador", "NS": "nova scotia", "NT": "northwest territories",
+    "NU": "nunavut", "ON": "ontario", "PE": "prince edward island", "QC": "quebec",
+    "SK": "saskatchewan", "YT": "yukon"}
+_AU_STATES = {
+    "NSW": "new south wales", "VIC": "victoria", "QLD": "queensland",
+    "WA": "western australia", "SA": "south australia", "TAS": "tasmania",
+    "ACT": "australian capital territory", "NT": "northern territory"}
+
+
+def _subdivisions() -> tuple:
+    """({code: countries}, {name: countries}) for every state and province above."""
+    codes: dict = {}
+    names: dict = {}
+    for cc, table in (("US", _US_STATES), ("CA", _CA_PROVINCES), ("AU", _AU_STATES)):
+        for code, name in table.items():
+            codes.setdefault(code, set()).add(cc)
+            names.setdefault(name, set()).add(cc)
+    return codes, names
+
+
+SUBDIVISION_CODES, SUBDIVISION_NAMES = _subdivisions()
+# A location's parts, split the way the location gate splits them (prefilter._SPLIT).
+_PART_SPLIT = re.compile(r"\s*(?:,|\||/|&|\(|\)|\s[-\u2013]\s)\s*")
+
+
+def subdivision_abroad(location: str, own: str = ""):
+    """The state or province a location names, as written, when it is in another country
+    and the profile does not place it (LOCATION regions), or None.
+
+    Read part by part, the way the location gate splits a location: "Remote, CA" and
+    "Remote - California" name California, which is abroad for somebody in the UK. A
+    state of the person's own country is home ("Remote, TX" for somebody in the US), and
+    so is one that could be ("WA" is Washington or Western Australia). `own` is the
+    person's country code, read from the profile when not given."""
+    own = CODE_COUNTRY.get(str(own or "").upper(), str(own or "").upper()) or _own_code()
+    for part in _PART_SPLIT.split(str(location or "")):
+        p = part.strip()
+        if not p or p.lower() in REGIONS:
+            continue
+        if p in SUBDIVISION_CODES:              # a code, in capitals as written
+            if p == own:
+                continue
+            where = SUBDIVISION_CODES[p]
+        else:
+            where = SUBDIVISION_NAMES.get(p.lower())
+        if where and own not in where:
+            return p
+    return None
+
+
 def abroad_short(sentence: str):
     """The first shorthand for somewhere abroad in `sentence`, as a match, or None."""
     s = sentence or ""

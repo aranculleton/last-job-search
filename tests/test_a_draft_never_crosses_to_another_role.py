@@ -12,6 +12,10 @@ it sat under:
 - Recording a re-application (a role applied to before, drafted again under new file
   names) overwrote the sent application's row: its documents pointed at files the employer
   never saw.
+- A draft for "Data Analyst" was still read as the "Senior Data Analyst" staged after it at
+  the same employer, because one title's words sat inside the other's, and when another
+  employer had been staged in between (picks.json no longer named the first pick) nothing
+  was set aside at all.
 
 Every employer, role and posting here is invented.
 """
@@ -164,3 +168,61 @@ def test_a_re_application_gets_its_own_row_and_the_sent_one_is_kept(tmp_path):
                                  "2026-10-22", "r9", path=path)
     assert [a for a, _ in again] == ["updated"]
     assert len(csv_store.read_rows(path, record_drafts.HEADER)) == 2
+
+
+def _kestrel(title, n):
+    return {"company": "Kestrel Mutual", "title": title, "location": "Manchester, UK",
+            "url": f"https://jobs.example/{n}", "portal": "pasted", "desc": PRICING, "fit": 78}
+
+
+def test_a_role_is_this_picks_only_when_its_words_are_the_same():
+    km = {"company": "Kestrel Mutual"}
+    for drafted, pick in [("Data Analyst", "Senior Data Analyst"),
+                          ("Senior Data Analyst", "Data Analyst"),
+                          ("Data Analyst", "Data Analyst, Fraud Strategy"),
+                          ("Pricing Analyst", "Lead Pricing Analyst")]:
+        assert draft_audit.other_role(dict(km, role=drafted), dict(km, role=pick)), (drafted, pick)
+    # The same role, written without its requisition noise, in another order or spelling.
+    for drafted, pick in [("Data Analyst", "Data Analyst (m/w/d)"),
+                          ("Senior Data Analyst", "Senior Data Analyst - REQ-2026-0412"),
+                          ("Data Analyst", "Data Analyst (Fixed Term, 12 months) - REQ1234"),
+                          ("Supply Chain Data Analyst", "Data Analyst - Supply Chain"),
+                          ("Pricing and Underwriting Analyst", "Analyst, Pricing & Underwriting"),
+                          ("Senior Data Analyst", "Sr. Data Analyst"),
+                          ("Data Analyst, maternity cover", "Data Analyst (Maternity Cover)")]:
+        assert draft_audit.other_role(dict(km, role=drafted), dict(km, role=pick)) == "", \
+            (drafted, pick)
+
+
+def test_an_earlier_role_is_set_aside_after_another_employer_was_staged(tmp_path):
+    rd = tmp_path / "r1"
+    [p] = stage_picks.stage(str(rd), ["1"], rows=[], shortlist=[_kestrel("Data Analyst", 1)],
+                            fetch=lambda r: {}, root=str(tmp_path))
+    (rd / f"research_{p['slug']}.json").write_text(json.dumps(FIXTURE["research"]),
+                                                   encoding="utf-8")
+    d = dict(copy.deepcopy(FIXTURE["draft"]), role="Data Analyst")
+    (rd / f"draft_{p['slug']}.json").write_text(json.dumps(d), encoding="utf-8")
+    # Another employer on its own: picks.json now names only that one.
+    other = dict(_kestrel("Planning Analyst", 2), company="Fernhill Freight")
+    stage_picks.stage(str(rd), ["1"], rows=[], shortlist=[other], fetch=lambda r: {},
+                      root=str(tmp_path))
+    assert [x["slug"] for x in json.loads((rd / "picks.json").read_text())] == ["fernhill_freight"]
+    [q] = stage_picks.stage(str(rd), ["1"], rows=[], shortlist=[_kestrel("Senior Data Analyst", 3)],
+                            fetch=lambda r: {}, root=str(tmp_path))
+    assert q["slug"] == p["slug"]
+    for name in (f"draft_{q['slug']}.json", f"research_{q['slug']}.json"):
+        assert not (rd / name).exists(), name
+        assert (rd / "old" / f"{q['slug']}-1" / name).exists(), name
+    # A stale draft put back by hand is refused, never audited or assembled as this role's.
+    (rd / f"draft_{q['slug']}.json").write_text(json.dumps(d), encoding="utf-8")
+    stage_picks.consent(str(rd), q["slug"], no=list(q["ask_first"]))
+    [r] = stage_picks.audit(str(rd))
+    assert r["verdict"] == "stale" and "'Data Analyst'" in r["why"]
+    drafts, missing, _ = stage_picks.assemble(str(rd))
+    assert drafts == [] and missing
+    # Staging the senior role again keeps what is now its own.
+    (rd / f"draft_{q['slug']}.json").write_text(json.dumps(dict(d, role="Senior Data Analyst")),
+                                                encoding="utf-8")
+    stage_picks.stage(str(rd), ["1"], rows=[], shortlist=[_kestrel("Senior Data Analyst", 3)],
+                      fetch=lambda r: {}, root=str(tmp_path))
+    assert (rd / f"draft_{q['slug']}.json").exists() and not (rd / "old" / f"{q['slug']}-2").exists()

@@ -149,10 +149,13 @@ _FRACTION = {"half": 50, "third": 33, "quarter": 25, "fifth": 20, "tenth": 10}
 _FRACTION_SHARE = re.compile(
     r"(?<![\w-])(?:(?P<by>by)\s+)?(?P<n>a|an|one|two|three)[\s-]+(?P<f>half|thirds?|quarters?|"
     r"fifths?|tenths?)\b(?![\s-]+part(?:y|ies)\b)(?P<of>\s+of\b)?", re.I)
+# "Half the morning" and "half of the week" are a stretch of time, never a share.
 _HALF = re.compile(
     r"(?<![\w-])(?:halv(?:ed|ing|es)\b|(?:by|in)\s+half\b|"
     r"(?<!first )(?<!second )(?<!1st )(?<!2nd )(?<!latter )(?<!former )(?<!back )(?<!front )"
-    r"(?<!other )(?<!the )half\s+(?:of|the|its|their|our|all|every)\b)", re.I)
+    r"(?<!other )(?<!the )half\s+(?:of|the|its|their|our|all|every)\b"
+    r"(?!\s+(?:(?:the|a|an|my|our|their|its|that|this)\s+)?(?:morning|afternoon|evening|day|night|"
+    r"week|weekend|month|year|shift)s?\b))", re.I)
 _HALF_UNIT = re.compile(r"(?<![\w-])(?:(?P<n>" + "|".join(list(_ONES) + list(_TEENS))
                         + r"|\d+)\s+and\s+)?(?:a\s+)?half\s+(?:an?\s+)?(?=(?:hours?|days?|"
                           r"weeks?|months?|years?|million|billion|thousand|dozen)\b)", re.I)
@@ -164,6 +167,45 @@ _ORDINAL_COUNT = re.compile(
     r"(?<![\w-])(?P<o>" + "|".join(_ORDINAL) + r")\s+(?:(?:consecutive|straight|successive)\s+"
     r"(?P<u1>hours?|days?|weeks?|months?|years?)\b|(?P<u2>hours?|days?|weeks?|months?|years?)"
     r"\s+(?:running|in\s+a\s+row)\b)", re.I)
+
+
+# "A decade" and "two decades" are ten and twenty years; "by a factor of three" is 3x.
+# Both went unread, so "over a decade of experience" passed a seven-year profile.
+_COUNT = r"(?:\d+(?:\.\d+)?|" + _alt(list(_ONES) + list(_TEENS) + list(_TENS)) + r")"
+_DECADE = re.compile(r"(?<![\w-])(?:(?P<n>a|an|" + _COUNT + r")[\s-]+)(?:decades?)\b", re.I)
+_FACTOR = re.compile(r"(?<![\w-])(?:by\s+)?a\s+factor\s+of\s+(?P<n>" + _COUNT + r")\b", re.I)
+# How long a call would take ("a thirty-minute conversation", "happy to talk for fifteen
+# minutes") is an offer, not a claim about the candidate's work; minutes in any other
+# sentence ("cut the run from 45 minutes to 3") still are.
+_MINUTES = re.compile(r"(?<![\w-])(?:" + _COUNT + r"|a\s+few|a\s+couple\s+of)(?:[\s-]+and[\s-]+a[\s-]+half)?"
+                      r"(?:[\s-]+|\s*-\s*)(?:minutes?|mins?)\b", re.I)
+_MEETING = re.compile(r"\b(?:call|calls|conversation|chat|meeting|talk|speak|discuss\w*|"
+                      r"catch[- ]up|coffee|introduction|intro|of your time)\b", re.I)
+# A day of the month beside its month ("on 21 October", "October 21st") is a date, and
+# dates are structure. Month names are read in capitals: "may" is a verb first.
+_MONTHS = (r"(?-i:January|February|March|April|May|June|July|August|September|October|"
+           r"November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept|Sep|Oct|Nov|Dec)\.?")
+_DATE = re.compile(r"(?<![\w-])\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?" + _MONTHS + r"(?![\w-])|"
+                   # "October 21st", "October 21, 2026", "by October 21.", never "In May 12
+                   # analysts joined", where 12 counts analysts.
+                   r"(?<![\w-])" + _MONTHS + r"\s+\d{1,2}(?:(?:st|nd|rd|th)\b|"
+                   r"(?=\s*,\s*\d{4}\b)|(?=\s*(?:[.;:!?)]|,\s|$)))", re.I)
+
+
+def _count_value(tok: str) -> float | None:
+    t = tok.lower().strip()
+    if t in ("a", "an"):
+        return 1.0
+    try:
+        return float(t)
+    except ValueError:
+        return _word_value(t)
+
+
+def _sentence_around(body: str, a: int, b: int) -> str:
+    start = max(body.rfind(c, 0, a) for c in ".!?\n") + 1
+    ends = [i for i in (body.find(c, b) for c in ".!?\n") if i >= 0]
+    return body[start:min(ends) if ends else len(body)]
 
 
 def _word_value(words: str) -> float | None:
@@ -220,6 +262,19 @@ def figures(body: str):
             taken.append((a, b))
             out.append((a, b if end is None else end, value, unit, body[a:b]))
 
+    for m in _DATE.finditer(body):
+        taken.append(m.span())                  # a date: read by nothing below
+    for m in _MINUTES.finditer(body):
+        if _MEETING.search(_sentence_around(body, m.start(), m.end())):
+            taken.append(m.span())              # how long a call would take
+    for m in _DECADE.finditer(body):
+        n = _count_value(m.group("n"))
+        if n:
+            add(m.start(), m.end(), "%g" % (n * 10), "years")
+    for m in _FACTOR.finditer(body):
+        n = _count_value(m.group("n"))
+        if n:
+            add(m.start(), m.end(), "%g" % n, "x")
     for m in _ORDINAL_COUNT.finditer(body):
         add(m.start(), m.end(), str(_ORDINAL[m.group("o").lower()]), m.group("u1") or m.group("u2"))
     for m in _HALF_UNIT.finditer(body):

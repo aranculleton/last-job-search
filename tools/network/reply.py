@@ -367,9 +367,20 @@ SPEAK_TO = re.compile(
 # CV along", "pass this to the team". A bare "I'll pass" is a no, and read as an
 # introduction it made "Thanks, but I'll pass." a referral offer. REFERRAL and REJECTION
 # both read "pass" through this one pattern, so the two can never claim the same words.
+# "Pass on" is both: "I'll pass on your CV" hands something on, "I'll pass on the
+# opportunity" declines it. So after "on" it is passing on only when what follows is
+# something that can be handed to somebody (_HANDED_ON), or somebody it goes to follows
+# (_TO_SOMEONE). "I'll pass on the offer", "the call", "it" and "my end" are a no.
+_HANDED_ON = (r"(?:cv|c\.v\.|r[eé]sum[eé]|profile|details|name|number|e-?mail|message|note|"
+              r"info|information|contact|application|portfolio|linkedin|letter|request|word|"
+              r"thoughts|feedback|background)s?")
+_TO_SOMEONE = (r"\s+(?:on\s+|along\s+)?(?:to|with)\s+(?:the|our|my|your|a|an|him|her|them|"
+               r"someone|somebody|(?-i:[A-Z])\w*)")
 _PASSED_ON = (r"\s+(?:it|them|your|you|him|her|my|along|over|through"
               r"|(?:this|that|these|those|the\s+\w+)\s+(?:on|along|over|to)"
-              r"|on\s+(?:to\s+)?(?:your|my|the|it|him|her|them))\b")
+              r"|on\s+to\s+(?:your|my|the|our|it|him|her|them|someone|(?-i:[A-Z])\w*)"
+              r"|on\s+(?:your|my|the|his|her|their|our)\s+(?:[\w'-]+\s+)?" + _HANDED_ON +
+              r"|on\s+(?:[\w'-]+\s+){0,2}[\w'-]+" + _TO_SOMEONE + r")\b")
 
 REFERRAL = _rx(
     (0.94, "told to name them as the referrer", REFERRAL_FIELD),
@@ -455,8 +466,23 @@ REJECTION = _rx(
      r"|\b(?:going to|gonna|I'?ll|I will|will have to|have to|need to)\s+pass\b(?!" + _PASSED_ON + r")"
      r"|\bnot (?:the right|a good) (?:person|fit|contact)\b|\bwrong person\b"
      r"|\bdon'?t think I'?m the right (?:person|contact)\b"),
+    # The same no as "I can't help", said more gently: read as a considered reply, it got
+    # the generous guidance and never counted toward the two nos that end a thread
+    # (2026-10-21). Pointed on to someone ("but try Wren in planning"), it is that route,
+    # which the referral cues read, and no decline; any other "but" leaves it a no.
+    (0.84, "a polite no",
+     r"(?:\bnot\s+(?:really\s+|quite\s+)?sure\s+(?:that\s+)?I(?:\s+can|\s+could|['\u2019]d be "
+     r"able to|\s+would be able to|['\u2019]ll be able to|\s+will be able to)\s+(?:really\s+)?help"
+     r"|\bI\s+don['\u2019]?t\s+think\s+I(?:\s+can|\s+could|['\u2019]d be able to|\s+would be "
+     r"able to|['\u2019]m able to|\s+am able to|['\u2019]ll be able to)\s+(?:really\s+)?help"
+     r"|\bnot\s+(?:really\s+)?(?:the|a)\s+(?:best|right|ideal)\s+(?:person|one|contact)\s+"
+     r"to\s+(?:help|ask|speak to|talk to)"
+     r"|\bafraid\s+I\s+(?:can['\u2019]?t|cannot|won['\u2019]?t be able to|am not able to|"
+     r"['\u2019]m not able to)\s+(?:really\s+)?help)\b"
+     r"(?![^.!?\n]{0,40}\bbut\b[^.!?\n]{0,12}\b(?:try|talk|speak|ask|reach out|ping|"
+     r"message|contact|email|drop)\b)"),
     (0.8, "brush-off to the careers page",
-     r"\b(keep an eye on|watch|check|apply (through|via|on))\s+(our|the)\s+"
+     r"\b(keep an eye on|watch|check|try|apply (through|via|on))\s+(our|the)\s+"
      r"(careers|jobs)\s+(page|site|board)\b"),
 )
 
@@ -715,8 +741,10 @@ def resume_routes(contact_id="<contact_id>", referral_field=False) -> str:
     if referral_field:
         return (f"Which {_NOUN}: one drafted for the role and filed under them: python3 "
                 "tools/stage_picks.py single <dir> --company <their employer> --role <the role> "
-                f"--posting-file <the posting> --for-contact {contact_id}. It goes in through "
-                "the portal with their name where it asks for a referrer, not to them.")
+                f"--posting-file <the posting> --for-contact {contact_id} --referral-field. "
+                f"{state.route_words(state.ROUTE_PORTAL)[:1].upper()}"
+                f"{state.route_words(state.ROUTE_PORTAL)[1:]}, so there is no message to log: "
+                "tell them in the thread once the application is in.")
     try:
         import docpaths
         current = docpaths.current_resume()
@@ -1250,6 +1278,10 @@ def declines_in(threads) -> list:
         # know", so "We are not hiring on my team right now" stopped counting
         # and the stop-after-two-nos rule never fired.
         if ACCEPTS.search(text) or extract_scheduling_link(text) or extract_email(text):
+            continue
+        # A no that points them on ("I can't help, but talk to Wren in planning") is read
+        # as a referral, and counted as a no it ended the thread the referral opened.
+        if _hits(text, REFERRAL):
             continue
         found.append({"date": row.get("date", ""), "evidence": hits[0][1]})
     return found

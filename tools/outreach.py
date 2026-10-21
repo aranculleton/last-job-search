@@ -422,16 +422,28 @@ def for_contact_md(a, cid, today) -> str:
     pdf = docpaths.resume_rel(a["abbr"], ".pdf")
     rows = state.threads_for(state.load_threads(person.state("network_threads.csv")), cid)
     asks = [r for r in rows if state.asks_for_resume(r)]
+    portal = (str(a.get("for_contact_route") or "") or state.resume_route(rows, cid)) \
+        == state.ROUTE_PORTAL
+    head = (f"## This goes in through the portal, with {name} named as your referrer"
+            if portal else f"## This goes to {name}, who asked for it")
     out = [f"# {_NOUN[:1].upper() + _NOUN[1:]} for {name} - {a['company']}, {a['role']}", "",
-           f"## This goes to {name}, who asked for it", ""]
-    if asks:
+           head, ""]
+    if asks and not portal:
         words = " ".join(str(asks[-1].get("full_text") or asks[-1].get("summary") or "").split())
         out += [f"They asked on {asks[-1].get('date')}: \"{words[:300]}\"", ""]
-    out += [f"Send them {pdf} (and the cover letter, if the role is a posted one) in that "
-            "thread or by email. No cold note: they are the route in, and a note to someone "
-            "else at the employer would land beside their referral.", "",
-            "When it goes, log it with the file, so every chat knows which one they hold:", "",
-            "    " + state.log_resume_command(cid, pdf), ""]
+    if portal:
+        # The route they asked for: apply and name them. Nothing goes to them, so there is
+        # no message to log, and RECONCILE asks for none (state.through_portal).
+        out += [f"Apply with {pdf} (and the cover letter, if the role is a posted one) "
+                f"at {a.get('url') or 'the posting'}, and put {name} where the form asks for a "
+                "referrer. Nothing goes to them, so there is no message to log. Tell them in "
+                "the thread once it is in. No cold note: they are the route in.", ""]
+    else:
+        out += [f"Send them {pdf} (and the cover letter, if the role is a posted one) in that "
+                "thread or by email. No cold note: they are the route in, and a note to someone "
+                "else at the employer would land beside their referral.", "",
+                "When it goes, log it with the file, so every chat knows which one they hold:", "",
+                "    " + state.log_resume_command(cid, pdf), ""]
     if rows:
         out += ["## The thread so far", ""]
         for r in rows[-6:]:
@@ -462,7 +474,7 @@ def write(a, meta, today):
     # What the score rested on: the round's shortlist is pruned away, and the interview
     # pack (tools/interview_pack.py) reads fit_why's deductions weeks later.
     for k in ("fit", "fit_why", "bar", "bar_reason", "for_contact", "for_contact_name",
-              "for_contact_channel"):
+              "for_contact_channel", "for_contact_route"):
         if meta.get(k) not in (None, "", []) and k not in kept:
             kept[k] = meta[k]
     if os.path.exists(os.path.join(d, "job_posting.md")):
@@ -473,8 +485,9 @@ def write(a, meta, today):
     cid = for_contact_of(a, meta)
     if cid:
         with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8") as f:
-            f.write(for_contact_md(dict(a, **{k: v for k, v in kept.items()
-                                               if k.startswith("for_contact")}), cid, today))
+            f.write(for_contact_md(dict(a, url=a.get("url") or meta.get("url", ""),
+                                        **{k: v for k, v in kept.items()
+                                           if k.startswith("for_contact")}), cid, today))
         return d
     known = _known_contacts(a["company"])
     replied = [p for p in known if p.get("status") not in SENT_NO_REPLY]

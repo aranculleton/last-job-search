@@ -660,7 +660,7 @@ def pages_dir(pages=None) -> str:
 
 
 def _page_file(url, pages=None) -> str:
-    h = hashlib.sha1(_norm_url(url).encode("utf-8")).hexdigest()[:20]
+    h = hashlib.sha1(_norm_url(url).encode("utf-8", errors="surrogatepass")).hexdigest()[:20]
     return os.path.join(pages_dir(pages), h + ".json")
 
 

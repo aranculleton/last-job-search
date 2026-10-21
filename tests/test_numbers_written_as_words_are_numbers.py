@@ -6,6 +6,11 @@ spreadsheets" to "forty spreadsheets" in a letter bullet, "more than 30" to "mor
 thirty-five" and "two hours" to "five hours" all passed both checks, and a rendered batch
 said BATCH: ALL PASS with "twelve years" on the resume. The fixture itself spells numbers
 ("eleven"), so drafters do write them. Every employer and figure here is invented.
+
+Then the other way: how long a call would take ("a thirty-minute conversation", "happy to
+talk for fifteen minutes"), a stretch of time ("or half the morning") and a date ("on 21
+October") were hard findings in correct letters, while "over a decade of experience" for
+a seven-year profile and "by a factor of three" were never read.
 """
 from __future__ import annotations
 
@@ -71,6 +76,13 @@ def _audit(d):
     # A hyphen joins a unit to its number, digits or words.
     ("a 9-hour job", {(9.0, "hour")}),
     ("a daily two-hour reconciliation", {(2.0, "hour")}),
+    # Decades are years, a factor is a multiple.
+    ("over a decade of experience", {(10.0, "year")}),
+    ("two decades in retail", {(20.0, "year")}),
+    ("cut errors by a factor of three", {(3.0, "x")}),
+    ("a factor of 10 faster", {(10.0, "x")}),
+    # Minutes said of the work are still a claim.
+    ("cut the nightly run from 45 minutes to 3", {(45.0, "")}),
 ])
 def test_a_spelled_out_figure_is_read_as_the_figure(text, want):
     assert check_numbers.claims(text) == want
@@ -78,7 +90,10 @@ def test_a_spelled_out_figure_is_read_as_the_figure(text, want):
 
 @pytest.mark.parametrize("text", [
     "one of the analysts", "a third party", "the first half of 2026", "in a quarter",
-    "the third quarter", "five ten-minute calls"])
+    "the third quarter", "five ten-minute calls",
+    "I would welcome a thirty-minute conversation", "I would welcome a 30-minute call",
+    "Happy to talk for fifteen minutes", "or half the morning", "half of the week",
+    "I could talk on 21 October", "free from October 21st"])
 def test_words_that_are_not_figures_stay_out(text):
     assert check_numbers.claims(text) == set()
 
@@ -114,3 +129,31 @@ def test_a_posting_figure_never_grounds_the_summary_or_a_letter_bullet():
     # The close may still say the posting's figure back to it.
     d = _edited("p4", "in your data.", "in your data across those 12 managers.")
     assert check_numbers.check_draft(dict(d, posting=posting)) == []
+
+
+P4_LAST = ("Which kinds of claim move most with the weather is the first thing I would want to "
+           "look at in your data.")
+
+
+@pytest.mark.parametrize("field,old,new", [
+    ("p4", P4_LAST, "I would welcome a thirty-minute conversation about which kinds of claim "
+                    "move most with the weather."),
+    ("p4", P4_LAST, "I could talk on 21 October, and the first thing I would look at is which "
+                    "claims move with the weather."),
+    ("cl_bullets[1]", "ending two hours of checking a day",
+     "ending two hours of checking a day, or half the morning"),
+])
+def test_a_call_a_stretch_of_time_and_a_date_are_not_findings(field, old, new):
+    m = _audit(_edited(field, old, new))
+    assert "number" not in {f["rule"] for f in m["findings"]}, m["findings"]
+
+
+@pytest.mark.parametrize("field,old,new", [
+    ("summary", "seven years", "over a decade"),
+    ("cl_bullets[2]", "that replaced eleven spreadsheets",
+     "that cut errors by a factor of three"),
+])
+def test_a_decade_and_a_factor_are_checked_like_years_and_multiples(field, old, new):
+    d = _edited(field, old, new)
+    assert check_numbers.check_draft(dict(d, posting=FIXTURE["posting"])), (field, new)
+    assert "number" in {f["rule"] for f in _audit(d)["findings"]}

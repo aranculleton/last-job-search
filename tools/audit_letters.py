@@ -36,6 +36,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # continue", "rather than SAP and Oracle". The old pattern matched "four years
 # of experience", which is the profile's positive claim, and missed "I have not
 # built", "no direct experience" and "not yet".
+# The candidate as a sentence's subject: "I", "my", or their own name ("Morgan's
+# exposure"). The softer shapes below count only about them: "operations managers with
+# little experience of SQL" and "teams with limited exposure to the data" are the people
+# the work was for, and "let 30 managers get up to speed" is a result.
+_NAMES = [n for n in {str(person.get("identity.first", "") or "").strip(),
+                      str(person.get("identity.name", "") or "").strip()} if n]
+_THEIR = ("|".join(re.escape(n) + r"'s" for n in sorted(_NAMES, key=len, reverse=True))
+          or r"(?!x)x")
+_THEY = "|".join(re.escape(n) for n in sorted(_NAMES, key=len, reverse=True)) or r"(?!x)x"
 CONCEDE = re.compile(
     r"\b(?:I have not (?:yet )?(?!only\b)\w+|I haven'?t (?:yet )?(?!only\b)\w+|"
     r"I have (?:had )?no (?:direct |formal |prior |hands-on )?experience|"
@@ -45,17 +54,31 @@ CONCEDE = re.compile(
     r"years? in rather than|would start here|is the one .*? I have not|"
     # The softer shapes a gap arrives in, which the two above let through: "my exposure
     # to insurance data so far is limited", "would be a new domain for me", "keen to
-    # build my experience of claims data", "I would learn it fast".
-    r"(?:exposure|experience|background|familiarity|knowledge)\b[^.]{0,40}\b(?:is|has been|"
-    r"remains|was) (?:so far |still |fairly |quite |relatively )?(?:limited|light|modest|narrow)|"
-    r"(?:limited|little|modest|no real) (?:exposure|experience|familiarity|background) (?:to|with|in|of)\b|"
+    # build my experience of claims data", "I would learn it fast". Each is said of the
+    # candidate.
+    r"(?:my|" + _THEIR + r") (?:[\w-]+ ){0,3}(?:exposure|experience|background|familiarity|"
+    r"knowledge)\b[^.]{0,40}\b(?:is|has been|remains|was) (?:so far |still |fairly |quite |"
+    r"relatively )?(?:limited|light|modest|narrow)|"
+    r"(?:(?-i:I)(?:'ve| have| had)?|(?-i:" + _THEY + r") (?:has|had)) (?:(?:had|got|gained|built|"
+    r"only|so far|yet|still|a|some|rather|relatively|fairly) ){0,3}(?:limited|little|modest|no real) "
+    r"(?:exposure|experience|familiarity|background) (?:to|with|in|of)\b|"
+    r"(?:my|" + _THEIR + r") (?:own )?(?:relatively |fairly )?(?:limited|little|modest) "
+    r"(?:exposure|experience|familiarity|background) (?:to|with|in|of)\b|"
     r"new (?:domain|area|field|sector|industry|world|territory|space) (?:for|to) me|"
+    r"(?:(?-i:I)(?:'m| am|'d be| would be| will be|'ll be)|(?-i:" + _THEY + r") is) (?:really |"
+    r"very |particularly |especially )?(?:keen|eager|excited|looking|hoping|happy) to (?:build|"
+    r"grow|develop|deepen|broaden|gain|strengthen) (?:up )?(?:my )?(?:[\w-]+ ){0,3}(?:experience|"
+    r"exposure|knowledge|understanding|skills?)|"
     r"(?:keen|eager|excited|looking|hoping|happy) to (?:build|grow|develop|deepen|broaden|gain|"
-    r"strengthen) (?:up )?(?:my )?(?:\w+ ){0,3}(?:experience|exposure|knowledge|understanding|skills?)|"
+    r"strengthen) (?:up )?my (?:[\w-]+ ){0,3}(?:experience|exposure|knowledge|understanding|skills?)|"
     r"build (?:up )?my (?:\w+ )?(?:experience|knowledge|exposure) (?:of|in|with)\b|"
     r"I(?:'d| would| will| can| could) (?:learn|pick up|master) (?:it|this|them|that|the \w+) "
-    r"(?:fast|quickly|soon)\b|get up to speed\b|(?:outside|beyond) (?:of )?my (?:direct |current )?"
-    r"(?:experience|background|expertise)\b|haven'?t (?:yet )?had the (?:chance|opportunity))", re.I)
+    r"(?:fast|quickly|soon)\b|"
+    r"(?-i:I)(?:'d|'ll| would| will| can| could| should| expect to| aim to| plan to| hope to)?"
+    r"(?: (?:quickly|soon|rapidly|fast))? get (?:myself )?up to speed\b|"
+    r"get(?:ting)? myself up to speed\b|(?:outside|beyond) (?:of )?my (?:direct |current )?"
+    r"(?:experience|background|expertise)\b|(?-i:I) (?:haven'?t|have not) (?:yet )?had the "
+    r"(?:chance|opportunity))", re.I)
 
 
 # The "not X, but Y" shape, in every phrasing that arrives. This is the one to

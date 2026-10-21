@@ -15,6 +15,17 @@ it. The reader got both directions wrong:
   "Employment type: Full-time" beside "Duration: 6 months" printed permanent, as did a
   company's "permanent home for software teams".
 - **"The only pay ... is for london"** when the same sentence gave the home band first.
+- **Then permanent wording read as a contract again.** "A long-term position" and "a long
+  term role" are jobs meant to last, read as "a term position"; projects "with a typical
+  duration of 6 months", "spot and day rate pricing" (a product), "every supplier contract
+  until signature" and "our IR35 compliance reviews" are the work, not how the job is held;
+  "Interim and Annual Reporting" in a title is a company's accounts. Each held a permanent
+  job back with "is a fixed-term contract, the posting says".
+- **Pay for the person's own area read as pay for somewhere else.** "£52,000 - £60,000
+  (London) / £40,000 - £48,000 (national)" read the "(London)" after the first band as the
+  second band's place too, and "plus London weighting of £4,000" read an allowance as the
+  band's place: "elsewhere: london" for someone in Manchester, and for someone in London the
+  two bands merged into one.
 
 Every employer and posting here is invented.
 """
@@ -64,8 +75,47 @@ def test_contract_words_that_are_not_how_the_job_is_held_ask_nothing(text, title
                                                                     "title": title})]
 
 
+@pytest.mark.parametrize("text,title", [
+    ("We are looking for someone for a long-term position in our analytics team.", "Data Analyst"),
+    ("This is a long term role with clear progression.", "Data Analyst"),
+    ("Join us in a long-term role where you will grow.", "Data Analyst"),
+    ("You will lead improvement projects with a typical duration of 6 months.", "Data Analyst"),
+    ("Typical project duration: 6 months.", "Data Analyst"),
+    ("You will analyse spot and day rate pricing for our charter fleet.", "Freight Pricing Analyst"),
+    ("You will own every supplier contract until signature, tracking renewal risk.", "Data Analyst"),
+    ("You will price each contract until renewal.", "Data Analyst"),
+    ("You will support our IR35 compliance reviews for the contractor workforce.",
+     "Tax Data Analyst"),
+    ("You will check whether each contractor sits inside or outside IR35.", "Tax Data Analyst"),
+    ("A permanent analyst role in group finance.",
+     "Financial Analyst - Interim and Annual Reporting"),
+    ("You will prepare the group accounts.", "Financial Analyst, Interim Reporting"),
+    ("Our people enjoy hybrid working and a mid-term review of goals.", "Data Analyst"),
+    ("Employment type: Permanent. We offer a short-term incentive plan.", "Data Analyst"),
+])
+def test_permanent_wording_is_not_read_as_a_contract(text, title):
+    t = PP.terms(text, title, TODAY)
+    assert t["kind"] not in ("fixed-term", "contract", "contract to hire"), (text, title, t)
+    row = {"company": "Quillmere Foods", "title": title, "location": "Manchester"}
+    prof = PP.read(row, text, rows=[], today=TODAY)
+    assert "contract" not in [q["id"] for q in PP.questions(prof, row)]
+
+
 @pytest.mark.parametrize("text,title,months", [
     ("This is a term position ending March 31, 2027.", "Data Analyst", None),
+    ("The duration of the contract is 6 months.", "Data Analyst", 6),
+    ("The duration of this assignment will be twelve months.", "Data Analyst", 12),
+    ("Assignment duration: 6 months.", "Data Analyst", 6),
+    ("Location: Manchester | Duration: 6 months", "Data Analyst", 6),
+    ("This is a short-term contract.", "Data Analyst", None),
+    ("We are hiring on a long-term contract.", "Data Analyst", None),
+    ("Day rate: £450 to £500.", "Data Analyst", None),
+    ("£450-£500 per day.", "Data Analyst", None),
+    ("IR35 status: outside.", "Data Analyst", None),
+    ("This role sits outside IR35.", "Data Analyst", None),
+    ("Contract until the end of March 2027.", "Data Analyst", None),
+    ("Contract until further notice.", "Data Analyst", None),
+    ("This is an interim role.", "Data Analyst", None),
     ("Temporary full-time, 9 months.", "Data Analyst", 9),
     ("Duration: 6 months.", "Data Analyst", 6),
     ("Initial 6-month term, with a view to extending.", "Data Analyst", 6),
@@ -99,6 +149,44 @@ def test_the_home_band_in_the_same_sentence_is_the_persons_pay():
     prof = PP.read(row, text, rows=[], today=TODAY)
     [q] = PP.questions(prof, row)
     assert "is for London (" in q["question"]
+
+
+_SPLIT = "Salary: £52,000 - £60,000 (London) / £40,000 - £48,000 (national)."
+_WEIGHTING = "Pay: £45,000 - £50,000 plus London weighting of £4,000."
+
+
+@pytest.mark.parametrize("text,band", [
+    (_SPLIT, (40000, 48000)),
+    (_WEIGHTING, (45000, 50000)),
+    ("The salary is £52,000 to £60,000 in London, and £40,000 to £48,000 elsewhere in the UK.",
+     (40000, 48000)),
+])
+def test_the_national_band_is_home_for_someone_outside_the_capital(text, band):
+    # The example person lives in Greater Manchester.
+    p = PP.pay(text)
+    assert p["where"] == "home" and (p["low"], p["high"]) == band, p
+    row = {"company": "Kestrel Mutual", "title": "Data Analyst", "location": "Manchester, UK"}
+    prof = PP.read(row, text, rows=[], today=TODAY)
+    assert "pay_elsewhere" not in [q["id"] for q in PP.questions(prof, row)]
+
+
+@pytest.mark.parametrize("text,band", [
+    (_SPLIT, (52000, 60000)),
+    (_WEIGHTING, (45000, 50000)),
+    ("The salary for this role is £40,000 to £48,000, or £52,000 to £60,000 for London-based "
+     "colleagues.", (52000, 60000)),
+    ("The salary is £52,000 to £60,000 for London.", (52000, 60000)),
+])
+def test_the_capital_band_is_home_for_someone_who_lives_there(monkeypatch, text, band):
+    import places
+    monkeypatch.setattr(places, "METRO", ("london", "camden", "islington"))
+    outside = [x for x in (places.LOCATION or {}).get("outside") or () if x != "london"]
+    monkeypatch.setattr(places, "LOCATION", dict(places.LOCATION or {},
+                                                 outside=outside + ["manchester"]))
+    p = PP.pay(text)
+    assert p["where"] == "home" and (p["low"], p["high"]) == band, p
+    # A band for another city alone is still somewhere else.
+    assert PP.pay("Salary: £45,000 - £50,000 in Manchester.")["where"] == "elsewhere: manchester"
 
 
 def test_the_location_line_is_in_plain_words():
