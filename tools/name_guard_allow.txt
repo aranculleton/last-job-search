@@ -20,6 +20,8 @@ Brackenhollow Mutual    # invented employer, tests/test_copies_of_a_posting_are_
 Head Chef               # a job title, tests/test_every_system_openroles_reads.py
 Acme Careers            # invented employer, tests/test_every_system_openroles_reads.py
 Acme Labs               # invented employer, tests/test_setup_reads_any_person.py
+Brackmoor Retail        # invented employer, tests/test_the_code_audit_catches_every_known_defect.py
+Ellerwick Trust         # invented employer, tests/test_the_drafting_pack_is_built_once_by_code.py
 # Public holidays: tools/holidays.py names them; none is a person.
 Anzac Day                    # a public holiday, tools/holidays.py
 Boxing Day                   # a public holiday, tools/holidays.py
@@ -109,3 +111,4 @@ Zip Code                # an export column (Profile.csv), not a name
 Geo Location            # an export column (Profile.csv), not a name
 Twitter Handles         # an export column (Profile.csv), not a name
 Instant Messengers      # an export column (Profile.csv), not a name
+Artificial Intelligence # not a person: a field, in a headline, tests/test_a_networking_round_reads_while_it_drafts.py

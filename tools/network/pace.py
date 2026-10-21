@@ -24,10 +24,14 @@ react to what actually happens instead of guessing a number once and making ever
   that takes far longer to load than the person's own recent pages, is a soft signal: the
   next pause doubles, and a second soft signal within the hour stops the day. The friction
   log keeps every signal, dated, across days.
-- **A ramp after a signal.** Once LinkedIn has shown a signal, the pages-an-hour ceiling
-  starts low the next day and rises one step for each clean day of reading (5, then the
-  preset's next steps), never above the cap or the person's own setting. Before any signal
-  there is no ramp: a first day reads at the cap, as 3.2.5 did.
+- **A ramp after friction.** Once a read has met friction (a check, a sign-in page out of
+  turn, a slow load), the pages-an-hour ceiling starts low the next day and rises one step
+  for each clean day of reading (5, then the preset's next steps), never above the cap or the
+  person's own setting. Before any there is no ramp: a first day reads at the cap, as 3.2.5
+  did. A page that came back nearly empty never moves the ramp: it is as often a paste the
+  session made too short as anything LinkedIn did. Friction is said as what happened ("a
+  sign-in page on 20 Oct"), never as a warning from LinkedIn: one was repeated to a person
+  as "a LinkedIn warning" that LinkedIn never gave (2026-10-21).
 - **Pages counted by kind.** A list page (the sent-invitations list, an employer's people,
   a people search) screens ten people in one load and is not the footprint of a profile
   page, so each kind has its own caps, and all loads together have one more.
@@ -142,9 +146,11 @@ LIMITS = {
         "profile reads allowed beyond the requests left today",
         "for the people a read rules out", 3, 3, 4),
     "ramp": (
-        "pages an hour allowed on each clean day of reading after LinkedIn showed a signal",
-        "after a signal, start low and rise on clean days, never above the cap or the "
-        "person's setting; before any signal there is no ramp",
+        "pages an hour allowed on each clean day of reading after friction (a check, a "
+        "sign-in page out of turn, a slow load)",
+        "after friction, start low and rise on clean days, never above the cap or the "
+        "person's setting; before any there is no ramp, and a page that came back nearly "
+        "empty never moves it",
         (5, 10, 20, 30), (5, 10, 20, 30), (5, 15, 30)),
     "expiry_hours": (
         "hours after the last page load from which LinkedIn's sign-in page is a session that "
@@ -465,6 +471,31 @@ def friction(data: dict | None = None) -> list:
             if isinstance(x, dict) and x.get("kind")]
 
 
+# What never moves the ramp: a page that came back nearly empty, which is as often a paste
+# the session made too short as a page LinkedIn did not serve (a 211-character paste of a
+# page that had loaded put the ramp back, 2026-10-21). It still doubles the next pause.
+NOT_FOR_THE_RAMP = ("not_rendering",)
+
+SAID = {"check": "a security check", "signed_out": "a sign-in page",
+        "unusual_activity": "an unusual-activity notice", "http_999": "an HTTP 999 page",
+        "not_rendering": "a page that came back nearly empty", "slow": "a slow page load"}
+
+
+def ramp_friction(data: dict | None = None) -> list:
+    """The friction that holds the ramp back: every kind but NOT_FOR_THE_RAMP."""
+    return [x for x in friction(data) if x.get("kind") not in NOT_FOR_THE_RAMP]
+
+
+def said(rec: dict) -> str:
+    """One friction record as what happened, with its day: "a sign-in page on 20 Oct"."""
+    day = str(rec.get("at") or "")[:10]
+    try:
+        when = datetime.date.fromisoformat(day).strftime("%d %b").lstrip("0")
+    except ValueError:
+        when = day or "an unknown day"
+    return f"{SAID.get(rec.get('kind'), str(rec.get('kind') or 'something'))} on {when}"
+
+
 # ------------------------------------------------------------------ the person's own pace
 
 # A page loaded before the person's own pace allowed it: the session opened it while the
@@ -504,7 +535,7 @@ def slow(load_seconds: float, history: list) -> bool:
 def clean_days(today: datetime.date, loads: list, data: dict | None = None) -> int:
     """Days with at least one page load and no signal, since the last day that had one. The
     ramp's step. `loads` are datetimes of every load on file."""
-    signal_days = {str(x.get("at", ""))[:10] for x in friction(data)}
+    signal_days = {str(x.get("at", ""))[:10] for x in ramp_friction(data)}
     days = sorted({d.date().isoformat() for d in loads if d.date() < today}, reverse=True)
     n = 0
     for day in days:
@@ -528,15 +559,16 @@ def loads_cap(period: str = "hour") -> int:
 
 
 def hourly_ceiling(today: datetime.date, loads: list, data: dict | None = None) -> tuple:
-    """(pages an hour allowed now, why): the cap, or after LinkedIn has shown a signal the
-    ramp's step for the clean days since, never above the cap. A signal today puts the
-    ramp back to its first step tomorrow. Before any signal there is no ramp: a first day
+    """(pages an hour allowed now, why): the cap, or after friction (`ramp_friction`) the
+    ramp's step for the clean days since, never above the cap. Friction today puts the
+    ramp back to its first step tomorrow. Before any there is no ramp: a first day
     read at five an hour was the slow start 3.2.5 never had. A person who set their own
     hourly cap and not the ramp has said how fast they want to go, and the ramp does not
     hold them below it: it once stalled a run for 44 minutes at 10 an hour while their
     own setting said 1000."""
     top = loads_cap("hour")
-    if not friction(data):
+    seen = ramp_friction(data)
+    if not seen:
         return top, "loads_per_hour"
     if own_cap("hour")[0] is not None and not mine("ramp"):
         return top, "loads_per_hour"
@@ -545,6 +577,6 @@ def hourly_ceiling(today: datetime.date, loads: list, data: dict | None = None) 
     step = steps[min(n, len(steps) - 1)]
     if step >= top:
         return top, "loads_per_hour"
-    return step, ("the ramp after LinkedIn's last signal: %d clean day(s) of reading since, "
-                  "step %d of %d (PROFILE_READ_RAMP %s)" % (n, min(n, len(steps) - 1) + 1,
-                                                            len(steps), steps))
+    return step, ("the ramp after the last friction a read met (%s): %d clean day(s) "
+                  "of reading since, step %d of %d (PROFILE_READ_RAMP %s)"
+                  % (said(seen[-1]), n, min(n, len(steps) - 1) + 1, len(steps), steps))

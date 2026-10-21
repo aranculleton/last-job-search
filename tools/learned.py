@@ -35,6 +35,9 @@ file and which no sync touches:
         [--applied-to "profile/networking.py OPENER"]... [--never-say "..."]... \\
         [--overrides <check>]... [--replaces <n>]... [--length inmail[:<reader>]=<words>]...
     python3 tools/learned.py skip --said "..." --why "..."   # a reaction that sets no rule
+    python3 tools/learned.py approve --said "..." --text-file <message> --channel inmail \\
+        --reader peer                            # a message they approved, kept whole
+    python3 tools/learned.py brief messages --channel inmail --reader peer   # examples first
     python3 tools/learned.py pending             # reactions this chat has not recorded
     python3 tools/learned.py retire <n>          # they changed their mind
     python3 tools/learned.py locked              # the settings no upgrade may change
@@ -500,14 +503,102 @@ def superseded(rows: list[dict] | None = None) -> dict:
     return out
 
 
-def brief(area: str | None = None) -> str:
+def brief(area: str | None = None, channel: str | None = None, reader: str | None = None) -> str:
     """The active rules as lines to follow before drafting, or "" when there are none.
-    A rule a later one overrules (superseded) is left out."""
+    A rule a later one overrules (superseded) is left out. For messages, the messages the
+    person approved come first (`approved_examples`), for this channel and reader where
+    there are some: rules drawn from them were followed, and the messages themselves were
+    never put in front of the drafter (2026-10-21)."""
     over = superseded()
     rows = [r for r in entries(area) if _key(r) not in over]
     if area is not None:
         rows = rows + [r for r in entries("other") if r not in rows and _key(r) not in over]
-    return "\n".join(f"- {r['rule']} ({r['date']}, they said: \"{r['said']}\")" for r in rows)
+    lines = []
+    if area in (None, "messages", "voice"):
+        shown = approved_examples(channel, reader)
+        if shown:
+            lines.append("Messages you approved, best match first (the shape to follow, never "
+                         "the words or another person's facts):")
+            for x in shown:
+                lines.append(f"  [{x.get('channel') or 'any channel'}, "
+                             f"{(x.get('reader') or 'any reader').replace('_', '-')}, "
+                             f"{x.get('date')}; you said: \"{x.get('said')}\"]")
+                lines += ["    " + ln for ln in str(x.get("text") or "")[:EXAMPLE_CHARS].splitlines()
+                          if ln.strip()]
+            if rows:
+                lines.append("Rules:")
+    lines += [f"- {r['rule']} ({r['date']}, they said: \"{r['said']}\")" for r in rows]
+    return "\n".join(lines)
+
+
+# ------------------------------------------------------------ messages the person approved
+
+# "Great, both sent", "almost perfect", "more of this": a message the person approved is the
+# best example there is of what they want, better than any rule drawn from it. A set of
+# InMails approved on 2026-10-20 sat in the message log and some forty rules were written
+# from them, and the drafter never saw one of them. They are kept here, whole.
+EXAMPLES_SHOWN = 5
+EXAMPLE_CHARS = 1200
+CHANNELS = ("connection", "inmail", "dm", "message", "email", "nudge", "reply", "intro")
+READERS = ("peer", "decision_maker", "recruiter")
+
+
+def approved(include_retired: bool = False) -> list[dict]:
+    rows = [r for r in (_data().get("approved") or []) if isinstance(r, dict)]
+    return rows if include_retired else [r for r in rows if r.get("status", "active") == "active"]
+
+
+def approve(said: str, text: str, channel: str = "", reader: str = "", contact_id: str = "",
+            today: str | None = None) -> dict:
+    """Keep a message the person approved as an example: their words about it (`said`), the
+    message whole (`text`), its channel and who it was for. It answers the reaction waiting
+    in the chat, the way a record does."""
+    if not str(said or "").strip() or not str(text or "").strip():
+        raise SystemExit("learned: approve needs what they said and the message itself")
+    channel = str(channel or "").strip().lower()
+    reader = str(reader or "").strip().lower().replace("-", "_")
+    if channel and channel not in CHANNELS:
+        raise SystemExit(f"learned: channel {channel!r}; one of {', '.join(CHANNELS)}")
+    if reader and reader not in READERS:
+        raise SystemExit(f"learned: reader {reader!r}; one of {', '.join(READERS)}")
+    path = _writable()
+    data = _data()
+    row = {"date": today or dt.date.today().isoformat(), "said": str(said).strip(),
+           "text": str(text).strip(), "channel": channel, "reader": reader,
+           "status": "active"}
+    if contact_id:
+        row["contact_id"] = str(contact_id).strip()
+    rows = [r for r in (data.get("approved") or []) if isinstance(r, dict)]
+    if any(" ".join(str(r.get("text") or "").split()) == " ".join(row["text"].split())
+           and r.get("status", "active") == "active" for r in rows):
+        resolve_pending(row["said"])
+        return {**row, "already": True}
+    rows.append(row)
+    data["approved"] = rows
+    data.setdefault("entries", load())
+    data.setdefault("offers", all_offers())
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    resolve_pending(row["said"])
+    return row
+
+
+def approved_examples(channel: str | None = None, reader: str | None = None,
+                      most: int = EXAMPLES_SHOWN) -> list[dict]:
+    """The approved messages a draft for this channel and reader should follow, best match
+    first: the same channel and reader, then the same channel, then the same reader, then
+    the rest; the newest first within each."""
+    channel = str(channel or "").strip().lower()
+    reader = str(reader or "").strip().lower().replace("-", "_")
+
+    def rank(r):
+        same_c = bool(channel) and r.get("channel") == channel
+        same_r = bool(reader) and r.get("reader") == reader
+        return -(2 * same_c + same_r)
+
+    rows = sorted(approved(), key=lambda r: str(r.get("date") or ""), reverse=True)
+    return sorted(rows, key=rank)[:most]        # stable: the newest first within each
 
 
 def all_offers() -> list[dict]:
@@ -650,6 +741,37 @@ _LONG_QUOTE = re.compile(r'"[^"\n]{80,}"|\u201c[^\u201d\n]{80,}\u201d')
 _THEIR_WORDS = re.compile(r"\b(?:replied|wrote back|responded|answered|said|wrote|messaged"
                           r"|their (?:reply|message|answer)|(?:his|her) (?:reply|message|answer)"
                           r"|the reply)\s*:", re.I)
+
+
+# The person approving a message: kept as an example (`approve`), the way a reaction against
+# one is kept as a rule. Said about a message, never a contact's own words (the same cuts
+# `reaction` makes apply).
+APPROVAL = re.compile("|".join([
+    r"\b(?:almost|nearly|just about|pretty much)?\s*perfect\b",
+    r"\bmore (?:of|like) (?:this|these|that|those)\b",
+    r"\b(?:great|good|nice|lovely)[,!.]?\s+(?:both|all|they'?re|it'?s|that'?s)?\s*(?:been\s+)?sent\b",
+    r"\b(?:sent|sending) (?:it |them |both |all )?as (?:is|written|drafted)\b",
+    r"\b(?:spot on|nailed it|exactly (?:right|it)|that'?s the one|these are (?:great|good|perfect))\b",
+    r"\b(?:love|loved) (?:this|these|it|them|that one)\b",
+]), re.I)
+
+
+def approval(text: str) -> str:
+    """The words in `text` that approve a message, or "" when it approves none."""
+    t = str(text or "").replace("\u2019", "'").replace("\u2018", "'")
+    if not t.strip() or t.lstrip().startswith(("<task-notification", "<system-reminder",
+                                                 "<command-", "<local-command", "/reply")):
+        return ""
+    if _RELAYED.search(t):
+        return ""
+    t = _LONG_QUOTE.sub(" ", _NOT_THEIRS.sub(" ", t))
+    cut = _THEIR_WORDS.search(t)
+    if cut:
+        t = t[:cut.start()]
+    if reaction(t):
+        return ""                  # a reaction against it is the one to record
+    m = APPROVAL.search(t)
+    return m.group(0).strip() if m else ""
 
 
 def reaction(text: str) -> str:
@@ -884,7 +1006,8 @@ def _this_turn(items: list) -> list:
     return items
 
 
-_ANSWERED = re.compile(r"learned\.py[\"']?\s+(?:record|skip)\b|\blearned\.(?:record|skip)\(")
+_ANSWERED = re.compile(r"learned\.py[\"']?\s+(?:record|skip|approve)\b"
+                       r"|\blearned\.(?:record|skip|approve)\(")
 
 
 def hook(event: dict) -> dict:
@@ -902,6 +1025,19 @@ def hook(event: dict) -> dict:
     if name == "UserPromptSubmit":
         text = str(event.get("prompt") or "")
         cue = reaction(text)
+        liked = "" if cue else approval(text)
+        if liked:
+            note_reaction(text, liked, again=True)
+            return {"hookSpecificOutput": {
+                "hookEventName": "UserPromptSubmit",
+                "additionalContext": (
+                    f"The person approved a message (\"{liked}\"). In this turn, keep each "
+                    "message they approved as an example, whole: python3 tools/learned.py "
+                    "approve --said \"<their words>\" --text-file <the message as approved> "
+                    "--channel <connection|inmail|dm|...> --reader <peer|decision_maker|"
+                    "recruiter>. learned.py brief messages shows it to every later draft. If "
+                    "it approves nothing, python3 tools/learned.py skip --said \"...\" --why "
+                    "\"...\".")}}
         if not cue:
             return {}
         note_reaction(text, cue, again=True)
@@ -918,7 +1054,7 @@ def hook(event: dict) -> dict:
     items = _this_turn(_transcript_texts(event.get("transcript_path") or ""))
     waiting = []
     for i, (_n, kind, text) in enumerate(items):
-        if kind != "user" or not reaction(text):
+        if kind != "user" or not (reaction(text) or approval(text)):
             continue
         if not any(k == "tool" and _ANSWERED.search(t) for _m, k, t in items[i + 1:]):
             waiting.append(text)
@@ -961,6 +1097,15 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     b = sub.add_parser("brief")
     b.add_argument("area", nargs="?")
+    b.add_argument("--channel", default=None, help="messages: the channel being drafted for")
+    b.add_argument("--reader", default=None, help="messages: peer, decision_maker or recruiter")
+    ap_ = sub.add_parser("approve", help="keep a message the person approved as an example")
+    ap_.add_argument("--said", required=True, help="their words about it")
+    ap_.add_argument("--text-file", required=True, help="the message as they approved it")
+    ap_.add_argument("--channel", default="")
+    ap_.add_argument("--reader", default="")
+    ap_.add_argument("--contact", default="", help="who it went to, by contact id")
+    sub.add_parser("approved", help="the messages kept as examples")
     li = sub.add_parser("list")
     li.add_argument("area", nargs="?")
     r = sub.add_parser("record")
@@ -999,7 +1144,19 @@ def main(argv=None) -> int:
     except (AttributeError, ValueError):
         pass
     if a.cmd == "brief":
-        print(brief(a.area) or "(nothing learned yet: the defaults apply)")
+        print(brief(a.area, a.channel, a.reader) or "(nothing learned yet: the defaults apply)")
+    elif a.cmd == "approve":
+        with open(a.text_file, encoding="utf-8") as fh:
+            text = fh.read()
+        e = approve(a.said, text, a.channel, a.reader, a.contact)
+        print("learned: " + ("already kept as an example" if e.get("already") else
+                             f"kept as an example of what you want ({e['channel'] or 'any channel'}, "
+                             f"{(e['reader'] or 'any reader').replace('_', '-')})")
+              + "; every later draft of its kind is shown it first (learned.py brief messages)")
+    elif a.cmd == "approved":
+        for i, x in enumerate(approved(), 1):
+            print(f"{i:3}. {x.get('date')} {x.get('channel') or '-'} {x.get('reader') or '-'}: "
+                  f"\"{' '.join(str(x.get('text') or '').split())[:100]}\" (said: \"{x.get('said')}\")")
     elif a.cmd == "list":
         over = superseded()
         for i, row in enumerate(load(), 1):

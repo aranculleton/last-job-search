@@ -42,7 +42,7 @@ _ROLES = person.module("roles") if person.exists("roles.py") else None
 # The message kinds that reach someone for the first time. An easy no is allowed in a later
 # message that asks a favour, never here. An email is not one: it goes to someone who asked
 # for it (compose.email), and an email after a call was warned for its exit (2026-10-20).
-FIRST_CONTACT = frozenset({"connection", "inmail"})
+FIRST_CONTACT = frozenset({"connection", "inmail", "dm"})
 
 # ------------------------------------------------------------------ what reads as generated
 
@@ -83,8 +83,16 @@ AI_TELLS = (
         r"\bhow do you (?:decide|know|judge|tell)\b[^?]{0,90}\b(?:good enough|ready|worth (?:it|"
         r"shipping)|right)\b", re.I),
      "an honest ask beats a test of them: a short call, or a pointer to the right person"),
+    # The shape, not the words: a vague ask about how the team works or spends its time.
+    # "I'd love to hear how your team works" was caught and "I'd love to hear what your team
+    # spends its days on" was not (2026-10-21).
     ("the old default ask", re.compile(
-        r"\bI(?:'d| would) love to hear (?:more )?(?:about )?how (?:your|the) team works\b", re.I),
+        r"\b(?:I(?:'d| would) (?:really |just )?(?:love|like|be (?:keen|interested|curious)) to"
+        r"|(?:would|I'?d) love to|keen to|curious to) (?:hear|know|learn|understand|find out)"
+        r"\b[^.?!]{0,20}?\b(?:how|what)\s+(?:your|the|their)\s+(?:\w+\s+)?(?:team|group|"
+        r"function|department|days?|week)\b[^.?!]{0,40}?\b(?:works?|spends?|does|runs?|"
+        r"operates?|day[- ]to[- ]day|is like|are like|looks? like|gets? up to|goes about|fills?|"
+        r"busy with)\b", re.I),
      "ask what you would really ask them, or for a short call, in your own words"),
     # Recorded as a reaction in one round (2026-10-20) and never checked: it says nothing
     # about why them, and every sweep opens on it.
@@ -220,6 +228,37 @@ _ASKING_CLOSE = re.compile(
     r"or (?:just )?(?:hear|learn|chat|talk))\b", re.I)
 
 
+# The same thing said two ways on a page and in a note: "ML" for machine learning, "recruit"
+# for talent acquisition. A headline of "Talent Acquisition, Machine Learning & Artificial
+# Intelligence" and a note's "you recruit for ML and AI" are one fact.
+_SAME_THING = ((re.compile(r"\bmachine[- ]learning\b", re.I), "ml"),
+               (re.compile(r"\bartificial intelligence\b", re.I), "ai"),
+               (re.compile(r"\btalent acquisition\b|\brecruit\w*|\bhiring\b", re.I), "recruit"),
+               (re.compile(r"\bdata science\b|\bdata scientists?\b", re.I), "ds"),
+               (re.compile(r"\bhuman resources\b|\bpeople team\b", re.I), "hr"))
+
+
+def _facts(text: str) -> set:
+    """The words a claim and a page are compared on: stems, short names and initials, and
+    one token for each thing said two ways (_SAME_THING)."""
+    t = tone._plain(str(text or ""))
+    return (_stems(t) | _short_names(t)
+            | {tok for rx, tok in _SAME_THING if rx.search(t) or re.search(
+                r"(?<![\w'])%s(?![\w'])" % re.escape(tok), t, re.I)})
+
+
+_SUFFIX = re.compile(r"(?:ments?|ations?|ers?|ing|ed|ies|es|s)$")
+
+
+def _stems(text: str) -> set:
+    """`_words`, each cut to its stem ("recruiter", "recruiting", "recruits" are "recruit")."""
+    out = set()
+    for w in _words(text):
+        stem = _SUFFIX.sub("", w)
+        out.add(stem if len(stem) >= 4 else w)
+    return out
+
+
 def _words(text: str) -> set:
     return {w for w in re.findall(r"[a-z][a-z'-]{4,}", tone._plain(str(text or "")).lower())
             if w not in tone.STOPWORDS}
@@ -239,7 +278,8 @@ def _short_names(text: str) -> set:
 
 def _read_text(reading: dict | None) -> str:
     r = reading or {}
-    parts = [r.get("headline", ""), r.get("about", ""), r.get("current", "")]
+    parts = [r.get("headline", ""), r.get("about", ""), r.get("current", ""),
+             r.get("company", "")]
     parts += [i.get("text", "") for i in r.get("items") or []]
     parts += [" ".join(str(e.get(k) or "") for k in ("employer", "title", "place"))
               for e in r.get("experience") or []]
@@ -263,8 +303,10 @@ def provenance(sentence: str, reading: dict | None = None) -> str:
     if reading:
         read = _read_text(reading)
         # Their employers by a short name or initials count as much as a long word: "you
-        # started out as an economist before QMX and KMB" is read off their page.
-        if len(_words(s) & _words(read)) + len(_short_names(s) & _short_names(read)) >= 2:
+        # started out as an economist before QMX and KMB" is read off their page. A word is
+        # matched by its stem: "You recruit for ML and AI at <employer>", copied from a
+        # headline that says "Recruiter, ML & AI", was warned as an inference (2026-10-21).
+        if len(_facts(s) & _facts(read)) >= 2:
             return STATED
     return INFERRED if reader_is_subject(s) else ""
 
@@ -714,6 +756,29 @@ def _own() -> set:
     return {_norm(s) for s in found if s.strip()}
 
 
+def _approved_texts() -> list:
+    """The messages the person approved (learned.py approve), normalised."""
+    try:
+        import learned
+        return [_norm(x.get("text", "")) for x in learned.approved()]
+    except (ImportError, SystemExit, OSError):
+        return []
+
+
+def _own_list(m, own: set) -> bool:
+    """Is this "X, Y and Z" not a list of credentials: a place among them ("moved from London
+    to Toronto, ex-<Employer> and <Employer>" names two employers and a city), or the
+    person's own who-line, as they set it (ABOUT_ME and the rest of `_own`) or as it stands
+    in a message they approved? Their own approved who-line was warned as three credentials
+    on nearly every note (2026-10-21)."""
+    import discovery
+    items = [re.sub(r"^ex-", "", x, flags=re.I) for x in m.groups()]
+    if any(discovery._is_place(x) for x in items):
+        return True
+    n = _norm(m.group(0))
+    return bool(n) and any(n in o for o in list(own) + _approved_texts() if o)
+
+
 def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", tone._plain(str(s or "")).lower()).strip()
 
@@ -746,7 +811,7 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
             if m:
                 out.append(Advice("ai_tell", f"{name}: {m.group(0)}", with_open_ask(fix)))
         m = _LIST3.search(s)
-        if m:
+        if m and not _own_list(m, own):
             out.append(Advice("three_credentials", m.group(0),
                               "a list of three reads as generated: name the one that matters "
                               "to this reader"))

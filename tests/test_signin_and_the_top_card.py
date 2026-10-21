@@ -188,6 +188,8 @@ def test_a_place_the_persons_own_gate_fails_is_elsewhere_and_an_unknown_one_is_c
     base = {"headline": "Senior Data Scientist", "company": "Kestrel Mutual", "current": ""}
     assert reading.verdict({**base, "location": "Manchester, England, United Kingdom"})[0]
     assert reading.verdict({**base, "location": "Leeds"}) == (True, "")
-    assert not reading.verdict({**base, "location": "London, England, United Kingdom"})[0]
+    # Changed 2026-10-21: a place the gate fails is said, never a skip.
+    keep, why = reading.verdict({**base, "location": "London, England, United Kingdom"})
+    assert keep and why.startswith("caution: based in London")
     keep, why = reading.verdict({**base, "location": "Amsterdam"})
     assert keep and why.startswith("caution: based in Amsterdam")

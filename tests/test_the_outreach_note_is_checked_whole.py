@@ -46,9 +46,15 @@ def test_the_check_and_the_built_note_agree():
     assert note.startswith(outreach.OPENING.format(role=ROLE, company="Wrenfield Freight"))
 
 
-def test_the_workflow_checks_the_body_with_its_opening():
-    with open(os.path.join(ROOT, ".claude", "workflows", "draft-applications.js"),
-              encoding="utf-8") as fh:
-        text = fh.read()
-    assert text.count("--check-note --company") == 2
-    assert '--check-note "<' not in text
+def test_the_drafting_audit_checks_the_body_with_its_opening():
+    # Updated 2026-10-21: this read the workflow's prompts for "--check-note --company",
+    # run by the drafter and again by the auditor agent. The check now runs in code, in
+    # the drafting audit (tools/draft_audit.py), on the note as it is sent.
+    import draft_audit
+    d = {"company": COMPANY, "role": ROLE, "outreach_body": BODY}
+    found = [f for f in draft_audit.rule_findings(
+        dict(d, summary="s", tools="SQL", p1="a.", p2="b.", lead="c", p4="d.",
+             cl_bullets=[{"label": "x", "text": "y"}], requirement_map=[{"requirement": "r",
+                                                                          "evidence": "e"}]),
+        {}, "")[0] if f["rule"] == "outreach"]
+    assert found and "words" in found[0]["text"]

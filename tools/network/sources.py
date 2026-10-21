@@ -551,6 +551,9 @@ def _cli_harvest(argv: list) -> int:
         got = json.load(fh)
     results = got.get("results", got) if isinstance(got, dict) else got
     company = opt.get("--company", "")
+    if not company.strip():
+        return _print_across(harvest_across(results, opt.get("--kind", "title_search"),
+                                            opt.get("--query", "")))
     run = harvest(results, company, opt.get("--kind", "title_search"), opt.get("--query", ""))
     c = run["counts"]
     print(f"{company}: {c['results']} results, {c['people']} people named, {c['kept']} kept "
@@ -573,6 +576,30 @@ def _cli_harvest(argv: list) -> int:
         with open(opt["--out"], "w", encoding="utf-8") as fh:
             json.dump({**run, "dropped": [{"person": p, "why": w} for p, w in run["dropped"]]},
                       fh, indent=1, default=str)
+    return 0
+
+
+def _print_across(got: dict) -> int:
+    c = got["counts"]
+    print(f"a search by title across employers: {c['results']} results, {c['kept']} people kept "
+          f"at {c['employers'] - c['ruled_out']} employer(s)"
+          + (f", {c['ruled_out']} employer(s) ruled out" if c["ruled_out"] else "")
+          + (f", {c['unplaced']} whose result names no employer" if c["unplaced"] else ""))
+    for emp, why, run in got["employers"]:
+        if why:
+            print(f"  {emp}: nothing kept ({why})")
+            continue
+        print(f"  {emp}: {len(run['keep'])} kept")
+        for i, p in enumerate(run["keep"], 1):
+            print(f"    {i}. {p['why']['score']:>3} {p['name']}: "
+                  f"{p.get('title') or '(no title in the result)'} "
+                  f"[{p.get('profile_status')}, {p.get('route')}] {p.get('linkedin_url')}"
+                  + (f"\n         ask first: {p['maybe_in_book']}" if p.get("maybe_in_book") else ""))
+        for p, why_ in run["dropped"]:
+            print(f"    dropped {p.get('name')}: {why_}")
+    for p in got["unplaced"]:
+        print(f"  no employer named: {p.get('name')}, {p.get('title') or '?'}: a search at an "
+              "employer, or a read, places them before a note")
     return 0
 
 
@@ -951,7 +978,7 @@ def from_people_paste(text: str, company: str, degree: str = "", contacts=None) 
 
 def harvest(results, company: str, kind: str = "title_search", query: str = "",
             today: datetime.date | None = None, connections=None, contacts=None,
-            name: str = "", known: dict | None = None) -> dict:
+            name: str = "", known: dict | None = None, remember: bool = True) -> dict:
     """Rungs 2 and 3 for one employer: search results to a ranked list, nothing fetched.
 
     The results' own titles say who each person is and where they work
@@ -1010,7 +1037,7 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
     # result still outranks a placed name with no job at all.
     keep.sort(key=lambda p: (-(p["why"]["score"] - (UNPLACED_PENALTY if p.get("location_unverified") else 0)),
                              discovery.PROFILE_STATUS.index(p.get("profile_status") or "unconfirmed")))
-    if kind == "title_search" and query and not name:
+    if kind == "title_search" and query and not name and remember:
         record_yield(company, query, len(keep),
                      sum(1 for p in keep if not p.get("location_unverified")), today)
     threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
@@ -1019,6 +1046,50 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
             "counts": {"results": len(results or ()), "people": len(people), "kept": len(keep),
                        "verified": sum(p.get("profile_status") == "verified" for p in keep),
                        "in_book": book["in_book"], "never_messaged": book["never_messaged"]}}
+
+
+def harvest_across(results, kind: str = "title_search", query: str = "",
+                   today: datetime.date | None = None, connections=None, contacts=None) -> dict:
+    """One search by title across employers ("<title> <city>", no employer in it) feeding
+    every employer it found: the results grouped by the employer each result's own title
+    names, each employer checked against what the job search has ruled out (`ruled_out`: an
+    excluded sector or employer, do_not_target.json), and each group harvested as a search
+    at that employer would be. A result that names no employer is never filed under one.
+
+    {"employers": [(employer, why ruled out or "", harvest run or None)], "unplaced":
+    [people], "counts": {...}}, the employer with most people kept first. A title search
+    that found nobody somewhere is not remembered against that employer's titles (it was
+    not a search there)."""
+    import discovery
+    from company_key import key as company_key
+    today = today or datetime.date.today()
+    groups: dict = {}
+    unplaced = []
+    for r in results or ():
+        got = discovery.people_from_results([r], "", kind=kind, query=query, today=today)
+        if not got:
+            continue
+        emp = str(got[0].get("company") or "").strip()
+        if not emp:
+            unplaced.append(got[0])
+            continue
+        name, rows = groups.get(company_key(emp), (emp, []))
+        rows.append(r)
+        groups[company_key(emp)] = (name, rows)
+    out = []
+    for _k, (emp, rows) in groups.items():
+        why = ruled_out(emp)
+        if why:
+            out.append((emp, why, None))
+            continue
+        out.append((emp, "", harvest(rows, emp, kind, query, today=today, connections=connections,
+                                     contacts=contacts, remember=False)))
+    out.sort(key=lambda g: (g[2] is None, -(len(g[2]["keep"]) if g[2] else 0), g[0].lower()))
+    kept = sum(len(run["keep"]) for _e, _w, run in out if run)
+    return {"employers": out, "unplaced": unplaced,
+            "counts": {"results": len(results or ()), "employers": len(out), "kept": kept,
+                       "ruled_out": sum(1 for _e, w, _r in out if w),
+                       "unplaced": len(unplaced)}}
 
 
 def _searched_for(query: str, company: str) -> str:

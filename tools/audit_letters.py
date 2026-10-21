@@ -224,6 +224,17 @@ def page_flags(t):
 def audit(a, batch=()):
     """The flags for one letter. `batch` is every draft rendered with it: two
     roles at one employer is the case where the letter must name its role."""
+    flags = draft_flags(a, batch)
+    for lab, run in resume_repeats(a):
+        flags.append(f"letter bullet ({lab.rstrip(': ')[:20]}) repeats the resume: \"{run}\"")
+    return flags + page_text_flags(a), body_words(a)
+
+
+def draft_flags(a, batch=()):
+    """The flags the draft object alone shows, before anything is rendered: the opening,
+    the credential, the employer named, concessions and the contrast construction, a
+    bullet repeating its label. The drafting audit (tools/draft_audit.py) runs these on
+    every draft; `audit` runs them again on the rendered letter with the page checks."""
     flags = []
     p1, p2, p4 = _plain(a["p1"]), _plain(a["p2"]), _plain(a.get("p4", ""))
     body = " ".join([p1, p2, _plain(a.get("lead", "")), p4]
@@ -271,11 +282,16 @@ def audit(a, batch=()):
         lab = b["label"].rstrip(": ").strip()
         if lab and _plain(b["text"]).lower().startswith(lab.lower()):
             flags.append(f"bullet text repeats its label ({lab[:20]})")
-    for lab, run in resume_repeats(a):
-        flags.append(f"letter bullet ({lab.rstrip(': ')[:20]}) repeats the resume: \"{run}\"")
     for where, run in posting_copies(a):
         flags.append(f"{where} copies the posting word for word: \"{run}\"; say it in your "
                      f"own words, using the posting's term once")
+    return flags
+
+
+def page_text_flags(a):
+    """The flags only the compiled letter shows: drafter text on the page, the banned
+    nouns and dashes, a doubled phrase, a legal suffix in the salutation."""
+    flags = []
     t = pdf_text(R.final_abbr(a))
     # The drafter's own notes must never reach the page. Letters have shipped
     # with "conceded in one sentence mid-letter in p2" in their closing.
@@ -293,7 +309,7 @@ def audit(a, batch=()):
                     t, re.M)
     if sal and R.LEGAL_SUFFIX.search(sal.group(1).strip()):
         flags.append("legal suffix in salutation")
-    return flags, body_words(a)
+    return flags
 
 
 # The cap in 03-writing-style.md. A letter over it is a finding, not a note.

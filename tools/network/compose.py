@@ -219,7 +219,19 @@ _KIND_ALIASES = {
     # A note to a hiring manager about an application already in (outreach.py): read in a
     # message pane, so no length here; outreach.check_note() holds it to its own words.
     "message": "message",
+    # A first message to someone already connected (first degree): no subject, unlike an
+    # InMail, and LinkedIn's message limit rather than a connection note's. There was no
+    # kind for it, so a message to a connection was checked as an InMail (and refused for
+    # its missing subject) or as an outreach "message" (2026-10-21).
+    "dm": "dm",
+    "direct_message": "dm",
+    "first_degree": "dm",
+    "connected": "dm",
 }
+
+# The first message to a person, whichever channel carries it: held to the first-note rules
+# (no asking for the job, work authorization by reader).
+FIRST_MESSAGE_KINDS = ("connection", "inmail", "dm")
 
 KIND_LIMITS = {
     "connection": {"chars": schema.LIMITS["connection_note_chars"]},
@@ -238,6 +250,7 @@ KIND_LIMITS = {
     # A warm intro whose instruction was "connect with X" is the request itself.
     "intro_connection": {"chars": schema.LIMITS["connection_note_chars"]},
     "message": {},
+    "dm": {"chars": schema.LIMITS["message_chars"]},
 }
 
 # There is no default close and no default opener any more, and the reason
@@ -791,6 +804,59 @@ JOB_ASKS = (
      "asks", _LATER_FIX),
 )
 _JOB_ASKS = [(re.compile(rx, re.I), kind, fix) for rx, kind, fix in JOB_ASKS]
+
+# The blunt "any jobs?" forms, refused to every reader, a recruiter as well: "Any data roles
+# open in Toronto?" passed to a recruiter, and the person reads it as "any jobs?"
+# (2026-10-21). A recruiter is told the work wanted and asked openly; never asked whether
+# there is a job.
+_RECRUITER_FIX = ("an \"any jobs?\" question: say the work you are looking for and leave the "
+                  "ask open (\"If anything you're working on fits, it'd be great to hear about "
+                  "it\")")
+BLUNT_ASKS = (
+    r"\bany\b[^.?!]{0,40}?\b(?:roles?|jobs?|openings?|positions?|vacanc\w+|opportunit\w+|reqs?)"
+    r"\b[^.?!]{0,12}\b(?:open|available|going|live|coming up)\b",
+    r"\b(?:anything|something)\s+(?:open|available|going)\b(?!\s+(?:to|with|on)\b)",
+    r"\b(?:do|does|would) (?:you|your team|the team) have (?:any |an? )?(?:open )?"
+    r"(?:roles?|jobs?|openings?|positions?|vacanc\w+|reqs?)\b",
+    r"\b(?:are|is) (?:you|your team|the team) (?:hiring|recruiting) (?:for|in|at)\b",
+)
+_BLUNT_ASKS = [re.compile(rx, re.I) for rx in BLUNT_ASKS]
+
+# A question about whether the reader is the right person: does hiring for it sit with them,
+# do their searches cover it, is it a colleague's, "or someone better to ask?". Each passed
+# validate() to a recruiter, and the person reads every one as "are you useful to me?"
+# (2026-10-21). The rule is the shape, not the words a learned never-say lists. A pointer
+# asked for openly ("Would you know the right person to speak to about it?") is not this:
+# it asks them to help, not whether they count.
+GATEKEEPING_FIX = ("a question about whether they are the right person reads as \"are you "
+                   "useful to me?\": ask about their work, or say the work you want and leave "
+                   "the ask open")
+GATEKEEPING = (
+    r"\b(?:hiring|recruiting|recruitment|searches|search|roles?|that|it|this)\b[^.?!]{0,40}?"
+    r"\bsits? (?:with|under|in|on) (?:you|your|someone|another|a different|the)\b",
+    r"\b(?:do|does) (?:your|the) (?:searches|search|desk|remit|patch|team|role|work)\b"
+    r"[^.?!]{0,50}?\b(?:cover|include|extend to|reach)\b",
+    r"\bor (?:is|would) (?:that|it|this) (?:be )?(?:with |for |under )?(?:another|a different|"
+    r"someone else'?s?|other)\b",
+    r"\bor (?:someone|somebody|anyone|another (?:person|colleague|recruiter)) (?:else|better)\b",
+    r"\bor (?:would|should) I (?:ask|speak to|try|contact) (?:someone|somebody|another)\b",
+    r"\b(?:are|would) you (?:be )?the (?:right|best) (?:person|contact|one)\b",
+    r"\bis (?:this|that) (?:you|your (?:area|remit|patch|team|desk))\b(?:,?\s*or\b|\s*\?)",
+    r"\bwho (?:covers|handles|looks after|owns|runs) (?:the )?(?:hiring|recruiting|searches|"
+    r"roles?)\b",
+)
+_GATEKEEPING = [re.compile(rx, re.I) for rx in GATEKEEPING]
+
+
+def gatekeeping_findings(text) -> list:
+    """The questions in `text` that ask whether the reader is the right person, as
+    tone.Violation("gatekeeping", ...), for every reader."""
+    out = []
+    for sentence in re.split(r"(?<=[.?!])\s+", str(text or "")):
+        m = next((m for rx in _GATEKEEPING for m in [rx.search(sentence)] if m), None)
+        if m:                              # once a sentence, however many shapes it has
+            out.append(tone.Violation("gatekeeping", f"\"{m.group(0)}\": {GATEKEEPING_FIX}"))
+    return out
 # All of them as one pattern, as callers have always used it.
 JOB_ASK = re.compile("|".join(f"(?:{rx})" for rx, _k, _f in JOB_ASKS), re.I)
 
@@ -987,16 +1053,19 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> l
     settings decide what is allowed: a recruiter is asked about roles; a decision-maker
     may be told the role wanted and the sender's work authorization; a peer neither,
     unless `work_auth=True` says this message should state it."""
+    blunt = [(m.span(), tone.Violation("asks_for_the_job", f"\"{m.group(0)}\": {_RECRUITER_FIX}"))
+             for rx in _BLUNT_ASKS for m in rx.finditer(text)]
     if recruiter or reader == "recruiter":
-        return []
+        return [v for _span, v in blunt]
     reader = reader or "peer"
-    out = []
+    out, spans = [], []
     for rx, kind, fix in _JOB_ASKS:
         if kind == "wants" and SAY_THE_ROLE.get(reader):
             continue
-        out += [tone.Violation("asks_for_the_job",
-                               f"\"{m.group(0)}\": {advice.with_open_ask(fix)}")
-                for m in rx.finditer(text)]
+        for m in rx.finditer(text):
+            spans.append(m.span())
+            out.append(tone.Violation("asks_for_the_job",
+                                      f"\"{m.group(0)}\": {advice.with_open_ask(fix)}"))
     allowed = ELIGIBILITY.get(reader, False) if work_auth is None else bool(work_auth)
     if not allowed:
         out += [tone.Violation("work_auth_in_first_note",
@@ -1004,7 +1073,8 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> l
                                "this in a first message (profile/networking.py ELIGIBILITY); "
                                "pass work_auth=True to say it in this one")
                 for m in _WORK_AUTH_ANY.finditer(text)]
-    return out
+    # A blunt ask the list above has already named is said once.
+    return out + [v for (a, b), v in blunt if not any(a < y and x < b for x, y in spans)]
 
 
 # ---------------------------------------------------------------- the phrase bank
@@ -1065,7 +1135,7 @@ def _voice_ok(text: str) -> bool:
         import voice_check
     except ImportError:                       # pragma: no cover - path issue only
         return True
-    return not voice_check.hard(text, allow=_OWN_VOICE)
+    return not voice_check.hard(text, allow=own_words())
 
 
 def _variants(intent: str, reader: str) -> list:
@@ -1165,12 +1235,43 @@ def _honest(note: str, looked: bool, said=()) -> None:
 _OWN_VOICE = getattr(_NET, "OWN_VOICE", re.compile(r"(?!x)x"))
 
 
+class _OwnWords:
+    """What is the person's own to say in any message they write: the phrases OWN_VOICE
+    names, and any stock phrase inside the lines they set themselves (OPENER, ASK,
+    ABOUT_ME, their TEMPLATES). The app's house style is a default, and the person's own
+    setting outranks it in every kind of message: "hope you're well" was their OPENER, put
+    into every first note by the composer, and refused in a nudge or a message to a
+    connection as a stock phrase (2026-10-21). `.match()` is what voice_check.hard() asks."""
+
+    def __init__(self, *extra):
+        self.extra = [x for x in extra if x is not None]
+
+    @staticmethod
+    def _lines() -> list:
+        out = [OPENER, ASK, ABOUT_ME]
+        for got in (TEMPLATES or {}).values():
+            for v in (got.values() if isinstance(got, dict) else [got]):
+                out += list(v) if isinstance(v, (list, tuple)) else [v]
+        return [" ".join(str(x).split()).lower() for x in out if str(x or "").strip()]
+
+    def match(self, found):
+        if _OWN_VOICE.match(found) or any(x.match(found) for x in self.extra):
+            return True
+        said = " ".join(str(found or "").split()).lower().replace("\u2019", "'")
+        return bool(said) and any(said in line.replace("\u2019", "'") for line in self._lines())
+
+
+def own_words(*extra) -> _OwnWords:
+    """The person's own words (`_OwnWords`), with `extra` patterns allowed beside them."""
+    return _OwnWords(*extra)
+
+
 def _first_note_voice(text) -> str:
     try:
         import voice_check
     except ImportError:                       # pragma: no cover - path issue only
         return text
-    hard = voice_check.hard(text, allow=_OWN_VOICE)
+    hard = voice_check.hard(text, allow=own_words())
     if hard:
         raise ReadsAsGenerated(
             "first note reads as generated: %s. %s"
@@ -1276,9 +1377,9 @@ _DEFAULT = object()      # "the caller did not say": the phrase bank chooses
 
 def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DEFAULT,
                opener=_DEFAULT, recruiter=False, seniority="peer", their=(),
-               reading=None, shape="shared", title="", reader=None, work_auth=None,
+               reading=_DEFAULT, shape="shared", title="", reader=None, work_auth=None,
                how_found="", looked=False, parallel="", mutual="", variant_key="",
-               hedged=True) -> str:
+               hedged=True, card_only=False) -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
         Hi Robin, hope you're well. <the reason for writing>. <about me>. <question>? <ask>.
@@ -1316,6 +1417,11 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     """
     _no_reaction_waiting("first note")
     asked = dict(locals())
+    # Told what was read (`reading=reading.load(<id>)`, None when nothing was): a note with
+    # nothing read under it is said so on the Note, and validate() refuses it unless the
+    # person chose a card-only note (`card_only=True`).
+    told = reading is not _DEFAULT
+    reading = None if reading is _DEFAULT else reading
     if shape not in SHAPES:
         raise ValueError(f"shape must be one of {', '.join(SHAPES)}, not {shape!r}")
     if shape == "recruiter":
@@ -1383,7 +1489,7 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     note = advice.spoken(" ".join(p for p in parts if p), keep=keep)
     _honest(note, looked, said=(how_found,))
     findings = first_note_findings(note, recruiter=recruiter, reader=rtype,
-                                   work_auth=say_auth or None)
+                                   work_auth=say_auth or None) + gatekeeping_findings(note)
     if findings:
         raise AsksForTheJob(
             "this first note asks for the job: %s. A first note asks for a conversation; "
@@ -1398,7 +1504,11 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
             # all, and advise() still warns on the inference.
             return first_note(**dict(asked, hedged=False))
         raise TooLong("first note", len(note), limit)
-    return Note(_first_note_voice(note), rtype, recruiter, shape)
+    read = None
+    if told:
+        import reading as _reading
+        read = bool(_reading.has_read(reading) or _reading.card_enough(reading))
+    return Note(_first_note_voice(note), rtype, recruiter, shape, read=read, card_only=card_only)
 
 
 def _reaches_fix(name, their=()) -> str:
@@ -1533,13 +1643,17 @@ class Note(str):
     the request's 300 (2026-10-20)."""
 
     def __new__(cls, text: str, reader: str = "peer", recruiter: bool = False,
-                shape: str = ""):
+                shape: str = "", read=None, card_only: bool = False):
         obj = super().__new__(cls, text)
         obj.reader, obj.recruiter, obj.shape = reader, recruiter, shape
+        # Whether anything was read about them (None: the composer was not told), and
+        # whether the person chose a note from their card alone (`card_only`).
+        obj.read, obj.card_only = read, bool(card_only)
         return obj
 
     def __reduce__(self):
-        return (Note, (str(self), self.reader, self.recruiter, self.shape))
+        return (Note, (str(self), self.reader, self.recruiter, self.shape, self.read,
+                       self.card_only))
 
 
 class InMail(str):
@@ -1906,9 +2020,15 @@ def lowered_names(text) -> list[str]:
     return []
 
 
+NO_READING = ("nothing was read about them, so this first note says nothing a search result "
+              "did not: read their profile first, or, if the person chose speed over a "
+              "tailored note, mark it card-only (card_only=True; reading.py draft --card-only) "
+              "and show it to them as card-only")
+
+
 def validate(message, kind, name=None, seniority="peer", employers=(),
              referrer=None, their_message=None, recruiter=False, reader=None, title="",
-             work_auth=None, subject=None, _all=False) -> list:
+             work_auth=None, subject=None, _all=False, contact="", card_only=False) -> list:
     """Every reason this draft should not be sent, as (rule, offending_text).
 
     What the skill layer runs before showing the user anything. Returns instead
@@ -1943,8 +2063,21 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     # Riley" fails on the one rule that is scoped to cold messages.
     out = list(tone.check(text, recipient_seniority=seniority, name=name,
                           live_thread=(k in ("reply", "referral_ask"))))
-    if k in ("connection", "inmail"):
+    if k in FIRST_MESSAGE_KINDS:
         out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth)
+    if k in FIRST_MESSAGE_KINDS + ("nudge",):
+        out += gatekeeping_findings(text)
+    # A first message with nothing read about them: refused unless the person chose a note
+    # from the card alone. Twenty first notes were saved and passed with no reading on file
+    # (2026-10-21). Known from the contact's reading (`contact=`), or from the Note itself.
+    if k in FIRST_MESSAGE_KINDS and not (card_only or getattr(message, "card_only", False)):
+        known = getattr(message, "read", None)
+        if contact:
+            import reading as _reading
+            got = _reading.load(contact)
+            known = bool(_reading.has_read(got) or _reading.card_enough(got))
+        if known is False:
+            out.append(tone.Violation("no_reading", NO_READING))
     if k == "inmail":
         first = text.lstrip().split("\n", 1)[0]
         if subject is not None:
@@ -2006,12 +2139,19 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     # house-style` lifts that one check and nothing else: under the one name alone, an
     # override lifted none or all of them.
     for f in _voice_findings(text, k):
-        out.append(tone.Violation("reads_as_generated",
-                                  f"{f['rule']}: {f['match']} -> {f['fix']}"))
+        fix = OWN_PHRASE_FIX if f["rule"] == "house-style" else f["fix"]
+        out.append(tone.Violation("reads_as_generated", f"{f['rule']}: {f['match']} -> {fix}"))
     if _all:
         return out
     over = _overrides() - NEVER_OVERRIDDEN
     return [v for v in out if v.rule not in over and _check_of(v) not in over]
+
+
+# What a stock phrase in one message is told. voice_check's own words ("recurs from letter to
+# letter") are about a set of documents, and one message cannot recur: whether notes repeat
+# each other is `reading.py batch`'s to judge, between notes to people at one employer.
+OWN_PHRASE_FIX = ("a stock phrase; say it your own way, or, if it is how you talk, add it to "
+                  "OWN_VOICE in profile/networking.py and it is yours in every message")
 
 
 def _check_of(v) -> str:
@@ -2353,7 +2493,10 @@ def main(argv=None) -> int:
     c.add_argument("--reader", default=None, choices=READER_TYPES)
     c.add_argument("--subject", default=None)
     c.add_argument("--employer", action="append", default=[])
-    c.add_argument("--contact", default="", help="their contact id: their reading is used")
+    c.add_argument("--contact", default="", help="their contact id: their reading is used, "
+                                                 "and a first note with none is refused")
+    c.add_argument("--card-only", action="store_true",
+                   help="the person chose a note from their card alone")
     r = sub.add_parser("read-aloud", help="check a spoken rewrite against the original")
     r.add_argument("original")
     r.add_argument("rewrite")
@@ -2391,7 +2534,8 @@ def main(argv=None) -> int:
         import reading as _reading
         rd = _reading.load(a.contact)
     bad = validate(text, a.kind, name=a.name, title=a.title, reader=a.reader,
-                   employers=a.employer, subject=a.subject)
+                   employers=a.employer, subject=a.subject, contact=a.contact,
+                   card_only=a.card_only)
     warn = advise(text, a.kind, name=a.name, title=a.title, reader=a.reader,
                   employers=a.employer, reading=rd)
     for v in bad:
@@ -2442,9 +2586,11 @@ def _voice_findings(text: str, kind: str | None = None) -> list:
         import voice_check
     except ImportError:
         return []
-    allow = {"connection": _OWN_VOICE, "inmail": _OWN_VOICE}.get(kind)
-    if kind in _WARM_KINDS:
-        allow = _THREAD_WARMTH
+    allow = None
+    if kind:
+        # The person's own words in every kind of message (`_OwnWords`), and in a live
+        # thread a light "hope" beside them.
+        allow = own_words(_THREAD_WARMTH) if kind in _WARM_KINDS else own_words()
     return [f for f in voice_check.hard(text, allow=allow) if f["rule"] not in _TONE_REPORTS]
 
 

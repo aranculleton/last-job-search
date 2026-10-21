@@ -13,6 +13,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 import stage_picks  # noqa: E402
 import untrusted  # noqa: E402
@@ -56,31 +57,48 @@ def test_an_audit_file_holding_the_draft_alone_is_still_read(tmp_path):
     assert len(drafts) == 1 and not missing and not rejected
 
 
-def test_the_workflow_writes_the_verdict_with_the_draft():
-    with open(os.path.join(ROOT, ".claude", "workflows", "draft-applications.js"),
-              encoding="utf-8") as fh:
-        text = fh.read()
-    audit = text.split("phase: 'Audit'", 1)[0].rsplit("agent(", 1)[1]
-    assert "the whole audit you return (verdict, draft" in audit
-    assert "delete ${scratch}/audit_" not in audit
+def test_the_audit_file_holds_the_verdict_with_the_draft(tmp_path):
+    # Updated 2026-10-21: this read the workflow's auditor prompt for the instruction to
+    # write the whole audit. The audit file is now written by code (stage_picks.py audit,
+    # tools/draft_audit.py), with the model auditor's verdict merged into it, so the
+    # verdict and the draft it judged are always kept together.
+    from test_one_drafting_call_per_posting import SLUG, make_round
+    rd = make_round(tmp_path)
+    stage_picks.audit(str(rd))
+    record = json.loads((rd / f"audit_{SLUG}.json").read_text(encoding="utf-8"))
+    assert {"verdict", "draft", "changes", "residual_risks"} <= set(record)
+    assert record["verdict"] == "pass" and record["draft"]["company"] == "Kestrel Mutual"
 
 
-def test_the_audit_stage_is_the_grounding_auditor():
-    """The research stage reads its agent file; the audit stage wrote Reviewer A
-    inline instead, without the auditor's rule 9 (no shared openings or
-    closings), its Reserve Experience check or its fixed-version rule."""
-    with open(os.path.join(ROOT, ".claude", "workflows", "draft-applications.js"),
-              encoding="utf-8") as fh:
-        text = fh.read()
-    audit = text.split("phase: 'Audit'", 1)[0].rsplit("agent(", 1)[1]
-    assert "Read .claude/agents/grounding-auditor.md first" in audit
-    assert "Reviewer A" not in audit
-    assert "voice_check.py --corpus" in audit and "check_numbers.py --drafts" in audit
+def test_the_model_audit_is_the_grounding_auditor_and_keeps_all_its_checks(tmp_path):
+    # Updated 2026-10-21: this read the workflow's auditor prompt for "Read
+    # .claude/agents/grounding-auditor.md first", "voice_check.py --corpus" and
+    # "check_numbers.py --drafts". The model auditor no longer reads files: its packet
+    # (tools/draft_audit.py packet) carries the agent file's own list of checks, and the
+    # code audit runs rule 9 against every letter and check_numbers on the draft itself.
+    import copy
+    import draft_audit
+    from test_one_drafting_call_per_posting import FIXTURE, SLUG, make_round
     with open(os.path.join(ROOT, ".claude", "agents", "grounding-auditor.md"),
               encoding="utf-8") as fh:
         agent = fh.read()
     for rule in ("Reserve Experience", "rule 9", "Audit a fixed version"):
         assert rule in agent
+    d = copy.deepcopy(FIXTURE["draft"])
+    d["stretches"] = [{"sentence": d["claim_map"][5]["sentence"], "why": "a stretch"}]
+    rd = make_round(tmp_path, d)
+    packet = draft_audit.packet(str(rd), SLUG)
+    checks = agent.split("## What you check, in order", 1)[1].split("\n## ", 1)[0].strip()
+    assert checks in packet and "audited_md5" in packet
+    opening, _ = draft_audit.ends(FIXTURE["draft"])
+    m = draft_audit.mechanical(dict(FIXTURE["draft"], pack_hash="x"), {}, FIXTURE["posting"],
+                               FIXTURE["research"], corpus={"openings": {opening},
+                                                            "closings": set()})
+    assert "rule-9" in {f["rule"] for f in m["findings"]}
+    bad = dict(copy.deepcopy(FIXTURE["draft"]), lead="Where my 45 years of work meets the role:")
+    m = draft_audit.mechanical(bad, {}, FIXTURE["posting"], FIXTURE["research"],
+                               corpus={"openings": set(), "closings": set()})
+    assert "number" in {f["rule"] for f in m["findings"]}
 
 
 def test_what_the_audit_left_open_rides_with_the_draft(tmp_path):

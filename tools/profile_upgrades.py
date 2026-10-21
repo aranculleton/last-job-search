@@ -1462,6 +1462,9 @@ SAFE_DEFAULTS: dict[str, str] = {
                                "words alone decide without it",
     "networking.LINKEDIN_LIMITS": "the plan's own limits apply; set only for a plan with more "
                                   "InMail credits than Premium's",
+    "networking.CONNECTIONS_PER_WEEK": "50 connection requests a week, the app's planning cap "
+                                       "as before (half the 100 a week reported for LinkedIn, "
+                                       "which publishes no number); the BUDGET line names it",
     "search.OPP_SCALE": "computed from the profile's own opportunity weights when absent",
     "skills.MAX_PER_LINE": "six items a line unless the person wants another number",
     "skills.FAMILIES": "none: the app's own families of interchangeable tools apply "

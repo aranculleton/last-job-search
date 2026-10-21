@@ -184,7 +184,8 @@ def test_a_browser_read_is_for_the_short_list_only(tmp_path, monkeypatch):
     monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     page = tmp_path / "page.txt"
     page.write_text("Rosalind Achterberg\nHead of Pricing\nManchester\nContact info\n· 2nd\n"
-                    "Connect\nMessage\nMore\nAbout\nPricing work.\n", encoding="utf-8")
+                    "Connect\nMessage\nMore\nAbout\nPricing work.\nExperience\nHead of Pricing\n"
+                    "Kestrel Mutual\nJan 2024 - Present\n", encoding="utf-8")
     with pytest.raises(SystemExit, match="not on today's short list"):
         reading.main(["read", "kestrel_rosalind", str(page), "--source", "browser",
                       "--name", "Rosalind Achterberg", "--company", "Kestrel Mutual"])

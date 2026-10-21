@@ -261,12 +261,15 @@ TONE_NAME = {"cliche": "banned_phrase", "em-dash": "em_dash", "person-dislikes":
 
 
 def _voice_findings_now(text, kind):
-    """What validate()'s voice filter returns, as of 2026-10-20: a light "hope" lifted in
-    every follow-up (a nudge, an email and a warm intro as well as a reply and a referral
-    ask), and nothing tone.check() already reports, so no finding comes back twice."""
+    """What validate()'s voice filter returns, as of 2026-10-21: the person's own words
+    (OWN_VOICE, and the stock phrases inside their OPENER and ASK) lifted in every kind of
+    message, where 2026-10-20 lifted them in a connection note and an InMail only; a light
+    "hope" lifted in every follow-up besides; and nothing tone.check() already reports, so no
+    finding comes back twice."""
     hard = _old_hard(text)
-    if kind in ("connection", "inmail"):
-        hard = _old_lift(hard, compose._OWN_VOICE)
+    if kind:
+        hard = [f for f in hard if not (f["rule"] == "house-style"
+                                        and compose.own_words().match(f["match"]))]
     if kind in ("reply", "referral_ask", "nudge", "email", "intro", "intro_connection"):
         hard = _old_lift(hard, compose._THREAD_WARMTH)
     return [f for f in hard if f["rule"] not in TONE_NAME]
@@ -309,17 +312,17 @@ def test_validate_lifts_what_it_lifted(text, kind):
     vk = kind or "connection"
     got = compose.validate(text, vk, _all=True)
     found = {v.rule for v in got} | {compose._check_of(v) for v in got}
-    for f in _old_lift(_old_hard(text), compose._OWN_VOICE if vk in ("connection", "inmail")
-                       else compose._THREAD_WARMTH if vk in ("reply", "referral_ask", "nudge",
-                                                             "email", "intro")
-                       else re.compile(r"(?!x)x")):
+    for f in _voice_findings_now(text, vk):
         assert TONE_NAME.get(f["rule"], f["rule"]) in found, (f, found)
 
 
 def test_the_exemptions_are_the_ones_each_filter_had():
     first = "Hi Tamsin, hope you're well. Would love to hear how it is going."
     assert compose._voice_findings(first, "connection") == []
-    assert compose._voice_findings(first, "email")         # "would love to" is lifted in a first note only
+    # Changed 2026-10-21: "would love to" is the person's own (OWN_VOICE), so it is lifted in
+    # every kind of message, an email too; a stock phrase that is not theirs is not.
+    assert compose._voice_findings(first, "email") == []
+    assert compose._voice_findings("Hi Tamsin, I would welcome the chance to talk.", "email")
     warm = "Hope you're well. Any update on the timing?"
     assert compose._voice_findings(warm, "reply") == []
     assert compose._voice_findings(warm, "connection") == []          # OWN_VOICE has it too
@@ -355,5 +358,7 @@ def test_the_outreach_note_check_is_validate_for_a_message(text):
               | {p.split(":", 2)[1].strip() for p in got if p.startswith("reads_as_generated:")})
     assert {v.rule for v in tone.check(text, recipient_seniority="senior", name="Sam")
             if v.rule != "greeting_wrong_name"} <= rules_
-    for f in _old_hard(text):
+    # Less the person's own words, lifted in every kind of message since 2026-10-21.
+    for f in _voice_findings_now(text, "message") + [f for f in _old_hard(text)
+                                                     if f["rule"] in TONE_NAME]:
         assert TONE_NAME.get(f["rule"], f["rule"]) in rules_, (f, rules_)

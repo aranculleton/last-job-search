@@ -226,7 +226,8 @@ METHODS: dict[str, dict] = {
                "documents/applications/<slug>/draft.json, then tools/verify_batch.sh on them; "
                "never one already sent",
         "files": ("templates/*", "tools/render_application.py", "tools/fit_to_page.py",
-                  "tools/posting_profile.py",
+                  "tools/posting_profile.py", "tools/draft_pack.py", "tools/draft_audit.py",
+                  "tools/draft_cost.py",
                   "tools/skills_block.py", "tools/allocate.py", "tools/bullet_library.py",
                   "tools/docpaths.py", "tools/doc_name.py", "tools/outreach.py",
                   "tools/screening_answers.py", "tools/record_drafts.py", "tools/stage_picks.py",
@@ -282,8 +283,9 @@ METHODS: dict[str, dict] = {
             (30, "2026-10-21", False, "stage points out a file name in capitals when it is picked; dead code removed"),
             (31, "2026-10-21", False, "RUNBOOK names export.py and own_profile.py"),
             (32, "2026-10-21", False, "Staging prints what each posting is and holds a fixed-term contract, pay for another place, an application already in or a second role at one employer until the person answers; a listed skill the posting names in a phrase is kept; no question about a skill the profile covers under another name"),
+            (33, "2026-10-21", False, "Each posting is drafted in one call from a compiled pack and checked by code first; the model auditor reads one packet only for a draft code flags; the outreach body is optional; a batch's cost is kept"),
         ),
-        "fingerprint": "2ef946c607c2449c",
+        "fingerprint": "5a287bdd176aa5d7",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -336,7 +338,7 @@ METHODS: dict[str, dict] = {
                "title searches from `discovery.queries_for()` run through `sources.py harvest`, "
                "and a profile check from the results; add only people not already in the book, "
                "with their evidence and profile status, as not_contacted, each draft written with "
-               "`reading.py draft` (it waits on a read). Then re-check every not_contacted "
+               "`reading.py draft <id> <file> --wait-for-read` (it waits on a read, and nothing unread can be sent). Then re-check every not_contacted "
                "contact a search found against today's matching (`discovery.same_employer`, "
                "`discovery.profile_status`): close any it would not keep, with the reason in "
                "`outcome`. No profile is read in the background and nothing is sent",
@@ -404,8 +406,9 @@ METHODS: dict[str, dict] = {
             (38, "2026-10-21", False, "An automatic reply is not a reply, one person in two rows is raised, a note must greet the person it is for, invisible characters hide nothing from the checks, and what has worked is judged by Fisher's exact test at 20 a group"),
             (39, "2026-10-21", False, "Dead code removed"),
             (40, "2026-10-21", False, "The LinkedIn export's messages and invitations come into the message log, pending invitations are listed for withdrawal, and the person's own profile is looked over when due"),
+            (41, "2026-10-21", False, "Reading estimates, card-only recruiter drafts, labelled pastes and the Experience heading decide a render, follow-ups logged by command, a dm kind, headline idioms, CONNECTIONS_PER_WEEK, title searches across employers, notes with nothing read refused, batch frames flagged, approved examples shown, recruiter and gatekeeping asks refused, quieter warnings, friction said as what happened, the company limit at draft, location a note"),
         ),
-        "fingerprint": "3750b6dc902de1ff",
+        "fingerprint": "db1cf96562fd7192",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -444,8 +447,9 @@ METHODS: dict[str, dict] = {
             (21, "2026-10-20", False, "notes drafted with the new voice checks; unsent drafts are not redrafted, and reading.py batch flags any built alike"),
             (22, "2026-10-21", False, "A saved note that greets someone other than its contact is refused"),
             (23, "2026-10-21", False, "Dead code removed"),
+            (24, "2026-10-21", True, "Queued first notes are re-checked: one with nothing read, a blunt recruiter ask, a gatekeeping question or one template frame across a batch is refused"),
         ),
-        "fingerprint": "f9f07e451f238da1",
+        "fingerprint": "ec05c2c0fb556402",
     },
     "screening": {
         "by": "round", "priority": 2,

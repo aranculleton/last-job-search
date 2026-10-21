@@ -201,9 +201,16 @@ def strip_latex(text: str) -> str:
 
 def check(path: str) -> list[tuple[str, str, str, str]]:
     raw = open(path, encoding="utf-8").read()
+    return check_text(raw, letter=is_letter(path))
+
+
+def check_text(raw: str, letter: bool = False) -> list[tuple[str, str, str, str]]:
+    """The findings for a document's text, read as `check` reads a file: `letter` says
+    whether the letter's severities apply, and the person's answers are read from the
+    consent header in `raw` (consent_header). The drafting audit reads a draft object
+    this way before anything is rendered (tools/draft_audit.py)."""
     text = strip_latex(raw)
     findings = []
-    letter = is_letter(path)
     yes, no = read_consent(raw)
     for sev, name, pat, why in CHECKS:
         if letter:

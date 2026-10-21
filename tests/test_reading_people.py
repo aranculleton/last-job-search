@@ -240,9 +240,11 @@ def test_after_the_read_someone_who_no_longer_fits_makes_way_for_the_next():
     assert reading.verdict(r, "Fernhill Freight") == (True, "")
     keep, why = reading.verdict(r, "Oakmere Foods")  # found at their old employer
     assert not keep and "moved on" in why and "Fernhill Freight" in why
+    # Changed 2026-10-21: where a contact sits is a note, never a skip (the location gate is
+    # for where the person would work).
     abroad = dict(r, location="Austin, Texas, United States")
     keep, why = reading.verdict(abroad, "Fernhill Freight")
-    assert not keep and "elsewhere" in why
+    assert keep and "based in Austin" in why
     unsure = dict(r, current="")  # no clear current employer: keep, never guess
     assert reading.verdict(unsure, "Oakmere Foods")[0]
 

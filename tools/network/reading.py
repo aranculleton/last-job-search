@@ -62,7 +62,10 @@ only through `fenced()`, as data, never as instructions.
                                                 [--learn ADDRESS | --company-id N]
     python3 tools/network/reading.py queue --urls                  # the fast path: addresses to open and paste
     python3 tools/network/reading.py limits                        # every limit, its value and why
-    python3 tools/network/reading.py friction [--kind K --words W] # the signals seen, and the ramp
+    python3 tools/network/reading.py friction [--kind K --words W] # the friction reads met, and the ramp
+    python3 tools/network/reading.py estimate [N]                  # how long reading N takes today
+    python3 tools/network/reading.py meanwhile                     # the notes to write while a page waits
+    python3 tools/network/reading.py drafts <file.json>            # a batch of notes, checked together
 
 Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     0  done: go, KEEP, saved          1  an error, or nothing to act on
@@ -78,6 +81,7 @@ Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     11 the batch of notes is too alike to send
     12 done: nobody left to read on today's short list (`next`)
     13 new day: a read waiting in the background ran past midnight; today needs its own list
+    14 scroll: the page's text has no Experience yet; scroll it to the very end, read it again
 """
 
 from __future__ import annotations
@@ -103,7 +107,8 @@ from company_key import fold  # noqa: E402
 _NET = person.module("networking") if person.exists("networking.py") else None
 
 EXIT = {"ok": 0, "error": 1, "skip": 3, "signin": 4, "check": 5, "unknown": 6, "wait": 7,
-        "later": 8, "tomorrow": 9, "not_read": 10, "alike": 11, "done": 12, "new_day": 13}
+        "later": 8, "tomorrow": 9, "not_read": 10, "alike": 11, "done": 12, "new_day": 13,
+        "scroll": 14}
 
 # "browser", "paste" or "off". Absent means "paste": reading a profile in the
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
@@ -551,12 +556,24 @@ _AT_EMPLOYER = re.compile(
     r"y|e|&)\s+)?[A-Z0-9&][\w&'.-]*)*)")
 
 
+# "at" in a headline that is an idiom, not an employer, however it is capitalised: "Responsible
+# AI at Scale", "Data at Speed". A headline in title case capitalises the idiom, and "at
+# Scale" was read as the employer "Scale": a bank's director was marked SKIP as having moved
+# on (2026-10-21). Only the bare word: "at Scale AI" names an employer.
+AT_IDIOMS = frozenset({"scale", "speed", "pace", "heart", "large", "work", "home", "best",
+                       "last", "first", "once", "length", "ease", "risk", "play", "rest",
+                       "will", "times", "stake", "odds", "night", "hand", "volume", "velocity",
+                       "the core", "the intersection", "the edge", "the forefront",
+                       "the crossroads"})
+
+
 def _headline_employer(text: str) -> str:
     """The employer a headline or a "Current:" line names as where they work, or ""."""
     for seg in _HEAD_SPLIT.split(_PAST_PART.sub(" ", str(text or ""))):
-        m = _AT_EMPLOYER.search(seg)
-        if m and m.group(1).strip(" .-"):
-            return m.group(1).strip(" .-")[:120]
+        for m in _AT_EMPLOYER.finditer(seg):
+            got = m.group(1).strip(" .-")
+            if got and " ".join(got.lower().split()) not in AT_IDIOMS:
+                return got[:120]
     return ""
 
 
@@ -751,12 +768,18 @@ def _entries(exp: list, most: int = 6) -> list:
             if employer == title:
                 title = above[0] if len(above) > 1 else ""
         nxt = lines[i + 1] if i + 1 < len(lines) else ""
-        place = ""
+        place, mode = "", ""
         if nxt and len(nxt) < 80 and not _DATES.search(nxt) and (
                 "," in nxt or _WORK_MODE.search(nxt) or fold(nxt).strip() in ("remote",)):
             place = _WORK_MODE.sub("", nxt).strip()
-        out.append({"employer": employer[:120], "title": title[:120],
-                    "dates": line[:60], "place": place[:80]})
+            m = _WORK_MODE.search(nxt)
+            mode = (m.group(0).strip(" ·•").lower() if m
+                    else "remote" if fold(nxt).strip() == "remote" else "")
+        entry = {"employer": employer[:120], "title": title[:120],
+                 "dates": line[:60], "place": place[:80]}
+        if mode:
+            entry["mode"] = mode           # "remote", "hybrid", "on-site", as their role says
+        out.append(entry)
         if len(out) >= most:
             break
     return out
@@ -886,6 +909,8 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
     built on someone else's profile is worse than a generic one.
     """
     today = today or datetime.date.today()
+    if is_structured(text):
+        text = from_structured(text)
     lines = [x for x in _clean_lines(text) if not _PAGE_ONE.match(x)]
     if name and not _names_them(name, lines):
         raise ValueError(f"this page does not look like {name}'s profile: their name is not on it")
@@ -900,7 +925,7 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
         "name": name, "company": company, "read_on": today.isoformat(),
         "sources": [{"kind": source, "url": url, "date": today.isoformat()}],
         "headline": headline, "location": location, "about": about,
-        "current": _current_employer(headline, secs.get("experience", []), org),
+        "current": _current_employer(headline, secs.get("experience", []), org, company),
         "degree": degree, "reach": reach, "connect": connect,
         "shared": _shared(secs), "items": items,
         "experience": _entries(secs.get("experience", [])),
@@ -919,7 +944,23 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
 ABOUT_KEEP = 2600
 
 
-def _current_employer(headline: str, experience: list, org: str) -> str:
+def _employer_in(head: str, experience: list) -> bool:
+    """Does their Experience name `head` as an employer, never only inside a role's title?
+    A title "Director, AI Governance at Enterprise Scale" holds the headline's words without
+    naming an employer, and read as one it made the headline's phrase the employer."""
+    if any(_has(head, e["employer"]) for e in _entries(experience, most=12) if e.get("employer")):
+        return True
+    return any(_has(head, x) and not _has(head, _headline_employer(x) or "\0")
+               and not re.search(r"\b(?:at|@)\s+" + re.escape(head), x, re.I)
+               for x in experience)
+
+
+def _same_place_of_work(a: str, b: str) -> bool:
+    import discovery
+    return bool(a and b) and (discovery.same_employer(a, b) or _has(b, a) or _has(a, b))
+
+
+def _current_employer(headline: str, experience: list, org: str, found_at: str = "") -> str:
     """Where they work now: the first Experience entry, else the employer the headline
     names, else the top card's organisation line.
 
@@ -932,10 +973,23 @@ def _current_employer(headline: str, experience: list, org: str) -> str:
     import discovery
     head = _headline_employer(headline)
     exp = _current(experience)
+    card = _card_employer(org)
     if head and exp and not discovery.same_employer(head, exp) \
-            and any(_has(head, x) for x in experience):
+            and _employer_in(head, experience):
         return head
-    return exp or head or _card_employer(org)
+    if exp:
+        return exp
+    # No Experience read: the headline's "at <X>" against the card's own employer. The card is
+    # LinkedIn's field for where they work; a headline is free text ("Responsible AI at
+    # Scale"). The headline wins only where it is the employer they were found at, which is
+    # what the card's badge got wrong for an industry body (2026-10-19).
+    if head and card and not discovery.same_employer(head, card):
+        if found_at and _same_place_of_work(card, found_at) \
+                and not _same_place_of_work(head, found_at):
+            return card
+        if not (found_at and _same_place_of_work(head, found_at)):
+            return card
+    return head or card
 
 
 def _names_them(name: str, lines: list) -> bool:
@@ -1128,6 +1182,28 @@ def merge(old: dict | None, new: dict) -> dict:
 
 # ------------------------------------------------------------------- verdict
 
+_NATIONAL = re.compile(r"\b(?:remote|nationally|national(?:ly)?|nationwide|country-?wide|"
+                       r"across (?:the country|canada|the uk|the us|the united states|"
+                       r"north america|europe|emea|the region)|all (?:regions|offices|locations))\b",
+                       re.I)
+
+
+def works_anywhere(reading: dict) -> bool:
+    """Does where they sit not bound where they work: a recruiter (who hires wherever the
+    employer does), or someone whose current role or headline says Remote, national or
+    across the country?"""
+    import compose
+    r = reading or {}
+    head = str(r.get("headline") or "")
+    if compose.is_recruiter(head):
+        return True
+    now = (r.get("experience") or [{}])[0] if r.get("experience") else {}
+    said = " ".join([head, str(now.get("place") or ""), str(now.get("mode") or ""),
+                     str(now.get("title") or ""), str(now.get("dates") or ""),
+                     _clip(str(r.get("about") or ""), ABOUT_CHARS)])
+    return bool(_NATIONAL.search(fold(said)))
+
+
 def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     """After the read: still worth writing to? (keep, why not).
 
@@ -1157,17 +1233,18 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
             and not _has(company, headline) and not _has(company, current):
         return False, f"has moved on: their current employer is {current}, not {company}"
     loc = reading.get("location", "")
-    if loc and "remote" not in fold(headline):
-        if discovery._abroad(loc):
-            return False, f"based elsewhere: {loc}"
-        # The person's own location gate, the one that screens postings, knows their
-        # market and the places they consider. A place it fails is elsewhere. A bare
-        # city it does not recognise ("Amsterdam", "Slough") cannot be placed without
-        # a gazetteer: kept, with a caution, because a wrong skip loses a good contact.
+    if loc and not works_anywhere(reading):
+        # Where a contact sits is never a reason to skip them: the location gate is for where
+        # the person would work, and a contact elsewhere can still refer them or point them to
+        # the team. A large consultancy's recruiter "based in" another city, whose role said
+        # "Remote" and "nationally", was skipped as based elsewhere (2026-10-21). It is said,
+        # as a note, for the person to weigh. No profile setting makes it a rule.
         import prefilter
         v, why_loc = prefilter.location_verdict(loc, headline)
-        if v == "FAIL":
-            return False, f"based elsewhere: {loc} ({why_loc})"
+        if discovery._abroad(loc) or v == "FAIL":
+            return True, (f"caution: based in {loc}, outside {discovery.HOME_CITY or 'your city'}: "
+                          "kept, since they can still refer you or point you to the team; say "
+                          "why them in the note")
         if "not recognized" in why_loc and not discovery._same_market(loc, discovery.HOME_CITY):
             return True, (f"caution: based in {loc}, a place your search does not name; check "
                           f"they work in {discovery.HOME_CITY} before writing")
@@ -2019,6 +2096,103 @@ def budget_line(now: datetime.datetime | None = None, sends_left: int | None = -
             + (f"; {change}" if change else "") + ".")
 
 
+def _mean(pair) -> float:
+    lo, hi = (pair, pair) if isinstance(pair, (int, float)) else tuple(pair)[:2]
+    return (float(lo) + float(hi)) / 2
+
+
+def _say_minutes(seconds: float) -> str:
+    m = max(1, int(round(seconds / 60.0)))
+    if m < 90:
+        return f"about {m} minute{'s' if m != 1 else ''}"
+    return f"about {m / 60.0:.1f} hours".replace(".0 hours", " hours")
+
+
+def estimate(n: int, now: datetime.datetime | None = None, mode: str = "card",
+             sends_left: int | None = -1) -> dict:
+    """How long reading `n` profiles takes today at the pace already set, said in plain words
+    before the reads start, so the person chooses between speed and tailored notes before
+    anything is drafted. Nothing here changes a pause or a cap: it adds up the ones there are
+    (a page's dwell, the pause between pages around GAP_MEDIAN, the longer break every
+    BREAK_AFTER pages, the hourly ceiling and the ramp, what is left today, and the wait
+    before the next page may load). A round of about twenty reads took 30 to 40 minutes
+    with nobody told until it was under way (2026-10-21).
+
+    {"today", "later", "seconds", "line"}: how many can be read today, how many wait, the
+    seconds for today's, and the line to say."""
+    now = now or datetime.datetime.now()
+    n = max(0, int(n))
+    hourly = ("PROFILE_READS_PER_HOUR", "PROFILE_LOADS_PER_HOUR", "PROFILE_READ_RAMP")
+    day_limits = [x for x in _limits(now, sends_left) if x[2] not in hourly]
+    can, binds, _setting = min(day_limits, key=lambda x: x[0])
+    today_n = min(n, can)
+    later = n - today_n
+    dwell_ = _mean(CARD_DWELL_SECONDS if mode == "card" else DWELL_SECONDS)
+    gaps = max(today_n - 1, 0)
+    breaks = int(gaps / max(_mean(BREAK_AFTER), 1.0))
+    secs = today_n * dwell_ + gaps * GAP_MEDIAN + breaks * max(_mean(BREAK_SECONDS) - GAP_MEDIAN, 0)
+    ceiling, _why = pace.hourly_ceiling(now.date(), [x["when"] for x in _loads()])
+    per_hour = max(1, min(READS_PER_HOUR, ceiling, LOADS_PER_HOUR))
+    if today_n > per_hour:                 # the hourly cap holds the rest an hour on
+        secs = max(secs, (today_n - 1) // per_hour * 3600 + dwell_)
+    g = gate_state(now, sends_left)
+    if g.get("at") and g["kind"] in ("wait", "later") and today_n:
+        secs += max(0.0, (g["at"] - now).total_seconds())
+    if not n:
+        line = "Reads: nobody is waiting to be read."
+    elif not today_n:
+        line = (f"Reading these {n} cannot start today ({binds}). Draft from their cards now, "
+                "each marked card-only, or wait for tomorrow's reads")
+    else:
+        each = max(1, int(round((dwell_ + GAP_MEDIAN) / 60.0)))
+        pace_ = (f"one page every {each} minute{'s' if each != 1 else ''} or so, a longer "
+                 f"break every few pages, at most {per_hour} an hour")
+        what = ("this one" if n == 1 else f"these {n}") if today_n == n \
+            else f"{today_n} of these {n}"
+        line = (f"Reading {what} takes {_say_minutes(secs)} today ({pace_})"
+                + (f"; the other {later} wait for tomorrow ({binds})" if later else "")
+                + ". Notes from their cards alone are ready now and say they are card-only; "
+                "the person chooses which before anything is drafted.")
+    return {"today": today_n, "later": later, "seconds": int(secs), "line": line}
+
+
+def meanwhile(today: datetime.date | None = None, contacts=None) -> list:
+    """What the session does while the next page waits, so it never sits idle: the notes it
+    can write now. [(contact_id, what)]: someone on today's list already read whose note is
+    not written from it yet, and a recruiter whose card says enough. A round read one page at
+    a time while the session waited, and nothing was drafted until the reads were done
+    (2026-10-21)."""
+    today = today or datetime.date.today()
+    if contacts is None:
+        try:
+            import state
+            contacts = state.load_contacts()
+        except Exception:  # noqa: BLE001
+            contacts = []
+    out = []
+    day = today.isoformat()
+    for i in _shortlist_file(today):
+        if _read_on(i, day) and (not os.path.isfile(draft_path(i)) or marked(i)):
+            out.append((i, "read today: write their note from the reading and show it"))
+    for c in contacts or ():
+        cid = c.get("contact_id", "")
+        if (c.get("status") or "not_contacted") != "not_contacted" or not cid:
+            continue
+        if not os.path.isfile(draft_path(cid)) and card_enough(load(cid), c.get("company", "")):
+            out.append((cid, "a recruiter whose card says enough: draft from it now (card-only)"))
+    return out
+
+
+def _meanwhile_lines(contacts=None) -> list:
+    got = meanwhile(contacts=contacts)
+    if not got:
+        return ["meanwhile: show the person the notes already written, so they send while the "
+                "next page waits"]
+    return (["meanwhile, while the next page waits:"]
+            + [f"  {cid}: {what}" for cid, what in got[:8]]
+            + ([f"  and {len(got) - 8} more"] if len(got) > 8 else []))
+
+
 def _is_break(reads) -> int:
     """How many reads since the last long break, this one included."""
     since_break = 0
@@ -2190,6 +2364,26 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
     return waiting, there
 
 
+def employer_full_line(company: str, contacts, also=(), today: datetime.date | None = None,
+                       also_is: str = "with a note waiting to send") -> str:
+    """Why no one more may be written to at this employer, or "": at most PER_EMPLOYER while
+    nobody there has answered, counting the people already waiting on a reply
+    (`at_employer`) and `also` (today's list, or the notes already drafted for people
+    there). The one test of it, read by the short list and by every draft saved: six notes
+    at four employers that already had two cold notes waiting each were saved and shown as
+    ready to send, because only the read step held it (2026-10-21)."""
+    waiting, there = at_employer(company, contacts, also, today=today)
+    if len(waiting) + len(there) < PER_EMPLOYER:
+        return ""
+    said = []
+    if waiting:
+        said.append(f"{len(waiting)} waiting on a reply ("
+                    + ", ".join(c.get("name") or c.get("contact_id") for c in waiting[:4]) + ")")
+    if there:
+        said.append(f"{len(there)} {also_is}")
+    return f"{company} has {' and '.join(said)}, against {PER_EMPLOYER} a company"
+
+
 def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
               sends_left: int | None = -1) -> dict:
     """Add to today's short list for deep reads, best first. {"ids", "added", "full",
@@ -2221,7 +2415,7 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
     have = [i for i in had if i not in removed and i not in pruned]
     cap, why = shortlist_cap(sends_left, today)
     unplaced_on = sum(1 for i in have if not placed(i, contacts))
-    added, full, unplaced, unknown, employer_full = [], [], [], [], {}
+    added, full, unplaced, unknown, employer_full, card = [], [], [], [], {}, []
     for i in dict.fromkeys(x for x in ids if x):
         if i in have or i in removed:
             continue
@@ -2231,21 +2425,17 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
             continue
         if _gone(i, contacts, today):
             continue
+        if card_enough(load(i), who.get("company", "")):
+            card.append(i)               # drafted from the card: no read spent on them
+            continue
         if len(have) >= cap:
             full.append(i)
             continue
-        waiting, there = at_employer(who.get("company", ""), contacts,
-                                     [_who(x, contacts) for x in have], today=today)
-        if len(waiting) + len(there) >= PER_EMPLOYER:
-            said = []
-            if waiting:
-                said.append(f"{len(waiting)} waiting on a reply ("
-                            + ", ".join(c.get("name") or c.get("contact_id")
-                                        for c in waiting[:4]) + ")")
-            if there:
-                said.append(f"{len(there)} on today's list")
-            employer_full[i] = (f"{who.get('company')} has {' and '.join(said)}, against "
-                                f"{PER_EMPLOYER} a company")
+        full_ = employer_full_line(who.get("company", ""), contacts,
+                                   [_who(x, contacts) for x in have], today=today,
+                                   also_is="on today's list")
+        if full_:
+            employer_full[i] = full_
             continue
         if not placed(i, contacts):
             if unplaced_on >= UNVERIFIED_ON_SHORTLIST:
@@ -2257,7 +2447,7 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
     _save_shortlist(have, today)
     return {"ids": have, "added": added, "full": full, "unplaced": unplaced,
             "pruned": pruned, "removed": removed, "cap": cap, "why": why,
-            "unknown": unknown, "employer_full": employer_full}
+            "unknown": unknown, "employer_full": employer_full, "card_enough": card}
 
 
 def on_shortlist(contact_id: str, today: datetime.date | None = None) -> bool:
@@ -2313,7 +2503,10 @@ def queue(contacts: list, today: datetime.date | None = None) -> list:
         # On hold, or at an employer the search has ruled out: never offered for a read.
         if why.not_writable(c, (), today):
             continue
-        if waits_on_read(cid) or not read_recently(load(cid), today):
+        got = load(cid)
+        if card_only_draft(cid) and card_enough(got, c.get("company", "")):
+            continue                     # a recruiter's card says enough: no read waits
+        if waits_on_read(cid) or not read_recently(got, today):
             out.append(c)
     return out
 
@@ -2324,7 +2517,7 @@ def written_the_older_way(contact_id: str) -> bool:
     method redoes. A note the current code wrote is either from a reading or opens on
     that line, and counting those too told every /network run to rewrite the notes the
     networking upgrade had just written, a rewrite that needs the very reads it waits on."""
-    return (os.path.isfile(draft_path(contact_id)) and not waits_on_read(contact_id)
+    return (os.path.isfile(draft_path(contact_id)) and not marked(contact_id)
             and not has_read(load(contact_id)))
 
 
@@ -2337,6 +2530,12 @@ def written_the_older_way(contact_id: str) -> bool:
 # says so where anyone opening the draft sees it, and `queue` lists the draft until a
 # note written from a reading replaces it.
 WAITS_ON_A_READ = "WAITS ON A READ"
+# The first line of a note the person chose to send from the card alone (speed over a
+# tailored note), or a recruiter's note where the card says enough (`card_enough`). Shown to
+# the person as card-only, never as a note written from their page: twenty notes went out
+# looking tailored that rested on a card (2026-10-21).
+CARD_ONLY = "CARD ONLY"
+MARKERS = (WAITS_ON_A_READ, CARD_ONLY)
 
 
 def draft_path(contact_id: str) -> str:
@@ -2348,22 +2547,75 @@ def has_read(reading: dict | None) -> bool:
     return _page_read(reading) or bool((reading or {}).get("items"))
 
 
-def waits_on_read(contact_id: str) -> bool:
-    """Does their waiting draft still open on the WAITS ON A READ line?"""
+def _first_line(contact_id: str) -> str:
     try:
         with open(draft_path(contact_id), encoding="utf-8") as fh:
-            return fh.readline().startswith(WAITS_ON_A_READ)
+            return fh.readline()
     except OSError:
+        return ""
+
+
+def waits_on_read(contact_id: str) -> bool:
+    """Does their waiting draft still open on the WAITS ON A READ line?"""
+    return _first_line(contact_id).startswith(WAITS_ON_A_READ)
+
+
+def card_only_draft(contact_id: str) -> bool:
+    """Is their waiting draft a card-only note (it opens on the CARD ONLY line)?"""
+    return _first_line(contact_id).startswith(CARD_ONLY)
+
+
+def marked(contact_id: str) -> bool:
+    """Does their waiting draft open on a line saying what it rests on (MARKERS)?"""
+    return _first_line(contact_id).startswith(MARKERS)
+
+
+def note_body(text: str) -> str:
+    """A draft file's note without the line saying what it rests on."""
+    t = str(text or "")
+    return t.split("\n\n", 1)[-1] if t.startswith(MARKERS) else t
+
+
+def card_enough(reading: dict | None, company: str = "") -> bool:
+    """Does their card alone say enough for the note they get? Only for a recruiter: their
+    note is who the person is, the work they want and their right to work, and rests on
+    nothing of the reader's own work. The card (a one-page read, or a card read of their
+    page) must name them a recruiter at the employer, place them in the person's market,
+    show no request pending, and pass the verdict with no caution. A peer's note still
+    rests on their reading (compose.first_note(reading=)). Reading every recruiter's page
+    to write the same three facts was a read a round could not spare (2026-10-21)."""
+    r = reading or {}
+    import compose
+    head = str(r.get("headline") or "")
+    if not head or not compose.is_recruiter(head) or r.get("reach") == "pending":
         return False
+    if not str(r.get("location") or "").strip():
+        return False
+    company = company or r.get("company", "")
+    if not company:
+        return False
+    where, _emp = card_where({"title": head, "current_line": r.get("current", "")}, company)
+    if where != "at":
+        return False
+    keep, why = verdict(r, company)
+    return keep and not why
 
 
-def draft_text(contact_id: str, note: str, name: str = "") -> str:
+def draft_text(contact_id: str, note: str, name: str = "", card_only: bool = False) -> str:
     """The draft file for a first note: the note, under the WAITS ON A READ line when
-    nothing has been read about them."""
-    note = str(note or "").strip()
-    if has_read(load(contact_id)):
+    nothing has been read about them, or the CARD ONLY line for a note the person chose to
+    send from the card alone (`card_only`) or a recruiter's card that says enough."""
+    note = note_body(str(note or "").strip()).strip()
+    got = load(contact_id)
+    if has_read(got):
         return note + "\n"
     who = name or "them"
+    if card_only or card_enough(got):
+        return (f"{CARD_ONLY}: written from {who}'s card and the search result; nothing of "
+                "their own page was read, so it says nothing a search did not. Show it to the "
+                "person as card-only. To tailor it, read their profile "
+                f"(python3 tools/network/reading.py read {contact_id} <file>) and rewrite it."
+                f"\n\n{note}\n")
     return (f"{WAITS_ON_A_READ}: nothing was read about {who}, so this note rests on the "
             "search result only and is not sent as it stands. Read their profile (a paste, "
             f"or the browser: python3 tools/network/reading.py read {contact_id} <file>), then "
@@ -2371,12 +2623,12 @@ def draft_text(contact_id: str, note: str, name: str = "") -> str:
             f"python3 tools/network/reading.py draft {contact_id} <file>.\n\n{note}\n")
 
 
-def write_draft(contact_id: str, note: str, name: str = "") -> str:
+def write_draft(contact_id: str, note: str, name: str = "", card_only: bool = False) -> str:
     """Write documents/network/<contact_id>/draft.md (draft_text) and return its path."""
     p = draft_path(contact_id)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as fh:
-        fh.write(draft_text(contact_id, note, name))
+        fh.write(draft_text(contact_id, note, name, card_only=card_only))
     return p
 
 
@@ -2669,8 +2921,37 @@ def people_page(text: str, company: str) -> list:
                     break
             p["current_line"] = next((m.group(1) for m in (_CURRENT_LINE.match(x)
                                                            for x in lines[i + 1:stop]) if m), "")
-        p["where"], p["employer"] = card_where(p, company)
+        if company:
+            p["where"], p["employer"] = card_where(p, company)
+        else:
+            # A search by title across employers: where each works is what their own card
+            # says, never the employer of the search, which has none.
+            emp = _headline_employer(p["current_line"]) or _headline_employer(p.get("title", ""))
+            p["where"], p["employer"] = ("at", emp) if emp else ("unknown", "")
     return people
+
+
+def by_employer(people: list) -> list:
+    """[(employer, why it is ruled out or "", [people])] for a search by title that spans
+    employers, the largest group first, and the people whose card names no employer last
+    under "". Each employer is checked the way the job search checks it (sources.ruled_out:
+    an excluded sector or employer, or do_not_target.json). "0 at ," was printed for a title
+    search across employers, as though it were one employer with no name (2026-10-21)."""
+    import sources
+    from company_key import key as company_key
+    groups: dict = {}
+    for p in people:
+        emp = str(p.get("employer") or "").strip()
+        k = company_key(emp) if emp else ""
+        name, members = groups.get(k, (emp, []))
+        members.append(p)
+        groups[k] = (name, members)
+    out = [(name, sources.ruled_out(name) if name else "", members)
+           for k, (name, members) in groups.items() if k]
+    out.sort(key=lambda g: (-len(g[2]), g[0].lower()))
+    if "" in groups:
+        out.append(("", "", groups[""][1]))
+    return out
 
 
 # Functions that are never anyone's route to a role in the person's own: a card whose title
@@ -2840,8 +3121,68 @@ def _same(a: str, b: str) -> bool:
     return compose._same_words(a, b)
 
 
+# The words a sentence's frame is made of: what stays when the nouns are swapped. Twenty
+# notes were one skeleton with the nouns changed ("I'm a <who>. <credential>, which I imagine
+# <their employer>. <question>?"), and each passed alone because no sentence repeated
+# (2026-10-21). A frame is the sentence with every other run of words a slot.
+FRAME_WORDS = frozenset("""a an the and or but so because which who that this these those
+it its it's i i'm i've i'd i'll me my we our you you're your yours they them their he she
+his her is are was were be been being am do does did have has had can could would should
+will may might must not no to of in on at for from with by as about into over after before
+than then also just still really how what why when where while if imagine guess guessing
+probably seems seem looks like think thought wonder wondering curious sure since both
+same too very much more most own new""".split())
+FRAME_MIN_WORDS = 4      # a frame with fewer fixed words is how any sentence starts
+OPENING_WORDS = 3
+
+
+def frame(sentence: str) -> tuple:
+    """The sentence as a frame: its FRAME_WORDS in order, each other run of words one slot
+    ("*"). Two sentences with the same frame are one sentence with the nouns swapped."""
+    words = re.findall(r"[a-z0-9][a-z0-9'&+.-]*", fold(str(sentence or "")).lower()
+                       .replace("\u2019", "'"))
+    out = []
+    for w in words:
+        w = w.strip(".")
+        if w in FRAME_WORDS:
+            out.append(w)
+        elif not out or out[-1] != "*":
+            out.append("*")
+    return tuple(out)
+
+
+def _frame_fixed(f: tuple) -> int:
+    return sum(1 for w in f if w != "*")
+
+
+def _opening(sentence: str) -> str:
+    words = re.findall(r"[a-z0-9']+", fold(str(sentence or "")).lower())
+    return " ".join(words[:OPENING_WORDS]) if len(words) >= OPENING_WORDS else ""
+
+
+def _employers_of(ids, employers=None) -> dict:
+    """{contact_id: company_key} for the notes in a batch: the map given, else the contact
+    book, else what was read about them. An id with no employer known is its own."""
+    from company_key import key as company_key
+    out = {}
+    book = {}
+    if employers is None:
+        try:
+            import state
+            book = {c.get("contact_id"): c.get("company", "") for c in state.load_contacts()}
+        except Exception:  # noqa: BLE001  no book: what was read, or nothing
+            book = {}
+    for cid in ids:
+        name = (employers or {}).get(cid) if employers is not None else book.get(cid)
+        if not name:
+            name = (load(cid) or {}).get("company", "")
+        out[cid] = company_key(name) if name else ""
+    return out
+
+
 def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
-          opener: str | None = None, vary_about_me: bool | None = None) -> list:
+          opener: str | None = None, vary_about_me: bool | None = None,
+          employers: dict | None = None) -> list:
     """What makes a batch of first notes a template: [(what, sentence, [ids])].
 
     `same_ground` compares only the common ground, so ten notes ending on one sentence
@@ -2875,6 +3216,49 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
             if len(ids) > limit:
                 out.append(("shared", sent, ids))
                 seen.append(sent)
+    # Within one employer, two is enough: colleagues compare notes, and the same sentence to
+    # two people in one team reads as a template where the same line to two strangers at
+    # different employers does not (2026-10-21).
+    where = _employers_of(per, employers)
+    for sents_id, sents in per.items():
+        k = where.get(sents_id)
+        if not k:
+            continue
+        for sent in sents:
+            if any(_same(sent, x) for x in own) or any(_same(sent, x) for x in seen):
+                continue
+            ids = [i for i, v in per.items() if where.get(i) == k
+                   and any(_same(sent, y) for y in v)]
+            if len(ids) >= 2:
+                out.append(("shared at one employer", sent, ids))
+                seen.append(sent)
+    # The frames: one sentence with its nouns swapped, the same opening after the greeting,
+    # the same close. Each judged across the batch, as the sentences are.
+    mine = [(cid, [x for x in sents if not any(_same(x, o) for o in own)])
+            for cid, sents in per.items()]
+    groups: dict = {}
+    for cid, sents in mine:
+        for x in sents:
+            f = frame(x)
+            if _frame_fixed(f) >= FRAME_MIN_WORDS and not any(_same(x, y) for y in seen):
+                groups.setdefault(f, {}).setdefault(cid, x)
+    for f, by in groups.items():
+        if len(by) > limit:
+            out.append(("same frame", " ".join(f), sorted(by)))
+    for what, pick in (("same opening", lambda xs: xs[0] if xs else ""),
+                       ("same close", lambda xs: xs[-1] if xs else "")):
+        by = {}
+        for cid, sents in mine:
+            x = pick(sents)
+            if not x or any(_same(x, y) for y in seen):
+                continue                   # already said as a shared sentence
+            key_ = _opening(x) if what == "same opening" else " ".join(frame(x))
+            if key_ and (what == "same opening" or _frame_fixed(frame(x)) >= 2):
+                by.setdefault(key_, []).append(cid)
+        for key_, ids in by.items():
+            if len(ids) > limit and not any(w == "same frame" and set(ids) <= set(i)
+                                            for w, _d, i in out):
+                out.append((what, key_, sorted(ids)))
     if ask:
         asks = {}
         for cid, sents in per.items():
@@ -2907,9 +3291,7 @@ def queued_notes(contacts: list) -> dict:
                 text = fh.read()
         except (OSError, ValueError):
             continue
-        if text.startswith(WAITS_ON_A_READ):
-            text = text.split("\n\n", 1)[-1]
-        out[cid] = text.strip()
+        out[cid] = note_body(text).strip()
     return out
 
 
@@ -2918,22 +3300,62 @@ def queued_notes(contacts: list) -> dict:
 # A snippet the browser tool runs on a profile page it already has open, returning
 # the parts a reading keeps as compact JSON: no click, no scroll, no request. Copying
 # the whole page text out by hand cost thousands of tokens a profile and changed what
-# was captured; this returns the same text get_page_text would, cut to the sections
-# parse() reads. `read --json` takes its output.
-EXTRACTOR = r"""(() => {
+# was captured; this returns the top card, About, Experience and Education, cut to what
+# parse() reads, in that order whatever order the page puts them in.
+#
+# On the newer layout the page's main text opens on the Activity feed, About and
+# Experience come much later, and a search for sections by their h2 heading found none
+# (2026-10-21). So each section is found three ways, first that works: a <section> whose
+# heading (h2, h3, or its first line) names it; the anchor LinkedIn puts before it
+# (id="about", id="experience"); and, failing both, the page's own text, cut from the line
+# that is the heading to the next heading line. `extractor --activity` adds their Activity
+# and Featured for a deep read.
+_EXTRACTOR = r"""(() => {
+  const WANT = __WANT__;
   const clip = (t, n) => (t || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
+  const first = t => ((t || "").split("\n").map(x => x.trim()).find(Boolean) || "");
   const main = document.querySelector("main") || document.body;
   const out = {url: location.href, title: document.title, top: "", sections: []};
-  const secs = Array.from(main.querySelectorAll("section"));
-  if (secs.length) out.top = clip(secs[0].innerText, 1500);
-  const want = /^(about|activity|experience|education|featured|publications)$/i;
-  for (const s of secs.slice(1)) {
-    const h = s.querySelector("h2");
-    const head = h ? h.innerText.split("\n")[0].trim() : "";
-    if (want.test(head)) out.sections.push({heading: head, text: clip(s.innerText, 2500)});
+  const h1 = main.querySelector("h1") || document.querySelector("h1");
+  let card = h1 && (h1.closest("section") || h1.parentElement);
+  for (let i = 0; card && i < 6 && card.innerText.split("\n").filter(Boolean).length < 4; i++)
+    card = card.parentElement;
+  out.top = clip(card ? card.innerText : "", 1500);
+  const got = {};
+  const keep = (head, text) => {
+    const k = head.toLowerCase();
+    if (!WANT.includes(k) || got[k]) return;
+    got[k] = {heading: head, text: clip(text, 2500)};
+  };
+  for (const s of main.querySelectorAll("section")) {
+    const h = s.querySelector("h2, h3");
+    keep(first(h ? h.innerText : s.innerText), s.innerText);
   }
+  for (const k of WANT) {
+    if (got[k]) continue;
+    const a = document.getElementById(k);
+    const s = a && (a.closest("section") || a.parentElement);
+    if (s) keep(first(s.innerText) || k, s.innerText);
+  }
+  const HEADS = /^(about|activity|experience|education|featured|publications|skills|licenses (&|and) certifications|certifications|volunteering|volunteer experience|recommendations|projects|honors (&|and) awards|languages|interests|courses|organizations|causes|patents|test scores|people also viewed|people you may know|more profiles for you|explore premium profiles|you might like|pages for you)$/i;
+  const lines = (main.innerText || "").split("\n").map(x => x.trim()).filter(Boolean);
+  for (let i = 0; i < lines.length; i++) {
+    const k = lines[i].toLowerCase();
+    if (!WANT.includes(k) || got[k]) continue;
+    let j = i + 1;
+    while (j < lines.length && !(HEADS.test(lines[j]) && lines[j].toLowerCase() !== k)) j++;
+    keep(lines[i], lines.slice(i, j).join("\n"));
+  }
+  if (!out.top) {
+    const cut = lines.findIndex(x => HEADS.test(x));
+    out.top = clip(lines.slice(0, cut < 0 ? 12 : Math.min(cut, 12)).join("\n"), 1500);
+  }
+  out.sections = WANT.filter(k => got[k]).map(k => got[k]);
   return JSON.stringify(out);
 })()"""
+EXTRACTOR = _EXTRACTOR.replace("__WANT__", '["about", "experience", "education"]')
+EXTRACTOR_ACTIVITY = _EXTRACTOR.replace(
+    "__WANT__", '["about", "experience", "education", "activity", "featured", "publications"]')
 
 
 # The same for a page that lists many people (a people search, an employer's People tab):
@@ -3018,6 +3440,107 @@ def from_extract(raw: str) -> str:
             body = head + "\n" + body
         parts.append(body)
     return "\n".join(p for p in parts if p.strip())
+
+
+# ------------------------------------------------------------ a structured extract
+
+# A short paste of the parts a reading keeps, one labelled line each, in any order:
+#
+#     Name: Tamsin Oyelaran
+#     Headline: Head of Demand Forecasting at Fernhill Freight
+#     Location: Leeds, England, United Kingdom
+#     About: I run forecasting for a chilled-freight network.
+#     Experience: Head of Demand Forecasting | Fernhill Freight | Jan 2023 - Present | Leeds
+#     Experience: Senior Analyst at Oakmere Foods, 2018 - 2022
+#     Education: University of Leeds, 2014 - 2017
+#
+# The page's main text starts with the Activity feed on the newer layout, About and
+# Experience come much later, and a chat pasted thousands of characters a person to get
+# them (2026-10-21). This is the same reading from a few lines. "Experience" takes
+# "title | employer | dates | place" or "title at employer, dates, place".
+_STRUCT = re.compile(r"^\s*(name|headline|location|place|current|about|summary|experience|role|"
+                     r"education|school|degree|connection|buttons|activity|post|featured)"
+                     r"\s*:\s*(.*)$", re.I)
+_STRUCT_KEYS = {"place": "location", "summary": "about", "role": "experience",
+                "school": "education", "connection": "degree", "post": "activity"}
+
+
+def _struct_fields(text: str) -> list:
+    out = []
+    for line in str(text or "").replace("\r", "").split("\n"):
+        m = _STRUCT.match(line)
+        if m and m.group(2).strip():
+            out.append((_STRUCT_KEYS.get(m.group(1).lower(), m.group(1).lower()),
+                        " ".join(m.group(2).split())))
+        elif out and line.strip() and out[-1][0] in ("about", "activity"):
+            out[-1] = (out[-1][0], out[-1][1] + " " + " ".join(line.split()))
+    return out
+
+
+def is_structured(text: str) -> bool:
+    """Is this a structured extract (labelled lines: a headline, a role, a place), not a
+    page's text? Two labelled fields at least, one of them a headline, a current role or a
+    role under Experience."""
+    got = {k for k, _ in _struct_fields(text)}
+    return len(got) >= 2 and bool(got & {"headline", "current", "experience"})
+
+
+_ROLE_AT = re.compile(r"^(.+?)\s+(?:at|@)\s+(.+)$")
+
+
+def _role_lines(value: str) -> list:
+    """One Experience field as the lines a profile prints: title, employer, dates, place."""
+    parts = [p.strip() for p in re.split(r"\s*\|\s*", value) if p.strip()]
+    if len(parts) == 1:
+        head, _, tail = value.partition(",")
+        m = _ROLE_AT.match(head.strip())
+        parts = ([m.group(1), m.group(2)] if m else [head.strip()]) + \
+            [p.strip() for p in tail.split(",") if p.strip()]
+        # "Leeds, England" after the dates is one place, not two fields.
+        dated = next((i for i, p in enumerate(parts) if _DATES.search(p) or _YEAR.search(p)), None)
+        if dated is not None and dated + 1 < len(parts):
+            parts = parts[:dated + 1] + [", ".join(parts[dated + 1:])]
+    title = parts[0] if parts else ""
+    employer = parts[1] if len(parts) > 1 else ""
+    rest = parts[2:]
+    dates = next((p for p in rest if _DATES.search(p) or _YEAR.search(p)), "")
+    if dates and not _DATES.search(dates):
+        dates = dates + " - Present" if "present" not in dates.lower() and len(_YEAR.findall(dates)) == 1 else dates
+    place = next((p for p in rest if p != dates), "")
+    return [x for x in (title, employer, dates, place) if x]
+
+
+def from_structured(text: str) -> str:
+    """A structured extract as the page text parse() reads: the top card (name, headline,
+    place, the Contact info line that anchors it), then About, Experience and Education
+    under their own headings."""
+    fields = _struct_fields(text)
+    one = {}
+    for k, v in fields:
+        one.setdefault(k, v)
+    top = [one.get("name", ""), one.get("degree", ""), one.get("headline", ""),
+           one.get("location", ""), "Contact info"]
+    top += [b.strip() for b in one.get("buttons", "").split(",") if b.strip()]
+    out = [x for x in top if x]
+    if one.get("about"):
+        out += ["About", one["about"]]
+    roles = [v for k, v in fields if k == "experience"]
+    if not roles and one.get("current"):
+        roles = [one["current"] + (" | Present" if "present" not in one["current"].lower() else "")]
+    if roles:
+        out.append("Experience")
+        for r in roles:
+            out += _role_lines(r)
+    schools = [v for k, v in fields if k == "education"]
+    if schools:
+        out.append("Education")
+        for v in schools:
+            out += [p.strip() for p in re.split(r"\s*[|,]\s*", v, maxsplit=1) if p.strip()]
+    posts = [v for k, v in fields if k == "activity"]
+    if posts:
+        out.append("Activity")
+        out += posts
+    return "\n".join(out) + "\n"
 
 
 # ------------------------------------------------------------ several in one paste
@@ -3467,6 +3990,144 @@ def record_pending(contact_id: str, today: datetime.date | None = None, row: dic
             "it; off the queue, the InMail and the new-note lists")
 
 
+def notes_from_json(raw: str, card_only: bool = False) -> dict:
+    """{contact_id: (note, card_only)} from the `drafts` JSON."""
+    got = json.loads(raw)
+    if not isinstance(got, dict) or not got:
+        raise ValueError("drafts needs a JSON object of {\"<contact_id>\": \"<note>\"}")
+    out = {}
+    for cid, v in got.items():
+        if isinstance(v, dict):
+            out[str(cid)] = (str(v.get("note") or ""), bool(v.get("card_only")) or card_only)
+        else:
+            out[str(cid)] = (str(v or ""), card_only)
+    return out
+
+
+NO_READING_SAVE = ("not saved. Nothing was read about {who}, so this note rests on the search "
+                   "result only and says nothing about them. Read them first (python3 "
+                   "tools/network/reading.py read {cid} <file>), or, if the person chose speed "
+                   "over a tailored note, save it with --card-only and show it to them as "
+                   "card-only. Reading the batch first costs about: python3 "
+                   "tools/network/reading.py estimate <how many>")
+
+
+def save_drafts(batch: dict) -> int:
+    """Save first notes ({contact_id: (note, card_only)}) to their draft files, each checked
+    the way one is (the greeting is theirs; something was read, or the note is card-only),
+    then all of them together with the queue already waiting (`alike`: one skeleton with
+    the nouns swapped, one opening, one close). A batch too alike saves none of its notes:
+    twenty notes from one template were saved one by one, each passing alone (2026-10-21).
+    Returns the exit code."""
+    import state
+    import tone
+    contacts = state.load_contacts()
+    ready, added_lines, refused = {}, [], 0
+    for cid, (note, card_only) in batch.items():
+        waits = card_only == WAITS_ON_A_READ
+        card_only = bool(card_only) and not waits
+        if not str(note or "").strip():
+            print(f"reading: {cid}: not saved, the note is empty")
+            refused += 1
+            continue
+        row = next((c for c in contacts if c.get("contact_id") == cid), None)
+        if row is None:
+            # A draft for someone read and never written to the book: their row comes from
+            # the reading, so the queue, the batch check and the send all find them.
+            row, how = state.from_reading(contacts, cid, datetime.date.today())
+            if how == "existing":
+                print(f"reading: not saved. {row.get('name')} is already in the contact book as "
+                      f"{row['contact_id']} (their LinkedIn address, or their name at that "
+                      f"employer): draft under that id, python3 tools/network/reading.py draft "
+                      f"{row['contact_id']} <file>")
+                refused += 1
+                continue
+            if how == "added":
+                added_lines.append(f"reading: {row.get('name')} was not in the contact book; "
+                                   "added at not_contacted from what was read about them")
+            else:
+                added_lines.append(
+                    f"reading: {cid} is not in the contact book and nothing read names them, "
+                    "so the queue and the send cannot find this draft: add their row "
+                    "(state.unique_contact_id for the id), or read them with --name and --company")
+            row = row or {}
+        # A batch of notes saved one by one: a note shuffled onto the wrong person greets
+        # somebody else, and the person pastes it by hand. Never saved.
+        wrong = tone.wrong_greeting(note, row.get("name", ""))
+        if wrong:
+            print(f"reading: not saved. The note {wrong[0].text}: fix the greeting (or save it "
+                  "under the right contact's id) and save it again.")
+            refused += 1
+            continue
+        got = load(cid) or {}
+        if not has_read(got) and not card_only and not waits \
+                and not card_enough(got, row.get("company", "")):
+            print("reading: " + NO_READING_SAVE.format(who=row.get("name") or cid, cid=cid))
+            refused += 1
+            continue
+        company = row.get("company", "") or got.get("company", "")
+        others = [c for c in contacts if c.get("contact_id") != cid
+                  and (c.get("status") or "not_contacted") == "not_contacted"
+                  and (os.path.isfile(draft_path(c.get("contact_id", "")))
+                       or c.get("contact_id") in ready)]
+        full_ = employer_full_line(company, contacts, others) if company else ""
+        if full_:
+            print(f"reading: not saved. {full_}: no more notes there until someone answers. "
+                  "Send the ones waiting, or set this one aside (python3 tools/network/state.py "
+                  f"drop {cid} --reason \"<why>\")")
+            refused += 1
+            continue
+        ready[cid] = (note_body(note).strip(), card_only, row, got)
+    if not ready:
+        return EXIT["error"]
+    # Checked together with every note already waiting, before any is saved.
+    queued = queued_notes(contacts)
+    queued.update({cid: v[0] for cid, v in ready.items()})
+    employers = {c.get("contact_id"): c.get("company", "") for c in contacts}
+    employers.update({cid: v[2].get("company", "") or v[3].get("company", "")
+                      for cid, v in ready.items()})
+    found = [(w, d, ids) for w, d, ids in alike(queued, employers=employers)
+             if set(ids) & set(ready) and w not in ("same shape",)]
+    if found:
+        print(f"reading: not saved. {'These notes are' if len(ready) > 1 else 'This note is'} "
+              "too alike to the others waiting, so they would read as one template:")
+        for what, detail, ids in found:
+            print(f"  {what}: \"{_clip(detail, 100)}\" in {len(ids)}: {', '.join(ids[:8])}"
+                  + (" ..." if len(ids) > 8 else ""))
+        print("  write each from its own reading: its own first sentence after the greeting, "
+              "its own way of saying what you have done, and its own close; the person's own "
+              "opener, line about them and ask are theirs to repeat")
+        return EXIT["alike"]
+    if added_lines:
+        state.save_contacts(contacts)
+    for line in added_lines:
+        print(line)
+    import compose
+    for cid, (note, card_only, row, got) in ready.items():
+        subject, _body = state.split_subject(note)
+        if got.get("connect") == "missing" and not subject \
+                and str(row.get("channel") or "connection") == "connection":
+            print("warning, before this connection note: " + NO_CONNECT)
+        p = write_draft(cid, note, row.get("name", ""), card_only=card_only)
+        how = ""
+        if card_only_draft(cid):
+            how = ("; CARD ONLY: written from the card, nothing of their page read. Show it to "
+                   "the person as card-only")
+        elif not has_read(got):
+            how = (f"; nothing read about {row.get('name') or cid} yet, so it opens on "
+                   f"{WAITS_ON_A_READ} and reading.py queue lists it")
+        print(f"reading: saved {os.path.relpath(p, person.state())}{how}")
+        # Built like another message waiting this round: said now, while it is being written.
+        for what, detail, ids in compose.round_alike(queued):
+            if cid in ids:
+                others = ", ".join(i for i in ids if i != cid)
+                print(f"  {what} as {others}: \"{_clip(detail, 90)}\": {compose.ROUND_FIX}")
+        when = time_for(cid, contacts)
+        if when:
+            print(f"  {when}")
+    return EXIT["ok"] if not refused else EXIT["error"]
+
+
 def main(argv: list | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -3483,6 +4144,8 @@ def main(argv: list | None = None) -> int:
                    help="card: read from the top card and About; deep: scrolled to the end")
     r.add_argument("--load-seconds", type=float, default=None,
                    help="how long the page took to load, where the session timed it")
+    r.add_argument("--no-experience", action="store_true",
+                   help="their page has no Experience section, even scrolled to the end")
     v = sub.add_parser("verdict", help="after the read: KEEP, SKIP (exit 3), or not read yet (10)")
     v.add_argument("contact_id")
     v.add_argument("--company", default="")
@@ -3505,6 +4168,18 @@ def main(argv: list | None = None) -> int:
                                       "WAITS ON A READ when nothing was read about them")
     dr.add_argument("contact_id")
     dr.add_argument("file", help="the note, or - for stdin")
+    dr.add_argument("--card-only", action="store_true",
+                    help="the person chose a note from their card alone: saved, and shown to "
+                         "them as card-only; without a reading it is refused otherwise")
+    dr.add_argument("--wait-for-read", action="store_true",
+                    help="a placeholder written before anyone is read (the networking upgrade's): "
+                         "saved under WAITS ON A READ, never sent as it stands, and listed by "
+                         "`queue` for a read")
+    dd = sub.add_parser("drafts", help="a batch of first notes, checked together before any is "
+                                       "saved: {\"<id>\": \"<note>\"} or {\"<id>\": {\"note\": "
+                                       "..., \"card_only\": true}}")
+    dd.add_argument("file", help="the JSON, or - for stdin")
+    dd.add_argument("--card-only", action="store_true", help="every note in it is card-only")
     qu = sub.add_parser("queue", help="drafts waiting with no fresh reading")
     qu.add_argument("--top", type=int, default=HAND_TOP,
                     help="how many to offer a paste for: the best few, never everyone")
@@ -3525,14 +4200,24 @@ def main(argv: list | None = None) -> int:
     sub.add_parser("limits", help="every reading limit, its value, where it came from, and why")
     sub.add_parser("budget", help="one line before a round: the reads and list pages left today, "
                                   "the limit that binds and the line that changes it")
+    es = sub.add_parser("estimate", help="how long reading this many profiles takes today, "
+                                         "in plain words, before the reads start")
+    es.add_argument("n", type=int, nargs="?", default=None,
+                    help="how many to read; today's list still to read by default")
+    es.add_argument("--mode", choices=READ_MODES, default="card")
+    sub.add_parser("meanwhile", help="the notes the session can write now, while the next "
+                                     "page waits")
     sub.add_parser("move-runtime", help="move the reading files an older copy kept in "
                                         "documents/network into this computer's ledger")
-    fr = sub.add_parser("friction", help="the signals LinkedIn showed, and the ramp; or keep one")
+    fr = sub.add_parser("friction", help="the friction reads met (what each was, and when), and "
+                                         "the ramp; or keep one")
     fr.add_argument("--kind", choices=pace.HARD + pace.SOFT, default=None)
     fr.add_argument("--words", default="", help="what it showed, word for word")
     su = sub.add_parser("search-url", help="a people search narrowed to one employer (and a "
                                            "place), from the filters the person set once")
-    su.add_argument("--company", required=True)
+    su.add_argument("--company", default="",
+                    help="the employer to narrow to; leave it out for a search by title across "
+                         "employers (--keywords or --function, and --place)")
     su.add_argument("--place", default="")
     su.add_argument("--keywords", default="")
     su.add_argument("--learn", default="", metavar="ADDRESS",
@@ -3575,7 +4260,10 @@ def main(argv: list | None = None) -> int:
     iv.add_argument("--load-seconds", type=float, default=None)
     pp = sub.add_parser("people", help="an employer's People tab or a people search, read once")
     pp.add_argument("file", help="the page text, or - for stdin")
-    pp.add_argument("--company", required=True)
+    pp.add_argument("--company", default="",
+                    help="the employer the search was narrowed to; leave it out for a search "
+                         "by title across employers, which groups the people by where each "
+                         "card says they work")
     pp.add_argument("--url", default="")
     pp.add_argument("--load-seconds", type=float, default=None)
     pp.add_argument("--json", action="store_true",
@@ -3599,13 +4287,16 @@ def main(argv: list | None = None) -> int:
     ba.add_argument("ids", nargs="*", help="the notes to check; every queued note by default")
     ex = sub.add_parser("extractor", help="the read-only snippet that returns a profile page, or "
                                           "with --list a page of many people, as JSON")
+    ex.add_argument("--activity", action="store_true",
+                    help="also their Activity and Featured, for a deep read; by default the top "
+                         "card, About, Experience and Education only")
     ex.add_argument("--list", action="store_true",
                     help="for a people search or an employer's People tab: every card with "
                          "the person's address, headline, place, degree and buttons")
     a = ap.parse_args(argv)
 
     if a.cmd == "extractor":
-        print(LIST_EXTRACTOR if a.list else EXTRACTOR)
+        print(LIST_EXTRACTOR if a.list else EXTRACTOR_ACTIVITY if a.activity else EXTRACTOR)
         return EXIT["ok"]
     if a.cmd == "move-runtime":
         moved = move_runtime()
@@ -3621,6 +4312,17 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "budget":
         print(budget_line())
         return EXIT["ok"]
+    if a.cmd == "estimate":
+        n = a.n
+        if n is None:
+            day = datetime.date.today()
+            n = sum(1 for i in _shortlist_file(day) if not _read_on(i, day.isoformat()))
+        print(estimate(n, mode=a.mode)["line"])
+        return EXIT["ok"]
+    if a.cmd == "meanwhile":
+        for line in _meanwhile_lines():
+            print(line)
+        return EXIT["ok"]
     if a.cmd == "friction":
         if a.kind:
             signal(a.kind, a.words)
@@ -3631,13 +4333,16 @@ def main(argv: list | None = None) -> int:
         log = pace.friction()
         loads = [x["when"] for x in _loads()]
         n, why_ = pace.hourly_ceiling(datetime.date.today(), loads)
-        print(f"friction: {len(log)} signal(s) on file; pages an hour allowed now: {n} ({why_})")
+        print(f"friction: {len(log)} on file, each what a read met, never a warning from "
+              f"LinkedIn unless it says so; pages an hour allowed now: {n} ({why_})")
         for x in log[-12:]:
-            print(f"  {x.get('at')}  {x.get('kind')}: {x.get('words') or ''}")
+            print(f"  {x.get('at')}  {pace.said(x)}"
+                  + (" (never moves the ramp)" if x.get("kind") in pace.NOT_FOR_THE_RAMP else "")
+                  + (f": {x.get('words')}" if x.get("words") else ""))
         broke = pace.breaches()
         if broke:
-            print(f"your own pace: {len(broke)} page(s) loaded before it allowed (not LinkedIn "
-                  "signals; they hold no ramp back)")
+            print(f"your own pace: {len(broke)} page(s) loaded before it allowed (nothing "
+                  "LinkedIn showed; they hold no ramp back)")
             for x in broke[-12:]:
                 print(f"  {x.get('at')}  {x.get('rule')}: {x.get('words') or ''}"
                       + (f" (the next pause was {x['owed_seconds']}s longer)"
@@ -3664,10 +4369,22 @@ def main(argv: list | None = None) -> int:
         return EXIT["ok"]
     if a.cmd == "search-url":
         try:
+            if a.learn and not a.company:
+                raise ValueError("--learn keeps the filters of a search narrowed to an employer: "
+                                 "name it with --company")
             if a.learn:
                 got = learn_search(a.learn, a.company, a.place)
                 print(f"reading: kept the filters for {a.company}"
                       + (f" in {a.place}" if a.place else "") + f": {got}")
+                return EXIT["ok"]
+            if not a.company:
+                # A search by title across employers: one search, many employers, each person
+                # read back with `people` (no --company), which groups them by employer.
+                keywords = a.keywords or (function_keywords() if a.function else "")
+                print(title_search_url(keywords, a.place))
+                print("  then read the page with `reading.py people <file>` (no --company): it "
+                      "groups the people by where each card says they work, and leaves out "
+                      "employers the search has ruled out")
                 return EXIT["ok"]
             if a.company_id:
                 learn_company_id(a.company, a.company_id)
@@ -3778,7 +4495,14 @@ def main(argv: list | None = None) -> int:
             print(f"  not added, nothing places them in a city yet: {', '.join(got['unplaced'])}. "
                   f"At most {UNVERIFIED_ON_SHORTLIST} such a day; a one-page read (`reading.py "
                   "people`) or a public finding places them first")
+        if got["card_enough"]:
+            print(f"  not added, a recruiter whose card says enough: "
+                  f"{', '.join(got['card_enough'])}. Draft each from the card now (reading.py "
+                  "draft saves it marked CARD ONLY), with no read spent")
         print(budget_line())       # before the round: what it can have, and what binds
+        todo = [i for i in got["ids"] if not _read_on(i, datetime.date.today().isoformat())]
+        if todo:
+            print(estimate(len(todo))["line"])
         return EXIT["ok"]
     if a.cmd == "queue":
         import state
@@ -3813,77 +4537,48 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "paste":
         text = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
         return _paste(text, a.source)
-    if a.cmd == "draft":
+    if a.cmd in ("draft", "drafts"):
         import learned
-        waiting = learned.refuse_over_pending("reading.py draft")
+        waiting = learned.refuse_over_pending(f"reading.py {a.cmd}")
         if waiting:
             print(waiting)
             return EXIT["error"]
-        note = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
-        if not note.strip():
-            raise SystemExit("reading: draft needs the note's text")
-        import state
-        contacts = state.load_contacts()
-        row = next((c for c in contacts if c.get("contact_id") == a.contact_id), None)
-        added = ""
-        if row is None:
-            # A draft for someone read and never written to the book: their row comes from
-            # the reading, so the queue, the batch check and the send all find them.
-            row, how = state.from_reading(contacts, a.contact_id, datetime.date.today())
-            if how == "existing":
-                print(f"reading: not saved. {row.get('name')} is already in the contact book as "
-                      f"{row['contact_id']} (their LinkedIn address, or their name at that "
-                      f"employer): draft under that id, python3 tools/network/reading.py draft "
-                      f"{row['contact_id']} <file>")
-                return EXIT["error"]
-            if how == "added":
-                state.save_contacts(contacts)
-                added = (f"reading: {row.get('name')} was not in the contact book; added at "
-                         "not_contacted from what was read about them")
-            else:
-                added = (f"reading: {a.contact_id} is not in the contact book and nothing read "
-                         "names them, so the queue and the send cannot find this draft: add "
-                         "their row (state.unique_contact_id for the id), or read them with "
-                         "--name and --company")
-            row = row or {}
-        # A batch of notes saved one by one: a note shuffled onto the wrong person greets
-        # somebody else, and the person pastes it by hand. Never saved.
-        import tone
-        wrong = tone.wrong_greeting(note, row.get("name", ""))
-        if wrong:
-            print(f"reading: not saved. The note {wrong[0].text}: fix the greeting (or save it "
-                  "under the right contact's id) and save it again.")
-            return EXIT["error"]
-        got = load(a.contact_id) or {}
-        subject, _body = state.split_subject(note)
-        if got.get("connect") == "missing" and not subject \
-                and str(row.get("channel") or "connection") == "connection":
-            print("warning, before this connection note: " + NO_CONNECT)
-        p = write_draft(a.contact_id, note, row.get("name", ""))
-        if added:
-            print(added)
-        print(f"reading: saved {os.path.relpath(p, person.state())}"
-              + ("" if has_read(got) else
-                 f"; nothing read about {row.get('name') or a.contact_id} yet, so it opens "
-                 f"on {WAITS_ON_A_READ} and reading.py queue lists it"))
-        # Built like another message waiting this round: said now, while it is being written.
-        import compose
-        queued = queued_notes(state.load_contacts())
-        queued[a.contact_id] = note.strip()
-        for what, detail, ids in compose.round_alike(queued):
-            if a.contact_id in ids:
-                others = ", ".join(i for i in ids if i != a.contact_id)
-                print(f"  {what} as {others}: \"{_clip(detail, 90)}\": {compose.ROUND_FIX}")
-        when = time_for(a.contact_id, contacts)
-        if when:
-            print(f"  {when}")
-        return EXIT["ok"]
+        if a.cmd == "draft":
+            note = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+            if not note.strip():
+                raise SystemExit("reading: draft needs the note's text")
+            batch = {a.contact_id: (note, bool(a.card_only))}
+            if a.wait_for_read:
+                batch = {a.contact_id: (note, WAITS_ON_A_READ)}
+        else:
+            raw = sys.stdin.read() if a.file == "-" else open(a.file, encoding="utf-8").read()
+            try:
+                batch = notes_from_json(raw, card_only=bool(a.card_only))
+            except ValueError as e:
+                raise SystemExit(f"reading: {e}") from None
+        return save_drafts(batch)
     if a.cmd == "batch":
         import state
         notes = queued_notes(state.load_contacts())
         if a.ids:
             notes = {k: v for k, v in notes.items() if k in a.ids}
-        found = alike(notes)
+        contacts = state.load_contacts()
+        found = alike(notes, employers={c.get("contact_id"): c.get("company", "")
+                                        for c in contacts})
+        # The company limit, as the short list and a draft hold it: the notes waiting at one
+        # employer beside the people there already waiting on a reply.
+        from company_key import key as company_key
+        by_co: dict = {}
+        for c in contacts:
+            if c.get("contact_id") in notes and c.get("company"):
+                by_co.setdefault(company_key(c["company"]), []).append(c)
+        for _k, there in by_co.items():
+            waiting, _t = at_employer(there[0]["company"], contacts)
+            if len(waiting) + len(there) > PER_EMPLOYER:
+                found.append(("over the company limit",
+                              employer_full_line(there[0]["company"], contacts, there[1:]) or
+                              f"{there[0]['company']}: {len(there)} notes waiting to send",
+                              [c["contact_id"] for c in there]))
         print(f"batch: {len(notes)} queued note(s) checked")
         for what, sent_, ids in found:
             print(f"  {what}: \"{_clip(sent_, 110)}\" in {len(ids)}: {', '.join(ids[:8])}"
@@ -3997,7 +4692,7 @@ def main(argv: list | None = None) -> int:
                 return EXIT["check"]
             if kind == "signin":
                 return _said_signout(signout())
-            if kind == "unknown" and len(" ".join(_clean_lines(text))) < NOT_RENDERED_CHARS:
+            if kind == "unknown" and not rendered(text, contact.get("name", "")):
                 # A page that stopped rendering is a soft signal: the next pause doubles, and
                 # a second within the hour ends the day's reads.
                 signal("not_rendering", "a page of %d characters, not a profile"
@@ -4011,6 +4706,19 @@ def main(argv: list | None = None) -> int:
             raise SystemExit(f"reading: {a.contact_id} is not on today's short list. A browser "
                              "read is for the people on today's list only: rank everyone "
                              "found, then `reading.py shortlist <ids, best first>`")
+        if source == "browser":
+            if not a.no_experience and not has_experience(text):
+                # On the current layout Experience and Education are on the page only once it
+                # has been scrolled to the very end; read before that, a real profile looks
+                # nearly empty, which is how a false "did not render" came about
+                # (2026-10-21). Nothing new is loaded: the same page, scrolled, read again.
+                print("reading: not read yet. Their Experience is not in the text, so the page "
+                      "was read before it had been scrolled to the end. Scroll the same page "
+                      "slowly to the very bottom (no new page, nothing clicked), then read its "
+                      f"text again: reading.py read {a.contact_id} - --source browser"
+                      f"{' --json' if a.json else ''} --mode {a.mode}. If their page has no "
+                      "Experience at all, even at the end, add --no-experience")
+                return EXIT["scroll"]
         try:
             new = parse(text, name=contact.get("name", ""), company=contact.get("company", ""),
                         source=source,
@@ -4067,17 +4775,45 @@ def main(argv: list | None = None) -> int:
     return EXIT["ok"]
 
 
-# A browser page with less text than this is one that did not render, not a profile.
+# A browser page with less text than this, showing nothing of a person, is one that did not
+# render. Length alone is never the test (`rendered`).
 NOT_RENDERED_CHARS = 300
 
 
+def has_experience(text: str) -> bool:
+    """Does this page's text hold their Experience: its heading with something under it, or
+    an Experience line in a structured extract?"""
+    if is_structured(text):
+        return any(k == "experience" for k, _v in _struct_fields(text))
+    _pre, secs, _b = _sections(_clean_lines(text))
+    return bool(secs.get("experience"))
+
+
+def rendered(text: str, name: str = "") -> bool:
+    """Did the page load, judged by what its text shows rather than its length? A loaded page
+    names the person (their surname), or carries a profile's sections or the fields of a
+    structured extract (`is_structured`): a short paste of the top card, About and
+    Experience is a page that loaded. A blank page, a spinner or a page of LinkedIn's
+    chrome alone shows none of them. A short summary of a page that had loaded was called
+    "did not render", which doubled the pause and warned that one more would stop the
+    day's reads (2026-10-21)."""
+    lines = _clean_lines(text)
+    if is_structured(text) or _SECTION_LINE.search("\n".join(lines)):
+        return True
+    if name and _names_them(name, lines):
+        return True
+    return len(" ".join(lines)) >= NOT_RENDERED_CHARS
+
+
 def _go_line(mode: str = "deep") -> str:
+    # On the current layout Experience and Education are on the page only once it has been
+    # scrolled to the very bottom (2026-10-21): every read scrolls to the end first.
     if mode == "card":
-        return (f"go: open the page and spend {dwell(mode='card')}s on its top card and About, "
-                "nothing scrolled and nothing clicked, then read its text once (`read ... "
-                "--mode card`). A card decides most keep or skip; read deep only for those it "
-                "cannot")
-    return (f"go: spend {dwell()}s on the page, scrolling it to the end at reading pace "
+        return (f"go: open the page and spend {dwell(mode='card')}s on it, scrolling it slowly "
+                "to the very end (Experience and Education appear only then) and clicking "
+                "nothing, then read its text once (`read ... --mode card`); the top card, About "
+                "and Experience decide most keep or skip")
+    return (f"go: spend {dwell()}s on the page, scrolling it to the very end at reading pace "
             "(nothing clicked), then read its text once")
 
 
@@ -4111,6 +4847,9 @@ def _cli_next(a) -> int:
     g = _wait_gate(a.timeout) if a.wait else gate_state()
     if g["kind"] != "go":
         print(_gate_line(g, datetime.datetime.now()))
+        if g["kind"] in ("wait", "later"):
+            for line in _meanwhile_lines(contacts):
+                print(line)
         return EXIT[g["kind"]]
     url = nxt.get("linkedin_url") or ""
     print(f"next: {nxt.get('name') or nxt['contact_id']} ({nxt.get('company') or '?'}) "
@@ -4325,6 +5064,27 @@ def search_url(company: str, place: str = "", keywords: str = "") -> str:
     return SEARCH_BASE + "?" + urlencode(q)
 
 
+def title_search_url(keywords: str, place: str = "") -> str:
+    """A people search for a title across every employer (and a place, from a filter kept
+    with --learn): one search that feeds many employers at once, read back with `people`
+    and no --company. Never with an employer's name in the keywords, which is not the
+    employer filter (`no_filter_line`)."""
+    from urllib.parse import urlencode
+    if not str(keywords or "").strip():
+        raise LookupError("a search by title needs the title: --keywords \"<title>\", or "
+                          "--function for your own")
+    data = _filters()
+    q = {"keywords": keywords}
+    if place:
+        geo = (data.get("places") or {}).get(" ".join(place.lower().split()))
+        if not geo:
+            raise LookupError(f"no location filter on file for {place}: filter one search by it "
+                              "by hand and keep its address with --learn")
+        q["geoUrn"] = geo
+    q.update(data.get("shape") or {})
+    return SEARCH_BASE + "?" + urlencode(q)
+
+
 def _page_breach(now: datetime.datetime) -> dict | None:
     """The gate's answer for a list page already loaded, when it said not yet: kept and
     logged as a breach of the person's own pace (keep_breach), never a refusal."""
@@ -4398,6 +5158,66 @@ def _cli_invitations(a) -> int:
     return after_breach(breach)
 
 
+def _cli_people_across(a, people, rec, now, contacts, threads, breach) -> int:
+    """`people` for a search by title across employers: the people grouped by the employer
+    their card names, each employer checked against what the search has ruled out, and the
+    ones whose card names none kept for a deep read to place."""
+    import state
+    groups = by_employer(people)
+    named = [g for g in groups if g[0]]
+    unknown = next((g[2] for g in groups if not g[0]), [])
+    print(f"people: {len(people)} on the page, a search by title across "
+          f"{len(named)} employer(s)" + (f"; {len(unknown)} whose card names no employer"
+                                         if unknown else "")
+          + f"; the next page at {now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} "
+            "at the earliest")
+    changed = False
+    for name, why, members in groups:
+        if name and why:
+            print(f"  {name}: out, {len(members)} ({why}): "
+                  + ", ".join(p["name"] for p in members[:6]))
+            continue
+        print(f"  {name}: {len(members)}" if name else
+              f"  where the card names no employer: {len(members)}, kept for a deep read to place")
+        rows = []
+        for n, p in enumerate(members):
+            keep, why_ = screen(p, name) if name else (True, "")
+            rank, fit = title_fit(p.get("title", ""))
+            keep = keep and rank > 0
+            rows.append((not keep, -rank if keep else 0, n, p, keep, why_ or ("" if keep else fit),
+                         fit if keep else ""))
+        for _o, _r, _n, p, keep, why_, fit in sorted(rows, key=lambda r: r[:3]):
+            row = state.already_contacted(contacts, name=p["name"], company=name or None,
+                                          linkedin_url=p.get("linkedin_url"))
+            tag = (f"[{row['contact_id']}]" if row else "[not in the book]"
+                   + (f" {p['linkedin_url']}" if p.get("linkedin_url") else ""))
+            waiting = bool(row) and (row.get("status") or "not_contacted") in ("not_contacted",
+                                                                              "dropped")
+            if waiting and name:
+                from_list(row["contact_id"], p, name, a.url)
+            print(f"    {'deep read' if keep else 'out'}: {p['name']}, {p.get('title') or '?'}"
+                  f"{', ' + p['location'] if p.get('location') else ''}"
+                  f"{' (' + p['degree'] + ')' if p.get('degree') else ''} {tag}"
+                  + (f": {why_}" if why_ else "") + (f" [{fit}]" if fit and keep else ""))
+            if p.get("reach") == "pending" and (waiting or (row is None and a.record and name)):
+                print("      " + record_pending(
+                    row["contact_id"] if row else state.unique_contact_id(
+                        p["name"], name, contacts, linkedin_url=p.get("linkedin_url")),
+                    row=None if row else {"name": p["name"], "company": name,
+                                          "title": p.get("title", ""),
+                                          "location": p.get("location", ""),
+                                          "linkedin_url": p.get("linkedin_url", "")},
+                    contacts=contacts, threads=threads))
+                changed = True
+    if changed:
+        state.save_threads(threads)
+        state.save_contacts(contacts)
+    print("next: one search feeds every employer it found: shortlist the few you will write to "
+          "today, best first (`reading.py shortlist`), at most "
+          f"{PER_EMPLOYER} an employer; the rest are drafted from what the page showed")
+    return after_breach(breach)
+
+
 def _cli_people(a) -> int:
     import state
     now = datetime.datetime.now()
@@ -4419,14 +5239,17 @@ def _cli_people(a) -> int:
         return EXIT["check"]
     if kind == "signin":
         return _said_signout(signout())
-    people = people_page(text, a.company)
+    company = " ".join(str(a.company or "").split())
+    people = people_page(text, company)
     owed = owed_seconds(breach, now) if breach else 0.0
     rec = page_read("people", a.url, now, people=len(people), load_seconds=a.load_seconds,
                     owed=owed)
     if breach:
-        print(keep_breach(breach, now, a.url or a.company, owed))
+        print(keep_breach(breach, now, a.url or company or "people search", owed))
     contacts = state.load_contacts()
     threads = state.load_threads()
+    if not company:
+        return _cli_people_across(a, people, rec, now, contacts, threads, breach)
     # Counted apart: every card was counted as at the employer, people elsewhere too.
     count = {w: sum(1 for p in people if p.get("where") == w) for w in ("at", "elsewhere", "unknown")}
     print(f"people: {len(people)} on the page: {count['at']} at {a.company}, "

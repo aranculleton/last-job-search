@@ -645,6 +645,26 @@ def corpus(paths: list[str]) -> list[tuple[int, str]]:
     return kept
 
 
+def end_key(sentence: str) -> str:
+    """How rule 9 compares an opening or a closing: its first eight words, lower case."""
+    return " ".join(str(sentence or "").split()[:8]).lower()
+
+
+def ends_of(text: str) -> tuple[str, str]:
+    """(opening, closing) of one document, as the corpus counts them, or ("", "").
+
+    The salutation carries the employer's name, which differs by construction and
+    would make every opener look unique, so it is dropped and the sentence that
+    actually starts the letter is compared. Sentences under four words are not
+    an opening or a closing.
+    """
+    body = _SALUTATION.sub("", prose(text or ""), count=1).lstrip()
+    ss = [s for s in sentences(body) if len(s.split()) >= 4]
+    if not ss:
+        return "", ""
+    return end_key(ss[0]), end_key(ss[-1])
+
+
 def _ends(paths: list[str]) -> tuple[list, list]:
     """How the documents open and how they close, counted.
 
@@ -658,18 +678,13 @@ def _ends(paths: list[str]) -> tuple[list, list]:
     for path in paths:
         try:
             with open(path, encoding="utf-8") as fh:
-                body = prose(fh.read())
+                opening, closing = ends_of(fh.read())
         except OSError:
             continue
-        # The salutation carries the employer's name, which differs by
-        # construction and would make every opener look unique. Drop it and
-        # compare the sentence that actually starts the letter.
-        body = _SALUTATION.sub("", body, count=1).lstrip()
-        ss = [s for s in sentences(body) if len(s.split()) >= 4]
-        if not ss:
+        if not opening:
             continue
-        first[" ".join(ss[0].split()[:8]).lower()] += 1
-        last[" ".join(ss[-1].split()[:8]).lower()] += 1
+        first[opening] += 1
+        last[closing] += 1
     return first.most_common(6), last.most_common(6)
 
 

@@ -1,0 +1,172 @@
+{
+ "_about": "An invented application for the example person (profile.example): an invented employer, posting and research fact, and a draft that passes tools/draft_audit.py. The drafting tests mutate it one defect at a time.",
+ "company": "Kestrel Mutual",
+ "role": "Claims Forecasting Analyst",
+ "slug": "kestrel_mutual",
+ "abbr": "Kestrel",
+ "posting": "Kestrel Mutual is hiring a Claims Forecasting Analyst in Manchester. You will build weekly forecasts of claims volumes so our claims handling teams can staff ahead of demand.\n\nWhat you bring:\n- Strong SQL and Python\n- Experience building forecasting models on operational data\n- dbt or similar transformation tooling\n- Power BI reporting for operations leaders\n- Clear communication with non-technical stakeholders\n- SAP experience is a plus\n\nHybrid, two days a week in our Manchester office.",
+ "research": {
+  "facts": [
+   {
+    "claim": "Kestrel Mutual looks after 1.2 million policyholders across home and motor",
+    "quote": "we look after 1.2 million policyholders across home and motor insurance",
+    "url": "https://www.kestrelmutual.example/about"
+   }
+  ],
+  "team_context": "claims operations",
+  "do_not_claim": [],
+  "salary": "not stated",
+  "work_model": "hybrid",
+  "location": "Manchester"
+ },
+ "draft": {
+  "company": "Kestrel Mutual",
+  "role": "Claims Forecasting Analyst",
+  "summary": "Operations analyst with seven years turning warehouse, transport and supplier data into the weekly forecasts operations teams plan against. Built demand-forecasting models in Python and SQL across 2,400 SKUs that cut forecast error from 22% to 14%, with the dbt pipelines and Power BI reporting behind them.",
+  "tools": "SQL, Python, dbt, Power BI",
+  "p1": "Your claims handling teams staff ahead of demand, so the weekly forecast is the plan they work to. At Brindle & Hart Logistics I built the weekly demand-forecasting models in Python and SQL that cut forecast error from 22% to 14% across 2,400 SKUs.",
+  "p2": "Kestrel Mutual looks after 1.2 million policyholders across home and motor. A bad week for the weather turns that number into a staffing question, and staffing to a forecast is the problem my models answer for stock and vans. Before that, at Oakmere Foods, I modelled shelf-life and order patterns for chilled lines, and write-offs fell 18% over two quarters.",
+  "lead": "Where my work meets what the role asks:",
+  "cl_bullets": [
+   {
+    "label": "Forecasting",
+    "text": "Forecast error came down from 22% to 14% on 2,400 SKUs, releasing an estimated £1.1M of safety stock."
+   },
+   {
+    "label": "Pipelines",
+    "text": "Moved a manual daily reconciliation onto scheduled dbt models with tests, ending two hours of checking a day."
+   },
+   {
+    "label": "Reporting",
+    "text": "I own the service-level reporting in Power BI that replaced eleven spreadsheets for more than 30 operations managers."
+   }
+  ],
+  "p4": "I am based in Manchester with settled status and full right to work in the UK, so no sponsorship is needed. Which kinds of claim move most with the weather is the first thing I would want to look at in your data.",
+  "concession": "none",
+  "angle": "A forecaster whose models already decide what operations teams do the next morning.",
+  "requirement_map": [
+   {
+    "requirement": "SQL and Python",
+    "evidence": "BH_FORECAST"
+   },
+   {
+    "requirement": "forecasting models on operational data",
+    "evidence": "BH_FORECAST"
+   },
+   {
+    "requirement": "dbt",
+    "evidence": "BH_PIPE"
+   },
+   {
+    "requirement": "Power BI reporting",
+    "evidence": "BH_REPORT"
+   },
+   {
+    "requirement": "stakeholder communication",
+    "evidence": "BH_REPORT"
+   },
+   {
+    "requirement": "SAP (a plus)",
+    "evidence": "the person said no; not named"
+   }
+  ],
+  "notes_for_tracker": "Angle: weekly forecasts that operations teams plan against. Company fact: 1.2 million policyholders (kestrelmutual.example). Salary not stated.",
+  "deadline": "",
+  "contact_person": "",
+  "req_id": "",
+  "claim_map": [
+   {
+    "field": "summary",
+    "sentence": "Operations analyst with seven years turning warehouse, transport and supplier data into the weekly forecasts operations teams plan against.",
+    "cites": [
+     "SUMMARY"
+    ]
+   },
+   {
+    "field": "summary",
+    "sentence": "Built demand-forecasting models in Python and SQL across 2,400 SKUs that cut forecast error from 22% to 14%, with the dbt pipelines and Power BI reporting behind them.",
+    "cites": [
+     "BH_FORECAST",
+     "BH_PIPE",
+     "BH_REPORT"
+    ]
+   },
+   {
+    "field": "p1",
+    "sentence": "Your claims handling teams staff ahead of demand, so the weekly forecast is the plan they work to.",
+    "cites": [
+     "POSTING"
+    ]
+   },
+   {
+    "field": "p1",
+    "sentence": "At Brindle & Hart Logistics I built the weekly demand-forecasting models in Python and SQL that cut forecast error from 22% to 14% across 2,400 SKUs.",
+    "cites": [
+     "BH_FORECAST"
+    ]
+   },
+   {
+    "field": "p2",
+    "sentence": "Kestrel Mutual looks after 1.2 million policyholders across home and motor.",
+    "cites": [
+     "F1"
+    ]
+   },
+   {
+    "field": "p2",
+    "sentence": "A bad week for the weather turns that number into a staffing question, and staffing to a forecast is the problem my models answer for stock and vans.",
+    "cites": [
+     "BH_FORECAST",
+     "BH_ROUTING"
+    ]
+   },
+   {
+    "field": "p2",
+    "sentence": "Before that, at Oakmere Foods, I modelled shelf-life and order patterns for chilled lines, and write-offs fell 18% over two quarters.",
+    "cites": [
+     "OF_WASTE"
+    ]
+   },
+   {
+    "field": "lead",
+    "sentence": "Where my work meets what the role asks:",
+    "cites": []
+   },
+   {
+    "field": "cl_bullets[0]",
+    "sentence": "Forecast error came down from 22% to 14% on 2,400 SKUs, releasing an estimated £1.1M of safety stock.",
+    "cites": [
+     "BH_FORECAST"
+    ]
+   },
+   {
+    "field": "cl_bullets[1]",
+    "sentence": "Moved a manual daily reconciliation onto scheduled dbt models with tests, ending two hours of checking a day.",
+    "cites": [
+     "BH_PIPE"
+    ]
+   },
+   {
+    "field": "cl_bullets[2]",
+    "sentence": "I own the service-level reporting in Power BI that replaced eleven spreadsheets for more than 30 operations managers.",
+    "cites": [
+     "BH_REPORT"
+    ]
+   },
+   {
+    "field": "p4",
+    "sentence": "I am based in Manchester with settled status and full right to work in the UK, so no sponsorship is needed.",
+    "cites": [
+     "LOC",
+     "AUTH"
+    ]
+   },
+   {
+    "field": "p4",
+    "sentence": "Which kinds of claim move most with the weather is the first thing I would want to look at in your data.",
+    "cites": []
+   }
+  ],
+  "stretches": []
+ }
+}

@@ -128,9 +128,16 @@ LIMITS = {
     # week, and requests left unanswered count against later ones, so the week
     # stays at half that. The day cap spreads the sending: a week's requests in one
     # day is a burst. Drafting is not held to it; the rest wait in the queue.
+    # Both are the app's planning caps, not LinkedIn's: CONNECTIONS_PER_WEEK in
+    # profile/networking.py changes the week (WEEKLY_CAP_SETTING), and LINKEDIN_LIMITS
+    # still overrides any number here.
     "connections_per_week": 50,
     "connections_per_day": 25,
     **PLANS[PLAN],
+    # A message to someone already connected (a first-degree connection): no subject, no
+    # credit and no weekly cap, and LinkedIn's message box takes about 8,000 characters.
+    # A first message there is still held to CONNECTED_CHARS by the composer.
+    "message_chars": 8000,
     # A ceiling, not a target: an InMail is the first note with room for one
     # paragraph of evidence, and padding it to a word count is the failure.
     "inmail_words": (None, 200),
@@ -148,7 +155,31 @@ LIMITS = {
     # a number the composer can refuse to exceed.
     "nudge_chars": 280,
 }
+
+# The setting that moves the weekly planning cap, named in every BUDGET line. Read as a plain
+# getattr so tools/profile_names.py lists it: a whole number of requests a week.
+WEEKLY_CAP_SETTING = "CONNECTIONS_PER_WEEK"
+WEEKLY_CAP_DEFAULT = LIMITS["connections_per_week"]
+_WEEKLY = getattr(_NETWORKING, "CONNECTIONS_PER_WEEK", None)
+try:
+    if _WEEKLY is not None and int(_WEEKLY) > 0:
+        LIMITS["connections_per_week"] = int(_WEEKLY)
+except (TypeError, ValueError):
+    pass
 LIMITS.update(dict(getattr(_NETWORKING, "LINKEDIN_LIMITS", {}) or {}))
+
+
+def weekly_cap_source() -> str:
+    """Where this week's request cap came from, said plainly: the app's planning cap (never
+    LinkedIn's own number, which it does not publish), or the person's setting."""
+    own = dict(getattr(_NETWORKING, "LINKEDIN_LIMITS", {}) or {})
+    if "connections_per_week" in own:
+        return "your LINKEDIN_LIMITS in profile/networking.py"
+    if LIMITS["connections_per_week"] != WEEKLY_CAP_DEFAULT:
+        return f"your {WEEKLY_CAP_SETTING} in profile/networking.py"
+    return (f"the app's planning cap, not LinkedIn's (LinkedIn publishes no number); "
+            f"{WEEKLY_CAP_SETTING} in profile/networking.py changes it")
+
 # Below the note it chases, whatever the plan allows the note.
 LIMITS["nudge_chars"] = min(LIMITS["nudge_chars"], LIMITS["connection_note_chars"] - 20)
 

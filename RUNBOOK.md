@@ -116,8 +116,8 @@ what went through here. Do not draft anything unprompted.
 
 ## 2. Draft
 
-**The fast path is three steps around one workflow.** Stage the picks, run the saved
-`draft-applications` workflow, assemble:
+**Four commands around one workflow.** Stage the picks, build the drafting pack, run the
+saved `draft-applications` workflow, audit, assemble:
 
 ```bash
 python3 tools/stage_picks.py stage "$SCRATCH/r1" 3 7 "Acme::Demand Planning"
@@ -125,9 +125,42 @@ python3 tools/stage_picks.py stage "$SCRATCH/r1" 3 7 "Acme::Demand Planning"
 python3 tools/stage_picks.py consent "$SCRATCH/r1" <slug> --yes <skill> ... --no <skill> ...
 python3 tools/stage_picks.py consent "$SCRATCH/r1" <slug> --draft   # or --skip: a held pick
 # Two roles at one employer are both held with "which one?"; stage ... --both drafts both.
-# Workflow draft-applications, args {today, round_dir: "$SCRATCH/r1", picks: <picks.json>}
-python3 tools/stage_picks.py assemble "$SCRATCH/r1"          # -> drafts.json
+python3 tools/draft_pack.py build "$SCRATCH/r1"           # pack.md and draft_args.json
+# Workflow draft-applications, args: the contents of draft_args.json, plus {today}
+python3 tools/stage_picks.py audit "$SCRATCH/r1"          # the code audit, authoritative
+python3 tools/stage_picks.py assemble "$SCRATCH/r1"       # -> drafts.json
 ```
+
+**The drafter reads the pack and nothing else.** `draft_pack.py` compiles what every
+drafter used to read for itself (the profile's facts, each under an id a claim can cite,
+the person's rules and what they have taught it, the openings and closings already sent,
+the field contract) into one file of a few thousand tokens, the same bytes for every
+posting, so the prompt cache serves it after the first. Build it again after any
+`consent`, and whenever it says it is out of date. Each drafter is one call: the pack,
+this posting, the verified research. It returns the draft object with a claim map (each
+sentence and the ids it rests on), writes it to `draft_<slug>.json`, and repairs from what
+the code audit prints, at most twice.
+
+**The audit is code first.** `stage_picks.py audit` runs every check that is mechanical
+(`tools/draft_audit.py`: voice_check, check_numbers, check_claims, the letter checks, the
+budgets, rule 9, the person's answers, and each sentence's numbers, skills, verb, tense and
+employer facts against what it cites) and writes `audit_<slug>.json`: `pass`, or
+`needs_model` with the reasons. Only a flagged draft goes to the model auditor, one call on
+the strongest model reading one packet (`python3 tools/draft_audit.py packet "$SCRATCH/r1"
+<slug>`, under 10k tokens). In the workflow's args, `only` (slugs) limits the model audits
+to the roles that will be sent and `model_audit: "all"` sends every draft; `stage_picks.py
+audit --only <slug> ...` re-audits just those. `assemble` renders a pass or a fixed draft
+and nothing else.
+
+`outreach_body` is optional. Without one, `tools/outreach.py` builds the note from the
+letter, as it always has; `outreach` in the args (true, or a list of slugs) has a small
+step write one, which the code audit checks whole.
+
+**What it cost.** Save the workflow's return value as JSON and run `python3
+tools/draft_cost.py "$SCRATCH/r1" --result <file> [--usage <file>]`: one record per stage
+per posting, in `cost.json` beside the batch and each application. Tokens, tool calls and
+seconds come only from the Workflow tool's run summary (`--usage`); the script cannot see
+them.
 
 The workflow researches each employer on sonnet and drafts and audits on the strongest
 model, per `11-cost-model.md`. Research fetches only through `python3 tools/company_research.py
@@ -135,10 +168,9 @@ fetch "<employer>" --posting <pick file> --urls ...`: robots.txt first, the craw
 a feed or sitemap behind a bot check, `FETCH_BUDGET` requests an employer a day, what each
 host did noted in `company_research/_hosts.json` for the next agent, fresh facts never
 fetched again, and each saved quote checked against the page. **Its concurrency is CPUs minus two**, which on a 4-CPU
-container is two agents at a time, so thirty agent calls can take over an hour. For
-a batch of more than three, the same three stages run faster as parallel background agents
-(one drafter per posting, then one auditor per draft); the briefs they are given
-are the prompts inside the workflow file.
+container is two agents at a time. Where the Workflow tool is not available, run the same
+stages as background agents: the briefs are the prompts inside the workflow file, with the
+contents of `pack.md` as the drafter's first lines.
 
 `stage` picks each filename and never reuses one another application was sent under. The
 rest of this section is what each draft object must hold, whichever way it is written.
@@ -166,8 +198,8 @@ concession is warranted at all, the sentence itself lives in `p2`. Every company
 `p2` is verified from the company's own site, located independently, never from a URL
 inside the posting.
 
-Save as `$SCRATCH/r1/drafts.json` (a list), with the shortlist rows as
-`$SCRATCH/r1/apps_in.json`.
+`assemble` writes `$SCRATCH/r1/drafts.json` (a list); `stage` wrote the shortlist rows as
+`$SCRATCH/r1/apps_in.json`. Section 1 of the pack is this contract as the drafter reads it.
 
 ## 3. Render, fit, verify
 
@@ -177,6 +209,10 @@ python3 tools/check_claims.py cv/*_Resume_*.tex cv/*_CV_*.tex cover_letters/*_Co
 tools/verify_batch.sh "$SCRATCH/r1/drafts.json"
 python3 tools/outreach.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json"
 ```
+
+The code audit in step 2 already ran the claim, number, voice and letter checks on each
+draft object, before anything was rendered. They run again here on the rendered files,
+where the page, layout and text-layer checks can be made too.
 
 `fit_to_page` allocates bullets, renders, compiles, trims the weakest bullet for *this*
 posting until one page, then grows back the strongest absent one that still fits.
@@ -299,15 +335,15 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `tools/verify_batch.sh <drafts.json>` | Every rendered application: pages, chronology, section layout, text layer, claims, letters. Exits non-zero on any finding. |
 | `python3 tools/record_drafts.py <drafts.json> <apps_in.json> --round rN` | The tracker rows for a rendered batch, by `/apply` Step 6b's rules, plus `screening_answers.md` for each. It writes **fit** in `fit_rating`, never the shortlist's priority, which can exceed 100 on a 0-100 column. |
 | `python3 tools/bar.py "<company>"` | The candidate's bar in code: pay, prestige, signal, or none, with the reason. The throttle applies it every round: the sectors and employers `profile/search.py` excludes are skipped with the reason recorded, every other row carries its verdict into the shortlist and `documents/rounds/`, and "none" is a flag, never a cut. An employer on none of the profile's lists says so ("not on your employer lists yet"): `bar.py unjudged` lists them in the newest shortlist, and `bar.py judge "<company>" <pay\|prestige\|signal\|none> "<why>"` records a judgement once (`profile/employers_judged.json`), which every later verdict reads; the profile's own lists and hard rules outrank it. |
-| `python3 tools/network/reading.py` | What was read about one person before writing to them: `read <contact_id> <file\|->` takes their profile page (pasted, read in the person's own browser, LinkedIn's Save to PDF, or transcribed screenshots), `add` one public finding (a talk, an article, a post), `show` what a note can rest on, best first, and `queue` the waiting drafts with no fresh reading, offering a paste for the best three only. `paste <file\|->` reads several profiles pasted at once, a line of `---` between them, each matched to a waiting note by name and employer. `draft <contact_id> <file\|->` writes a first note to its `draft.md`, opening on `WAITS ON A READ` when nothing was read about them. `shortlist <ids>` puts the run's best ten on the day's short list, and a browser read refuses anyone not on it. `verdict <contact_id>` is KEEP or SKIP after a read, `route --tools <...>` says how this session reads profiles and the one line to tell the person, `gate` says whether a browser read may go now, and `stop "<what LinkedIn showed>"` halts browser reads for the day. Keeps only what a note could rest on, never their whole profile. |
-| `python3 tools/network/sources.py ["<employer>"...]` | Where to look for people. Alone, this person's plan of source kinds, ranked by what has drawn replies; with employers, the run's exact searches inside the budget (at most four per employer and five shared by the whole run), and none for an employer the job search ruled out. `ladder --tools <...>` prints what this chat can use, from their connections export to a read in their browser, and the one line to say when it has no browser; `connections "<employer>"` lists who they already know there; `harvest <results.json> --company "<employer>"` turns a search's results into a ranked list of people, each with its evidence, profile status (verified, likely or unconfirmed) and route, nothing fetched. |
+| `python3 tools/network/reading.py` | What was read about one person before writing to them: `read <contact_id> <file\|->` takes their profile page (pasted, read in the person's own browser, LinkedIn's Save to PDF, or transcribed screenshots), `add` one public finding (a talk, an article, a post), `show` what a note can rest on, best first, and `queue` the waiting drafts with no fresh reading, offering a paste for the best three only. `paste <file\|->` reads several profiles pasted at once, a line of `---` between them, each matched to a waiting note by name and employer. `draft <contact_id> <file\|->` writes a first note to its `draft.md`, refused when nothing was read about them unless `--card-only` (saved under `CARD ONLY`, shown as card-only), refused past the company limit, and checked with the notes waiting for one frame, opening or close (exit 11); `drafts <file.json>` saves a batch checked together. `estimate [N]` says how long N reads take today, before they start; `meanwhile` lists the notes to write while a page waits. `people <file>` with no `--company` groups a search by title across employers by employer. `shortlist <ids>` puts the run's best ten on the day's short list, and a browser read refuses anyone not on it. `verdict <contact_id>` is KEEP or SKIP after a read, `route --tools <...>` says how this session reads profiles and the one line to tell the person, `gate` says whether a browser read may go now, and `stop "<what LinkedIn showed>"` halts browser reads for the day. Keeps only what a note could rest on, never their whole profile. |
+| `python3 tools/network/sources.py ["<employer>"...]` | Where to look for people. Alone, this person's plan of source kinds, ranked by what has drawn replies; with employers, the run's exact searches inside the budget (at most four per employer and five shared by the whole run), and none for an employer the job search ruled out. `ladder --tools <...>` prints what this chat can use, from their connections export to a read in their browser, and the one line to say when it has no browser; `connections "<employer>"` lists who they already know there; `harvest <results.json> --company "<employer>"` turns a search's results into a ranked list of people, each with its evidence, profile status (verified, likely or unconfirmed) and route, nothing fetched; with no `--company`, one search by title feeds every employer it found, grouped by employer, those the search ruled out left out. |
 | `python3 tools/claude_surfaces.py` | What the Claude app and Claude Code can do, and how to reach each part, dated and sourced (`tools/claude_surfaces.json`): `show <id>`, `say <id>` (the words a person sees), `check` (entries older than 60 days, as warnings), `sync-docs` (the docs' marked blocks), and `watch`, the maintainer's check of every quote against its page and of the latest release, run weekly in the app only. |
 | `python3 tools/network/why.py [<contact_id>...]` | Why each person: a score from 0 to 100 and one plain line, best first, by counting, with no model call. |
 | `python3 tools/network/openalex.py "<employer>"` | Researchers who put the employer on a recent paper, only when `profile/networking.py` sets `OPENALEX`. A cloud session needs `OPENALEX_API_KEY` (SETUP.md). |
 | `python3 tools/exclude.py` | Rulings in `seen_jobs.json`, each with what it rests on. `add <url> --reason "<why>" [--basis person] [--rests-on "<part>"]` rules a posting out (a reason that cites "blocker N" names its part by itself), `lift "<words in the reason>"` takes rulings off when the person changes their mind, `review` groups older rulings that record no basis, `stamp "<words>" --basis rules\|person` records what a group rests on, `parts` lists the parts of the rules a ruling can rest on, `lapsed` the rulings a rules change lapsed and `restamp "<words>" --rests-on "<part>"\|all` keeps the ones that still hold; `--url` narrows lift, stamp and restamp to named postings when reasons are word for word the same; and `rules` prints the rules fingerprint. |
 | `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
 | `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, Poppler, pypdf, Bun and every job board's host, with what to do about anything missing. |
-| `python3 tools/network/state.py` | What is owed, the connection budget, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. |
+| `python3 tools/network/state.py` | What is owed, the connection budget, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. `nudge <contact_id> --text-file <file>` logs a nudge that went, with its words, and `message <contact_id> ...` any other later message (`--texts <file.json>` for several); the BUDGET line says the 50 a week is the app's planning cap and names `CONNECTIONS_PER_WEEK`. |
 
 `tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each
 skill a posting might ask about, what the candidate genuinely holds that does the same job

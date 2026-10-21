@@ -474,7 +474,9 @@ def test_every_hand_over_of_a_draft_says_the_time_there(book, capsys):
                   location="Toronto, Ontario, Canada", channel="connection"))
     note = book.path / "note.txt"
     note.write_text("Hi Rosalind, a note.", encoding="utf-8")
-    assert reading.main(["draft", "kestrel_achterberg", str(note)]) == 0
+    # Nothing read about her: saved only as a card-only note now (2026-10-21), and the time
+    # there is said all the same.
+    assert reading.main(["draft", "kestrel_achterberg", str(note), "--card-only"]) == 0
     assert "their time now:" in capsys.readouterr().out and "(America/Toronto)" in \
         reading.time_for("kestrel_achterberg")
     assert reading.main(["queue"]) == 0
@@ -492,5 +494,6 @@ def test_nothing_is_held_back_for_the_hour(book, capsys, monkeypatch):
                         lambda *a, **k: "their time now: Tue 03:00 in Toronto (America/Toronto)")
     note = book.path / "note.txt"
     note.write_text("Hi Rosalind, a note.", encoding="utf-8")
-    assert reading.main(["draft", "kestrel_achterberg", str(note)]) == 0
+    # Card-only: nothing read about her, and since 2026-10-21 such a note is saved only so.
+    assert reading.main(["draft", "kestrel_achterberg", str(note), "--card-only"]) == 0
     assert os.path.isfile(reading.draft_path("kestrel_achterberg"))

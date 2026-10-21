@@ -48,13 +48,16 @@ def test_a_verdict_with_no_page_read_is_not_read_yet_never_keep(here, capsys):
 
 def test_a_public_finding_can_still_rule_someone_out_cheaply(here, capsys):
     cid = "kestrel_achterberg"
+    # A public page that shows they have moved on rules them out. Where they sit no longer
+    # does (2026-10-21): that is a note, never a skip.
     reading.save(cid, {"name": "Rosalind Achterberg", "company": "Kestrel Mutual",
-                       "headline": "", "location": "San Francisco, California, United States",
+                       "headline": "", "current": "Fernhill Freight",
+                       "location": "San Francisco, California, United States",
                        "sources": [{"kind": "public", "url": "https://example.org/t/1"}],
                        "items": []})
     assert reading.main(["verdict", cid]) == reading.EXIT["skip"]
     out = capsys.readouterr().out
-    assert "SKIP: based elsewhere" in out and f"reading.py skip {cid}" in out
+    assert "SKIP: has moved on" in out and f"reading.py skip {cid}" in out
 
 
 # ------------------------------------------------------------ 2. exit codes
@@ -232,7 +235,12 @@ def test_todays_top_card_reads_headline_place_and_reach(card, reach):
     assert r["location"] == "San Francisco, California, United States"   # never the school
     assert r["reach"] == reach and r["current"] == "Kestrel Mutual"
     keep, why = reading.verdict(r, "Kestrel Mutual")
-    assert not keep and ("elsewhere" in why or "pending" in why)
+    # Changed 2026-10-21: where a contact sits is a note, never a skip; a request already
+    # pending still is one.
+    if reach == "pending":
+        assert not keep and "pending" in why
+    else:
+        assert keep and "based in San Francisco" in why
     assert "University of Leeds" not in why
 
 
@@ -352,7 +360,9 @@ Connect
     by = {p["name"]: p for p in people}
     assert by["Rosalind Achterberg"]["reach"] == "pending"
     assert not reading.screen(by["Rosalind Achterberg"], "Kestrel Mutual")[0]
-    assert not reading.screen(by["Corwin Haldane"], "Kestrel Mutual")[0]       # elsewhere
+    # Changed 2026-10-21: based elsewhere is a note, never a cut.
+    keep, why = reading.screen(by["Corwin Haldane"], "Kestrel Mutual")
+    assert keep and "based in Boston" in why
 
 
 def test_a_one_page_read_paces_like_a_profile_and_spares_the_send_cap(here):
