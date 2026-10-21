@@ -14,6 +14,12 @@ and the person says when the source is the one that is stale.
 
     python3 tools/profile_consistency.py          # exit 1 when anything disagrees
     python3 tools/profile_consistency.py --json
+    python3 tools/profile_consistency.py --reviewed profile/<file>:<line>
+                                                  # the person read it: both are right
+
+A finding the person has read and says is right as it stands is kept in
+profile/consistency_reviewed.json with the sentence it was about, and is not raised again
+until that sentence changes.
 """
 
 from __future__ import annotations
@@ -46,7 +52,11 @@ _NOT_TARGET = re.compile(r"\b(?:current(?:ly)?|base of|earn\w*|market|benchmark|
                          # a posting's stated range against the person's knockout line: "a
                          # range topping out between 100,000 and 104,999 is ranked down"
                          r"topping out|tops out|ranked down|knock-?outs?|cut line|is cut|not cut|"
-                         r"stated range|whole range)\b", re.I)
+                         r"stated range|whole range|"
+                         # "a range whose maximum is below 100,000 is a cut": a posting's top,
+                         # held against a line set on purpose below the walk-away floor
+                         r"maximum|is a cut|a hard cut|range whose|whose range|"
+                         r"top of (?:the|its|a) range)\b", re.I)
 # The person's screening rules for postings (profile/10-triage-blockers.md): every amount in
 # them is a line a posting's range is held against, never the person's own band or floor.
 RULE_FILES = ("10-triage-blockers.md",)
@@ -115,12 +125,51 @@ _ASKED_ONLY = re.compile(r"\b(?:permit|visa|expiry|status)\b[^.\n]{0,160}\b(?:on
 _VOLUNTEER = re.compile(r"\b(?:state|mention|give|volunteer|say)\s+(?:the\s+)?(?:expiry|"
                         r"date|end date)(?:\s+date)?\s+plainly\b|\bvolunteer (?:the )?(?:expiry|"
                         r"permit|visa)\b", re.I)
+# How to answer once asked is the rule kept, not broken: "asked directly how long it runs,
+# state the expiry plainly" was flagged as volunteering it.
+_WHEN_ASKED = re.compile(r"\b(?:when|if|once|only if|unless|where)\s+(?:\w+\s+){0,2}asked\b|"
+                         r"\basked (?:directly|outright|about it|how long)\b", re.I)
+
+# What the person has read and says is right as it stands: {file, fact, said, sentence}.
+REVIEWED_FILE = "consistency_reviewed.json"
 
 
-def findings(unread: list | None = None) -> list[dict]:
-    """[{file, line, fact, said, source}] for every restatement that disagrees with its
-    source. A fact whose source cannot be read is not checked, and is named in `unread`
+def _key(f: dict) -> tuple:
+    return (f["file"], f["fact"], f["said"], " ".join(str(f.get("sentence", "")).split()))
+
+
+def reviewed() -> list[dict]:
+    """The findings the person has reviewed and kept, from profile/consistency_reviewed.json."""
+    path = person.path(REVIEWED_FILE)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            rows = json.load(fh).get("reviewed") or []
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [r for r in rows if isinstance(r, dict)]
+
+
+def _sentence_at(text: str, offset: int) -> str:
+    """The sentence of `text` holding `offset`, as _sentence_spans cuts it."""
+    for start, sent in _sentence_spans(text):
+        if start <= offset < start + len(sent):
+            return sent
+    return ""
+
+
+def findings(unread: list | None = None, kept: list | None = None) -> list[dict]:
+    """[{file, line, fact, said, source, sentence}] for every restatement that disagrees
+    with its source and that the person has not reviewed and kept (those go in `kept`, when
+    given). A fact whose source cannot be read is not checked, and is named in `unread`
     (when given) rather than passed silently."""
+    found = _all_findings(unread)
+    done = {_key(r) for r in reviewed()}
+    if kept is not None:
+        kept.extend(f for f in found if _key(f) in done)
+    return [f for f in found if _key(f) not in done]
+
+
+def _all_findings(unread: list | None = None) -> list[dict]:
     import screening_answers as sheet     # reads the profile as it loads
     out: list[dict] = []
     try:
@@ -163,10 +212,14 @@ def findings(unread: list | None = None) -> list[dict]:
                 before = t[max(0, t.rfind("\n", 0, m.start()) + 1):m.start()]
                 if re.search(r"\b(?:never|don'?t|do not|not|avoid)\b[^.]*$", before, re.I):
                     continue        # "Never volunteer the expiry" is the rule itself
+                sent = _sentence_at(t, m.start())
+                if _WHEN_ASKED.search(sent):
+                    continue        # how to answer once asked is the rule kept
                 out.append({"file": _rel(p_), "line": t.count("\n", 0, m.start()) + 1,
                             "fact": "permit disclosure", "said": m.group(0),
                             "source": "\"%s\" in %s" % (" ".join(rule[1].split())[:90],
-                                                         _rel(rule[0]))})
+                                                         _rel(rule[0])),
+                            "sentence": " ".join(sent.split())})
     evaluation = os.path.normpath(sheet.EVALUATION)
     for path, text in texts.items():
         # Quoted text is a question a form asks or words someone else said ("will you
@@ -176,6 +229,7 @@ def findings(unread: list | None = None) -> list[dict]:
         rules = os.path.basename(path) in RULE_FILES
         for start, sent in _sentence_spans(masked):
             i = text.count("\n", 0, start) + 1
+            whole = " ".join(text[start:start + len(sent)].split())
             line = text.splitlines()[i - 1].strip() if text.splitlines() else ""
             if source_rows and re.match(r"^\|\s*\*\*(?:Target|Walk-away floor)\*\*", line):
                 continue
@@ -190,7 +244,8 @@ def findings(unread: list | None = None) -> list[dict]:
                                     "said": m.group(0).strip(),
                                     "source": "%s to %s in %s" % (
                                         "{:,}".format(low), "{:,}".format(high),
-                                        _rel(sheet.EVALUATION))})
+                                        _rel(sheet.EVALUATION)),
+                                    "sentence": whole})
             if floor is not None and not rules and _FLOOR.search(sent) \
                     and not _RANGE.search(sent) and not _NOT_TARGET.search(sent):
                 for m in _SINGLE.finditer(sent):
@@ -199,14 +254,16 @@ def findings(unread: list | None = None) -> list[dict]:
                         out.append({"file": _rel(path), "line": i, "fact": "walk-away floor",
                                     "said": m.group(0).strip(),
                                     "source": "%s in %s" % ("{:,}".format(floor),
-                                                            _rel(sheet.EVALUATION))})
+                                                            _rel(sheet.EVALUATION)),
+                                    "sentence": whole})
             if notice_m is not None and _NOTICE.search(sent):
                 after = sent[_NOTICE.search(sent).start():]
                 said = _months(after)
                 if said is not None and abs(said - notice_m) > 0.01:
                     out.append({"file": _rel(path), "line": i, "fact": "notice period",
                                 "said": _DURATION.search(after).group(0),
-                                "source": "%s in %s" % (notice, _rel(sheet.PROFILE))})
+                                "source": "%s in %s" % (notice, _rel(sheet.PROFILE)),
+                                "sentence": whole})
             if sponsor is not None:
                 own = masked[start:start + len(sent)]
                 if own.rstrip(" *_\"'").endswith("?"):
@@ -215,41 +272,77 @@ def findings(unread: list | None = None) -> list[dict]:
                 if sponsor is False and need:
                     out.append({"file": _rel(path), "line": i, "fact": "sponsorship",
                                 "said": need.group(0),
-                                "source": "no sponsorship required, in %s" % sponsor_src})
+                                "source": "no sponsorship required, in %s" % sponsor_src,
+                                "sentence": whole})
                 elif sponsor is True and _NO_SPONSOR.search(own):
                     out.append({"file": _rel(path), "line": i, "fact": "sponsorship",
                                 "said": _NO_SPONSOR.search(own).group(0),
-                                "source": "sponsorship required, in %s" % sponsor_src})
+                                "source": "sponsorship required, in %s" % sponsor_src,
+                                "sentence": whole})
     return out
 
 
-def report(found: list[dict], unread: list | None = None) -> str:
+def report(found: list[dict], unread: list | None = None, kept: list | None = None) -> str:
     skipped = ["Not checked, %s" % u for u in unread or ()]
+    if kept:
+        skipped.append("%d place(s) you reviewed and kept as they are (%s); a change to one "
+                       "of those sentences checks it again." % (len(kept), REVIEWED_FILE))
     if not found:
         return "\n".join(["The pay band, floor, notice period, sponsorship and permit disclosure "
                           "are said the same way everywhere%s." % (
-                              " that could be read" if skipped else "")] + skipped)
+                              " that could be read" if unread else "")] + skipped)
     lines = ["%d place(s) in the profile say a fact differently from its source:" % len(found)]
     for f in found:
         where = "%s:%d" % (f["file"], f["line"]) if f["line"] else f["file"]
         lines.append("- %s, %s: %s" % (where, f["fact"], "says \"%s\"; the source says %s"
                                        % (f["said"], f["source"]) if f["said"] else f["source"]))
     lines.append("Change each to the source, or, if the source is the stale one, correct the "
-                 "source: the form answers, the interview packs and the letters all read it.")
+                 "source: the form answers, the interview packs and the letters all read it. "
+                 "Where both are right on purpose (a line set for postings, say), keep it: "
+                 "python3 tools/profile_consistency.py --reviewed <file>:<line>")
     return "\n".join(lines + skipped)
+
+
+def keep(where: list[str], today: str = "") -> list[str]:
+    """Record each finding at `where` (profile/<file>:<line>) as reviewed and kept by the
+    person. Returns what it recorded, one line each; a place with no finding is said so."""
+    import datetime as dt
+    found = findings()
+    rows, said = reviewed(), []
+    for w in where:
+        hit = [f for f in found if "%s:%d" % (f["file"], f["line"]) == w.strip()]
+        if not hit:
+            said.append("%s: nothing is raised there now, so nothing was recorded." % w)
+            continue
+        for f in hit:
+            rows.append({"file": f["file"], "fact": f["fact"], "said": f["said"],
+                         "sentence": f.get("sentence", ""),
+                         "date": today or dt.date.today().isoformat()})
+            said.append("%s: %s \"%s\" kept as it is." % (w, f["fact"], f["said"]))
+    if len(rows) != len(reviewed()):
+        with open(person.path(REVIEWED_FILE), "w", encoding="utf-8") as fh:
+            json.dump({"reviewed": rows}, fh, indent=1)
+            fh.write("\n")
+    return said
 
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--reviewed", nargs="+", metavar="FILE:LINE",
+                    help="the person read the finding there and says it is right as it stands")
     a = ap.parse_args(argv)
     unread: list = []
+    kept: list = []
     try:
-        found = findings(unread)
+        if a.reviewed:
+            print("\n".join(keep(a.reviewed)))
+            return 0
+        found = findings(unread, kept)
     except person.NoProfile:
         print("profile_consistency: no profile/ yet: /setup builds one.")
         return 0
-    print(json.dumps(found, indent=1) if a.json else report(found, unread))
+    print(json.dumps(found, indent=1) if a.json else report(found, unread, kept))
     return 1 if found else 0
 
 

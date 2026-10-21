@@ -18,7 +18,9 @@ python3 tools/profile_upgrades.py --plan
 ```
 
 A JSON list, most urgent first: `id`, `needs`, `why` (what is missing), `run` (what does
-it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 5. An empty list while
+it), `gives`, `time`. Keep the `needs: "you"` entries aside for Step 5. Exit 2 with a line
+instead of a list means this checkout is older than the repo's last update: run the merge
+it names, then the plan again; never apply anything from an older checkout. An empty list while
 the sync said upgrades are pending means another chat brought the update in and is
 applying them: stop here, with nothing to report. Where the plan holds fewer than the sync
 listed, it says which are already in place (an instant one ran, or another chat landed it):

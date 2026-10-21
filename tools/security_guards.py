@@ -283,10 +283,35 @@ def check_package_manifests() -> None:
             )
 
 
+def check_tracked_caches() -> None:
+    """No compiled Python file in the repository. They are ignored, but a forced add (or one
+    tracked before) keeps them in: 128 under profile/__pycache__ and profile/tests/__pycache__
+    rode along with every profile commit in one person's repo (2026-10-21)."""
+    import subprocess
+    try:
+        r = subprocess.run(["git", "-C", str(ROOT), "ls-files", "-z"], capture_output=True,
+                           timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    if r.returncode:
+        return
+    found = [f for f in r.stdout.decode("utf-8", "replace").split("\0")
+             if f and ("__pycache__/" in f or f.endswith((".pyc", ".pyo")))]
+    if found:
+        dirs = sorted({f.split("__pycache__/")[0] + "__pycache__" if "__pycache__/" in f else f
+                       for f in found})
+        errors.append(
+            f"{len(found)} compiled Python file(s) are committed ({', '.join(dirs[:3])}"
+            f"{' and more' if len(dirs) > 3 else ''}). They are rebuilt on every run and "
+            f"change on every commit. Take them out, keeping them on disk: git rm -r -q "
+            f"--cached {' '.join(dirs[:6])}")
+
+
 def main() -> int:
     check_permissions()
     check_gitignore()
     check_package_manifests()
+    check_tracked_caches()
     if errors:
         print(f"security_guards: {len(errors)} failure(s)")
         for err in errors:
@@ -294,7 +319,7 @@ def main() -> int:
         return 1
     print(
         "security_guards: OK (permissions allowlist, hooks allowlist, gitignore rules, "
-        "package manifests)"
+        "package manifests, no compiled files committed)"
     )
     return 0
 

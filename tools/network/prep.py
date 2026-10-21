@@ -1852,6 +1852,11 @@ def fit_to_say(answer) -> bool:
     return bool(answer) and RAW_MARK not in answer and not voice_check.spoken_findings(answer)
 
 
+# What is still to be filled in: "[FILL IN: ...]", "[TODO]", "[TBC]", "<the number>".
+PLACEHOLDER = re.compile(r"\[\s*(?:fill[ -]?in|to ?do|tbc|tbd|insert|add|xx+)\b[^\]]*\]"
+                         r"|<(?!!--)[^<>\n]{2,60}>", re.I)
+
+
 def unsayable(lines) -> list:
     """Why an answer, as the lines it was written in, is not yet fit to say aloud, or []:
     raw profile wording, a paste with its source still on it, bullet points, or written
@@ -1861,6 +1866,10 @@ def unsayable(lines) -> list:
     text = " ".join(_text(ln) for ln in lines)
     if RAW_MARK in text:
         return ["raw profile wording: rewrite it as you would say it"]
+    gap = PLACEHOLDER.search(text)
+    if gap:
+        # "[FILL IN: the team size]" was reported fit to say aloud (2026-10-21).
+        return ["a placeholder still to fill: %s" % gap.group(0)]
     if "(source:" in text or re.match(r"\s*(?:Prepared|Story|Say):", text):
         return ["pasted from the profile: say it in your own words"]
     if any(re.match(r"\s*(?:[-*+]|\d+[.)])\s", ln) for ln in lines):
@@ -1894,15 +1903,29 @@ ASK = "Ask"
 ASK_MARK = "ASK YOU FIRST (Claude asks, once):"
 
 
+# A quoted line: a note beside an answer, except where the whole answer is quoted, which is
+# how answers were written before 3.9.0. Read as notes, an already passing prep failed after
+# the update on six answers it had passed the day before (2026-10-21); an answer with nothing
+# said outside its quote is read from the quote. The pack's own "> Checking:" line never is.
+_QUOTE = re.compile(r"^\s*>\s?")
+_OWN_QUOTE = re.compile(r"^\s*>\s*(?:Checking|They want to hear)\s*:", re.I)
+
+
 def spoken_lines(lines) -> list:
-    """The lines of an answer the person will say: every note, and a draft's mark, out."""
-    out, notes = [], False
+    """The lines of an answer the person will say: every note, and a draft's mark, out. An
+    answer written wholly as a quote is read from the quote."""
+    out, quoted, notes = [], [], False
     for ln in lines or ():
         if _NOTES_START.match(ln):
             notes = True
+        if not notes and _QUOTE.match(ln) and not _OWN_QUOTE.match(ln):
+            quoted.append(_QUOTE.sub("", ln, count=1))
         if notes or _NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln) or _DRAFT_LINE.match(ln):
             continue
         out.append(ln)
+    if not any(_text(ln) for ln in out) and any(_text(ln) for ln in quoted):
+        return [ln for ln in quoted if not (_NOTE_LINE.match(ln) or _ITALIC_LINE.match(ln)
+                                            or _DRAFT_LINE.match(ln))]
     return out
 
 
@@ -1986,6 +2009,28 @@ def stamp_of(text) -> int | None:
     return int(found[-1]) if found else None
 
 
+def _same_but_dated(old: str, new: str) -> bool:
+    """Do two documents differ only in their date and the stamp naming the prep that wrote
+    them? A release rewrote 220 documents whose only change, in many, was those two lines."""
+    def body(t):
+        return _STAMP.sub("", _WRITTEN.sub("", t))
+    return body(old) == body(new)
+
+
+# The contacts a release rewrites a prep for: someone who replied, a call booked, a referral
+# in flight. Of one person's 220 documents, 141 were for conversations closed, dropped or gone
+# cold and 42 for notes with no reply, and every release rewrote them all, twice over when two
+# chats synced; `/prep <contact>` rebuilds any of the rest the day a call needs it.
+LIVE = frozenset({"in_conversation", "replied_needs_response", "call_booked",
+                  "referral_in_progress"})
+
+
+def live(contact, threads=()) -> bool:
+    """Is this conversation one a call could come out of now?"""
+    cid = _contact_id(contact)
+    return state.effective_status(contact, state.threads_for(list(threads or ()), cid)) in LIVE
+
+
 def stale(path, contact=None, threads=(), research=None, application=None, today=None) -> bool:
     """Is the document at `path` older than the current prep, unstamped, or (given the
     contact) written before their row or their thread changed? A missing document is not
@@ -2053,7 +2098,7 @@ def write_prep(contact, company_research=None, application=None, profile_facts=N
     # In a rewrite of them all, a document that would change only its date is left as it
     # is: two chats that each regenerated every prep wrote the same documents a day apart,
     # and all 217 conflicted. Asked for one contact, it is written, date and all.
-    if keep_if_same and old is not None and _WRITTEN.sub("", old) == _WRITTEN.sub("", new):
+    if keep_if_same and old is not None and _same_but_dated(old, new):
         return path
     with open(path, "w", encoding="utf-8") as f:
         f.write(new)
@@ -2154,8 +2199,9 @@ def main(argv=None) -> int:
                     help="rewrite every contact's prep document")
     ap.add_argument("--stale-only", action="store_true",
                     help="rewrite only the documents an older prep wrote, with no stamp, or "
-                         "written before the contact's row or thread changed; never write "
-                         "one for a contact who has none")
+                         "written before the contact's row or thread changed, and only for a "
+                         "conversation still live (a reply, a call booked, a referral); never "
+                         "write one for a contact who has none")
     ap.add_argument("--dry-run", action="store_true",
                     help="list the documents that would be written, and write nothing")
     ap.add_argument("--check", action="store_true",
@@ -2192,8 +2238,8 @@ def main(argv=None) -> int:
                 need = research_needed(row, research, a.today)
                 if need:
                     needs.append("%s: %s" % (_text(row.get("name")), need))
-            if a.stale_only and not stale(path, row, threads, research,
-                                          find_application(row, tracker), a.today):
+            if a.stale_only and not (live(row, threads) and stale(
+                    path, row, threads, research, find_application(row, tracker), a.today)):
                 continue
             todo.append((row, path))
         if a.dry_run:
@@ -2212,8 +2258,9 @@ def main(argv=None) -> int:
             else:
                 wrote += 1
         print("%d prep documents written%s%s" % (
-            wrote, " (the ones older than prep v%d, or whose contact or thread has changed "
-            "since)" % redo_from() if a.stale_only else "",
+            wrote, " (live conversations only, older than prep v%d or whose contact or thread "
+            "has changed since; the rest are rebuilt by /prep when a call needs them)"
+            % redo_from() if a.stale_only else "",
             "; %d already current, left as they were" % same if same else ""))
         for line in needs:
             print(line)

@@ -1,7 +1,10 @@
 # The state files merge row by row when two chats changed them at once
 # (tools/merge_state.py, wired up by every sync). Without the driver, lines as usual.
-job_search_tracker.csv merge=ljs-state
-network_contacts.csv merge=ljs-state
-network_threads.csv merge=ljs-state
-job_scraper/seen_jobs.json merge=ljs-state
-documents/interview/question_bank.csv merge=ljs-state
+# Each is kept with plain line endings whatever wrote it: a chat that edited the contact
+# book with a writer ending every line in CRLF changed every line in the diff, and the
+# row-by-row merge saw every row as changed by both sides.
+job_search_tracker.csv merge=ljs-state text eol=lf
+network_contacts.csv merge=ljs-state text eol=lf
+network_threads.csv merge=ljs-state text eol=lf
+job_scraper/seen_jobs.json merge=ljs-state text eol=lf
+documents/interview/question_bank.csv merge=ljs-state text eol=lf

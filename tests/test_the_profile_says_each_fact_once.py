@@ -141,3 +141,42 @@ def test_a_posting_cut_line_in_the_screening_rules_is_not_a_pay_band(profile):
     _add(profile, "01-candidate-profile.md", "- A stated salary range whose top is under "
          "40,000 is cut.")
     assert C.findings() == []
+
+
+def test_a_posting_maximum_held_below_the_floor_is_a_cut_line_not_the_floor(profile):
+    """From a real repo on 2026-10-21: "a range whose maximum is below 100,000 is a cut" sat
+    beside a 105,000 walk-away floor, set lower on purpose, and was flagged as a second
+    floor. The person had to reword a correct line to clear the question."""
+    _add(profile, "CLAUDE.md", "- A stated maximum below GBP 40,000 is a cut, while the floor "
+         "stays 42,000.")
+    assert C.findings() == []
+    _add(profile, "CLAUDE.md", "- My walk-away floor is 45,000.")
+    assert [f["fact"] for f in C.findings()] == ["walk-away floor"]
+
+
+def test_how_to_answer_once_asked_keeps_the_rule_to_wait(profile):
+    """"Asked directly how long it runs, state the expiry plainly" is the rule kept, not
+    broken: it was flagged as volunteering the expiry."""
+    _add(profile, "01-candidate-profile.md", "- Name the visa or its dates only when asked "
+         "directly.")
+    _add(profile, "07-interview-prep.md", "> Asked directly how long the permit runs, state the "
+         "expiry plainly and say what the plan is.")
+    assert C.findings() == []
+
+
+def test_a_finding_the_person_reviewed_and_kept_is_not_raised_again(profile, capsys):
+    _add(profile, "CLAUDE.md", "- Walk-away floor is 45,000.")
+    [found] = C.findings()
+    where = "%s:%d" % (found["file"], found["line"])
+    assert C.main(["--reviewed", where]) == 0
+    assert "kept as it is" in capsys.readouterr().out
+    assert C.findings() == [] and C.main([]) == 0
+    assert "reviewed and kept as they are" in capsys.readouterr().out
+    saved = json.loads((profile / C.REVIEWED_FILE).read_text(encoding="utf-8"))
+    assert saved["reviewed"][0]["said"] == "45,000"
+    # A place with nothing raised records nothing; a changed sentence is checked again.
+    assert "nothing was recorded" in C.keep(["profile/CLAUDE.md:1"])[0]
+    clean = profile / "CLAUDE.md"
+    clean.write_text(clean.read_text(encoding="utf-8").replace(
+        "- Walk-away floor is 45,000.", "- Walk-away floor is now 45,000."), encoding="utf-8")
+    assert [f["fact"] for f in C.findings()] == ["walk-away floor"]

@@ -463,7 +463,7 @@ it. LinkedIn is never fetched from a session.
    **Start from the person's own messages that drew replies**
    (`python3 tools/network/compose.py examples`): their shape and wording come before
    any default. Then `compose.validate(kind="connection", title=...)` on each, and
-   `compose.advise(...)`. A draft `validate()` refuses is rewritten and never shown; a
+   `compose.advise(..., company=<their employer>)`. A draft `validate()` refuses is rewritten and never shown; a
    draft is rewritten on `advise()`'s warnings first, and a warning the rewrite leaves
    standing is shown with the draft for the person to decide, never in place of the
    rewrite. Then the read-aloud pass (`compose.READ_ALOUD`): the spoken version

@@ -5,6 +5,7 @@ Invented rows only (the example person's employers).
 from __future__ import annotations
 
 import json
+import shutil
 import os
 import subprocess
 import sys
@@ -238,7 +239,9 @@ def test_a_claim_is_never_staked_over_a_sync_that_landed(tmp_path, monkeypatch, 
     monkeypatch.setattr(merge_state, "install", lambda root: None)
     monkeypatch.setattr(sync_app, "own_tests_after_sync", lambda root: None)
     P.main(["--after-sync"])
-    capsys.readouterr()
+    said = capsys.readouterr().out
+    assert "another chat's sync of this update reached master first" in said
+    assert "none of its changes has reached master yet" in said
     refs = _git(b, "ls-remote", "origin", P.CLAIM_REFS + "*")
     assert refs.stdout.strip() == ""                  # b pushed no claim of its own
     monkeypatch.setattr(P, "ROOT", a)
@@ -256,6 +259,10 @@ def test_the_chat_that_claimed_keeps_the_update_when_the_other_lands_first(tmp_p
     monkeypatch.setattr(P, "ROOT", b)
     assert P.push_claim() == "taken"
     assert P.owner_elsewhere() != ""                  # b waits on a's claim
+    # Told why, as it is: a took it and nothing of a's has reached master. The sync said
+    # a's sync had "brought this update in" and b had it "by merging master" (2026-10-21).
+    assert P.owner()[1] == "claimed"
+    assert "has not reached master yet" in P.OWNER_WHY[P.owner()[1]]
     _git(b, "push", "-q", "origin", "HEAD:master")    # and lands its sync first
     monkeypatch.setattr(P, "ROOT", a)
     P.fetch_master()
@@ -461,3 +468,25 @@ def test_the_plan_says_which_listed_upgrades_are_already_in_place(tmp_path, monk
     assert [r["id"] for r in json.loads(out.out)] == [rows[0][0].id]
     assert "Already in place since the sync listed them" in out.err
     assert rows[1][0].id in out.err and rows[0][0].id not in out.err
+
+
+def test_a_state_file_rewritten_with_crlf_endings_changes_only_its_changed_row(tmp_path):
+    """From a real repo on 2026-10-21: a chat edited the contact book with a writer that
+    ended every line in CRLF, and the commit changed every line, so the diff was unreadable
+    and the row-by-row merge saw every row changed by both sides."""
+    repo = tmp_path / "r"
+    repo.mkdir()
+    _git(str(repo), "init", "-q")
+    shutil.copy(os.path.join(ROOT, ".gitattributes"), repo / ".gitattributes")
+    rows = ["contact_id,name,status"] + ["c%d,Person %d,awaiting_reply" % (i, i) for i in range(20)]
+    book = repo / "network_contacts.csv"
+    book.write_bytes(("\n".join(rows) + "\n").encode())
+    _git(str(repo), "add", "-A")
+    _git(str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "1")
+    rows[5] = "c4,Person 4,in_conversation"
+    book.write_bytes(("\r\n".join(rows) + "\r\n").encode())
+    _git(str(repo), "add", "-A")
+    stat = _git(str(repo), "diff", "--cached", "--numstat").stdout.split()
+    assert stat[:2] == ["1", "1"], stat
+    assert b"\r" not in subprocess.run(["git", "-C", str(repo), "show", ":network_contacts.csv"],
+                                       capture_output=True).stdout

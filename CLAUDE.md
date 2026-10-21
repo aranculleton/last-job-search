@@ -672,10 +672,11 @@ chat has lost it.
 | Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
 | Messaged someone, or they replied | `network_threads.csv`, one row per message |
 | A new person worth contacting | `network_contacts.csv` |
-| A contact's situation changed, or something is now owed | that contact's `status` and `next_action` |
+| A contact's situation changed, or something is now owed | that contact's `status` and `next_action`: `python3 tools/network/state.py set <contact> --status <s> --next-action "<what>" --due <date> --note "<what happened>"`, never by hand |
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |
 | A posting was ruled out | `job_scraper/seen_jobs.json`, through `tools/exclude.py add` (a reason, and what it rests on) |
 | A fact about the candidate: a skill, a gap, a date, a constraint | `01-candidate-profile.md`, and `CLAUDE.md` if it belongs in the summary |
+| They told one employer a different place from the profile's | `python3 tools/told.py "<Employer>" "<place>"` (person.json `identity.places_told`) |
 | A reaction or preference: a message, a person, a job, the voice, the questions | the setting it governs, and `profile/learned.json` via `tools/learned.py record` |
 | Company research that cost a fetch | `company_research/<key>.json` |
 

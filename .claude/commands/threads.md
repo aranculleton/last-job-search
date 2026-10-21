@@ -37,6 +37,12 @@ is never surfaced or written to again. Commit the two CSVs.
 
 **Gone cold** third, as a list to close out rather than chase.
 
+**Anything the person tells you about a thread** (a call booked, a referral put in, a new
+date, what was said) is written the same turn with
+`python3 tools/network/state.py set <contact> --status <status> --next-action "<what>"
+--due <YYYY-MM-DD> --note "<what happened>"`, never by editing the contact book: a note
+with line breaks typed into the file broke it.
+
 **Linked** last: threads and applications at the same employer, so a referral in
 progress can be pointed at a live application.
 

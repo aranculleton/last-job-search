@@ -20,7 +20,61 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Tell each employer your own place.** If you tell one employer you are somewhere other
+  than your profile says, record it once: `python3 tools/told.py "<Employer>" "<place>"`.
+  That employer's interview pack then says what it heard, drops the moved-recently small
+  talk, and a message draft to someone there that names your own city gets a warning.
+  Every other employer still hears your own place.
+- **Change a contact without editing the file.** `python3 tools/network/state.py set
+  <contact> --status call_booked --next-action "Call Thursday" --due 2026-10-23 --note "..."`
+  changes one row and keeps the file one line a row. A contact book edited by hand, with a
+  note that had line breaks in it, broke and had to be restored.
+- **"Both are right, leave it."** When the consistency check flags a line that is right on
+  purpose, `python3 tools/profile_consistency.py --reviewed <file>:<line>` records that.
+  It is not raised again until that sentence changes.
+
+### Changed
+
+- **A release rewrites far fewer call preps.** It rebuilds only the preps for live
+  conversations: someone who replied, a call booked or a referral in flight. Before, every
+  release rewrote all of them: 220 in one repo, twice when two chats synced, though most
+  were for conversations long over. A prep whose only change would be its date is left
+  alone. Any other prep is rebuilt by `/prep` the day you need it.
+- **The state files keep plain line endings** whatever program wrote them. A chat that
+  saved the contact book with Windows line endings changed every line in the commit, so
+  the diff was unreadable and the row-by-row merge saw every row as changed by both sides.
+- **"Moved recently?" can be answered "per employer"**, for good, by someone who tells
+  each employer their own place. Before, it could only be closed by naming one place, and
+  a "no" lasted a month. When nothing is known yet, it now leaves a short marker, not the
+  whole question.
+
 ### Fixed
+
+- **The consistency check stops flagging two things that are not clashes.** A posting rule
+  ("a range whose maximum is below 100,000 is a cut") is no longer read as a second
+  walk-away floor. "Asked directly, state the expiry plainly" is no longer read as
+  volunteering it.
+- **An `/upgrade` started on an older copy of your repo stops and says so.** It no longer
+  lists the wrong changes or crashes on a change it does not know.
+- **The app's own tests no longer go red on your files.** "The example is fully upgraded"
+  counted your own tests and your tracker when run in your repo. It now looks only at the
+  example person.
+- **The hand-over message says what the other chat has done.** It said a change belonged
+  to "the chat whose sync brought this update in" even when that chat had only claimed it
+  and nothing of its had reached master. It now says which, and how many of its changes
+  are on master already.
+- **An answer written as a quote is read as the answer again.** After the last update a
+  `>` line counted as a note, so a prep that had passed failed six answers with no word of
+  what had changed. Where nothing else in the answer is said, the quote is the answer.
+- **A placeholder is never "fit to say aloud".** An answer holding `[FILL IN: ...]`,
+  `[TODO]` or `<the number>` now fails the check and names it.
+- **The prep check reads every section**, not only "Your answers": a question answered
+  under another heading is checked, and its draft listed.
+- **No compiled Python files under `profile/`.** The tools no longer write them there, and
+  the local CI fails with the command that removes any already committed. 128 of them had
+  been committed with one person's profile.
 
 - **"What would you do differently now?" no longer takes your answer to "Why now?".** The
   word "now" counted as the topic, so at a bank the question matched the answer you wrote

@@ -207,8 +207,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-19", True, "call preps name the referrer, speak to a recruiter in your employer-facing words, mark profile wording to rewrite and keep your rewritten answers, point a recruiter screen to its process's own document, and are rebuilt when research, the tracker or an approaching call changes what they should say"),
             (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
             (13, "2026-10-20", True, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up; an answer drafted on request is marked as a draft; call preps answer from the interview pack's own answers (stock answers, why you are looking, work authorization), read the team research the pack reads, use the same posting, and send a booked screen with no application to /interview, so call preps already written are rebuilt, keeping what the person wrote"),
+            (14, "2026-10-21", False, "a release rewrites only a live conversation's prep, and never one whose only change is its date and stamp; an answer written as a quote is read as the answer, and a placeholder fails the check"),
         ),
-        "fingerprint": "cbf201e42df99552",
+        "fingerprint": "3cc15d674dd7e8dc",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -288,8 +289,9 @@ METHODS: dict[str, dict] = {
             (10, "2026-10-19", True, "the person's own reasons are asked, never drafted; stock answers matched through employer names and Use for:, and checked against the employer; what each person there was told, and which messages have no text; the warm route by stored status; the recruiter assumed for a screen; the format of this round only; which team, and the process at a screen; just arrived honoured; a posting file for every process"),
             (11, "2026-10-20", True, "Likely questions is notes, never words to say, and never repeats an answer already written; a stock answer marked Not for this kind of employer, or holding a fill-in, is left out with the reason; notes beside an answer are kept and never checked; a rebuild keeps the person's own layout and never adds the Checking line twice; a screen asks its standard questions first; hooks are whole sentences; and an answer drafted on request carries a Draft line that check lists until the person confirms it"),
             (12, "2026-10-21", True, "a question about what you would do differently is no longer matched to the stock answer for why now; an employer your own catalogue calls professional services is a consulting firm; a fact still to confirm is never printed as where you live; advice and guesses in outcome.md are never what you were told; a rebuild keeps the round's fuller name and the stories the last build used"),
+            (13, "2026-10-21", False, "a pack says the place each employer heard when it was told another (tools/told.py), with no move or settling-in for it; an answer written as a quote is read as the answer; a placeholder is never fit to say; a question answered under any heading is checked"),
         ),
-        "fingerprint": "09ea01593dc95368",
+        "fingerprint": "176cc751c83ae61c",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -377,8 +379,9 @@ METHODS: dict[str, dict] = {
             (32, "2026-10-20", False, "a people page lists each card with the person's address and best first by how close the title is to their function, cutting IT support, operations and the like; a people search can be built from a company number and is confirmed by the first page of results; a sign-in page is an expired session or friction by the hours since the last page or sign-in"),
             (33, "2026-10-20", False, "profile reads back to 3.2.5's caps (30 an hour, 80 a day), reading for the week's requests, no slow start before a signal, a lifted cap lifting the ramp and the loads cap, and the place check said once in a chat"),
             (34, "2026-10-20", False, "the voice checks from one round (a round's InMails built alike, a bare close, guessing from a level, flattery, vague comparisons, hedges by default, repeated words, a VOICE setting), and the tool fixes (rows from readings, pending invitations, no Connect button, InMail refunds, company numbers, research titles, two a company, the time where they are, a page loaded too soon kept); and the reading limits: a read stops counting once its note is sent, the person's own caps outrank every preset cap of their period, one budget line before a round; and one check for every composer, agreeing with what the composers write (no warning on a sentence about the sender, on the topic word said again, or on a question; a note to someone connected checked at its own length; an outreach note checked as a message)"),
+            (35, "2026-10-21", False, "compose.advise(company=) warns of a draft naming the person's own city to an employer told another; state.py set changes a contact's status, next action, date or notes by command"),
         ),
-        "fingerprint": "41fb599f6b93d46f",
+        "fingerprint": "ab7e85348c097808",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -503,6 +506,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "
                            "runs; keeps nothing",
     "tools/local_path.sh": "the same, for the shell scripts; keeps nothing",
+    "tools/told.py": "records, when asked, the place each employer heard in person.json; "
+                     "what that changes in a pack or a note is versioned with those",
     "tools/profile_consistency.py": "reads the profile and names what disagrees; the person "
                                     "corrects it, through the profile-consistency upgrade",
     ".github/*": "the app's own CI and issue templates",

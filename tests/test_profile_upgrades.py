@@ -53,6 +53,12 @@ def profile(tmp_path, monkeypatch):
             rec["no"] = dt.date.today().isoformat()
         asked.write_text(json.dumps(got), encoding="utf-8")
     monkeypatch.setenv(person.ENV, str(d))
+    # The example person's own state too: run in a person's repo, the checks read that
+    # repo's tracker, rounds and process folders, and "the example is fully upgraded" went
+    # red on their files.
+    st = tmp_path / "example_state"
+    shutil.copytree(os.path.join(EXAMPLE, "state"), st)
+    monkeypatch.setenv(person.STATE_ENV, str(st))
     person._modules.clear()
     person._data.clear()
     yield d
@@ -681,6 +687,9 @@ def test_own_tests_reading_the_apps_code_or_pinning_changed_behaviour_are_kept_i
     tests.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     monkeypatch.setattr(U, "ROOT", str(repo))
+    # Their own tests are the ones of the profile in use: this repo's.
+    monkeypatch.setenv(person.ENV, str(repo / "profile"))
+    person.reset()
     assert U.by_id("own-tests").pending() == ""                 # nothing of theirs at risk
     (tests / "test_reads.py").write_text(
         "import os\nROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))\n"
@@ -766,3 +775,57 @@ def test_a_saved_voice_in_the_old_stiff_wording_is_offered_a_rewrite(profile, mo
         'ASK = "I would love to hear how your team works"'), encoding="utf-8")
     assert "ASK in profile/networking.py" in U.by_id("voice-refresh").pending()
     assert "rewrite them the way you write" in U.by_id("voice-refresh").ask
+
+
+def test_a_checkout_older_than_the_sync_says_so_and_never_lists_or_crashes(
+        profile, tmp_path, monkeypatch, capsys):
+    """From a real repo on 2026-10-21: an /upgrade worktree made from a commit before the
+    sync listed the wrong upgrades, and `--check` on one it did not know raised KeyError."""
+    import sync_app
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def run(*args):
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+                              check=True).stdout.strip()
+    run("init", "-q")
+    run("config", "user.email", "t@example.com")
+    run("config", "user.name", "t")
+    for n in ("1", "2"):
+        (repo / "f").write_text(n)
+        run("add", "f")
+        run("commit", "-qm", n)
+    stamp = tmp_path / "ljs-last-sync"
+    monkeypatch.setattr(sync_app, "ROOT", str(repo))
+    monkeypatch.setattr(sync_app, "_stamp_path", lambda: str(stamp))
+    sync_app._record_check()                       # the sync left the repo on commit 2
+    assert sync_app.behind_sync() == ""
+    run("checkout", "-q", "HEAD~1")                # a worktree made from before it
+    assert "older than the last update" in sync_app.behind_sync()
+    assert U.main(["--plan"]) == 2 and "git merge" in capsys.readouterr().out
+    assert U.main(["--check", "boards"]) == 2
+    capsys.readouterr()
+    run("checkout", "-q", "-")
+    assert U.main(["--check", "no-such-change"]) == 2
+    assert "no change called 'no-such-change'" in capsys.readouterr().out
+
+
+def test_the_example_is_judged_on_its_own_files_never_the_repo_it_runs_in(
+        profile, tmp_path, monkeypatch):
+    """From a real repo on 2026-10-21: run there, "the example is fully upgraded" counted the
+    person's own tests (one read the app's code as text) and went red."""
+    repo = tmp_path / "theirs"
+    tests = repo / "profile" / "tests"
+    tests.mkdir(parents=True)
+    (repo / "tools").mkdir()
+    (repo / "tools" / "round_step.py").write_text("def run():\n    return 1\n", encoding="utf-8")
+    (tests / "test_reads.py").write_text(
+        "import os\nROOT = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))\n"
+        "def test_it():\n"
+        "    assert 'return 1' in open(os.path.join(ROOT, 'tools', 'round_step.py')).read()\n",
+        encoding="utf-8")
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.setattr(U, "ROOT", str(repo))
+    assert U.by_id("own-tests").pending() == ""
+    assert [(u.id, why) for u, why in U.pending()] == []
+    assert os.path.isfile(person.state("job_search_tracker.csv"))
