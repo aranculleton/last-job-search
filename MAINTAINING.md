@@ -140,6 +140,13 @@ reason in one line in the reply.
    causes is fixed in the app where the app is wrong, and otherwise named in the CHANGELOG
    entry it comes from, so the sync's message has something to point at. 3.5.0 skipped
    this and broke dozens of the maintainer's tests on names it removed.
+   Then rehearse the whole update: `python3 tools/rehearse_sync.py <the maintainer's repo>`.
+   On throwaway copies it plays out a cloud chat and a chat on their computer taking the
+   update at once with the copy of the sync they have now, runs the everyday commands and
+   their own tests in each, lands one and merges the other, and fails on any crash, stray
+   file or conflict. Every one is fixed before the release: it is what the person's chats
+   would otherwise find first. Its first run found a computer chat's sync leaving a file
+   uncommitted that stopped the next sync.
 2. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
    `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Merge it with CI
    green.

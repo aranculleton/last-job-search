@@ -230,6 +230,38 @@ def test_a_chat_on_their_computer_is_recorded_once_and_keeps_their_answer(tmp_pa
     assert place.has_local() and place.works_on() == "computer"
 
 
+def test_the_computer_chat_line_is_committed_so_the_next_sync_can_pull(tmp_path, monkeypatch):
+    """Found by tools/rehearse_sync.py on 2026-10-21: the line was written and never
+    committed, so the next sync, which pulls master only into a clean folder, stopped."""
+    import subprocess
+    import person
+    repo = tmp_path / "theirs"
+    d = repo / "profile"
+    d.mkdir(parents=True)
+    (d / "person.json").write_text("{}", encoding="utf-8")
+    (d / "place.json").write_text('{"works_on": "both"}\n', encoding="utf-8")
+
+    def git(*args):
+        return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c",
+                               "user.email=t@example.com", *args], capture_output=True,
+                              text=True, check=True).stdout
+    git("init", "-q")
+    git("add", "-A")
+    git("commit", "-qm", "start")
+    (repo / "notes.txt").write_text("theirs, staged\n", encoding="utf-8")
+    git("add", "notes.txt")
+    monkeypatch.setenv(person.ENV, str(d))
+    monkeypatch.setenv("GIT_AUTHOR_NAME", "t")
+    monkeypatch.setenv("GIT_AUTHOR_EMAIL", "t@example.com")
+    monkeypatch.setenv("GIT_COMMITTER_NAME", "t")
+    monkeypatch.setenv("GIT_COMMITTER_EMAIL", "t@example.com")
+    assert place.note_local(datetime.date(2026, 10, 21))
+    assert "profile/place.json" not in git("status", "--porcelain")
+    assert "Place: a chat on this computer" in git("log", "-1", "--format=%s")
+    # Only that line went in: what they had staged stays staged, uncommitted.
+    assert git("status", "--porcelain").strip() == "A  notes.txt"
+
+
 def test_the_answer_is_recorded_only_in_a_profile_that_exists(tmp_path, monkeypatch):
     import person
     monkeypatch.setattr(person, "exists", lambda *p: False)

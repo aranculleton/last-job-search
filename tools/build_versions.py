@@ -501,6 +501,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     "tools/offline_boards.py": "a test seam: canned board answers inside a test, nothing kept",
     "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
+    "tools/rehearse_sync.py": "the maintainer's pre-release rehearsal of a sync on throwaway "
+                              "copies; keeps nothing",
     "tools/holidays.py": "works out public holidays when a date is counted; writes nothing, and "
                          "a person's own dates live in their search.py PUBLIC_HOLIDAYS",
     "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "

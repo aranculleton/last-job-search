@@ -281,12 +281,33 @@ def note_local(today: datetime.date | None = None) -> bool:
         if has_local() or not person.exists("person.json"):
             return False
         got = dict(_place(), computer_chat=(today or datetime.date.today()).isoformat())
-        with open(_profile_file(), "w", encoding="utf-8") as fh:
+        path = _profile_file()
+        with open(path, "w", encoding="utf-8") as fh:
             json.dump(got, fh, indent=2)
             fh.write("\n")
+        _commit_place(path)
         return True
     except Exception:  # a check must never break the sync that runs it
         return False
+
+
+def _commit_place(path: str) -> None:
+    """Commit the one line just written, and only it. Left uncommitted, it stopped the next
+    sync, which pulls master only into a clean folder: every chat on a computer was told to
+    commit a file it had never touched (found by tools/rehearse_sync.py, 2026-10-21)."""
+    import subprocess
+    root = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+    rel = os.path.relpath(path, root)
+    try:
+        if subprocess.run(["git", "-C", root, "ls-files", "--error-unmatch", rel],
+                          capture_output=True, timeout=30).returncode:
+            subprocess.run(["git", "-C", root, "add", "--", rel], capture_output=True,
+                           timeout=30)
+        subprocess.run(["git", "-C", root, "commit", "-q", "-m",
+                        "Place: a chat on this computer, first seen", "--", rel],
+                       capture_output=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
 
 
 def record(answer: str, today: datetime.date | None = None) -> str:
