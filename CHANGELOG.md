@@ -50,9 +50,12 @@ make sense to somebody whose repo just received it.
   - Each posting is then drafted in one call. It returns the draft with a map of which
     fact each sentence rests on, and code checks it, so the drafter repairs from only what
     fails.
-  - The grounding audit is code first (`stage_picks.py audit`, `tools/draft_audit.py`). Only
-    a draft code flags reaches the model auditor, which reads one small packet.
-    `model_audit: "all"` sends every draft to it.
+  - Every draft that will be sent gets both audits: code first (`stage_picks.py audit`,
+    `tools/draft_audit.py`), then the model auditor, which reads one small packet (about
+    3.5k tokens on the example person) in one call and returns its verdict through
+    `draft_audit.py verdict`. A draft code alone passed is never rendered. Roles you drop
+    are left out with the workflow's `only`, or `stage_picks.py audit --only` and
+    `assemble --only` afterwards.
   - What a batch cost, per posting and stage, is kept in `cost.json` (`tools/draft_cost.py`).
   - Measured by size, not yet in a live run: a drafter's fixed reading drops from about 16k
     tokens to about 3k on the example person, and from about 45 tool calls to 3 to 7.
@@ -169,6 +172,10 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Each widening is 2x, then 3x, the first round's pages**, not a doubling on top of a
+  doubling, and a board that asks for a crawl delay is fetched one request at a time. A
+  round resumed from a saved scrape with `--expand` says before it widens that the wider
+  round scrapes the portals live, since only they have the extra pages.
 - **If one of your own tests fails after this update**, these four changes are deliberate:
   - A reply can now be read as an automatic one, a new scenario called `auto_reply`. It
     drafts nothing (0 sentences), because nothing is sent. A test that lists every reply
@@ -264,6 +271,101 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Numbers written as words are checked like digits**, in the resume and the letter:
+  "twelve years", "a third of", "halved", "doubled" and "the fifth consecutive year". A
+  summary or a letter bullet is checked against your profile alone, so a posting's figures
+  can no longer stand in for your work.
+- **A sentence citing the posting can no longer carry an employer fact the posting does not
+  say**, or lend its figures to a sentence about you.
+- **Every research fact a letter cites is checked against the page it was fetched from.** A
+  search summary, a quote under six words, or a figure only in the researcher's own wording
+  can no longer be cited, and the drafter is told when the research it was given has
+  changed.
+- **The code audit catches more**: your target sectors are not counted as work you did, and
+  it flags an addressee nobody named, softer ways of conceding a gap, leadership or scope no
+  cited fact supports, near-identical openings, and a malformed bullet, without stopping the
+  batch.
+- **Files from another role at the same employer, a stale note, an edited draft or an
+  unmarked model audit are never read as this application's**, and recording a
+  re-application adds its own tracker row rather than overwriting the one that was sent.
+- **A posting's terms are read right both ways**: a stated permanent job is not read as a
+  contract, the common contract forms ("Duration: 6 months") are, and pay stated for your
+  own area is not queried.
+- **A role title made of general words gets a readable file name**, and staging never
+  crashes on it; staging names the pack build and the workflow's arguments.
+- **Employer research follows robots.txt redirects**, keeps the crawl delay from the very
+  first request, shares one daily budget across runs, and never fetches a posting's link
+  written another way.
+- **The costs of two roles at one employer are kept apart, a symbol a letter's font cannot
+  print is caught, and trimming a long letter keeps its closing sentence.**
+- **The message log says what happened, in every order it happens in.**
+  - A nudge after you answered someone's reply is logged as the one nudge, and logging the
+    same chase as a message no longer sets up a second one.
+  - `state.py unsend` and `resent` act on the latest message by date, never an older one
+    that the export import appended below it.
+  - An answer to someone who wrote first is logged as a reply on the message channel,
+    whichever command logs it, never as a connection request.
+  - Reading the LinkedIn export again adds nothing, even a message with no words, such as a
+    resume sent on its own. A request recorded from the Pending page and then found in the
+    export is one request, dated the day it went. Invitations someone accepted are never
+    offered for withdrawal when one side of the export has no profile address.
+  - A line of seven "=" inside a message is words, not a merge conflict. A real conflict is
+    still refused.
+  - `state.py set "<name>"` refuses a name two contacts share and lists their ids, and
+    `nudge` and `message --texts <file>` take the contact ids from the file.
+  - After the first message to someone who accepted a request with no note, the next action
+    no longer repeats the request's withdraw line.
+  - `sent --draft` on a placeholder draft logs it and says how to put the real words on the
+    log.
+- **Reading slows down after friction, whatever cap you set.**
+  - After a security check on a day with no page recorded, reading starts again at the
+    ramp's first step.
+  - A lower hourly cap of your own no longer switches the ramp off: after friction the lower
+    of the two holds. A raised cap still ramps after a hard signal, back up to your own cap.
+  - A page that came back nearly empty counts as a page loaded, so the doubled pause after
+    it holds.
+  - A stop in words the app does not recognise is said in those words, never as a security
+    check.
+- **A note rests on its own reader.**
+  - Approved examples are shown to the drafter without their reader's name and employer, and
+    a first note naming the person or employer an example was written for is refused when it
+    is for someone else. A waiting note queued before this check is listed for a rewrite.
+  - Notes below a line of `---` in a queued draft are never read, checked or logged as part
+    of the note.
+  - The per-employer limit reads the message log, so someone who replied is not counted as
+    waiting.
+  - A greeting that starts the person's given name (three letters or more) is theirs.
+  - An out-of-office reply that offers to help is read as a person, and a sentence about a
+    team is no longer read as a "no longer with us" message.
+  - A recruiter hiring nationally is not cautioned for two cities on their page.
+- **The own-profile check no longer flags a promotion listed as two roles at one employer**,
+  or a shortened employer name.
+- **On a free LinkedIn plan, a request sent with no note no longer uses up the month's
+  personalised notes.**
+- **`sources.py` answers `--help`, a command missing its argument, or a file typed by
+  mistake with its usage**, instead of searching for it as an employer.
+- **A second language asked only as a plus, or named as a market, is ranked, not cut.**
+  "Bilingual in Spanish is a plus", "Fluency in Mandarin would be an advantage" and
+  "experience with Spanish and Portuguese markets" were cut as language requirements. The
+  rulings the old reading saved are released on the next round, with nobody asking. A
+  language stated as a requirement still cuts, a level written as a test or a grade
+  included ("Japanese (JLPT N2) required").
+- **Remote places are read the same way by both gates.** A remote role naming a region that
+  takes in your country passes whatever country sits beside it ("Remote (US, EMEA)" for a UK
+  home); your country written as a code ("US", "U.K.") is home; a time zone is hours, not a
+  place to live ("must be based in a US time zone"); and a remote role in a country your
+  profile does not list is flagged rather than passed.
+- **"U.S. Citizen" written in capitals reaches the eligibility gate**, a data role that
+  supports a profession is no longer cut as that profession's credential gate, and Master
+  Production Schedule and Master Black Belt are not read as degrees.
+- **A ruling on one posting no longer hides a new opening with the same title months
+  later**, and a skip recorded for a score no longer blocks.
+- **`bar.py judge` keeps every judgement**, even with several running at once, refuses to
+  write over a file it cannot read, and a judgement speaks for its own employer only, never
+  another with the same first word.
+- **A round no longer hangs on Windows over an accented letter**, and a round where nothing
+  passes the free gates ends as missed rather than broken. The newest saved round is the
+  highest numbered.
 - **"I'll pass it on" is a referral, and a bare "I'll pass" is a no.** "Send me your CV and
   I'll pass it on" was read as a decline, which hid the resume ask beside it and counted
   towards the two declines that end a thread. "Thanks, but I'll pass." was read as an offer

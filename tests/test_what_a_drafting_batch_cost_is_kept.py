@@ -25,7 +25,9 @@ from test_one_drafting_call_per_posting import run_workflow  # noqa: E402
 def test_the_workflow_returns_a_cost_record_for_every_stage_it_ran():
     got = run_workflow({"A": "clean", "B": "model"}, pack="P" * 400, pack_hash="h")
     cost = {r["pick"]["slug"]: r["cost"] for r in got["out"]}
-    assert [c["stage"] for c in cost["a"]] == ["research", "draft"]
+    # Updated 2026-10-21: every draft that will be sent gets the model audit, so the clean
+    # draft A has an audit stage too.
+    assert [c["stage"] for c in cost["a"]] == ["research", "draft", "audit"]
     assert [c["stage"] for c in cost["b"]] == ["research", "draft", "audit"]
     draft = cost["a"][1]
     assert draft["static_prefix_chars"] == 400 and draft["prompt_chars"] > 400
@@ -42,17 +44,19 @@ def test_the_batch_and_each_application_keep_it_and_one_line_says_the_total(tmp_
                                                    "b": ("Fernhill Freight", "Planner")}[r["pick"]["slug"]]
     folder = outreach.app_folder("Kestrel Mutual", "Analyst", "")
     os.makedirs(folder, exist_ok=True)
+    # Labels by company, as runs before 2026-10-21 wrote them, and by slug, as they do now.
     usage = [{"label": "research:Kestrel Mutual", "tokens": 1000, "tool_calls": 3, "seconds": 20},
-             {"label": "draft:Kestrel Mutual", "tokens": 9000, "tool_calls": 4, "seconds": 70}]
+             {"label": "draft:Kestrel Mutual", "tokens": 9000, "tool_calls": 4, "seconds": 70},
+             {"label": "audit:a", "tokens": 2000, "tool_calls": 2, "seconds": 30}]
     path, kept, line = draft_cost.write(str(tmp_path), got["out"], usage)
     batch = json.load(open(path, encoding="utf-8"))
     a = batch["postings"]["a"]
-    assert a["totals"]["tokens"] == 10000 and a["totals"]["tool_calls"] == 7
-    assert a["totals"]["seconds"] == 90
+    assert a["totals"]["tokens"] == 12000 and a["totals"]["tool_calls"] == 9
+    assert a["totals"]["seconds"] == 120
     # Fernhill's figures were never copied in: not available, not zero.
     assert batch["postings"]["b"]["totals"]["tokens"] is None
     assert kept == [os.path.relpath(os.path.join(folder, "cost.json"),
                                     os.environ["LJS_STATE"])]
     assert json.load(open(os.path.join(folder, "cost.json")))["slug"] == "a"
-    assert line.startswith("batch: 2 posting(s), 5 agent call(s), 1 model audit(s)")
+    assert line.startswith("batch: 2 posting(s), 6 agent call(s), 2 model audit(s)")
     assert "tokens not available" in line

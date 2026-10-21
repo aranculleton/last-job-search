@@ -450,11 +450,36 @@ class QuoteNotFound(ValueError):
     """A saved quote is not in the page it cites, as that page was fetched."""
 
 
+# The fewest words a quote may have and still be checked. Under six it is a phrase, not a
+# statement: "claims", or "1.2 million policyholders", is on many pages of a site, so
+# finding it on one proves nothing about the sentence a letter rests on it, and a one-word
+# quote was being stamped `quote_checked`. Six is about the shortest sentence that says
+# who did what ("Our Chicago plant opened in 2026."), the shape a fact's quote has.
+MIN_QUOTE_WORDS = 6
+
+
+def quote_problem(fact, pages=None) -> str:
+    """What is wrong with one fact's quote, as code can tell: "" when it is in the page it
+    cites as `fetch` kept that page, "short" under MIN_QUOTE_WORDS, "not-on-page" when the
+    kept page does not hold it, "no-page" when no page is kept to check it against."""
+    if not isinstance(fact, dict):
+        return "no-page"
+    quote = str(fact.get("quote") or "")
+    if len(quote.split()) < MIN_QUOTE_WORDS:
+        return "short"
+    page = stored_page(fact.get("url"), pages) if fact.get("url") else None
+    if page is None:
+        return "no-page"
+    return "" if norm_text(quote) in norm_text(page.get("text")) else "not-on-page"
+
+
 def check_quotes(data, pages=None) -> tuple[list, list]:
-    """(facts checked, facts whose quote is not in the page they cite).
+    """(facts checked, facts whose quote is not in the page they cite, or too short).
 
     Only facts citing a page `fetch` read can be checked; a fact from a page read
-    another way is passed through untouched, as it always was."""
+    another way is passed through untouched, as it always was. A quote under
+    MIN_QUOTE_WORDS on a kept page is refused: it would be stamped checked and prove
+    nothing."""
     checked, missing = [], []
     groups = [data.get("facts") or [], data.get("interview_process") or []]
     groups += [v for v in (data.get("teams") or {}).values() if isinstance(v, list)]
@@ -462,13 +487,9 @@ def check_quotes(data, pages=None) -> tuple[list, list]:
         for f in facts:
             if not isinstance(f, dict) or not f.get("quote") or not f.get("url"):
                 continue
-            page = stored_page(f["url"], pages)
-            if page is None:
+            if stored_page(f["url"], pages) is None:
                 continue
-            if norm_text(f["quote"]) in norm_text(page.get("text")):
-                checked.append(f)
-            else:
-                missing.append(f)
+            (checked if quote_problem(f, pages) == "" else missing).append(f)
     return checked, missing
 
 
@@ -495,9 +516,9 @@ def save(company, data, root=None, country=None, role=None, today=None, pages=No
     checked, missing = check_quotes(data, pages)
     if missing:
         raise QuoteNotFound(
-            "not saved: %d quote(s) are not in the page they cite, as it was fetched: %s. "
-            "Quote the page's own sentence exactly (the candidates fetch printed are), "
-            "or leave the fact out." % (len(missing), "; ".join(
+            "not saved: %d quote(s) are not in the page they cite, as it was fetched, or are "
+            "under %d words: %s. Quote the page's own sentence exactly (the candidates fetch "
+            "printed are), or leave the fact out." % (len(missing), MIN_QUOTE_WORDS, "; ".join(
                 "%s (%s)" % (str(f.get("quote"))[:80], f.get("url")) for f in missing)))
     stamp = _today(today).isoformat()
     for f in checked:
@@ -660,6 +681,26 @@ def _store_page(url, title, text, via, pages=None) -> str:
                    "stored": time.time()}, fh, ensure_ascii=False)
     os.replace(where + ".tmp", where)
     return where
+
+
+def _budget_take(company, today, pages, budget) -> bool:
+    """Take one request from the employer's budget for the day, or say there is none left.
+    Read and written under one lock, so runs going at once share one count."""
+    where = os.path.join(pages_dir(pages), "budget.json")
+    os.makedirs(os.path.dirname(where), exist_ok=True)
+    with _locked(where):
+        try:
+            with open(where, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            data = {}
+        day = data.get(today) or {}
+        used = int(day.get(file_key(company), 0))
+        if used >= budget:
+            return False
+        day[file_key(company)] = used + 1
+        _write_json(where, {today: day})
+        return True
 
 
 def _budget_used(company, today, pages=None, add=0) -> int:
@@ -919,21 +960,30 @@ class _Run:
         self.failures = {}        # host -> failures in a row this run
         self.log = []             # (state, url, detail)
         self.feeds = {}           # host -> feed urls a page named
+        self.started = {}         # host -> when its last request started
 
     def left(self) -> int:
-        return self.budget - self.used_before - self.used
+        """Requests left for this employer today, across every run: the shared count is
+        read again each time, because two runs for one employer (two roles there,
+        researched at once) each read it once at their start and spent the budget twice."""
+        return self.budget - _budget_used(self.company, self.today.isoformat(), self.pages)
 
     def _spend(self) -> bool:
-        if self.left() <= 0:
+        if not _budget_take(self.company, self.today.isoformat(), self.pages, self.budget):
             return False
         self.used += 1
-        _budget_used(self.company, self.today.isoformat(), self.pages, add=1)
         return True
 
-    def _pace(self, host: str) -> None:
-        delay = max(MIN_GAP, float((self.notes.get(host) or {}).get("crawl_delay") or 0))
+    def _pace_file(self, host: str) -> str:
         where = os.path.join(pages_dir(self.pages), "pace", re.sub(r"[^a-z0-9.-]", "_", host))
         os.makedirs(os.path.dirname(where), exist_ok=True)
+        return where
+
+    def _pace(self, host: str) -> float:
+        """Wait for the host's next slot, book the one after, and return when this request
+        starts."""
+        delay = max(MIN_GAP, float((self.notes.get(host) or {}).get("crawl_delay") or 0))
+        where = self._pace_file(host)
         with _locked(where):
             try:
                 with open(where, encoding="utf-8") as fh:
@@ -946,6 +996,21 @@ class _Run:
                 fh.write(repr(start + delay))
         if start > now:
             self.sleep(start - now)
+        self.started[host] = start
+        return start
+
+    def _hold_until(self, host: str, when: float) -> None:
+        """Book the host's next slot no earlier than `when`."""
+        where = self._pace_file(host)
+        with _locked(where):
+            try:
+                with open(where, encoding="utf-8") as fh:
+                    nxt = float(fh.read().strip() or 0)
+            except (OSError, ValueError):
+                nxt = 0.0
+            if when > nxt:
+                with open(where, "w", encoding="utf-8") as fh:
+                    fh.write(repr(when))
 
     def get(self, url: str, headers: dict) -> tuple[int, dict, str] | None:
         """One request, paced and counted; None when the budget is spent."""
@@ -964,14 +1029,32 @@ class _Run:
         host = (urlsplit(url).hostname or "").lower()
         if host not in self.policy:
             def fetch(robots_url, ua):
-                got = self.get(robots_url, {"User-Agent": ua, "Accept": "text/plain,*/*"})
-                if got is None:
-                    raise RuntimeError("budget spent")
-                return got[2], got[0]
+                # Redirects followed, up to five, as RFC 9309 asks and as
+                # tools/robots_check.py does with curl: a bare domain that sends everything
+                # to www, robots.txt included, was read as a refusal and noted for a
+                # fortnight.
+                for _hop in range(6):
+                    got = self.get(robots_url, {"User-Agent": ua, "Accept": "text/plain,*/*"})
+                    if got is None:
+                        raise RuntimeError("budget spent")
+                    status, head, text = got
+                    if status in (301, 302, 303, 307, 308) and (head or {}).get("location"):
+                        nxt = urljoin(robots_url, head["location"])
+                        if urlsplit(nxt).scheme not in ("http", "https") or \
+                                NEVER_HOSTS.search(urlsplit(nxt).hostname or ""):
+                            return text, status
+                        robots_url = nxt
+                        continue
+                    return text, status
+                return "", 310
             body, why = robots_check.read_policy(url, fetch=fetch)
             self.policy[host] = (body, why)
             if body:
                 delay = max(crawl_delay(body, "Claude-User"), crawl_delay(body, "*"))
+                # The robots.txt request was paced with the delay known before it was read.
+                # The page after it waits the delay the site asked for, from that request.
+                if delay and host in self.started:
+                    self._hold_until(host, self.started[host] + max(MIN_GAP, float(delay)))
                 no_ai = any(content_signals(body, a).get("ai-input") == "no"
                             for a in ("Claude-User", "*"))
                 self.notes[host] = note_host(host, {
@@ -1049,8 +1132,18 @@ def _posting_parts(posting_file) -> tuple[str, str, set]:
     head = text.split("BEGIN-UNTRUSTED-", 1)[0] if body != text else ""
     loc = re.search(r"^- location: (.*)$", head, re.M)
     cc = re.search(r"^- research as: ([A-Z]{2})\b", head, re.M)
-    urls = {_norm_url(u.rstrip(".,);]")) for u in re.findall(r"https?://[^\s<>\"']+", body)}
+    urls = {_page_key(u.rstrip(".,);]")) for u in re.findall(r"https?://[^\s<>\"']+", body)}
     return (loc.group(1).strip() if loc else ""), (cc.group(1) if cc else ""), urls
+
+
+def _page_key(u) -> str:
+    """A URL as the page it names: its host (without www.) and path, the scheme, the query
+    and the fragment left off. A link from inside a posting is never fetched, and written
+    with http for https, or with ?src=li after it, it was."""
+    parts = urlsplit(str(u or "").strip())
+    host = (parts.hostname or "").lower()
+    host = host[4:] if host.startswith("www.") else host
+    return host + (parts.path.rstrip("/") or "/")
 
 
 def fetch(company, urls=(), site=None, country=None, role=None, posting=None, topics=(),
@@ -1082,7 +1175,7 @@ def fetch(company, urls=(), site=None, country=None, role=None, posting=None, to
     for url in todo:
         host = (urlsplit(url).hostname or "").lower()
         nu = _norm_url(url)
-        if nu in forbidden:
+        if _page_key(url) in forbidden:
             run.log.append(("refused", url, "it appears inside the posting, which is never a source"))
             continue
         if nu in fresh_urls:

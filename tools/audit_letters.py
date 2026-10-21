@@ -37,11 +37,25 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # of experience", which is the profile's positive claim, and missed "I have not
 # built", "no direct experience" and "not yet".
 CONCEDE = re.compile(
-    r"\b(?:I have not (?:yet )?(?!only\b)\w+|I have (?:had )?no (?:direct |formal |prior |hands-on )?experience|"
+    r"\b(?:I have not (?:yet )?(?!only\b)\w+|I haven'?t (?:yet )?(?!only\b)\w+|"
+    r"I have (?:had )?no (?:direct |formal |prior |hands-on )?experience|"
     r"not yet\b|have yet to|(?:is|would be|are) new to me|I lack\b|"
     r"(?:fewer|less|shorter) than the|short of the|"
     r"rather than (?:the )?(?:\d+|five|six|seven|eight|nine|ten|business|continue|(?-i:[A-Z]{2,}))|"
-    r"years? in rather than|would start here|is the one .*? I have not)", re.I)
+    r"years? in rather than|would start here|is the one .*? I have not|"
+    # The softer shapes a gap arrives in, which the two above let through: "my exposure
+    # to insurance data so far is limited", "would be a new domain for me", "keen to
+    # build my experience of claims data", "I would learn it fast".
+    r"(?:exposure|experience|background|familiarity|knowledge)\b[^.]{0,40}\b(?:is|has been|"
+    r"remains|was) (?:so far |still |fairly |quite |relatively )?(?:limited|light|modest|narrow)|"
+    r"(?:limited|little|modest|no real) (?:exposure|experience|familiarity|background) (?:to|with|in|of)\b|"
+    r"new (?:domain|area|field|sector|industry|world|territory|space) (?:for|to) me|"
+    r"(?:keen|eager|excited|looking|hoping|happy) to (?:build|grow|develop|deepen|broaden|gain|"
+    r"strengthen) (?:up )?(?:my )?(?:\w+ ){0,3}(?:experience|exposure|knowledge|understanding|skills?)|"
+    r"build (?:up )?my (?:\w+ )?(?:experience|knowledge|exposure) (?:of|in|with)\b|"
+    r"I(?:'d| would| will| can| could) (?:learn|pick up|master) (?:it|this|them|that|the \w+) "
+    r"(?:fast|quickly|soon)\b|get up to speed\b|(?:outside|beyond) (?:of )?my (?:direct |current )?"
+    r"(?:experience|background|expertise)\b|haven'?t (?:yet )?had the (?:chance|opportunity))", re.I)
 
 
 # The "not X, but Y" shape, in every phrasing that arrives. This is the one to

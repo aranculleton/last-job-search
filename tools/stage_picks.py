@@ -74,29 +74,37 @@ A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
 `stage` writes, under <round_dir>:
     picks/NN_<slug>.md   the posting, fenced by tools/untrusted.py, with the
                          shortlist's scores and routing notes above the fence
-    picks.json           [{file, company, role, slug, abbr, ask_first}], the
-                         `args.picks` of the saved draft-applications workflow;
-                         `consent` adds skills_yes and skills_no. Only the picks
-                         nothing is waiting on.
+    picks.json           [{file, company, role, slug, abbr, ask_first}]: the picks
+                         nothing is waiting on. `consent` adds skills_yes and
+                         skills_no; `tools/draft_pack.py build` turns it into
+                         draft_args.json, the workflow's args.
     held.json            the picks waiting on the person's answer, each with its
                          `hold` questions; `consent --draft` moves one to picks.json
     apps_in.json         the shortlist rows with `abbr`, for tools/outreach.py
 
 `audit` is the grounding audit of each `<round_dir>/draft_<slug>.json` the workflow's
 drafter writes, done by code first (tools/draft_audit.py): every rule the draft must
-meet, and every question about its claim map. It writes `audit_<slug>.json` with the
-verdict `pass` (nothing for the model to judge) or `needs_model`, and merges the model
-auditor's `model_audit_<slug>.json` when there is one, re-checking its corrected draft.
-`--only` audits just the roles that will be sent; `--json` prints only what fails.
+meet, and every question about its claim map. It writes `audit_<slug>.json` and merges
+the model auditor's `model_audit_<slug>.json` when there is one, re-checking its
+corrected draft. Every draft that will be sent gets both: the verdict is `needs_model`
+until the model auditor has read the packet, and `pass` or `fixed` only once code has
+re-checked what it returned. A draft written for another role than the pick (a file left
+from an earlier pick at the same employer) is `stale`. `--only` audits just the roles
+that will be sent; `--json` prints only what fails.
 
 `assemble` reads each `<round_dir>/audit_<slug>.json` (the whole audit: verdict,
 corrected draft, changes and residual risks) and writes `<round_dir>/drafts.json`
 with the posting text and the abbreviation filled in. A draft the audit rejected is
-never rendered: it is reported with the audit's reasons. Nor is one still waiting on
-the model auditor, one changed since its audit, or one audited against a profile that
-has changed since. A pick with no audited draft is reported, never silently dropped.
-An older audit file, from the agent auditor or holding the corrected draft alone, as a
-one-element list, is still read.
+never rendered: it is reported with the audit's reasons. Nor is one without the model
+auditor's verdict, one changed since its audit (the draft, the model audit or the note
+written again), one for another role, or one audited against a profile that has changed
+since. A pick with no audited draft is reported, never silently dropped; `--only` leaves
+out the roles the person dropped. An older audit file, from the agent auditor or holding
+the corrected draft alone, as a one-element list, is still read.
+
+When `stage` gives a slug to a different role than the round's earlier pick under it, the
+files that pick left (draft, research, audits, note, saved posting) are moved to
+`<round_dir>/old/<slug>-N/` first, so nothing written for one role is read as another's.
 """
 
 from __future__ import annotations
@@ -155,17 +163,42 @@ def role_token(role: str, taken: set[str] | None = None) -> str:
     Analytics"), and falls back to the whole title.
     """
     taken = taken or set()
+    for tok in role_tokens(role):
+        if tok not in taken:
+            return tok
+    return "Role"
+
+
+# Words a title carries that are never a role's name, even when every other word is
+# filler: articles and the terms of the job ("12 Month Contract").
+_NEVER_A_NAME = {"a", "an", "and", "the", "of", "for", "to", "in", "at", "with", "on",
+                 "contract", "month", "months", "fixed", "term", "remote", "hybrid", "ftc",
+                 "temporary", "temp", "permanent", "full", "time", "part"}
+
+
+def role_tokens(role: str) -> list[str]:
+    """Every token `role_token` may name a role by, best first, each tried in turn.
+
+    The role's own distinguishing words first ("PricingStrategy"); when every word is
+    filler ("Senior Analyst"), the title's own words are still a name a person reads
+    ("SeniorAnalyst"), where the old fallback was "Role", the same machine-looking token
+    every time. Then the first of them numbered, so a filename is always found."""
+    out = []
     parts = [p for p in re.split(r"\s[-–—]\s|,|\(|\)", role or "") if p.strip()]
-    candidates = list(reversed(parts)) + [role or ""]
-    for text in candidates:
+    for text in list(reversed(parts)) + [role or ""]:
         words = [w for w in re.findall(r"[A-Za-z0-9]+", text) if w.lower() not in _FILLER]
-        if not words:
-            continue
         for n in (2, 3, 1):
             tok = "".join(w[:1].upper() + w[1:] for w in words[:n])
-            if tok and tok not in taken and len(tok) <= 24:
-                return tok
-    return "Role"
+            if tok and len(tok) <= 24 and tok not in out:
+                out.append(tok)
+    plain = [w for w in re.findall(r"[A-Za-z]+", role or "") if w.lower() not in _NEVER_A_NAME]
+    for n in (2, 3, 1):
+        tok = "".join(w[:1].upper() + w[1:] for w in plain[:n])
+        if tok and len(tok) <= 24 and tok not in out:
+            out.append(tok)
+    first = out[0] if out else "Role"
+    out += [f"{first}{k}" for k in range(2, 10)]
+    return out
 
 
 def _tracker_rows(path: str = TRACKER) -> list[dict]:
@@ -215,19 +248,17 @@ def choose_abbr(company: str, role: str, rows: list[dict], root: str = ROOT,
     same = doc_name.reusable(base, role, rows)
     if base not in claimed and (not held or same) and (held or not file_taken(base, root)):
         return base
-    tried: set[str] = set()
-    for _ in range(6):
-        tok = role_token(role, tried)
-        tried.add(tok)
+    for tok in role_tokens(role):
         abbr = doc_name.suffix(company, tok)
         # The redraft of a redraft keeps the token name its unsent draft has.
         free = (doc_name.reusable(abbr, role, rows) if owners(abbr, rows)
                 else not file_taken(abbr, root))
         if abbr not in claimed and free:
             return abbr
-    raise ValueError(
-        f"no free filename for {company!r} / {role!r}: {base} and every role token tried "
-        "belong to other applications. Pass a Company::title pick with a clearer title.")
+    raise SystemExit(
+        f"stage: every file name for {company} | {role} is taken by another application "
+        f"({base} and {base}_<role>). Rename one of the older files in cv/ and "
+        "cover_letters/, and its tracker row, then stage again.")
 
 
 def _find(shortlist: list[dict], pick: str) -> dict:
@@ -280,6 +311,10 @@ def posting_text(row: dict, round_dir: str, s: str, fetch=_hydrate) -> str:
     if os.path.exists(saved):
         with open(saved, encoding="utf-8") as fh:
             return fh.read()
+    if str(row.get("portal") or "") == "pasted":
+        raise SystemExit(f"stage: the posting for {row.get('company')} | {row.get('title')} has no "
+                         "text. Paste it into a file and stage it again with single "
+                         "--posting-file <that file>.")
     got = fetch(row) or {}
     if (got.get("desc") or "").strip():
         return got["desc"]
@@ -364,6 +399,8 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
     rows = _tracker_rows() if rows is None else rows
     contact = contact_for(for_contact) if str(for_contact or "").strip() else None
     os.makedirs(os.path.join(round_dir, "picks"), exist_ok=True)
+    before = {p.get("slug"): p for p in _read_picks(round_dir) + _read_held(round_dir)
+              if isinstance(p, dict)}
     staged, apps_in, claimed, seen_slugs = [], [], set(), set()
     for n, pick in enumerate(picks, 1):
         r = _find(shortlist, pick)
@@ -386,6 +423,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         if s in seen_slugs:
             s = f"{s}_{n}"
         seen_slugs.add(s)
+        _set_aside(round_dir, s, before.get(s), r)
         r = dict(r, desc=posting_text(r, round_dir, s, fetch))
         asks = to_ask(r["desc"])
         prof = posting_profile.read(r, r["desc"], rows=rows, today=today)
@@ -448,6 +486,57 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
 
 
 ONE_PER_EMPLOYER = "one_per_employer"
+
+# The files a round keeps per pick, each named by the pick's slug alone.
+SLUG_FILES = ("draft_{}.json", "research_{}.json", "audit_{}.json", "model_audit_{}.json",
+              "outreach_{}.json", os.path.join("postings", "{}.txt"))
+
+
+def _read_picks(round_dir: str) -> list[dict]:
+    try:
+        with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _set_aside(round_dir: str, s: str, old: dict | None, row: dict) -> list[str]:
+    """Move the files an earlier pick left under slug `s` into old/, when that pick was
+    another role: they are named by the company alone, so a second role at an employer
+    read the first one's draft, research, audit and note as its own, and assemble put
+    the first role's letter under the second role's file name. A re-stage of the same
+    role keeps them."""
+    from company_key import key as company_key
+    import draft_audit
+    new = {"company": row.get("company"), "role": row.get("title")}
+    if old is not None:
+        same = (company_key(old.get("company")) == company_key(new["company"])
+                and not draft_audit.other_role({"company": old.get("company"),
+                                                "role": old.get("role")}, new)
+                and draft_audit._role_words(old.get("role")) == draft_audit._role_words(new["role"]))
+    else:
+        d = draft_audit._one(draft_audit._read_json(os.path.join(round_dir, f"draft_{s}.json")))
+        same = not isinstance(d, dict) or not draft_audit.other_role(d, new)
+    if same:
+        return []
+    found = [f.format(s) for f in SLUG_FILES if os.path.exists(os.path.join(round_dir, f.format(s)))]
+    if old is None:
+        # Nothing says which role a posting saved by hand was for: it stays.
+        found = [f for f in found if not f.startswith("postings")]
+    if not found:
+        return []
+    n = 1
+    while os.path.exists(os.path.join(round_dir, "old", f"{s}-{n}")):
+        n += 1
+    dest = os.path.join(round_dir, "old", f"{s}-{n}")
+    for f in found:
+        os.makedirs(os.path.dirname(os.path.join(dest, f)), exist_ok=True)
+        os.replace(os.path.join(round_dir, f), os.path.join(dest, f))
+    was = (old or {}).get("role") or "another role"
+    print(f"stage: {s} was {was}; its files from then are kept in {dest}, so nothing "
+          f"drafted for that role is read as {row.get('title')}.", file=sys.stderr)
+    return found
 
 
 def _research_country(row: dict) -> str:
@@ -618,29 +707,52 @@ def audit(round_dir: str, only=()) -> list[dict]:
     return draft_audit.audit_round(round_dir, only)
 
 
-def _held_back(got) -> str:
+def _held_back(got, round_dir: str = "", slug: str = "") -> str:
     """Why an audit record written by `audit` may not be rendered yet, or "".
 
-    A record from the agent auditor has no `mechanical` part and is read as before."""
+    Nothing is rendered for sending without both audits: the code audit and the model
+    auditor's reading of the packet, its verdict re-checked by code. A record from the
+    agent auditor, which read everything itself, has no `mechanical` part and is read as
+    before."""
+    if isinstance(got, dict) and got.get("verdict") == "stale":
+        return f"{got.get('stale') or 'the draft is for another role'}: draft this pick again"
     if not isinstance(got, dict) or not isinstance(got.get("mechanical"), dict):
         return ""
     mech = got["mechanical"]
     if str(got.get("verdict") or "") == "needs_model":
-        why = ", ".join(mech.get("reasons") or []) or "a question code cannot settle"
+        why = ", ".join(mech.get("reasons") or [])
+        if not why:
+            return "waiting on the model audit (the code checks are clean)"
         return f"waiting on the model auditor ({why})"
+    if not isinstance(got.get("model"), dict):
+        return ("no model audit yet: every draft that will be sent is read by the model "
+                "auditor after the code audit")
     import draft_audit
     import draft_pack
     if isinstance(got.get("draft"), dict) and mech.get("draft_md5") != draft_audit.md5(got["draft"]):
         return "changed since it was audited: run stage_picks.py audit again"
+    if round_dir and slug and isinstance(got.get("inputs"), dict) and \
+            got["inputs"] != draft_audit.inputs(round_dir, slug):
+        return ("changed since it was audited (the draft, the model audit or the note was "
+                "written again): run stage_picks.py audit again")
     if mech.get("rules_hash") and mech["rules_hash"] != draft_pack.rules_hash():
         return "the profile changed since it was audited: run stage_picks.py audit again"
     return ""
 
 
-def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
-    """(drafts, picks with no audited draft, picks the audit rejected, with why)."""
+def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]:
+    """(drafts, picks with no audited draft, picks the audit rejected, with why).
+
+    `only` (slugs) assembles just the roles that will be sent; the rest are left out and
+    not reported, the same way `audit --only` and the workflow's `only` leave them."""
     with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
         staged = json.load(fh)
+    want = {str(x) for x in only or ()}
+    if want:
+        unknown = want - {p["slug"] for p in staged}
+        if unknown:
+            raise SystemExit("assemble: no pick with slug " + ", ".join(sorted(unknown)))
+        staged = [p for p in staged if p["slug"] in want]
     waiting = [f"{p['company']}: {', '.join(unanswered(p))}" for p in staged if unanswered(p)]
     if waiting:
         raise SystemExit("assemble: the person has not been asked about every skill their "
@@ -664,10 +776,19 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
             rejected.append(f"{p['company']} | {p['role']}"
                             + (f": {'; '.join(risks)}" if risks else ""))
             continue
+        if verdict == "stale":
+            missing.append(f"{p['company']} ({_held_back(got)})")
+            continue
         if not isinstance(d, dict):
             missing.append(p["company"])
             continue
-        held = _held_back(got)
+        held = _held_back(got, round_dir, p["slug"])
+        if not held and isinstance(got, dict) and isinstance(got.get("mechanical"), dict):
+            # A record the audit wrote names the role it audited; one for another role is
+            # never assembled under this pick's name (an agent auditor's older record is
+            # read as before).
+            import draft_audit
+            held = draft_audit.other_role(d, p)
         if held:
             missing.append(f"{p['company']} ({held})")
             continue
@@ -737,28 +858,35 @@ def _report(staged: list[dict], round_dir: str) -> None:
               f"{round_dir} <slug> --yes <skill> ... --no <skill> ...")
     if len(held) == len(staged):
         print("\nNothing to draft yet: every pick waits on an answer above.")
-    print(f"\nargs for the draft-applications workflow: {os.path.join(round_dir, 'picks.json')}")
+    print(f"\nNext, once every answer is recorded: python3 tools/draft_pack.py build {round_dir}"
+          f"\nThen the draft-applications workflow, its args the contents of "
+          f"{os.path.join(round_dir, 'draft_args.json')} plus {{today}}.")
 
 
 def _report_audit(results: list[dict]) -> None:
     said = {"pass": "pass   ", "fixed": "fixed  ", "needs_model": "MODEL  ", "reject": "REJECT ",
-            "missing": "MISSING"}
+            "missing": "MISSING", "stale": "STALE  "}
     for r in results:
         mech = r.get("mechanical") or {}
         why = ""
         if r["verdict"] == "needs_model":
-            why = "needs the model auditor: " + ", ".join(mech.get("reasons") or [])
+            reasons = ", ".join(mech.get("reasons") or [])
+            why = ("code checks clean; waiting on the model audit" if not reasons
+                   else "for the model auditor: " + reasons)
         elif r["verdict"] == "missing":
             why = f"no draft_{r['slug']}.json"
+        elif r["verdict"] == "stale":
+            why = f"{r.get('why')}: draft this pick again"
         elif r.get("old"):
             why = "audited by the agent auditor"
         else:
-            why = "code checks clean" if r["verdict"] == "pass" else ""
+            why = "both audits passed" if r["verdict"] in ("pass", "fixed") else ""
         print(f"{said.get(r['verdict'], r['verdict']):8} {r['slug']:<28} {why}")
     waiting = [r["slug"] for r in results if r["verdict"] == "needs_model"]
     if waiting:
-        print("\nThe model auditor reads only these, one call each (python3 tools/draft_audit.py "
-              "packet <round_dir> <slug> prints what it reads): " + ", ".join(waiting))
+        print("\nThe model auditor reads each of these, one call each, before anything is "
+              "assembled (python3 tools/draft_audit.py packet <round_dir> <slug> prints what it "
+              "reads): " + ", ".join(waiting))
 
 
 def _no_role(contact_id: str) -> int:
@@ -828,6 +956,8 @@ def main() -> int:
                     help="print only what fails, as JSON (what the drafter reads)")
     a = sub.add_parser("assemble")
     a.add_argument("round_dir")
+    a.add_argument("--only", nargs="+", default=[],
+                   help="the slugs to assemble: the roles that will be sent")
     args = ap.parse_args()
     if args.cmd == "audit":
         results = audit(args.round_dir, args.only)
@@ -855,11 +985,19 @@ def main() -> int:
     if args.cmd == "single" and args.for_contact and not args.posting_file:
         return _no_role(args.for_contact)
     if args.cmd == "single":
-        if not (args.company and args.role and args.posting_file):
+        if not (str(args.company or "").strip() and str(args.role or "").strip()
+                and args.posting_file):
             ap.error("single needs --company, --role and --posting-file (or --for-contact with "
                      "no posting, when they asked for your resume and named no role)")
-        with open(args.posting_file, encoding="utf-8") as fh:
-            body = fh.read()
+        try:
+            with open(args.posting_file, encoding="utf-8") as fh:
+                body = fh.read()
+        except OSError:
+            raise SystemExit(f"single: cannot read {args.posting_file}. Save the posting's text "
+                             "there and run this again.") from None
+        if not body.strip():
+            raise SystemExit(f"single: {args.posting_file} is empty. Paste the posting's text "
+                             "into it and run this again.")
         row = {"company": args.company, "title": args.role, "url": args.url,
                "location": args.location, "portal": "pasted", "desc": body}
         if args.fit is not None:
@@ -873,7 +1011,7 @@ def main() -> int:
         _report(stage(args.round_dir, args.picks, both=args.both, for_contact=args.for_contact),
                 args.round_dir)
         return 0
-    drafts, missing, rejected = assemble(args.round_dir)
+    drafts, missing, rejected = assemble(args.round_dir, args.only)
     print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")
     if rejected:
         print("REJECTED BY THE AUDIT, not rendered:\n  " + "\n  ".join(rejected))

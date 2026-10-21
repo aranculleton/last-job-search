@@ -32,7 +32,7 @@ as if it were a file and prefilter's dict to text_screen as if it were a list.
 Every intermediate file is kept in --out so a stage can be re-run alone, and
 every one of them is a JSON list.
 """
-import argparse, datetime, json, os, shutil, subprocess, sys
+import argparse, datetime, json, os, re, shutil, subprocess, sys
 import tempfile
 import time
 
@@ -78,6 +78,14 @@ class StageTimeout(Exception):
     """A stage ran past its budget and was stopped."""
 
 
+# Every stage writes UTF-8, whatever the computer's own default. On Windows that default
+# is cp1252: a stage's stderr carrying an accented place name arrived as bytes the round
+# decoded as UTF-8, and the replacement character it got could not be written to a log
+# opened in cp1252, so the thread draining the pipe died and the stage hung until its
+# budget ran out. The round's own log and output are UTF-8 for the same reason (main).
+STAGE_ENCODING = {"PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+
+
 def _stream(cmd, log, budget):
     """(exit code, stdout, stderr) for one stage, its stderr passed on as it arrives.
 
@@ -88,15 +96,25 @@ def _stream(cmd, log, budget):
     import threading
     with tempfile.TemporaryFile("w+", encoding="utf-8") as out:
         p = subprocess.Popen(cmd, cwd=ROOT, text=True, stdout=out, stderr=subprocess.PIPE,
-                             encoding="utf-8", errors="replace")
+                             encoding="utf-8", errors="replace",
+                             env={**os.environ, **STAGE_ENCODING})
         lines = []
 
         def pump():
+            # Every line is read whatever happens to it after. A line this process could
+            # not write (a log or a console in another encoding) killed the thread, and
+            # with nothing reading the pipe the stage blocked until its budget ran out.
             for line in p.stderr:
                 lines.append(line)
-                print(line, end="", file=sys.stderr, flush=True)
-                log.write(line)
-                log.flush()
+                try:
+                    print(line, end="", file=sys.stderr, flush=True)
+                except Exception:
+                    pass
+                try:
+                    log.write(line)
+                    log.flush()
+                except Exception:
+                    pass
 
         th = threading.Thread(target=pump, daemon=True)
         th.start()
@@ -112,6 +130,11 @@ def _stream(cmd, log, budget):
         out.seek(0)
         return p.returncode, out.read(), "".join(lines)
 
+
+# The scrape a round has finished, for the line a later stage's timeout prints: the
+# stages after it read files, so the round can go on from it with --from-scraped
+# rather than scraping again.
+RESUME: dict = {}
 
 # What a stage that runs out of time can still keep, by its script's name: called
 # instead of stopping the round, and its return value is the stage's exit code. Kept
@@ -187,9 +210,13 @@ def run(cmd, log, deadline=None, ok=(0,)):
             print(f"   stage timed out after {budget}s: {os.path.basename(cmd[1])}; "
                   "keeping what it had found", flush=True)
             return on_timeout()
+        saved = RESUME.get("scrape", "")
         sys.exit(f"stage timed out after {budget}s: {os.path.basename(cmd[1])}. "
                  "A hung portal or fetch would otherwise hold the round until "
-                 "the container is reclaimed and the whole search is lost.")
+                 "the container is reclaimed and the whole search is lost."
+                 + (f" The scrape it had finished is kept: to go on from it, run the round "
+                    f"again with --from-scraped {saved} and a new --out."
+                    if saved and name != "scrape_wide.py" and os.path.isfile(saved) else ""))
 
     import types
     # stderr is already in the log, line by line
@@ -247,6 +274,19 @@ SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "outreach_pending_note", "throttle_override_note",
                   "drafted_note")
+
+
+def round_order(path: str) -> tuple:
+    """How saved rounds sort, oldest first: by the numbers in the round's name ("r3"
+    before "r18", "r18" before "r18_round2"), then by when the file was written. A fresh
+    clone gives every file the same time, so the time alone picked whichever round the
+    folder happened to list last as "the newest"."""
+    name = os.path.splitext(os.path.basename(path))[0]
+    try:
+        written = os.path.getmtime(path)
+    except OSError:
+        written = 0.0
+    return tuple(int(n) for n in re.findall(r"\d+", name)), written
 
 
 def write_summary(shortlist_path, out_dir, name):
@@ -507,6 +547,8 @@ def main():
                     help=f"re-run wider when the yield target is missed, up to "
                          f"{MAX_ROUNDS} rounds")
     ap.add_argument("--round", type=int, default=1, help=argparse.SUPPRESS)
+    ap.add_argument("--first-pages", dest="first_pages", type=int, default=None,
+                    help=argparse.SUPPRESS)
     ap.add_argument("--hydrate-cache", dest="hydrate_cache", default=None,
                     help=argparse.SUPPRESS)
     ap.add_argument("--summary-dir", dest="summary_dir", default=None,
@@ -521,22 +563,33 @@ def main():
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
     a = ap.parse_args()
+    # A line this round cannot print in the console's own encoding is printed with a
+    # stand-in character, never raised: an accented employer name ended the round.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")
+        except (AttributeError, ValueError):
+            pass
     import scrape_wide
     pages, workers, _ = scrape_wide.defaults()
     a.pages = a.pages or pages
     a.workers = a.workers or workers
     os.makedirs(a.out, exist_ok=True)
     f = lambda n: os.path.join(a.out, n)
-    log = open(f("round.log"), "a")
+    log = open(f("round.log"), "a", encoding="utf-8", errors="replace")
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
     started = time.monotonic()
     deadline = started + ROUND_BUDGET_SEC
     TIMES.clear()
+    RESUME.clear()
     scrape_dir = f("00_scrape")
     partial = ""
 
     if a.from_scraped:
+        if not os.path.isfile(a.from_scraped):
+            sys.exit(f"--from-scraped: there is no file at {a.from_scraped}. Point it at a "
+                     "saved scrape, a round's 00_scrape/kept.json.")
         os.makedirs(scrape_dir, exist_ok=True)
         dest = os.path.join(scrape_dir, "kept.json")
         # Re-running a round in place, `--from-scraped rounds/r17/00_scrape/kept.json
@@ -586,6 +639,7 @@ def main():
                        "stopped short or refused the pre-flight probe (round.log names the "
                        "portals and why), so this round is not a full picture of the market")
     scraped = os.path.join(scrape_dir, "kept.json")
+    RESUME["scrape"] = scraped
 
     # `--seen` is what stops hydrate paying for postings this search already
     # ruled out. The check is throttle.ruled_out() either way; running it here
@@ -632,7 +686,13 @@ def main():
     for n in STAGES:
         print(f"  {n:16s} {count(f(n + '.json'))}")
     if TIMES:
-        spent = ", ".join(f"{name.rsplit('.', 1)[0]} {took(secs)}" for name, secs in TIMES)
+        # One entry a stage: a scrape that ran out of time and then kept what it had
+        # found is two runs of scrape_wide, and was listed twice.
+        by_stage: dict = {}
+        for name, secs in TIMES:
+            by_stage[name] = by_stage.get(name, 0) + secs
+        spent = ", ".join(f"{name.rsplit('.', 1)[0]} {took(secs)}"
+                          for name, secs in by_stage.items())
         line = f"time: {spent}; {took(time.monotonic() - started)} in all"
         print(line)
         log.write(line + "\n")
@@ -665,6 +725,10 @@ def main():
         # in plain words, never "fix the portal" (env_check.blocked_say).
         print("Tell the person, in these words, once:")
         print("\n".join("  " + ln for ln in blocked.splitlines()))
+    # A wider round searches more pages, which only a live scrape has, so from a saved
+    # scrape it scrapes live. --expand is the asking: a round resumed from a timeout's kept
+    # scrape (--from-scraped) is exactly the round that still owes its widening, and one
+    # that never widened missed the yield rule's three rounds. It is said before it runs.
     widen = not met and a.expand and a.round < MAX_ROUNDS
     if not a.keep:
         # The shortlist survives every prune, for drafting. A round that missed
@@ -687,15 +751,21 @@ def main():
         return 0
 
     if widen:
-        pages_x = WIDENINGS[a.round - 1]
+        # Each widening is a multiple of the FIRST round's pages: 2x, then 3x. Applied to
+        # the round before's, they compounded, and the third round searched 6x.
+        first = a.first_pages or a.pages
+        pages = int(first * WIDENINGS[a.round - 1])
         nxt = f"{a.out.rstrip('/')}_round{a.round + 1}"
         print(f"\nexpanding: round {a.round + 1} of {MAX_ROUNDS}, "
-              f"pages {a.pages} -> {int(a.pages * pages_x)}, "
+              f"pages {a.pages} -> {pages}, "
               f"jobage held at {a.jobage} (the freshness rule never widens) -> {nxt}")
+        if a.from_scraped:
+            print("  this round read a saved scrape; the wider round scrapes the portals live "
+                  "for its extra pages")
         cache = f(HYDRATED)
         code = subprocess.call(
             [sys.executable, __file__, "--out", nxt,
-             "--pages", str(int(a.pages * pages_x)),
+             "--pages", str(pages), "--first-pages", str(first),
              "--jobage", str(a.jobage),
              "--workers", str(a.workers), "--top", str(a.top), "--today", a.today,
              "--require", a.require, "--expand", "--round", str(a.round + 1)]
@@ -718,8 +788,11 @@ def main():
     # explicitly with the count, what was tried, and the likely blocker. Never
     # pad a thin run with sub-60 postings, and never relax a gate or the
     # location filter to hit the number."
-    print(f"\nYIELD TARGET MISSED after round {a.round}"
-          f"{'' if a.expand else ' (no --expand, so no wider round was run)'}.")
+    if not a.expand:
+        why_not = " (no --expand, so no wider round was run)"
+    else:
+        why_not = ""
+    print(f"\nYIELD TARGET MISSED after round {a.round}{why_not}.")
     print(f"  got {good} at 60+ and {strong} at 75+; wanted {YIELD_60} and {YIELD_75}")
 
     # Before anything about the market, say whether a board was even answering.

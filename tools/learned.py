@@ -517,13 +517,14 @@ def brief(area: str | None = None, channel: str | None = None, reader: str | Non
     if area in (None, "messages", "voice"):
         shown = approved_examples(channel, reader)
         if shown:
-            lines.append("Messages you approved, best match first (the shape to follow, never "
-                         "the words or another person's facts):")
+            lines.append("Messages you approved, best match first. Follow their shape only: "
+                         "never reuse a name, an employer or any fact from them, which belong "
+                         "to the person each was written for:")
             for x in shown:
                 lines.append(f"  [{x.get('channel') or 'any channel'}, "
                              f"{(x.get('reader') or 'any reader').replace('_', '-')}, "
                              f"{x.get('date')}; you said: \"{x.get('said')}\"]")
-                lines += ["    " + ln for ln in str(x.get("text") or "")[:EXAMPLE_CHARS].splitlines()
+                lines += ["    " + ln for ln in shape_of(x)[:EXAMPLE_CHARS].splitlines()
                           if ln.strip()]
             if rows:
                 lines.append("Rules:")
@@ -599,6 +600,76 @@ def approved_examples(channel: str | None = None, reader: str | None = None,
 
     rows = sorted(approved(), key=lambda r: str(r.get("date") or ""), reverse=True)
     return sorted(rows, key=rank)[:most]        # stable: the newest first within each
+
+
+def contact_book() -> list:
+    """The contact book's rows, or [] when it cannot be read."""
+    try:
+        import csv_store
+        return csv_store.read_rows(person.state("network_contacts.csv"))
+    except Exception:  # noqa: BLE001  a brief must never break on the book
+        return []
+
+
+def example_reader(x: dict, book: list | None = None) -> tuple:
+    """(name, employer) of the person an approved example was written for, from the contact
+    book (`book`, else read), else from what was read about them; ("", "") for one kept
+    with no contact."""
+    cid = str((x or {}).get("contact_id") or "").strip()
+    if not re.match(r"^[\w.-]+$", cid):
+        return "", ""
+    rows = contact_book() if book is None else book
+    for r in rows:
+        if str(r.get("contact_id") or "").strip() == cid:
+            return str(r.get("name") or "").strip(), str(r.get("company") or "").strip()
+    try:
+        with open(person.state("documents", "network", cid, "reading.json"),
+                  encoding="utf-8") as fh:
+            got = json.load(fh)
+        return str(got.get("name") or "").strip(), str(got.get("company") or "").strip()
+    except (OSError, ValueError, AttributeError):
+        return "", ""
+
+
+def _name_words(name: str) -> list:
+    """The full name, then each word of it long enough to be a name, longest first."""
+    words = [w for w in re.findall(r"[^\W\d_][\w'-]*", str(name or "")) if len(w) >= 2]
+    full = " ".join(words)
+    return ([full] if len(words) > 1 else []) + sorted(set(words), key=len, reverse=True)
+
+
+def employer_pattern(company: str):
+    """A pattern for an employer as a message names it: its name, or its key (the name
+    without Ltd, Group and the like), word for word. None for no employer."""
+    try:
+        from company_key import key
+        short = key(company)
+    except Exception:  # noqa: BLE001  no employers.py in an odd profile
+        short = ""
+    forms = []
+    for f in (company, short):
+        words = re.findall(r"[a-z0-9&]+", str(f or "").lower())
+        if words and words not in forms:
+            forms.append(words)
+    if not forms:
+        return None
+    return re.compile("|".join(r"(?<![a-z0-9])" + r"\W+".join(map(re.escape, w))
+                               + r"(?![a-z0-9])" for w in forms), re.I)
+
+
+def shape_of(x: dict) -> str:
+    """An approved example as the brief shows it: the name and employer of the person it was
+    written for replaced by <their name> and <their employer>. Shown whole, the next note
+    to someone at another employer was copied from it, that person's employer and the talk
+    they gave included (2026-10-21)."""
+    text = str((x or {}).get("text") or "")
+    name, company = example_reader(x)
+    pat = employer_pattern(company)
+    if pat is not None:
+        text = pat.sub("<their employer>", text)
+    for w in _name_words(name):
+        text = re.sub(r"(?<![\w'-])" + re.escape(w) + r"(?![\w'-])", "<their name>", text)
+    return text
 
 
 def all_offers() -> list[dict]:

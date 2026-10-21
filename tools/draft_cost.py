@@ -4,8 +4,9 @@
 The `draft-applications` workflow records what a script can see: each stage's model, the
 size of its prompt, and the output tokens the shared budget counter moved by. It cannot
 see the clock, an agent's tool calls or its input tokens; the Workflow tool's own run
-summary shows those for every agent, by label (`research:<company>`, `draft:<company>`,
-`audit:<company>`, `outreach:<company>`). This joins the two:
+summary shows those for every agent, by label (`research:<slug>`, `draft:<slug>`,
+`audit:<slug>`, `outreach:<slug>`, the pick's slug, so two roles at one employer are two
+labels). This joins the two:
 
     python3 tools/draft_cost.py <round_dir> --result <the workflow's return value, saved as JSON>
                                             [--usage <usage.json>]
@@ -51,6 +52,10 @@ def per_posting(result, usage=None) -> dict:
     """{slug: {"company", "role", "stages": [...], "totals": {...}}} for the batch."""
     by_label = _usage_by_label(usage)
     out = {}
+    # The workflow labels each agent by the pick's slug ("draft:kestrel_mutual_2"). Runs
+    # before that labelled it by the company, which two roles at one employer share: such
+    # a label is read only for a company with one posting in the batch, never for two.
+    companies = [((item or {}).get("pick") or {}).get("company") for item in result or []]
     for item in result or []:
         pick = (item or {}).get("pick") or {}
         slug = pick.get("slug")
@@ -59,7 +64,10 @@ def per_posting(result, usage=None) -> dict:
         stages = []
         for c in item.get("cost") or []:
             row = dict(c)
-            got = by_label.get(f"{c.get('stage')}:{pick.get('company')}", {})
+            got = by_label.get(f"{c.get('stage')}:{slug}")
+            if got is None and companies.count(pick.get("company")) == 1:
+                got = by_label.get(f"{c.get('stage')}:{pick.get('company')}")
+            got = got or {}
             for k in NOT_IN_SCRIPT:
                 row[k] = got.get(k) if got.get(k) is not None else None
             stages.append(row)

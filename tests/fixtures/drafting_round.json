@@ -1,5 +1,5 @@
 {
- "_about": "An invented application for the example person (profile.example): an invented employer, posting and research fact, and a draft that passes tools/draft_audit.py. The drafting tests mutate it one defect at a time.",
+ "_about": "An invented application for the example person (profile.example): an invented employer, posting and research fact, and a draft that passes tools/draft_audit.py. The research fact's page is kept for the quote check by tests/test_one_drafting_call_per_posting.py store_pages(). The drafting tests mutate it one defect at a time.",
  "company": "Kestrel Mutual",
  "role": "Claims Forecasting Analyst",
  "slug": "kestrel_mutual",
@@ -167,6 +167,7 @@
     "cites": []
    }
   ],
-  "stretches": []
+  "stretches": [],
+  "research_hash": "960e960b"
  }
 }

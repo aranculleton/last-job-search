@@ -216,6 +216,80 @@ LANGUAGE_REQUIRED = re.compile(
     r"\b(fluen\w*|nativ\w*|bilingual|proficien\w*|requir\w*|must speak|"
     r"mandatory|essential|written and (spoken|oral))\b", re.I)
 
+# A language named as a language, not as a market or a supplier. "Experience with Spanish
+# and Portuguese markets is required" and "analysing Chinese supplier lead times" were cut
+# as language requirements: the unambiguous names were read with no cue at all, and
+# "required" sat in the same sentence. A name counts when a language cue sits beside it,
+# with nothing between but other languages and the words a level is written in ("fluent
+# in English and Spanish", "Spanish (written and spoken)", "Spanish-speaking"), or when a
+# requirement follows it straight away ("Spanish is required"). The names that are also
+# English words keep the closer reading OTHER_LANGUAGE gives them.
+_ANY_LANGUAGE = "|".join(sorted(
+    {"english", "french", "welsh", "irish", "gaelic", "german", "italian", "dutch", "polish",
+     "hebrew", "turkish", "korean", *_UNAMBIGUOUS_LANGUAGE.split("|"), *_HELD,
+     *(str(g[0]).lower() for g in LANGUAGE_GATE)} - {""}, key=len, reverse=True))
+_LANG_SEP = r"[\s,/&()\-:]+"
+# A level is written as a test or a grade as often as a word: "Japanese (JLPT N2) required",
+# "German, C1, essential". Read the grade as filler and a short bracket as one step, or the
+# narrower reading lets a stated requirement through as a plus.
+_LANG_FILLER = (r"(?:in|of|and|or|both|either|business|professional|working|conversational|"
+                r"full|excellent|strong|good|advanced|fluent|written|spoken|oral|verbal|level|"
+                r"above|minimum|jlpt|hsk|cefr|dele|topik|[abc][12]|n[1-5]|"
+                + _ANY_LANGUAGE + r")")
+_LANG_STEP = r"(?:" + _LANG_SEP + _LANG_FILLER + r"|\s*\([^()\n]{1,40}\))"
+_CUE_BEFORE = re.compile(r"\b" + _LANG_CUE + r"(?:" + _LANG_SEP + _LANG_FILLER + r"){0,4}"
+                         + _LANG_SEP + r"$", re.I)
+_CUE_AFTER = re.compile(_LANG_STEP + r"{0,3}" + _LANG_SEP
+                        + r"(?:" + _LANG_CUE + r"|(?:(?:is|are)\s+(?:also\s+)?)?"
+                        r"(?:required|essential|mandatory|necessary|a must)\b)", re.I)
+_UNAMBIGUOUS_RX = (re.compile(r"(?:" + _UNAMBIGUOUS_LANGUAGE + r")", re.I)
+                   if _UNAMBIGUOUS_LANGUAGE else _NEVER)
+
+# A second language named as a nice-to-have. The screen's own preference words (PREFERRED,
+# and ENCOURAGE, which holds "not required" and "welcome"), and the few a language line adds.
+# "Bilingual in Spanish is a plus", "Fluency in Mandarin would be an advantage" and
+# "Proficiency in Japanese is preferred but not required" were all cut as requirements:
+# "bilingual", "fluency" and the "requir" inside "not required" read as the requirement,
+# and only the profile's own language had its nice-to-have words checked.
+_LANGUAGE_SOFT = re.compile(
+    r"\b(?:is|are|be|as|considered|seen as)\s+an?\s+(?:\w+\s+)?advantage\b"
+    r"|[:(,\-]\s*an?\s+(?:\w+\s+)?advantage\b"
+    r"|\b(?:is|are|be)\s+(?:\w+\s+)?(?:beneficial|helpful|useful)\b"
+    r"|\bnot\s+(?:a\s+)?(?:required|requirement|essential|mandatory|necessary|needed)\b"
+    r"|\boptional\b", re.I)
+
+
+def _language_preferred(sentence: str) -> bool:
+    """Does the sentence name what it asks for as a preference, not a requirement?"""
+    return bool(PREFERRED.search(sentence) or ENCOURAGE.search(sentence)
+                or _LANGUAGE_SOFT.search(sentence))
+
+
+def other_language_named(sentence: str):
+    """The first language the candidate does not hold that `sentence` names as a language,
+    as a match, or None. Its text is what a cut names ("Spanish", "fluent in German")."""
+    s = sentence or ""
+    for m in OTHER_LANGUAGE.finditer(s):
+        if not _UNAMBIGUOUS_RX.fullmatch(m.group(0)):
+            return m                    # an English word, matched only beside its cue
+        if (_CUE_BEFORE.search(s[max(0, m.start() - 100):m.start()])
+                or _CUE_AFTER.match(s, m.end())):
+            return m
+    return None
+
+
+def other_language_cut(sentence: str):
+    """The language match a sentence states as a requirement, or None.
+
+    A language the candidate does not hold, named as a language, in a sentence with a
+    requirement word and no preference word, that the profile's own language rows
+    (search.py LANGUAGE_GATE) do not call a nice-to-have."""
+    if _language_preferred(sentence) or any(soft.search(sentence)
+                                            for _, _, soft in LANGUAGE_GATE):
+        return None
+    m = other_language_named(sentence)
+    return m if m is not None and LANGUAGE_REQUIRED.search(sentence) else None
+
 ELIGIBILITY = getattr(_S, "ELIGIBILITY", _NEVER)
 ENTITLED = getattr(_S, "ENTITLED", _NEVER)
 PERMIT_ACCEPTED = getattr(_S, "PERMIT_ACCEPTED", _NEVER)
@@ -319,10 +393,12 @@ DEGREE = re.compile(r"\b(?:master|msc|m\.sc\.?|m\.s\.?|mba|ph\.?\s?d\.?|doctora\
 # not a degree. Nor is a Scrum Master, which a business analyst posting asks
 # for, or the verb: a posting says "learn to use and master the various
 # internal data warehouse tables", and `fit.py` docked it 9 points for a
-# graduate degree.
+# graduate degree. Nor the supply-chain terms: a "Master Production Schedule (MPS)",
+# a master scheduler, a Lean Six Sigma Master Black Belt.
 NOT_A_DEGREE = re.compile(
     r"\bmaster'?s?\s+(?:data|plan|class|file|record|copy|agreement|service|key|list|"
-    r"catalog\w*|schedule|budget|brand|template|node|branch)\b"
+    r"catalog\w*|schedule|scheduler|scheduling|production|black\s+belt|budget|brand|"
+    r"template|node|branch)\b"
     r"|\bmaster(?:ing|ed|y)\b"
     r"|(?<=\bscrum\s)master\b"
     r"|\bmaster\s+(?:the|a|an|our|your|its|their|this|these|those|new)\b", re.I)
@@ -674,23 +750,43 @@ def _permit_accepted(s: str) -> bool:
     return any(not _REFUSED.search(s[:m.start()]) for m in PERMIT_ACCEPTED.finditer(s))
 
 
+def _states_ineligibility(s: str) -> bool:
+    """Does this sentence state, as a condition, a status the candidate lacks?"""
+    if not ELIGIBILITY.search(s) or ENCOURAGE.search(s):
+        return False
+    # "must be legally entitled to work in <country>" alone is met by a
+    # candidate who is; only a status term beside it, with a condition cue,
+    # is a bar.
+    if ENTITLED.search(s) and not _STATUS_TERMS.search(s):
+        return False
+    # The same sentence naming a work permit as an ACCEPTED status is a
+    # list of routes in, and the candidate's own status may be one of them.
+    # Some bars (a clearance) are never satisfied that way, so they still cut.
+    if _permit_accepted(s) and not _NOT_BY_PERMIT.search(s):
+        return False
+    return bool(CONDITION.search(s) or _ALWAYS.search(s))
+
+
+# A sentence that ends on an initialism: "Applicants must be a U.S." is split from
+# "Citizen or Permanent Resident." because the next word is capitalised, which is how a
+# new sentence starts and also how a status is written. The status was never read whole.
+_ENDS_ON_INITIALISM = re.compile(r"(?<![A-Za-z.])(?:[A-Za-z]\.){2,}$")
+
+
 def eligibility_cut(text: str) -> str | None:
-    """The sentence that states, as a condition, a status the candidate lacks."""
-    for s in sentences(text):
-        if not ELIGIBILITY.search(s) or ENCOURAGE.search(s):
-            continue
-        # "must be legally entitled to work in <country>" alone is met by a
-        # candidate who is; only a status term beside it, with a condition cue,
-        # is a bar.
-        if ENTITLED.search(s) and not _STATUS_TERMS.search(s):
-            continue
-        # The same sentence naming a work permit as an ACCEPTED status is a
-        # list of routes in, and the candidate's own status may be one of them.
-        # Some bars (a clearance) are never satisfied that way, so they still cut.
-        if _permit_accepted(s) and not _NOT_BY_PERMIT.search(s):
-            continue
-        if CONDITION.search(s) or _ALWAYS.search(s):
+    """The sentence that states, as a condition, a status the candidate lacks.
+
+    A sentence ending on an initialism is read on its own and joined with the one after
+    it, and either is a cut: joined, "must be a U.S. Citizen" is the status it states,
+    and read alone as well, an equal opportunity line after it never excuses it."""
+    parts = sentences(text)
+    for i, s in enumerate(parts):
+        if _states_ineligibility(s):
             return s[:220]
+        if i + 1 < len(parts) and _ENDS_ON_INITIALISM.search(s):
+            joined = s + " " + parts[i + 1]
+            if _states_ineligibility(joined):
+                return joined[:220]
     return None
 
 
@@ -725,25 +821,41 @@ def internal_only(title: str, text: str) -> str | None:
     return None
 
 
-def designation_cut(text):
+# A credential named as one the role does not need: "No actuarial exams are needed",
+# "you do not need to be qualified".
+_NOT_NEEDED = re.compile(
+    r"\bnot\s+(?:a\s+)?(?:needed|required|necessary|essential|mandatory|a requirement)\b"
+    r"|\bno\s+(?:\w+\s+){0,4}(?:is|are)\s+(?:needed|required|necessary)\b"
+    r"|\b(?:do|does|will)\s+not\s+(?:need|require)\b|\b(?:don'?t|doesn'?t)\s+(?:need|require)\b",
+    re.I)
+
+
+def designation_cut(text, title: str = ""):
     """The sentence stating a professional designation as a condition, or None.
 
     "Support for actuarial exams" and "CPA an asset" are not gates; a title
     that IS the designation, or a qualification line demanding progress toward
     one, is. Held designations are none of these, so any match is a real bar.
     """
+    lifted = False
     for s in sentences(text):
         if not DESIGNATION.search(s):
             continue
-        if PREFERRED.search(s) or ENCOURAGE.search(s):
+        if PREFERRED.search(s) or ENCOURAGE.search(s) or _NOT_NEEDED.search(s):
+            lifted = True
             continue
         if DESIGNATION_REQUIRED.search(s):
             return s[:200]
     # A title naming the profession outright, repeated through the posting,
-    # is the same bar whether or not a qualification line spells it out.
-    head = text[:400]
-    if DESIGNATED_TITLE.search(head) and len(DESIGNATED_TITLE.findall(text)) >= 3:
-        return head.split("\n")[0][:200]
+    # is the same bar whether or not a qualification line spells it out. It is the
+    # posting's own title that has to name it, where there is one: "Data Analyst to
+    # support our actuarial pricing team" names the team, not the role, and a data role
+    # beside an actuarial function was cut as a credential gate. A sentence saying the
+    # credential is a preference or not needed lifts it.
+    head = title if title else text[:400]
+    if (not lifted and DESIGNATED_TITLE.search(head)
+            and len(DESIGNATED_TITLE.findall(text)) >= 3):
+        return (title or head.split("\n")[0])[:200]
     return None
 
 
@@ -820,10 +932,12 @@ def _names_home(s: str) -> bool:
     """Does the sentence name the person's own country, region or metro as a place?
 
     A metro town counts only bare or followed by a home region or country:
-    "Manchester, NH" and "Sale, Australia" are somewhere else.
+    "Manchester, NH" and "Sale, Australia" are somewhere else. The home country counts
+    by its code too ("remote within the US" for somebody in the US), whether or not the
+    profile's own pattern lists the code.
     """
     low = s.lower()
-    if _places.HOME_COUNTRY_RX.search(low):
+    if _places.HOME_COUNTRY_RX.search(low) or _places.home_code_in(s):
         return True
     for r in _places.REGIONS:
         # A region's short code is read in capitals, like a country code: "on"
@@ -839,56 +953,62 @@ def _names_home(s: str) -> bool:
     return False
 
 
-def _abroad_country(s: str):
-    """A country, not a region, written as shorthand in the sentence ("US", "the United
-    States"): abroad_short less the regions, which region_includes_home decides."""
-    m = _places.abroad_short(s)
-    while m is not None and _places.REGION_WORDS.fullmatch(m.group(0)):
-        rest = s[m.end():]
-        m2 = _places.abroad_short(rest)
-        if m2 is None:
-            return None
-        s, m = rest, m2
-    return m
-
-
 def _countries_named(s: str):
     """Every place in the sentence that is one country and not home, as matches."""
     for c in _places.OTHER_COUNTRIES:
         yield from re.finditer(r"(?<!\w)" + re.escape(c) + r"(?!\w)", s, re.I)
-    yield from _places.COUNTRY_CODES.finditer(s)
+    for m in _places.COUNTRY_CODES.finditer(s):
+        if not _places.code_is_home(m.group(0)):
+            yield m
+
+
+def _hours_after(s: str, m) -> bool:
+    """Is the place followed by a time-zone or hours phrase? "remote within US time
+    zones" and "based in a US time zone" ask for hours, not a home."""
+    return bool(_HOURS.match(s[m.end():m.end() + 30]))
+
+
+def _abroad_places(s: str) -> list:
+    """The countries a sentence names that are not home, the way RESIDE reads them: the
+    profile's other countries, the codes, and "the United States" or "the United
+    Kingdom" written out; less any followed by a time-zone or hours phrase."""
+    found = list(_countries_named(s)) + list(re.finditer(r"\b(?:united states|united kingdom)\b",
+                                                         s, re.I))
+    return [m for m in found if not _hours_after(s, m)]
+
+
+def resides_abroad(s: str) -> bool:
+    """Does this one sentence require the candidate to live in a country that is not theirs?"""
+    reside = RESIDE.search(s)
+    if not reside and not re.search(r"\bonly\b|\bremote\b|\brestricted\b|\blimited\b", s, re.I):
+        return False
+    if _names_home(s):
+        return False
+    # A region cuts only when it leaves home out: "based in EMEA" cut somebody in the
+    # UK, which EMEA takes in. A list with a region that takes home in ("Europe or the
+    # US") is a list that includes them; one the table cannot place is the location
+    # gate's to flag, never a cut. A region or a country followed by "time zones" asks
+    # for hours: "must be based in a US time zone" was cut as a requirement to live
+    # abroad, because this branch returned before the hours were read.
+    inside, _ = _places.region_takes_in_home(s, keep=lambda m: not _hours_after(s, m))
+    if inside is True:
+        return False
+    if reside and (_abroad_places(s) or inside is False):
+        return True
+    for m in _countries_named(s):
+        if _hours_after(s, m):
+            continue
+        if (_BEFORE_PLACE.search(s[max(0, m.start() - 60):m.start()])
+                or _AFTER_PLACE.match(s[m.end():m.end() + 50])):
+            return True
+    return False
 
 
 def residence_cut(text: str) -> str | None:
     """The sentence requiring the candidate to live in a country that is not theirs."""
     for s in sentences(text):
-        reside = RESIDE.search(s)
-        if not reside and not re.search(r"\bonly\b|\bremote\b|\brestricted\b|\blimited\b", s, re.I):
-            continue
-        if _names_home(s):
-            continue
-        low = s.lower()
-        # A region cuts only when it leaves home out: "based in EMEA" cut somebody in the
-        # UK, which EMEA takes in. A list with a region that takes home in ("Europe or the
-        # US") is a list that includes them; one the table cannot place is the location
-        # gate's to flag, never a cut.
-        regions = [_places.region_includes_home(m.group(0))
-                   for m in _places.REGION_WORDS.finditer(s)]
-        if True in regions:
-            continue
-        if reside and (any(re.search(r"(?<!\w)" + re.escape(c) + r"(?!\w)", low)
-                           for c in _places.OTHER_COUNTRIES)
-                       or _abroad_country(s)):
+        if resides_abroad(s):
             return s[:220]
-        if reside and regions and all(r is False for r in regions):
-            return s[:220]
-        for m in _countries_named(s):
-            # "remote within US time zones" asks for hours, not a home.
-            if _HOURS.match(s[m.end():m.end() + 30]):
-                continue
-            if (_BEFORE_PLACE.search(s[max(0, m.start() - 60):m.start()])
-                    or _AFTER_PLACE.match(s[m.end():m.end() + 50])):
-                return s[:220]
     return None
 
 
@@ -957,6 +1077,74 @@ def cut_settings(reason: str) -> list:
     return list(dict.fromkeys(found))
 
 
+# One cut as the screen writes it into a ruling, "<what>: "<the sentence it quotes>"", and
+# several are joined with "; ".
+_RULING_PART = re.compile(r'(?P<words>[^";]*?): "(?P<quote>.*?)"(?=;\s|\s*$)', re.S)
+
+
+def _quoted_words(quote: str) -> str:
+    """The quote `evidence()` wrote, less the "..." and the part-word at a cut end."""
+    q = quote.strip()
+    if q.startswith("..."):
+        q = q[3:].split(None, 1)[1] if len(q[3:].split(None, 1)) > 1 else ""
+    if q.endswith("..."):
+        q = q[:-3].rsplit(None, 1)[0] if len(q[:-3].rsplit(None, 1)) > 1 else ""
+    return q
+
+
+def _language_refused(what: str, quote: str) -> bool:
+    """Would today's screen refuse this language cut, on the sentence it quotes?
+
+    False for anything but the second-language reading this re-judges: the profile's
+    own language rows (LANGUAGE_GATE) are read as they always were. Only what changed
+    is asked again, a preference word in the sentence and a cue beside the name, because
+    both sit right beside the name the quote is centred on; the requirement word may
+    sit further off than the quote reaches, and is not."""
+    what = what.strip().lower()
+    gated = tuple(str(g[0]).lower() for g in LANGUAGE_GATE)
+    if not what or (gated and what.endswith(gated)) or not OTHER_LANGUAGE.search(what):
+        return False
+    q = _quoted_words(quote)
+    return bool(q) and (_language_preferred(q) or other_language_named(q) is None)
+
+
+def ruling_refused(reason: str) -> bool:
+    """True when a ruling the screen wrote is one today's screen would not make.
+
+    Every cut in the reason has to be one this re-judges, and today's screen has to
+    refuse each one on the sentence the ruling quotes; any other cut, or any words the
+    screen did not write, and the ruling stands. Re-judged: the second-language cut,
+    which read a language named only as a nice-to-have ("Bilingual in Spanish is a plus")
+    or a nationality word ("Spanish and Portuguese markets") as a requirement; and the
+    requirement to live in another country, which read the person's own country written
+    as a code ("remote within the US" for somebody in the US) and a time zone ("based in
+    a US time zone") as somewhere to live. Those rulings were kept for good, resting on
+    settings the person never changed; this lets
+    tools/throttle.py ruled_out release them on the next round, with nobody asking, and
+    the posting is screened again when a round finds it. A ruling today's screen makes
+    is never refused here, so a posting is not fetched again round after round.
+    """
+    text = str(reason or "").strip()
+    parts = list(_RULING_PART.finditer(text))
+    ends = [0] + [p.end() for p in parts]
+    starts = [p.start() for p in parts] + [len(text)]
+    if not parts or any(not re.fullmatch(r"[;\s]*", text[a:b]) for a, b in zip(ends, starts)):
+        return False
+    for p in parts:
+        words, quote = p.group("words").strip(), p.group("quote")
+        if words.lower() == CUTS["residence"][0]:
+            # The quote is the whole sentence when it is shorter than the 220 characters
+            # the cut keeps; a longer one cannot be judged again from what is left.
+            if len(quote) >= 220 or resides_abroad(quote):
+                return False
+        elif words.lower().endswith(CUTS["language"][0]):
+            if not _language_refused(words[:-len(CUTS["language"][0])], quote):
+                return False
+        else:
+            return False
+    return True
+
+
 def pay_cut_top(reason: str):
     """The top of the range a pay cut the screen wrote quotes, whatever the currency."""
     m = _PAY_CUT_READ.search(str(reason or ""))
@@ -1002,10 +1190,9 @@ def screen(job: dict) -> dict:
                 cuts.append(f'{lang} {CUTS["language"][0]}: "{evidence(s, m)}"')
                 break
 
-    softs = [soft for _, _, soft in LANGUAGE_GATE]
     for s in sentences(text):
-        m = OTHER_LANGUAGE.search(s)
-        if m and LANGUAGE_REQUIRED.search(s) and not any(x.search(s) for x in softs):
+        m = other_language_cut(s)
+        if m is not None:
             cuts.append(f'{m.group(0)} {CUTS["language"][0]}: "{evidence(s, m)}"')
             break
 
@@ -1024,7 +1211,7 @@ def screen(job: dict) -> dict:
     elif n is not None and n - YEARS_HELD == 1:
         flags.append(f"stated {n} years; a stretch, not a bar")
 
-    d = designation_cut(text)
+    d = designation_cut(text, job.get("title") or "")
     if d:
         cuts.append(f'{CUTS["designation"][0]}: "{d}"')
 

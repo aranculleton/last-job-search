@@ -148,26 +148,19 @@ def _abroad_in_remote(loc: str, low: str) -> tuple[str, str] | None:
     for c in OTHER_COUNTRIES:
         if re.search(r"(?<!\w)" + re.escape(c) + r"(?!\w)", low):
             return c, "country"
-    m = _places.COUNTRY_CODES.search(loc) or re.search(r"\b(?:united states|united kingdom)\b", low)
-    if m:
+    # A code naming home is home, however the profile's own pattern writes it.
+    m = next((m for m in _places.COUNTRY_CODES.finditer(loc)
+              if not _places.code_is_home(m.group(0))), None)
+    m = m or re.search(r"\b(?:united states|united kingdom)\b", low)
+    if m and not _HOME_RX.search(m.group(0).lower()):
         return m.group(0), "country"
     m = _places.REGION_WORDS.search(loc)
     return (m.group(0), "region") if m else None
 
 
 def _region_takes_in_home(loc: str) -> tuple:
-    """(True, the region) when a region the location names takes in home, (False, the
-    first) when every one it names leaves home out, (None, "") when that cannot be
-    told: "Remote - North America or EMEA" is remote from the UK, whichever region is
-    written first."""
-    found = [(m.group(0), _places.region_includes_home(m.group(0)))
-             for m in _places.REGION_WORDS.finditer(loc)]
-    for region, inside in found:
-        if inside is True:
-            return True, region
-    if found and all(inside is False for _, inside in found):
-        return False, found[0][0]
-    return None, ""
+    """places.region_takes_in_home, the one reading the text screen's residence cut uses."""
+    return _places.region_takes_in_home(loc)
 
 
 def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
@@ -176,7 +169,13 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     tl = (title or "").lower()
     parts = _parts(low)
     prov = next((REGIONS[p] for p in parts if p in REGIONS), None)
-    home = _HOME_RX.search(low) is not None or prov is not None
+    # Home and the neighbour by their codes too ("Remote, US"): home was recognised only
+    # through home_country_rx, so a person whose pattern left out the bare code read
+    # their own country as abroad, and a neighbour written as a code failed where the
+    # same country written out was flagged.
+    codes = [m.group(0) for m in _places.COUNTRY_CODES.finditer(loc or "")]
+    home = (_HOME_RX.search(low) is not None or prov is not None
+            or any(_places.code_is_home(c) for c in codes))
     # A two-letter state that is also the home country's code is the country
     # when a home region or city is beside it: Dayforce, SmartRecruiters and
     # Workday write "<City>, ON, CA", and "CA" read as California failed every
@@ -190,7 +189,7 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     states = [p for p in parts if p in NEIGHBOUR_STATES
               and not (p == _CC and (home or (metro and not shared)))]
     abroad = (bool(NEIGHBOUR_WORDS.search(low)) or bool(NEIGHBOUR_METROS.search(low))
-              or bool(states))
+              or bool(states) or any(_places.code_names(c, NEIGHBOUR_WORDS) for c in codes))
     # A word, not a substring, and in the title only as a work mode: "Remote
     # Sensing Analyst" is a geospatial job title, and the substring test sent
     # an on-site posting outside the home metro down the explicitly-remote branch.
@@ -203,6 +202,14 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     # not a pass: it passes only when the employer explicitly hires from home,
     # which a location string cannot show.
     if remote:
+        # A region named that takes in home makes the role remote from home, whatever
+        # country is named beside it: "Remote (US, EMEA)" and "Remote (Europe/US)" are
+        # remote from the UK. The country checks below ran first and failed them, while
+        # the text screen read the same list as taking home in (places.region_takes_in_home
+        # is the one reading for both).
+        inside, region = (None, "") if home else _places.region_takes_in_home(loc or "")
+        if inside is True:
+            return "PASS", f"explicitly remote; {region} takes in {_HOME}"
         # Remote from one other country only: "Remote (US only)", "Remote, Germany
         # only", "Remote, US-based". The check below took a country only as a whole
         # part, so each of these passed for somebody living elsewhere. The
@@ -230,13 +237,14 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
             # (places.region_includes_home): one that leaves home out is abroad,
             # one that takes it in is remote from home, and one the table cannot
             # place is for Tier 2, as is a country inside a longer part.
-            if named and named[1] == "region":
-                inside, region = _region_takes_in_home(loc or "")
-                if inside is False:
-                    return "FAIL", (f"remote within {region}, which leaves out {_HOME}; "
-                                    f"relocation abroad is a deal-breaker")
-                if inside is True:
-                    return "PASS", f"explicitly remote; {region} takes in {_HOME}"
+            if named and named[1] == "region" and inside is False:
+                return "FAIL", (f"remote within {region}, which leaves out {_HOME}; "
+                                f"relocation abroad is a deal-breaker")
+            # A country the profile's own list leaves out is still somewhere else:
+            # "Remote - Canada" passed clean for somebody in Germany, while an on-site
+            # place there was flagged. It is flagged the same way, for Tier 2.
+            other = None if named else _places.known_country_in(low)
+            named = named or ((other, "country") if other else None)
             if named:
                 return "FLAG", (f"remote, but names {named[0]}; whether that includes "
                                 f"{_HOME} is for Tier 2")
@@ -492,6 +500,23 @@ def seen_on(seen_path: str, today: _dt.date | None = None, entries: dict | None 
     return first_seen(entries, (today or _dt.date.today()).isoformat())
 
 
+def _ruled_on(ruled_out, entries: dict, today: _dt.date | None):
+    """throttle.ruled_out on the round's day, so a ruling on a title holds only while the
+    same title is that posting relisted. The day is passed only when there is one, and a
+    stand-in written before ruled_out took it (a person's own tests have one) is called
+    as it was written."""
+    if not today:
+        return ruled_out(entries)
+    try:
+        return ruled_out(entries, today.isoformat())
+    except TypeError:
+        return ruled_out(entries)
+
+
+# How a past ruling's reason opens (throttle.ruled_out): "<status> in seen_jobs.json: ...".
+RULED_IN_SEEN = ("excluded in seen_jobs.json", "skipped in seen_jobs.json")
+
+
 def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
                       today: _dt.date | None = None, contacts: str | None = None,
                       threads: str | None = None, do_not_target: str | None = None,
@@ -524,7 +549,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
         entries = None
     elif entries is None:
         entries = _seen_entries(seen_path)
-    urls, pairs = ruled_out(entries) if entries else ({}, {})
+    urls, pairs = _ruled_on(ruled_out, entries, today) if entries else ({}, {})
     # The employer-level holds the throttle applies live: a referral in flight,
     # and an employer recorded as having no relevant presence until its review
     # date. ruled_out() no longer reads their old copies in seen_jobs.json,
@@ -616,7 +641,7 @@ def main() -> int:
                                a.do_not_target, entries=entries) if a.seen else (lambda job: ""))
     first = seen_on(a.seen, today, entries=entries)
     kept, dropped = [], []
-    n_seen = 0
+    n_seen = n_held = 0
     for job in rows:
         # Aged from its first sighting as well as the portal's date, before any gate.
         day = first(job)
@@ -631,7 +656,13 @@ def main() -> int:
             if why:
                 ok = False
                 row["prefilter_reason"] = why
-                n_seen += 1
+                # A past ruling, or a hold today's state makes (a referral in flight,
+                # do_not_target.json, the candidate's bar): counted apart, because the
+                # holds were all reported as rulings in seen_jobs.json.
+                if why.startswith(RULED_IN_SEEN):
+                    n_seen += 1
+                else:
+                    n_held += 1
         (kept if ok else dropped).append(row)
         if a.explain:
             mark = "KEEP" if ok else "DROP"
@@ -642,8 +673,10 @@ def main() -> int:
           f"{len(kept) + len(dropped)} in", file=sys.stderr)
     if a.seen:
         print(f"        {n_seen} of the dropped were already ruled out in "
-              f"{os.path.basename(a.seen)}; hydrate no longer fetches them",
-              file=sys.stderr)
+              f"{os.path.basename(a.seen)}"
+              + (f", and {n_held} are held back today (a referral in flight, "
+                 f"do_not_target.json or the candidate's bar)" if n_held else "")
+              + "; hydrate fetches none of them", file=sys.stderr)
 
     # The shape in is the shape out: a list stays a list (what every later
     # stage reads), an id-keyed dict stays keyed.

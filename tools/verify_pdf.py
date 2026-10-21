@@ -397,11 +397,35 @@ def _find(hay, words, pos):
     return None
 
 
+def _symbols(text) -> set:
+    """The symbols in a line that `canon` sets aside and a reader still reads: a maths or
+    other sign ("≥", "→", "×"), never punctuation or the spacing marks LaTeX
+    turns into spaces."""
+    import unicodedata
+    return {ch for ch in str(text or "") if unicodedata.category(ch).startswith("S")
+            and ch not in _KEEP and ch not in "~^`|"}
+
+
 def roundtrip(groups, text):
     """What the text layer lacks or holds out of order, as plain lines; [] when every line
-    the draft put on the page is there, in order."""
+    the draft put on the page is there, in order.
+
+    A symbol the font has no glyph for is set aside by `canon` on both sides (the page
+    shows a replacement character, the draft the sign), so every line read as present.
+    Each line's symbols are looked for in the text layer as they are, and a replacement
+    character on the page is named."""
     hay = canon(text)
+    raw = str(text or "")
     pos, last, out = 0, "", []
+    if "\ufffd" in raw:
+        out.append("missing: a character the font has no glyph for is on the page, shown as "
+                   "\ufffd: write it another way")
+    for label, fields in groups:
+        for _what, field in fields:
+            lost = sorted(_symbols(field) - set(raw))
+            if lost:
+                out.append("missing: %s: the sign %s is not in the text layer (the font has no "
+                           "glyph for it): write it in words" % (label, " ".join(lost)))
     for label, fields in groups:
         ends = []
         for _what, field in fields:

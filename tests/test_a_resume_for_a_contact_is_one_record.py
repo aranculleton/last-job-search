@@ -640,3 +640,14 @@ def test_the_interview_pack_says_which_resume_a_contact_holds(repo):
     assert "file not named (state.py attach %s)" % CID in lines[1]
     # Someone at another employer, and a message that only offered one, add nothing.
     assert interview_pack._held_by_contacts(dict(ctx, company="Kestrel Mutual")) == []
+
+
+def test_a_resume_logged_with_sent_to_someone_who_wrote_first_keeps_its_file(repo):
+    # They wrote first, so `sent` logs the answer as a reply (followed_up). The file that
+    # went must survive that hand-off, or the resume is logged as sent with no file named.
+    contacts = [dict(c) for c in CONTACTS]
+    threads = [dict(t) for t in THREADS if t["contact_id"] != CID or t["direction"] == "in"]
+    row = state.sent(contacts, threads, CID, TODAY, channel="message", text=EMAIL,
+                     attached=CV)
+    assert row["direction"] == "out" and state.attached(row) == [CV]
+    assert row["scenario"] == "send_resume"

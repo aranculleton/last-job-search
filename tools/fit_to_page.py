@@ -354,7 +354,36 @@ def shorten(text, budget):
     return " ".join(sents)
 
 
-def _try(a, key, budget):
+def shorten_close(text, budget, keep=()):
+    """Shorten the close without losing what it is for. Its last sentence is the one
+    written for this role, and the sentences saying where the candidate is and their
+    right to work (the claim map's LOC and AUTH sentences, `keep`; the first sentence when
+    there is no claim map) are the same in every letter. Dropping from the end, as
+    `shorten` does, left the shared sentence as the letter's closing: the one rule 9 says
+    no two letters may have, and a close the person's rule says ends on this role. Only a
+    sentence that is neither goes, from the one before the last backwards."""
+    sents = R.split_sentences(text)
+    norm = [" ".join(x.lower().split()) for x in sents]
+    # Kept by place, not by wording: kept by wording, every sentence worded like a kept one
+    # was kept too, and a close repeating one line could not be cut at all.
+    wanted = [" ".join(str(k).lower().split()) for k in keep]
+    held = {norm.index(w) for w in wanted if w in norm} or ({0} if sents else set())
+    alive = list(range(len(sents)))
+    i = len(sents) - 2
+    while len(" ".join(sents[j] for j in alive).split()) > budget and i >= 0:
+        if i not in held:
+            alive.remove(i)
+        i -= 1
+    return " ".join(sents[j] for j in alive)
+
+
+def _close_keeps(a) -> list:
+    """The close's sentences that say where the candidate is and their right to work."""
+    return [c.get("sentence", "") for c in a.get("claim_map") or [] if isinstance(c, dict)
+            and str(c.get("field")) == "p4" and {"LOC", "AUTH"} & set(c.get("cites") or [])]
+
+
+def _try(a, key, budget, cut=None):
     """Shorten a field only if sentence removal actually changes it.
 
     shorten() drops whole trailing sentences, so a single long sentence comes
@@ -363,7 +392,7 @@ def _try(a, key, budget):
     while reporting that trimming had run.
     """
     before = a[key] if isinstance(key, str) else key["text"]
-    after = shorten(before, budget)
+    after = (cut or shorten)(before, budget)
     if after == before:
         return False
     if isinstance(key, str):
@@ -398,7 +427,9 @@ def trim_letter(a, over, page_over=True):
     for b in a["cl_bullets"]:
         if len(b["text"].split()) > 22 and _try(a, b, 20):
             return True
-    if len(a["p4"].split()) > 35 and _try(a, "p4", max(30, len(a["p4"].split()) - over)):
+    keeps = _close_keeps(a)
+    if len(a["p4"].split()) > 35 and _try(a, "p4", max(30, len(a["p4"].split()) - over),
+                                          cut=lambda t, b: shorten_close(t, b, keeps)):
         return True
     extras = sorted(k for k in a
                     if re.fullmatch(r"p\d+", k) and k not in ("p1", "p2", "p4")

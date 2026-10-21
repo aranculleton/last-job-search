@@ -496,6 +496,7 @@ _NICKNAMES = (
     ("zachary", "zach", "zack"), ("nathaniel", "nathan", "nate"), ("joshua", "josh"),
     ("eleanor", "ellie", "nell"), ("josephine", "jo", "josie"), ("judith", "judy"),
     ("francis", "frank"), ("frances", "fran"), ("mohammed", "muhammad", "mohammad", "mohamed"),
+    ("gabriel", "gabe"),
 )
 _NICK = {}
 for _group in _NICKNAMES:
@@ -566,6 +567,9 @@ def _their_names(name) -> set:
     return out
 
 
+SHORT_FORM_LETTERS = 3
+
+
 def wrong_greeting(text, name) -> list:
     """[the greeting_wrong_name Violation] when the salutation greets somebody other than
     `name`, else []. Nothing is judged without a name, or with a greeting to nobody by name."""
@@ -579,10 +583,17 @@ def wrong_greeting(text, name) -> list:
     if not all(n.isascii() for n in ok):
         return []
     initials = {n for n in ok if len(n) == 1}
+    # A short form that is the start of the name they go by ("Raj" for Rajesh, "Olu" for
+    # Oluwaseun, "Max" for Maximilian) is theirs: the table of English short forms alone
+    # refused every one of those (2026-10-21). Three letters at least, so one stray letter
+    # pair never passes for a name.
+    given = {_fold_name(p) for g_ in (first_name(name), preferred_name(name))
+             for p in str(g_ or "").split("-") if p}
     for g in names:
         f = _fold_name(g)
         if (f in ok or any(same_given_name(f, n) for n in ok)
-                or any(f.startswith(i) for i in initials)):
+                or any(f.startswith(i) for i in initials)
+                or (len(f) >= SHORT_FORM_LETTERS and any(n.startswith(f) for n in given))):
             return []
     return [Violation("greeting_wrong_name",
                       "greets %s, but this message is for %s" % (" and ".join(names), name))]

@@ -27,7 +27,10 @@ the notes: the row's contact is who the resume goes to.
 
 The rules it keeps, from Step 6b: match company and role the way the rest of
 the app does (one employer key, one title rule); update an open match rather
-than duplicating it and never move it backwards; append beside a final one;
+than duplicating it and never move it backwards, when that match is this draft's
+own record (unsent, or under the same file names): a re-application, staged under
+new file names, gets a row of its own beside the one already sent; append beside
+a final one;
 never reorder or restructure the CSV; never touch another row; never write
 `seen_jobs.json`.
 """
@@ -48,7 +51,7 @@ import csv_store  # noqa: E402
 import docpaths  # noqa: E402
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
-from throttle import FINAL, _same_title  # noqa: E402
+from throttle import FINAL, UNSENT, _same_title  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACKER = person.state("job_search_tracker.csv")
@@ -72,6 +75,20 @@ EMPLOYER_BOARDS = frozenset(_openroles_ats)
 def _same_application(row: dict, new: dict) -> bool:
     return (company_key(row.get("company")) == company_key(new["company"])
             and _same_title(row.get("role"), new["role"]))
+
+
+def _stem(path) -> str:
+    return os.path.splitext(str(path or "").strip())[0].casefold()
+
+
+def _this_application(row: dict, new: dict) -> bool:
+    """Whether a row for the same role is the record of THIS draft: one never sent, or
+    one whose documents carry this draft's file names. A role applied to before and drafted
+    again gets its own file names (tools/stage_picks.py), and refreshing the sent row put
+    the new, unsent documents on the record of what the employer received."""
+    if (row.get("status") or "").strip().lower() in UNSENT:
+        return True
+    return bool(_stem(row.get("cv_file"))) and _stem(row.get("cv_file")) == _stem(new["cv_file"])
 
 
 def _channel(portal) -> str:
@@ -192,7 +209,8 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
         who = for_contact(d, meta, contacts)
         new = _row_for(d, meta, today, round_name, contacts)
         open_match = next((r for r in rows if _same_application(r, new)
-                           and (r.get("status") or "").strip().lower() not in FINAL), None)
+                           and (r.get("status") or "").strip().lower() not in FINAL
+                           and _this_application(r, new)), None)
         if open_match is None:
             rows.append(new)
             done.append(("added", new))

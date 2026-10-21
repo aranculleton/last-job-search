@@ -1197,9 +1197,9 @@ def auto_reply_action(text, sent_on=None) -> str:
 
 
 def _they_spoke_last(rows) -> bool:
-    """Is the last message theirs? An acceptance after it changes nothing either way."""
-    spoken = [r for r in rows if not state.is_acceptance(r) and not state.is_auto_reply(r)]
-    return bool(spoken) and _inbound(spoken[-1])
+    """Is the last message theirs? An acceptance after it changes nothing either way.
+    One answer, the one the follow-up log reads too (state.they_spoke_last)."""
+    return state.they_spoke_last(rows)
 
 
 def _rows_for(contact, threads):

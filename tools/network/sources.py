@@ -603,8 +603,39 @@ def _print_across(got: dict) -> int:
     return 0
 
 
+COMMANDS = ("ladder", "harvest", "import-connections", "while-you-wait", "people-paste",
+            "connections")
+
+
+def _usage() -> str:
+    """The Usage section of this file's docstring."""
+    doc = __doc__ or ""
+    return doc[doc.find("Usage:"):].rstrip() if "Usage:" in doc else doc.strip()
+
+
+def _not_an_employer(arg: str) -> bool:
+    """Is this argument a flag or a file rather than an employer? `--help`, or a command
+    spelled wrong with its file after it, was searched as an employer."""
+    a = str(arg or "").strip()
+    return a.startswith("-") or bool(re.search(r"\.(?:json|csv|txt|md|zip)$", a, re.I))
+
+
 def main(argv: list | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if any(a in ("-h", "--help") for a in argv):
+        print(_usage())
+        return 0
+    if argv and argv[0] in COMMANDS and argv[0] not in ("ladder", "while-you-wait") \
+            and len(argv) < {"people-paste": 3}.get(argv[0], 2):
+        print(f"sources: {argv[0]} needs more than that.\n{_usage()}")
+        return 2
+    if argv and argv[0] == "harvest" and not os.path.isfile(argv[1]):
+        print(f"sources: no file {argv[1]!r}: harvest reads a saved file of search results")
+        return 1
+    bad = [a for a in argv if _not_an_employer(a)] if argv and argv[0] not in COMMANDS else []
+    if bad:
+        print(f"sources: {bad[0]!r} is not an employer or a command here.\n{_usage()}")
+        return 2
     if argv and argv[0] == "ladder":
         return _cli_ladder(argv[1:])
     if argv and argv[0] == "harvest" and len(argv) > 1:

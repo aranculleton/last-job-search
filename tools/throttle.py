@@ -45,7 +45,7 @@ import bar  # noqa: E402
 from dates import as_date, days_since  # noqa: E402
 from company_key import key, row_key  # noqa: E402
 from lookup_score import norm  # noqa: E402
-from text_screen import GATE_CUT_WORDS, pay_cut_top  # noqa: E402
+from text_screen import GATE_CUT_WORDS, pay_cut_top, ruling_refused  # noqa: E402
 
 import person  # noqa: E402
 
@@ -324,9 +324,12 @@ def is_stale_exclusion(reason: str, entry: dict | None = None) -> bool:
     deal-breaker the profile names, with a number attached. Then a pay reason
     stands only on a range topping out below the cut line, a place only where
     the location gate still fails the place the entry recorded (`entry`), and a
-    degree never.
+    degree never. First of all, a cut the screen wrote that today's screen refuses on
+    the sentence it quotes is stale whatever words it shares with a real cut.
     """
     text = str(reason or "")
+    if ruling_refused(text):
+        return True
     if _STILL_CUTS.search(text):
         return False
     if _RANGE_REASON.search(text):
@@ -501,15 +504,26 @@ def load_seen(path: str = SEEN) -> dict:
 ANYWHERE = "*"
 
 
-def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str, str], str]]:
+def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
+                                                       dict[tuple[str, str, str], str]]:
     """URL key -> reason and (title, employer key, city) -> reason for everything already ruled out.
 
     The city is part of the key: a ruling on a place or a language in one city
     blocked the same title at that employer everywhere. Read it with `ruled_pair`.
+
+    `today` is the round's day. Given it, a ruling holds for the same title at that
+    employer and city only while the ruled posting was seen within RELIST_WINDOW days,
+    the window in which the same title is that posting relisted (`_seen_index`); past
+    it, the same title is more likely a new opening, and a new requisition months later
+    was dropped on its predecessor's ruling before anything read its own body. A ruling
+    on the posting's own address holds for good, and so does a pair ruled in the
+    person's own words. Without `today`, every pair holds, as it always did.
     """
     urls: dict[str, str] = {}
     pairs: dict[tuple[str, str, str], str] = {}
     since = rescreen_since()
+    now = as_date(today, iso_only=True) if today else None
+    relist_since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat() if now else ""
     import exclude
     rules_now, parts_now = exclude.rules_fingerprint(), exclude.rules_parts()
     for u, e in entries.items():
@@ -536,10 +550,17 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str, str],
         # is today's rule for it, and `exclude.holds` below lapses it the day the part
         # changes. Anything else is judged by its reason against today's rules.
         named = isinstance(e.get("rests_on"), dict) and bool(e.get("rests_on"))
+        # A ruling the screen wrote that today's screen would not make, read on the
+        # sentence it quotes (text_screen.ruling_refused): a second language named only
+        # as a nice-to-have, or a nationality word, cut as a language requirement. It
+        # rests on settings the person never changed, so nothing else would ever lift it.
+        if status == "excluded" and not own_call and ruling_refused(reason):
+            continue
         # Scored out under rules that no longer say to cut on a score. The entry
         # stays as the record; it just stops blocking, and the posting is ranked
-        # again against the current scoring.
-        if status == "excluded" and not own_call and not named and is_stale_exclusion(reason, e):
+        # again against the current scoring. A skip whose reason is a score is the
+        # same claim: "skipped" with "scored 58, below the 60 pass bar" blocked for good.
+        if not own_call and not named and is_stale_exclusion(reason, e):
             continue
         if (status == "excluded" and not own_call and since and screened_before(e, since)
                 and not _NOT_A_VERDICT.search(reason)):
@@ -556,7 +577,8 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str, str],
             urls[n] = why
         t = title_key(e.get("title"))
         k = key(e.get("company"))
-        if t and k:
+        days = _days_seen(e)
+        if t and k and (own_call or not relist_since or not days or max(days) >= relist_since):
             pairs[(t, k, city(e["location"]) if e.get("location") else ANYWHERE)] = why
     return urls, pairs
 
@@ -1209,6 +1231,24 @@ def write_back(path: str, data: dict, skipped: list[dict], today: str,
     return n
 
 
+# The kinds of skip, as their reasons open, for the count a round prints. The count was
+# keyed on the reason up to its first colon or comma, so a reason with neither (an
+# application already made to the same role) counted as a whole sentence of its own.
+_SKIP_KINDS = re.compile(
+    r"^(candidate's bar|do not target|referral in progress|already ruled out|"
+    r"already applied to this role|already in a hiring process for this role|"
+    r"company throttle|same-employer duplicate)\b", re.I)
+
+
+def skip_kind(reason: str) -> str:
+    """The kind of skip a reason records, in a few words."""
+    text = str(reason or "").strip()
+    m = _SKIP_KINDS.match(text)
+    if m:
+        return m.group(1)
+    return re.split(r"[:;,(]", text, maxsplit=1)[0].strip()[:40] or "no reason"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("infile", help="fit.py output, every ranked row")
@@ -1249,7 +1289,7 @@ def main() -> int:
     # Re-judging everything was the point of --no-seen-read, and the prefilter
     # honoured it while this applied every past ruling at the end anyway, so a
     # round with the flag re-scored nothing.
-    urls, pairs = ({}, {}) if a.keep_ruled_out else ruled_out(seen["seen"])
+    urls, pairs = ({}, {}) if a.keep_ruled_out else ruled_out(seen["seen"], a.today)
     blocked = load_do_not_target(a.do_not_target, a.today, data=dnt)
     warm = warm_routes(a.contacts, rows=contacts, live=live)
     kept, skipped = throttle(rows, open_apps, urls, pairs, a.today, blocked, warm,
@@ -1279,7 +1319,7 @@ def main() -> int:
                                               index=index)
 
     from collections import Counter
-    kinds = Counter(r["skip_reason"].split(":")[0].split(",")[0] for r in skipped)
+    kinds = Counter(skip_kind(r["skip_reason"]) for r in skipped)
     print(f"{len(rows)} ranked -> {len(kept)} surfaced, {len(skipped)} skipped "
           f"({dict(kinds)}); {len(open_apps)} employers with an open application; "
           f"{len(blocked)} employers on do_not_target; "

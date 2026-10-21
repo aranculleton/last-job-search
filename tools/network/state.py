@@ -890,15 +890,29 @@ _TEMPLATE = re.compile(
     r"|\bwith (?:limited|no|intermittent) access to\b|\b(?:on|upon) my return\b"
     r"|\bwhen i (?:am back|return|get back)\b|\bfor (?:urgent|anything urgent)\b|\burgent (?:matters|queries|requests)\b"
     r"|\bbis\b|\bjusqu'au\b|\bhasta el\b|\bfino al\b|\btot en met\b", re.I)
-# A message with these in it is a person talking, whatever else it says.
+# A message with these in it is a person talking, whatever else it says. An offer made
+# for later counts ("I'll pass your profile to our recruiter"): out of the office with a
+# promise in it was read as an automatic reply, so nobody thanked the person advocating
+# (2026-10-21).
 _ENGAGED = re.compile(
     r"\?|\b(?:happy|glad|keen|love|delighted) to\b|\blet'?s\b|\bworks for me\b|\bsounds good\b"
-    r"|\bsend (?:me|over|it|your)\b|\bi(?:'ve| have) (?:passed|shared|forwarded|sent)\b", re.I)
+    r"|\bsend (?:me|over|it|your)\b|\bi(?:'ve| have) (?:passed|shared|forwarded|sent)\b"
+    r"|\bi(?:'ll| will| can| could)(?: happily| gladly| certainly| definitely)? (?:pass|forward|"
+    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b", re.I)
 # Gone: the address no longer reaches them. Third person only, the way the template
-# writes it; "I am no longer at Acme" is them, writing, and reply.py reads that.
-_LEFT = re.compile(r"\b(?:is|are) no longer (?:with|at|employed (?:by|at)|working (?:for|at)"
-                   r"|part of)\b|\bhas left (?:the (?:company|firm|business|organi[sz]ation|team))",
-                   re.I)
+# writes it, and about a person: a name, a pronoun or "this person" as the subject. "I am
+# no longer at Acme" is them, writing, and reply.py reads that; "our team is no longer part
+# of the Manchester office" is a person explaining, and was read as the template.
+_SUBJECT_OF_LEFT = (r"(?:\b(?:[Hh]e|[Ss]he|[Tt]hey)\s+"
+                    r"|\b(?!(?:We|I|You|It|Our|My|Your|This|That|There|The)\b)[A-Z][\w'-]+"
+                    r"(?: [A-Z][\w'-]+){0,2}\s+"
+                    # "The person you are trying to reach is no longer with ...": a person
+                    # named by their place in the template, anywhere in the sentence.
+                    r"|(?i:\b(?:person|employee|individual|recipient|colleague|team member|"
+                    r"staff member|user|addressee)\b)[^.!?\n]{0,60}?\s)")
+_LEFT = re.compile(_SUBJECT_OF_LEFT + r"(?i:(?:is|are) no longer (?:with|at|employed (?:by|at)|"
+                   r"working (?:for|at)|part of)\b|has left (?:the (?:company|firm|business|"
+                   r"organi[sz]ation|team)))")
 
 _MONTHS = {m: i for i, names in enumerate((
     ("jan", "january"), ("feb", "february"), ("mar", "march"), ("apr", "april"), ("may",),
@@ -1006,6 +1020,17 @@ def said_something(row) -> bool:
     """An inbound row that is a message: the only kind that makes a route warm."""
     return (_direction(row) == "in" and not is_acceptance(row) and not is_call(row)
             and not is_auto_reply(row))
+
+
+def they_spoke_last(rows) -> bool:
+    """Is the last word on this thread theirs? The one answer /reply and the follow-up log
+    share. Acceptances and automatic replies say nothing either way; anything else,
+    a message out, a call, is the last word when it comes last. Reading "they ever
+    replied" as "they spoke last" refused a due nudge, and the chase it sent the person
+    to log another way set up a second one (2026-10-21)."""
+    spoken = [r for r in _ordered([r for r in rows if _direction(r)])
+              if not is_acceptance(r) and not is_auto_reply(r)]
+    return bool(spoken) and said_something(spoken[-1])
 
 
 def request_pending(rows) -> datetime.date | None:
@@ -1596,10 +1621,11 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     (`note=False`); an InMail needs its `subject` too. `outside` is a request sent from
     LinkedIn itself: logged with the note the invitations page showed when there was one
     (`preview` when the page cut it at "show more"), and with no text when its words were
-    not seen, so it is never an example of what works. Both lists change in place; the
-    caller saves them. Raises ValueError for a contact not in the book, one already
-    written to, or a send with its words missing. `attached` is a file that went with it
-    (`resolve_attachment`), named on the row (`attachment_note`).
+    not seen, so it is never an example of what works. An answer to someone who wrote
+    first is a reply, and is logged as one (`followed_up`), never as a first note. Both
+    lists change in place; the caller saves them. Raises ValueError for a contact not in
+    the book, one already written to, or a send with its words missing. `attached` is a
+    file that went with it (`resolve_attachment`), named on the row (`attachment_note`).
     """
     day = _need_date(date or today, "date")
     attached = resolve_attachment(attached) if str(attached or "").strip() else ""
@@ -1635,6 +1661,14 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
                          f"{rows[-1].get('date')}: a later message is logged with "
                          f"state.py nudge {cid} (a chase after silence) or state.py message "
                          f"{cid} (a reply, or anything else), with its words")
+    if not outside and (body or channel != "connection" or note) \
+            and any(said_something(r) for r in threads_for(threads, cid)):
+        # They wrote first, so what goes back is a reply, whichever command logs it. Logged
+        # here as a first note, an answer to a recruiter became a connection request: a
+        # weekly request spent, and "not accepted, withdraw it" three weeks on (2026-10-21).
+        return followed_up(contacts, threads, cid, today, text=text, date=date,
+                           channel="" if channel == "connection" else channel,
+                           subject=subject, kind="message", attached=attached)["row"]
     words_needed()
     if channel == "connection" and outside and body:
         scenario = "connection_note"
@@ -1710,15 +1744,17 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
                          "works: --text-file <file> with the message as sent, or --draft")
     rows = [r for r in threads_for(threads, cid) if _direction(r)]
     outs = [r for r in rows if _direction(r) == "out" and not is_withdrawal(r)]
-    if not outs:
+    said = [r for r in rows if said_something(r)]
+    if not outs and not said:
         raise ValueError(f"nothing is logged as sent to {name} yet: the first message is "
                          f"state.py sent {cid}")
     for r in outs:
         if (str(r.get("date") or "") == day.isoformat()
                 and _same_words_sent(r.get("full_text"), body)):
             raise ValueError(f"already logged: the same words to {name} on {day.isoformat()}")
-    said = [r for r in rows if said_something(r)]
-    they_last = bool(said) and _direction(said[-1]) == "in"
+    # Who spoke last, the one answer /reply reads too: "they ever replied" refused a due
+    # nudge after our own answer to them, and set up a second one (2026-10-21).
+    they_last = they_spoke_last(rows)
     spoke = [r for r in outs if not is_bare_request(r)]
     if kind == "nudge" and they_last:
         raise ValueError(f"{name} wrote last ({said[-1].get('date')}): a reply is owed, not a "
@@ -1731,11 +1767,15 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         # A second message with no reply between is a chase, whatever the command: the
         # nudge count (owed, what_works) reads it as one.
         scenario = "nudge"
-    last_out = outs[-1]
     accepted = any(is_acceptance(r) for r in rows)
     chan = str(channel or "").strip().lower()
-    if not chan:
-        chan = channel_of(last_out) or channel_of(contact) or "message"
+    if not chan and not outs:
+        # They wrote first: the answer goes back the way they came, and an answer on
+        # LinkedIn is a message, never a request or a paid InMail.
+        chan = channel_of(said[-1]) or "message"
+        chan = "message" if chan in ("connection", "inmail") else chan
+    elif not chan:
+        chan = channel_of(outs[-1]) or channel_of(contact) or "message"
         if chan == "connection" and (accepted or scenario != "first_message"):
             chan = "message"             # once connected, a message, never another request
     note = ""
@@ -1776,7 +1816,9 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         # The resume was the thing owed: the row stops asking for it, and its date with it.
         contact["next_action"] = (f"{noun()[:1].upper() + noun()[1:]} sent {day.isoformat()} "
                                   f"({attached}): one nudge if no reply")
-    elif scenario != "nudge" and str(contact.get("status") or "") in DERIVABLE:
+    elif scenario != "nudge" and str(contact.get("status") or "") in waiting:
+        # Connected and now written to: "once they accept" is over, so the request's
+        # withdraw-in-21-days line no longer stands beside the nudge (2026-10-21).
         contact["next_action"] = "One nudge if no reply"
     contact["next_action_due"] = due if (done or str(contact.get("status") or "") in waiting) \
         else contact.get("next_action_due", "")
@@ -1818,9 +1860,21 @@ def split_subject(text: str) -> tuple[str, str]:
 
 
 def _first_out(threads, cid) -> int | None:
-    rows = [i for i, r in enumerate(threads)
-            if str(r.get("contact_id") or "").strip() == cid and _direction(r) == "out"]
-    return rows[-1] if rows else None
+    """The index in `threads` of the latest message logged to them: by date, file order
+    only for a tie. By file position alone, an older message the export import appended at
+    the end was the one unsend took off the log, its words put back as their draft, while
+    the message that did not go stayed logged (2026-10-21)."""
+    rows = [r for r in threads_for(threads, cid) if _direction(r) == "out"]
+    if not rows:
+        return None
+    return next(i for i, r in enumerate(threads) if r is rows[-1])
+
+
+def _later_in(threads, i, cid) -> list:
+    """Their inbound rows dated after row `i` (or on its day and after it in the file)."""
+    ordered = threads_for(threads, cid)
+    at = next(n for n, r in enumerate(ordered) if r is threads[i])
+    return [r for r in ordered[at + 1:] if _direction(r) == "in"]
 
 
 def resent(contacts, threads, contact_id, today, text="", date=None, subject="") -> dict:
@@ -1873,13 +1927,12 @@ def unsend(contacts, threads, contact_id, today) -> dict:
     if i is None:
         raise ValueError(f"nothing is logged as sent to {contact.get('name') or cid}")
     row = threads[i]
-    later = [r for r in threads[i + 1:] if str(r.get("contact_id") or "").strip() == cid
-             and _direction(r) == "in"]
+    later = _later_in(threads, i, cid)
     if later:
         raise ValueError(f"{contact.get('name') or cid} replied after it ({later[0].get('date')}),"
                          " so it went: correct it with state.py resent instead")
     del threads[i]
-    theirs = [r for r in threads if str(r.get("contact_id") or "").strip() == cid]
+    theirs = threads_for(threads, cid)           # by date: left[-1] is the latest still logged
     left = [r for r in theirs if _direction(r) == "out"]
     if not left:
         contact["first_contacted"] = ""
@@ -2156,7 +2209,7 @@ def _cli_sent(argv) -> int:
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
     for cid in a.contact_ids:
-        text, before, subject = "", None, a.subject
+        text, before, subject, placeholder = "", None, a.subject, False
         if a.text_file:
             with open(a.text_file, encoding="utf-8") as fh:
                 text = fh.read()
@@ -2166,6 +2219,7 @@ def _cli_sent(argv) -> int:
             if text is None:
                 print(f"  not recorded: {cid} has no draft to log")
                 continue
+            placeholder = _waits_on_read(cid)
         drafted_subject, body = split_subject(text)
         if drafted_subject:                      # an InMail draft carries its subject line
             text, subject = body, subject or drafted_subject
@@ -2190,6 +2244,12 @@ def _cli_sent(argv) -> int:
             print(f"  {cid}: was not in the contact book; added from what was read about them")
         print(f"  {logged}: {shown_summary(row)} on {row['date']}; awaiting their reply, "
               "draft removed")
+        if placeholder:
+            # A placeholder written before anyone was read is never sent as it stands: logged
+            # because the person says it went, and said, so other words can be put right.
+            print(f"    that draft was a placeholder waiting on a read, never meant to go as it "
+                  "stood. If other words went, put them on the log: python3 "
+                  f"tools/network/state.py resent {logged} --text-file <the message as sent>")
     if done:
         save_threads(threads, a.threads)
         save_contacts(contacts, a.contacts)
@@ -2211,7 +2271,8 @@ def _cli_followed_up(argv, kind) -> int:
                      if kind == "nudge" else
                      "Record a later message that went (a reply, a thank-you, the first words "
                      "after they accepted), with its words."))
-    ap.add_argument("contact_ids", nargs="+")
+    ap.add_argument("contact_ids", nargs="*",
+                    help="who it went to; with --texts, the ids in the file when none are named")
     ap.add_argument("--text-file", default="", help="the message as sent, with any edits")
     ap.add_argument("--texts", default="", metavar="FILE.json",
                     help="several at once: {\"<contact_id>\": \"<the words as sent>\", ...}")
@@ -2240,6 +2301,12 @@ def _cli_followed_up(argv, kind) -> int:
         import json
         with open(a.texts, encoding="utf-8") as fh:
             texts = {str(k): str(v) for k, v in (json.load(fh) or {}).items()}
+    if not a.contact_ids:
+        # --texts is how several are logged at once: its ids are the ones it names.
+        a.contact_ids = list(texts)
+    if not a.contact_ids:
+        print(f"{kind}: name who it went to (their contact ids), or give --texts <file.json>")
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
     for cid in a.contact_ids:
@@ -2316,6 +2383,15 @@ def _draft_of(cid: str) -> str | None:
     except (ImportError, OSError, ValueError):
         return None
     return reading.note_body(draft)
+
+
+def _waits_on_read(cid: str) -> bool:
+    """Is their queued draft the WAITS ON A READ placeholder?"""
+    try:
+        import reading
+        return reading.waits_on_read(cid)
+    except (ImportError, ValueError):
+        return False
 
 
 def _learn_edit(cid: str, sent_text: str, draft: str | None = None) -> None:
@@ -2436,7 +2512,17 @@ def set_contact(contacts, threads, who, status=None, next_action=None, due=None,
     """Change one contact's status, next action, its date, or add a dated note; returns the
     row and a line for each change. The book was edited by hand for want of this, and a note
     with line breaks in it broke the file (2026-10-21). A note stays on one line."""
-    row = (already_contacted(contacts, contact_id=who) or already_contacted(contacts, name=who))
+    row = already_contacted(contacts, contact_id=who)
+    if row is None:
+        # A name two rows share names neither: the first one was changed, and it was the
+        # wrong person as often as not (2026-10-21).
+        want = _match_name(who)
+        same = [c for c in contacts if want and _match_name(c.get("name")) == want]
+        if len(same) > 1:
+            raise ValueError(f"{len(same)} contacts are called {who!r}: name one by its id ("
+                             + ", ".join(f"{c.get('contact_id')} at {c.get('company') or '?'}"
+                                         for c in same) + ")")
+        row = already_contacted(contacts, name=who)
     if not row:
         raise ValueError(f"no contact matching {who!r}")
     said = []
@@ -3319,7 +3405,15 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
     # A free account's personalised notes run out within the month; after that a
     # request goes without a note and the message follows the acceptance.
     notes_limit = schema.LIMITS.get("personal_notes_per_month")
-    notes_sent = sum(1 for _, d in requests if month_start <= d <= month_end)
+    # Only a request that carried a note spends one: five requests sent with no note said
+    # "this month's personalised notes are used up" (2026-10-21). A request whose words were
+    # not seen, or whose row the log has not reached yet, may have had one and counts.
+    bare = {(str(r.get("contact_id") or "").strip(), as_date(r.get("date")))
+            for r in threads if is_bare_request(r)}
+    noted = {(str(r.get("contact_id") or "").strip(), as_date(r.get("date")))
+             for r in threads if is_request(r) and not is_bare_request(r)}
+    notes_sent = sum(1 for cid, d in requests if month_start <= d <= month_end
+                     and ((cid, d) in noted or (cid, d) not in bare))
     notes_left = None if notes_limit is None else max(notes_limit - notes_sent, 0)
     note = CAPPED_NOTE if conn_left == 0 else ""
     if notes_left == 0 and conn_left:

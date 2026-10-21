@@ -127,8 +127,10 @@ python3 tools/stage_picks.py consent "$SCRATCH/r1" <slug> --draft   # or --skip:
 # Two roles at one employer are both held with "which one?"; stage ... --both drafts both.
 python3 tools/draft_pack.py build "$SCRATCH/r1"           # pack.md and draft_args.json
 # Workflow draft-applications, args: the contents of draft_args.json, plus {today}
-python3 tools/stage_picks.py audit "$SCRATCH/r1"          # the code audit, authoritative
+#   (add "only": [slugs] to leave out roles the person has dropped)
+python3 tools/stage_picks.py audit "$SCRATCH/r1"          # both audits, authoritative
 python3 tools/stage_picks.py assemble "$SCRATCH/r1"       # -> drafts.json
+# Dropping a role after the workflow: audit and assemble with --only <slug> ... too.
 ```
 
 **The drafter reads the pack and nothing else.** `draft_pack.py` compiles what every
@@ -141,20 +143,28 @@ this posting, the verified research. It returns the draft object with a claim ma
 sentence and the ids it rests on), writes it to `draft_<slug>.json`, and repairs from what
 the code audit prints, at most twice.
 
-**The audit is code first.** `stage_picks.py audit` runs every check that is mechanical
-(`tools/draft_audit.py`: voice_check, check_numbers, check_claims, the letter checks, the
-budgets, rule 9, the person's answers, and each sentence's numbers, skills, verb, tense and
-employer facts against what it cites) and writes `audit_<slug>.json`: `pass`, or
-`needs_model` with the reasons. Only a flagged draft goes to the model auditor, one call on
-the strongest model reading one packet (`python3 tools/draft_audit.py packet "$SCRATCH/r1"
-<slug>`, under 10k tokens). In the workflow's args, `only` (slugs) limits the model audits
-to the roles that will be sent and `model_audit: "all"` sends every draft; `stage_picks.py
-audit --only <slug> ...` re-audits just those. `assemble` renders a pass or a fixed draft
-and nothing else.
+**Every draft that will be sent gets two audits: code first, then the model.**
+`stage_picks.py audit` runs every check that is mechanical (`tools/draft_audit.py`:
+voice_check, check_numbers with numbers written as words, check_claims, the letter checks,
+the budgets, rule 9, the person's answers, each sentence's numbers, skills, verb, scope,
+tense and employer facts against what it cites, every cited research quote against the
+page it was fetched from, and the letter's addressee against the research) and writes
+`audit_<slug>.json`. Then the model auditor reads it: one call on the strongest model per
+draft, flagged or not, reading one packet and nothing else (`python3 tools/draft_audit.py
+packet "$SCRATCH/r1" <slug>`, under 10k tokens: the draft, each sentence beside the
+evidence it cites, the research facts and their quote checks, the flags, what changed in
+the profile since the draft) and saving its verdict with `python3 tools/draft_audit.py
+verdict "$SCRATCH/r1" <slug>`, which re-checks its corrected draft by code. A draft is
+`needs_model` until then, and `pass` or `fixed` only once code agrees with what it
+returned. Skipping it is only for the roles the person drops: `only` (slugs) in the
+workflow's args, and `stage_picks.py audit --only <slug> ...` and `assemble --only <slug>
+...` after it. `assemble` renders a draft both audits passed and nothing else.
 
 `outreach_body` is optional. Without one, `tools/outreach.py` builds the note from the
 letter, as it always has; `outreach` in the args (true, or a list of slugs) has a small
-step write one, which the code audit checks whole.
+step write one from the paragraphs both audits passed, saved with `python3
+tools/draft_audit.py note`, which stamps it with the draft it was written for, and the
+code audit checks it whole. A note written for another version of the draft is left out.
 
 **What it cost.** Save the workflow's return value as JSON and run `python3
 tools/draft_cost.py "$SCRATCH/r1" --result <file> [--usage <file>]`: one record per stage
@@ -172,8 +182,11 @@ container is two agents at a time. Where the Workflow tool is not available, run
 stages as background agents: the briefs are the prompts inside the workflow file, with the
 contents of `pack.md` as the drafter's first lines.
 
-`stage` picks each filename and never reuses one another application was sent under. The
-rest of this section is what each draft object must hold, whichever way it is written.
+`stage` picks each filename and never reuses one another application was sent under.
+When it gives a slug to a different role than the round's earlier pick under it, that
+pick's files (its draft, research, audits, note) move to `old/<slug>-N/` first; a draft
+still found for another role is `stale` and never assembled. The rest of this section is
+what each draft object must hold, whichever way it is written.
 
 For each chosen posting, write one draft object; the fields are in
 `tools/render_application.py` `build()`. In short: `abbr`, `company`, `role`, `summary`
@@ -210,9 +223,11 @@ tools/verify_batch.sh "$SCRATCH/r1/drafts.json"
 python3 tools/outreach.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json"
 ```
 
-The code audit in step 2 already ran the claim, number, voice and letter checks on each
-draft object, before anything was rendered. They run again here on the rendered files,
-where the page, layout and text-layer checks can be made too.
+Both audits in step 2 ran before anything was rendered: the code audit (the claim,
+number, voice and letter checks on each draft object) and the model auditor's reading of
+its packet. The code checks run again here on the rendered files, where the page, layout
+and text-layer checks can be made too: a sign the font has no glyph for, in the resume or
+the letter, is named.
 
 `fit_to_page` allocates bullets, renders, compiles, trims the weakest bullet for *this*
 posting until one page, then grows back the strongest absent one that still fits.
@@ -223,8 +238,10 @@ on any finding and checks pages, chronology, section order, bullets per employer
 details as literal text, duplicated phrasing, em and en dashes, the document nouns the profile
 bans (`person.json` `documents.banned_nouns`), the ATS text layer (read with pypdf, which alone
 sees words run together: without it the batch exits 3 and says the spacing check was SKIPPED),
-every figure in each letter against the profile (`check_numbers.py --drafts`), and a letter
-bullet that repeats a resume bullet. The resume's filename
+every figure in each letter against the profile (`check_numbers.py --drafts`, numbers
+written as words included; the summary and the letter bullets against the profile alone,
+the opening and close also against the posting and p2), and a letter bullet that repeats a
+resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
 `cv/<Prefix>_CV_<ABBR>`; the globs here cover both.
 

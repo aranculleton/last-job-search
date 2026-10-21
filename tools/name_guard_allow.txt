@@ -112,3 +112,33 @@ Geo Location            # an export column (Profile.csv), not a name
 Twitter Handles         # an export column (Profile.csv), not a name
 Instant Messengers      # an export column (Profile.csv), not a name
 Artificial Intelligence # not a person: a field, in a headline, tests/test_a_networking_round_reads_while_it_drafts.py
+Brackwater Software     # invented employer, tests/test_a_judgement_is_kept_whole_and_read_for_its_own_employer.py and tools/bar.py
+Brackwater Software Ltd # invented employer, the same test
+Brackwater Insurance    # invented employer, the same test and tools/bar.py
+Brackwater Financial Services  # invented employer, the same test
+Brackwater Global       # invented employer, the same test
+Fernbrook Labs          # invented employer, the same test
+Gorsefield Trading      # invented employer, the same test
+Hollin Data             # invented employer, the same test
+Hollowmere Foods        # invented employer, tests/test_a_rounds_counts_name_what_they_count.py
+Quenby Freight          # invented employer, the same test
+Tarnwick Mills          # invented employer, the same test
+Quillfield Foods        # invented employer, tests/test_a_ruling_on_one_posting_is_not_a_ruling_on_the_next.py
+Fernwick Foods          # invented employer, tests/test_a_second_language_asked_as_a_plus_is_ranked.py
+Brindlehart Freight     # invented employer, tests/test_the_screen_reads_a_status_a_team_and_a_schedule.py
+Native Japanese         # a language requirement as a posting writes it, not a name
+Fluent German           # a language requirement as a posting writes it, not a name
+New York-wide           # a place, an invented profile's region reason in a test
+Master Production Schedule  # a supply-chain term, tools/text_screen.py NOT_A_DEGREE
+Master Scheduler        # a supply-chain job, tools/text_screen.py NOT_A_DEGREE
+Master Black Belt       # a Lean Six Sigma grade, tools/text_screen.py NOT_A_DEGREE
+Lean Six Sigma          # a method, not a name
+Lean Six Sigma Master   # a method and its grade, tools/text_screen.py
+Black Belt              # a Lean Six Sigma grade, tools/text_screen.py
+Permanent Resident      # a work status a posting names, tools/text_screen.py
+Actuarial Analyst       # a job title, tests/test_the_screen_reads_a_status_a_team_and_a_schedule.py
+Wrackenfold Retail      # invented employer, tests/test_the_code_audit_reads_what_it_was_missing.py
+Ysolde Brackwater       # invented, tests/test_the_code_audit_reads_what_it_was_missing.py
+Maternity Leave Cover   # a job title's terms, tests/test_a_postings_terms_are_read_both_ways.py
+Data Analyst Contractor # a job title, tests/test_a_postings_terms_are_read_both_ways.py
+Interim Finance Analyst # a job title, tests/test_a_postings_terms_are_read_both_ways.py

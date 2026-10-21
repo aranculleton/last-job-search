@@ -31,7 +31,8 @@ def test_a_draft_with_no_body_is_complete_and_its_note_is_built_from_the_letter(
     assert "outreach_body" not in FIXTURE["draft"]
     rd = make_round(tmp_path)
     [r] = stage_picks.audit(str(rd))
-    assert r["verdict"] == "pass"
+    # Updated 2026-10-21: clean for code, and waiting on the model audit like every draft.
+    assert r["mechanical"]["gate"] == "clean" and r["verdict"] == "needs_model"
     note = outreach.outreach_note(dict(FIXTURE["draft"]))
     assert note.startswith(outreach.OPENING.format(role=FIXTURE["role"], company="Kestrel Mutual"))
     assert outreach.check_note(note) == []
@@ -47,17 +48,18 @@ def test_a_body_the_outreach_step_writes_is_merged_and_checked_whole(tmp_path):
         ("At Brindle & Hart Logistics I built the demand models that cut forecast error from 22% "
          "to 14%.", ["BH_FORECAST"]),
         ("Happy to answer anything the application leaves open.", []))]
-    (rd / f"outreach_{SLUG}.json").write_text(json.dumps({"outreach_body": body, "claim_map": cm}),
-                                               encoding="utf-8")
+    # Updated 2026-10-21: the note is saved by draft_audit.write_note (the workflow's
+    # `draft_audit.py note`), which stamps it with the draft it was written for; a file
+    # written by hand carries no stamp and is left out (test_a_note_for_another_draft...).
+    draft_audit.write_note(str(rd), SLUG, {"outreach_body": body, "claim_map": cm})
     [r] = stage_picks.audit(str(rd))
-    assert r["verdict"] == "pass", r["mechanical"]
+    assert r["mechanical"]["gate"] == "clean", r["mechanical"]
     record = json.loads((rd / f"audit_{SLUG}.json").read_text(encoding="utf-8"))
     assert record["draft"]["outreach_body"] == body
     # A body that fits in 80 words alone and not with the opening line in front of it.
     long = " ".join(["Your claims teams staff to a weekly forecast."] * 9)
     assert len(long.split()) < outreach.MAX_NOTE_WORDS
-    (rd / f"outreach_{SLUG}.json").write_text(json.dumps({"outreach_body": long, "claim_map": []}),
-                                               encoding="utf-8")
+    draft_audit.write_note(str(rd), SLUG, {"outreach_body": long, "claim_map": []})
     [r] = stage_picks.audit(str(rd))
     assert r["verdict"] == "needs_model"
     assert any(f["rule"] == "outreach" and "words" in f["text"] for f in r["mechanical"]["findings"])
@@ -79,14 +81,17 @@ def test_the_drafter_is_not_asked_for_a_body_and_the_step_runs_only_when_wanted(
     assert {"claim_map", "stretches"} <= set(got["req"])
     assert labels(run_workflow({"A": "clean", "B": "clean"}, pack="P"), "outreach") == []
     got = run_workflow({"A": "clean", "B": "clean"}, pack="P", outreach=["b"])
-    assert labels(got, "outreach") == ["outreach:B"]
+    assert labels(got, "outreach") == ["outreach:b"]
     assert labels(run_workflow({"A": "clean", "B": "model"}, pack="P", outreach=True),
-                  "outreach") == ["outreach:A", "outreach:B"]
+                  "outreach") == ["outreach:a", "outreach:b"]
 
 
 def test_a_draft_still_waiting_on_the_model_auditor_gets_no_note():
     got = run_workflow({"A": "model", "B": "clean"}, pack="P", outreach=True, only=["b"])
-    assert labels(got, "outreach") == ["outreach:B"]
+    assert labels(got, "outreach") == ["outreach:b"]
+    # The note is written from the paragraphs the model auditor kept, not the drafter's.
+    prompt = next(c["prompt"] for c in got["calls"] if c["label"] == "outreach:b")
+    assert "p1: audited p1" in prompt and "drafted p1" not in prompt
 
 
 def test_old_drafts_that_carry_a_body_are_still_checked_as_before():

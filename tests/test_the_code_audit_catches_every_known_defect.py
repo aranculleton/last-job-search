@@ -27,6 +27,10 @@ import voice_check  # noqa: E402
 FIXTURE = json.load(open(os.path.join(ROOT, "tests", "fixtures", "drafting_round.json"),
                          encoding="utf-8"))
 GOOD = FIXTURE["draft"]
+sys.path.insert(0, os.path.join(ROOT, "tests"))
+from test_one_drafting_call_per_posting import store_pages  # noqa: E402
+
+store_pages()
 PICK = {"company": FIXTURE["company"], "role": FIXTURE["role"], "slug": FIXTURE["slug"],
         "abbr": FIXTURE["abbr"], "ask_first": ["SAP"], "skills_no": ["SAP"], "skills_yes": []}
 NONE = {"openings": set(), "closings": set()}

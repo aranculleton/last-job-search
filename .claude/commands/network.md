@@ -585,7 +585,9 @@ it. LinkedIn is never fetched from a session.
    `python3 tools/network/reading.py draft <contact_id> <file|->` (a batch at once, checked
    together: `reading.py drafts <file.json>`), and commit it with the
    contacts: a draft that lives only in the chat is gone when the session ends, and the
-   next run would skip the contact as already queued. A note for someone nothing was
+   next run would skip the contact as already queued. A draft file holds the note and
+   nothing else: notes about it, for the person, go below a line of `---`, and everything
+   below that line is never checked, sent or logged as the note. A note for someone nothing was
    read about is refused unless the person chose card-only (`--card-only`): it is saved under a
    `CARD ONLY` line and shown to them as card-only, and `reading.py queue` offers it a read. A
    placeholder written before anyone is read (the networking upgrade's) is `--wait-for-read`:

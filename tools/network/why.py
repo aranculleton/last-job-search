@@ -58,8 +58,9 @@ def open_roles(company: str, rounds_dir: str | None = None) -> list:
     Each row carries `_path`, the round file it came from, so a reader that
     prints a score can say where the score is recorded.
     """
+    from run_round import round_order      # by round number, not by when git wrote it
     files = sorted(glob.glob(os.path.join(rounds_dir or person.state("documents", "rounds"),
-                                          "*.json")), key=os.path.getmtime)
+                                          "*.json")), key=round_order)
     for path in reversed(files):
         if os.path.basename(path).startswith("."):
             continue
