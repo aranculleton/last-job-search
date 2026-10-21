@@ -1,0 +1,5 @@
+From,To,Sent At,Message,Direction,inviterProfileUrl,inviteeProfileUrl
+Morgan Ellis,Tamsin Varga,"3/2/26, 10:15 AM",,OUTGOING,https://www.linkedin.com/in/morgan-ellis-example,https://www.linkedin.com/in/example-tamsin-varga
+Morgan Ellis,Quillon Varga,"4/15/26, 9:00 AM","Hi Quillon, we were both at Leeds. I work in supply-chain analytics in Manchester. Would you have 15 minutes sometime?",OUTGOING,https://www.linkedin.com/in/morgan-ellis-example,https://www.linkedin.com/in/example-quillon-varga
+Morgan Ellis,Pell Ansgar,"10/15/26, 8:00 AM",,OUTGOING,https://www.linkedin.com/in/morgan-ellis-example,https://www.linkedin.com/in/example-pell-ansgar
+Morgan Ellis,Shirin Example,"5/1/26, 9:30 AM",,OUTGOING,https://www.linkedin.com/in/morgan-ellis-example,https://www.linkedin.com/in/example-shirin

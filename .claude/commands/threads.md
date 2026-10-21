@@ -15,6 +15,8 @@ What is owed, what is due, what has gone cold.
 4. `state.platform_budget()` for the week's remaining capacity.
 5. `state.link_to_applications()` to show where a thread and an application at
    the same employer relate.
+6. `python3 tools/network/own_profile.py due`: it prints a line only when a look at their own
+   LinkedIn profile is worth it. Act on that line alone, asking its question once at the end.
 
 ## Present
 
@@ -36,6 +38,11 @@ withdrawn it on LinkedIn, record it in the same turn:
 listed here). It logs a `request_withdrawn` row the derived status reads as closed and
 closes the contact with the date and why, so the request leaves this list and the person
 is never surfaced or written to again. Commit the two CSVs.
+Requests sent from LinkedIn itself that the log never saw come from their export
+(`python3 tools/network/export.py pending`, printed in the state view as PENDING INVITATIONS),
+oldest first. They withdraw them on LinkedIn, one at a time (`python3 tools/claude_surfaces.py
+steps linkedin-withdraw-invitation`); the app never does. Record the ones they name with
+`python3 tools/network/export.py withdrawn <name>...` (or `--oldest <n>`).
 
 **Gone cold** third, as a list to close out rather than chase.
 

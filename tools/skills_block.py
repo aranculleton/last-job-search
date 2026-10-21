@@ -152,6 +152,78 @@ def _asked_for(posting):
     return frozenset(item for _, item, pat in ITEMS if re.search(pat, posting, re.I))
 
 
+# Words too general to say a posting asked for a skill, and the small words that join a
+# phrase rather than build one.
+_GENERIC = frozenset(
+    "and or of for the a an to in on with at by from as data analysis analytics design "
+    "testing management reporting model models modelling modeling tools tooling skills "
+    "development engineering science business stakeholder stakeholders".split())
+_LINKING = frozenset(
+    "a an the of and or to in on for with at by from as is are be been our your their its "
+    "this that these those we you they it culture".split())
+_SUFFIXES = ("ations", "ation", "ings", "ing", "als", "al", "ed", "s")
+
+
+def _stem(word):
+    w = word.lower()
+    for suf in _SUFFIXES:
+        if w.endswith(suf) and len(w) - len(suf) >= 4:
+            return w[: -len(suf)]
+    return w
+
+
+def _head_stems(item):
+    """The head noun of each part of an inventory item, the last word that names the
+    skill rather than a general one: "demand forecasting" is named by "forecasting",
+    and "A/B testing and experiment design" by "experiment", since "testing" and
+    "design" are too general to say which skill."""
+    out = set()
+    for part in re.split(r"\s+and\s+|,|/|\(|\)", item):
+        words = [w for w in re.findall(r"[A-Za-z][A-Za-z+#]*", part)
+                 if len(w) > 2 and w.lower() not in _GENERIC]
+        if words:
+            out.add(_stem(words[-1]))
+    return out
+
+
+_WORD = re.compile(r"[A-Za-z][A-Za-z+#'-]*")
+
+
+def _compound_named(items, posting):
+    """The items the tailor listed that the posting names inside a compound phrase.
+
+    An item's own pattern can deliberately skip a word on its own: "experimentation"
+    alone is as often "a culture of experimentation" as the skill, so a profile's A/B
+    testing pattern leaves it out. But "online experimentation" or "an experimentation
+    platform" is the skill, and the tailor listing it in the tools field is the second
+    reading that says so. Read here only to keep such an item from being trimmed as
+    never asked for: every item is held, so nothing unheld can reach the page this way.
+    """
+    if not posting or not items:
+        return frozenset()
+    words = [(m.group(0), m.start(), m.end()) for m in _WORD.finditer(posting)]
+    out = set()
+    for item in items:
+        stems = _head_stems(item)
+        if not stems:
+            continue
+        for i, (w, _start, _end) in enumerate(words):
+            if _stem(w) not in stems:
+                continue
+            for j in (i - 1, i + 1):
+                if not 0 <= j < len(words):
+                    continue
+                a, b = (words[j], words[i]) if j < i else (words[i], words[j])
+                between = posting[a[2]:b[1]]
+                other = words[j][0].lower()
+                if between.strip(" -") == "" and "\n" not in between and other not in _LINKING:
+                    out.add(item)
+                    break
+            if item in out:
+                break
+    return frozenset(out)
+
+
 def _standing_in(posting):
     """Held items that stand in for a tool the posting asks for and the person does not
     hold, from the same family (tools/bridges.py): Power BI for a Tableau posting, AWS
@@ -203,7 +275,7 @@ def _from_posting(sel, posting):
     return sel
 
 
-def _rank(sel, posting, context, company=""):
+def _rank(sel, posting, context, company="", also_named=frozenset()):
     """Posting-named items first, then what the page's bullets evidence, then
     the tailor's remaining picks. Within each tier the tailor's order holds.
 
@@ -228,7 +300,8 @@ def _rank(sel, posting, context, company=""):
         if item in ANCHORS:
             return -1 + ANCHORS.index(item) * 0.1
         secondary = item in SECONDARY
-        named = bool(posting and re.search(pat, posting, re.I)) or item in standing
+        named = (bool(posting and re.search(pat, posting, re.I)) or item in standing
+                 or item in also_named)
         evidenced = bool(context and re.search(pat, context, re.I))
         # A flat +3 for a secondary put a posting-named secondary BELOW a
         # primary the posting never mentioned, and the per-line cap then cut it
@@ -260,7 +333,7 @@ def _rank(sel, posting, context, company=""):
     # about the weakest thing on the resume.
     if posting:
         sel = {c: [i for i in v
-                   if i not in SECONDARY or i in standing
+                   if i not in SECONDARY or i in standing or i in also_named
                    or re.search(next(p for _, it, p in ITEMS if it == i), posting, re.I)]
                for c, v in sel.items()}
     return {c: sorted(v, key=tier) for c, v in sel.items()}
@@ -291,9 +364,11 @@ def _final(tools, context, posting="", company="", consented=()):
     rendered line: uncapped, it wraps onto a second with Jira and Confluence,
     which nobody hiring for the role was going to read."""
     picked = select(tools)
+    # Listed by the tailor and named by the posting in a phrase its pattern skips: asked for.
+    compound = _compound_named([i for v in picked.values() for i in v], posting)
     sel = _from_context(dict(picked), context)
     sel = _from_posting(sel, posting)
-    sel = _rank(sel, posting, context, company)
+    sel = _rank(sel, posting, context, company, compound)
     # The employer's own name is not a skill mention wherever it appears: a
     # summary praising a tool company's product would otherwise add that tool
     # to the stack. Only the tailor naming it on the tools string keeps it.
@@ -316,7 +391,7 @@ def _final(tools, context, posting="", company="", consented=()):
     # token trim below could weigh anything, so two postings each asking for
     # two named tools lost them here, while tools neither posting mentions
     # stayed.
-    asked_here = _asked_for(posting) | set(yes)
+    asked_here = _asked_for(posting) | set(yes) | compound
 
     def _trim_line(items, cap):
         items = list(items)

@@ -1,6 +1,6 @@
 {
   "boards": {
-    "version": 16,
+    "version": 17,
     "date": "2026-10-15"
   },
   "documents": {
@@ -8,7 +8,7 @@
     "date": "2026-10-15"
   },
   "drafts": {
-    "version": 30,
+    "version": 32,
     "date": "2026-10-17"
   },
   "expand": {
@@ -24,7 +24,7 @@
     "date": "2026-10-17"
   },
   "market": {
-    "version": 5,
+    "version": 6,
     "date": "2026-10-17"
   },
   "network-notes": {
@@ -32,15 +32,15 @@
     "date": "2026-10-17"
   },
   "networking": {
-    "version": 39,
+    "version": 40,
     "date": "2026-10-17"
   },
   "prep-docs": {
-    "version": 17,
+    "version": 18,
     "date": "2026-10-17"
   },
   "research": {
-    "version": 4,
+    "version": 5,
     "date": "2026-10-17"
   },
   "routines": {
@@ -48,7 +48,7 @@
     "date": "2026-10-17"
   },
   "screening": {
-    "version": 17,
+    "version": 18,
     "date": "2026-10-17"
   },
   "search": {

@@ -296,7 +296,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "connections-export", "work-place",
                                                                  "profile-consistency",
                                                                  "campaign-notes", "message-texts",
-                                                                 "voice-refresh"}
+                                                                 "voice-refresh",
+                                                                 # Only they can give their own
+                                                                 # profile (2026-10-21).
+                                                                 "own-profile-review"}
     assert "inbox" in U.by_id("job-alerts").ask
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask

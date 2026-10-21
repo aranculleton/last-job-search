@@ -48,6 +48,8 @@ done correctly*.
 | `reading.py` | What was read about one person before writing: their page, their public work, what a note can rest on |
 | `prep.py` | Call prep documents, for a call that came out of a thread |
 | `profile_facts.py` | The candidate half of a prep document, read from the profile |
+| `export.py` | LinkedIn's data export, read: their connections, their message history into the log, the invitations still waiting |
+| `own_profile.py` | Their own LinkedIn profile, checked now and then for red flags only; `due` is silent until a look is worth it |
 
 **Never hand-write a message without running `compose.validate()` on it**, with the
 recipient's `name=`: a draft that greets anybody else ("Hi Tamsin," on a note for Riley
@@ -621,7 +623,9 @@ nudged. `state.owed()` lists it as `request_pending` once it has waited
 can be outstanding and one nobody accepted in three weeks rarely is. Once the person has,
 `state.py withdraw <contact_id>` records it: a `request_withdrawn` row, which the derived
 status reads as closed, and the contact closed with the date and why, so nobody writes
-to them again. Someone who
+to them again. Requests sent from LinkedIn itself, which the log never saw, come from
+their export (`export.py pending`, the same three weeks): they withdraw those on LinkedIn,
+and `export.py withdrawn` records each one closed. Someone who
 accepted a request that carried **no note** has been told nothing, so what is owed is
 a first message (`first_message`), written with `compose.first_note()`, never a nudge.
 A call or meeting logged in the thread (`channel` call, phone, teams..., or

@@ -110,6 +110,15 @@ def test_a_single_apply_is_staged_like_a_round_pick(tmp_path):
                         "--url", ROW["url"], "--fit", "81"],
                        capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr
+    # The example tracker already holds an application for this very role, so staging
+    # now holds it and asks first (tools/posting_profile.py); the answer releases it.
+    # Until 2026-10-21 it was staged straight into picks.json, unasked.
+    assert "You applied for Senior Supply Chain Analyst at Larkspur Retail" in p.stdout
+    assert json.loads((out / "picks.json").read_text(encoding="utf-8")) == []
+    held = json.loads((out / "held.json").read_text(encoding="utf-8"))
+    subprocess.run([sys.executable, os.path.join(ROOT, "tools", "stage_picks.py"), "consent",
+                    str(out), held[0]["slug"], "--draft"], check=True, capture_output=True,
+                   cwd=ROOT)
     picks = json.loads((out / "picks.json").read_text(encoding="utf-8"))
     apps = json.loads((out / "apps_in.json").read_text(encoding="utf-8"))
     assert picks[0]["company"] == "Larkspur Retail" and picks[0]["abbr"]

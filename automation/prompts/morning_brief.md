@@ -70,6 +70,8 @@ It is what makes the brief this person's rather than a template:
   yet, and a line asking for outcomes with `/outcome`.
 - `python3 tools/what_works.py brief search`: one line, only when it reports a clear
   difference.
+- `python3 tools/network/own_profile.py due`: when, and only when, it prints a line, its
+  question goes in as one of the three things below. It costs nothing when silent.
 
 ## 3. News that matters
 

@@ -27,6 +27,11 @@ os.environ["LJS_STATE"] = _state
 # unset, the ledger lives under the tests' own state.
 os.environ.pop("LJS_LEDGER", None)
 atexit.register(shutil.rmtree, _state, ignore_errors=True)
+# Pages tools/company_research.py fetched, kept for the quote check: the tests' own, never
+# the machine's shared folder a real research run uses.
+_pages = tempfile.mkdtemp(prefix="ljs_pages_")
+os.environ["LJS_RESEARCH_PAGES"] = _pages
+atexit.register(shutil.rmtree, _pages, ignore_errors=True)
 
 
 import pytest  # noqa: E402

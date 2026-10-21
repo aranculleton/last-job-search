@@ -1,0 +1,1080 @@
+#!/usr/bin/env python3
+"""LinkedIn's data export, read: one reader for every file the app uses from it.
+
+A person can download a copy of their own LinkedIn data (`python3
+tools/claude_surfaces.py steps linkedin-export-files` says how, checked against LinkedIn's
+help page) and give it here, as the ZIP or as the files inside it. Nothing here fetches
+linkedin.com, and nothing is ever sent: the export is the one way the app sees what
+happened on LinkedIn itself.
+
+Only the files named in FILES are ever opened; everything else in the archive stays
+shut. Their column names come from three independent parsers of the export, not from a
+file LinkedIn was seen to write, so every header is matched without regard to case or
+spacing, a header found below a few lines of notes (Connections.csv has them) is
+found, and a missing file or column is named rather than a crash.
+
+What it gives:
+
+- **the connections** (`state.first_degree()` reads them through `read()`);
+- **the history**: messages and invitations into network_threads.csv as message rows,
+  joined to the contact book by profile address (`state.profile_handle`, the one
+  normaliser, which reads ca., uk. and www. addresses as one), else by a careful name
+  match, else listed as not in the contact book. Running it twice adds nothing, and a
+  message the app already logged is not added again. Status stays derived from the log,
+  so afterwards `state.py` shows who replied and who is owed a reply;
+- **the invitations still waiting**: the ones sent and never accepted, older than
+  PENDING_DAYS, oldest first, for the person to withdraw on LinkedIn themselves.
+
+    python3 tools/network/export.py files [<zip|folder>]          # what it holds, what is missing
+    python3 tools/network/export.py save <zip|csv>... [--only connections|history|profile]
+    python3 tools/network/export.py history [--from <zip|folder>] [--apply]
+    python3 tools/network/export.py pending [--from <zip|folder>] [--days N] [--all]
+    python3 tools/network/export.py withdrawn <name|profile address|contact id>... \\
+        [--oldest N] [--reason "..."] [--from <zip|folder>]
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import datetime
+import html
+import io
+import os
+import re
+import sys
+import zipfile
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+for _p in (_HERE, os.path.dirname(_HERE)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+
+import dates  # noqa: E402
+import person  # noqa: E402
+import state as _st  # noqa: E402
+
+# The files the app reads, by what they hold. Nothing else in an archive is opened.
+FILES = {
+    "connections": "Connections.csv",
+    "messages": "messages.csv",
+    "invitations": "Invitations.csv",
+    "profile": "Profile.csv",
+    "positions": "Positions.csv",
+    "education": "Education.csv",
+    "skills": "Skills.csv",
+    "certifications": "Certifications.csv",
+}
+# What each use needs. "history" takes the connections too: an invitation whose person
+# is now a connection was accepted, and that is the only place it says so.
+GROUPS = {
+    "connections": ("connections",),
+    "history": ("messages", "invitations", "connections"),
+    "profile": ("profile", "positions", "education", "skills", "certifications"),
+}
+GROUPS["all"] = tuple(FILES)
+# The columns each file is expected to hold, as three independent parsers of the export
+# name them (research, 2026-10-21; not checked against a file LinkedIn wrote). Matched
+# without regard to case or spacing.
+COLUMNS = {
+    "connections": ("First Name", "Last Name", "URL", "Email Address", "Company", "Position",
+                    "Connected On"),
+    "messages": ("CONVERSATION ID", "CONVERSATION TITLE", "FROM", "SENDER PROFILE URL", "TO",
+                 "RECIPIENT PROFILE URLS", "DATE", "SUBJECT", "CONTENT", "FOLDER",
+                 "ATTACHMENTS"),
+    "invitations": ("From", "To", "Sent At", "Message", "Direction", "inviterProfileUrl",
+                    "inviteeProfileUrl"),
+    "profile": ("First Name", "Last Name", "Maiden Name", "Address", "Birth Date", "Headline",
+                "Summary", "Industry", "Geo Location", "Twitter Handles", "Websites",
+                "Instant Messengers"),
+    "positions": ("Company Name", "Title", "Description", "Location", "Started On",
+                  "Finished On"),
+    "education": ("School Name", "Start Date", "End Date", "Notes", "Degree Name", "Activities"),
+    "skills": ("Name",),
+    "certifications": ("Name", "Url", "Authority", "Started On", "Finished On",
+                       "License Number"),
+}
+# Without these a file cannot be used at all; any other missing column is named and the
+# rest of the file is still read.
+NEEDED = {
+    "connections": ("First Name", "Last Name"),
+    "messages": ("FROM", "DATE", "CONTENT"),
+    "invitations": ("To", "Sent At", "Direction"),
+    "profile": ("Headline",),
+    "positions": ("Company Name", "Title"),
+    "education": ("School Name",),
+    "skills": ("Name",),
+    "certifications": ("Name",),
+}
+# A file far past this is not one of LinkedIn's, and is not read into memory to find out.
+# A busy inbox's messages.csv runs to tens of megabytes.
+MAX_BYTES = 200 * 1024 * 1024
+# How far down a file its header may sit (Connections.csv has notes above it).
+HEADER_SEARCH_LINES = 40
+
+
+def _fold_header(name: str) -> str:
+    return " ".join(str(name or "").replace("﻿", "").split()).casefold()
+
+
+def default_folder() -> str:
+    """documents/linkedin/ in this checkout, or in the main checkout when this is a
+    worktree without it: the export is never committed, so a worktree lacks it."""
+    here = person.state("documents", "linkedin")
+    if os.environ.get(person.STATE_ENV) or _holds_any(here):
+        return here
+    main = person.main_checkout()
+    there = os.path.join(main, "documents", "linkedin") if main else ""
+    return there if there and _holds_any(there) else here
+
+
+def _holds_any(folder: str) -> bool:
+    try:
+        names = {n.lower() for n in os.listdir(folder)}
+    except OSError:
+        return False
+    return any(f.lower() in names for f in FILES.values())
+
+
+def _source(src) -> tuple[str, str]:
+    """("zip" | "folder" | "file", path) for what the person gave, default the folder."""
+    src = str(src or "") or default_folder()
+    if os.path.isdir(src):
+        return "folder", src
+    if os.path.isfile(src) and zipfile.is_zipfile(src):
+        return "zip", src
+    return "file", src
+
+
+def _kind_of_file(path: str) -> str:
+    base = os.path.basename(path).lower()
+    return next((k for k, f in FILES.items() if f.lower() == base), "")
+
+
+def _raw(kind: str, src=None) -> tuple[str, str]:
+    """(text, where it was read) for one file, or ("", "") when it is not there."""
+    how, path = _source(src)
+    want = FILES[kind].lower()
+    if how == "zip":
+        with zipfile.ZipFile(path) as z:
+            found = [n for n in z.namelist() if os.path.basename(n).lower() == want]
+            if not found:
+                return "", ""
+            # The shortest path: the export's own file, not one nested in a folder of extras.
+            name = min(found, key=len)
+            if z.getinfo(name).file_size > MAX_BYTES:
+                raise ValueError(f"the {FILES[kind]} in that archive is too large to be LinkedIn's")
+            data = z.read(name)
+        return data.decode("utf-8-sig", errors="replace"), f"{os.path.basename(path)}:{name}"
+    if how == "folder":
+        try:
+            names = os.listdir(path)
+        except OSError:
+            return "", ""
+        hit = next((n for n in names if n.lower() == want), None)
+        if not hit:
+            return "", ""
+        path = os.path.join(path, hit)
+    elif not os.path.isfile(path) or (_kind_of_file(path) not in ("", kind)):
+        return "", ""
+    if os.path.getsize(path) > MAX_BYTES:
+        raise ValueError(f"{path} is too large to be LinkedIn's {FILES[kind]}")
+    with open(path, "rb") as fh:
+        return fh.read().decode("utf-8-sig", errors="replace"), path
+
+
+def _header_at(text: str, kind: str) -> tuple[int, list]:
+    """(character offset of the header line, its cells), or (-1, []) when none is found."""
+    want = {_fold_header(c) for c in COLUMNS[kind]}
+    need = min(2, len(want))
+    offset = 0
+    for i, line in enumerate(text.splitlines(keepends=True)):
+        if i >= HEADER_SEARCH_LINES:
+            break
+        try:
+            cells = next(csv.reader([line.rstrip("\r\n")]))
+        except (csv.Error, StopIteration):
+            cells = []
+        if len({_fold_header(c) for c in cells} & want) >= need:
+            return offset, cells
+        offset += len(line)
+    return -1, []
+
+
+def parse(text: str, kind: str) -> dict:
+    """{"rows": [...], "missing": [columns], "found": bool} from one file's text.
+
+    Each row's keys are COLUMNS' names where the header matched one (any case, any
+    spacing); a column nobody expected is kept under its own name."""
+    at, cells = _header_at(text, kind)
+    if at < 0:
+        return {"rows": [], "missing": list(COLUMNS[kind]), "found": False}
+    canon = {_fold_header(c): c for c in COLUMNS[kind]}
+    names = [canon.get(_fold_header(c), str(c).strip()) for c in cells]
+    rows = []
+    reader = csv.reader(io.StringIO(text[at:]))
+    next(reader, None)
+    for cells_ in reader:
+        if not any(str(c).strip() for c in cells_):
+            continue
+        rows.append({n: (cells_[i] if i < len(cells_) else "") for i, n in enumerate(names)})
+    got = set(names)
+    return {"rows": rows, "missing": [c for c in COLUMNS[kind] if c not in got], "found": True}
+
+
+def read(kind: str, src=None) -> dict:
+    """One export file: {"kind", "file", "where", "rows", "missing", "found", "usable"}.
+
+    `src` is the ZIP, a folder holding the files, or the one file itself; by default
+    documents/linkedin/. A file that is not there comes back with found False and no
+    rows, never an error: the caller names what is missing."""
+    if kind not in FILES:
+        raise KeyError(f"export: no file kind {kind!r}; one of {', '.join(FILES)}")
+    text, where = _raw(kind, src)
+    got = parse(text, kind) if text else {"rows": [], "missing": list(COLUMNS[kind]),
+                                          "found": False}
+    usable = got["found"] and not [c for c in NEEDED[kind] if c in got["missing"]]
+    return {"kind": kind, "file": FILES[kind], "where": where, **got, "usable": usable}
+
+
+def describe(tables) -> list:
+    """Plain lines: each file read, each one missing, each expected column not found."""
+    out = []
+    for t in tables:
+        if not t["where"]:
+            out.append(f"{t['file']} is not in it")
+        elif not t["found"]:
+            out.append(f"{t['file']} has no header this app recognises "
+                       f"(it looked for {', '.join(COLUMNS[t['kind']][:3])})")
+        else:
+            gap = (f"; no {', '.join(t['missing'])} column" if t["missing"] else "")
+            out.append(f"{t['file']}: {len(t['rows'])} row{'s' if len(t['rows']) != 1 else ''}"
+                       + gap + ("" if t["usable"] else ", so it cannot be used"))
+    return out
+
+
+def save(srcs, only: str = "all", dest: str | None = None) -> str:
+    """Copy the files `only` names from what the person gave into documents/linkedin/,
+    opening nothing else, and return what to tell them. Each is checked for its header
+    first; one without it is not saved."""
+    dest = dest or person.state("documents", "linkedin")
+    kinds = GROUPS[only]
+    saved, missing, other = [], [], 0
+    for src in srcs:
+        how, path = _source(src)
+        if how == "zip":
+            with zipfile.ZipFile(path) as z:
+                want = {FILES[k].lower() for k in kinds}
+                other += sum(1 for n in z.namelist() if not n.endswith("/")
+                             and os.path.basename(n).lower() not in want)
+        elif how == "file" and _kind_of_file(path) not in kinds:
+            missing.append(os.path.basename(path) + " (not a file this reads)")
+            continue
+        for kind in kinds:
+            if how == "file" and _kind_of_file(path) != kind:
+                continue
+            text, _where = _raw(kind, path)
+            if not text:
+                continue
+            if not parse(text, kind)["found"]:
+                missing.append(f"{FILES[kind]} (no header this app recognises)")
+                continue
+            os.makedirs(dest, exist_ok=True)
+            with open(os.path.join(dest, FILES[kind]), "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+            saved.append(FILES[kind])
+    absent = [FILES[k] for k in kinds if FILES[k] not in saved
+              and not any(m.startswith(FILES[k]) for m in missing)]
+    if not saved:
+        raise ValueError("nothing saved: none of " + ", ".join(FILES[k] for k in kinds)
+                         + " was in what you gave")
+    line = f"Saved {_and(saved)}."
+    if other:
+        line += (f" I read only {'that' if len(saved) == 1 else 'those'} from the archive; "
+                 f"the other {other} file{'s' if other != 1 else ''} in it "
+                 f"{'were' if other != 1 else 'was'} not opened.")
+    if missing or absent:
+        line += " Not saved: " + _and(missing + [f"{a} (not in it)" for a in absent]) + "."
+    return line
+
+
+def _and(items) -> str:
+    items = list(items)
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + " and " + items[-1]
+
+
+# ---------------------------------------------------------------- dates
+
+_MDY = re.compile(r"^\s*(\d{1,2})/(\d{1,2})/(\d{2,4})\b")
+_DAY_MONTH_YEAR = re.compile(r"\b(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})\b")
+_MONTH_DAY_YEAR = re.compile(r"\b([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})\b")
+_MONTH_YEAR = re.compile(r"^\s*([A-Za-z]{3,9})\.?\s+(\d{4})\s*$")
+_NUM_MONTH_YEAR = re.compile(r"^\s*(\d{1,2})/(\d{4})\s*$")
+_YEAR = re.compile(r"^\s*(\d{4})\s*$")
+
+
+def _month_number(word: str) -> int | None:
+    for fmt in ("%b", "%B"):
+        try:
+            return datetime.datetime.strptime(word[:3] if fmt == "%b" else word, fmt).month
+        except ValueError:
+            continue
+    return None
+
+
+def day(value) -> datetime.date | None:
+    """A day from any date the export writes: "2024-03-15 14:22:01 UTC" (messages),
+    "3/15/24, 2:22 PM" (invitations, month first as LinkedIn writes it, day first only
+    where the first number cannot be a month), "15 Mar 2024" (connections)."""
+    text = " ".join(str(value or "").split())
+    got = dates.as_date(text, iso_only=True)
+    if got:
+        return got
+    m = _MDY.match(text)
+    if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        y += 2000 if y < 100 else 0
+        month, d = (b, a) if a > 12 >= b else (a, b)
+        try:
+            return datetime.date(y, month, d)
+        except ValueError:
+            return None
+    for rx, order in ((_DAY_MONTH_YEAR, "dmy"), (_MONTH_DAY_YEAR, "mdy")):
+        m = rx.search(text)
+        if m:
+            d, mon, y = ((m.group(1), m.group(2), m.group(3)) if order == "dmy"
+                         else (m.group(2), m.group(1), m.group(3)))
+            month = _month_number(mon)
+            if month:
+                try:
+                    return datetime.date(int(y), month, int(d))
+                except ValueError:
+                    return None
+    return None
+
+
+def month(value) -> tuple | None:
+    """(year, month or None) from a position's or a certificate's date: "Mar 2023",
+    "03/2023", "2023", or an ISO date. None when there is nothing usable."""
+    text = " ".join(str(value or "").split())
+    if not text:
+        return None
+    got = dates.as_date(text, iso_only=True)
+    if got:
+        return (got.year, got.month)
+    m = _MONTH_YEAR.match(text)
+    if m and _month_number(m.group(1)):
+        return (int(m.group(2)), _month_number(m.group(1)))
+    m = _NUM_MONTH_YEAR.match(text)
+    if m and 1 <= int(m.group(1)) <= 12:
+        return (int(m.group(2)), int(m.group(1)))
+    m = _YEAR.match(text)
+    if m:
+        return (int(m.group(1)), None)
+    got = day(text)
+    return (got.year, got.month) if got else None
+
+
+# ---------------------------------------------------------------- who is who
+
+def _state():
+    return _st
+
+
+def me() -> tuple[str, str]:
+    """(the person's own profile handle, their name as the name match reads it)."""
+    st = _state()
+    return (st.profile_handle(person.get("identity.linkedin", "") or ""),
+            st._match_name(person.get("identity.name", "") or ""))
+
+
+def name_key(name) -> str:
+    """A name as the contact book is matched on it: credentials, letters after the name,
+    pronouns and honorifics gone (state.person_name). "" for a single name, which is too
+    little to call anybody by."""
+    st = _state()
+    bare = st.person_name(name)
+    return st._match_name(bare) if len(bare.split()) >= 2 else ""
+
+
+def match_contact(contacts, name, url) -> tuple:
+    """(contact row or None, how): "profile address", "name", "ambiguous" or "".
+
+    The profile address first, through the one normaliser (`state.profile_handle`). Then
+    the name, only when exactly one row carries it and that row's own address, if it
+    has one, is this person's: two rows with the name are two people as far as this can
+    tell, and a different address is a different person. A nickname or a near spelling
+    never joins."""
+    st = _state()
+    h = st.profile_handle(url)
+    if h:
+        for c in contacts:
+            if st.profile_handle(c.get("linkedin_url")) == h:
+                return c, "profile address"
+    key = name_key(name)
+    if not key:
+        return None, ""
+    same = [c for c in contacts if name_key(c.get("name")) == key]
+    if h:
+        same = [c for c in same if not st.profile_handle(c.get("linkedin_url"))]
+    if len(same) == 1:
+        return same[0], "name"
+    return None, ("ambiguous" if same else "")
+
+
+# ---------------------------------------------------------------- the history
+
+_TAG = re.compile(r"<[^>]+>")
+_BREAK = re.compile(r"<br\s*/?>|</p>\s*<p[^>]*>|</div>\s*<div[^>]*>", re.I)
+_RESUME = re.compile(r"\b(?:r[eé]sum[eé]|cv|curriculum vitae)\b", re.I)
+_URLS = re.compile(r"https?://\S+?(?=[,;\s]|$)")
+# A request is a request whichever day the log and the export put it on: a request seen
+# on the invitations page is logged as "pending since about" a day.
+REQUEST_SLACK_DAYS = 7
+# A message the app logged on the day the person said it went and the export's day,
+# which is in UTC, can be a day apart.
+MESSAGE_SLACK_DAYS = 1
+EXPORT_NOTE = "from LinkedIn's export"
+
+
+def _clean(text) -> str:
+    t = str(text or "")
+    if "<" in t and _TAG.search(t):
+        t = _TAG.sub("", _BREAK.sub("\n", t))
+    return html.unescape(t).strip()
+
+
+def _preview(text, most: int = 60) -> str:
+    one = " ".join(str(text or "").split())
+    return one if len(one) <= most else one[:most - 3].rstrip() + "..."
+
+
+def _norm(text) -> str:
+    return " ".join(str(text or "").split()).lower()
+
+
+def same_text(a, b) -> bool:
+    """One message, whether the app logged it whole and the export cut it, or the
+    other way round (an invitation's preview ends early)."""
+    a, b = _norm(a).rstrip(".… "), _norm(b).rstrip(".… ")
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= 40 and long_.startswith(short)
+
+
+def _yes(value) -> bool:
+    return str(value or "").strip().lower() in ("yes", "true", "1", "y")
+
+
+def _attachment(row) -> str:
+    """What was attached, said plainly: "a resume" when its name or the message says so."""
+    raw = str(row.get("ATTACHMENTS") or "").strip()
+    if not raw:
+        return ""
+    urls = _URLS.findall(raw)
+    names = [os.path.basename(u.split("?")[0]) for u in urls] if urls else [raw]
+    said = " ".join(names) + " " + str(row.get("CONTENT") or "")
+    what = "a resume" if _RESUME.search(said) else "an attachment"
+    shown = ", ".join(n for n in names if n and "." in n and len(n) <= 80)
+    return f"{what} attached" + (f" ({shown})" if shown else "")
+
+
+def _participants(row, mine) -> tuple:
+    """(direction, [(name, url)] of the others) for one message row."""
+    st = _state()
+    my_h, my_n = mine
+    sender_url = str(row.get("SENDER PROFILE URL") or "")
+    sh = st.profile_handle(sender_url)
+    from_me = (sh == my_h) if (sh and my_h) else (name_key(row.get("FROM")) == my_n and bool(my_n))
+    urls = [u for u in _URLS.findall(str(row.get("RECIPIENT PROFILE URLS") or ""))]
+    others_urls = [u for u in urls if not (my_h and st.profile_handle(u) == my_h)]
+    if from_me:
+        if len(others_urls) == 1:
+            return "out", [(str(row.get("TO") or ""), others_urls[0])]
+        if others_urls:
+            return "out", [("", u) for u in others_urls]
+        return "out", [(str(row.get("TO") or ""), "")]
+    people = [(str(row.get("FROM") or ""), sender_url)]
+    people += [("", u) for u in others_urls]
+    return "in", people
+
+
+def _who(name, url) -> str:
+    st = _state()
+    h = st.profile_handle(url)
+    return ("in:" + h) if h else ("name:" + name_key(name)) if name_key(name) else ""
+
+
+def _near(a, b, days) -> bool:
+    return a is not None and b is not None and abs((a - b).days) <= days
+
+
+def plan_history(contacts, threads, src=None, mine=None) -> dict:
+    """What the export's history adds to the message log, decided and not yet written.
+
+    {"add": [thread rows], "fill": [(an existing row, its words)], "joined": {how: n},
+     "unmatched": [{name, url, last, last_from, sent, received}], "ambiguous": [{name, url}],
+     "groups": n, "drafts": n, "tables": [...], "problem": ""}
+
+    A message to or from one person in the contact book becomes one row, `channel`
+    message, with its words, subject and any attachment noted. One the app logged already
+    (the same person, a day either side, the same words) is not added again; one it logged
+    with no words is given them. A request the person sent is a `connection_request` row
+    with its note; an invitation they received from someone in the book is an inbound
+    row. A request accepted since, which only Connections.csv says, gets its acceptance.
+    A conversation with more than one other person is no one thread and is left out."""
+    st = _state()
+    tables = [read(k, src) for k in GROUPS["history"]]
+    msgs, invs, conns = tables
+    mine = mine or me()
+    if not mine[0] and mine[1]:
+        # Their own address, from a message they sent: without it their address among a
+        # message's recipients read as a second person and every thread as a group.
+        mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
+                      if name_key(r.get("FROM")) == mine[1]
+                      and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
+    out = {"add": [], "fill": [], "joined": {"profile address": 0, "name": 0},
+           "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
+           "problem": ""}
+    if not (mine[0] or mine[1]):
+        out["problem"] = ("person.json has no LinkedIn address and no name, so which messages "
+                          "are yours cannot be told")
+        return out
+    if not (msgs["usable"] or invs["usable"]):
+        out["problem"] = "neither messages.csv nor Invitations.csv is there to read"
+        return out
+    log = list(threads)
+    joined_ids: dict = {}
+
+    def join(name, url):
+        c, how = match_contact(contacts, name, url)
+        if c is not None:
+            cid = str(c.get("contact_id") or "").strip()
+            if cid not in joined_ids:
+                joined_ids[cid] = how
+            return c
+        if how == "ambiguous":
+            key = (name_key(name), st.profile_handle(url))
+            if key not in {(name_key(a["name"]), st.profile_handle(a["url"]))
+                           for a in out["ambiguous"]}:
+                out["ambiguous"].append({"name": name, "url": url})
+        return None
+
+    def mine_for(cid):
+        return [r for r in log if str(r.get("contact_id") or "").strip() == cid]
+
+    def add_message(cid, when, direction, text, subject, summary):
+        rows = mine_for(cid)
+        for r in rows:
+            if st._direction(r) == direction and _near(st.as_date(r.get("date")), when,
+                                                        MESSAGE_SLACK_DAYS) \
+                    and same_text(r.get("full_text"), text):
+                return
+        empty = [r for r in rows if st._direction(r) == direction
+                 and _near(st.as_date(r.get("date")), when, MESSAGE_SLACK_DAYS)
+                 and not str(r.get("full_text") or "").strip() and not st.is_request(r)
+                 and not st.is_acceptance(r) and not st.is_withdrawal(r) and not st.is_call(r)]
+        if len(empty) == 1 and text:
+            if not any(e is empty[0] for e, _ in out["fill"]):
+                out["fill"].append((empty[0], text))
+            return
+        row = {"contact_id": cid, "date": when.isoformat(), "direction": direction,
+               "channel": "message", "scenario": "", "summary": summary,
+               "full_text": text, "subject": subject}
+        out["add"].append(row)
+        log.append(row)
+
+    # Messages, one conversation at a time.
+    if msgs["usable"]:
+        convs: dict = {}
+        for i, r in enumerate(msgs["rows"]):
+            if _yes(r.get("IS MESSAGE DRAFT")) or str(r.get("FOLDER") or "").strip().lower() \
+                    in ("draft", "drafts", "spam"):
+                out["drafts"] += 1
+                continue
+            cid_ = str(r.get("CONVERSATION ID") or "").strip() or f"row{i}"
+            convs.setdefault(cid_, []).append(r)
+        for rows in convs.values():
+            people, parsed = {}, []
+            for r in rows:
+                direction, others = _participants(r, mine)
+                parsed.append((r, direction))
+                for name, url in others:
+                    k = _who(name, url)
+                    if k:
+                        got = people.setdefault(k, ["", ""])
+                        got[0] = got[0] or name
+                        got[1] = got[1] or url
+            if len(people) != 1:
+                out["groups"] += 1 if len(people) > 1 else 0
+                continue
+            name, url = next(iter(people.values()))
+            contact = join(name, url)
+            dated = sorted(((day(r.get("DATE")), r, d) for r, d in parsed),
+                           key=lambda x: x[0] or datetime.date.min)
+            if contact is None:
+                sent = sum(1 for _, _, d in dated if d == "out")
+                last = dated[-1] if dated else (None, {}, "")
+                out["unmatched"].append({
+                    "name": name, "url": url,
+                    "last": last[0].isoformat() if last[0] else "",
+                    "last_from": "you" if last[2] == "out" else "them",
+                    "sent": sent, "received": len(dated) - sent, "kind": "messages"})
+                continue
+            cid = str(contact.get("contact_id") or "").strip()
+            for when, r, direction in dated:
+                if when is None:
+                    continue
+                note = _attachment(r)
+                text = _clean(r.get("CONTENT"))
+                # The words' start is in the summary: two messages to one person on one day
+                # are two rows, and reconcile reads identical summaries as one logged twice.
+                summary = ("Message " + ("sent" if direction == "out" else "received") + ", "
+                           + EXPORT_NOTE + (f"; {note}" if note else "")
+                           + (f": {_preview(text)}" if text else ""))
+                add_message(cid, when, direction, text, str(r.get("SUBJECT") or "").strip(),
+                            summary)
+
+    # Invitations: the person's requests, and requests to them from people in the book.
+    if invs["usable"]:
+        for r in invs["rows"]:
+            way = str(r.get("Direction") or "").strip().lower()
+            when = day(r.get("Sent At"))
+            if when is None:
+                continue
+            note = _clean(r.get("Message"))
+            if way.startswith("out"):
+                contact = join(r.get("To"), r.get("inviteeProfileUrl"))
+                if contact is None:
+                    continue           # the pending list names these; see pending()
+                cid = str(contact.get("contact_id") or "").strip()
+                rows = mine_for(cid)
+                same = [x for x in rows if st.is_request(x)
+                        and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)]
+                if same:
+                    if note and not str(same[0].get("full_text") or "").strip() \
+                            and not any(e is same[0] for e, _ in out["fill"]):
+                        out["fill"].append((same[0], note))
+                    continue
+                row = {"contact_id": cid, "date": when.isoformat(), "direction": "out",
+                       "channel": "connection", "scenario": "connection_request",
+                       "summary": ("Connection request with a note, " if note
+                                   else "Connection request, no note, ") + EXPORT_NOTE,
+                       "full_text": note, "subject": ""}
+                out["add"].append(row)
+                log.append(row)
+            elif way.startswith("in"):
+                contact = join(r.get("From"), r.get("inviterProfileUrl"))
+                if contact is None:
+                    continue           # an invitation from a stranger is not outreach
+                cid = str(contact.get("contact_id") or "").strip()
+                if any(st._direction(x) == "in" and st._scenario(x) == "invitation_received"
+                       and _near(st.as_date(x.get("date")), when, MESSAGE_SLACK_DAYS)
+                       for x in mine_for(cid)):
+                    continue
+                row = {"contact_id": cid, "date": when.isoformat(), "direction": "in",
+                       "channel": "connection", "scenario": "invitation_received",
+                       "summary": ("They asked to connect" + (", with a note" if note else "")
+                                   + ", " + EXPORT_NOTE),
+                       "full_text": note, "subject": ""}
+                out["add"].append(row)
+                log.append(row)
+
+    # Acceptances: a request in the log, and the person now a connection.
+    if conns["usable"]:
+        for r in conns["rows"]:
+            name = " ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x).strip()
+            when = day(r.get("Connected On"))
+            if when is None:
+                continue
+            c, _how = match_contact(contacts, name, r.get("URL"))
+            if c is None:
+                continue
+            cid = str(c.get("contact_id") or "").strip()
+            rows = st._ordered(mine_for(cid))
+            asked = [x for x in rows if st.is_request(x)
+                     and (st.as_date(x.get("date")) or datetime.date.max)
+                     <= when + datetime.timedelta(days=MESSAGE_SLACK_DAYS)]
+            if not asked:
+                continue           # connected before any request: nothing to accept
+            since = st.as_date(asked[-1].get("date"))
+            later = [x for x in rows if (st.as_date(x.get("date")) or datetime.date.min) >= since
+                     and x is not asked[-1]]
+            if any(st.is_acceptance(x) or st.said_something(x) or st.is_withdrawal(x)
+                   for x in later):
+                continue
+            joined_ids.setdefault(cid, _how)
+            row = {"contact_id": cid, "date": when.isoformat(), "direction": "in",
+                   "channel": "connection", "scenario": "connection_accepted",
+                   "summary": "Accepted the connection request, " + EXPORT_NOTE,
+                   "full_text": "", "subject": ""}
+            out["add"].append(row)
+            log.append(row)
+
+    touched = {r["contact_id"] for r in out["add"]} | {r.get("contact_id") for r, _ in out["fill"]}
+    for cid in touched:
+        how = joined_ids.get(cid)
+        if how in out["joined"]:
+            out["joined"][how] += 1
+    out["unmatched"].sort(key=lambda u: u["last"], reverse=True)
+    return out
+
+
+def apply_history(threads, plan, contacts=None) -> int:
+    """Write a plan into the message log in place; the caller saves. Rows changed.
+
+    With `contacts`, each person the import touched has the statuses the log decides
+    (state.DERIVABLE) brought in line with it, and an empty first_contacted filled from
+    their first message out: the log is the authority for those, and leaving the rows
+    behind put every imported thread in front of the person as a contradiction."""
+    for row, text in plan["fill"]:
+        row["full_text"] = text
+    threads.extend(plan["add"])
+    if contacts is not None:
+        settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
+               | {str(r.get("contact_id") or "") for r, _ in plan["fill"]})
+    return len(plan["add"]) + len(plan["fill"])
+
+
+def settle(contacts, threads, ids) -> list:
+    """For each contact in `ids`, a stored status the log decides set to what it says.
+    Returns [(contact_id, old, new)] for the ones changed."""
+    st = _state()
+    changed = []
+    for c in contacts:
+        cid = str(c.get("contact_id") or "").strip()
+        if cid not in ids:
+            continue
+        rows = st.threads_for(threads, cid)
+        stored = str(c.get("status") or "").strip()
+        derived = st.derive_status(rows)
+        if (not stored or stored in st.DERIVABLE) and derived != stored \
+                and derived != "not_contacted":
+            c["status"] = derived
+            changed.append((cid, stored, derived))
+        if not str(c.get("first_contacted") or "").strip():
+            first = next((r for r in rows if st._direction(r) == "out"), None)
+            if first and st.as_date(first.get("date")):
+                c["first_contacted"] = st.as_date(first.get("date")).isoformat()
+    return changed
+
+
+# ---------------------------------------------------------------- invitations still waiting
+
+# The same three weeks `state.owed()` lists a request to withdraw after: one rule, one
+# number. LinkedIn's help says invitations left pending can lead to a restriction on
+# sending more, and that a withdrawn one cannot be sent again for up to three weeks (help
+# pages a551012 and a568295, read through a web search on 2026-10-21, never fetched):
+# withdrawing at three weeks leaves a second try possible six weeks after the first.
+PENDING_DAYS = int(_st.REQUEST_WITHDRAW_DAYS)
+
+
+def _pending_days() -> int:
+    return PENDING_DAYS
+
+
+# Shown in the state view and /threads; the rest are counted. There is no way to withdraw
+# many at once (LinkedIn's help, a568295), so a list of hundreds is not read whole:
+# the oldest come first.
+PENDING_SHOWN = 10
+
+
+def pending(contacts, threads, today, src=None, days: int | None = None) -> dict:
+    """Invitations the person sent that nobody has accepted, older than `days`, oldest first.
+
+    {"items": [{name, url, sent, days, note, contact_id}], "total_sent": n, "younger": n,
+     "file": bool, "connections": bool, "tables": [...]}
+
+    Read from Invitations.csv; an invitation whose person is in Connections.csv was
+    accepted, and one the log shows withdrawn, accepted or answered is not waiting.
+    Someone in the contact book whose request `state.owed()` already lists to withdraw
+    carries `listed`, so the two lists never show one person twice."""
+    st = _state()
+    today = st._need_date(today, "today")
+    days = _pending_days() if days is None else int(days)
+    inv, conns = read("invitations", src), read("connections", src)
+    out = {"items": [], "total_sent": 0, "younger": 0, "file": inv["usable"],
+           "connections": conns["usable"], "tables": [inv, conns]}
+    if not inv["usable"]:
+        return out
+    linked_h, linked_n = set(), set()
+    for r in conns["rows"]:
+        h = st.profile_handle(r.get("URL"))
+        if h:
+            linked_h.add(h)
+        else:
+            k = name_key(" ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x))
+            if k:
+                linked_n.add(k)
+    owed_ids = {i["contact_id"] for i in st.owed(contacts, threads, today)
+                if i["kind"] == "request_pending"}
+    seen = set()
+    for r in inv["rows"]:
+        if not str(r.get("Direction") or "").strip().lower().startswith("out"):
+            continue
+        name, url = str(r.get("To") or "").strip(), str(r.get("inviteeProfileUrl") or "")
+        when = day(r.get("Sent At"))
+        if when is None:
+            continue
+        out["total_sent"] += 1
+        h = st.profile_handle(url)
+        if (h and h in linked_h) or (not h and name_key(name) in linked_n):
+            continue
+        key = h or name_key(name) or name
+        if key in seen:
+            continue
+        seen.add(key)
+        contact, _how = match_contact(contacts, name, url)
+        cid = str(contact.get("contact_id") or "").strip() if contact else ""
+        if contact is not None:
+            rows = [x for x in st.threads_for(threads, cid) if st._direction(x)]
+            after = [x for x in rows if (st.as_date(x.get("date")) or datetime.date.min) >= when]
+            if any(st.is_withdrawal(x) or st.is_acceptance(x) or st.said_something(x)
+                   for x in after):
+                continue
+            if str(contact.get("status") or "").strip() in ("closed", "gone_cold",
+                                                            "converted_to_application"):
+                continue
+        waited = (today - when).days
+        if waited < days:
+            out["younger"] += 1
+            continue
+        out["items"].append({"name": name, "url": url, "sent": when.isoformat(),
+                             "days": waited, "note": bool(str(r.get("Message") or "").strip()),
+                             "contact_id": cid, "listed": cid in owed_ids})
+    out["items"].sort(key=lambda i: (i["sent"], i["name"]))
+    return out
+
+
+WITHDRAW_STEPS = "python3 tools/claude_surfaces.py steps linkedin-withdraw-invitation"
+
+
+def pending_lines(found: dict, shown: int = PENDING_SHOWN) -> list:
+    """The section the state view and /threads print: [] when nothing is waiting."""
+    items = [i for i in found["items"] if not i["listed"]]
+    if not items:
+        return []
+    weeks = _pending_days() // 7
+    head = (f"PENDING INVITATIONS  {len(items)} sent from LinkedIn more than {weeks} weeks ago "
+            "and never accepted, oldest first (from your export)")
+    lines = [head]
+    for i in items[:shown]:
+        who = i["name"] or i["url"] or "someone"
+        lines.append(f"  {who}: sent {i['sent']}, {i['days']} days ago"
+                     + (" (in your contact book)" if i["contact_id"] else ""))
+    if len(items) > shown:
+        lines.append(f"  and {len(items) - shown} more")
+    lines.append("  Worth withdrawing, oldest first: waiting invitations count against how many "
+                 "LinkedIn lets you send. You do it on LinkedIn, one at a time; the steps: "
+                 + WITHDRAW_STEPS + ". Then tell me who, and I record it: python3 "
+                 "tools/network/export.py withdrawn <name>... (or --oldest <n>)")
+    return lines
+
+
+def withdrawn(contacts, threads, who, today, src=None, oldest: int = 0, reason: str = "",
+              days: int | None = None) -> dict:
+    """Record invitations the person says they withdrew on LinkedIn: each one closed,
+    with the reason, so it is never suggested again. Lists changed in place.
+
+    {"done": [(name, contact_id)], "unknown": [what was not found], "ambiguous": [...]}.
+    Someone in the contact book is closed through `state.withdraw()`, with the request
+    logged first when only the export had it. Someone who is not becomes a closed row
+    beside the request and its withdrawal, so the person is never surfaced again."""
+    st = _state()
+    today = st._need_date(today, "today")
+    found = pending(contacts, threads, today, src, days=0 if days is None else days)
+    items = found["items"]
+    picked, unknown, ambiguous = [], [], []
+    for w in who or ():
+        w = str(w or "").strip()
+        h = st.profile_handle(w)
+        hits = ([i for i in items if st.profile_handle(i["url"]) == h] if h
+                else [i for i in items if i["contact_id"] == w]
+                or [i for i in items if name_key(i["name"]) and name_key(i["name"]) == name_key(w)])
+        if len(hits) == 1:
+            picked.append(hits[0])
+        elif hits:
+            ambiguous.append(w)
+        else:
+            unknown.append(w)
+    if oldest:
+        old = [i for i in items if (today - datetime.date.fromisoformat(i["sent"])).days
+               >= _pending_days()]
+        picked += [i for i in old[:int(oldest)] if i not in picked]
+    why = " ".join(str(reason or "").split()) or "withdrawn on LinkedIn by the person"
+    done = []
+    for i in picked:
+        sent = datetime.date.fromisoformat(i["sent"])
+        cid = i["contact_id"]
+        if not cid:
+            cid = st.unique_contact_id(i["name"] or st.profile_handle(i["url"]), "", contacts,
+                                       linkedin_url=i["url"])
+            st.add_row(contacts, cid, {
+                "name": i["name"], "linkedin_url": i["url"], "channel": "connection",
+                "status": "awaiting_reply", "first_contacted": i["sent"], "route": "cold",
+                "found_via": "export",
+                "notes": "an invitation sent from LinkedIn itself, seen in its export"})
+        rows = [x for x in st.threads_for(threads, cid) if st._direction(x)]
+        if st.request_pending(rows) is None:
+            threads.append({"contact_id": cid, "date": sent.isoformat(), "direction": "out",
+                            "channel": "connection", "scenario": "connection_request",
+                            "summary": "Connection request, " + EXPORT_NOTE,
+                            "full_text": "", "subject": ""})
+        try:
+            st.withdraw(contacts, threads, cid, today, why)
+        except ValueError as e:
+            unknown.append(f"{i['name'] or i['url']} ({e})")
+            continue
+        done.append((i["name"] or i["url"], cid))
+    return {"done": done, "unknown": unknown, "ambiguous": ambiguous}
+
+
+# ---------------------------------------------------------------- the command line
+
+def _cli_files(a) -> int:
+    for line in describe([read(k, a.src) for k in FILES]):
+        print("  " + line)
+    return 0
+
+
+def _cli_save(a) -> int:
+    try:
+        print(save(a.srcs, a.only))
+    except (OSError, ValueError, zipfile.BadZipFile) as e:
+        print(f"export: {e}")
+        return 1
+    return 0
+
+
+def _cli_history(a) -> int:
+    st = _state()
+    contacts, threads = st.load_contacts(a.contacts), st.load_threads(a.threads)
+    plan = plan_history(contacts, threads, a.src)
+    read_ = [t["file"] for t in plan["tables"] if t["usable"]]
+    if plan["problem"]:
+        print(f"export: nothing imported: {plan['problem']}.")
+        for line in describe(plan["tables"]):
+            print("  " + line)
+        return 1
+    print(f"From your LinkedIn export ({', '.join(read_)}):")
+    for line in describe(plan["tables"]):
+        if "is not in it" in line or "column" in line or "header" in line:
+            print("  " + line)
+    j = plan["joined"]
+    people = j["profile address"] + j["name"]
+    print(f"  {len(plan['add'])} message row{'s' if len(plan['add']) != 1 else ''} to add and "
+          f"{len(plan['fill'])} already logged given their words, for {people} "
+          f"{'person' if people == 1 else 'people'} in your contact book "
+          f"({j['profile address']} by profile address, {j['name']} by name)")
+    if plan["groups"]:
+        print(f"  {plan['groups']} group conversation{'s' if plan['groups'] != 1 else ''} left "
+              "out: a message to several people is not one thread")
+    if plan["ambiguous"]:
+        print(f"TWO PEOPLE, ONE NAME ({len(plan['ambiguous'])}): more than one row in your contact "
+              "book has this name and no LinkedIn address says which. Put the address on the "
+              "right row, then run this again:")
+        for x in plan["ambiguous"][:10]:
+            print(f"  {x['name']} {x['url']}".rstrip())
+    if plan["unmatched"]:
+        wrote = [u for u in plan["unmatched"] if u["sent"]]
+        print(f"NOT IN YOUR CONTACT BOOK ({len(plan['unmatched'])}, {len(wrote)} of them you "
+              "wrote to), newest first. Add any worth keeping to network_contacts.csv with "
+              "their LinkedIn address, then run this again and their messages join them:")
+        for u in plan["unmatched"][:25]:
+            print(f"  {u['name'] or u['url']}: last message {u['last'] or 'undated'}, from "
+                  f"{u['last_from']}; {u['sent']} sent, {u['received']} received"
+                  + (f" ({u['url']})" if u["url"] else ""))
+        if len(plan["unmatched"]) > 25:
+            print(f"  and {len(plan['unmatched']) - 25} more")
+    if not a.apply:
+        print("Nothing written yet. To add them: python3 tools/network/export.py history --apply"
+              + (f" --from {a.src}" if a.src else ""))
+        return 0
+    n = apply_history(threads, plan, contacts)
+    if n:
+        st.save_threads(threads, a.threads)
+        st.save_contacts(contacts, a.contacts)
+    print(f"Written: {n} row{'s' if n != 1 else ''} in network_threads.csv. Nothing was sent. "
+          "python3 tools/network/state.py now shows who replied and who is owed a reply.")
+    return 0
+
+
+def _cli_pending(a) -> int:
+    st = _state()
+    contacts, threads = st.load_contacts(a.contacts), st.load_threads(a.threads)
+    found = pending(contacts, threads, a.today, a.src, days=a.days)
+    if not found["file"]:
+        print("export: no Invitations.csv to read; the steps for the export: python3 "
+              "tools/claude_surfaces.py steps linkedin-export-files")
+        return 1
+    lines = pending_lines(found, shown=10 ** 6 if a.all else PENDING_SHOWN)
+    for line in lines or ["PENDING INVITATIONS  none older than "
+                          f"{(a.days if a.days is not None else _pending_days())} days"]:
+        print(line)
+    if not found["connections"]:
+        print("  Connections.csv was not given, so an invitation accepted since may be listed.")
+    return 0
+
+
+def _cli_withdrawn(a) -> int:
+    st = _state()
+    contacts, threads = st.load_contacts(a.contacts), st.load_threads(a.threads)
+    if not a.who and not a.oldest:
+        print("withdrawn: name who you withdrew (a name, a LinkedIn address or a contact id), "
+              "or --oldest <n> for the oldest n listed")
+        return 2
+    got = withdrawn(contacts, threads, a.who, a.today, a.src, oldest=a.oldest, reason=a.reason)
+    for name, cid in got["done"]:
+        print(f"  {name}: withdrawal recorded, closed, never suggested again [{cid}]")
+    for w in got["ambiguous"]:
+        print(f"  {w}: more than one waiting invitation has that name; give their LinkedIn address")
+    for w in got["unknown"]:
+        print(f"  {w}: not found among the waiting invitations, nothing recorded")
+    if got["done"]:
+        st.save_threads(threads, a.threads)
+        st.save_contacts(contacts, a.contacts)
+    print(f"withdrawn: {len(got['done'])} recorded")
+    return 0 if got["done"] or not (got["unknown"] or got["ambiguous"]) else 1
+
+
+def main(argv=None) -> int:
+    st = _state()
+    ap = argparse.ArgumentParser(prog="export.py", description=__doc__.split("\n\n")[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    f = sub.add_parser("files", help="what the export holds, and what is missing")
+    f.add_argument("src", nargs="?", default=None)
+    s = sub.add_parser("save", help="copy the named files into documents/linkedin/")
+    s.add_argument("srcs", nargs="+")
+    s.add_argument("--only", choices=sorted(GROUPS), default="all")
+    for name, helptext in (("history", "messages and invitations into network_threads.csv"),
+                           ("pending", "invitations sent and never accepted, oldest first"),
+                           ("withdrawn", "record invitations withdrawn on LinkedIn")):
+        p = sub.add_parser(name, help=helptext)
+        p.add_argument("--from", dest="src", default=None)
+        p.add_argument("--contacts", default=st.CONTACTS_CSV)
+        p.add_argument("--threads", default=st.THREADS_CSV)
+        p.add_argument("--today", default=datetime.date.today().isoformat())
+        if name == "history":
+            p.add_argument("--apply", action="store_true")
+        if name == "pending":
+            p.add_argument("--days", type=int, default=None)
+            p.add_argument("--all", action="store_true")
+        if name == "withdrawn":
+            p.add_argument("who", nargs="*")
+            p.add_argument("--oldest", type=int, default=0)
+            p.add_argument("--reason", default="")
+    a = ap.parse_args(argv)
+    return {"files": _cli_files, "save": _cli_save, "history": _cli_history,
+            "pending": _cli_pending, "withdrawn": _cli_withdrawn}[a.cmd](a)
+
+
+if __name__ == "__main__":
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:
+        print(f"export: {e}", file=sys.stderr)
+        raise SystemExit(1) from None
