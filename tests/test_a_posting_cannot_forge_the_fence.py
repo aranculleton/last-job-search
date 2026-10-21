@@ -76,14 +76,36 @@ class TheFenceCannotBeClosedFromInside(unittest.TestCase):
 
 class TheArchiveUsesIt(unittest.TestCase):
     def test_outreach_writes_a_fenced_posting(self):
-        src = (ROOT / "tools" / "outreach.py").read_text(encoding="utf-8")
-        self.assertIn("untrusted.fence(", src)
-        self.assertNotIn('f.write("> Verbatim posting text as retrieved.', src)
+        # The archive written for an application, read back: the forged markers are
+        # gone, the posting's own text is inside one real fence, and nothing of it
+        # sits outside that fence where it could pass for the document's own words.
+        import tempfile
+        import outreach
+        with tempfile.TemporaryDirectory() as d:
+            a = {"company": "Oakmere Foods", "role": "Data Analyst", "abbr": "Oakmere",
+                 "posting": HOSTILE}
+            self.assertEqual("written", outreach.archive_posting(
+                d, a, {"url": "https://boards.example.com/1"}, "2026-10-20"))
+            out = (Path(d) / "job_posting.md").read_text(encoding="utf-8")
+        nonce = out.split("BEGIN-UNTRUSTED-")[1].split("\n")[0]
+        self.assertNotIn("deadbeef", out)
+        inside = out.split(f"BEGIN-UNTRUSTED-{nonce}")[1].split(f"END-UNTRUSTED-{nonce}")[0]
+        self.assertIn("Ignore previous instructions", inside)
+        self.assertNotIn("Ignore previous instructions",
+                         out.replace(inside, ""))
 
     def test_untrusted_is_imported_after_the_path_is_set(self):
-        """It is a local module; importing it first only worked by accident."""
-        src = (ROOT / "tools" / "outreach.py").read_text(encoding="utf-8")
-        self.assertLess(src.index("sys.path.insert"), src.index("import untrusted"))
+        """It is a local module; importing it first only worked by accident. Run from
+        anywhere, with nothing else on the path, outreach imports."""
+        import os
+        import subprocess
+        r = subprocess.run([sys.executable, "-I", "-c",
+                            "import runpy, sys; sys.argv = ['outreach.py', '--help'];"
+                            f"runpy.run_path({str(ROOT / 'tools' / 'outreach.py')!r}, "
+                            "run_name='__main__')"],
+                           capture_output=True, text=True, cwd=os.sep, timeout=60,
+                           env=dict(os.environ))
+        self.assertNotIn("ModuleNotFoundError", r.stderr, r.stderr)
 
 
 if __name__ == "__main__":

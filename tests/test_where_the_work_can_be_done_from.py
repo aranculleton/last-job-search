@@ -35,12 +35,37 @@ def test_a_remote_role_restricted_to_another_country_is_not_remote_from_home():
         assert prefilter.location_verdict(loc)[0] == "FAIL", loc
 
 
-def test_a_region_beside_remote_is_for_tier_2_and_home_still_passes():
-    for loc in ("Remote - EMEA", "Remote - Europe", "Remote (EU residents)"):
-        assert prefilter.location_verdict(loc)[0] == "FLAG", loc
-    for loc in ("Remote (UK)", "Remote - UK", "Remote", "Remote, Northgate",
+def test_a_region_beside_remote_is_judged_by_whether_it_takes_in_home():
+    # Changed on purpose. Every region beside "remote" was flagged for Tier 2, and the
+    # gate knew only some region words, so "Remote - North America" passed for
+    # somebody in the UK as remote from anywhere. The gate now reads the text
+    # screen's list (places.REGION_WORDS) and judges each the way the screen does.
+    for loc in ("Remote - North America", "Remote (Americas)", "Remote, Asia-Pacific",
+                "Remote (EU residents)", "Remote - LATAM", "Remote, APAC"):
+        assert prefilter.location_verdict(loc)[0] == "FAIL", loc
+    for loc in ("Remote - EMEA", "Remote - Europe", "Remote - North America or EMEA",
+                "Remote (UK)", "Remote - UK", "Remote", "Remote, Northgate",
                 "Remote (US or UK)"):
         assert prefilter.location_verdict(loc)[0] == "PASS", loc
+    assert prefilter.location_verdict("Remote - North America or EMEA")[1] == (
+        "explicitly remote; EMEA takes in United Kingdom")
+
+
+def test_a_region_is_read_for_the_persons_own_country(monkeypatch):
+    # An invented market in North America, and one the region table cannot place.
+    monkeypatch.setattr(places, "HOME_COUNTRY_RX", re.compile(r"\bcanada\b"))
+    monkeypatch.setattr(prefilter, "_HOME_RX", re.compile(r"\bcanada\b"))
+    monkeypatch.setattr(prefilter, "_HOME", "Canada")
+    monkeypatch.setattr(prefilter, "OTHER_COUNTRIES", ["germany"])
+    for loc in ("Remote - North America", "Remote (Americas)"):
+        assert prefilter.location_verdict(loc)[0] == "PASS", loc
+    for loc in ("Remote - Europe", "Remote - EMEA", "Remote, Asia-Pacific"):
+        assert prefilter.location_verdict(loc)[0] == "FAIL", loc
+    monkeypatch.setattr(places, "HOME_COUNTRY_RX", re.compile(r"\bwexland\b"))
+    monkeypatch.setattr(prefilter, "_HOME_RX", re.compile(r"\bwexland\b"))
+    monkeypatch.setattr(prefilter, "_HOME", "Wexland")
+    for loc in ("Remote - North America", "Remote - EMEA"):
+        assert prefilter.location_verdict(loc)[0] == "FLAG", loc
 
 
 def test_a_restriction_to_the_neighbour_fails_where_naming_it_only_flags(monkeypatch):

@@ -531,6 +531,19 @@ def _match_gone_quiet(text, ctx):
     return []
 
 
+def _match_auto_reply(text, ctx):
+    # Not a person: an out-of-office or a "no longer here" template (state.auto_reply).
+    # It sits above everything that reads a message, because there is no message: the
+    # address in its signature is not a resume ask, and its length is not effort.
+    got = state.auto_reply(text, sent_on=ctx.get("today"))
+    if not got:
+        return []
+    what = {"left": "an automatic reply saying they have left",
+            "away": "an out-of-office reply"}.get(got["kind"], "an automatic reply")
+    back = " (back %s)" % got["back_on"].isoformat() if got.get("back_on") else ""
+    return [(0.95, "%s%s: %s" % (what, back, _quote(got["evidence"])))]
+
+
 def _match_calendar_link(text, ctx):
     if not ctx["link"]:
         return []
@@ -659,6 +672,8 @@ NO_LINK_ACTION = ("No booking link in the message: propose two specific times in
 # two cues collide in real messages:
 #
 #   gone_quiet        first, because with nothing inbound there is no message to read
+#   auto_reply        an out-of-office or "no longer here": a machine, so nothing below
+#                     applies (its signature's address is not an ask, its length not effort)
 #   calendar_link     an offered slot expires; booking it is the only urgent action
 #   send_resume       an ask or an address, even buried in four generous paragraphs
 #   referral_offered  outranks a no, because "we are not hiring but talk to Wren"
@@ -682,6 +697,21 @@ SCENARIOS = {s.name: s for s in (
             "Do not repeat the original message; give them a reason to answer now.",
         ),
         matcher=_match_gone_quiet,
+    ),
+    Scenario(
+        name="auto_reply",
+        move=("Nothing to answer: an automatic reply, not them. Log it inbound with scenario "
+              "auto_reply and leave the thread as it is; it is not a reply, not a warm route, "
+              "and nothing is owed."),
+        sentences=(0, 0),
+        owes_action=False,
+        next_action="",
+        do_not=(
+            "Do not reply to the automatic message.",
+            "Do not count it as their answer: the thread is still waiting on them.",
+            "Do not spend the one nudge before they are back.",
+        ),
+        matcher=_match_auto_reply,
     ),
     Scenario(
         name="calendar_link",
@@ -905,7 +935,7 @@ def _one_contact(rows, what: str) -> None:
 
 def _late_business_days(history, today) -> int:
     """Business days their last message has sat unanswered, 0 when we are not the late ones."""
-    spoken = [r for r in history if not state.is_acceptance(r)]
+    spoken = [r for r in history if not state.is_acceptance(r) and not state.is_auto_reply(r)]
     if today is None or not spoken:
         return 0
     last = spoken[-1]
@@ -949,6 +979,7 @@ def classify(inbound_text, thread_history=(), today=None) -> dict:
         "has_inbound": bool(inbound_rows),
         "we_spoke_last": we_spoke_last,
         "late_business_days": _late_business_days(history, today),
+        "today": state.as_date(today) if today else None,
     }
 
     scored = []
@@ -1056,6 +1087,9 @@ def guidance(scenario, their_message="") -> dict:
             "stated an eligibility bar the " + STATUS_NAME + " does not clear. Their "
             "citizenship-gated roles should stop being surfaced.")
 
+    if sc.name == "auto_reply":
+        next_action = auto_reply_action(text)
+
     low, high = sc.sentences
     return {"move": sc.move,
             "target_sentences": max(low, min(high, _sentences_for_words(words))),
@@ -1063,12 +1097,29 @@ def guidance(scenario, their_message="") -> dict:
             "next_action": next_action}
 
 
+def auto_reply_action(text, sent_on=None) -> str:
+    """What to do about an automatic reply: wait for their return, or find who replaced them."""
+    got = state.auto_reply(text, sent_on=sent_on) or {}
+    if got.get("kind") == "left":
+        return ("They have left: this address no longer reaches them. Close the contact "
+                "(state.py close) and find who holds the role now, rather than nudging an inbox "
+                "nobody reads.")
+    if got.get("back_on"):
+        return ("They are away until %s. The thread is still waiting on them: the one nudge "
+                "waits until %d working days after they are back (%s)."
+                % (got["back_on"].isoformat(), state.AWAY_GRACE_BUSINESS_DAYS,
+                   state.add_business_days(got["back_on"],
+                                           state.AWAY_GRACE_BUSINESS_DAYS).isoformat()))
+    return ("The thread is still waiting on them: the nudge follows the usual clock from your "
+            "message.")
+
+
 # ---------------------------------------------------------------- judgment
 
 
 def _they_spoke_last(rows) -> bool:
     """Is the last message theirs? An acceptance after it changes nothing either way."""
-    spoken = [r for r in rows if not state.is_acceptance(r)]
+    spoken = [r for r in rows if not state.is_acceptance(r) and not state.is_auto_reply(r)]
     return bool(spoken) and _inbound(spoken[-1])
 
 
@@ -1222,7 +1273,7 @@ def following_up_is_honest(threads, today=None) -> tuple:
 
     trailing = []
     for row in reversed(rows):
-        if state.is_acceptance(row):
+        if state.is_acceptance(row) or state.is_auto_reply(row):
             continue
         if _inbound(row):
             break
@@ -1279,19 +1330,29 @@ def nudge_due(threads, today, new_development="") -> dict:
     nudges = _trailing_outbound(rows) - 1
     # The last row is an acceptance when that is the last thing that happened,
     # and its date is the one the networking skill counts from: "from the
-    # acceptance, not from the send".
-    sent = state.as_date(rows[-1].get("date"))
+    # acceptance, not from the send". An automatic reply is not: the clock runs
+    # from our message, and an away message's return date holds the nudge.
+    real = [r for r in rows if not state.is_auto_reply(r)] or rows
+    sent = state.as_date(real[-1].get("date"))
     base["nudges_sent"] = max(nudges, 0)
     base["last_out"] = sent.isoformat() if sent else ""
     if sent is None:
         return dict(base, reason="the last outbound message has no usable date")
-    base["due_date"] = state.add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+    due_on = state.add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS)
+    back = state.away_until(rows)
+    if back is not None:
+        due_on = max(due_on, state.add_business_days(back, state.AWAY_GRACE_BUSINESS_DAYS))
+    base["due_date"] = due_on.isoformat()
 
     waited = state.business_days_between(sent, today)
     base["business_days"] = waited
     if nudges >= schema.MAX_NUDGES:
         return dict(base, reason=("one nudge has already gone out; a second costs more than it "
                                   "recovers. Let it go cold."))
+    if back is not None and state.as_date(today) < due_on:
+        return dict(base, reason=("an automatic reply says they are away until %s: the nudge "
+                                  "waits until %s, when they have had time to see it"
+                                  % (back.isoformat(), base["due_date"])))
     if new_development and waited >= 1:
         return dict(base, due=True,
                     reason="new development (%s) is a legitimate reason to write inside the %s"

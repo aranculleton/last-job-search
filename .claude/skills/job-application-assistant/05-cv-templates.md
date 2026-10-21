@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.9
+framework_version: 2.1.10
 ---
 
 # Resume Templates and Tailoring Guide
@@ -12,9 +12,11 @@ All resumes use the moderncv LaTeX package with the "banking" style and "blue" c
 
 **Output file:** `cv/<Prefix>_Resume_<ABBR>.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json`
 **Compile with:** **lualatex** on MiKTeX/TeX Live. pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly.
-**Fact source:** the Source of Truth chain in `profile/01-candidate-profile.md` - the current
-resume it names (under `documents/cv/`) first, then `profile/01-candidate-profile.md`,
-then the Candidate Profile section of `profile/CLAUDE.md`. **Never `cv/main_example.tex`**: it is an
+**Fact source:** the grounding sources CLAUDE.md, "The person", defines: the files
+`profile/person.json` `grounding.sources` names (by default `profile/01-candidate-profile.md`,
+the Candidate Profile section of `profile/CLAUDE.md` and `profile/bullets.py`), with `01`
+winning where they disagree. A fact only an older resume carries is written into `01` before
+it is used. **Never `cv/main_example.tex`**: it is an
 unpopulated upstream template whose bullets are `[YOUR_NAME]`-style placeholders, and reading it
 contributes no facts. Previously generated `cv/<Prefix>_Resume_<ABBR>.tex` files may be read
 for structure and phrasing, never as a source of claims.
@@ -50,7 +52,8 @@ hand-naming a file.
 right for a company that writes itself that way and wrong for every company that does not.
 Applied to the rest it produces `<Prefix>_Resume_HARBOURFREIGHT.pdf` and `_QUAYSIDE.pdf`: not
 abbreviations, just the company name shouted. A shouted name looks machine-generated, which is
-the one thing a filename on an attachment must never do. `doc_name.is_shouty()` is the check.
+the one thing a filename on an attachment must never do. `doc_name.is_shouty()` is the check,
+and `tools/stage_picks.py stage` runs it on every name it picks.
 
 **A document already sent keeps the name the employer received.** Renaming it would decouple
 the record from what is in their ATS. Only unsent drafts are renamed.
@@ -524,7 +527,7 @@ Two independent causes, both easy to avoid:
    \item{\cventry{2016--2024}{Role Title}{Organization}{Location}{}{...}}  % en-dash, may not
    ```
 
-   This applies to the **date argument only**. Keep `--` everywhere it is typographically correct in prose, for example a numeric range like `EUR 600k--1M`.
+   This applies to the **date argument**. In prose, write a range in words, `EUR 600k to 1M`, never `--`: it is an en dash in the PDF, and `verify_batch.sh` fails a document with any em or en dash (`tools/locale_rules.py`).
 
 2. **A bare single year gives the parser no end date.** A short contract, mandate or internship written as `\cventry{2016}` imports as a start date with nothing to close it. Use an explicit range, with months where the role ran under a year:
 

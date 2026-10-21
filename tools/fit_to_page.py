@@ -158,7 +158,69 @@ def _compile(engine, tex, cwd, pdf, passes=1):
             + f". It substituted defaults and still wrote {os.path.basename(pdf)}, "
             f"so the PDF is valid and wrong. Check the working directory: "
             f"the font paths in the template are relative to it.")
+    # A character the font does not have is left out of the page with no error at all: an
+    # accented surname or an employer's name loses a letter, a symbol vanishes from a
+    # figure, and the PDF is one valid page. LaTeX says so only in its log.
+    lost = missing_characters(out + "\n" + _log(cwd, tex))
+    if lost:
+        raise CompileFailed(
+            f"{engine} could not print {len(lost)} character(s) in {os.path.basename(pdf)}, "
+            f"because its font does not have them: {', '.join(lost[:6])}. The PDF leaves them "
+            f"out, so it does not say what the draft says. Write them another way (a plain "
+            f"letter, or a word for the symbol), or use a font that has them.")
     return _pages(pdf)
+
+
+_MISSING = re.compile(r"Missing character: There is no (.+?) (?:\((U\+[0-9A-Fa-f]+)\) )?in font "
+                      r"\[?([^\]:!\s]+)")
+
+
+def _log(cwd, tex):
+    """The compile's .log, which holds what the terminal may not."""
+    try:
+        with open(os.path.join(cwd, os.path.splitext(os.path.basename(tex))[0] + ".log"),
+                  encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def missing_characters(log):
+    """Each character a compile could not print, once: "日 (U+65E5) in lmroman10-regular"."""
+    seen = []
+    for char, code, font in _MISSING.findall(log or ""):
+        item = f"{char}{' (' + code + ')' if code else ''} in {font}"
+        if item not in seen:
+            seen.append(item)
+    return seen
+
+
+def font_problems(pdf):
+    """Plain lines for each font in `pdf` that is not embedded or is a Type 3 (bitmap) font,
+    from Poppler's pdffonts; [] when every font is embedded, or pdffonts cannot run. A font
+    left out of the file is replaced by whatever the reader's machine has, and a parser may
+    read it wrongly; a Type 3 font prints blurred and many parsers read it as nothing."""
+    if not os.path.exists(pdf):
+        return []
+    try:
+        got = subprocess.run(["pdffonts", pdf], capture_output=True, text=True)
+    except (FileNotFoundError, OSError):
+        return []
+    if got.returncode != 0:
+        return []
+    out = []
+    for line in (got.stdout or "").splitlines()[2:]:
+        cols = line.split()
+        if len(cols) < 7:
+            continue
+        name, kind, emb = cols[0], " ".join(cols[1:-6]), cols[-5]
+        if emb.lower() == "no":
+            out.append(f"the font {name} is not embedded in {os.path.basename(pdf)}, so the "
+                       f"reader's machine puts another in its place")
+        elif kind.startswith("Type 3"):
+            out.append(f"the font {name} in {os.path.basename(pdf)} is a Type 3 (bitmap) font, "
+                       f"which prints blurred and many parsers read as nothing")
+    return out
 
 
 def compile_resume(abbr, passes=1):
@@ -421,6 +483,10 @@ def fit(a):
         lpages = _render_letter(a)
     # Settle the page reference in the footer now that the layout is final.
     pages = compile_resume(abbr, passes=2)
+    fonts = font_problems(resume_pdf(abbr)) + font_problems(letter_pdf(abbr))
+    if fonts:
+        raise CompileFailed("; ".join(fonts) + ". Use fonts the template embeds (the ones it "
+                            "ships with), then render again.")
     return (pages, _lines(resume_pdf(abbr))), lpages
 
 
@@ -506,7 +572,11 @@ if __name__ == "__main__":
     # to another application never gets half a batch rendered over it.
     R.check_batch(apps)
     for a in apps:
-        (rp, rl), lp = fit(a)
+        try:
+            (rp, rl), lp = fit(a)
+        except CompileFailed as exc:
+            print(f"fit_to_page: {a.get('abbr') or a.get('company')}: {exc}", file=sys.stderr)
+            sys.exit(1)
         bw = body_words(a)
         flag = "   <-- CHECK" if needs_check(rp, lp, bw) else ""
         print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  letter {lp}p/{bw} body words{flag}")

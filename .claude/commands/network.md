@@ -42,6 +42,10 @@ it. LinkedIn is never fetched from a session.
    and `company_research/`. Anyone already contacted is out:
    `state.already_contacted(contacts, name, company, linkedin_url=...)` checks the
    profile URL first, which finds the same person under a nickname or a new employer.
+   Without a URL, `state.possible_match(contacts, name, company)` names a row that may be
+   the same person (Bob for Robert, "R. Smith", a middle name, "Smith, Robert", a letter's
+   typo); `sources.harvest()` and `from_connections()` carry it as `maybe_in_book`. Show the
+   person that line and ask before adding a second row: never add or merge on a guess.
    A company whose `company_research/<key>.json` `network_presence` record still
    holds (`discovery.presence_ruled_out(company, today)`) is out until its review date.
    An employer is out on the bar only when `tools/bar.py` says `excluded`. A `none` whose
@@ -466,7 +470,8 @@ it. LinkedIn is never fetched from a session.
    decides what it says, and `variant_key=` the contact id so the ask and opener vary.
    **Start from the person's own messages that drew replies**
    (`python3 tools/network/compose.py examples`): their shape and wording come before
-   any default. Then `compose.validate(kind="connection", title=...)` on each, and
+   any default. Then `compose.validate(kind="connection", title=..., name=<their name>)` on
+   each (with the name, a note greeting anybody else is refused), and
    `compose.advise(..., company=<their employer>)`. A draft `validate()` refuses is rewritten and never shown; a
    draft is rewritten on `advise()`'s warnings first, and a warning the rewrite leaves
    standing is shown with the draft for the person to decide, never in place of the
@@ -521,7 +526,9 @@ it. LinkedIn is never fetched from a session.
    route_detail, `found_via` (the kind from step 3 that surfaced them), the quoted
    signal for tier 1, `linkedin_url`, the channel, and
    `linked_application` where `state.link_to_applications()` finds one. Each id from
-   `state.unique_contact_id(name, company, contacts, linkedin_url=...)`. **Write each
+   `state.unique_contact_id(name, company, contacts, linkedin_url=...)`, and nobody whose
+   `maybe_in_book` the person has not answered. `state.py`'s RECONCILE lists any pair
+   that got in anyway as `possible_duplicate`. **Write each
    draft to `documents/network/<contact_id>/draft.md`** with
    `python3 tools/network/reading.py draft <contact_id> <file|->`, and commit it with the
    contacts: a draft that lives only in the chat is gone when the session ends, and the

@@ -5,10 +5,10 @@ closing are. Rendering checks read the compiled PDF text, which is what the
 reader sees. Each rule is one from 03-writing-style.md or
 06-cover-letter-templates.md that a letter in this repo has actually broken.
 """
-import re, subprocess, sys, os, json
+import re, subprocess, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
-from fit_to_page import body_words
+from fit_to_page import body_words, load
 import docpaths
 import person
 import company_key
@@ -109,6 +109,64 @@ def resume_repeats(a, n=6):
         if common:
             label = b.get("label", "") if isinstance(b, dict) else b[0]
             out.append((label, sorted(common)[0]))
+    return out
+
+
+# A run of this many words copied from the posting into what the candidate wrote. Pasted
+# posting text reads as spam to the person who wrote the posting, and it is the cheapest
+# keyword stuffing there is: the posting's exact term, used once in a real sentence, is the
+# right amount. The resume's bullets are the profile's own words, so a run they share with
+# the posting is not a copy; the summary and every part of the letter are written fresh.
+POSTING_RUN = 6
+_WRITTEN = (("summary", "the resume summary"), ("p1", "the opening"),
+            ("p2", "the company paragraph"), ("lead", "the line before the bullets"),
+            ("p4", "the close"))
+
+
+def _own_words():
+    """Every run the person's own words carry: the bullet library and the profile."""
+    texts = list(R.BULLETS.values())
+    try:
+        with open(person.file("candidate_profile", "01-candidate-profile.md"),
+                  encoding="utf-8") as fh:
+            texts.append(fh.read())
+    except OSError:
+        pass
+    return texts
+
+
+def posting_copies(a, n=POSTING_RUN, own=None):
+    """[(where, the copied words)] for each part of the summary or the letter that repeats
+    `n` or more words in a row from the posting, the longest stretch in each part. A run
+    the person's own words also carry (the profile, the bullet library) is theirs."""
+    posting = _words(a.get("posting") or "").split()
+    if len(posting) < n:
+        return []
+    theirs = runs(posting, n)
+    mine = set()
+    for t in (own if own is not None else _own_words()):
+        mine |= runs(_words(t).split(), n)
+    parts = [(where, a.get(k) or "") for k, where in _WRITTEN]
+    parts += [("the %s bullet" % (b.get("label") or "letter").rstrip(": ") if isinstance(b, dict)
+               else "a letter bullet", b.get("text", "") if isinstance(b, dict) else " ".join(b[1:]))
+              for b in a.get("cl_bullets") or []]
+    out = []
+    for where, text in parts:
+        words = _words(text).split()
+        hits = [i for i in range(len(words) - n + 1)
+                if " ".join(words[i:i + n]) in theirs and " ".join(words[i:i + n]) not in mine]
+        if not hits:
+            continue
+        # The longest stretch of overlapping runs, shown whole.
+        stretches, start, prev = [], hits[0], hits[0]
+        for i in hits[1:]:
+            if i != prev + 1:
+                stretches.append((start, prev))
+                start = i
+            prev = i
+        stretches.append((start, prev))
+        first, last = max(stretches, key=lambda x: x[1] - x[0])
+        out.append((where, " ".join(words[first:last + n])))
     return out
 
 
@@ -215,6 +273,9 @@ def audit(a, batch=()):
             flags.append(f"bullet text repeats its label ({lab[:20]})")
     for lab, run in resume_repeats(a):
         flags.append(f"letter bullet ({lab.rstrip(': ')[:20]}) repeats the resume: \"{run}\"")
+    for where, run in posting_copies(a):
+        flags.append(f"{where} copies the posting word for word: \"{run}\"; say it in your "
+                     f"own words, using the posting's term once")
     t = pdf_text(R.final_abbr(a))
     # The drafter's own notes must never reach the page. Letters have shipped
     # with "conceded in one sentence mid-letter in p2" in their closing.
@@ -242,7 +303,9 @@ if __name__ == "__main__":
     if len(sys.argv) < 2 or sys.argv[1] in ("-h", "--help"):
         print("usage: python3 tools/audit_letters.py <drafts.json>\n\n" + __doc__.strip().split("\n\n")[0])
         sys.exit(0 if len(sys.argv) > 1 else 2)
-    apps = json.load(open(sys.argv[1]))
+    # Through fit_to_page's loader: a kept draft.json names its posting, which is read
+    # back through its untrusted fence, and the posting-copy check needs it.
+    apps, _read_in = load(sys.argv[1])
     bad = 0
     for a in apps:
         flags, w = audit(a, apps)

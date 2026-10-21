@@ -260,12 +260,16 @@ def check_note(note):
         import compose
     except (ImportError, RuntimeError, OSError, AttributeError):
         compose = None                # no networking profile: the checks it can still run
+    # "Sam" stands in for a reader nobody has named yet, so a note greeting its real
+    # reader is not greeting the wrong one: that check is left to a call that knows them.
     if compose is not None:
         return problems + [f"{v.rule}: {v.text}" for v in compose.validate(
-            sent, "message", name="Sam", seniority="senior", reader="decision_maker")]
+            sent, "message", name="Sam", seniority="senior", reader="decision_maker")
+            if v.rule != "greeting_wrong_name"]
     if _tone is not None:
         problems += [f"{v.rule}: {v.text}" for v in
-                     _tone.check(sent, recipient_seniority="senior", name="Sam")]
+                     _tone.check(sent, recipient_seniority="senior", name="Sam")
+                     if v.rule != "greeting_wrong_name"]
     try:
         import voice_check
     except ImportError:

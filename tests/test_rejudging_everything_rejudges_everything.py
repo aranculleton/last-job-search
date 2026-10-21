@@ -76,3 +76,22 @@ def _no_rescreen(monkeypatch):
     """These pin how a ruling holds. Whether a better screen re-judges it is
     tests/test_build_versions.py's, so the app's own re-run versions are held off."""
     monkeypatch.setenv("LJS_RESCREEN", "off")
+
+
+def test_the_prefilter_reads_the_seen_file_once(tmp_path, monkeypatch):
+    # The ruled-out gate and the first-sighting reader each loaded seen_jobs.json, which
+    # runs to megabytes in a long-lived repo.
+    import json
+    import prefilter
+    src, seen = tmp_path / "in.json", tmp_path / "seen.json"
+    src.write_text(json.dumps([{"title": "Data Analyst", "company": "Oakmere Foods",
+                                "location": "Manchester", "url": "https://x.example/1",
+                                "date": "2026-10-18"}]))
+    seen.write_text(json.dumps({"seen": {}}))
+    loads = []
+    real = prefilter._seen_entries
+    monkeypatch.setattr(prefilter, "_seen_entries", lambda p: loads.append(p) or real(p))
+    monkeypatch.setattr(sys, "argv", ["prefilter.py", str(src), "--out", str(tmp_path / "k.json"),
+                                      "--today", "2026-10-20", "--seen", str(seen)])
+    prefilter.main()
+    assert loads == [str(seen)]

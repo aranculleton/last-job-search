@@ -197,8 +197,6 @@ _MESSAGE_ONLY = {
 # so it fails in the opening HR screen and takes the relationship with it.
 UNSUPPORTED_CLAIM = getattr(_NET, "UNSUPPORTED_STATUS", None) or re.compile(r"(?!x)x")
 
-_LINE_BOUND = re.compile(r"\n")
-
 # Sentence splitting follows `render_application.SENT_SPLIT` rather than
 # importing it: that module pulls in the entire resume generator, and a tone
 # check that cannot be imported without the LaTeX toolchain behind it is a tone
@@ -344,12 +342,32 @@ _NAME_TOKEN = re.compile(r"[^\W\d_](?:[^\W\d_]|['\-])*")
 _CURLY = {"’": "'", "‘": "'", "“": '"', "”": '"'}
 
 
+# Characters that show nothing: zero-width spaces and joiners, the soft hyphen, the byte
+# order mark, direction marks and the invisible operators. Text copied from a web page,
+# a chat window or a model can carry them, and one sitting inside "just checking in" or
+# inside a name made the phrase and the name fail to match, silently: the check passed
+# the message it exists to stop. They go before anything is read, and a space that is
+# not a plain space (a non-breaking one, a thin one) becomes one.
+_INVISIBLE = re.compile("[\u00ad\u034f\u061c\u115f\u1160\u17b4\u17b5\u180e\u200b-\u200f"
+                        "\u202a-\u202e\u2060-\u2064\u2066-\u206f\u3164\ufeff\uffa0]")
+_ODD_SPACE = re.compile("[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
+_LINE_SEPARATOR = re.compile("[\u2028\u2029]")
+
+
+def _visible(text) -> str:
+    """The text as it reads: invisible characters gone, odd spaces plain, nothing else changed."""
+    s = _INVISIBLE.sub("", str(text or ""))
+    return _LINE_SEPARATOR.sub("\n", _ODD_SPACE.sub(" ", s))
+
+
 def _plain(text) -> str:
-    """Straighten curly quotes so "I'd" and "I’d" are one phrase to match.
+    """The visible text (`_visible`) with curly quotes straightened, so "I'd" and "I’d"
+    are one phrase to match. Character for character the same as `_visible(text)`, so an
+    offset found here is an offset there.
 
     Dashes are untouched: they are a rule, not a nuisance.
     """
-    s = str(text or "")
+    s = _visible(text)
     for curly, straight in _CURLY.items():
         s = s.replace(curly, straight)
     return s
@@ -447,6 +465,127 @@ def first_name(name) -> str:
     if titles and len(tokens) == 1:
         return f"{titles[0]} {tokens[0]}"
     return tokens[0]
+
+
+# Given names that are the same person, written by hand for this file (the idea of a
+# nickname table is common to personal-contact tools; no list was copied). English
+# usage only, and small: a name missing here is simply not matched. Read by the
+# greeting check below and by state.possible_duplicates.
+_NICKNAMES = (
+    ("robert", "bob", "rob", "bobby", "robbie", "bert"), ("william", "bill", "will", "billy"),
+    ("elizabeth", "liz", "beth", "lizzie", "eliza", "betty", "libby"),
+    ("katherine", "catherine", "kathryn", "kate", "katie", "kathy", "cathy", "kat"),
+    ("alexander", "alex", "sandy"), ("alexandra", "alex", "sandra", "lexi"),
+    ("michael", "mike", "mick"), ("christopher", "chris", "kit"),
+    ("christine", "christina", "chris", "tina"), ("jonathan", "jon", "jonny"),
+    ("john", "jack", "johnny"), ("james", "jim", "jimmy", "jamie"),
+    ("richard", "rick", "rich", "ricky"), ("thomas", "tom", "tommy"), ("joseph", "joe", "joey"),
+    ("daniel", "dan", "danny"), ("matthew", "matt"), ("andrew", "andy", "drew"),
+    ("anthony", "tony"), ("nicholas", "nick", "nicky"), ("benjamin", "ben", "benji"),
+    ("samuel", "sam", "sammy"), ("samantha", "sam", "sammy"),
+    ("edward", "ed", "eddie", "ted", "ned"), ("david", "dave"), ("stephen", "steven", "steve"),
+    ("peter", "pete"), ("patrick", "pat", "paddy"), ("patricia", "pat", "patty", "trish"),
+    ("margaret", "maggie", "meg", "peggy"), ("jennifer", "jen", "jenny"),
+    ("rebecca", "becky", "becca"), ("deborah", "debbie", "deb"), ("susan", "sue", "susie"),
+    ("victoria", "vicky", "tori"), ("jessica", "jess", "jessie"), ("timothy", "tim"),
+    ("gregory", "greg"), ("jeffrey", "geoffrey", "jeff", "geoff"), ("frederick", "fred", "freddie"),
+    ("charles", "charlie"), ("charlotte", "charlie", "lottie"), ("henry", "harry", "hal"),
+    ("lawrence", "laurence", "larry"), ("philip", "phillip", "phil"), ("ronald", "ron"),
+    ("donald", "don"), ("kenneth", "ken", "kenny"), ("raymond", "ray"), ("gerald", "gerry"),
+    ("amanda", "mandy"), ("pamela", "pam"), ("theodore", "theo", "ted"),
+    ("zachary", "zach", "zack"), ("nathaniel", "nathan", "nate"), ("joshua", "josh"),
+    ("eleanor", "ellie", "nell"), ("josephine", "jo", "josie"), ("judith", "judy"),
+    ("francis", "frank"), ("frances", "fran"), ("mohammed", "muhammad", "mohammad", "mohamed"),
+)
+_NICK = {}
+for _group in _NICKNAMES:
+    for _n in _group:
+        _NICK.setdefault(_n, set()).add(_group[0])
+
+
+
+def same_given_name(a: str, b: str) -> bool:
+    """Is one given name the other, or a short form of it (Bob and Robert)?"""
+    a, b = _fold_name(a), _fold_name(b)
+    if not a or not b:
+        return False
+    return a == b or bool(_NICK.get(a, {a}) & _NICK.get(b, {b}))
+
+
+def _fold_name(word) -> str:
+    """A name word lowercased with its accents dropped: "Zoé" and "Zoe" are one greeting."""
+    import unicodedata
+    s = unicodedata.normalize("NFKD", str(word or "")).lower()
+    return "".join(c for c in s if not unicodedata.combining(c)).strip(".'")
+
+
+# The greeting names somebody other than the reader: "Hi Tamsin," on a note saved for
+# Riley Reed. A shuffled batch produces it, a person pastes each note by hand, and it is
+# the one mistake the reader is certain to notice. An unfilled "{first_name}" was caught;
+# a wrong real name was not. compose.validate() refuses it, and no learned rule lifts it.
+_SALUTATIONS = ("hi", "hey", "hello", "dear", "good morning", "good afternoon",
+                "good evening", "hej", "hallo", "hola", "bonjour", "ciao", "salut", "hoi")
+_PROFILE_GREETING = str(getattr(_NET, "GREETING", "") or "").strip()
+_SALUTE = re.compile(
+    r"(?:" + "|".join(re.escape(g) for g in sorted(
+        set(_SALUTATIONS) | ({_PROFILE_GREETING.lower()} if _PROFILE_GREETING else set()),
+        key=len, reverse=True))
+    + r")[ \t]+(?P<who>[^,!:;\n.?]{1,60}?)[ \t]*(?:[,!:;\n]|$)", re.I)
+# Words a salutation greets that are not somebody's name.
+_NOBODY = frozenset({"there", "all", "team", "everyone", "everybody", "folks", "both", "you",
+                     "sir", "madam", "hiring", "manager", "recruiter", "recruiters", "friend",
+                     "friends", "colleagues", "again", "y'all"})
+
+
+def greeted(text) -> list:
+    """The names a message's opening salutation greets ("Hi Riley and Sam," gives both), or
+    [] when it greets nobody by name ("Hi there", "Dear Hiring Manager", "Hi Acme team")."""
+    lines = [ln.strip() for ln in _plain(text).splitlines() if ln.strip()]
+    if lines and _SUBJECT.match(lines[0]):
+        lines = lines[1:]
+    m = _SALUTE.match(lines[0]) if lines else None
+    if not m:
+        return []
+    words = _NAME_TOKEN.findall(m.group("who"))
+    if any(w.lower() in _NOBODY for w in words):
+        return []
+    return [w for w in words if w[:1].isupper()
+            and w.lower().strip(".") not in _HONORIFICS | _CREDENTIALS]
+
+
+def _their_names(name) -> set:
+    """Every name the reader can be greeted by: each word of their name, the part of a
+    double-barrelled one, the name in brackets they go by."""
+    words = _NAME_TOKEN.findall(_plain(name))
+    out = set()
+    for w in words + [first_name(name), preferred_name(name)]:
+        for part in [w] + str(w or "").split("-"):
+            f = _fold_name(part)
+            if f and f not in _HONORIFICS | _CREDENTIALS:
+                out.add(f)
+    return out
+
+
+def wrong_greeting(text, name) -> list:
+    """[the greeting_wrong_name Violation] when the salutation greets somebody other than
+    `name`, else []. Nothing is judged without a name, or with a greeting to nobody by name."""
+    if not name:
+        return []
+    names = greeted(text)
+    ok = _their_names(name)
+    if not names or not ok:
+        return []
+    # A name written in another script can be greeted in this one: not judged.
+    if not all(n.isascii() for n in ok):
+        return []
+    initials = {n for n in ok if len(n) == 1}
+    for g in names:
+        f = _fold_name(g)
+        if (f in ok or any(same_given_name(f, n) for n in ok)
+                or any(f.startswith(i) for i in initials)):
+            return []
+    return [Violation("greeting_wrong_name",
+                      "greets %s, but this message is for %s" % (" and ".join(names), name))]
 
 
 # Whose message is this? A connection note has four moves and three of them are
@@ -793,6 +932,7 @@ def check(text, recipient_seniority="peer", name=None, live_thread=False) -> lis
     found = (_dashes(plain)
             + _banned(plain)
             + _name_starts_sentence(plain, name)
+            + wrong_greeting(plain, name)
             + _opens_with_laugh(plain)
             + _stacked_thanks(plain)
             + _exclamation(plain, recipient_seniority)

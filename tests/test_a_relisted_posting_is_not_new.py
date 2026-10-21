@@ -116,3 +116,34 @@ def test_prefilter_drops_a_relist_by_its_first_sighting(tmp_path):
 
 def test_the_round_summary_carries_the_age():
     assert "first_seen" in run_round.SUMMARY_FIELDS and "age_days" in run_round.SUMMARY_FIELDS
+
+
+def test_a_relist_under_a_tag_or_a_shortened_title_is_the_same_posting():
+    # The relist and ruled-out keys read the exact lower-cased title, while the check
+    # for a role already applied to folded posting tags and "Sr.". A relist retitled
+    # "(Hybrid)" or "Sr." read as new: it earned the freshness bonus, passed the age
+    # gate, and a ruling on the posting it relists did not hold. One key now.
+    seen = {"https://boards.example.com/1": {
+        "url": "https://boards.example.com/1", "title": "Senior Data Analyst",
+        "company": "Kestrel Mutual", "location": LOC, "first_seen": _ago(25),
+        "status": "surfaced"}}
+    of = throttle.first_seen(seen, ISO)
+    for title in ("Senior Data Analyst (Hybrid)", "Sr. Data Analyst", "Senior Data Analyst"):
+        assert of(posting("https://boards.example.com/2", title=title)) == _ago(25), title
+    assert of(posting("https://boards.example.com/2", title="Senior Data Analyst, Fraud")) == ""
+
+
+def test_a_ruling_holds_for_the_same_role_under_a_tag_or_a_shortened_title():
+    seen = {"https://boards.example.com/1": {
+        "url": "https://boards.example.com/1", "title": "Senior Data Analyst",
+        "company": "Kestrel Mutual", "location": LOC, "status": "excluded",
+        "basis": "person", "exclusion_reason": "not a company I want to work for",
+        "excluded_date": ISO}}
+    urls, pairs = throttle.ruled_out(seen)
+    for title in ("Senior Data Analyst (Hybrid)", "Sr. Data Analyst", "SENIOR DATA ANALYST"):
+        assert throttle.ruled_pair(pairs, posting("https://boards.example.com/2", title=title)), title
+    # A different role at that employer stays in scope.
+    assert not throttle.ruled_pair(pairs, posting("https://boards.example.com/3",
+                                                 title="Senior Data Analyst, Fraud Strategy"))
+    # A title in another script is still a key.
+    assert throttle.title_key("データアナリスト") == "データアナリスト"

@@ -135,3 +135,61 @@ def test_a_minimum_is_not_scored_as_a_top():
     out = opportunity.score({"title": "Analyst", "company": "Greyloch", "desc": desc},
                             dt.date(2026, 10, 14))
     assert not any("stated top of band" in w for w in out["why"]), out["why"]
+
+
+# ---- a full stop after an abbreviation ----------------------------------------
+# Split at every full stop, "5+ yrs. of experience" lost its bar, "Ph.D. in
+# economics required." lost the word "required" and "must be U.S. citizens" lost the
+# status, so the years bar, the degree flag and the eligibility gate never saw them.
+
+def test_a_bar_written_with_an_abbreviation_is_read():
+    assert [n for n, _ in T.years_bars("Minimum: 5+ yrs. of experience in analytics is required.")] == [5]
+    assert [n for n, _ in T.years_bars("Approx. 4 yrs. of hands-on experience with SQL is required.")] == [4]
+    flags = T.screen({"title": "Data Analyst", "desc": "Ph.D. in economics required."})["flags"]
+    assert any("graduate degree stated as required" in f for f in flags), flags
+
+
+def test_an_abbreviation_is_not_a_sentence_end_but_a_sentence_end_still_is():
+    assert T.sentences("Tools e.g. dbt and Airflow are required. Must be U.S. citizens.") == [
+        "Tools e.g. dbt and Airflow are required.", "Must be U.S. citizens."]
+    # The next sentence starting in capitals is still a new sentence, or an equal
+    # opportunity line would excuse the residence requirement before it.
+    assert T.sentences("Based in the U.S. We are an equal opportunity employer.") == [
+        "Based in the U.S.", "We are an equal opportunity employer."]
+    assert T.sentences("Strong SQL and Python or R. Snowflake is a plus.") == [
+        "Strong SQL and Python or R.", "Snowflake is a plus."]
+
+
+def test_a_status_written_with_an_initialism_is_a_condition(monkeypatch):
+    import re
+    monkeypatch.setattr(T, "ELIGIBILITY", re.compile(r"\bcitizens?(?:hip)?\b", re.I))
+    assert T.eligibility_cut("Candidates must be U.S. citizens to be considered.")
+
+
+# ---- one split per body -------------------------------------------------------
+# Every gate reads a posting's sentences, and the screen, the opportunity score, fit
+# and the bar each split the same body again: about fifteen splits a posting, most of
+# what the free stages cost. The split is kept for the next reader, and every reader
+# still gets the same sentences and a list of its own.
+
+def test_a_body_is_split_once_however_many_gates_read_it(monkeypatch):
+    import uuid
+    import bar
+    import fit
+    calls = []
+    real = T._is_run_together
+    monkeypatch.setattr(T, "_is_run_together", lambda piece: calls.append(piece) or real(piece))
+    body = ("Requirements: 3+ years of experience in analytics is required. Strong SQL is "
+            "required. Salary: £45,000 - £55,000 per annum. Fluency in Welsh is an asset. "
+            "Ref %s." % uuid.uuid4().hex)
+    job = {"title": "Data Analyst", "company": "Oakmere Foods", "desc": body}
+    first = T.sentences(body)
+    pieces = len(calls)
+    s = T.screen(job)
+    fit.fit(opportunity.score(s, dt.date(2026, 10, 20)))
+    bar.verdict(job["company"], body)
+    assert len(calls) == pieces, "the body was split again"
+    again = T.sentences(body)
+    assert again == first and again is not first
+    again.append("changed")
+    assert T.sentences(body) == first

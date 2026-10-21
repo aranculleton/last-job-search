@@ -93,7 +93,7 @@ You never need any of this to use it.
 | What a search does, step by step | [RUNBOOK.md](RUNBOOK.md) |
 | How each stage works and what it costs | [ARCHITECTURE.md](ARCHITECTURE.md) |
 | The rules Claude follows, and the command map | [CLAUDE.md](CLAUDE.md) |
-| Daily briefings and scheduled searches | [automation/README.md](automation/README.md) |
+| The twice-weekly brief and scheduled searches | [automation/README.md](automation/README.md) |
 | Scoring rubric, writing style, cost model | [`.claude/skills/job-application-assistant/`](.claude/skills/job-application-assistant/) |
 | Reporting a bug or suggesting something | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Working on the app itself | [MAINTAINING.md](MAINTAINING.md) |

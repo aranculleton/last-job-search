@@ -664,18 +664,6 @@ def is_pending_line(line: str) -> bool:
     return bool(_PENDING_LINE.match(" ".join(str(line or "").split())))
 
 
-def _reach(pre: list) -> tuple[str, str]:
-    """(their degree, how they can be reached) from the top of their page, read only.
-
-    The buttons LinkedIn shows the person on someone's profile say what is
-    possible: Connect (a request with a note), Message (already connected, or an
-    open profile), Follow only (Connect sits under More), Pending (a request has
-    already gone). Nothing is clicked: the words on the page are enough.
-    """
-    degree, reach, _connect = _reach_and_connect(pre)
-    return degree, reach
-
-
 def _reach_and_connect(pre: list) -> tuple[str, str, str]:
     """(degree, reach, connect): `connect` is "shown" when the page has a Connect button,
     "missing" when it shows Message or Follow to someone not connected and no Connect (it
@@ -3858,6 +3846,14 @@ def main(argv: list | None = None) -> int:
                          "their row (state.unique_contact_id for the id), or read them with "
                          "--name and --company")
             row = row or {}
+        # A batch of notes saved one by one: a note shuffled onto the wrong person greets
+        # somebody else, and the person pastes it by hand. Never saved.
+        import tone
+        wrong = tone.wrong_greeting(note, row.get("name", ""))
+        if wrong:
+            print(f"reading: not saved. The note {wrong[0].text}: fix the greeting (or save it "
+                  "under the right contact's id) and save it again.")
+            return EXIT["error"]
         got = load(a.contact_id) or {}
         subject, _body = state.split_subject(note)
         if got.get("connect") == "missing" and not subject \

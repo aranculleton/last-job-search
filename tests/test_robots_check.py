@@ -221,12 +221,21 @@ class TestArgumentHardening(unittest.TestCase):
     """
 
     def test_curl_argv_ends_with_a_double_dash_before_the_url(self):
-        import inspect
+        # What curl is handed, read from the call itself rather than from the source.
+        from unittest import mock
 
         import robots_check
 
-        src = inspect.getsource(robots_check._fetch)
-        self.assertIn("'--', url", src)
+        seen = []
+
+        def fake(argv, **kw):
+            seen.append(argv)
+            return mock.Mock(returncode=0, stdout="User-agent: *\n200")
+        with mock.patch.object(robots_check.subprocess, "run", side_effect=fake):
+            robots_check._fetch("-o/tmp/x https://example.com/robots.txt", "Claude-User")
+        (argv,) = seen
+        self.assertEqual(argv[-2:], ["--", "-o/tmp/x https://example.com/robots.txt"])
+        self.assertNotIn("-o/tmp/x https://example.com/robots.txt", argv[:-1])
 
     def test_a_dash_leading_argument_fails_closed(self):
         script = REPO_ROOT / "tools" / "robots_check.py"

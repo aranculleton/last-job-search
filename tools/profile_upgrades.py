@@ -1323,6 +1323,11 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    # Read since before the first release through a one-argument getter (network/reply.py
+    # _w) that tools/profile_names.py could not see; nothing about how it is read changed.
+    "networking.HOME_ADJECTIVE": "unset, the nationality word in a reply's status and "
+                                 "presence checks matches nothing, as it always did for a "
+                                 "profile without it",
     # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
     # the careful preset: the pauses of the release before the dial, and 3.2.5's caps.
     "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "

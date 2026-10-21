@@ -84,17 +84,19 @@ def route_odds(contacts, threads, today=None) -> dict:
 
     The person's own results, counted by tools/what_works.py: a route moves a
     score only once both it and the rest have MIN_GROUP decided first notes and
-    the gap is unlikely to be chance. Until then this is empty and nothing moves.
+    the gap is unlikely to be chance, held to every route compared (what_works.clear).
+    Until then this is empty and nothing moves.
     """
     import what_works
     openers = [c for c in what_works.message_cases(contacts, threads, today)
                if c["attempt"] == "opener"]
     out = {}
-    for route in {c["route"] for c in openers}:
+    routes = {c["route"] for c in openers}
+    for route in routes:
         mine = [c for c in openers if c["route"] == route]
         rest = [c for c in openers if c["route"] != route]
         a, b = sum(c["won"] for c in mine), sum(c["won"] for c in rest)
-        if what_works.clear(a, len(mine), b, len(rest)):
+        if what_works.clear(a, len(mine), b, len(rest), comparisons=len(routes)):
             better = a / len(mine) > b / len(rest)
             out[route] = (6 if better else -6,
                           f"your {route} notes are answered {a} of {len(mine)}")

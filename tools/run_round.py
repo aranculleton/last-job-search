@@ -120,17 +120,68 @@ def _stream(cmd, log, budget):
 ON_TIMEOUT: dict = {}
 
 
+def took(seconds: float) -> str:
+    """A duration as a person reads it: "22m 28s", "4s", "1h 3m"."""
+    s = max(0, int(round(seconds)))
+    hours, rest = divmod(s, 3600)
+    minutes, secs = divmod(rest, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m {secs}s" if minutes else f"{secs}s"
+
+
+def _now() -> str:
+    return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+# (stage, seconds) for every stage run() ran in this round, in order. A round's log
+# had no time in it at all, so where half an hour went could only be guessed at.
+TIMES: list = []
+
+
+def _stage_done(log, name: str, began: float, how: str) -> float:
+    secs = time.monotonic() - began
+    TIMES.append((name, secs))
+    log.write(f"[{name} finished {_now()}, took {took(secs)}, {how}]\n")
+    log.flush()
+    return secs
+
+
+# One line per request a paced board sent (scrape_wide.py --request-log): when, which
+# board, what it asked, how many postings came back, how many were new to the round,
+# how long it took. Written beside the scrape's files and copied into round.log, which
+# survives the prune, so a later change can learn when a board stops finding anything
+# new. Only the paced boards: LinkedIn's thousands of requests would bury the rest.
+REQUEST_LOG = "requests.log"
+
+
+def keep_requests(log, path: str) -> None:
+    """The paced boards' request lines, added to the round's log once the scrape ends."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read()
+    except OSError:
+        return
+    if lines.strip():
+        log.write(f"[paced board requests, one line each: {lines.count(chr(10))}]\n{lines}")
+        log.flush()
+
+
 def run(cmd, log, deadline=None, ok=(0,)):
-    """Run one stage; its exit code, which is one of `ok`, or the round stops."""
+    """Run one stage; its exit code, which is one of `ok`, or the round stops.
+
+    Its start, its end and how long it took go in the round's log."""
     print("+", " ".join(cmd), flush=True)
     budget = _stage_budget(cmd, deadline)
-    log.write("\n$ " + " ".join(cmd) + "\n")
+    name = os.path.basename(cmd[1]) if len(cmd) > 1 else ""
+    began = time.monotonic()
+    log.write("\n$ " + " ".join(cmd) + f"\n[{name} started {_now()}]\n")
     log.flush()
     try:
         code, stdout, stderr = _stream(cmd, log, budget)
     except StageTimeout as e:
         log.write(str(e)[-20000:] + f"\n[timed out after {budget}s]\n")
-        log.flush()
+        _stage_done(log, name, began, "stopped: out of time")
         on_timeout = ON_TIMEOUT.pop(os.path.basename(cmd[1]) if len(cmd) > 1 else "", None)
         if on_timeout is not None:
             print(f"   stage timed out after {budget}s: {os.path.basename(cmd[1])}; "
@@ -145,12 +196,14 @@ def run(cmd, log, deadline=None, ok=(0,)):
     r = types.SimpleNamespace(returncode=code, stdout=stdout, stderr="")
     log.write(r.stdout)
     log.flush()
+    secs = _stage_done(log, name, began, f"exit {r.returncode}")
     if r.returncode not in ok:
         print(r.stdout[-2000:], r.stderr[-2000:], file=sys.stderr)
         sys.exit(f"stage failed: {os.path.basename(cmd[1])} (exit {r.returncode})")
     tail = [l for l in r.stdout.strip().splitlines() if l.strip()][-3:]
     for l in tail:
         print("   ", l)
+    print(f"    ({name} took {took(secs)})")
     return r.returncode
 
 
@@ -477,7 +530,9 @@ def main():
     log = open(f("round.log"), "a")
     # One monotonic ceiling for the whole round. Every stage gets the
     # smaller of its own budget and what is left of this.
-    deadline = time.monotonic() + ROUND_BUDGET_SEC
+    started = time.monotonic()
+    deadline = started + ROUND_BUDGET_SEC
+    TIMES.clear()
     scrape_dir = f("00_scrape")
     partial = ""
 
@@ -508,12 +563,20 @@ def main():
 
         nonlocal_partial: list = []
         ON_TIMEOUT["scrape_wide.py"] = keep_what_arrived
+        requests = os.path.join(scrape_dir, REQUEST_LOG)
+        try:
+            os.remove(requests)        # a round run again in the same place starts its own
+        except OSError:
+            pass
         code = run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
                     "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-                    "--workers", str(a.workers)]
+                    "--workers", str(a.workers), "--request-log", requests,
+                    "--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
+                   + (["--keep-ruled-out"] if a.no_seen_read else [])
                    + (["--alerts", a.alerts] if a.alerts else []),
                    log, deadline, ok=(0, SCRAPE_PARTIAL))
         ON_TIMEOUT.pop("scrape_wide.py", None)
+        keep_requests(log, requests)
         if code == SCRAPE_PARTIAL:
             partial = ("the scrape stage ran out of time and kept only what had arrived"
                        if nonlocal_partial else
@@ -549,7 +612,7 @@ def main():
     run([sys.executable, f"{T}/opportunity.py", f("03_screened.json"), "--out", f("04_opportunity.json"),
          "--top", "100000", "--today", a.today], log, deadline)
     run([sys.executable, f"{T}/fit.py", f("04_opportunity.json"), "--out", f("05_ranked.json"),
-         "--top", str(a.top)], log, deadline)
+         "--top", str(a.top)] + (["--tracker", a.tracker] if a.tracker else []), log, deadline)
     throttle = [sys.executable, f"{T}/throttle.py", f("05_ranked.json"), "--out", f("06_shortlist.json"),
                 "--skipped", f("06_skipped.json"), "--today", a.today]
     if a.tracker:
@@ -566,6 +629,12 @@ def main():
     print(f"  {'00_scrape/kept':16s} {count(scraped)}")
     for n in STAGES:
         print(f"  {n:16s} {count(f(n + '.json'))}")
+    if TIMES:
+        spent = ", ".join(f"{name.rsplit('.', 1)[0]} {took(secs)}" for name, secs in TIMES)
+        line = f"time: {spent}; {took(time.monotonic() - started)} in all"
+        print(line)
+        log.write(line + "\n")
+        log.flush()
     print(f"\nshortlist: {f('06_shortlist.json')}")
 
     good, strong = yield_of(f("06_shortlist.json"))

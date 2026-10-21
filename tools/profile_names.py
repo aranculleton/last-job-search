@@ -45,6 +45,11 @@ _ATTR_ALIAS = re.compile(r"\b(\w+)\.(" + _NAME + r")\b")
 # check could ever say a profile lacked one.
 _GETTER_DEF = re.compile(r"def (\w+)\(\s*(\w+)\s*,\s*(\w+)\s*\)\s*(?:->[^:]+)?:\s*\n"
                          r"\s*return getattr\(\s*(\w+)\s*,\s*\2\s*,\s*\3\s*\)")
+# And one that takes the name alone and supplies its own default:
+# `def _w(name): v = str(getattr(_NET, name, "") or "")...`, called `_w("HOME_ADJECTIVE")`.
+# Unseen, a name read only that way was missing here, so the upgrade checks never saw it.
+_GETTER_ONE = re.compile(r"def (\w+)\(\s*(\w+)\s*\)\s*(?:->[^:]+)?:\s*\n"
+                         r"(?:[ \t]+[^\n]*\n){0,2}?[ \t]+[^\n]*\bgetattr\(\s*(\w+)\s*,\s*\2\s*,")
 
 
 def _files():
@@ -64,8 +69,9 @@ def collect() -> dict:
         with open(path, encoding="utf-8") as fh:
             lines = fh.read().splitlines()
         alias = {a: m for line in lines for a, m in _BIND.findall(line)}
-        getters = {fn: alias[a] for fn, _, _, a in _GETTER_DEF.findall("\n".join(lines))
-                   if a in alias}
+        text = "\n".join(lines)
+        getters = {fn: alias[a] for fn, _, _, a in _GETTER_DEF.findall(text) if a in alias}
+        getters.update({fn: alias[a] for fn, _, a in _GETTER_ONE.findall(text) if a in alias})
         getter_call = (re.compile(r"\b(" + "|".join(map(re.escape, getters)) + r")\(\s*\"("
                                   + _NAME + r")\"") if getters else None)
         for n, line in enumerate(lines, 1):

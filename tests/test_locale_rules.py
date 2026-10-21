@@ -343,13 +343,17 @@ def test_the_outreach_note_check_is_validate_for_a_message(text):
         if len(outreach.APPLYING.findall(note)) > 1:
             problems.append("says it has applied more than once")
         return problems
+    # Less one check: "Sam" stands in for a reader nobody has named, so a note greeting its
+    # real reader ("Hi Tamsin") is not greeting the wrong person. greeting_wrong_name
+    # (2026-10-21) is left to a call that knows the reader, and check_note skips it.
     gate = [f"{v.rule}: {v.text}" for v in compose.validate(
         text.replace("[name]", "Sam"), "message", name="Sam", seniority="senior",
-        reader="decision_maker")]
+        reader="decision_maker") if v.rule != "greeting_wrong_name"]
     got = outreach.check_note(text)
     assert got == own_checks(text) + gate
     rules_ = ({p.split(":", 1)[0] for p in got}
               | {p.split(":", 2)[1].strip() for p in got if p.startswith("reads_as_generated:")})
-    assert {v.rule for v in tone.check(text, recipient_seniority="senior", name="Sam")} <= rules_
+    assert {v.rule for v in tone.check(text, recipient_seniority="senior", name="Sam")
+            if v.rule != "greeting_wrong_name"} <= rules_
     for f in _old_hard(text):
         assert TONE_NAME.get(f["rule"], f["rule"]) in rules_, (f, rules_)

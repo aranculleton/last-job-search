@@ -4,7 +4,8 @@ Works through the profile upgrades Claude can do alone (`tools/profile_upgrades.
 `needs: "nobody"`), most urgent first, and hands back the questions only the person can
 answer. Nobody has to know which upgrades exist or ask for them: CLAUDE.md "Start of
 every session" step 5 starts this in a background agent whenever the sync lists one, and
-the twice-weekly shortlist runs it before its round. The person's own request never
+every scheduled run (the twice-weekly brief, and the optional round) runs it first
+(`automation/prompts/_common.md` step 2). The person's own request never
 waits for it.
 
 `$ARGUMENTS` may hold a time budget in minutes (default 30) or upgrade ids to do only those.
@@ -44,7 +45,8 @@ For each `needs: "nobody"` entry, until the budget is spent:
    as `[CONFIRM: <the question>]` where the value goes: the session asks it at the end
    (the `unconfirmed-facts` upgrade), so nothing is ever guessed.
 3. Keep to every rule `/setup` and `/add-portal` keep: robots.txt decides which boards
-   are built, nothing personal goes into an app-owned file, research is cited.
+   are built (a board it disallows is never built here: that is the person's own call, in
+   `/add-portal`), nothing personal goes into an app-owned file, research is cited.
 4. If its `run` ends with `python3 tools/build_versions.py record <name>` (the
    `method-*` upgrades: a part of the build the app now does better), run that once it is
    redone. A redo keeps what is there and adds what the current method adds; a value it

@@ -33,7 +33,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import json
 import os
@@ -46,6 +45,7 @@ import bar  # noqa: E402
 from dates import as_date, days_since  # noqa: E402
 from company_key import key, row_key  # noqa: E402
 from lookup_score import norm  # noqa: E402
+from text_screen import GATE_CUT_WORDS, pay_cut_top  # noqa: E402
 
 import person  # noqa: E402
 
@@ -86,11 +86,34 @@ WARM = RESPONDED | SENT_NO_REPLY
 # roles at that employer keep reaching the top of the shortlist anyway.
 REFERRAL_IN_PROGRESS = "referral_in_progress"
 
+# The tracker status vocabulary, the one copy in code: /outcome's "Tracker status
+# vocabulary" block, and the spellings older trackers carry. what_works, followups,
+# open_actions and network/state read these sets from here rather than restating them:
+# a copy kept elsewhere is how open_actions once keyed on `interviewing` while the
+# tracker wrote `interview`, and an employer mid-interview sorted below a booked call.
+STATUSES = ("drafted", "applied", "interview", "offer", "hired", "rejected", "no_response",
+            "offer_declined", "withdrawn")
+# Older spellings of those, read as the same status everywhere and never written.
+LEGACY_SPELLINGS = {"no response": "no_response", "offer declined": "offer_declined",
+                    "interviewing": "interview"}
+
+
+def _spellings(*canonical) -> frozenset:
+    """The canonical statuses and every older spelling of them."""
+    return frozenset(canonical) | {old for old, new in LEGACY_SPELLINGS.items()
+                                   if new in canonical}
+
+
 # Tracker statuses that close an application. `declined` is not in the canonical
 # vocabulary (/outcome lists `rejected`, `offer_declined`, `withdrawn`) but it
 # is in the tracker, and reading it as open would suppress that employer forever.
-FINAL = {"hired", "rejected", "no_response", "no response", "offer_declined",
-         "offer declined", "withdrawn", "declined"}
+FINAL = set(_spellings("hired", "rejected", "no_response", "offer_declined", "withdrawn")
+            | {"declined"})
+# An interview or an offer running: a process, never silence.
+LIVE_PROCESS = _spellings("interview", "offer")
+# Reached an interview, whatever came after it; and closed without one.
+REACHED_INTERVIEW = LIVE_PROCESS | _spellings("hired", "offer_declined")
+LOST = _spellings("rejected", "no_response")
 
 # Statuses where documents exist but nothing was sent. CLAUDE.md throttles on
 # "a company with an open application" and sets the override against "what was
@@ -203,8 +226,13 @@ _STILL_CUTS_CORE = (
 # line, and every relocation or on-site reason blocked the same title at that
 # employer whatever the gate now says. Each is judged as today's rules judge it,
 # below.
+#
+# The screen's own gate cuts are read in the words it writes them in (text_screen
+# GATE_CUT_WORDS, the profile's own eligibility wording among them), so a ruling the
+# screen wrote is recognised as one whatever the profile calls its eligibility gate.
 _STILL_CUTS = re.compile(
-    "|".join([_STILL_CUTS_CORE, *getattr(person.module("search"), "STILL_CUTS", ())]),
+    "|".join([_STILL_CUTS_CORE, GATE_CUT_WORDS.pattern,
+              *getattr(person.module("search"), "STILL_CUTS", ())]),
     re.I)
 # A range below this is a different job level, the one pay cut today's screen makes
 # (text_screen.py, search.py SALARY_CUT_BELOW).
@@ -212,9 +240,13 @@ SALARY_CUT_BELOW = getattr(person.module("search"), "SALARY_CUT_BELOW", 0) or 0
 _RANGE_REASON = re.compile(r"\brange\b|\bsalary\b|\bpay\b|\bcompensation\b|\btops? out\b"
                            r"|\bfloor\b|\bcut line\b", re.I)
 _MONEY = r"(\d{1,3}(?:[,.\s]\d{3})+|\d+(?:\.\d+)?)\s?(k\b)?"
+# A currency in front of a figure: a code ("GBP "), a symbol ("£", "€"), letters and a
+# symbol ("C$", "CA$", "A$", "R$") or "kr". Read as only a code or one symbol, "C$32,000"
+# and "kr 32 000" quoted no figure, and a ruling on one read as stale.
+_MARK = r"(?:[A-Z]{3}\s?)?(?:[A-Za-z]{1,2}(?=[^\w\s])|kr\.?\s?)?[^\w\s]?\s?"
 _TOP_CUE = re.compile(r"(?:tops? out at|range max(?:imum)?|max(?:imum)?(?: is| of| at)?|up to)"
-                      r"\s*:?\s*(?:[A-Z]{3}\s?)?[^\w\s]?\s?" + _MONEY, re.I)
-_SPAN = re.compile(_MONEY + r"\s*(?:-|\u2013|to)\s*(?:[A-Z]{3}\s?)?[^\w\s]?\s?" + _MONEY, re.I)
+                      r"\s*:?\s*" + _MARK + _MONEY, re.I)
+_SPAN = re.compile(_MONEY + r"\s*(?:-|\u2013|to)\s*" + _MARK + _MONEY, re.I)
 _LOCATION_REASON = re.compile(r"\brelocat\w*|\bon-?site\b|\blocation\b|\bcommut\w*"
                               r"|\bbased in\b|\boutside the\b", re.I)
 _DEGREE_REASON = re.compile(r"\bmaster'?s?\b|\bph\.?\s?d\b|\bdoctora\w*|\bdegree\b", re.I)
@@ -226,7 +258,13 @@ def _amount(num: str, k: str | None) -> int:
 
 
 def range_top(reason: str) -> int | None:
-    """The top of the pay range a reason quotes, or None when it cannot be told."""
+    """The top of the pay range a reason quotes, or None when it cannot be told.
+
+    The screen's own cut is read in the words it writes it in (text_screen.pay_cut_top),
+    whatever the currency; any other wording by the cues below."""
+    top = pay_cut_top(reason)
+    if top is not None:
+        return top
     m = _TOP_CUE.search(reason or "")
     if m:
         return _amount(m.group(1), m.group(2))
@@ -327,9 +365,6 @@ def _row_age_days(row: dict, today: "dt.date | None" = None) -> int | None:
     return days_since(row.get("date"), today, iso_only=True)
 
 
-LIVE_PROCESS = frozenset({"interview", "offer"})
-
-
 def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     """A sent application with no reply recorded, old enough to presume dead.
 
@@ -348,8 +383,8 @@ def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
     return age is not None and age >= SILENCE_DAYS
 
 
-def open_applications(path: str = TRACKER,
-                      today: "dt.date | None" = None) -> dict[str, list[dict]]:
+def open_applications(path: str = TRACKER, today: "dt.date | None" = None,
+                      rows: list[dict] | None = None) -> dict[str, list[dict]]:
     """Employer key -> every *sent*, still-live tracker row at that employer.
 
     Sent is the point. The throttle exists so the employer does not receive two
@@ -365,7 +400,7 @@ def open_applications(path: str = TRACKER,
     employer the throttle could see was a different application entirely.
     """
     out: dict[str, list[dict]] = {}
-    for r in _tracker_rows(path):
+    for r in _tracker_rows(path) if rows is None else rows:
         status = (r.get("status") or "").strip().lower()
         if status in FINAL or status in UNSENT:
             continue
@@ -377,8 +412,8 @@ def open_applications(path: str = TRACKER,
     return out
 
 
-def silent_applications(path: str = TRACKER,
-                        today: "dt.date | None" = None) -> dict[str, list[dict]]:
+def silent_applications(path: str = TRACKER, today: "dt.date | None" = None,
+                        rows: list[dict] | None = None) -> dict[str, list[dict]]:
     """Employer key -> sent rows old enough to have stopped suppressing.
 
     The companion to `open_applications`. The shortlist row carries a note
@@ -386,7 +421,7 @@ def silent_applications(path: str = TRACKER,
     says so rather than looking like the throttle forgot.
     """
     out: dict[str, list[dict]] = {}
-    for r in _tracker_rows(path):
+    for r in _tracker_rows(path) if rows is None else rows:
         status = (r.get("status") or "").strip().lower()
         if status in FINAL or status in UNSENT or not is_silent(r, today):
             continue
@@ -396,7 +431,8 @@ def silent_applications(path: str = TRACKER,
     return out
 
 
-def closed_applications(path: str = TRACKER) -> dict[str, list[dict]]:
+def closed_applications(path: str = TRACKER,
+                        rows: list[dict] | None = None) -> dict[str, list[dict]]:
     """Employer key -> every sent application there that has closed.
 
     A closed application does not hold its employer (other roles there are fair
@@ -404,7 +440,7 @@ def closed_applications(path: str = TRACKER) -> dict[str, list[dict]]:
     `no_response` came back as the top pick of the next two rounds.
     """
     out: dict[str, list[dict]] = {}
-    for r in _tracker_rows(path):
+    for r in _tracker_rows(path) if rows is None else rows:
         status = (r.get("status") or "").strip().lower()
         if status in FINAL and status not in UNSENT:
             k = key(r.get("company"))
@@ -413,10 +449,11 @@ def closed_applications(path: str = TRACKER) -> dict[str, list[dict]]:
     return out
 
 
-def drafted_applications(path: str = TRACKER) -> dict[str, dict]:
+def drafted_applications(path: str = TRACKER,
+                         rows: list[dict] | None = None) -> dict[str, dict]:
     """Employer key -> the first unsent draft there, for the note on the row."""
     out: dict[str, dict] = {}
-    for r in _tracker_rows(path):
+    for r in _tracker_rows(path) if rows is None else rows:
         if (r.get("status") or "").strip().lower() not in UNSENT:
             continue
         k = key(r.get("company"))
@@ -426,12 +463,26 @@ def drafted_applications(path: str = TRACKER) -> dict[str, dict]:
 
 
 def _tracker_rows(path: str = TRACKER) -> list[dict]:
-    if not os.path.exists(path):
-        return []
+    """The tracker's rows, [] when there is none, refused when a merge left conflict
+    markers in it (csv_store.read_rows, the one state-file reader)."""
     import csv_store
-    csv_store.refuse_conflicts(path)
-    with open(path, newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+    return csv_store.read_rows(path)
+
+
+def _contact_rows(path: str = CONTACTS) -> list[dict]:
+    """The contact book's rows, [] when there is none or it cannot be read.
+
+    Read through csv_store like the tracker, so a contact book a merge left conflict
+    markers in is refused rather than read: as rows, the three marker lines were three
+    contacts and both sides of the conflicted row two more, and a warm route or a
+    referral hold could rest on the side that lost."""
+    import csv_store
+    try:
+        return csv_store.read_rows(path)
+    except csv_store.Conflicted:
+        raise
+    except OSError:
+        return []
 
 
 def load_seen(path: str = SEEN) -> dict:
@@ -503,7 +554,7 @@ def ruled_out(entries: dict) -> tuple[dict[str, str], dict[tuple[str, str, str],
         n = norm(e.get("url") or u)
         if n:
             urls[n] = why
-        t = (e.get("title") or "").strip().lower()
+        t = title_key(e.get("title"))
         k = key(e.get("company"))
         if t and k:
             pairs[(t, k, city(e["location"]) if e.get("location") else ANYWHERE)] = why
@@ -542,7 +593,7 @@ def city(location) -> str:
 
 
 def _posting_key(title, company, location) -> tuple[str, str, str]:
-    return ((title or "").strip().lower(), key(company), city(location))
+    return (title_key(title), key(company), city(location))
 
 
 def _days_seen(e: dict) -> list[str]:
@@ -627,15 +678,16 @@ def copy_date(index: dict, job: dict) -> str:
     return index.get(_posting_key(job.get("title"), job.get("company"), job.get("location")), "")
 
 
-def first_seen(entries: dict, today: str = ""):
+def first_seen(entries: dict, today: str = "", index: tuple | None = None):
     """A function from a posting to the day this search first saw it, or "".
 
     By its URL, or as a relist of a posting with the same title, employer and city
     seen in the last RELIST_WINDOW days. The companion of `ruled_out`: both read
     seen_jobs.json and only what the scrape already has, so prefilter can age a
-    posting before hydrate fetches it.
+    posting before hydrate fetches it. `index` is `_seen_index(entries, today)`, for a
+    caller that builds it once.
     """
-    urls, pairs = _seen_index(entries, today)
+    urls, pairs = _seen_index(entries, today) if index is None else index
 
     def of(job: dict) -> str:
         k, _ = _find(job, urls, pairs)
@@ -644,7 +696,18 @@ def first_seen(entries: dict, today: str = ""):
     return of
 
 
-def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, str]:
+def _read_do_not_target(path: str = DO_NOT_TARGET) -> dict | None:
+    """do_not_target.json as read, or None when there is none or it cannot be read."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
+                       data: dict | None = None) -> dict[str, str]:
     """Employer key -> why no posting from them can be relevant.
 
     Different in kind from an excluded posting, and the distinction is the one
@@ -658,11 +721,10 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, 
     that goes stale, and the usual note on such an entry is "keep the
     relationship, revisit in a few months". An entry past its review_after is
     ignored and reported, rather than quietly suppressing an employer forever.
+    `data` is the file as a caller already read it (`_read_do_not_target`).
     """
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, ValueError):
+    data = _read_do_not_target(path) if data is None else data
+    if not data:
         return {}
     today = today or dt.date.today().isoformat()
     out = {}
@@ -680,12 +742,11 @@ def load_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> dict[str, 
     return out
 
 
-def expired_do_not_target(path: str = DO_NOT_TARGET, today: str = "") -> list[str]:
+def expired_do_not_target(path: str = DO_NOT_TARGET, today: str = "",
+                          data: dict | None = None) -> list[str]:
     """Entries whose review_after has passed, so the caller can say so."""
-    try:
-        with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
-    except (OSError, ValueError):
+    data = _read_do_not_target(path) if data is None else data
+    if not data:
         return []
     today = today or dt.date.today().isoformat()
     return sorted(n for n, e in (data.get("companies") or {}).items()
@@ -726,6 +787,16 @@ def _contact_id(row: dict) -> str:
     return ""
 
 
+def threads_beside(contacts: str) -> str:
+    """The message log that goes with a contact book: the repo's beside the repo's, and the
+    `network_threads.csv` in the same folder beside any other. A contact book given on its
+    own (--contacts) was read against the repo's own log, so its statuses were derived
+    from somebody else's messages."""
+    if not contacts or os.path.abspath(contacts) == os.path.abspath(CONTACTS):
+        return THREADS
+    return os.path.join(os.path.dirname(os.path.abspath(contacts)), "network_threads.csv")
+
+
 def _derived_statuses(rows: list[dict],
                       threads_path: str | None = None) -> dict[str, str]:
     """{contact_id: effective_status}, or {} when the log cannot be read.
@@ -744,8 +815,17 @@ def _derived_statuses(rows: list[dict],
         sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
         from state import effective_status
 
-        with open(path, newline="", encoding="utf-8") as fh:
-            threads = list(csv.DictReader(fh))
+        import csv_store
+        if not os.path.exists(path):
+            return {}
+        try:
+            threads = csv_store.read_rows(path)
+        except csv_store.Conflicted as e:
+            # The log is a reason to fall back to what the row says, never to stop a
+            # round, and never something to read as messages with the markers in it.
+            print(f"{e} Until then each contact's status is read from the contact "
+                  "book's own column.", file=sys.stderr)
+            return {}
         by_contact = collections.defaultdict(list)
         for row in threads:
             by_contact[str(row.get("contact_id") or "").strip()].append(row)
@@ -782,14 +862,10 @@ def _contacts_by_employer(path: str, statuses: set, rows: list[dict] | None = No
     read of the file, which a test's fixture never reaches.
     """
     if rows is None:
-        try:
-            # UTF-8 by name: the platform's default is cp1252 on Windows, and the
-            # contact book holds names it cannot read.
-            with open(path, newline="", encoding="utf-8") as fh:
-                rows = list(csv.DictReader(fh))
-        except OSError:
+        rows = _contact_rows(path)
+        if not rows:
             return {}
-        live = _derived_statuses(rows)
+        live = _derived_statuses(rows, threads_beside(path))
     live = live or {}
     out: dict[str, list[dict]] = {}
     for r in rows:
@@ -818,13 +894,14 @@ def warm_routes(path: str = CONTACTS, rows: list[dict] | None = None,
     return _contacts_by_employer(path, RESPONDED, rows, live)
 
 
-def pending_outreach(path: str = CONTACTS) -> dict[str, list[dict]]:
+def pending_outreach(path: str = CONTACTS, rows: list[dict] | None = None,
+                     live: dict[str, str] | None = None) -> dict[str, list[dict]]:
     """Employer key -> the people there who were messaged and have not replied.
 
     Not a route, so it adds no points and suppresses nothing. It is the note
     that stops a second message going to somebody already sitting on a first.
     """
-    return _contacts_by_employer(path, SENT_NO_REPLY)
+    return _contacts_by_employer(path, SENT_NO_REPLY, rows, live)
 
 
 def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
@@ -845,30 +922,41 @@ def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
     return out
 
 
-_TITLE_NOISE = re.compile(r"[^a-z0-9]+")
+# Everything in a title but its letters and digits, in any script.
+_TITLE_NOISE = re.compile(r"[\W_]+")
 # A bracket that says how or where a role is posted, not which role it is.
 _TITLE_TAG = re.compile(
     r"\((?:future opportunities|evergreen|talent pool|remote|hybrid|on[- ]?site|"
     r"full[- ]time|permanent|[mfwd]/[mfwd]/[mfwd]|all genders)\)", re.I)
 
 
+def title_key(title) -> str:
+    """A title as the role it names: "Sr. Analyst, Supply Chain (Hybrid)" is
+    "senior analyst supply chain".
+
+    Letters and digits only, so a comma or a posting tag does not make two jobs, and
+    seniority spellings folded. The one key for a title: the role already applied to
+    (`_same_title`), a relist of a posting seen before (`first_seen`, the age gate),
+    copies of one posting in a round, and a posting already ruled out (`ruled_pair`).
+    Those three read the exact lower-cased title while the first folded, so "Senior
+    Data Analyst (Hybrid)" and "Sr. Data Analyst" were new postings to the age gate and
+    to a ruling on "Senior Data Analyst" at the same employer and city.
+    """
+    x = _TITLE_NOISE.sub(" ", _TITLE_TAG.sub(" ", str(title or "")).casefold())
+    x = re.sub(r"\b(sr|snr)\b", "senior", x)
+    x = re.sub(r"\b(jr)\b", "junior", x)
+    return " ".join(x.split())
+
+
 def _same_title(a, b) -> bool:
     """Is this the role already applied to, under a spelling that drifted?
 
-    Compared on letters and digits only, so "Sr. Analyst, Supply Chain" and
-    "Senior Analyst, Supply Chain (Future Opportunities)" are not treated as two
-    jobs by a comma or a posting tag. Seniority words are folded for the same
-    reason. The whole title, never a prefix of it: "Data Analyst" closed matched
-    "Data Analyst, Fraud Strategy", and a skip on a closed application is never
-    looked at again, so the second role was blocked for good.
+    Compared by `title_key`. The whole title, never a prefix of it: "Data Analyst"
+    closed matched "Data Analyst, Fraud Strategy", and a skip on a closed application
+    is never looked at again, so the second role was blocked for good.
     """
-    def norm(x):
-        x = _TITLE_NOISE.sub(" ", _TITLE_TAG.sub(" ", str(x or "")).lower())
-        x = re.sub(r"\b(sr|snr)\b", "senior", x)
-        x = re.sub(r"\b(jr)\b", "junior", x)
-        return " ".join(x.split())
-    x, y = norm(a), norm(b)
-    return bool(x) and x == y
+    x = title_key(a)
+    return bool(x) and x == title_key(b)
 
 
 def _as_score(value) -> float | None:
@@ -910,8 +998,8 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             reason = holds[k]
         elif n and n in urls:
             reason = f"already ruled out, {urls[n]}"
-        elif ruled_pair(pairs, r):
-            reason = f"already ruled out, {ruled_pair(pairs, r)}"
+        elif (pair_why := ruled_pair(pairs, r)):
+            reason = f"already ruled out, {pair_why}"
         elif k and closed and any(_same_title(r.get("title"), c.get("role"))
                                   for c in closed.get(k, [])):
             c = next(c for c in closed[k] if _same_title(r.get("title"), c.get("role")))
@@ -1075,15 +1163,16 @@ def _sighting(entries: dict, urls: dict, pairs: dict, r: dict, today: str) -> st
 
 
 def write_back(path: str, data: dict, skipped: list[dict], today: str,
-               kept: list[dict] | tuple = ()) -> int:
+               kept: list[dict] | tuple = (), index: tuple | None = None) -> int:
     """Record every skip, and when each posting was first and last seen. Returns skips written.
 
     Surfaced rows are recorded too, at status "surfaced", so the day a posting was
     first seen survives it being relisted. They are not "new": /rank reads "new" as
-    a backlog added by hand.
+    a backlog added by hand. `index` is `_seen_index` of these entries on this day, for
+    a caller that built it already; it is added to as postings are recorded.
     """
     entries = data.setdefault("seen", {})
-    urls, pairs = _seen_index(entries, today)
+    urls, pairs = _seen_index(entries, today) if index is None else index
     n = 0
     for r in skipped:
         reason = r["skip_reason"]
@@ -1123,6 +1212,9 @@ def main() -> int:
     ap.add_argument("--seen", default=SEEN)
     ap.add_argument("--do-not-target", default=DO_NOT_TARGET)
     ap.add_argument("--contacts", default=CONTACTS)
+    ap.add_argument("--threads", default=None,
+                    help="the message log contact statuses are derived from (default: the "
+                         "network_threads.csv beside --contacts)")
     ap.add_argument("--today", default=dt.date.today().isoformat())
     ap.add_argument("--no-write", action="store_true",
                     help="do not record skips in seen_jobs.json")
@@ -1139,27 +1231,37 @@ def main() -> int:
     # for the one-role-per-employer rule, whichever comes first.
     import company_key
     company_key.learn(r.get("company") for r in rows)
-    open_apps = open_applications(a.tracker)
+    # Each state file read once, so every rule below judges the same snapshot of it:
+    # the tracker was read eight times, the contact book and the message log three each.
+    today = as_date(a.today, iso_only=True)
+    tracker = _tracker_rows(a.tracker)
+    contacts = _contact_rows(a.contacts)
+    live = _derived_statuses(contacts, a.threads or threads_beside(a.contacts)) if contacts else {}
+    dnt = _read_do_not_target(a.do_not_target) or {}
+    open_apps = open_applications(a.tracker, today, rows=tracker)
     seen = load_seen(a.seen)
     # Re-judging everything was the point of --no-seen-read, and the prefilter
     # honoured it while this applied every past ruling at the end anyway, so a
     # round with the flag re-scored nothing.
     urls, pairs = ({}, {}) if a.keep_ruled_out else ruled_out(seen["seen"])
-    blocked = load_do_not_target(a.do_not_target, a.today)
-    warm = warm_routes(a.contacts)
+    blocked = load_do_not_target(a.do_not_target, a.today, data=dnt)
+    warm = warm_routes(a.contacts, rows=contacts, live=live)
     kept, skipped = throttle(rows, open_apps, urls, pairs, a.today, blocked, warm,
-                             drafted_applications(a.tracker),
-                             pending_outreach(a.contacts), referral_holds(a.contacts),
-                             silent_applications(a.tracker), closed_applications(a.tracker))
+                             drafted_applications(a.tracker, rows=tracker),
+                             pending_outreach(a.contacts, rows=contacts, live=live),
+                             referral_holds(a.contacts, rows=contacts, live=live),
+                             silent_applications(a.tracker, today, rows=tracker),
+                             closed_applications(a.tracker, rows=tracker))
 
-    stale = expired_do_not_target(a.do_not_target, a.today)
+    stale = expired_do_not_target(a.do_not_target, a.today, data=dnt)
     if stale:
         print("do_not_target entries past review_after, no longer suppressing: %s"
               % ", ".join(stale), file=sys.stderr)
 
     # The day each surfaced posting was first seen rides on the shortlist, so a
     # relisted posting reads as old there too.
-    seen_on = first_seen(seen["seen"], a.today)
+    index = _seen_index(seen["seen"], a.today)
+    seen_on = first_seen(seen["seen"], a.today, index=index)
     for r in kept:
         r["first_seen"] = seen_on(r) or a.today
     with open(a.out, "w", encoding="utf-8") as fh:
@@ -1167,7 +1269,8 @@ def main() -> int:
     if a.skipped:
         with open(a.skipped, "w", encoding="utf-8") as fh:
             json.dump(skipped, fh, indent=1)
-    written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today, kept)
+    written = 0 if a.no_write else write_back(a.seen, seen, skipped, a.today, kept,
+                                              index=index)
 
     from collections import Counter
     kinds = Counter(r["skip_reason"].split(":")[0].split(",")[0] for r in skipped)
@@ -1200,4 +1303,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"throttle: {e}", file=sys.stderr)
+        raise SystemExit(1) from None

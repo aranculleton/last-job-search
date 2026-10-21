@@ -9,6 +9,7 @@ before and must give exactly the answers they gave: the tables below were taken
 from the code before tools/places.py existed.
 """
 import os
+import datetime as dt
 import re
 import subprocess
 import sys
@@ -116,9 +117,12 @@ GATE = {
         "", "Aylesbury, England, United Kingdom", "Leeds, England, United Kingdom",
         "Liverpool", "Warrington", "Preston, England", "Sheffield", "North West",
         "North West England", "New York, NY", "San Diego, CA", "Austin, TX", "EMEA", "Europe",
-        "Northgate", "Northgate, Wexmoor", "Wexmoor", "Somewhere, Nowhere", "Remote (EU)"],
+        "Northgate", "Northgate, Wexmoor", "Wexmoor", "Somewhere, Nowhere"],
     "FAIL": [
         "Remote, India", "Remote - Germany", "Remote - Canada",
+        # Changed on purpose: the EU leaves out the UK, the example's home, so a role
+        # remote within it is abroad (tools/places.py region_includes_home).
+        "Remote (EU)",
         "Manchester, New Hampshire, United States", "Sale, Australia", "London",
         "London, England, United Kingdom", "On-site, London", "Birmingham, UK", "Bristol",
         "Edinburgh, Scotland", "Glasgow, Scotland, United Kingdom", "Cardiff, Wales, UK",
@@ -139,10 +143,14 @@ REMOTE_FAILS = [
     "United States", "USA",
     # Changed on purpose: a country code is read as written, so "US" is the United
     # States wherever a remote role names it.
-    "Manchester, NH, US"]
-# A region named beside "remote" may or may not take in home, so Tier 2 decides.
-# These passed as remote-from-anywhere until the remote branch read regions.
-REMOTE_FLAGS = ["EMEA", "Europe", "Remote (EU)"]
+    "Manchester, NH, US",
+    "Remote (EU)"]
+# A region named beside "remote" is judged by whether it takes in home. Changed on
+# purpose: these were all flagged for Tier 2 while the gate kept its own list of
+# region words. EMEA and Europe take in the UK, so a role remote within them passes;
+# the EU does not, so it fails (above). A home the table cannot place still flags
+# (tests/test_where_the_work_can_be_done_from.py).
+REMOTE_FLAGS: list = []
 # fit.py prices a FLAG by its reason, so those are held to the word.
 FLAG_REASONS = {
     "location not recognized; Tier 2 decides": [
@@ -154,7 +162,6 @@ FLAG_REASONS = {
         "Leeds, England, United Kingdom", "Liverpool", "Preston, England", "Sheffield",
         "Warrington"],
     "no location stated; Tier 2 decides": [""],
-    "remote, but names EU; whether that includes United Kingdom is for Tier 2": ["Remote (EU)"],
 }
 WIDE =[loc for locs in GATE.values() for loc in locs]
 
@@ -231,3 +238,34 @@ def test_the_residence_cut_gives_what_it_gave():
 
 
 HOME_NATION = ("Belfast, Northern Ireland", "Northern Ireland")
+
+
+def test_a_country_written_in_capitals_still_fails_at_the_gate(monkeypatch):
+    # prefilter kept the profile's list as written and compared it with the lower-cased
+    # location; places.py lower-cases it. A profile writing "Germany" passed every
+    # on-site role in Germany at the gate.
+    import importlib
+    spec = dict(person.module("search").LOCATION, other_countries=["Germany", "France"])
+    monkeypatch.setattr(person.module("search"), "LOCATION", spec)
+    try:
+        importlib.reload(places)
+        fresh = importlib.reload(prefilter)
+        assert fresh.location_verdict("Berlin, Germany")[0] == "FAIL"
+        assert fresh.location_verdict("Remote, France")[0] == "FAIL"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(places)
+        importlib.reload(prefilter)
+
+
+def test_a_row_is_placed_and_aged_once(monkeypatch):
+    # annotate took decide's verdict and then worked out the place and the age again.
+    calls = []
+    real = prefilter.location_verdict
+    monkeypatch.setattr(prefilter, "location_verdict",
+                        lambda *a, **k: calls.append(a) or real(*a, **k))
+    ok, row = prefilter.annotate({"title": "Data Analyst", "company": "Oakmere Foods",
+                                  "location": "Manchester", "date": "2026-10-18"},
+                                 dt.date(2026, 10, 20))
+    assert ok and row["location_verdict"] == "PASS" and row["age_days"] == 2
+    assert len(calls) == 1

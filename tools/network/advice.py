@@ -691,7 +691,9 @@ def stiff_forms(text: str, keep=()) -> list[tuple[str, str]]:
 def spoken(text: str, keep=()) -> str:
     """`text` in the person's own voice: each stiff form (stiff_forms) replaced by what they
     say. Nothing changes without a VOICE setting."""
-    out = str(text or "")
+    # The visible text: _stiff reads offsets in tone._plain(), which match it, not a text
+    # still holding a zero-width space.
+    out = tone._visible(text)
     for start, end, _full, short in reversed(_stiff(out, keep)):
         out = out[:start] + short + out[end:]
     return out

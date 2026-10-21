@@ -29,16 +29,17 @@ Each is now a rule, next to the code it governs:
   not chased   a DO NOT CHASE entry in the row's notes
   superseded   a later row for the same role is the application now
   recipient    who it goes to, or plainly nobody
-  stop         two nudges met with silence, or SILENCE_DAYS since it went
+  stop         two nudges met with silence, or SILENCE_DAYS of silence: since
+               the employer last wrote (last_heard), or since it went
 
     python3 tools/followups.py [--today YYYY-MM-DD]
     python3 tools/followups.py --close-quiet [--dry-run]   # the brief runs this
+    python3 tools/followups.py --closed-quiet              # what /gmail-sync still searches
 """
 
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime
 import os
 import re
@@ -77,6 +78,10 @@ NUDGE_1 = ("Hi {name}, I applied for the {role} role on {date} and wanted to mak
 NUDGE_2 = ("Hi {name}, following up once more on the {role} application from {date}. "
            "If the role has moved on, no problem at all; if it is still open, I would "
            "value ten minutes to talk through the fit.")
+# Either nudge, once they have written since the last one: "wanted to make sure it
+# reached the right person" is not true of an application they have answered.
+NUDGE_AFTER_WORD = ("Hi {name}, thank you for your note on {heard}. I wanted to ask where "
+                    "the {role} role stands, and whether anything more from me would help.")
 
 # What a person writes in the row's notes once a nudge has gone. Numbering reads
 # this and nothing else.
@@ -109,11 +114,25 @@ LOG_AS = "followed up %s"      # the /outcome Step 2b form, so there is one to w
 # like every other; `until <date>` in the same entry ends it, and a later entry
 # saying "chase again" ends it too, so lifting it never means rewriting history.
 _NOT_CHASED = re.compile(r"\bdo(?:[\s-]+not|n['’]?t)[\s-]+chase\b", re.I)
+
+# The employer's word since the application, as the row's notes record it: what
+# /gmail-sync writes (any signal but an acknowledgement), its reopening of a row closed
+# on silence, a hold "per the employer", and the plain words a person writes. Silence is
+# counted from the latest of these, not from the application: a recruiter who wrote on
+# day 40 has not been silent for 45 days. An automatic acknowledgement is not a word.
+_EMPLOYER_WORD = re.compile(
+    r"\bgmail-sync:\s*(?!application ack)\w|\breopened: they replied\b|\bper the employer\b"
+    r"|\breply owed\b|\bheard (?:back )?from\b|\b(?:they|recruiter|recruiters|employer|hiring "
+    r"manager|hr|talent team|the team) (?:replied|wrote|emailed|called|rang|messaged|asked|"
+    r"said|got back)\b", re.I)
+_AUTOMATIC = re.compile(r"\b(?:application ack|acknowledg\w*|auto[- ]?reply|automated|"
+                        r"automatic|out of office|received your application)\b", re.I)
+_ANY_DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
 _CHASE_AGAIN = re.compile(r"\b(?:chase again|resume chasing)\b", re.I)
 
-# The /outcome vocabulary's live-process statuses, plus the `interviewing` that
-# open_actions.HEAT keyed on while the tracker wrote `interview`.
-LIVE_PROCESS = frozenset({"interview", "interviewing", "offer"})
+# The /outcome vocabulary's live-process statuses and their older spellings: the
+# tracker's one vocabulary (throttle.py), never a copy of it.
+LIVE_PROCESS = throttle.LIVE_PROCESS
 
 # A tracker `role` that is a note rather than a job title ("Questionnaire
 # completed", "Several applications (titles unknown)"), and the template used
@@ -136,11 +155,11 @@ NO_RECIPIENT = ("no recipient on file: find the recruiter or hiring manager firs
 
 
 def _rows(path: str = TRACKER) -> list[dict]:
+    """The rows, through csv_store.read_rows, the one state-file reader: a conflicted file
+    is refused, and a short row's missing cells read as blanks, never None."""
     import csv_store
-    csv_store.refuse_conflicts(path)
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
+        return csv_store.read_rows(path)
     except OSError:
         return []
 
@@ -165,6 +184,23 @@ def nudges_sent(notes) -> list[datetime.date | None]:
         opens_on = _LEADING_DATE.match(entry)
         for m in _SENT.finditer(entry):
             out.append(_iso(m.group(1) or m.group(2) or (opens_on.group(1) if opens_on else "")))
+    return out
+
+
+def last_heard(notes, today: datetime.date | None = None) -> datetime.date | None:
+    """The latest day the notes record the employer saying something, or None.
+
+    An entry counts when it reads as their word (`_EMPLOYER_WORD`) and not as an
+    automatic acknowledgement; its date is the one it opens on, else the first in it.
+    """
+    out = None
+    for entry in str(notes or "").split("|"):
+        if not _EMPLOYER_WORD.search(entry) or _AUTOMATIC.search(entry):
+            continue
+        m = _LEADING_DATE.match(entry) or _ANY_DATE.search(entry)
+        day = _iso(m.group(1)) if m else None
+        if day and (today is None or day <= today) and (out is None or day > out):
+            out = day
     return out
 
 
@@ -354,7 +390,8 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
         it = {"row": r, "key": k, "company": str(r.get("company") or "").strip(),
               "role": role, "date": applied.isoformat(), "age": (today - applied).days,
               "state": "waiting", "nudge": 0, "sent": 0, "due_on": "", "late": 0,
-              "quiet_on": "", "notice": False, "held": [], "closed_by": None,
+              "quiet_on": "", "notice": False, "held": [], "closed_by": None, "heard": "",
+              "answered": False,
               "to": {}, "needs_role": bool(_PLACEHOLDER_ROLE.search(role)), "message": ""}
         out.append(it)
         if id(r) in closed:
@@ -372,8 +409,17 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
         # SILENCE_DAYS has stopped counting. The same number ends the chase
         # here, or a week of silence after the second nudge if that comes
         # first, and the row is said to have gone quiet once, not listed as due.
-        quiet_on = applied + datetime.timedelta(days=SILENCE_DAYS)
-        if len(sent) >= MAX_NUDGES and last is not None:
+        #
+        # Silence is counted from the employer's last word, when the notes record one
+        # after the application (last_heard): a recruiter's reply on day 40 left the row
+        # to close as "no reply" five days later. A reply after the second nudge means
+        # the two were not met with silence, so that stop waits for silence again.
+        heard = last_heard(r.get("notes"), today)
+        heard = heard if heard and heard > applied else None
+        it["heard"] = heard.isoformat() if heard else ""
+        it["answered"] = bool(heard and last is not None and heard > last)
+        quiet_on = (heard or applied) + datetime.timedelta(days=SILENCE_DAYS)
+        if len(sent) >= MAX_NUDGES and last is not None and not it["answered"]:
             quiet_on = min(quiet_on, last + datetime.timedelta(days=NUDGE_GAP_DAYS))
         it["quiet_on"] = quiet_on.isoformat()
         if today >= quiet_on:
@@ -415,9 +461,10 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
         it["state"] = "due"
         it["to"] = recipient(r, warm.get(k, ()), docs, today)
         if it["to"] and not it["needs_role"]:
-            tpl = NUDGE_1 if n == 1 else NUDGE_2
+            word = heard is not None and (last is None or heard > last)
+            tpl = NUDGE_AFTER_WORD if word else NUDGE_1 if n == 1 else NUDGE_2
             it["message"] = tpl.format(name=it["to"].get("name") or "[name]",
-                                       role=role, date=it["date"])
+                                       role=role, date=it["date"], heard=it["heard"])
     out.sort(key=lambda x: -x["age"])
     return out
 
@@ -449,10 +496,19 @@ def body(it: dict) -> str:
     return it.get("message") or ""
 
 
+def _quiet_why(it: dict, silence: str) -> str:
+    """Why a row has gone quiet: two nudges unanswered, the silence since they last wrote,
+    or `silence` (how long since it went, in the caller's words)."""
+    if it.get("sent", 0) >= MAX_NUDGES and not it.get("answered"):
+        return "two follow-ups and no reply"
+    if it.get("heard"):
+        return "no word since they last wrote, %s" % it["heard"]
+    return silence
+
+
 def stop_line(it: dict) -> str:
     """The one-off notice for an application that has gone quiet."""
-    why = ("two follow-ups and no reply" if it.get("sent", 0) >= MAX_NUDGES
-           else "%d days since it went and no reply" % it["age"])
+    why = _quiet_why(it, "%d days since it went and no reply" % it["age"])
     return ("%s - %s, applied %s: %s. Stop chasing it; the brief closes it as no_response."
             % (it["company"], it["role"] or "role not recorded", it["date"], why))
 
@@ -487,13 +543,44 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
         return gone
     for it in gone:
         r = it["row"]
-        why = ("two follow-ups and no reply" if it["sent"] >= MAX_NUDGES
-               else "no reply in %d days" % it["age"])
+        why = _quiet_why(it, "no reply in %d days" % it["age"])
         r["status"] = "no_response"
         note = CLOSED_NOTE % (today.isoformat(), why)
         r["notes"] = ((r.get("notes") or "").rstrip() + " | " + note).strip(" |")
     csv_store.write_rows(path, rows, csv_store.header(path))
     return gone
+
+
+# A row closed on silence is closed on a presumption, not an answer, and the note it
+# carries says a late reply is recorded. /gmail-sync searched only open rows, and
+# `no_response` is final, so no late reply to one was ever seen. It reads these too, for
+# this long after the close: callers in other tools take months to come back.
+REOPEN_WINDOW_DAYS = 120
+_CLOSED_QUIET = re.compile(r"(\d{4}-\d{2}-\d{2}): closed as no_response\b[^|]*"
+                           r"\(followups\.py --close-quiet\)")
+
+
+def closed_quiet(rows: list[dict], today: datetime.date,
+                 days: int = REOPEN_WINDOW_DAYS) -> list[dict]:
+    """Rows `close_quiet` closed as no_response in the last `days`, each with the close date.
+
+    [{"row", "company", "role", "closed_on"}], oldest close first. A row closed by hand,
+    or by a reply that said no, is not here: only a close on silence can be undone by a
+    reply.
+    """
+    out = []
+    for r in rows:
+        if _status(r) not in ("no_response", "no response"):
+            continue
+        found = [_iso(d) for d in _CLOSED_QUIET.findall(str(r.get("notes") or ""))]
+        found = [d for d in found if d]
+        if not found:
+            continue
+        on = max(found)
+        if 0 <= (today - on).days <= days:
+            out.append({"row": r, "company": str(r.get("company") or "").strip(),
+                        "role": str(r.get("role") or "").strip(), "closed_on": on.isoformat()})
+    return sorted(out, key=lambda x: x["closed_on"])
 
 
 def when(it: dict) -> str:
@@ -558,8 +645,20 @@ def main() -> int:
     ap.add_argument("--close-quiet", action="store_true",
                     help="close every application gone quiet as no_response, with a dated note")
     ap.add_argument("--dry-run", action="store_true", help="with --close-quiet: list, write nothing")
+    ap.add_argument("--closed-quiet", action="store_true",
+                    help="list the rows closed as gone quiet in the last %d days, which "
+                         "/gmail-sync still searches for a late reply" % REOPEN_WINDOW_DAYS)
     a = ap.parse_args()
     today = datetime.date.fromisoformat(a.today)
+    if a.closed_quiet:
+        got = closed_quiet(_rows(), today)
+        for it in got:
+            print("%s | %s | closed on silence %s" % (it["company"],
+                                                      it["role"] or "role not recorded",
+                                                      it["closed_on"]))
+        print("%d closed on silence in the last %d days: a reply from one reopens it"
+              % (len(got), REOPEN_WINDOW_DAYS))
+        return 0
     if a.close_quiet:
         gone = close_quiet(today=today, write=not a.dry_run)
         verb = "would close" if a.dry_run else "closed"

@@ -63,8 +63,7 @@ Only draft unprompted if the user has explicitly said to in that request.
   cut line (`SALARY_CUT_BELOW` in `profile/search.py`, well under the walk-away floor: a different
   job level, not a negotiation). Those are different jobs, not missing skills. Everything else
   gets ranked. A top between the cut line and the floor is a flag, never a cut, in
-  `tools/text_screen.py`; `tools/score_posting.py`, which reads extracted fields, applies the
-  floor itself as its salary cut.
+  `tools/text_screen.py` and in `tools/score_posting.py`, which reads extracted fields.
 - **Every posting ruled out is written back to `seen_jobs.json`** with `tools/exclude.py add`,
   which stores `status: "excluded"`, a checkable `exclusion_reason`, a date and what the ruling
   rests on, so it never resurfaces while that holds. A ruling under the person's screening
@@ -387,6 +386,9 @@ fresher one. A 14-day-old posting is worth pursuing only when the fit is genuine
 A posting the portal gave no date for is kept, not dropped: absence of a date is not evidence of
 age. It is scored normally and reported as `date not stated`.
 
+The tiers below are scoring stages. The networking skill's tier 1 is a person with a quoted
+live hiring signal, a different thing.
+
 **Tier 1: mechanical pre-filter. Run `tools/prefilter.py`. No model tokens.**
 
 ```bash
@@ -457,9 +459,9 @@ flags from them, and loses nothing else.
 
 **The screen cuts on facts and flags judgments.** `tools/score_posting.py` ends a posting only on
 a stated, quoted fact: a gate failure (eligibility, language, location) or a whole salary range
-below the floor. Everything else - a years bar, a stated Master's or PhD, job family, the homonym
-fields, direct reports, a fixed-term contract - becomes a **flag** that orders the scoring queue
-and never discards. The raw-text screen, `tools/text_screen.py`, cuts on the other facts listed
+below the cut line. Everything else - a years bar, a stated Master's or PhD, a range under the
+floor, job family, the homonym fields, direct reports, a fixed-term contract - becomes a **flag**
+that orders the scoring queue and never discards. The raw-text screen, `tools/text_screen.py`, cuts on the other facts listed
 under the hard cuts above.
 
 That split was learned the hard way. An earlier version also cut on the job-family label and
@@ -561,6 +563,12 @@ sweep and re-checking the target after each:
 5. **More pages per portal**, and then the Step 1c WebSearch fallback for boards without a
    CLI.
 
+**What `run_round.py --expand` runs, and what it leaves to you.** The round widens only rung 5's
+first half by itself: each wider round searches more pages (from the default 5, then 10, then
+30), up to 3 rounds in all, with the same freshness window. It prints rungs 1 to 4 and the
+WebSearch fallback as what to try next and never runs them (RUNBOOK.md, "When the round
+misses"): a session that wants them runs them by hand, on this manual path.
+
 **Bound it.** At most **3 expansion rounds**. Stop early the moment the target is met.
 Portal CLIs rate-limit, so keep each round's volume comparable to the first pass rather than
 multiplying it.
@@ -618,7 +626,10 @@ The `source` field records which mechanism produced the entry: `cli` for Step 1b
 
 **Step 3 now writes the scoring fields directly**, using exactly the field names `/rank`
 uses, so both commands produce interchangeable entries and nothing downstream needs to know
-which one scored a posting. A posting that reached Step 3 is stored with `status: "ranked"`,
+which one scored a posting. **This is the manual path** (Steps 1 to 3 run by hand, without
+`run_round.py`): a round writes `surfaced` and `skipped` rows instead, never `ranked` ones
+(`tools/throttle.py`; `/rank`, "Where the postings are"). On the manual path, a posting that
+reached Step 3 is stored with `status: "ranked"`,
 its `rank_score`, `rank_verdict`, `rank_date`, `location_verdict`, `language_gate` and its
 `strengths`/`gaps`. A posting excluded by a gate is stored with `status: "excluded"`, an
 `exclusion_reason` naming the failing gate and an `excluded_date` (Step 4.4). Keep `fit`
@@ -791,21 +802,17 @@ LinkedIn search links:
 
 ### Step 5.5: Stop at the shortlist
 
-**Do not draft resumes or cover letters unless the user asked for them.** The run ends at the
-ranked table plus its supporting context: salary read, deadlines, referral and warm-intro
-links for passing postings, and anything that needs a human decision.
-
-**Before drafting for any posting later, confirm the user has not already applied to it.**
-The tracker only records applications made through this repo, so it cannot rule out one the
-user made directly on a company site or through a recruiter. Ask first, then record the
-answer so the next run knows.
+The run ends at the ranked table plus its supporting context (salary read, deadlines,
+referral and warm-intro links for passing postings, and anything that needs a human
+decision). Nothing is drafted unasked, and nothing is drafted before the already-applied
+question: "The rules every search keeps", items 5 and 6, at the top of this skill.
 
 After presenting, ask:
 > "Want me to evaluate any of these in detail? Just give me the number(s)."
 
 If the user picks a number, invoke the **job-application-assistant** skill workflow (fit evaluation first, then CV + cover letter if approved).
 
-Do **not** suggest `/rank` after a normal run: Step 3 already scored everything it presented and wrote it to `ranked`, so `/rank`'s default selection (`status: new`) would find nothing. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`; treat both as already-seen for dedup purposes.)
+Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`; treat both as already-seen for dedup purposes.)
 
 ### Step 6: Update Tracker (Optional)
 
@@ -824,5 +831,5 @@ If the user decides to apply to any job, the tracker row is written by **job-app
 7. **No automated people lookups.** Referral contacts (Step 4.5) are LinkedIn search links only - never fetch or scrape LinkedIn people-search result pages programmatically.
 8. **Health checks are bounded and honest.** Step 4.75 spends at most one probe, one retry, and (in `health` mode) one detail fetch per portal - a diagnosis, not a crawl. A rate-limit is never evidence of breakage. Health verdicts come only from observed CLI output; a portal that could not be tested is reported as inconclusive, never guessed. The on/off switch (`PORTALS` in `profile/search.py`, or `enabled:` in a person's own portal) is the only thing the health check may edit, and only with confirmation.
 9. **Score everything you present, and rank by that score.** No posting reaches the user unscored, and the table is ordered by score. A list of unranked links is a failed run.
-10. **An under-target run expands before it reports.** Steps 3.5's expansion ladder runs before the summary is written, up to 3 rounds. Never pad a thin result with sub-60 postings, and never relax a gate or the location filter to make the yield target.
+10. **An under-target run expands before it reports.** Step 3.5's expansion ladder runs before the summary is written, up to 3 rounds (`run_round.py --expand` widens the pages itself and prints the other rungs, Step 3.5). Never pad a thin result with sub-60 postings, and never relax a gate or the location filter to make the yield target.
 11. **Flag distribution patterns, never accuse.** The mass-posting signal (Step 2.5) describes how a listing is being distributed, not a claim that the employer is a scam. Never name a company as fraudulent or untrustworthy - present the observation and let the user decide.

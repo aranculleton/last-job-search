@@ -65,6 +65,10 @@ _DEGREE_HELD = _EDU.group(1) if _EDU else "the profile's degree"
 _SEARCH = person.module("search")
 YEARS_HELD = getattr(_SEARCH, "YEARS_HELD", 0)
 SALARY_FLOOR = getattr(_SEARCH, "SALARY_FLOOR", 0)
+# The one pay cut CLAUDE.md names, and the one tools/text_screen.py makes: a stated range
+# whose top is below the cut line is a different job level. Between the cut line and the
+# floor it is a flag, a decision input, never a cut.
+SALARY_CUT_BELOW = getattr(_SEARCH, "SALARY_CUT_BELOW", 0) or 0
 _CUR = getattr(_SEARCH, "CURRENCY_SYMBOL", "$")
 
 # Job families that are not the person's, and the homonym fields that separate
@@ -94,8 +98,10 @@ def screen(r: dict) -> dict:
     The lesson is the same one the whole redesign keeps teaching. A job family is a
     judgment, and a cheap model's single label for it is not reliable enough to end
     a posting's life. Facts are different: a stated "7+ years", a stated
-    "Master's required", a stated range topping out below the floor. Those are
-    quotable, and a quote is now REQUIRED before any cut is made on them.
+    "Master's required", a stated range topping out below the cut line. Those are
+    quotable, and a quote is now REQUIRED before any cut is made on them. Pay cuts
+    only below the cut line (search.py SALARY_CUT_BELOW), as in tools/text_screen.py;
+    a range under the floor and above that line is a flag.
 
     So: `cut` for facts, `flags` for everything else. Flags order the scoring queue
     and appear in the report; they never discard.
@@ -139,10 +145,17 @@ def screen(r: dict) -> dict:
         flags.append(msg + (", but the posting offers an equivalent-experience route"
                             if escape else ""))
 
+    # The floor used to be the cut here, while the text screen cut only below the cut
+    # line and flagged the rest, so the extracted path dropped roles the free screen
+    # keeps and ranks.
     hi = r.get("salary_max")
-    if hi is not None and hi < SALARY_FLOOR:
+    if hi is not None and hi < SALARY_CUT_BELOW:
         cuts.append(f"whole stated range tops out at {_CUR}{hi:,}, below the "
-                    f"{_CUR}{SALARY_FLOOR:,} walk-away floor")
+                    f"{_CUR}{SALARY_CUT_BELOW:,} cut line: a different job level, "
+                    f"not a negotiation")
+    elif hi is not None and hi < SALARY_FLOOR:
+        flags.append(f"stated range tops out at {_CUR}{hi:,}, under the "
+                     f"{_CUR}{SALARY_FLOOR:,} walk-away floor; a decision input, never a cut")
 
     # --- Judgment signals. These ORDER the queue. They never discard.
     if r.get("people_management_required") and not getattr(_SEARCH, "MANAGES_PEOPLE", False):

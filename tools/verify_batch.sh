@@ -2,8 +2,9 @@
 # Verify every rendered application in a drafts.json: the resume within the
 # profile's page count (documents.resume_pages, default 1), a one-page letter, chronology,
 # bullets per employer, clean text layer (pdftotext, and pypdf for run-together
-# words), contact details, the pinned skill, no parentheses in the skills
-# block, no duplicated bullets. Then claims and letters.
+# words), contact details, every line of the draft in the text layer in order (the
+# round trip), the pinned skill, no parentheses in the skills block, no duplicated
+# bullets. Then claims and letters.
 #
 #   tools/verify_batch.sh rounds/r1/drafts.json
 #
@@ -89,6 +90,11 @@ PYX
   elif [ "$st" -ne 0 ]; then p="$p SPACING_LETTER"; fi
   readers="$readers $(printf '%s\n%s\n' "$vr" "$vc" | grep -oE 'extractor: [a-z]+' | cut -d' ' -f2)"
   grep -qF -- "$EMAIL" $VB/vb_r1.txt && grep -qF -- "$PHONE" $VB/vb_r1.txt || p="$p CONTACT"
+  # The round trip: every line the draft put on the page (contacts, headings, the summary,
+  # each role's heading line and bullets, each skills line, education, certifications) must
+  # be in the text layer, in order. A swallowed % or a glyph the font lacks passed every
+  # check above; this names the line it broke.
+  rt=$(python3 "$ROOT/tools/verify_pdf.py" "$R" --roundtrip "$DRAFTS" --abbr "$a" 2>&1) || p="$p ROUNDTRIP"
   [ -z "$PINNED" ] || grep -qF -- "$PINNED" $VB/vb_r1.txt || p="$p NO_PINNED_SKILL"
   # Skills sits between Professional Experience and Education; the old range
   # to /^Professional/ never closed and matched "(2018-2022)" under Education.
@@ -116,6 +122,7 @@ PYX
   done
   b=$(grep -cE '^ *•' $VB/vb_r.txt); tb=$((tb+b)); n=$((n+1))
   printf "%-9s %s/%s  %-4s %-14s %s\n" "$a" "$rp" "$cp" "$b" "$cnt" "$p"
+  case " $p " in *" ROUNDTRIP "*) printf '%s\n' "$rt" | sed 's/^/          /' ;; esac
   [ -n "$p" ] && fail=1
 done
 echo "mean bullets: $((tb/n))"
@@ -150,6 +157,13 @@ echo "=== numbers ==="
 python3 "$ROOT/tools/check_numbers.py" --drafts "$DRAFTS" \
   $(for a in $ABBRS; do echo "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "NUMBERS: FAILURES ABOVE"; fail=1; }
+echo "=== keywords (a report: nothing here fails the batch or changes a document) ==="
+# What the posting names against what the page carries: on it, held but not on it, and
+# not held. A skill the profile does not hold is listed as not held, never as one to add.
+for a in $ABBRS; do
+  python3 "$ROOT/tools/verify_pdf.py" "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.pdf" \
+    --keywords "$DRAFTS" --abbr "$a" 2>&1 | sed "s/^/$a: /"
+done
 echo "=== voice ==="
 # The anti-cliche rules lived only in 03-writing-style.md, which means they were
 # followed at whatever rate they were followed at and nothing measured it. A

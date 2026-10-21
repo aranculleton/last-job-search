@@ -118,10 +118,11 @@ About 55MB of intermediate files, all of it derived and thick with third-party p
 text. The round deletes them and keeps the top of the shortlist without the posting
 bodies, roughly 30KB, in `documents/rounds/<round>.json`.
 
-A round that **missed** its yield target keeps three files it otherwise deletes, with the
-bodies stripped: what the gates removed, what the screen removed, and what the throttle
-removed. Those are the three places a posting can vanish, and they are what the failure
-message tells you to read.
+A round that **missed** its yield target keeps four files it otherwise deletes, with the
+bodies stripped: what the scrape's own gates removed, what the search had already ruled
+out, what the screen removed, and what the throttle removed. Those are the places a posting
+can vanish, and they are what the failure message tells you to read (RUNBOOK.md, "When the
+round misses", lists them).
 
 ---
 
@@ -309,7 +310,7 @@ target.
 | Fact extraction | ~1k | small, batched |
 | Full weighted scoring | ~19k | mid |
 | Adversarial verification | ~40k | mid, only on 70+ |
-| Grounding audit | ~110k | strongest, never downgraded |
+| Grounding audit | ~110k | the session's own, never downgraded |
 
 **A cheap model may extract, and may reject on a quoted fact. It may not judge.** Two
 attempts to move fit scoring onto cheap machinery were measured against a capable model
@@ -318,7 +319,7 @@ actually adjacent, and that is a judgement. The saving comes from sending fewer 
 to it.
 
 **Anything that could put a false claim in front of an employer runs on the strongest
-model available.** Cheapness is never a reason to risk a fabrication.
+model available**, which is the session's own. Cheapness is never a reason to risk a fabrication.
 
 Full detail in
 [`11-cost-model.md`](.claude/skills/job-application-assistant/11-cost-model.md).

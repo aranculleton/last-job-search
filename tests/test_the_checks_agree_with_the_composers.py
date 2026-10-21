@@ -354,8 +354,9 @@ def test_the_docs_say_one_thing_about_warnings_and_lengths():
         assert "for the person to decide" in text, doc
     skill = _read(".claude", "skills", "networking", "SKILL.md")
     assert "about 150 words" not in skill and "about 170 words" in skill
+    # The number the composer warns at is its own constant; a search of compose.py for a
+    # stale "150 to 200" added nothing to it.
     assert compose.INMAIL_WORDS_FOR["decision_maker"] == 170
-    assert "150 to 200" not in _read("tools", "network", "compose.py")
     auditor = _read(".claude", "agents", "grounding-auditor.md")
     rest = auditor.split("The rules that are not", 1)[1].split("5.", 1)[0]
     assert "em dash" not in rest and "documents.spelling" not in rest

@@ -508,8 +508,51 @@ def _referrer_advice(contact, application=None) -> str:
     return "Name them in the first minute, not the last."
 
 
+# What a reading about a person may carry and a prep document or an interview pack must never
+# show: their age, family, health, religion, politics or sexuality. A reading keeps their
+# posts, and a post about a new baby, an illness or an election reached "Who you are meeting"
+# and the small talk as something to bring up. None of it is professional, all of it is what
+# an interviewer is not allowed to ask about, and it is not the candidate's to raise either.
+# The words are a person's own circumstances, never a field of work: "health insurer" and
+# "an election-results model" stay.
+SENSITIVE = (
+    ("age", re.compile(r"\b(?:\d{1,3}(?:st|nd|rd|th) birthday|birthday|turn(?:ed|ing|s)? "
+                       r"(?:[1-9]0|\d{2})\b|\d{2}[- ]years?[- ]old|born in (?:19|20)\d{2}|"
+                       r"retir(?:e|ed|ing|ement) (?:party|plans?|next year|soon))", re.I)),
+    ("family", re.compile(r"\b(?:my|his|her|their|our) (?:wife|husband|spouse|fianc[eé]e?|kids?|"
+                          r"children|sons?|daughters?|baby|babies|twins|mum|mom|mother|dad|"
+                          r"father|family|grand(?:son|daughter|child(?:ren)?|ma|pa))\b|"
+                          r"\b(?:pregnan\w*|maternity|paternity|parental leave|newborn|"
+                          r"new (?:mum|mom|dad|parent)|wedding|got married|honeymoon|divorc\w*)\b",
+                          re.I)),
+    ("health", re.compile(r"\b(?:diagnos\w*|cancer|chemo\w*|tumou?r|illness|sick leave|surgery|"
+                          r"my (?:health|recovery)|mental health|depression|anxiety|adhd|autis\w*|"
+                          r"dyslexi\w*|disabilit\w*|disabled|chronic (?:pain|illness|condition)|"
+                          r"neurodivergen\w*|therapy|therapist|burn[- ]?out|long covid|"
+                          r"hospitali[sz]ed|in hospital)\b", re.I)),
+    ("religion", re.compile(r"\b(?:church|mosque|synagogue|faith|religio\w*|pray\w*|bible|quran|"
+                            r"torah|christian\w*|muslim|islam\w*|jewish|judaism|hindu\w*|sikh\w*|"
+                            r"buddhis\w*|catholic\w*|ramadan|eid|diwali|hanukk?ah|passover|easter|"
+                            r"christmas|god bless|blessed)\b", re.I)),
+    ("politics", re.compile(r"\b(?:political|politics|politician\w*|vot(?:e|ed|ing) for|ballot|"
+                            r"campaign(?:ed|ing) for|(?:labour|conservative|liberal democrat|green|"
+                            r"reform|republican|democratic|liberal) party|democrats|republicans|"
+                            r"tory|tories|brexit|protest\w*|activis\w*|petition)\b", re.I)),
+    ("sexuality", re.compile(r"\b(?:gay|lesbian|bisexual|queer|lgbt\w*|pride (?:month|march|"
+                             r"parade)|transgender|non[- ]binary|sexual orientation|sexuality|"
+                             r"coming out|came out|my (?:boyfriend|girlfriend))\b", re.I)),
+)
+
+
+def sensitive_topic(*texts) -> str:
+    """The sensitive topic (SENSITIVE) any of these texts touches, or ""."""
+    text = " ".join(_text(t) for t in texts)
+    return next((topic for topic, rx in SENSITIVE if rx.search(text)), "")
+
+
 def _reading_lines(contact) -> list:
-    """What was read about them before the first note (tools/network/reading.py)."""
+    """What was read about them before the first note (tools/network/reading.py). Nothing
+    personal: a hook that touches a SENSITIVE topic is left out."""
     cid = _contact_id(contact)
     try:
         import reading
@@ -520,7 +563,8 @@ def _reading_lines(contact) -> list:
         return []
     src = "documents/network/%s/reading.json, read %s" % (cid, found.get("read_on") or "undated")
     out = []
-    for _strength, kind, what, evidence in reading.hooks(found)[:4]:
+    for _strength, kind, what, evidence in [h for h in reading.hooks(found)
+                                            if not sensitive_topic(h[2], h[3])][:4]:
         if kind == "about":
             continue
         line = "- %s%s" % (what[:1].upper() + what[1:],
@@ -1865,11 +1909,13 @@ PLACEHOLDER = re.compile(r"\[\s*(?:fill[ -]?in|to ?do|tbc|tbd|insert|add|xx+)\b[
                          r"|<(?!!--)[^<>\n]{2,60}>", re.I)
 
 
-def unsayable(lines) -> list:
+def unsayable(lines, question="", seconds=0) -> list:
     """Why an answer, as the lines it was written in, is not yet fit to say aloud, or []:
     raw profile wording, a paste with its source still on it, bullet points, or written
-    rather than spoken register (voice_check.spoken_findings). The one rule both the call
-    prep and the interview pack hold answers to."""
+    rather than spoken register (voice_check.spoken_findings). Given the question and the
+    seconds the answer has, also far too long to say in them, and "we" where the question
+    asks what the person did (voice_check.answer_findings). The one rule both the call prep
+    and the interview pack hold answers to."""
     lines = [ln for ln in (lines or ()) if _text(ln)]
     text = " ".join(_text(ln) for ln in lines)
     if RAW_MARK in text:
@@ -1882,7 +1928,7 @@ def unsayable(lines) -> list:
         return ["pasted from the profile: say it in your own words"]
     if any(re.match(r"\s*(?:[-*+]|\d+[.)])\s", ln) for ln in lines):
         return ["written as bullet points: say it as sentences"]
-    return voice_check.spoken_findings(text)
+    return voice_check.spoken_findings(text) + voice_check.answer_findings(text, question, seconds)
 
 
 # What in an answer is a note to the person, never words they will say: a line under
@@ -1960,7 +2006,9 @@ def check_answers(text, company="") -> list:
         if ASK_MARK in a:
             out.append((ASK, q))
             continue
-        out += [(q, why) for why in unsayable(spoken_lines(lines))]
+        # A call is a conversation: an answer has about a screen answer's time.
+        out += [(q, why) for why in unsayable(spoken_lines(lines), q,
+                                               voice_check.SCREEN_SECONDS)]
         if drafted(lines):
             out.append((DRAFT, q))
     return out

@@ -258,11 +258,47 @@ def gaps(text):
     return [a for a in assess(text) if a.verdict == GAP]
 
 
+# What a skill gap asks of the person: to LEARN it, or to show the EVIDENCE they
+# already hold. An upskilling plan that sends someone on a course for a tool they
+# already do the same job with costs weeks that one honest sentence would have saved.
+LEARN = "learn"
+EVIDENCE = "evidence"
+
+
+def nudge(skill):
+    """{"skill", "nudge": EVIDENCE | LEARN, "have", "say", "why"} for one gap's name.
+
+    EVIDENCE when the profile holds it or holds something that does the same job (a
+    HELD or BRIDGE verdict here): what to show and the sentence to say it in. LEARN when
+    nothing covers it, with the profile's own reason when it gives one.
+    """
+    found = assess(str(skill or ""))
+    for a in found:
+        if a.verdict in (HELD, BRIDGE):
+            return {"skill": str(skill), "nudge": EVIDENCE, "have": list(a.have),
+                    "say": a.line, "why": a.note}
+    why = next((a.note for a in found if a.note), "")
+    return {"skill": str(skill), "nudge": LEARN, "have": held_beside(str(skill or "")),
+            "say": "", "why": why}
+
+
 if __name__ == "__main__":
     import sys
     if sys.argv[1:2] in (["-h"], ["--help"]):
         print('usage: python3 tools/bridges.py "<posting text>": each skill it asks for, '
-              "what the profile holds for it, and what to say")
+              "what the profile holds for it, and what to say\n"
+              '       python3 tools/bridges.py --nudge "<skill>"...: learn it, or show the '
+              "evidence already held")
+        sys.exit(0)
+    if sys.argv[1:2] == ["--nudge"]:
+        # One gap a line: learn it, or show the evidence already held (/upskill reads it).
+        for skill in sys.argv[2:]:
+            got = nudge(skill)
+            print("%-24s %-8s %s" % (got["skill"], got["nudge"], "; ".join(got["have"])[:60]))
+            if got["say"]:
+                print("    say: %s" % got["say"])
+            if got["why"]:
+                print("    why: %s" % got["why"])
         sys.exit(0)
     body = " ".join(sys.argv[1:]) or "Power BI or Tableau, SAP a plus, CIPS preferred."
     for a in assess(body):

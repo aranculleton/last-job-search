@@ -39,11 +39,11 @@ It is what makes the brief this person's rather than a template:
 2. Read the most recent `documents/network/followup_pack_*.md`, reuse any draft still right
    for an item still due, and draft only what is new. Networking messages follow
    `.claude/skills/networking` (read the contact's whole thread in `network_threads.csv`
-   first) and every one must pass `compose.validate()`. Application follow-ups use the text
-   and recipient the tool prints; one with no recipient gets only the line saying who to
-   find. One nudge only, 5 to 7 business days, stop after two nos, the candidate's
-   exclusions (`profile/CLAUDE.md`), nothing to anyone at `awaiting_reply` before their window
-   opens. First notes are limited by `state.platform_budget()`: draft only as many as there
+   first) and every one must pass `compose.validate()`: one nudge only, 5 to 7 business days,
+   stop after two nos, the candidate's exclusions (`profile/CLAUDE.md`), nothing to anyone at
+   `awaiting_reply` before their window opens. Application follow-ups are a separate clock,
+   two follow-ups 7 days apart: use the text, recipient and schedule the tool prints
+   (RUNBOOK.md step 5), and one with no recipient gets only the line saying who to find. First notes are limited by `state.platform_budget()`: draft only as many as there
    are connection requests left this week, highest tier and employer value first, from
    contacts already in the book (no discovery runs here).
 3. Write `documents/network/followup_pack_<today>.md` in the previous pack's layout. If

@@ -58,10 +58,13 @@ upgrade or session ever does, and none suggests it (tests/test_linkedin_stays_on
 from __future__ import annotations
 
 import functools
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
@@ -236,6 +239,109 @@ def cli(skill: str, env: str | None = None) -> str:
         raise RuntimeError("bun build failed for %s:\n%s"
                            % (skill, (build.stderr or build.stdout)[:800]))
     return dist
+
+
+# ------------------------------------------------------------ running a portal's CLI
+#
+# The one runner for every call to a portal's CLI: a search (tools/scrape_wide.py), a
+# detail fetch (tools/hydrate.py) and a job alert's posting (tools/job_alerts.py). The
+# second and third had copies of their own that kept only stderr's last line, so a
+# board that said THROTTLED, or that robots.txt disallowed the page, and then printed a
+# JSON error, was recorded as the JSON error.
+
+# A line in which a board says it is refusing: THROTTLED, a redirect to a sandbox,
+# robots.txt, a missing credential.
+REFUSAL_LINE = re.compile(r"\bTHROTTLED\b|/sandbox\b|robots\.txt\s+disallows|disallowed by "
+                          r"robots\.txt|\bMISSING_CREDENTIALS\b")
+EXIT_PREFIX = re.compile(r"^exit -?\d+:\s*")
+
+
+def refusal(text: str | None) -> str:
+    """The line in which a portal said it is refusing (THROTTLED, a sandbox redirect,
+    robots.txt, a missing credential), as it said it, or ""."""
+    for line in str(text or "").splitlines():
+        line = EXIT_PREFIX.sub("", line.strip())
+        if not REFUSAL_LINE.search(line):
+            continue
+        try:
+            body = json.loads(line)
+            if isinstance(body, dict) and body.get("error"):
+                line = str(body["error"])
+        except ValueError:
+            pass
+        return line[:200]
+    return ""
+
+
+def _no_results(got: dict) -> bool:
+    return not got.get("results")
+
+
+def run_cli(cmd: list[str], timeout: int = 90, empty=None) -> tuple[dict | None, str | None]:
+    """(parsed JSON, None) on success; (None, reason) on any failure.
+
+    Failures used to vanish: a blocked or rate-limited portal just produced a
+    smaller file with exit 0 and nothing said so. Every failure now has a
+    reason, and the scrape (tools/scrape_wide.py) counts them per portal and
+    refuses to look healthy when more than a quarter of the requests failed.
+
+    `empty` says when an answer holds nothing: a search with no results (the
+    default), a detail with no description. Nothing, with a refusal said, is a
+    refusal.
+
+    ## Why stdout goes to a FILE and not a pipe
+
+    A live round reported `freehire: 327/441 requests failed` with
+    `JSONDecodeError: Unterminated string starting at: line 363`. Run one at a
+    time the same queries succeed every time; run ten at once and all ten fail,
+    each returning 65,381 or 65,443 or 65,203 bytes. That is 64 KiB, a pipe
+    buffer.
+
+    Node writes to stdout ASYNCHRONOUSLY when stdout is a pipe and
+    SYNCHRONOUSLY when it is a regular file. A CLI that calls `process.exit()`
+    after writing therefore loses whatever has not drained, and under
+    concurrency nothing drains: one query's 160 KB of JSON arrives as the
+    first 64 KB, cut mid-string. Exit status is 0, because as far as the
+    process is concerned it wrote and exited.
+
+    The failure is silent in the worst way. A truncated body is not an error
+    the portal reported, it is a portal that looks slow, and three quarters of
+    one of the two enabled sources was being thrown away every round.
+
+    A temporary file costs nothing and removes the buffer entirely. The fix is
+    on this side on purpose: the portal CLIs are plug-ins, `/add-portal`
+    scaffolds more of them, and every one written the same way would carry the
+    same bug.
+
+    ## Why the reason is not always stderr's last line
+
+    One person's board printed `THROTTLED: ... redirecting searches to /sandbox
+    (robots.txt disallows it); not followed.` and then its JSON error, and only the
+    JSON reached the round. A line that names a refusal is kept wherever it falls, and
+    exit 0 with nothing found and a refusal said is a refusal, not an empty market.
+    """
+    env = dict(os.environ, NODE_USE_ENV_PROXY="1")
+    try:
+        with tempfile.TemporaryFile("w+", encoding="utf-8") as fh:
+            p = subprocess.run(cmd, stdout=fh, stderr=subprocess.PIPE,
+                               text=True, timeout=timeout, env=env)
+            fh.seek(0)
+            out = fh.read()
+        said = refusal(p.stderr)
+        if p.returncode != 0:
+            err = (p.stderr or "").strip().splitlines()
+            why = said or (err[-1].strip()[:120] if err else "no stderr")
+            return None, f"exit {p.returncode}: {why}"
+        if not out.strip():
+            return None, f"exit 0: {said}" if said else "empty output"
+        got = json.loads(out)
+        if said and isinstance(got, dict) and (empty or _no_results)(got):
+            return None, f"exit 0: {said}"
+        return got, None
+    except subprocess.TimeoutExpired:
+        return None, f"timeout after {timeout}s"
+    except Exception as e:
+        return None, f"{type(e).__name__}: {str(e)[:120]}"
 
 
 def defaults(root: str | None = None) -> dict[str, bool]:

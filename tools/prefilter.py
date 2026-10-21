@@ -102,7 +102,10 @@ REGIONS = dict(_LOC.get("regions", {}))
 NEIGHBOUR_STATES = set(_NB.get("states", ()))
 NEIGHBOUR_WORDS = _NB.get("words", _NEVER)
 NEIGHBOUR_METROS = _NB.get("metros", _NEVER)
-OTHER_COUNTRIES = list(_LOC.get("other_countries", []))
+# Lower case, as tools/places.py holds them: the gate compares them with the
+# lower-cased location, so a profile writing "Germany" stopped failing German on-site
+# roles here while the text screen still cut them.
+OTHER_COUNTRIES = list(_places.OTHER_COUNTRIES)
 OUTSIDE = list(_LOC.get("outside", []))
 _HOME = _LOC.get("home_country", "")
 _HOME_RX = _LOC.get("home_country_rx", _NEVER)
@@ -135,20 +138,36 @@ def _metro_in(low: str) -> str | None:
 # What a remote location says about where the work may be done from. A country
 # named with one of these beside it restricts the role to that country.
 _RESTRICTED = re.compile(r"\bonly\b|\bbased\b|\bresiden\w*|\bcitizens?\b")
-# A region written out; its codes (EU, EMEA) are tools/places.py REGION_CODES.
-_REGION_WORDS = re.compile(r"\b(?:europe|european union|emea|apac|latam|latin america)\b")
-
-
 def _abroad_in_remote(loc: str, low: str) -> tuple[str, str] | None:
-    """(the place, "country" or "region") a remote location names that is not home."""
+    """(the place, "country" or "region") a remote location names that is not home.
+
+    A region is read from the one list the text screen reads (tools/places.py
+    REGION_WORDS). The gate kept a shorter list of its own, so "Remote - North
+    America", "Remote (Americas)" and "Remote, Asia-Pacific" read as remote from
+    anywhere and passed for somebody who lives in none of them."""
     for c in OTHER_COUNTRIES:
         if re.search(r"(?<!\w)" + re.escape(c) + r"(?!\w)", low):
             return c, "country"
     m = _places.COUNTRY_CODES.search(loc) or re.search(r"\b(?:united states|united kingdom)\b", low)
     if m:
         return m.group(0), "country"
-    m = _places.REGION_CODES.search(loc) or _REGION_WORDS.search(low)
+    m = _places.REGION_WORDS.search(loc)
     return (m.group(0), "region") if m else None
+
+
+def _region_takes_in_home(loc: str) -> tuple:
+    """(True, the region) when a region the location names takes in home, (False, the
+    first) when every one it names leaves home out, (None, "") when that cannot be
+    told: "Remote - North America or EMEA" is remote from the UK, whichever region is
+    written first."""
+    found = [(m.group(0), _places.region_includes_home(m.group(0)))
+             for m in _places.REGION_WORDS.finditer(loc)]
+    for region, inside in found:
+        if inside is True:
+            return True, region
+    if found and all(inside is False for _, inside in found):
+        return False, found[0][0]
+    return None, ""
 
 
 def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
@@ -207,8 +226,17 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
             if named and named[1] == "country" and named[0].lower() in parts:
                 return "FAIL", (f"remote but anchored outside {_HOME} ({named[0]}); "
                                 f"relocation abroad is a deal-breaker")
-            # A country inside a longer part, or a region that may take in home
-            # ("Remote - EMEA"): the body says which, so Tier 2 decides.
+            # A region is judged the way the text screen judges one
+            # (places.region_includes_home): one that leaves home out is abroad,
+            # one that takes it in is remote from home, and one the table cannot
+            # place is for Tier 2, as is a country inside a longer part.
+            if named and named[1] == "region":
+                inside, region = _region_takes_in_home(loc or "")
+                if inside is False:
+                    return "FAIL", (f"remote within {region}, which leaves out {_HOME}; "
+                                    f"relocation abroad is a deal-breaker")
+                if inside is True:
+                    return "PASS", f"explicitly remote; {region} takes in {_HOME}"
             if named:
                 return "FLAG", (f"remote, but names {named[0]}; whether that includes "
                                 f"{_HOME} is for Tier 2")
@@ -386,24 +414,34 @@ def workday_internal_site(url: str) -> str:
 
 def decide(job: dict, today: _dt.date | None = None,
            max_age: int = MAX_AGE_DAYS) -> tuple[bool, str]:
+    return _decide(job, today, max_age)[:2]
+
+
+def _decide(job: dict, today: _dt.date | None, max_age: int) -> tuple:
+    """(kept, reason, location verdict, its reason, age): `annotate` keeps the verdict and
+    the age `decide` worked out, rather than working both out again for every row."""
+    lv, lwhy = location_verdict(job.get("location", ""), job.get("title", ""))
+    age = age_days(job, today)
+
+    def out(ok, why):
+        return ok, why, lv, lwhy, age
     site = workday_internal_site(job.get("url"))
     if site:
-        return False, f"eligibility: internal Workday site ({site})"
-    age = age_days(job, today)
+        return out(False, f"eligibility: internal Workday site ({site})")
     posted = posted_age(job, today)
     live = (job.get("portal") or "") in LIVE_BOARDS
     if age is not None and age > max_age and not live:
         if posted is not None and posted >= age:
-            return False, f"age: posted {age} days ago, past the {max_age}-day hard limit"
+            return out(False, f"age: posted {age} days ago, past the {max_age}-day hard limit")
         said = ("the portal gives no date" if posted is None
                 else f"the portal's {posted} days is a relist")
-        return False, f"age: first seen {age} days ago, past the {max_age}-day hard limit; {said}"
-    lv, lwhy = location_verdict(job.get("location", ""), job.get("title", ""))
+        return out(False, f"age: first seen {age} days ago, past the {max_age}-day hard limit; "
+                          f"{said}")
     if lv == "FAIL":
-        return False, f"location: {lwhy}"
+        return out(False, f"location: {lwhy}")
     tv, twhy = title_verdict(job.get("title", ""))
     if tv == "FAIL":
-        return False, f"title: {twhy}"
+        return out(False, f"title: {twhy}")
     if age is None:
         agestr = "no date from the portal"
     elif live and age > max_age:
@@ -412,16 +450,15 @@ def decide(job: dict, today: _dt.date | None = None,
         agestr = f"first seen {age}d ago, no date from the portal"
     else:
         agestr = f"{age}d old"
-    return True, f"{agestr}; location {lv} ({lwhy}); title {tv} ({twhy})"
+    return out(True, f"{agestr}; location {lv} ({lwhy}); title {tv} ({twhy})")
 
 
 def annotate(job: dict, today: _dt.date | None = None,
              max_age: int = MAX_AGE_DAYS) -> tuple[bool, dict]:
     """The decision plus the row carrying it: reason, location verdict, age."""
-    ok, why = decide(job, today, max_age)
-    lv, lwhy = location_verdict(job.get("location", ""), job.get("title", ""))
+    ok, why, lv, lwhy, age = _decide(job, today, max_age)
     return ok, dict(job, prefilter_reason=why, location_verdict=lv,
-                    location_reason=lwhy, age_days=age_days(job, today))
+                    location_reason=lwhy, age_days=age)
 
 
 def _seen_entries(seen_path: str) -> dict | None:
@@ -437,13 +474,15 @@ def _seen_entries(seen_path: str) -> dict | None:
     return entries
 
 
-def seen_on(seen_path: str, today: _dt.date | None = None):
+def seen_on(seen_path: str, today: _dt.date | None = None, entries: dict | None = None):
     """A function from a posting to the day this search first saw it, or "".
 
     `throttle.first_seen`, read before any posting is aged, so a relisted posting is
     as old as its first sighting. A missing or unreadable seen file sees nothing.
+    `entries` is the seen file as a caller already read it (`_seen_entries`).
     """
-    entries = _seen_entries(seen_path) if seen_path else None
+    if entries is None:
+        entries = _seen_entries(seen_path) if seen_path else None
     if not entries:
         return lambda job: ""
     try:
@@ -454,7 +493,9 @@ def seen_on(seen_path: str, today: _dt.date | None = None):
 
 
 def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
-                      today: _dt.date | None = None):
+                      today: _dt.date | None = None, contacts: str | None = None,
+                      threads: str | None = None, do_not_target: str | None = None,
+                      entries: dict | None = None):
     """A predicate over a posting: has this search already ruled it out?
 
     Returns `lambda job -> reason or ""`. A missing or unreadable seen file
@@ -463,18 +504,26 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
     posting is judged again (run_round.py --no-seen-read); the live holds below
     still apply, because they are today's state and not a past ruling. `today`
     is the round's (--today), so a replay reads do_not_target.json as it stood.
+    `contacts`, `threads` and `do_not_target` are the round's state files, as
+    tools/throttle.py takes them; the repo's when not given. `entries` is the seen
+    file as a caller already read it.
 
     The decision is `throttle.ruled_out`, imported rather than restated, so
     this can only ever drop what the throttle would drop anyway.
     """
     try:
+        import throttle
         from throttle import ruled_out, ruled_pair
         from throttle import load_do_not_target, referral_holds
         from company_key import key as company_key
         from lookup_score import norm
+        import csv_store
     except ImportError:
         return lambda job: ""
-    entries = None if keep_ruled_out else _seen_entries(seen_path)
+    if keep_ruled_out:
+        entries = None
+    elif entries is None:
+        entries = _seen_entries(seen_path)
     urls, pairs = ruled_out(entries) if entries else ({}, {})
     # The employer-level holds the throttle applies live: a referral in flight,
     # and an employer recorded as having no relevant presence until its review
@@ -482,8 +531,20 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
     # because those outlived the hold; checked live here, they still cost
     # hydrate nothing, and they lift the day the hold does.
     try:
-        live = {**referral_holds(),
-                **load_do_not_target(today=(today or _dt.date.today()).isoformat())}
+        if contacts or threads:
+            book = contacts or throttle.CONTACTS
+            rows = throttle._contact_rows(book)
+            holds = referral_holds(book, rows=rows, live=throttle._derived_statuses(
+                rows, threads or throttle.threads_beside(book))) if rows else {}
+        else:
+            holds = referral_holds()
+        day = (today or _dt.date.today()).isoformat()
+        # The paths only when they were given, so a caller (or a test) that stands in its
+        # own reader with the file already bound still reads that one.
+        live = {**holds, **(load_do_not_target(do_not_target, today=day) if do_not_target
+                            else load_do_not_target(today=day))}
+    except csv_store.Conflicted:
+        raise                            # refused, never read as contacts: say which file
     except Exception:                    # no contact book or do_not_target yet
         live = {}
     # And the candidate's bar where the employer's name alone decides it (an
@@ -537,13 +598,23 @@ def main() -> int:
     ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
                     help="with --seen, drop nothing for a past ruling: everything is "
                          "judged again (a posting is still aged from its first sighting)")
+    # The round's own state files for the live holds, as tools/throttle.py takes them.
+    ap.add_argument("--contacts", default=None,
+                    help="with --seen: the contact book, for referral holds (default: the repo's)")
+    ap.add_argument("--threads", default=None,
+                    help="the message log (default: the network_threads.csv beside --contacts)")
+    ap.add_argument("--do-not-target", dest="do_not_target", default=None,
+                    help="with --seen: do_not_target.json (default: the repo's)")
     a = ap.parse_args()
     today = _dt.date.fromisoformat(a.today) if a.today else _dt.date.today()
 
     rows, was_dict = load_jobs(a.infile)
     rows = stamp_copies(rows, today)
-    ruled = already_ruled_out(a.seen, a.keep_ruled_out, today) if a.seen else (lambda job: "")
-    first = seen_on(a.seen, today)
+    # seen_jobs.json read once for both: in a long-lived repo it runs to megabytes.
+    entries = _seen_entries(a.seen) if a.seen else None
+    ruled = (already_ruled_out(a.seen, a.keep_ruled_out, today, a.contacts, a.threads,
+                               a.do_not_target, entries=entries) if a.seen else (lambda job: ""))
+    first = seen_on(a.seen, today, entries=entries)
     kept, dropped = [], []
     n_seen = 0
     for job in rows:
@@ -590,4 +661,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"prefilter: {e}", file=sys.stderr)
+        raise SystemExit(1) from None

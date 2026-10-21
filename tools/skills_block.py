@@ -203,15 +203,6 @@ def _from_posting(sel, posting):
     return sel
 
 
-def _pin(sel):
-    if not PINNED:
-        return sel
-    line, item = PINNED
-    if item not in sel.get(line, []):
-        sel.setdefault(line, []).append(item)
-    return sel
-
-
 def _rank(sel, posting, context, company=""):
     """Posting-named items first, then what the page's bullets evidence, then
     the tailor's remaining picks. Within each tier the tailor's order holds.
@@ -389,6 +380,66 @@ def _final(tools, context, posting="", company="", consented=()):
 # A skill the person said yes to is the posting's spelling, not an inventory item
 # written for LaTeX, so it is escaped on the way out.
 _TEX = {"&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_", "$": r"\$"}
+
+
+def coverage(posting, page, consented=()):
+    """What the posting names, against the page: {"on_page": [...], "held_not_placed": [...],
+    "not_held": [(name, its held neighbour or "")]}. A report, never an edit: nothing here
+    adds anything to a resume, and a skill the profile does not hold is listed as not held,
+    never as one to add. A skill the person said yes to for this application counts as
+    theirs. `page` is the resume's text layer, which is what a parser reads."""
+    posting, page = str(posting or ""), str(page or "")
+    yes = {y.casefold() for y in _yes(consented)}
+    on, off, asked = [], [], set()
+    for _cat, item, pat in ITEMS:
+        if not re.search(pat, posting, re.I):
+            continue
+        asked.add(item.casefold())
+        target = on if re.search(pat, page, re.I) else off
+        if item not in on + off:
+            target.append(item)
+    on += [y for y in _yes(consented) if re.search(re.escape(y), page, re.I) and y not in on]
+    # Named as the posting writes it ("CIPS"), each place in the posting once: the profile's
+    # NOT_HELD and its BRIDGES can both know the same term.
+    unheld, spans = [], []
+    for name, (pat, _why) in NOT_HELD.items():
+        m = re.search(pat, posting, re.I)
+        if m and name.casefold() not in yes:
+            unheld.append((m.group(0), ""))
+            spans.append(m.span())
+    try:
+        import bridges
+        assessed, entries = bridges.assess(posting), {e["asked"]: e for e in bridges.MAP}
+    except Exception:          # no profile to read: no bridges
+        assessed, entries = [], {}
+    named = {n.casefold() for n, _h in unheld}
+    for a in assessed:
+        if a.verdict == "held" or a.asked.casefold() in yes | named:
+            continue
+        if any(re.search(pat, a.asked, re.I) for _c, item, pat in ITEMS
+               if item.casefold() in asked):
+            continue           # the inventory holds it: counted above
+        m = re.search(entries[a.asked]["pattern"], posting, re.I) if a.asked in entries else None
+        if m and any(m.start() < e and s < m.end() for s, e in spans):
+            continue           # the same words, already named
+        unheld.append((a.asked, ", ".join(a.have) if a.verdict == "bridge" else ""))
+        named.add(a.asked.casefold())
+    return {"on_page": on, "held_not_placed": off, "not_held": unheld}
+
+
+def coverage_lines(report) -> list:
+    """The coverage report as plain lines."""
+    out = []
+    if report["on_page"]:
+        out.append("on the page (%d): %s" % (len(report["on_page"]), "; ".join(report["on_page"])))
+    if report["held_not_placed"]:
+        out.append("held but not on the page (%d): %s. Yours to add where it is true, if there "
+                   "is room" % (len(report["held_not_placed"]),
+                                "; ".join(report["held_not_placed"])))
+    if report["not_held"]:
+        out.append("not held, so never added (%d): %s" % (len(report["not_held"]), "; ".join(
+            "%s (the nearest you hold: %s)" % (n, h) if h else n for n, h in report["not_held"])))
+    return out or ["the posting names nothing the profile's skills list knows"]
 
 
 def render(tools, context="", posting="", company="", consented=()):

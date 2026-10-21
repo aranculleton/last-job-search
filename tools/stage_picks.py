@@ -263,6 +263,17 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         r = _find(shortlist, pick)
         abbr = choose_abbr(r["company"], r["title"], rows, root, claimed)
         claimed.add(abbr)
+        if doc_name.is_shouty(abbr):
+            # A board that writes the employer in capitals gives a name in capitals, the
+            # one thing a filename on an attachment must not look like.
+            words = doc_name._words(r["company"])
+            plain = "".join(w.capitalize() for w in words
+                            if w.lower() not in doc_name.GENERIC)[:doc_name.MAX_CHARS]
+            print(f"stage: the file name {abbr} is the employer's name in capitals, which "
+                  "looks machine-made on an attachment. Add how the employer writes its own "
+                  f"name to profile/employers.py ABBREVIATIONS, for example "
+                  f"{' '.join(words).lower()!r}: {plain!r}, then stage again.",
+                  file=sys.stderr)
         s = slug(r["company"])
         if s in seen_slugs:
             s = f"{s}_{n}"

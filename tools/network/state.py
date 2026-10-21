@@ -527,6 +527,186 @@ def contacts_at(contacts, company) -> list[dict]:
     return [row for row in contacts if row_company_key(row) == want]
 
 
+# ---------------------------------------------------------------- possible duplicates
+
+# One person, two rows. `already_contacted` matches the name exactly, so beside "Robert
+# Smith" at one employer a nickname ("Bob"), an initial ("R."), a surname-first listing,
+# a middle initial and a one-letter typo of the surname were five strangers, and the
+# rule that nobody already contacted is
+# surfaced again rested on how a search snippet happened to spell them. The rows from a
+# web search carry no LinkedIn address, which is the one thing that would have told.
+#
+# A warning, never a merge: the message log hangs off contact_id, and a wrong merge
+# would give one person's thread to another in the one file that must not be lost.
+#
+# Surnames this close are one letter apart ("Smyth", "Smith"). Short ones are left out:
+# "Chen" and "Cheng" are two families, not a typo.
+TYPO_RATIO = 0.8
+TYPO_MIN_LETTERS = 5
+# Written in either row's notes, a pair somebody has checked is never raised again.
+_NOT_SAME = re.compile(r"\bnot the same (?:person|one) as\s+([\w.-]+)|\bdifferent (?:person|people) "
+                       r"(?:from|to|than)\s+([\w.-]+)", re.I)
+_GENERATION = re.compile(r"\b(jr|sr|ii|iii)\b\.?", re.I)
+
+
+def same_given_name(a: str, b: str) -> bool:
+    """Is one given name the other, or a short form of it (Bob and Robert)? tone's table."""
+    import tone
+    return tone.same_given_name(_bare(a), _bare(b))
+
+
+def _name_parts(name) -> tuple:
+    """(given, middles, surname, generation) of a name, a "Smith, Robert" listing turned round."""
+    raw = _TRAILER.split(_PAREN.sub(" ", str(name or "")))[0]
+    head, comma, tail = raw.partition(",")
+    tail_tokens = [t for t in tail.split(",")[0].split() if _bare(t)]
+    if (comma and len(head.split()) == 1 and 1 <= len(tail_tokens) <= 2
+            and not any(_bare(t) in _SUFFIXES | _HONORIFICS for t in tail_tokens)):
+        raw = " ".join(tail_tokens + head.split())
+    gen = {m.group(1).lower() for m in _GENERATION.finditer(raw)}
+    tokens = [_bare(t) for t in person_name(raw).split()]
+    tokens = [t for t in tokens if t and t not in _SUFFIXES]
+    if len(tokens) < 2:
+        return ("", (), tokens[0] if tokens else "", gen)
+    return (tokens[0], tuple(tokens[1:-1]), tokens[-1], gen)
+
+
+def _why_same(a, b) -> tuple:
+    """(how sure, the reason) two names at one employer may be one person, or ("", "")."""
+    import difflib
+    (fa, ma, la, ga), (fb, mb, lb, gb) = _name_parts(a), _name_parts(b)
+    if not fa or not fb or not la or not lb:
+        return "", ""                    # a single name is too little to call anybody
+    if ga != gb and ga and gb:
+        return "", ""                    # a Jr and a Sr: two people, likely related
+    initial = (len(fa) == 1 or len(fb) == 1) and fa[0] == fb[0]
+    given = same_given_name(fa, fb)
+    if la == lb:
+        if fa == fb and ma != mb:
+            return "likely", "a middle name is the only difference"
+        if fa == fb:
+            turned = ("," in str(a or "")) != ("," in str(b or ""))
+            return "likely", ("the same name, one written surname first" if turned
+                              else "the same name twice")
+        if given:
+            return "likely", f"{fa.title()} and {fb.title()} are one given name"
+        if initial:
+            return "likely", f"{(fa if len(fa) == 1 else fb).upper()}. could be " \
+                             f"{(fb if len(fa) == 1 else fa).title()}"
+        return "", ""
+    if (given or initial) and min(len(la), len(lb)) >= TYPO_MIN_LETTERS \
+            and difflib.SequenceMatcher(None, la, lb).ratio() >= TYPO_RATIO:
+        return "possible", f"{la.title()} and {lb.title()} differ by about a letter"
+    return "", ""
+
+
+def _checked_apart(x, y) -> bool:
+    """Does either row's notes say it is not the same person as the other?"""
+    for row, other in ((x, y), (y, x)):
+        theirs = str(other.get("contact_id") or "").strip().lower()
+        for m in _NOT_SAME.finditer(" ".join(str(row.get(k) or "") for k in ("notes", "outcome"))):
+            if theirs and (m.group(1) or m.group(2) or "").strip(".").lower() == theirs:
+                return True
+    return False
+
+
+def possible_duplicates(contacts) -> list[dict]:
+    """Rows at one employer that may be one person, each with its reason. Never merged.
+
+    [{"contact_ids": (...), "names": (...), "company": ..., "sure": "likely" | "possible"
+    | "check", "reason": "..."}]. "likely": the same surname and a nickname ("Bob" for
+    "Robert"), an initial ("R."), a middle name or a name written back to front;
+    "possible": the same given name and a surname about a letter off ("Smyth"). Three or
+    more rows that may be one person come back once, as "check", to look at by hand.
+    Two different LinkedIn addresses are two people, whatever the names say, and a pair
+    whose notes say "not the same person as <id>" is never raised again.
+    """
+    by_key: dict = {}
+    for row in contacts or ():
+        if isinstance(row, dict) and row_company_key(row):
+            by_key.setdefault(row_company_key(row), []).append(row)
+    out = []
+    for rows in by_key.values():
+        pairs = []
+        for i, x in enumerate(rows):
+            for y in rows[i + 1:]:
+                hx, hy = profile_handle(x.get("linkedin_url")), profile_handle(y.get("linkedin_url"))
+                if hx and hy and hx != hy:
+                    continue
+                if hx and hx == hy:
+                    sure, why = "likely", "the same LinkedIn profile"
+                else:
+                    sure, why = _why_same(x.get("name"), y.get("name"))
+                if sure and not _checked_apart(x, y):
+                    pairs.append((x, y, sure, why))
+        # A person in three rows, or three people one rule cannot tell apart: by hand.
+        root = {id(r): id(r) for r in rows}
+
+        def top(k, root=root):
+            while root[k] != k:
+                k = root[k]
+            return k
+        for x, y, _s, _w in pairs:
+            root[top(id(x))] = top(id(y))
+        groups: dict = {}
+        for r in rows:
+            groups.setdefault(top(id(r)), []).append(r)
+        seen = set()
+        for x, y, sure, why in pairs:
+            group = groups[top(id(x))]
+            if len(group) > 2:
+                if top(id(x)) in seen:
+                    continue
+                seen.add(top(id(x)))
+                out.append({"contact_ids": tuple(r.get("contact_id", "") for r in group),
+                            "names": tuple(r.get("name", "") for r in group),
+                            "company": group[0].get("company", ""), "sure": "check",
+                            "reason": "%d rows here may be one person; check them by hand"
+                                      % len(group)})
+                continue
+            out.append({"contact_ids": (x.get("contact_id", ""), y.get("contact_id", "")),
+                        "names": (x.get("name", ""), y.get("name", "")),
+                        "company": x.get("company", ""), "sure": sure, "reason": why})
+    return out
+
+
+def possible_match(contacts, name, company, linkedin_url=None) -> dict | None:
+    """Before a row is added: the row already in the book that may be this person, or None.
+
+    `already_contacted` answers for the same name; this answers for a nickname, an
+    initial, a middle name, a reversed listing or a letter's typo at the same employer,
+    so discovery asks "is this the Robert Smith already in the book?" instead of adding a
+    second row. {"row": <the row>, "sure": ..., "reason": ...}. Never a merge.
+    """
+    if already_contacted(contacts, name=name, company=company, linkedin_url=linkedin_url):
+        return None
+    want = profile_handle(linkedin_url)
+    for row in contacts_at(contacts, company):
+        theirs = profile_handle(row.get("linkedin_url"))
+        if want and theirs and want != theirs:
+            continue
+        sure, why = _why_same(name, row.get("name"))
+        if sure:
+            return {"row": row, "sure": sure, "reason": why}
+    return None
+
+
+def duplicate_line(found, this_id="") -> str:
+    """What `possible_duplicates` or `possible_match` found, said plainly, with what to do.
+
+    `this_id` is the row the line is written against, left out of the people it names.
+    """
+    row = found.get("row") or {}
+    ids = list(found.get("contact_ids") or (str(row.get("contact_id") or ""),))
+    names = list(found.get("names") or (str(row.get("name") or ""),))
+    others = [(n, i) for n, i in zip(names, ids) if i and i != this_id] or [("", this_id)]
+    who = ", ".join("%s (%s)" % (n, i) if n else i for n, i in others)
+    return ("may be the same person as %s: %s. Never merged. If it is one person, close the "
+            "newer row (state.py close) and keep the one that holds the messages; if not, write "
+            "\"not the same person as %s\" in this row's notes."
+            % (who, found.get("reason", ""), others[0][1]))
+
+
 # ---------------------------------------------------------------- threads
 
 # Direction and channel are typed by hand into a spreadsheet, so the obvious
@@ -644,9 +824,164 @@ def call_held(row) -> bool:
     return is_call(row) and _scenario(row) not in CALL_NOT_HELD
 
 
+# ---------------------------------------------------------------- automatic replies
+
+# An out-of-office or other automatic reply is logged inbound like a message, and read
+# by direction alone it was one. "I am out of the office until 20 October" derived
+# `replied_needs_response`: a warm route in `throttle.RESPONDED`, so the employer read
+# "DO NOT APPLY COLD", a reply was owed to a mailbox nobody was reading, and the nudge
+# the thread did need was refused because "they answered". Nobody has said anything:
+# status, warmth, what is owed and what drew a reply all read past it. Logged with one of
+# these scenarios, or recognised from its words, it is never a reply.
+AUTO_REPLY_SCENARIOS = frozenset({"auto_reply", "autoreply", "automatic_reply",
+                                  "out_of_office", "ooo"})
+
+# The message says a machine sent it. Enough on its own. A few languages, kept small:
+# the subject prefix mail programs write and the phrase their bodies open with.
+_AUTO_SAYS = re.compile(
+    r"\bautomatic(?:ally generated)? (?:reply|response|message)\b|\bauto[- ]?(?:reply|response)\b"
+    r"|\bautomated (?:reply|response|message)\b|^\s*(?:out of (?:the )?office|ooo)\s*:"
+    r"|\bthis (?:mailbox|inbox|e-?mail address) is (?:not|no longer) (?:monitored|in use|checked)\b"
+    r"|\babwesenheitsnotiz\b|\bautomatische antwort\b"          # German
+    r"|\br[ée]ponse automatique\b|\bmessage d'absence\b"         # French
+    r"|\brespuesta autom[áa]tica\b|\bresposta autom[áa]tica\b"  # Spanish, Portuguese
+    r"|\brisposta automatica\b"                                  # Italian
+    r"|\bautomatisch antwoord\b|\bafwezigheidsmelding\b"         # Dutch
+    r"|\bautomatiskt svar\b|\bautosvar\b",                       # Swedish, Norwegian, Danish
+    re.I | re.M)
+
+# "I am out of the office". A person writes the same words in a real reply ("I'm out of
+# the office until Monday, but happy to chat then"), so this counts only beside a second
+# sign of the template (a return date, limited access, "on my return", urgent matters to
+# someone else) and only in a message that asks and offers nothing.
+_AWAY = re.compile(
+    r"\b(?:i am|i'm|i will be|i'll be)\s+(?:currently\s+|now\s+)?(?:out of (?:the )?office"
+    r"|away from (?:the|my) (?:office|desk|e-?mail)|away|on (?:annual |parental |maternity |"
+    r"paternity |sick |study )?leave|on holiday|on vacation|out of office)\b"
+    r"|\bich bin\b[^.\n]{0,30}\b(?:nicht im b[üu]ro|abwesend)\b|\bje suis absente?\b"
+    r"|\bestoy fuera de la oficina\b|\bsono fuori (?:ufficio|sede)\b|\bik ben\b[^.\n]{0,25}\bafwezig\b",
+    re.I)
+_TEMPLATE = re.compile(
+    r"\b(?:until|till|returning|return(?:ing)? on|back (?:in the office )?on|back on)\b"
+    r"|\bwith (?:limited|no|intermittent) access to\b|\b(?:on|upon) my return\b"
+    r"|\bwhen i (?:am back|return|get back)\b|\bfor (?:urgent|anything urgent)\b|\burgent (?:matters|queries|requests)\b"
+    r"|\bbis\b|\bjusqu'au\b|\bhasta el\b|\bfino al\b|\btot en met\b", re.I)
+# A message with these in it is a person talking, whatever else it says.
+_ENGAGED = re.compile(
+    r"\?|\b(?:happy|glad|keen|love|delighted) to\b|\blet'?s\b|\bworks for me\b|\bsounds good\b"
+    r"|\bsend (?:me|over|it|your)\b|\bi(?:'ve| have) (?:passed|shared|forwarded|sent)\b", re.I)
+# Gone: the address no longer reaches them. Third person only, the way the template
+# writes it; "I am no longer at Acme" is them, writing, and reply.py reads that.
+_LEFT = re.compile(r"\b(?:is|are) no longer (?:with|at|employed (?:by|at)|working (?:for|at)"
+                   r"|part of)\b|\bhas left (?:the (?:company|firm|business|organi[sz]ation|team))",
+                   re.I)
+
+_MONTHS = {m: i for i, names in enumerate((
+    ("jan", "january"), ("feb", "february"), ("mar", "march"), ("apr", "april"), ("may",),
+    ("jun", "june"), ("jul", "july"), ("aug", "august"), ("sep", "sept", "september"),
+    ("oct", "october"), ("nov", "november"), ("dec", "december")), 1) for m in names}
+_WEEKDAYS = ("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+_MONTH_RX = "|".join(sorted(_MONTHS, key=len, reverse=True))
+_BACK_ON = re.compile(
+    r"\b(?:until|till|returning(?: on)?|return(?:ing)? on|back(?: in the office)?(?: on)?"
+    r"|will (?:be )?(?:back|return)(?: on)?|from)\s+(?:the\s+)?"
+    r"(?:(?P<iso>\d{4}-\d{2}-\d{2})"
+    r"|(?:(?P<wd>" + "|".join(_WEEKDAYS) + r")\b,?\s*)?"
+    r"(?:(?P<d1>\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(?P<m1>" + _MONTH_RX + r")\b\.?"
+    r"|(?P<m2>" + _MONTH_RX + r")\b\.?\s+(?P<d2>\d{1,2})(?:st|nd|rd|th)?\b)?"
+    r"(?:,?\s*(?P<y>\d{4}))?)", re.I)
+
+
+def _back_on(text: str, sent_on) -> datetime.date | None:
+    """The day an away message says they are back, or None when it says none it can read.
+
+    ISO dates, "20 October", "October 20th", a weekday ("until Monday", the first one
+    after the message). A day and month with no year is the first such day on or after
+    the message. Numeric 20/10 is read as nothing: it is 20 October or a typo for 10/20.
+    """
+    sent_on = as_date(sent_on)
+    for m in _BACK_ON.finditer(str(text or "")):
+        if m.group("iso"):
+            got = as_date(m.group("iso"))
+            if got:
+                return got
+            continue
+        month = (m.group("m1") or m.group("m2") or "").lower()
+        day = m.group("d1") or m.group("d2")
+        if month and day:
+            year = int(m.group("y")) if m.group("y") else (sent_on.year if sent_on
+                                                             else datetime.date.today().year)
+            try:
+                got = datetime.date(year, _MONTHS[month], int(day))
+            except ValueError:
+                continue
+            if not m.group("y") and sent_on and got < sent_on - datetime.timedelta(days=7):
+                got = got.replace(year=got.year + 1)
+            return got
+        if m.group("wd") and sent_on:
+            ahead = (_WEEKDAYS.index(m.group("wd").lower()) - sent_on.weekday()) % 7 or 7
+            return sent_on + datetime.timedelta(days=ahead)
+    return None
+
+
+def auto_reply(text, subject="", sent_on=None) -> dict | None:
+    """What an inbound message is, when no person wrote it: None for a message from a person.
+
+    {"kind": "automatic" | "away" | "left", "back_on": date or None, "evidence": "..."}.
+    "left" is a template saying they are no longer there; "away" an out-of-office;
+    "automatic" any other message that says a machine sent it.
+    """
+    body = str(text or "")
+    words = "%s\n%s" % (subject or "", body)
+    left = _LEFT.search(words)
+    said = _AUTO_SAYS.search(words)
+    away = _AWAY.search(words)
+    if left and (said or not _ENGAGED.search(body)):
+        return {"kind": "left", "back_on": None, "evidence": left.group(0).strip()}
+    if said:
+        return {"kind": "away" if away else "automatic",
+                "back_on": _back_on(words, sent_on), "evidence": said.group(0).strip()}
+    if away and _TEMPLATE.search(words) and not _ENGAGED.search(body):
+        return {"kind": "away", "back_on": _back_on(words, sent_on),
+                "evidence": away.group(0).strip()}
+    return None
+
+
+def is_auto_reply(row) -> bool:
+    """Is this inbound row an automatic reply (an out-of-office, a "no longer here") and not them?"""
+    if _direction(row) != "in":
+        return False
+    if _scenario(row) in AUTO_REPLY_SCENARIOS:
+        return True
+    return auto_reply(row.get("full_text") or row.get("summary"), row.get("subject"),
+                      row.get("date")) is not None
+
+
+def away_until(rows) -> datetime.date | None:
+    """The return date of an away message that came after our last message, or None.
+
+    The nudge waits for it: one sent into an inbox nobody reads until the 20th is the
+    one nudge the thread gets, spent.
+    """
+    back = None
+    for row in _ordered([r for r in rows if _direction(r)]):
+        if is_auto_reply(row):
+            got = auto_reply(row.get("full_text") or row.get("summary"), row.get("subject"),
+                             row.get("date"))
+            back = (got or {}).get("back_on") or back
+        elif _direction(row) == "out" or said_something(row):
+            back = None
+    return back
+
+
+# Two working days after they are back before the nudge, for the inbox they come back to.
+AWAY_GRACE_BUSINESS_DAYS = 2
+
+
 def said_something(row) -> bool:
     """An inbound row that is a message: the only kind that makes a route warm."""
-    return _direction(row) == "in" and not is_acceptance(row) and not is_call(row)
+    return (_direction(row) == "in" and not is_acceptance(row) and not is_call(row)
+            and not is_auto_reply(row))
 
 
 def request_pending(rows) -> datetime.date | None:
@@ -656,7 +991,7 @@ def request_pending(rows) -> datetime.date | None:
     a call, or a message sent after the request (an InMail or an email reaches
     them without one) all mean the request is no longer what is waiting.
     """
-    for row in reversed(_ordered([r for r in rows if _direction(r)])):
+    for row in reversed(_ordered([r for r in rows if _direction(r) and not is_auto_reply(r)])):
         if is_request(row):
             return as_date(row.get("date")) or datetime.date.min
         return None
@@ -670,7 +1005,8 @@ def accepted_never_messaged(rows) -> datetime.date | None:
     so what is owed is a first message, written as one, not a nudge on a note
     that was never sent.
     """
-    ordered = _ordered([r for r in rows if _direction(r) and not is_call(r)])
+    ordered = _ordered([r for r in rows if _direction(r) and not is_call(r)
+                        and not is_auto_reply(r)])
     if not ordered or not is_acceptance(ordered[-1]):
         return None
     before = ordered[:-1]
@@ -709,6 +1045,9 @@ def derive_status(threads_for_contact) -> str:
     us; their message last means we owe them. Anything the log cannot see stays
     on the contact row and is handled by `effective_status`.
 
+    An automatic reply (`is_auto_reply`: an out-of-office, a "no longer here") is
+    nothing at all: nobody read the message, so the thread waits exactly as before.
+
     An acceptance is neither. It moves a thread that is waiting on them to
     `connected_no_reply`, which stays until they actually write, and it answers
     nothing: accepting after writing leaves the reply owed where it was.
@@ -719,7 +1058,7 @@ def derive_status(threads_for_contact) -> str:
     """
     status = "not_contacted"
     for row in _ordered(threads_for_contact):
-        if not _direction(row):
+        if not _direction(row) or is_auto_reply(row):
             continue
         if is_withdrawal(row):
             # The request they never accepted is gone, and with it the thread.
@@ -902,6 +1241,13 @@ def reconcile(contacts, threads) -> list[dict]:
             if n > 1:
                 flag(cid, _name_of(contacts, cid), "", "", "duplicate_message",
                      "%d identical rows for %s on %s" % (n, sig[1] or "a message", sig[0]))
+
+    # Two rows that may be one person, from a nickname, an initial or a typo: the
+    # warning `already_contacted` cannot give, raised on the newer row. Never merged.
+    for found in possible_duplicates(contacts):
+        newer = found["contact_ids"][-1]
+        flag(newer, found["names"][-1], "", "", "possible_duplicate",
+             duplicate_line(found, newer))
     return problems
 
 
@@ -920,7 +1266,7 @@ def _trailing_outbound(msgs) -> int:
     n = 0
     for row in reversed(msgs):
         if is_acceptance(row) or is_bare_request(row) or is_withdrawal(row) \
-                or (is_call(row) and not call_held(row)):
+                or is_auto_reply(row) or (is_call(row) and not call_held(row)):
             continue
         if _direction(row) != "out" or call_held(row):
             break
@@ -1074,7 +1420,10 @@ def owed(contacts, threads, today) -> list[dict]:
         # row exists. When the last row is an acceptance, its date is the one
         # the clock runs from: the networking skill waits "from the acceptance,
         # not from the send".
-        last_out = msgs[-1] if msgs else None
+        # An automatic reply is not the last thing that happened: the clock runs from our
+        # message, and an away message's return date holds the nudge until they are back.
+        real = [r for r in msgs if not is_auto_reply(r)]
+        last_out = real[-1] if real else None
         sent = (as_date(last_out.get("date")) if last_out
                 else as_date(contact.get("first_contacted")))
         if sent is None:
@@ -1085,7 +1434,11 @@ def owed(contacts, threads, today) -> list[dict]:
             _action_row()
             continue
         waited = business_days_between(sent, today)
-        if waited < schema.FOLLOWUP_BUSINESS_DAYS:
+        due_on = add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS)
+        back = away_until(msgs)
+        if back is not None:
+            due_on = max(due_on, add_business_days(back, AWAY_GRACE_BUSINESS_DAYS))
+        if waited < schema.FOLLOWUP_BUSINESS_DAYS or today < due_on:
             _action_row()
             continue
         items.append(dict(base,
@@ -1093,7 +1446,7 @@ def owed(contacts, threads, today) -> list[dict]:
                           channel=channel_of(last_out) if last_out else channel_of(contact),
                           since=sent.isoformat(),
                           business_days=waited,
-                          due=add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS).isoformat(),
+                          due=due_on.isoformat(),
                           nudges_sent=nudges))
     # Replies first, then anything the user put a date on, then nudges. A
     # self-imposed date outranks a nudge because the user chose it; it does not

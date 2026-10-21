@@ -53,7 +53,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from text_screen import ESCAPE, NOT_A_DEGREE, PREFERRED, entry_years, sentences  # noqa: E402
+from text_screen import DEGREE, ESCAPE, NOT_A_DEGREE, PREFERRED, entry_years, sentences  # noqa: E402
 from prefilter import location_verdict  # noqa: E402
 from opportunity import SCALE as OPP_SCALE  # noqa: E402
 import person  # noqa: E402
@@ -176,11 +176,14 @@ SLACK_CAP = 0.8
 # ceiling still stops a keyword-stuffed posting outscoring a real one.
 CORE_FULL, CORE_TAPER, CORE_MAX = 36, 0.5, 48
 
-# How much of the years bar the slack may buy down, by band. A strong domain
-# and role-shape match is a reason to stretch, and the whole point of the slack
-# is that a wish list is not law. It is not a reason to pretend a Principal
-# posting is an analyst one, so the rescue shrinks as the bar climbs.
-YEARS_SLACK_CAP = {9: 0.45, 11: 0.25}
+# What a years bar costs, by how far it is over the years held: the full cost, and
+# how much of it the slack may buy down. A strong domain and role-shape match is a
+# reason to stretch, and the whole point of the slack is that a wish list is not law.
+# It is not a reason to pretend a Principal posting is an analyst one, so the rescue
+# shrinks as the bar climbs. YEARS_SLACK_CAP said {9: 0.45, 11: 0.25}, keyed on the old
+# absolute bars, while the costs in use were written inline; it is now what they read.
+YEARS_COST = {9: 40, 7: 30, 5: 20}
+YEARS_SLACK_CAP = {9: 0.10, 7: 0.25, 5: 0.45}
 
 
 def _core_points(raw: int) -> int:
@@ -275,11 +278,14 @@ DOMAIN_YEARS_COST = 16
 
 # Degree bars. Real but soft, and often waived for a strong candidate.
 #
-# "Master" is matched as a whole word: `master\w*` read a brand name that
-# starts with "master" as a graduate requirement and docked a posting 9. The
-# senses that are whole words ("master data", "Scrum Master", the verb) are the
-# screen's NOT_A_DEGREE, so the screen and the score cannot disagree about them.
-GRAD = re.compile(r"\b(?:master(?:'?s)?\b|msc|m\.s\.|phd|ph\.d|doctora)\w*", re.I)
+# The screen's own pattern (text_screen.DEGREE), so the screen and the score cannot
+# disagree about what names a degree: this kept a narrower copy, and "An MBA is
+# required", "an advanced degree" and "a graduate degree" were flagged by the screen
+# and cost nothing here. "Master" is a whole word: `master\w*` read a brand name that
+# starts with "master" as a graduate requirement and docked a posting 9. The senses
+# that are whole words ("master data", "Scrum Master", the verb) are the screen's
+# NOT_A_DEGREE.
+GRAD = DEGREE
 GRAD_COST = 9
 # An equivalence route means there is no bar, so it is read across a window
 # rather than the sentence: the route often sits past a list the sentence
@@ -531,12 +537,9 @@ def fit(job: dict) -> dict:
     # "10+ years", and a new graduate lost nothing on "6+".
     over = (bar - YEARS_HELD) if bar else 0
     cost = 0
-    if bar and over >= 9:
-        cost = _years_cost(40, 0.10)
-    elif bar and over >= 7:
-        cost = _years_cost(30, 0.25)
-    elif bar and over >= 5:
-        cost = _years_cost(20, 0.45)
+    band = next((b for b in sorted(YEARS_COST, reverse=True) if bar and over >= b), None)
+    if band is not None:
+        cost = _years_cost(YEARS_COST[band], YEARS_SLACK_CAP[band])
     elif bar and over >= 3:
         cost = round(5 * keep)
     if cost:
@@ -566,16 +569,17 @@ def fit(job: dict) -> dict:
     return {"fit": pts, "fit_why": why, "location_verdict": lv}
 
 
-def interviewed_at() -> dict:
+def interviewed_at(tracker: str | None = None) -> dict:
     """Employer key -> the role, for every employer that has interviewed the person.
 
     Read from the tracker the way tools/what_works.py reads it, so the two agree on
-    what reaching an interview means. {} when there is no tracker.
+    what reaching an interview means. {} when there is no tracker. `tracker` is the
+    round's (run_round.py --tracker), the repo's when not given.
     """
     try:
         import what_works
         from company_key import key as _ckey
-        rows = what_works._csv(person.state("job_search_tracker.csv"))
+        rows = what_works._csv(tracker or person.state("job_search_tracker.csv"))
         out = {}
         for row in rows:
             if what_works.reached_interview(row):
@@ -591,6 +595,14 @@ def main() -> int:
     ap.add_argument("--out")
     ap.add_argument("--top", type=int, default=40)
     ap.add_argument("--explain", action="store_true")
+    # The round's own state files, as tools/throttle.py takes them, so a round pointed at
+    # a copy of the state reads the same copy here: fit read the repo's whatever it was told.
+    ap.add_argument("--tracker", default=None,
+                    help="tracker CSV, for the employers that interviewed you (default: the repo's)")
+    ap.add_argument("--contacts", default=None,
+                    help="contact book, for warm routes (default: the repo's)")
+    ap.add_argument("--threads", default=None,
+                    help="message log (default: the network_threads.csv beside --contacts)")
     a = ap.parse_args()
     data = json.load(open(a.infile))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
@@ -601,12 +613,22 @@ def main() -> int:
     # resume gets read by a person instead of a queue. So a warm route both adds
     # points and exempts the role from the floor's demotion.
     try:
-        from throttle import warm_routes
+        import throttle
         from company_key import key as _ckey
-        warm = warm_routes()
-    except Exception:
+        if a.contacts or a.threads:
+            contacts = a.contacts or throttle.CONTACTS
+            rows = throttle._contact_rows(contacts)
+            warm = throttle.warm_routes(contacts, rows=rows, live=throttle._derived_statuses(
+                rows, a.threads or throttle.threads_beside(contacts))) if rows else {}
+        else:
+            warm = throttle.warm_routes()
+    except Exception as e:
+        import csv_store
+        if isinstance(e, csv_store.Conflicted):
+            raise                       # refused, never read as contacts: say which file
         warm, _ckey = {}, None
-    interviewed = interviewed_at() if _ckey else {}
+    interviewed = ((interviewed_at(a.tracker) if a.tracker else interviewed_at())
+                   if _ckey else {})
 
     out = []
     for j in jobs:
@@ -672,4 +694,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    import csv_store
+    try:
+        raise SystemExit(main())
+    except csv_store.Conflicted as e:  # a merge left markers: say which file, read nothing
+        print(f"fit: {e}", file=sys.stderr)
+        raise SystemExit(1) from None

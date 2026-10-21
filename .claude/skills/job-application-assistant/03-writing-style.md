@@ -1,12 +1,12 @@
 ---
-framework_version: 1.12.6
+framework_version: 1.12.7
 ---
 
 # Writing Style Guide
 
 ## Critical Rules
 
-1. **NO em-dashes (--).**  Use commas, periods, or restructure the sentence instead.
+1. **NO em or en dashes** (`---` and `--` in LaTeX, or the characters themselves). Use commas, periods, or restructure the sentence instead; a range is written in words ("600k to 1M").
 2. **NO cliches or filler phrases.** This rule is now enforced in code, not just stated
    here. `python3 tools/voice_check.py <file.tex>` runs over every letter in
    `verify_batch.sh` and `compose.py` refuses to return an outreach message that trips
@@ -131,11 +131,12 @@ from one person to another, capped at the person's plan limit (**200 characters*
 LinkedIn account, **300** on Premium: `LINKEDIN_PLAN` in `profile/networking.py`), whose only
 job is to get a reply.
 These rules are separate from everything above and override the document conventions where
-they conflict.
+they conflict. **The networking skill (`.claude/skills/networking/SKILL.md`) governs every
+message, and wins wherever this section differs**: who reads a note decides what it may say
+("Who reads it decides what it says" there), and `compose.validate()` checks it by reader.
 
-**Structure.** The shape in `.claude/skills/networking/SKILL.md` (say who the candidate is,
-say what they are looking for, and say one true thing about the reader), which governs
-wherever this section differs:
+**Structure.** The shape in the networking skill (say who the candidate is, say what they
+are looking for, and say one true thing about the reader):
 
 1. `Hi <First>,` then who the candidate is, in the standard who-line: "I am an operations
    analyst in Manchester, seven years in logistics and food supply chains, now building
@@ -149,10 +150,11 @@ wherever this section differs:
    about them, never a verdict on their work.
 3. **What the candidate is looking for**, said as context and not as a demand: the person's
    `ABOUT_ME` line does it without naming a job. Say where they are based exactly as
-   `profile/CLAUDE.md` words it. Name no role, and never ask whether the team is hiring
-   (`compose.validate()` flags both). Leave work authorization out too: it goes in a first note
-   only to a recruiter (`recruiter=True`), and otherwise belongs in the referral ask or in
-   the reply to "are you able to work here?". Whatever is said has to be true (see the Work
+   `profile/CLAUDE.md` words it. Never ask whether the team is hiring, except of a recruiter.
+   The role wanted and work authorization go to a recruiter and a decision-maker by default,
+   and never to a peer unless that message asks for it (`SAY_THE_ROLE` and `ELIGIBILITY` in
+   `profile/networking.py`; `compose.validate()` flags each by reader); for a peer they belong
+   in the referral ask or in the reply to "are you able to work here?". Whatever is said has to be true (see the Work
    authorization line in `profile/01-candidate-profile.md`).
 4. A soft close that asks something only this person can answer.
 

@@ -224,16 +224,21 @@ def test_a_brief_note_drops_the_question_and_stays_short():
 
 
 def test_a_route_moves_scores_only_on_a_clear_gap(monkeypatch):
+    # Twenty a side since 2026-10-21 (what_works.MIN_GROUP, Fisher's exact test): ten
+    # a side moved scores before, and groups that small swing on one reply.
     import what_works
-    cases = ([{"attempt": "opener", "route": "alumni", "won": True}] * 8
-             + [{"attempt": "opener", "route": "alumni", "won": False}] * 2
-             + [{"attempt": "opener", "route": "cold", "won": False}] * 9
-             + [{"attempt": "opener", "route": "cold", "won": True}])
+    cases = ([{"attempt": "opener", "route": "alumni", "won": True}] * 16
+             + [{"attempt": "opener", "route": "alumni", "won": False}] * 4
+             + [{"attempt": "opener", "route": "cold", "won": False}] * 18
+             + [{"attempt": "opener", "route": "cold", "won": True}] * 2)
     monkeypatch.setattr(what_works, "message_cases", lambda *a, **k: cases)
     odds = why.route_odds([], [])
-    assert odds["alumni"][0] > 0 and "answered 8 of 10" in odds["alumni"][1]
+    assert odds["alumni"][0] > 0 and "answered 16 of 20" in odds["alumni"][1]
     assert odds["cold"][0] < 0
-    few = cases[:3] + cases[10:13]
+    ten_a_side = cases[8:28]
+    monkeypatch.setattr(what_works, "message_cases", lambda *a, **k: ten_a_side)
+    assert why.route_odds([], []) == {}                        # ten a side: nothing moves
+    few = cases[:3] + cases[20:23]
     monkeypatch.setattr(what_works, "message_cases", lambda *a, **k: few)
     assert why.route_odds([], []) == {}                        # too few: nothing moves
 

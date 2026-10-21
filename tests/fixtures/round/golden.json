@@ -1,0 +1,490 @@
+{
+ "prefiltered": [
+  "https://www.linkedin.com/jobs/view/4000000101",
+  "https://www.linkedin.com/jobs/view/4000000111",
+  "https://www.linkedin.com/jobs/view/4000000105",
+  "https://www.linkedin.com/jobs/view/4000000121",
+  "https://www.linkedin.com/jobs/view/4000000110",
+  "https://www.linkedin.com/jobs/view/4000000106",
+  "https://www.linkedin.com/jobs/view/4000000108",
+  "https://jobs.example/freehire/9107",
+  "https://jobs.example/freehire/9101",
+  "https://jobs.example/freehire/9104",
+  "https://jobs.example/freehire/9102",
+  "https://jobs.example/freehire/9103",
+  "https://jobs.example/freehire/9105",
+  "https://www.linkedin.com/jobs/view/4000000113",
+  "https://www.linkedin.com/jobs/view/4000000103",
+  "https://www.linkedin.com/jobs/view/4000000102",
+  "https://www.linkedin.com/jobs/view/4000000123",
+  "https://www.linkedin.com/jobs/view/4000000124",
+  "https://www.linkedin.com/jobs/view/4000000116",
+  "https://www.linkedin.com/jobs/view/4000000107",
+  "https://www.linkedin.com/jobs/view/4000000109",
+  "https://www.linkedin.com/jobs/view/4000000115",
+  "https://www.linkedin.com/jobs/view/4000000114",
+  "https://www.linkedin.com/jobs/view/4000000104",
+  "https://jobs.example/freehire/9106",
+  "https://boards.greenhouse.io/wrenfield/jobs/7004",
+  "https://www.linkedin.com/jobs/view/4000000112",
+  "https://cityboard.example/jobs/301",
+  "https://nationalboard.example/41",
+  "https://cityboard.example/jobs/303",
+  "https://cityboard.example/jobs/302",
+  "https://boards.greenhouse.io/wrenfield/jobs/7001",
+  "https://boards.greenhouse.io/wrenfield/jobs/7003"
+ ],
+ "cut": [
+  [
+   "https://jobs.example/freehire/9103",
+   [
+    "stated range tops out at £31,000, below £32,000: a different job level, not a negotiation: \"Salary: £28,000 - £31,000.\""
+   ]
+  ],
+  [
+   "https://jobs.example/freehire/9106",
+   [
+    "open to the employer's own staff only: \"This vacancy is open to internal applicants only.\""
+   ]
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000114",
+   [
+    "eligibility gate: British nationality or a security clearance stated as a condition: \"Applicants must hold active SC clearance.\""
+   ]
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000115",
+   [
+    "Welsh stated as a requirement: \"Fluency in Welsh is essential for this role.\""
+   ]
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000116",
+   [
+    "professional designation stated as a requirement: \"You must be ACCA qualified.\""
+   ]
+  ]
+ ],
+ "ranked": [
+  {
+   "id": "4000000101",
+   "url": "https://www.linkedin.com/jobs/view/4000000101",
+   "fit": 97,
+   "opportunity": 47,
+   "priority": 79,
+   "priority_exact": 78.603
+  },
+  {
+   "id": "9101",
+   "url": "https://jobs.example/freehire/9101",
+   "fit": 91,
+   "opportunity": 50,
+   "priority": 78,
+   "priority_exact": 78.448
+  },
+  {
+   "id": "gh-7001",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
+   "fit": 95,
+   "opportunity": 45,
+   "priority": 74,
+   "priority_exact": 73.707
+  },
+  {
+   "id": "9104",
+   "url": "https://jobs.example/freehire/9104",
+   "fit": 85,
+   "opportunity": 50,
+   "priority": 73,
+   "priority_exact": 73.276
+  },
+  {
+   "id": "4000000104",
+   "url": "https://www.linkedin.com/jobs/view/4000000104",
+   "fit": 98,
+   "opportunity": 43,
+   "priority": 73,
+   "priority_exact": 72.655
+  },
+  {
+   "id": "n-41",
+   "url": "https://nationalboard.example/41",
+   "fit": 82,
+   "opportunity": 50,
+   "priority": 71,
+   "priority_exact": 70.69
+  },
+  {
+   "id": "9108",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7004",
+   "fit": 81,
+   "opportunity": 50,
+   "priority": 70,
+   "priority_exact": 69.828
+  },
+  {
+   "id": "4000000123",
+   "url": "https://www.linkedin.com/jobs/view/4000000123",
+   "fit": 86,
+   "opportunity": 46,
+   "priority": 68,
+   "priority_exact": 68.207
+  },
+  {
+   "id": "4000000105",
+   "url": "https://www.linkedin.com/jobs/view/4000000105",
+   "fit": 77,
+   "opportunity": 50,
+   "priority": 66,
+   "priority_exact": 66.379
+  },
+  {
+   "id": "9107",
+   "url": "https://jobs.example/freehire/9107",
+   "fit": 94,
+   "opportunity": 40,
+   "priority": 65,
+   "priority_exact": 64.828
+  },
+  {
+   "id": "c-303",
+   "url": "https://cityboard.example/jobs/303",
+   "fit": 87,
+   "opportunity": 41,
+   "priority": 62,
+   "priority_exact": 61.5
+  },
+  {
+   "id": "4000000103",
+   "url": "https://www.linkedin.com/jobs/view/4000000103",
+   "fit": 81,
+   "opportunity": 42,
+   "priority": 59,
+   "priority_exact": 58.655
+  },
+  {
+   "id": "9105",
+   "url": "https://jobs.example/freehire/9105",
+   "fit": 72,
+   "opportunity": 46,
+   "priority": 57,
+   "priority_exact": 57.103
+  },
+  {
+   "id": "4000000106",
+   "url": "https://www.linkedin.com/jobs/view/4000000106",
+   "fit": 81,
+   "opportunity": 40,
+   "priority": 56,
+   "priority_exact": 55.862
+  },
+  {
+   "id": "4000000108",
+   "url": "https://www.linkedin.com/jobs/view/4000000108",
+   "fit": 81,
+   "opportunity": 40,
+   "priority": 56,
+   "priority_exact": 55.862
+  },
+  {
+   "id": "9102",
+   "url": "https://jobs.example/freehire/9102",
+   "fit": 81,
+   "opportunity": 40,
+   "priority": 56,
+   "priority_exact": 55.862
+  },
+  {
+   "id": "4000000102",
+   "url": "https://www.linkedin.com/jobs/view/4000000102",
+   "fit": 74,
+   "opportunity": 43,
+   "priority": 55,
+   "priority_exact": 54.862
+  },
+  {
+   "id": "4000000121",
+   "url": "https://www.linkedin.com/jobs/view/4000000121",
+   "fit": 69,
+   "opportunity": 45,
+   "priority": 54,
+   "priority_exact": 53.534
+  },
+  {
+   "id": "c-301",
+   "url": "https://cityboard.example/jobs/301",
+   "fit": 81,
+   "opportunity": 38,
+   "priority": 53,
+   "priority_exact": 53.069
+  },
+  {
+   "id": "4000000109",
+   "url": "https://www.linkedin.com/jobs/view/4000000109",
+   "fit": 75,
+   "opportunity": 40,
+   "priority": 52,
+   "priority_exact": 51.724
+  },
+  {
+   "id": "4000000113",
+   "url": "https://www.linkedin.com/jobs/view/4000000113",
+   "fit": 73,
+   "opportunity": 40,
+   "priority": 50,
+   "priority_exact": 50.345
+  },
+  {
+   "id": "4000000124",
+   "url": "https://www.linkedin.com/jobs/view/4000000124",
+   "fit": 72,
+   "opportunity": 40,
+   "priority": 50,
+   "priority_exact": 49.655
+  },
+  {
+   "id": "4000000107",
+   "url": "https://www.linkedin.com/jobs/view/4000000107",
+   "fit": 70,
+   "opportunity": 40,
+   "priority": 48,
+   "priority_exact": 48.276
+  },
+  {
+   "id": "gh-7003",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7003",
+   "fit": 73,
+   "opportunity": 35,
+   "priority": 44,
+   "priority_exact": 44.052
+  },
+  {
+   "id": "4000000110",
+   "url": "https://www.linkedin.com/jobs/view/4000000110",
+   "fit": 63,
+   "opportunity": 43,
+   "priority": 43,
+   "priority_exact": 46.707
+  },
+  {
+   "id": "c-302",
+   "url": "https://cityboard.example/jobs/302",
+   "fit": 70,
+   "opportunity": 35,
+   "priority": 42,
+   "priority_exact": 42.241
+  },
+  {
+   "id": "4000000112",
+   "url": "https://www.linkedin.com/jobs/view/4000000112",
+   "fit": 40,
+   "opportunity": 0,
+   "priority": 0,
+   "priority_exact": 0.0
+  },
+  {
+   "id": "4000000111",
+   "url": "https://www.linkedin.com/jobs/view/4000000111",
+   "fit": 14,
+   "opportunity": 20,
+   "priority": -6,
+   "priority_exact": 4.828
+  }
+ ],
+ "shortlist": [
+  {
+   "id": "4000000101",
+   "url": "https://www.linkedin.com/jobs/view/4000000101",
+   "fit": 97,
+   "opportunity": 47,
+   "priority": 79,
+   "priority_exact": 78.603,
+   "bar": "pay"
+  },
+  {
+   "id": "9101",
+   "url": "https://jobs.example/freehire/9101",
+   "fit": 91,
+   "opportunity": 50,
+   "priority": 78,
+   "priority_exact": 78.448,
+   "bar": "pay"
+  },
+  {
+   "id": "gh-7001",
+   "url": "https://boards.greenhouse.io/wrenfield/jobs/7001",
+   "fit": 95,
+   "opportunity": 45,
+   "priority": 74,
+   "priority_exact": 73.707,
+   "bar": "pay"
+  },
+  {
+   "id": "9104",
+   "url": "https://jobs.example/freehire/9104",
+   "fit": 85,
+   "opportunity": 50,
+   "priority": 73,
+   "priority_exact": 73.276,
+   "bar": "none"
+  },
+  {
+   "id": "4000000104",
+   "url": "https://www.linkedin.com/jobs/view/4000000104",
+   "fit": 98,
+   "opportunity": 43,
+   "priority": 73,
+   "priority_exact": 72.655,
+   "bar": "none",
+   "warm_route_note": "DO NOT APPLY COLD. Juno Castellan (replied_needs_response): send the CV",
+   "throttle_override_note": "OVERRIDE: fit 98 against 72 for Senior Supply Chain Analyst, already applied at this employer. Surfaced because it clears the open application by 26 points."
+  },
+  {
+   "id": "n-41",
+   "url": "https://nationalboard.example/41",
+   "fit": 82,
+   "opportunity": 50,
+   "priority": 71,
+   "priority_exact": 70.69,
+   "bar": "pay"
+  },
+  {
+   "id": "4000000105",
+   "url": "https://www.linkedin.com/jobs/view/4000000105",
+   "fit": 77,
+   "opportunity": 50,
+   "priority": 66,
+   "priority_exact": 66.379,
+   "bar": "none",
+   "outreach_pending_note": "Applying is fine, this is not a warm route. A message is already out and unanswered: Wren Halloway (Head of Supply Chain Analytics). Do not send another.",
+   "drafted_note": "DOCUMENTS ALREADY DRAFTED here and never sent: Operations Analyst, 2026-09-20. Send that one or close it out before drafting another."
+  },
+  {
+   "id": "c-303",
+   "url": "https://cityboard.example/jobs/303",
+   "fit": 87,
+   "opportunity": 41,
+   "priority": 62,
+   "priority_exact": 61.5,
+   "bar": "none"
+  },
+  {
+   "id": "9105",
+   "url": "https://jobs.example/freehire/9105",
+   "fit": 72,
+   "opportunity": 46,
+   "priority": 57,
+   "priority_exact": 57.103,
+   "bar": "none"
+  },
+  {
+   "id": "4000000108",
+   "url": "https://www.linkedin.com/jobs/view/4000000108",
+   "fit": 81,
+   "opportunity": 40,
+   "priority": 56,
+   "priority_exact": 55.862,
+   "bar": "none"
+  },
+  {
+   "id": "9102",
+   "url": "https://jobs.example/freehire/9102",
+   "fit": 81,
+   "opportunity": 40,
+   "priority": 56,
+   "priority_exact": 55.862,
+   "bar": "none"
+  },
+  {
+   "id": "c-301",
+   "url": "https://cityboard.example/jobs/301",
+   "fit": 81,
+   "opportunity": 38,
+   "priority": 53,
+   "priority_exact": 53.069,
+   "bar": "none"
+  },
+  {
+   "id": "4000000113",
+   "url": "https://www.linkedin.com/jobs/view/4000000113",
+   "fit": 73,
+   "opportunity": 40,
+   "priority": 50,
+   "priority_exact": 50.345,
+   "bar": "none"
+  },
+  {
+   "id": "4000000124",
+   "url": "https://www.linkedin.com/jobs/view/4000000124",
+   "fit": 72,
+   "opportunity": 40,
+   "priority": 50,
+   "priority_exact": 49.655,
+   "bar": "none"
+  },
+  {
+   "id": "c-302",
+   "url": "https://cityboard.example/jobs/302",
+   "fit": 70,
+   "opportunity": 35,
+   "priority": 42,
+   "priority_exact": 42.241,
+   "bar": "none"
+  }
+ ],
+ "skipped": [
+  [
+   "https://boards.greenhouse.io/wrenfield/jobs/7003",
+   "same-employer duplicate: Supply Chain Analyst scored higher "
+  ],
+  [
+   "https://boards.greenhouse.io/wrenfield/jobs/7004",
+   "same-employer duplicate: Supply Chain Analyst scored higher "
+  ],
+  [
+   "https://jobs.example/freehire/9107",
+   "same-employer duplicate: Senior Supply Chain Analyst scored "
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000102",
+   "same-employer duplicate: Forecasting Analyst scored higher t"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000103",
+   "same-employer duplicate: Logistics Analyst scored higher thi"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000106",
+   "same-employer duplicate: Supply Chain Analyst scored higher "
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000107",
+   "same-employer duplicate: Logistics Analyst scored higher thi"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000109",
+   "same-employer duplicate: Inventory Analyst scored higher thi"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000110",
+   "same-employer duplicate: Senior Inventory Analyst scored hig"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000111",
+   "same-employer duplicate: Data Analyst scored higher this run"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000112",
+   "same-employer duplicate: Senior Demand Planning Analyst scor"
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000121",
+   "same-employer duplicate: Senior Supply Chain Analyst scored "
+  ],
+  [
+   "https://www.linkedin.com/jobs/view/4000000123",
+   "same-employer duplicate: Logistics Analyst scored higher thi"
+  ]
+ ]
+}

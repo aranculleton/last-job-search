@@ -26,13 +26,17 @@ sys.path.insert(0, str(ROOT / "tools"))
 import run_round as R  # noqa: E402
 
 
-class EveryStageHasACeiling(unittest.TestCase):
-    def test_no_run_call_omits_the_deadline(self):
-        src = (ROOT / "tools" / "run_round.py").read_text(encoding="utf-8")
-        body = src[src.index("def main():"):]
-        self.assertNotIn("], log)", body, "a stage call without the deadline")
-        self.assertNotIn(", log)\n", body, "a stage call without the deadline")
+def test_no_stage_runs_without_the_deadline(drive_round):
+    # Was a search of run_round.py's source for a call spelled without one; this runs
+    # the round and reads what every stage was actually handed.
+    calls, _ = drive_round()
+    stages = [Path(cmd[1]).name for cmd, _ in calls]
+    assert "scrape_wide.py" in stages and "throttle.py" in stages, stages
+    for cmd, deadline in calls:
+        assert deadline is not None, f"{Path(cmd[1]).name} ran without the deadline"
 
+
+class EveryStageHasACeiling(unittest.TestCase):
     def test_the_scrape_gets_the_most(self):
         scrape = R._stage_budget(["py", "tools/scrape_wide.py"], None)
         other = R._stage_budget(["py", "tools/fit.py"], None)

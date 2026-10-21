@@ -81,10 +81,8 @@ HEAT = {
     # The tracker writes `interview` and `offer`, the /outcome vocabulary. This
     # table keyed on `interviewing` alone, so an employer with an interview
     # under way sorted below a call booked with an employer that does not hire
-    # for the role.
-    "offer": 100,
-    "interview": 100,
-    "interviewing": 100,
+    # for the role. The live statuses come from the one vocabulary (throttle.py).
+    **dict.fromkeys(throttle.LIVE_PROCESS, 100),
     "call_booked": 90,
     "referral_in_progress": 85,
     "replied_needs_response": 80,
@@ -114,6 +112,16 @@ KIND_ORDER = {"reply": 0, "action_due": 1, "nudge": 2,
 PREP_WINDOW_DAYS = 7
 THANKS_DAYS = 7
 INTERVIEW_RANK = len(KIND_ORDER) - 1
+# An interview, then nothing. A row at `interview` stays there however long the employer
+# is silent: the nudges are for sent applications, and a live process is never timed out
+# (followups.live_processes: a wrong nudge mid-process costs more than a missed one). So
+# once the thank-you window closed the list went quiet for good, and a final round weeks
+# past with no word never reached it. After this many days with nothing recorded since,
+# it asks: a short status note, or the outcome. A question on the list, never a nudge.
+INTERVIEW_QUIET_DAYS = 14
+# The statuses that mean an interview is running. An offer is not here: what is owed then is
+# the person's decision, not a word from the employer.
+INTERVIEWING = followups.LIVE_PROCESS - {"offer"}
 
 
 def _tracker(path=TRACKER):
@@ -309,12 +317,57 @@ def _thanked(files, held_on) -> bool:
     return False
 
 
+def _last_word(row, files, stages, today):
+    """(the last thing that happened on an interview row, its date, status notes sent since).
+
+    The latest of: a stage held, the row's date, a dated entry in its notes, and a
+    thank-you or follow-up note on file. None for the date when a stage is still booked
+    ahead: a process with a date in it is not quiet.
+    """
+    if any(not st["done"] and st["date"] and st["date"] >= today.isoformat() for st in stages):
+        return "", None, 0
+    seen = []
+    for st in stages:
+        d = state.as_date(st["date"])
+        if d and d <= today:
+            seen.append((d, "the %s" % (st["label"] or "interview")))
+    d = state.as_date(row.get("date"))
+    if d:
+        seen.append((d, "the last update"))
+    for entry in str(row.get("notes") or "").split("|"):
+        m = re.match(r"\s*(\d{4}-\d{2}-\d{2})", entry)
+        d = state.as_date(m.group(1)) if m else None
+        if d and d <= today:
+            seen.append((d, "the last note"))
+    notes_sent = []
+    for f in files:
+        if f.startswith(("followup_", "thank_you_")):
+            d = state.as_date(f)
+            if d and d <= today:
+                seen.append((d, "the last note you sent"))
+                if f.startswith("followup_"):
+                    notes_sent.append(d)
+    notes_sent += [d for d in followups.nudges_sent(row.get("notes")) if d and d <= today]
+    if not seen:
+        return "", None, 0
+    when, what = max(seen)
+    stage = max((x for x in seen if x[1] not in ("the last update", "the last note",
+                                                  "the last note you sent")),
+                default=(None, ""))
+    # A status note is one sent after the thank-you window: the thank-you is not one.
+    after = stage[0] + dt.timedelta(days=THANKS_DAYS) if stage[0] else None
+    sent_since = len({d for d in notes_sent if after and d > after})
+    return what, when, sent_since
+
+
 def interview_items(tracker, today):
     """The interview half of the due list, from each live application's outcome.md.
 
     A booked stage with no pack, from PREP_WINDOW_DAYS before it (due today,
     because the pack is wanted before the day), and a stage that has been and
-    gone with no thank-you on file, for THANKS_DAYS after it.
+    gone with no thank-you on file, for THANKS_DAYS after it. And an interview
+    row with no word for INTERVIEW_QUIET_DAYS and nothing booked: a status note or
+    the outcome, the person's call (after two notes, the outcome only).
     """
     today = state.as_date(today)
     items = []
@@ -350,6 +403,29 @@ def interview_items(tracker, today):
                 "who": "%s - %s" % (company, role), "due": due.isoformat(), "late": late,
                 "what": what, "to": "", "text": "", "held": [], "quiet": False,
                 "kind": "interview"})
+        if status not in INTERVIEWING or any(i["who"] == "%s - %s" % (company, role)
+                                             for i in items):
+            continue
+        last, when, sent_since = _last_word(row, files, stages, today)
+        if when is None or (today - when).days < INTERVIEW_QUIET_DAYS:
+            continue
+        due = when + dt.timedelta(days=INTERVIEW_QUIET_DAYS)
+        since = "%s, %s" % (last, when.isoformat())
+        if sent_since >= followups.MAX_NUDGES:
+            what = ("no word since %s, and %d status notes have gone: record what happened "
+                    "(/outcome %s), and send no more" % (since, sent_since, company))
+        else:
+            what = ("no word for %d days since %s: send a short status note (/outcome followup "
+                    "%s drafts one) or record what happened (/outcome %s)"
+                    % ((today - when).days, since, company, company))
+        hold = followups.not_chased(row.get("notes"), today)
+        items.append({
+            "half": "application", "key": company_key(company), "rank": INTERVIEW_RANK,
+            "name": "%s (%s)" % (company, role if len(role) <= 40 else role[:37] + "..."),
+            "who": "%s - %s" % (company, role), "due": due.isoformat(),
+            "late": (today - due).days, "what": what, "to": "", "text": "",
+            "held": ["tracker note: " + followups._clip(hold)] if hold else [], "quiet": False,
+            "kind": "interview"})
     return items
 
 

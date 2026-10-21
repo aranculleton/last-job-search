@@ -558,7 +558,8 @@ def _cli_harvest(argv: list) -> int:
     for i, p in enumerate(run["keep"], 1):
         print(f"  {i}. {p['why']['score']:>3} {p['name']}: {p.get('title') or '(no title in the result)'}"
               f" [{p.get('profile_status')}, {p.get('route')}] {p.get('linkedin_url')}\n"
-              f"       why: {p['why']['line']}\n       evidence: {p.get('evidence')}")
+              f"       why: {p['why']['line']}\n       evidence: {p.get('evidence')}"
+              + (f"\n       ask first: {p['maybe_in_book']}" if p.get("maybe_in_book") else ""))
     for p, why in run["dropped"]:
         print(f"  dropped {p.get('name')}: {why}")
     if c.get("in_book"):
@@ -605,7 +606,8 @@ def main(argv: list | None = None) -> int:
         return 0
     if argv and argv[0] == "connections" and len(argv) > 1:
         for p in from_connections(argv[1]):
-            print(f"  {p['name']}: {p.get('title')} ({p.get('evidence')}) {p.get('linkedin_url')}")
+            print(f"  {p['name']}: {p.get('title')} ({p.get('evidence')}) {p.get('linkedin_url')}"
+                  + (f"\n    ask first: {p['maybe_in_book']}" if p.get("maybe_in_book") else ""))
         return 0
     import state
     try:
@@ -729,6 +731,10 @@ def from_connections(company: str, connections=None, contacts=None) -> list:
         if state.already_contacted(contacts, name=c.get("name"), company=c.get("company"),
                                    linkedin_url=c.get("linkedin_url")):
             continue
+        maybe = state.possible_match(contacts, c.get("name"), c.get("company"),
+                                     c.get("linkedin_url"))
+        if maybe:
+            c = {**c, "maybe_in_book": state.duplicate_line(maybe)}
         out.append({**c, "found_via": "connections", "route": "connection",
                     "route_detail": "in your connections", "first_degree": True,
                     "channel": "message", "profile_status": "verified",
@@ -985,6 +991,11 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
                                    linkedin_url=p.get("linkedin_url")):
             dropped.append((p, "already in your contact book"))
             continue
+        # A nickname, an initial or a typo of somebody already in the book: kept, never
+        # dropped on a guess, and never added as a stranger either. The person is asked.
+        maybe = state.possible_match(contacts, p.get("name"), company, p.get("linkedin_url"))
+        if maybe:
+            p["maybe_in_book"] = state.duplicate_line(maybe)
         p.setdefault("route", "connection" if p.get("first_degree") else "cold")
         p.setdefault("company", company)
         if query and kind == "title_search" and not p.get("title"):

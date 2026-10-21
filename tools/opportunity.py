@@ -231,14 +231,10 @@ def score(job: dict, today: dt.date | None = None) -> dict:
         pts += t
         why.append(f"{t:+d} {treason}")
 
-    seen_core = 0
-    for pat, p in CORE:
-        if pat.search(hay):
-            pts += p
-            seen_core += 1
-    if seen_core:
-        why.append(f"+{sum(p for pat,p in CORE if pat.search(hay))} "
-                   f"core capability match on {seen_core} signals")
+    core = [p for pat, p in CORE if pat.search(hay)]      # each pattern searched once
+    pts += sum(core)
+    if core:
+        why.append(f"+{sum(core)} core capability match on {len(core)} signals")
 
     lev = 0
     for pat, p, reason, *aside in LEVERAGE:

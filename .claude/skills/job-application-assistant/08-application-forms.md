@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.1
+framework_version: 1.1.2
 ---
 
 # Application Form Fields
@@ -46,7 +46,7 @@ Trigger it whenever a posting or portal asks for any of:
 
 ## The rule that governs everything here
 
-**Every claim in a form field must already be defensible from the same sources the CV and cover letter are grounded against** - the Source of Truth chain in `profile/01-candidate-profile.md`: the current resume it names under `documents/cv/`, then `profile/01-candidate-profile.md` itself, then `profile/CLAUDE.md`'s Candidate Profile section, with a claim grounded if ANY of the three supports it. Never ground a claim in `cv/main_example.tex`, which is an unpopulated upstream template. The interviewer reads the form alongside the CV. A form field is not a place to introduce new claims, inflate scope, or fill space - it is a place to *select* from what is already true and arrange it for the question asked.
+**Every claim in a form field must already be defensible from the same sources the CV and cover letter are grounded against**: the grounding sources CLAUDE.md, "The person", defines, the files `profile/person.json` `grounding.sources` names (by default `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section and `profile/bullets.py`), with a claim grounded if ANY of them supports it and `01` winning where they disagree. Never ground a claim in `cv/main_example.tex`, which is an unpopulated upstream template. The interviewer reads the form alongside the CV. A form field is not a place to introduce new claims, inflate scope, or fill space - it is a place to *select* from what is already true and arrange it for the question asked.
 
 All accuracy rules from `05-cv-templates.md` and `03-writing-style.md` apply unchanged.
 
@@ -105,7 +105,7 @@ Include:
 
 ## Verification before handing it over
 
-- [ ] Every factual claim traces to the Source of Truth chain: the current resume named in `profile/01-candidate-profile.md`, `profile/01-candidate-profile.md` itself, or `profile/CLAUDE.md`'s Candidate Profile section
+- [ ] Every factual claim traces to a grounding source (`profile/person.json` `grounding.sources`: by default `profile/01-candidate-profile.md`, `profile/CLAUDE.md`'s Candidate Profile section or `profile/bullets.py`)
 - [ ] No claim contradicts the CV or cover letter submitted for the same role
 - [ ] Ownership scoped correctly on contributory work
 - [ ] Word and character counts measured, not estimated

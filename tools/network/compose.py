@@ -415,7 +415,9 @@ def employers_first(text, employers, within=2) -> str:
         return ""
     # Each sentence as the writer typed it (tone.sentences straightens curly quotes),
     # and the greeting with its own line break when it has one.
-    text = str(text or "")
+    # The visible text: an offset in tone._plain() is an offset in it, and a sentence moved
+    # up carries no invisible character with it.
+    text = tone._visible(text)
     plain, sents, at = tone._plain(text), [], 0
     for s in tone.sentences(text):
         i = plain.find(s, at)
@@ -663,7 +665,12 @@ _COMPOSER_LENGTH = frozenset({"too_long", "too_short"})
 # lowercase start, two thanks) is a warning shown with the draft, never a refusal: refused,
 # an email with a "CV" file name could not be composed to be shown at all.
 GATE_REFUSES = frozenset({"reads_as_generated", "person_dislikes", "em_dash", "banned_phrase",
-                          "check_in", "unsupported_claim", "unfilled_placeholder"})
+                          "check_in", "unsupported_claim", "unfilled_placeholder",
+                          "greeting_wrong_name"})
+
+# What no recorded rule lifts (learned.py --overrides): a draft greeting somebody other
+# than the person it is for is a mistake, never a matter of taste.
+NEVER_OVERRIDDEN = frozenset({"greeting_wrong_name"})
 
 
 def _gate(kind: str, text: str, what: str, **kw) -> str:
@@ -1923,6 +1930,10 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     if subject is None and isinstance(message, InMail):
         subject = message.subject
         text = message.body
+    # Every check reads the text as it reads (tone._visible): a zero-width space inside
+    # "just checking in" hid it from CHECK_IN. The length is the text as it goes, every
+    # character counted, which is what the platform counts.
+    sent_text, text = text, tone._visible(text)
     # A note the composer wrote knows who it is for: checked for that reader, not a peer.
     recruiter = recruiter or bool(getattr(message, "recruiter", False))
     rtype = (reader or (getattr(message, "reader", "") if not title else "")
@@ -1949,7 +1960,7 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     limits = dict(KIND_LIMITS[k])
     if k == "connection" and getattr(message, "shape", ""):
         limits["chars"] = note_chars(message.shape)
-    chars, words = len(text), len(text.split())
+    chars, words = len(sent_text), len(text.split())
     if "chars" in limits and chars > limits["chars"]:
         out.append(tone.Violation("too_long", f"{chars} characters, limit {limits['chars']}"))
     if "words" in limits:
@@ -1999,7 +2010,7 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
                                   f"{f['rule']}: {f['match']} -> {f['fix']}"))
     if _all:
         return out
-    over = _overrides()
+    over = _overrides() - NEVER_OVERRIDDEN
     return [v for v in out if v.rule not in over and _check_of(v) not in over]
 
 

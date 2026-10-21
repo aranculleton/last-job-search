@@ -24,6 +24,14 @@ and "$300M+" and "300 million" are another. A resume that rounds 2.5M to "2.5
 million" therefore still matches, and one that quietly promotes 60M to 75M
 does not.
 
+A count with no unit word is a count OF something, and the noun it counts has to
+agree. Matched by its size alone, "12 source systems" in the profile grounded "12
+clients" in an interview answer, and "40k+ accounts" grounded "40k customers".
+Where both the document and the profile name what the number counts, they must
+share a word or a known synonym (`SYNONYMS`): "12 systems" and "a 12-store pilot"
+still match "12 source systems" and "12 stores". A number with nothing after it on
+either side ("a team of 12") is matched by its size, as before.
+
 WHAT IS DELIBERATELY NOT A FINDING:
 
   - dates and years, which are structure rather than claims
@@ -130,13 +138,121 @@ def claims(text: str) -> set[tuple[float, str]]:
     return out
 
 
+# What a count counts. In the document, the noun right after the number, up to the first word
+# that is not part of it ("12 source systems in Azure" counts source systems); a hyphen right
+# after the number joins its noun to it ("a 12-store pilot" counts stores). In the profile,
+# every content word in the next WINDOW words of the same clause, because the noun a profile
+# counts can sit behind its modifiers ("1.5M+ sensitive public-sector debt, healthcare and
+# financial records"): wide on the side that grounds, narrow on the side that claims.
+WINDOW = 8
+_NOUN_AFTER = re.compile(r"-?\s*([A-Za-z][A-Za-z'/-]*(?:\s+[A-Za-z][A-Za-z'/-]*){0,2})")
+_CLAUSE = re.compile(r"[^.;:()!?\d\n]*")
+_ENDS_NOUN = frozenset("""a an the and or of to in on for with by at from into across over per
+than as is are was were be been being each every which that who whose while via through
+within under after before between during plus more less fewer times this these those it its
+their his her our my your up down out off about against around also only just nearly
+approximately roughly almost some""".split())
+_PLAIN_ADJ = frozenset("""new other different key major main large small big separate distinct
+unique total active regional global internal external senior junior weekly daily monthly
+quarterly annual yearly live core several high low top full""".split())
+# Words that count the same thing. Kept to true synonyms: "30 people" and "30+ operations
+# managers" are not one claim, and neither are accounts and customers.
+SYNONYMS = (
+    frozenset({"people", "person", "staff", "employee", "headcount", "colleague", "fte"}),
+    frozenset({"client", "customer"}),
+    frozenset({"store", "shop", "branch", "outlet"}),
+    frozenset({"sku", "product", "item"}),
+    frozenset({"record", "row", "transaction", "entry"}),
+    frozenset({"centre", "center", "site", "depot", "warehouse", "dc", "facility"}),
+    frozenset({"spreadsheet", "workbook", "sheet"}),
+    frozenset({"supplier", "vendor"}),
+    frozenset({"test", "experiment", "trial", "pilot"}),
+    frozenset({"dashboard", "report"}),
+    frozenset({"system", "platform"}),
+    frozenset({"user", "listener", "viewer", "subscriber", "member"}),
+    frozenset({"organisation", "organization", "company", "business", "firm"}),
+)
+_SYNONYM = {w: min(group) for group in SYNONYMS for w in group}
+
+
+def _stem(word: str) -> str:
+    w = re.sub(r"^[^a-z0-9]+|[^a-z0-9']+$", "", word.lower().replace("\u2019", "'"))
+    w = w[:-2] if w.endswith("'s") else w.rstrip("'")
+    if len(w) > 4 and w.endswith("ies"):
+        w = w[:-3] + "y"
+    elif w.endswith(("sses", "ches", "shes", "xes")):
+        w = w[:-2]
+    elif len(w) > 3 and w.endswith("s") and not w.endswith("ss"):
+        w = w[:-1]
+    return _SYNONYM.get(w, w)
+
+
+def counted(text: str, at: int, wide: bool = False) -> frozenset:
+    """What the number ending at `at` counts, as its stemmed words with synonyms folded
+    together; empty when no noun follows it. `wide` reads the profile's way (WINDOW)."""
+    if wide:
+        words = re.split(r"[\s,/-]+", " ".join(_CLAUSE.match(text, at).group(0).split()[:WINDOW]))
+        return frozenset(_stem(w) for w in words
+                         if w and w.lower() not in _ENDS_NOUN | _PLAIN_ADJ and w[0].isalpha())
+    return frozenset(_stem(w) for w in _noun_words(text, at)
+                     if w.lower() not in _PLAIN_ADJ)
+
+
+def _noun_words(text: str, at: int) -> list:
+    """The words of the noun right after the number ending at `at`, as written."""
+    m = _NOUN_AFTER.match(text, at)
+    out = []
+    for w in (re.split(r"(?<=\S)[\s/]+|-", m.group(1).strip()) if m else ()):
+        if not w:
+            continue
+        if w.lower() in _ENDS_NOUN:
+            break
+        out.append(w)
+    return out
+
+
+def _after(text: str, at: int) -> str:
+    """The words after a number as written, for saying what it counts."""
+    return " ".join(_CLAUSE.match(text, at).group(0).split()[:WINDOW]).strip(" ,-\"'")
+
+
+class Grounded(set):
+    """The grounded claims, with `nouns`: {claim: [the noun each occurrence counts]}.
+    A set like any other to a caller that only asks whether a claim is in it."""
+
+    def __init__(self, keys=(), nouns=None, said=None):
+        super().__init__(keys)
+        self.nouns = {k: list(v) for k, v in (nouns or {}).items()}
+        self.said = {k: list(v) for k, v in (said or {}).items()}
+
+    def add_text(self, text: str, nouns: bool = True) -> None:
+        """Every claim in `text`; with nouns=False, each matched by its size alone (the
+        employer's own figures a letter may repeat, whatever it says they count)."""
+        body = _RESIDUE.sub(" ", plain(text or ""))
+        for m in _NUM.finditer(body):
+            key = claim_key(m.group(1), m.group(2))
+            if key is None:
+                continue
+            self.add(key)
+            self.nouns.setdefault(key, []).append(counted(body, m.end(), wide=True) if nouns
+                                                  else frozenset())
+            self.said.setdefault(key, []).append(_after(body, m.end()))
+
+    def agrees(self, key, noun: frozenset) -> bool:
+        """Does an occurrence of `key` count what `noun` counts, or name nothing?"""
+        if key[1] or not noun or key not in self.nouns:
+            return True
+        return any(not have or have & noun for have in self.nouns[key])
+
+
 def grounded(paths=SOURCES) -> set[tuple[float, str]]:
-    """Every numeric claim the source of truth supports."""
-    out: set[tuple[float, str]] = set()
+    """Every numeric claim the source of truth supports (a `Grounded`, which also knows
+    what each count counts)."""
+    out = Grounded()
     for path in paths:
         try:
             with open(path, encoding="utf-8") as fh:
-                out |= claims(fh.read())
+                out.add_text(fh.read())
         except OSError:
             continue
     return out
@@ -172,20 +288,30 @@ def without_drafts(text: str) -> str:
 
 
 def check(text: str, source: str = "", allowed=None) -> list[dict]:
-    """Numbers in `text` that the source of truth does not support."""
+    """Numbers in `text` that the source of truth does not support: a figure it never
+    states, and a count of something else (`Grounded.agrees`). A plain set passed as
+    `allowed` is matched by size and unit alone, as it always was."""
     allowed = allowed if allowed is not None else grounded()
     body = _RESIDUE.sub(" ", plain(text or ""))
     out = []
     for m in _NUM.finditer(body):
         key = claim_key(m.group(1), m.group(2))
-        if key is None or key in allowed:
+        if key is None:
             continue
-        out.append({
+        noun = counted(body, m.end())
+        if key in allowed and (not isinstance(allowed, Grounded) or allowed.agrees(key, noun)):
+            continue
+        finding = {
             "source": source,
             "value": m.group(0).strip(),
             "normalised": f"{key[0]:g}{(' ' + key[1]) if key[1] else ''}",
             "context": quote(text, m.group(1)),
-        })
+        }
+        if key in allowed:
+            finding["counts"] = " ".join(_noun_words(body, m.end()))
+            finding["profile_counts"] = sorted({x for x in allowed.said.get(key, ()) if x},
+                                               key=len)[:2]
+        out.append(finding)
     return out
 
 
@@ -204,7 +330,12 @@ def _bullet_text(b) -> str:
 def check_draft(a: dict, allowed=None) -> list[dict]:
     """Numbers in one draft's letter and summary that nothing supports."""
     allowed = allowed if allowed is not None else grounded()
-    ok = set(allowed) | claims(a.get("p2") or "") | claims(a.get("posting") or "")
+    if isinstance(allowed, Grounded):
+        ok = Grounded(allowed, allowed.nouns, allowed.said)
+        for k in ("p2", "posting"):
+            ok.add_text(a.get(k) or "", nouns=False)
+    else:
+        ok = set(allowed) | claims(a.get("p2") or "") | claims(a.get("posting") or "")
     name = a.get("abbr") or a.get("company") or "draft"
     out = []
     for k in DRAFT_FIELDS:
@@ -259,6 +390,9 @@ def main() -> int:
     print(f"check_numbers: {len(findings)} number(s) not in the profile")
     for f in findings:
         print(f"  {f['source']}: {f['value']!r} (as {f['normalised']})")
+        if "counts" in f:
+            print(f"      the profile counts {f['normalised']} \"" + "\", \"".join(
+                f["profile_counts"]) + f"\", and this counts \"{f['counts']}\"")
         if f["context"]:
             print(f"      ...{f['context']}...")
     print("  Either the profile is missing a fact the document states, or the "

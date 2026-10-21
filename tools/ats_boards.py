@@ -135,7 +135,7 @@ BARE_REMOTE = re.compile(r"^\W*(fully |100% )?remote\W*$", re.I)
 # A label's own leading "Remote -", so anchoring a bare "Remote" never says it twice.
 _REMOTE_WORD = re.compile(r"^\W*(?:fully |100% )?remote\W*(?:[-:(]\W*)?", re.I)
 
-BODY_CAP = 20_000
+from hydrate import BODY_CAP  # noqa: E402  the one cap on a posting's body
 
 # How much of a Workday board is read. A board up to PAGE_ALL_MAX postings (after
 # narrowing it to the profile's country with the board's own facet) is paged whole and
@@ -381,16 +381,26 @@ def careersite(employer: str, token: str, queries=None,
     return out, "; ".join(notes) or None
 
 
-def _ruled_out_page(employer: str):
-    """A careers-site page this search has already ruled out, by its URL or its employer,
-    so no request is spent on it (prefilter's own check, read before the fetch)."""
+def _ruled_out_pages(seen: str | None = None, keep_ruled_out: bool = False,
+                     today: dt.date | None = None):
+    """A function from an employer to its careers-site skip: has this search already ruled
+    out the page at a URL, by the URL or the employer? No request is spent on one that it
+    has (prefilter's own check, read before the fetch).
+
+    Built once for the round, from the round's own seen file and its --no-seen-read
+    (`keep_ruled_out`: no past ruling is read, only the live holds). It was rebuilt for
+    every careers-site employer from the repo's seen file, so a round that asked to judge
+    everything again still never fetched a page it had once ruled out."""
     try:
         from prefilter import already_ruled_out
         from throttle import SEEN
-        ruled = already_ruled_out(SEEN)
+        ruled = already_ruled_out(seen or SEEN, keep_ruled_out, today)
     except Exception:                      # no seen file yet: nothing is ruled out
-        return None
-    return lambda url: bool(ruled({"url": url, "company": employer, "title": ""}))
+        return lambda employer: None
+
+    def for_employer(employer: str):
+        return lambda url: bool(ruled({"url": url, "company": employer, "title": ""}))
+    return for_employer
 
 
 # ------------------------------------------------------------------- workday
@@ -484,7 +494,8 @@ greenhouse, lever, ashby = FETCH["greenhouse"], FETCH["lever"], FETCH["ashby"]
 
 
 def fetch_all(boards=None, workers: int = 16, notes: dict | None = None,
-              today: dt.date | None = None) -> tuple[list[dict], dict[str, str]]:
+              today: dt.date | None = None, seen: str | None = None,
+              keep_ruled_out: bool = False) -> tuple[list[dict], dict[str, str]]:
     """(rows, {employer: why it returned nothing}) across every board.
 
     `notes`, when given, collects what a board that DID return rows left out,
@@ -492,17 +503,21 @@ def fetch_all(boards=None, workers: int = 16, notes: dict | None = None,
     same thing as a board gone quiet. The worker count is across boards; the
     politeness budget per host is held by openroles. `today` dates Workday's
     "Posted N days ago", so a replayed round (scrape_wide.py --today) dates its
-    postings from its own day and not the day it is replayed.
+    postings from its own day and not the day it is replayed. `seen` and
+    `keep_ruled_out` are the round's seen_jobs.json and its --no-seen-read, for the
+    careers-site pages already ruled out.
     """
     boards = BOARDS if boards is None else boards
     rows: list[dict] = []
     quiet: dict[str, str] = {}
+    pages = (_ruled_out_pages(seen, keep_ruled_out, today)
+             if any(kind == "careersite" for kind, _ in boards.values()) else None)
     with ThreadPoolExecutor(max_workers=workers) as ex:
         def submit(employer, kind, token):
             if kind == "workday":
                 return ex.submit(FETCH[kind], employer, token, today=today)
             if kind == "careersite":
-                return ex.submit(FETCH[kind], employer, token, skip=_ruled_out_page(employer))
+                return ex.submit(FETCH[kind], employer, token, skip=pages(employer))
             return ex.submit(FETCH[kind], employer, token)
         futs = {submit(employer, kind, token): employer
                 for employer, (kind, token) in boards.items() if kind in FETCH}
@@ -663,6 +678,12 @@ def main() -> int:
     ap.add_argument("--add", nargs=2, metavar=("PROVIDER", "TOKEN"),
                     help="verify one board before adding it to the map; for "
                          "workday, TOKEN may be the careers site's URL")
+    ap.add_argument("--seen", default=None,
+                    help="seen_jobs.json whose rulings a careers site's pages are skipped on "
+                         "(default: the repo's)")
+    ap.add_argument("--keep-ruled-out", dest="keep_ruled_out", action="store_true",
+                    help="skip no careers-site page for a past ruling, so every one is read "
+                         "and judged again (run_round.py --no-seen-read)")
     a = ap.parse_args()
 
     if a.find:
@@ -707,7 +728,7 @@ def main() -> int:
         return 0
 
     notes: dict[str, str] = {}
-    rows, quiet = fetch_all(notes=notes)
+    rows, quiet = fetch_all(notes=notes, seen=a.seen, keep_ruled_out=a.keep_ruled_out)
     by_portal: dict[str, int] = {}
     for r in rows:
         by_portal[r["portal"]] = by_portal.get(r["portal"], 0) + 1
