@@ -69,7 +69,9 @@ Each folder holds:
   will accept a submission (sponsorship, work authorisation, salary expectation),
   written by `/apply` Step 6b on every application.
 - **`outreach.md`** - a sub-80-word note to the hiring manager or recruiter, built from
-  the cover letter's verified company fact. Sending it is the candidate's call.
+  the cover letter's verified company fact. Sending it is the candidate's call. For a
+  resume drafted for a contact who asked for it (`stage_picks.py --for-contact`), no cold
+  note: their thread, what they asked, and the command that logs the resume with its file.
 - **`form_fields.txt`** - answers given to the portal's own questions, so a follow-up or
   a second application does not contradict the first.
 - **`interview_prep.md`** - the one living prep document for this hiring process, written
@@ -151,7 +153,7 @@ They are different things and the collision is worth stating out loud:
 
 | | |
 |---|---|
-| `documents/cv/` | the master resume a person wrote, read by `/setup` and `/expand` |
+| `documents/cv/` | the master resume a person wrote, read by `/setup` and `/expand`; the one named *current* (or the only one, or the latest dated) is what goes to somebody who asks for it and names no role (`docpaths.current_resume`) |
 | `cv/` at the repo root | tailored resumes the generator writes, one per application |
 
 Rendered documents live at the repo root. An application folder names them by path in the

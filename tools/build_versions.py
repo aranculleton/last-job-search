@@ -284,8 +284,9 @@ METHODS: dict[str, dict] = {
             (31, "2026-10-21", False, "RUNBOOK names export.py and own_profile.py"),
             (32, "2026-10-21", False, "Staging prints what each posting is and holds a fixed-term contract, pay for another place, an application already in or a second role at one employer until the person answers; a listed skill the posting names in a phrase is kept; no question about a skill the profile covers under another name"),
             (33, "2026-10-21", False, "Each posting is drafted in one call from a compiled pack and checked by code first; the model auditor reads one packet only for a draft code flags; the outreach body is optional; a batch's cost is kept"),
+            (34, "2026-10-21", False, "A resume drafted for a contact who asked carries them into the tracker row and its folder (stage_picks.py --for-contact); no unsent draft renders differently"),
         ),
-        "fingerprint": "5a287bdd176aa5d7",
+        "fingerprint": "0fad9161c77c1b10",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -310,8 +311,10 @@ METHODS: dict[str, dict] = {
             (13, "2026-10-21", False, "a pack says the place each employer heard when it was told another (tools/told.py), with no move or settling-in for it; an answer written as a quote is read as the answer; a placeholder is never fit to say; a question answered under any heading is checked"),
             (14, "2026-10-21", False, "A prepared answer that states where the person lives or moved from is flagged in the pack and by its check when that employer was told another place"),
             (15, "2026-10-21", False, "Packs choose stories across the whole plan, say they are for before and after an interview and never during one, list where the resume invites a push, quote-check mock feedback, flag over-long and all-we answers, and drop anything personal read about a person"),
+            (16, "2026-10-21", False, "process_channel is read by the drafting step too; no pack changes"),
+            (17, "2026-10-21", False, "The pack says which resume each contact at the employer was sent, from the message log"),
         ),
-        "fingerprint": "ece849d26cb0c180",
+        "fingerprint": "c5cf1084ebb3fb2b",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -407,8 +410,9 @@ METHODS: dict[str, dict] = {
             (39, "2026-10-21", False, "Dead code removed"),
             (40, "2026-10-21", False, "The LinkedIn export's messages and invitations come into the message log, pending invitations are listed for withdrawal, and the person's own profile is looked over when due"),
             (41, "2026-10-21", False, "Reading estimates, card-only recruiter drafts, labelled pastes and the Experience heading decide a render, follow-ups logged by command, a dm kind, headline idioms, CONNECTIONS_PER_WEEK, title searches across employers, notes with nothing read refused, batch frames flagged, approved examples shown, recruiter and gatekeeping asks refused, quieter warnings, friction said as what happened, the company limit at draft, location a note"),
+            (42, "2026-10-21", False, "Reply guidance names which resume goes and how to log it; a bare 'I'll pass' is a no and 'I'll pass it on' a referral"),
         ),
-        "fingerprint": "db1cf96562fd7192",
+        "fingerprint": "d2267c523f79814c",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

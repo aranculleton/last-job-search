@@ -22,6 +22,26 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **A resume a contact asked for is one record across chats.** When a networking chat logs
+  the ask and a drafting chat makes the resume at the same time, the two now meet:
+  - `state.py message|nudge|sent --attached <file>` logs which file went, and
+    `state.py attach <id> --date <day> --file <file>` names it on a message already logged.
+    A file the drafting chat named but this copy does not have yet is accepted when it
+    carries your own resume name.
+  - `stage_picks.py stage|single --for-contact <id>` drafts a resume for that contact: their
+    name goes in the tracker row's `contact_person`, with "Made for <name>" in its notes, and
+    their thread heads `outreach.md` in place of a cold note. With no role named, it names
+    your current resume in `documents/cv/` and records it on the contact.
+  - RECONCILE in `state.py` names three gaps, each with the one command that settles it: a
+    message saying a resume went that names no file, a resume the tracker says was made for
+    a contact with nothing in their thread saying it reached them, and an ask the contact's
+    row does not record. `open_actions.py` and `--due` say who is owed a resume and which one
+    went.
+  - Reply guidance for a resume ask or a referral says which resume goes and how to log it
+    (`which_resume`, beside the next action).
+  - The interview pack says which resume each contact at that employer was sent, and on
+    which day, under what they hold.
+
 - **Drafting a batch costs far less, with the same checks.**
   - A drafting pack (`tools/draft_pack.py build`) compiles, once by code, everything every
     drafter used to read for itself: your facts under stable ids, your rules and learned
@@ -149,6 +169,19 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **If one of your own tests fails after this update**, these four changes are deliberate:
+  - A reply can now be read as an automatic one, a new scenario called `auto_reply`. It
+    drafts nothing (0 sentences), because nothing is sent. A test that lists every reply
+    scenario, or asks each for at least one sentence, needs to know about it.
+  - Your scoring baseline can move where a posting requires an advanced degree: it now
+    costs the points it should. Re-record it with `python3 tools/score_eval.py --update`
+    once you agree with the new scores.
+  - A pay range under your walk-away floor whose top is at or above your cut line
+    (`SALARY_CUT_BELOW`) is ranked with a flag, no longer cut, in the extracted-fields screen
+    as in the free one. Only a range below the cut line is cut.
+  - A stand-in for `ats_boards.fetch_all` in your tests still works. It is handed `seen`
+    and `keep_ruled_out` only when a round is given its own seen file or run with
+    `--no-seen-read`.
 - **A first note with nothing read is refused** unless it is marked card-only, and a card-only
   note is shown to you as one. 20 notes had been saved and passed with nobody read.
 - **A draft obeys the same company limit as the read list**: no third cold note at an
@@ -231,6 +264,11 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **"I'll pass it on" is a referral, and a bare "I'll pass" is a no.** "Send me your CV and
+  I'll pass it on" was read as a decline, which hid the resume ask beside it and counted
+  towards the two declines that end a thread. "Thanks, but I'll pass." was read as an offer
+  of an introduction, and "I will pass on this one" as nothing at all. Both now read as a
+  no.
 - **A short paste of a page that loaded is no longer "did not render".** A labelled paste or a
   structured extract is read as the page. A page read before it was scrolled to its end,
   with no Experience on it, is asked for again rather than counted as a failure.

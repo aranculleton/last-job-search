@@ -796,6 +796,19 @@ def missing_postings(tracker=None) -> list:
     return out
 
 
+def process_channel(contact) -> str:
+    """The tracker's `channel` for a process, or an application, that goes through this
+    contact: `referral` when they are putting the candidate forward, `recruiter` for a
+    recruiter, `contact` otherwise. One answer for a process (register_process) and for a
+    resume drafted for them (record_drafts.py, stage_picks.py --for-contact)."""
+    c = contact or {}
+    # "declined: no referral" is the opposite of one: read as `_referred` reads it.
+    referral = (_text(c.get("status")) == "referral_in_progress"
+                or _text(c.get("route")).startswith("referral")
+                or _said_referral(_text(c.get("outcome"))))
+    return "referral" if referral else ("recruiter" if prep.is_recruiter(c) else "contact")
+
+
 def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
                      contacts=None, posting="") -> tuple:
     """Make a hiring process with no application something every reader can see: a
@@ -836,13 +849,7 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                          "build the prep with pack." % (_text(have.get("role")), company,
                                                         _text(have.get("status")),
                                                         _text(have.get("date")), company))
-    # "declined: no referral" is the opposite of one: read as `_referred` reads it.
-    referral = (_text(c.get("status")) == "referral_in_progress"
-                or _text(c.get("route")).startswith("referral")
-                or _said_referral(_text(c.get("outcome"))))
-    process = dict(status="interview",
-                   channel="referral" if referral else ("recruiter" if prep.is_recruiter(c)
-                                                       else "contact"),
+    process = dict(status="interview", channel=process_channel(c),
                    contact_person=name, source="contact:%s" % _text(c.get("contact_id")))
     note = ("%s: led by %s (%s) %s; nobody applied through the portal, so this is the only "
             "record" % (PROCESS_NOTE, name, _text(c.get("contact_id")), today))
@@ -1403,10 +1410,28 @@ def paper_lines(ctx) -> list:
     return _sent_lines(ctx) + landmine_lines(ctx)
 
 
+def _held_by_contacts(ctx) -> list:
+    """The resumes the message log says went to someone at this employer, by name and date.
+
+    A referrer who asked for the resume holds whichever file was sent to them, and that may
+    not be the one the tracker row names: the networking chat logs it, the drafting chat
+    made it (state.py message --attached)."""
+    k, out = company_key(ctx["company"]), []
+    for c in ctx["contacts"]:
+        if company_key(c.get("company")) != k:
+            continue
+        name = state.person_name(c.get("name")) or _text(c.get("name"))
+        for sent in state.resumes_sent(ctx["threads"], c.get("contact_id")):
+            what = ", ".join(sent["files"]) or "a %s, file not named (state.py attach %s)" % (
+                _noun(), c.get("contact_id"))
+            out.append("- Sent to %s on %s: %s" % (name, sent["date"] or "an undated day", what))
+    return out
+
+
 def _sent_lines(ctx) -> list:
     row, draft = ctx["row"], ctx["draft"] or {}
     src = _text(draft.get("_path"))
-    out = []
+    out = _held_by_contacts(ctx)
     files = [f for f in (row.get("cv_file"), row.get("cover_letter_file")) if _text(f)]
     if ctx.get("process"):
         # Nothing was submitted, so nothing a draft argued reached them.

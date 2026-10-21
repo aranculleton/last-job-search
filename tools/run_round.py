@@ -570,8 +570,10 @@ def main():
             pass
         code = run([sys.executable, f"{T}/scrape_wide.py", "--out", scrape_dir,
                     "--pages", str(a.pages), "--jobage", str(a.jobage), "--today", a.today,
-                    "--workers", str(a.workers), "--request-log", requests,
-                    "--seen", a.seen or person.state("job_scraper", "seen_jobs.json")]
+                    "--workers", str(a.workers), "--request-log", requests]
+                   # The employer boards read the repo's own seen file unless the round
+                   # was given another.
+                   + (["--seen", a.seen] if a.seen else [])
                    + (["--keep-ruled-out"] if a.no_seen_read else [])
                    + (["--alerts", a.alerts] if a.alerts else []),
                    log, deadline, ok=(0, SCRAPE_PARTIAL))

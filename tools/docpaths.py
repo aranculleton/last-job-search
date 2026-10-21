@@ -75,6 +75,54 @@ def letter_pdf(abbr: str) -> str:
     return person.state(letter_rel(abbr, ".pdf"))
 
 
+# The person's own resume, the one they send when someone asks for it and names no role:
+# documents/cv/, which they fill (documents/README.md). A tailored resume for a role nobody
+# named is a guess, and the guess is what the reader sees.
+GENERAL_DIR = ("documents", "cv")
+SENDABLE = (".pdf", ".docx", ".doc")
+_DATED = re.compile(r"(\d{4})[-_.]?(\d{2})(?:[-_.]?(\d{2}))?")
+
+
+def general_resumes() -> list[str]:
+    """Every file in documents/cv/ that could go to someone as it is, repo-relative."""
+    folder = person.state(*GENERAL_DIR)
+    try:
+        names = sorted(os.listdir(folder))
+    except OSError:
+        return []
+    return ["/".join(GENERAL_DIR + (n,)) for n in names
+            if os.path.splitext(n)[1].lower() in SENDABLE
+            and os.path.isfile(os.path.join(folder, n))]
+
+
+def current_resume() -> str:
+    """The resume to send when no role was named, repo-relative, or "" when it cannot be told.
+
+    The one whose name says it is current ("Morgan_Ellis_CV_current.pdf"), else the only one,
+    else the one whose name carries the latest date; a PDF before a Word copy of the same.
+    Two undated files and nothing saying which is "": the person is asked, never guessed for.
+    """
+    files = general_resumes()
+    if not files:
+        return ""
+
+    def best(group):
+        pdfs = [f for f in group if f.lower().endswith(".pdf")]
+        group = pdfs or group
+        if len(group) == 1:
+            return group[0]
+        dated = [((m.group(1), m.group(2), m.group(3) or "00"), f) for f in group
+                 for m in [_DATED.search(os.path.basename(f))] if m]
+        if len(dated) == len(group):
+            top = max(d for d, _ in dated)
+            hits = [f for d, f in dated if d == top]
+            return hits[0] if len(hits) == 1 else ""
+        return ""
+
+    current = [f for f in files if "current" in os.path.basename(f).lower()]
+    return best(current) if current else best(files)
+
+
 def resume_name_rx() -> re.Pattern:
     """Matches a resume filename and captures its ABBR."""
     return re.compile(re.escape(prefix()) + "_" + re.escape(noun_word()) + r"_([A-Za-z0-9_]+)")

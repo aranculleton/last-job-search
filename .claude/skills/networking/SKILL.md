@@ -644,7 +644,11 @@ A nudge in that thread is still `kind="nudge"`, and a later message `kind="reply
 **Email, when they give an address.** A strong signal, and it happens often.
 Resume attached, a short context paragraph so they do not have to find the
 original message. Do not over-trim: a senior person who asked you to email them
-expects substance. Repeating what was said on LinkedIn is fine.
+expects substance. Repeating what was said on LinkedIn is fine. Which resume: one drafted
+for them for a role they named (`stage_picks.py ... --for-contact <id>`), else the
+person's current one, never one tailored to a guess; and the message is logged with the
+file that went (`state.py message <id> --attached <file>`), so a drafting chat and a
+networking chat working at once leave one record and the next interview knows what they hold.
 
 **Warm intro.** The referrer's name goes in the first sentence. This is the
 highest-converting message type in the system and burying the referral wastes it.
@@ -1004,6 +1008,8 @@ almost always one.
 - `/threads`, what is owed, what is due, what has gone cold
 - `/prep <contact>`, prep document for a booked call
 - `state.py nudge <id> --text-file <file>` logs a nudge that went, with its words;
-  `state.py message <id> ...` any other later message (`--texts <file.json>` for several)
+  `state.py message <id> ...` any other later message (`--texts <file.json>` for several);
+  `--attached <file>` on either (and on `sent`) names a file that went with it, and
+  `state.py attach <id> --date <day> --file <file>` names it on a message already logged
 - `reading.py estimate [N]` says how long N reads take today; `reading.py meanwhile` the notes
   to write while a page waits; `reading.py drafts <file.json>` saves a batch checked together

@@ -8,6 +8,10 @@ earlier round left the tracker pointing at documents whose source text no
 longer existed. Interview prep, the /outcome record and any later "what did
 this posting actually ask for" question all need the text.
 
+A resume drafted for a contact who asked for it (stage_picks.py --for-contact) gets no
+cold note: its outreach.md is headed with that contact's thread, what they asked and when,
+and the one command that logs the resume with its file once it goes (`for_contact_md`).
+
 An outreach note, saved beside it as outreach.md. A cold application is one
 of hundreds in a queue; the same application with a short note to the hiring
 manager or recruiter on LinkedIn is read by a person. The note is built from
@@ -402,6 +406,42 @@ def archive_posting(d, a, meta, today):
     return "written"
 
 
+def for_contact_of(a, meta=None) -> str:
+    """The contact_id of whoever this resume was drafted for, or ""."""
+    return str((meta or {}).get("for_contact") or a.get("for_contact") or "").strip()
+
+
+def for_contact_md(a, cid, today) -> str:
+    """outreach.md for a resume drafted for a contact: their thread, never a cold note."""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import state
+    contact = state.already_contacted(state.load_contacts(person.state("network_contacts.csv")),
+                                      contact_id=cid) or {}
+    name = (state.person_name(contact.get("name")) or str(contact.get("name") or "")
+            or str(a.get("for_contact_name") or cid))
+    pdf = docpaths.resume_rel(a["abbr"], ".pdf")
+    rows = state.threads_for(state.load_threads(person.state("network_threads.csv")), cid)
+    asks = [r for r in rows if state.asks_for_resume(r)]
+    out = [f"# {_NOUN[:1].upper() + _NOUN[1:]} for {name} - {a['company']}, {a['role']}", "",
+           f"## This goes to {name}, who asked for it", ""]
+    if asks:
+        words = " ".join(str(asks[-1].get("full_text") or asks[-1].get("summary") or "").split())
+        out += [f"They asked on {asks[-1].get('date')}: \"{words[:300]}\"", ""]
+    out += [f"Send them {pdf} (and the cover letter, if the role is a posted one) in that "
+            "thread or by email. No cold note: they are the route in, and a note to someone "
+            "else at the employer would land beside their referral.", "",
+            "When it goes, log it with the file, so every chat knows which one they hold:", "",
+            "    " + state.log_resume_command(cid, pdf), ""]
+    if rows:
+        out += ["## The thread so far", ""]
+        for r in rows[-6:]:
+            who = "you" if state._direction(r) == "out" else (name.split()[0] if name else "them")
+            said = " ".join(str(r.get("full_text") or r.get("summary") or "").split())
+            out.append(f"- {r.get('date')} {who}: {said[:240]}")
+        out.append("")
+    return "\n".join(out)
+
+
 def write(a, meta, today):
     d = folder(a)
     os.makedirs(d, exist_ok=True)
@@ -421,7 +461,8 @@ def write(a, meta, today):
     kept = {k: v for k, v in a.items() if k not in ("posting", "posting_from")}
     # What the score rested on: the round's shortlist is pruned away, and the interview
     # pack (tools/interview_pack.py) reads fit_why's deductions weeks later.
-    for k in ("fit", "fit_why", "bar", "bar_reason"):
+    for k in ("fit", "fit_why", "bar", "bar_reason", "for_contact", "for_contact_name",
+              "for_contact_channel"):
         if meta.get(k) not in (None, "", []) and k not in kept:
             kept[k] = meta[k]
     if os.path.exists(os.path.join(d, "job_posting.md")):
@@ -429,6 +470,12 @@ def write(a, meta, today):
     with open(os.path.join(d, "draft.json"), "w", encoding="utf-8") as f:
         json.dump([kept], f, indent=1, ensure_ascii=False)
         f.write("\n")
+    cid = for_contact_of(a, meta)
+    if cid:
+        with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8") as f:
+            f.write(for_contact_md(dict(a, **{k: v for k, v in kept.items()
+                                               if k.startswith("for_contact")}), cid, today))
+        return d
     known = _known_contacts(a["company"])
     replied = [p for p in known if p.get("status") not in SENT_NO_REPLY]
     with open(os.path.join(d, "outreach.md"), "w") as f:
@@ -547,14 +594,17 @@ if __name__ == "__main__":
         # half way through writing outreach.md, which left a file holding only
         # its heading, and stopped the batch: every later posting lost its
         # archived text and its kept draft.
+        m = meta.get(supplied) or meta.get(a["abbr"].upper(), {})
+        cid = for_contact_of(a, m)
         try:
-            words = len(outreach_note(a).split())
+            words = 0 if cid else len(outreach_note(a).split())
         except ValueError as e:
             refused.append(f"{a.get('company')}: {e}")
             words = 0
         had = os.path.exists(os.path.join(folder(a), "job_posting.md"))
-        d = write(a, meta.get(supplied) or meta.get(a["abbr"].upper(), {}), today)
-        print("wrote", os.path.relpath(d, ROOT), "|", words, "words"
+        d = write(a, m, today)
+        print("wrote", os.path.relpath(d, ROOT), "|",
+              (f"for {cid}: their thread, no cold note" if cid else f"{words} words")
               + (" | kept the archived job_posting.md" if had else ""))
     if refused:
         print("\nOUTREACH NOTE REFUSED (its outreach.md says so; every other file was written). "

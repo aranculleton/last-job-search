@@ -38,6 +38,8 @@ Usage:
     python3 tools/network/state.py [--today YYYY-MM-DD]
     python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
     python3 tools/network/state.py text <contact_id> --date YYYY-MM-DD --text-file <file>
+    python3 tools/network/state.py message <contact_id> --text-file <file> [--attached <file>]
+    python3 tools/network/state.py attach <contact_id> --date YYYY-MM-DD --file <file | unknown>
     python3 tools/network/state.py sent <contact_id>... (--text-file <file> | --draft | --no-note |
         --outside) [--channel inmail --subject "..."] [--date YYYY-MM-DD]
     python3 tools/network/state.py resent <contact_id> [--text-file <file>] [--date ...] [--subject ...]
@@ -64,7 +66,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
 import dates  # noqa: E402
 import schema  # noqa: E402
 from company_key import key as company_key, fold as _ck_fold, row_key as _ck_row_key  # noqa: E402
-from throttle import FINAL as _THROTTLE_FINAL  # noqa: E402
+from throttle import FINAL as _THROTTLE_FINAL, UNSENT as _THROTTLE_UNSENT  # noqa: E402
 import person  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(_HERE))
@@ -1175,12 +1177,17 @@ def _closed_after_last_reply(contact, rows) -> bool:
     return bool(closed and last_in and last_in <= closed)
 
 
-def reconcile(contacts, threads) -> list[dict]:
+def reconcile(contacts, threads, tracker=None) -> list[dict]:
     """Every place the stored state and the message log disagree.
 
     Only the three statuses in `DERIVABLE` are checked against the log. Flagging
     `call_booked` for disagreeing with `awaiting_reply` would report every healthy
     thread in the book and train the user to skip the output.
+
+    The resume a contact asked for is checked too (`resume_findings`): a message saying
+    one went with no file named, a resume the tracker says went to a contact with nothing
+    in their thread saying so (only with `tracker`), and a request nothing has answered
+    that their row does not record.
     """
     problems = []
 
@@ -1270,6 +1277,7 @@ def reconcile(contacts, threads) -> list[dict]:
         newer = found["contact_ids"][-1]
         flag(newer, found["names"][-1], "", "", "possible_duplicate",
              duplicate_line(found, newer))
+    problems += resume_findings(contacts, threads, tracker)
     return problems
 
 
@@ -1578,7 +1586,7 @@ NEEDS_SUBJECT = "an InMail's subject is needed too: --subject \"<the subject as 
 
 
 def sent(contacts, threads, contact_id, today, date=None, channel="connection", text="",
-         outside=False, note=True, subject="", preview=False) -> dict:
+         outside=False, note=True, subject="", preview=False, attached="") -> dict:
     """Record that a note or a request went: the message row, the contact row, and the
     unsent draft gone. One command for the three steps /network lists, which a person
     sending from the LinkedIn app left undone: the queue then said "send now" to two
@@ -1590,9 +1598,11 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     (`preview` when the page cut it at "show more"), and with no text when its words were
     not seen, so it is never an example of what works. Both lists change in place; the
     caller saves them. Raises ValueError for a contact not in the book, one already
-    written to, or a send with its words missing.
+    written to, or a send with its words missing. `attached` is a file that went with it
+    (`resolve_attachment`), named on the row (`attachment_note`).
     """
     day = _need_date(date or today, "date")
+    attached = resolve_attachment(attached) if str(attached or "").strip() else ""
     cid = str(contact_id or "").strip()
     contact = already_contacted(contacts, contact_id=cid) if cid else None
     channel = str(channel or "connection").strip().lower()
@@ -1640,6 +1650,8 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     else:
         scenario = "first_message"
         summary = f"First {channel} sent"
+    if attached:
+        summary = f"{summary}; {attachment_note(attached)}"
     row = {"contact_id": cid, "date": day.isoformat(), "direction": "out", "channel": channel,
            "scenario": scenario, "summary": summary, "full_text": body, "subject": subject}
     threads.append(row)
@@ -1665,7 +1677,7 @@ FOLLOW_UP_KINDS = ("nudge", "message")
 
 
 def followed_up(contacts, threads, contact_id, today, text="", date=None, channel="",
-                subject="", kind="message") -> dict:
+                subject="", kind="message", attached="") -> dict:
     """Record a later message to someone already written to: a nudge after silence
     (`kind="nudge"`), or any other message in the thread (`kind="message"`: a reply to them,
     a thank-you, the first words after they accepted a request that carried none). The
@@ -1678,10 +1690,15 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     ValueError for a contact not in the book, one nothing has been logged to yet (that is
     `sent`), a nudge where they spoke last (a reply is owed, not a nudge), a message with no
     words, and a true duplicate: the same words to the same person on the same day.
-    Both lists change in place; the caller saves them."""
+    Both lists change in place; the caller saves them.
+
+    `attached` is a file that went with it (`resolve_attachment`). A resume sent while one
+    they asked for is owed is logged as `send_resume`, the scenario /reply reads as
+    something they now hold, and a next action that was the resume itself is done."""
     if kind not in FOLLOW_UP_KINDS:
         raise ValueError(f"kind is one of {', '.join(FOLLOW_UP_KINDS)}, not {kind!r}")
     day = _need_date(date or today, "date")
+    attached = resolve_attachment(attached) if str(attached or "").strip() else ""
     cid = str(contact_id or "").strip()
     contact = already_contacted(contacts, contact_id=cid) if cid else None
     if contact is None:
@@ -1727,8 +1744,17 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         if before >= schema.MAX_NUDGES:
             note = (f"that is nudge {before + 1} to {name}; the rule is {schema.MAX_NUDGES}. "
                     "Logged because it went; nothing more goes until they reply")
+    resume = bool(attached) and is_resume_file(attached)
+    owed_one = resume and kind == "message" and any(
+        o["contact_id"] == cid for o in resumes_owed([contact], threads))
+    if owed_one:
+        scenario, note = "send_resume", ""
     summary = {"nudge": f"Nudge sent ({chan})", "reply": f"Reply sent ({chan})",
-               "first_message": f"First {chan} sent, after they accepted"}[scenario]
+               "first_message": f"First {chan} sent, after they accepted",
+               "send_resume": f"{noun()[:1].upper() + noun()[1:]} sent ({chan}), as asked"
+               }[scenario]
+    if attached:
+        summary = f"{summary}; {attachment_note(attached)}"
     row = {"contact_id": cid, "date": day.isoformat(), "direction": "out", "channel": chan,
            "scenario": scenario, "summary": summary, "full_text": body,
            "subject": " ".join(str(subject or "").split())}
@@ -1742,10 +1768,17 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     if scenario == "nudge":
         contact["next_action"] = ("Nudged: nothing more unless they reply. If still silent by "
                                   f"the date, close it: state.py set {cid} --status gone_cold")
-    elif str(contact.get("status") or "") in DERIVABLE:
-        contact["next_action"] = "One nudge if no reply"
     waiting = DERIVABLE | {"connected_no_reply"}
-    contact["next_action_due"] = due if str(contact.get("status") or "") in waiting \
+    done = (scenario != "nudge" and resume
+            and (str(contact.get("status") or "") in waiting or _row_records_resume(contact)
+                 or not str(contact.get("next_action") or "").strip()))
+    if done:
+        # The resume was the thing owed: the row stops asking for it, and its date with it.
+        contact["next_action"] = (f"{noun()[:1].upper() + noun()[1:]} sent {day.isoformat()} "
+                                  f"({attached}): one nudge if no reply")
+    elif scenario != "nudge" and str(contact.get("status") or "") in DERIVABLE:
+        contact["next_action"] = "One nudge if no reply"
+    contact["next_action_due"] = due if (done or str(contact.get("status") or "") in waiting) \
         else contact.get("next_action_due", "")
     _drop_draft(cid)
     return {"row": row, "said": note}
@@ -2107,12 +2140,18 @@ def _cli_sent(argv) -> int:
                     help="sent from LinkedIn itself, words not seen (a request seen as Pending)")
     ap.add_argument("--no-note", action="store_true", help="a connection request with no note")
     ap.add_argument("--subject", default="", help="an InMail's subject as sent")
+    ap.add_argument("--attached", default="", metavar="FILE",
+                    help="a file that went with it, as it sits in the repo (a resume: "
+                         "cv/<name>.pdf or documents/cv/<name>.pdf)")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
     if a.text_file and len(a.contact_ids) > 1:
         print("sent: --text-file is one person's message; name one contact")
+        return 1
+    if a.attached and len(a.contact_ids) > 1:
+        print("sent: --attached is one person's file; name one contact")
         return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
@@ -2135,7 +2174,8 @@ def _cli_sent(argv) -> int:
         in_book = already_contacted(contacts, contact_id=cid) is not None
         try:
             row = sent(contacts, threads, cid, a.today, date=a.date or None, channel=a.channel,
-                       text=text, outside=a.outside, note=not a.no_note, subject=subject)
+                       text=text, outside=a.outside, note=not a.no_note, subject=subject,
+                       attached=a.attached)
         except ValueError as e:
             print(f"  not recorded: {e}")
             continue
@@ -2148,7 +2188,7 @@ def _cli_sent(argv) -> int:
                   "address, or their name at that employer): recorded there, no second row")
         elif not in_book:
             print(f"  {cid}: was not in the contact book; added from what was read about them")
-        print(f"  {logged}: {row['summary'].lower()} on {row['date']}; awaiting their reply, "
+        print(f"  {logged}: {shown_summary(row)} on {row['date']}; awaiting their reply, "
               "draft removed")
     if done:
         save_threads(threads, a.threads)
@@ -2182,12 +2222,18 @@ def _cli_followed_up(argv, kind) -> int:
                     choices=("", "message", "connection", "inmail", "email", "intro"),
                     help="default: the thread's own; a message once they are connected")
     ap.add_argument("--subject", default="")
+    ap.add_argument("--attached", default="", metavar="FILE",
+                    help="a file that went with it, as it sits in the repo (a resume: "
+                         "cv/<name>.pdf or documents/cv/<name>.pdf)")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
     if a.text_file and len(a.contact_ids) > 1:
         print(f"{kind}: --text-file is one person's message; name one contact, or use --texts")
+        return 1
+    if a.attached and len(a.contact_ids) > 1:
+        print(f"{kind}: --attached is one person's file; name one contact")
         return 1
     texts = {}
     if a.texts:
@@ -2213,7 +2259,8 @@ def _cli_followed_up(argv, kind) -> int:
             text = ""
         try:
             got = followed_up(contacts, threads, cid, a.today, text=text, date=a.date or None,
-                              channel=a.channel, subject=a.subject, kind=kind)
+                              channel=a.channel, subject=a.subject, kind=kind,
+                              attached=a.attached)
         except ValueError as e:
             print(f"  not recorded: {cid}: {e}")
             continue
@@ -2222,7 +2269,7 @@ def _cli_followed_up(argv, kind) -> int:
         done += 1
         row = got["row"]
         after = (already_contacted(contacts, contact_id=cid) or {}).get("next_action", "")
-        print(f"  {cid}: {row['summary'].lower()} on {row['date']}"
+        print(f"  {cid}: {shown_summary(row)} on {row['date']}"
               + (f"; next: {after}" if after else ""))
         if got["said"]:
             print(f"    {got['said']}")
@@ -2464,6 +2511,484 @@ def _cli_dropped_rows(argv) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- a resume, asked for and sent
+
+# A networking chat logged a contact's "can you send me your CV?", a drafting chat made
+# the resume, the person emailed it, and the log said "Resume sent as asked": no file, no
+# tracker row, no folder. Which resume a contact holds is the first thing an interview
+# with them turns on, and the two chats had no shared word for it. The word is this
+# marker, in a message row's summary, worded exactly as tools/network/export.py words an
+# attachment LinkedIn's export records: "a resume attached (<file>)", or "an attachment
+# attached (<file>)" for anything that is not a resume. The file is the path inside the
+# repo (cv/<Prefix>_Resume_<ABBR>.pdf), so every chat finds the same one. No column: the
+# summary is the row's own account of what went, and every reader already has it.
+_ATTACHED = re.compile(r"\b(a (?:resume|r[eé]sum[eé]|cv)|an attachment) attached"
+                       r"(?: \(([^()]*)\))?", re.I)
+# What `attach --file unknown` writes: the person says a resume went and nobody kept which.
+NOT_KEPT = "file not kept"
+_DOC = r"(?:r[eé]sum[eé]|cv|curriculum vitae)"
+_COVER = re.compile(r"cover[ _-]?letter", re.I)
+# Where a sendable resume can sit: the app's own (cv/) and the person's own (documents/cv/).
+RESUME_DIRS = ("cv/", "documents/cv/")
+PERSON_ROUTES = frozenset({"referral", "recruiter", "contact"})
+
+
+def noun() -> str:
+    """The person's word for the document (person.json documents.noun): every line said
+    to them uses it. "resume" with no profile."""
+    try:
+        return str(person.get("documents.noun", "resume") or "resume")
+    except Exception:  # no profile: the app's word
+        return "resume"
+
+
+def _doc_rx() -> str:
+    own = noun().lower()
+    return _DOC if re.fullmatch(_DOC, own, re.I) else rf"(?:{_DOC}|{re.escape(own)})"
+
+
+def is_resume_file(path) -> bool:
+    """Is this file a resume (a CV), rather than a letter or anything else?
+
+    By its name ("<Prefix>_Resume_Acme.pdf", "Morgan_Ellis_CV.pdf", "resume-2026.pdf"),
+    or by where it sits (cv/, documents/cv/). A cover letter never is, wherever it sits."""
+    p = str(path or "").replace("\\", "/").strip()
+    base = os.path.basename(p)
+    if not base or _COVER.search(base):
+        return False
+    words = re.compile(r"(?:^|[^a-z])" + _doc_rx().replace(" ", "[ _-]?") + r"(?:[^a-z]|$)", re.I)
+    return bool(words.search(base)) or p.lstrip("./").startswith(RESUME_DIRS)
+
+
+def attachment_note(path) -> str:
+    """The marker a message row carries for a file that went with it."""
+    what = "a resume" if is_resume_file(path) else "an attachment"
+    return f"{what} attached ({path})"
+
+
+def attached(row) -> list[str]:
+    """The files a message row says went with it, from its marker. [] when none is named."""
+    out = []
+    for m in _ATTACHED.finditer(str((row or {}).get("summary") or "")):
+        out += [f.strip() for f in str(m.group(2) or "").split(",") if f.strip()]
+    return out
+
+
+def shown_summary(row) -> str:
+    """A row's summary as a line says it: lower case, the file it names as it is spelled."""
+    summary = str((row or {}).get("summary") or "")
+    m = _ATTACHED.search(summary)
+    return summary.lower() if not m else summary[:m.start()].lower() + summary[m.start():]
+
+
+def _marked(row) -> list:
+    return list(_ATTACHED.finditer(str((row or {}).get("summary") or "")))
+
+
+def _is_message_out(row) -> bool:
+    return (_direction(row) == "out" and not is_bare_request(row) and not is_withdrawal(row)
+            and not is_call(row) and not is_acceptance(row))
+
+
+def _sentences(text) -> list:
+    """Its clauses: "Please find my CV attached, thank you for passing it on" is a CV sent
+    and a thank-you, and read whole the thank-you hid the CV."""
+    return [s for s in re.split(r"[.!?\n;,]+", str(text or "")) if s.strip()]
+
+
+def _sent_rx():
+    d = _doc_rx()
+    return re.compile(
+        rf"\b{d}\b[^.!?\n]{{0,40}}?\b(?:sent|emailed|e-mailed|attached|forwarded|shared|went)\b"
+        r"|\b(?:sent|emailed|e-mailed|attached|attaching|forwarded|enclosed|enclosing|"
+        rf"here(?:'s| is)|please find)\b[^.!?\n]{{0,30}}?\b{d}\b", re.I)
+
+
+# A sentence about a resume that went earlier, or one that is only offered: "following up
+# on the resume I sent", "thanks for passing my CV on", "I'll send my CV tonight".
+_NOT_THIS_ONE = re.compile(
+    r"\bfollow(?:ing|ed)?[ -]?up on\b|\bthank(?:s| you)\b[^.!?\n]{0,30}\b(?:pass|passing|"
+    r"forward|forwarding|sharing|for)\b|\b(?:will|I'?ll|can|happy to|shall I|should I|"
+    r"want me to)\s+(?:send|share|email|forward)\b"
+    r"|\b(?:not|never|haven'?t|hasn'?t|didn'?t|without)\b", re.I)
+
+
+def says_resume_went(row) -> bool:
+    """Does this message row of ours say a resume went with it, by its marker, its
+    scenario or its words?
+
+    A message about a resume that went before ("following up on the CV I sent") is not one,
+    and nor is an offer of one ("happy to send my CV")."""
+    if not _is_message_out(row):
+        return False
+    if any(m.group(1).lower() != "an attachment" for m in _marked(row)):
+        return True
+    if _scenario(row) == "send_resume":
+        return True
+    sent = _sent_rx()
+    for field in ("summary", "full_text"):
+        for s in _sentences(row.get(field)):
+            if sent.search(s) and not _NOT_THIS_ONE.search(s):
+                return True
+    return False
+
+
+def names_a_file(row) -> bool:
+    """Does the row name the file that went (or say nobody kept it)?"""
+    return bool(attached(row))
+
+
+def asks_for_resume(row) -> bool:
+    """Is this message of theirs a request for the resume itself (not a profile, not their
+    address in a signature)? The reply classifier's own cue, `reply.asks_for_resume`."""
+    if not said_something(row):
+        return False
+    if _scenario(row) == "send_resume":
+        return True
+    try:
+        import reply
+    except Exception:  # noqa: BLE001  the scenario alone, without the classifier
+        return False
+    return reply.asks_for_resume(str(row.get("full_text") or row.get("summary") or ""))
+
+
+# The person saying a resume will not go: "CV not sent: applied through the portal".
+# `state.py set <id> --note "<noun> not sent: <why>"` writes it with the day in front. The
+# colon is part of it: "CV not sent yet" in a next action is a reminder, not a decision.
+def _settled_rx():
+    return re.compile(rf"\b{_doc_rx()}\s+not\s+(?:sent|going|needed|owed)\s*:", re.I)
+
+
+def resume_settled_on(contact):
+    """When the person said a resume will not go to them, from the row's notes or outcome:
+    the day written in front of it, True for an undated one, None when never."""
+    rx, when = _settled_rx(), None
+    for field in ("notes", "outcome"):
+        for chunk in re.split(r"[;|]", str((contact or {}).get(field) or "")):
+            if rx.search(chunk):
+                d = as_date(chunk)
+                if d is None:
+                    return True
+                when = max(when, d) if when else d
+    return when
+
+
+def _settled_since(contact, day) -> bool:
+    got = resume_settled_on(contact)
+    return got is True or (got is not None and (day is None or got >= day))
+
+
+def resumes_sent(threads, contact_id) -> list[dict]:
+    """Every message to them that says a resume went: {date, files, row}, oldest first."""
+    return [{"date": str(r.get("date") or ""), "files": attached(r), "row": r}
+            for r in threads_for(threads, contact_id) if says_resume_went(r)]
+
+
+def _owed_note_file(contact) -> str:
+    """The file a "<noun> to send: <path>" note on the row names (stage_picks.py single
+    --for-contact writes one when no role was named), or ""."""
+    m = re.search(rf"\b{_doc_rx()} to send:\s*(\S+)", str((contact or {}).get("notes") or ""),
+                  re.I)
+    return m.group(1).rstrip(".,;") if m else ""
+
+
+def _row_records_resume(contact) -> bool:
+    """Does the contact row already say a resume is owed: its next action names one, or a
+    "<noun> to send" note does? Then the book and the log agree, and it is on the to-do list."""
+    return bool(re.search(rf"\b{_doc_rx()}\b", str(contact.get("next_action") or ""), re.I)
+                or _owed_note_file(contact))
+
+
+def made_for(row, contacts) -> dict | None:
+    """The contact a tracker row's documents were made for, or who leads its process.
+
+    Read from the row's own words: "made for <name> (<contact_id>)" in its notes
+    (record_drafts.py writes it for a resume drafted with --for-contact), a `contact:<id>`
+    source (a process with no application), or, on a row filed under a person's route
+    (channel referral, recruiter or contact), its contact_person at that employer."""
+    row = row or {}
+    notes = str(row.get("notes") or "")
+    m = re.search(r"\bmade for [^;|()]*\(([^()\s]+)\)", notes, re.I)
+    src = str(row.get("source") or "").strip()
+    cid = m.group(1) if m else (src.split(":", 1)[1].strip() if src.startswith("contact:") else "")
+    if cid:
+        return already_contacted(contacts, contact_id=cid)
+    channel = str(row.get("channel") or "").strip().lower()
+    who = _match_name(row.get("contact_person"))
+    if channel not in PERSON_ROUTES or not who:
+        return None
+    k = company_key(row.get("company"))
+    for c in contacts:
+        if row_company_key(c) == k and _match_name(c.get("name")) == who:
+            return c
+    return None
+
+
+def _resume_stem(path) -> str:
+    return os.path.splitext(os.path.basename(str(path or "").strip()))[0].lower()
+
+
+def made_for_rows(tracker, contacts, contact_id) -> list[dict]:
+    """The tracker rows with a resume made for this contact, newest first."""
+    rows = [r for r in tracker or () if str(r.get("cv_file") or "").strip()
+            and (made_for(r, contacts) or {}).get("contact_id") == contact_id]
+    return sorted(rows, key=lambda r: as_date(r.get("date")) or datetime.date.min, reverse=True)
+
+
+def _pdf(path) -> str:
+    return os.path.splitext(str(path or "").strip())[0] + ".pdf"
+
+
+def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
+    """Every contact owed a resume: their last request for it has had none since, or one
+    was drafted for them (a tracker row not yet past drafted) and none has gone since.
+
+    Owed from their request (`asks_for_resume`), or the day it was made, until a message
+    of ours says a resume went (`says_resume_went`), or the person says one will not
+    (`resume_settled_on`). A thread the person closed owes nothing. Each: {contact_id,
+    name, company, company_key, asked, made, role, words, file, recorded}: `file` is the
+    one to send where the repo knows it (a resume made for them, or the "<noun> to send"
+    note), `recorded` whether the book already says it is owed (their row, or the
+    tracker's row for the one made for them)."""
+    out = []
+    for contact in contacts:
+        cid = str(contact.get("contact_id") or "").strip()
+        if str(contact.get("status") or "").strip() in ("closed", "gone_cold", "dropped"):
+            continue
+        rows = threads_for(threads, cid)
+        made_rows = made_for_rows(tracker, contacts, cid)
+        sent_on = [as_date(r.get("date")) or datetime.date.min
+                   for r in rows if says_resume_went(r)]
+        base = {"contact_id": cid, "name": contact.get("name", ""),
+                "company": contact.get("company", ""), "company_key": row_company_key(contact),
+                "asked": "", "made": "", "role": "", "words": ""}
+        ask_at = next((i for i in range(len(rows) - 1, -1, -1) if asks_for_resume(rows[i])),
+                      None)
+        asked = as_date(rows[ask_at].get("date")) if ask_at is not None else None
+        if (ask_at is not None and not any(says_resume_went(r) for r in rows[ask_at + 1:])
+                and not _settled_since(contact, asked)):
+            made = [r for r in made_rows
+                    if (as_date(r.get("date")) or datetime.date.min) >= (asked or datetime.date.min)]
+            words = " ".join(str(rows[ask_at].get("full_text") or rows[ask_at].get("summary")
+                                 or "").split())
+            out.append(dict(base, asked=asked.isoformat() if asked else "",
+                            words=words if len(words) <= 120 else words[:117].rstrip() + "...",
+                            file=_pdf(made[0]["cv_file"]) if made else _owed_note_file(contact),
+                            recorded=_row_records_resume(contact)))
+            continue
+        for r in made_rows:
+            day = as_date(r.get("date"))
+            if (str(r.get("status") or "").strip().lower() not in _THROTTLE_UNSENT
+                    or any(d >= (day or datetime.date.min) for d in sent_on)
+                    or _settled_since(contact, day)):
+                continue
+            out.append(dict(base, made=day.isoformat() if day else "",
+                            role=str(r.get("role") or "").strip(), file=_pdf(r["cv_file"]),
+                            recorded=True))
+            break
+    return out
+
+
+def log_resume_command(contact_id, file="", channel="") -> str:
+    """The one command that logs a resume that went, with its file."""
+    return (f"python3 tools/network/state.py message {contact_id} --attached "
+            f"{file or '<the file that went>'} --text-file <the message as sent>"
+            + (f" --channel {channel}" if channel else ""))
+
+
+def resume_owed_line(item, mark="") -> str:
+    """"a resume owed to <name> (asked <date>): ..." for the due list and the employer view;
+    `mark` ("**") wraps the part that says who is owed what."""
+    made = (f" (made {item['made']} for {item.get('role') or 'their role'})"
+            if item.get("made") else "")
+    return (f"{mark}a {noun()} owed to {item['name'] or item['contact_id']}{mark}"
+            + (f" (asked {item['asked']})" if item.get("asked") else made)
+            + ": send it, then log it with the file: "
+            + log_resume_command(item["contact_id"], item.get("file")))
+
+
+def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]:
+    """The three places a resume and the log disagree, each with the command that settles it.
+
+    `resume_file_not_named`: a message says a resume went and names no file.
+    `resume_not_logged`: a tracker row says a resume made for a contact went (its status is
+    past drafted), and no message to them since says it reached them.
+    `resume_owed`: they asked for it, none has gone since, and their row does not say so.
+    Each is settled for good by what it asks for: the file named, the message logged, the
+    row saying it is owed, or the person's "<noun> not sent: <why>" note. `reasons` keeps
+    only those."""
+    word = noun()
+    found = []
+
+    def add(contact, reason, detail):
+        found.append({"contact_id": str(contact.get("contact_id") or "").strip(),
+                      "name": contact.get("name", ""), "stored": "", "derived": "",
+                      "reason": reason, "detail": detail})
+
+    by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    for cid, contact in by_id.items():
+        for r in threads_for(threads, cid):
+            if says_resume_went(r) and not names_a_file(r):
+                day = str(r.get("date") or "").strip()
+                add(contact, "resume_file_not_named",
+                    f"the message of {day} says a {word} went but not which file: name it: "
+                    f"python3 tools/network/state.py attach {cid} --date {day} --file <the "
+                    "file that went> (--file unknown if nobody kept it)")
+    for row in tracker or ():
+        status = str(row.get("status") or "").strip().lower()
+        cv = str(row.get("cv_file") or "").strip()
+        if not cv or not status or status in _THROTTLE_UNSENT or status in TRACKER_FINAL:
+            continue
+        contact = made_for(row, contacts)
+        if contact is None:
+            continue
+        cid = str(contact.get("contact_id") or "").strip()
+        day = as_date(row.get("date"))
+        stem = _resume_stem(cv)
+        went = [s for s in resumes_sent(threads, cid)
+                if (as_date(s["date"]) or datetime.date.min) >= (day or datetime.date.min)
+                or stem in {_resume_stem(f) for f in s["files"]}]
+        if went or _settled_since(contact, day):
+            continue
+        add(contact, "resume_not_logged",
+            f"the {word} for {row.get('role') or 'the role'} at {row.get('company')} was made "
+            f"for them and the tracker says it went ({status}), but nothing in their thread "
+            f"says it reached them: log it: {log_resume_command(cid, _pdf(cv))}. If it did not "
+            f"go to them: state.py set {cid} --note \"{word} not sent: <why>\"")
+    for item in resumes_owed(contacts, threads, tracker):
+        if item["recorded"]:
+            continue
+        cid = item["contact_id"]
+        add(by_id.get(cid, item), "resume_owed",
+            f"they asked for your {word} on {item['asked'] or 'an unknown date'} and none has "
+            f"gone since, and their row does not say it is owed: send it, then log it: "
+            f"{log_resume_command(cid, item['file'])}. Not sending it: state.py set {cid} "
+            f"--note \"{word} not sent: <why>\"")
+    return [f for f in found if reasons is None or f["reason"] in reasons]
+
+
+def resolve_attachment(path, root=None) -> str:
+    """The file that went, as a path inside the repo, or ValueError saying what to do.
+
+    It must be in this copy of the repo, named by a kept application (a draft.json in
+    documents/applications/ names its resume and letter), or carry the name the app gives
+    this person's resume or letter (cv/<Prefix>_<Noun>_<ABBR>.pdf): a drafting chat
+    working at the same time may have made it, and it arrives when both chats' work is
+    merged. A file outside the repo is refused: no other chat could ever find it."""
+    root = os.path.normpath(root or person.state())
+    raw = str(path or "").strip()
+    if not raw:
+        raise ValueError("name the file that went: --attached <file>")
+    raw = os.path.expanduser(raw)
+    tries = [raw] if os.path.isabs(raw) else [os.path.join(root, raw), os.path.abspath(raw)]
+    for full in tries:
+        full = os.path.normpath(full)
+        if os.path.isfile(full):
+            rel = os.path.relpath(full, root)
+            if rel.startswith(".."):
+                raise ValueError(f"{raw} is outside this repo, so no other chat could find it: "
+                                 f"copy it into documents/cv/ and name that")
+            return rel.replace(os.sep, "/")
+    rel = raw.replace("\\", "/").lstrip("./") if not os.path.isabs(raw) else raw
+    if rel in _kept_outputs(root):
+        return rel
+    try:
+        import docpaths
+        made = (docpaths.resume_name_rx().search(os.path.basename(rel))
+                or re.search(re.escape(docpaths.prefix()) + r"_Cover_Letter_", rel))
+    except Exception:  # noqa: BLE001  no profile: only a file that is there
+        made = None
+    if made and rel.startswith(("cv/", "cover_letters/")):
+        return rel
+    raise ValueError(f"no file {raw} in this repo, and no kept application names it: give "
+                     "the path as it sits here (cv/<name>.pdf, documents/cv/<name>.pdf)")
+
+
+def _kept_outputs(root) -> set:
+    """Every resume and letter a kept application in documents/applications/ names."""
+    out = set()
+    base = os.path.join(root, "documents", "applications")
+    try:
+        folders = sorted(os.listdir(base))
+    except OSError:
+        return out
+    try:
+        import docpaths
+    except Exception:  # noqa: BLE001
+        return out
+    for d in folders:
+        try:
+            with open(os.path.join(base, d, "draft.json"), encoding="utf-8") as fh:
+                got = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        for draft in got if isinstance(got, list) else [got]:
+            abbr = str((draft or {}).get("abbr") or "").strip() if isinstance(draft, dict) else ""
+            if abbr:
+                for ext in (".pdf", ".tex"):
+                    out.add(docpaths.resume_rel(abbr, ext))
+                    out.add(docpaths.letter_rel(abbr, ext))
+    return out
+
+
+def attach(threads, contact_id, date, path, root=None) -> dict:
+    """Name the file that went with a message already logged: the one message of ours to
+    them on that day that says a resume went and names none (or the only one that day).
+    `path` "unknown" says nobody kept it. The row is changed in place; the caller saves."""
+    cid = str(contact_id or "").strip()
+    day = _need_date(date, "date").isoformat()
+    rows = [r for r in threads if str(r.get("contact_id") or "").strip() == cid
+            and _is_message_out(r) and str(r.get("date") or "").strip() == day]
+    if not rows:
+        raise ValueError(f"no message to {cid} on {day} is logged: log the one that carried it, "
+                         f"with its words: {log_resume_command(cid, path)} --date {day}")
+    open_ = [r for r in rows if not names_a_file(r)]
+    if not open_:
+        raise ValueError(f"the message to {cid} on {day} already names "
+                         f"{', '.join(attached(rows[0]))}")
+    pick = [r for r in open_ if says_resume_went(r)] or open_
+    if len(pick) > 1:
+        raise ValueError(f"{len(pick)} messages to {cid} on {day} could be the one: name the "
+                         "file in the right one's summary by hand")
+    row = pick[0]
+    unknown = str(path or "").strip().lower() in ("unknown", "not kept", NOT_KEPT)
+    rel = NOT_KEPT if unknown else resolve_attachment(path, root)
+    what = "a resume" if (unknown or is_resume_file(rel)) else "an attachment"
+    note = f"{what} attached ({rel})"
+    summary = str(row.get("summary") or "").strip()
+    bare = [m for m in _marked(row) if not m.group(2)]
+    if bare:
+        m = bare[0]
+        summary = summary[:m.start()] + note + summary[m.end():]
+    else:
+        summary = "; ".join(x for x in (summary, note) if x)
+    row["summary"] = summary
+    if what == "a resume" and _scenario(row) in ("", "reply"):
+        row["scenario"] = "send_resume"
+    return row
+
+
+def _cli_attach(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py attach",
+        description="Name the file that went with a message already logged.")
+    ap.add_argument("contact_id")
+    ap.add_argument("--date", required=True, help="the day it went, as logged")
+    ap.add_argument("--file", required=True,
+                    help="the file as it sits in the repo, or unknown if nobody kept it")
+    ap.add_argument("--threads", default=THREADS_CSV)
+    a = ap.parse_args(argv)
+    threads = load_threads(a.threads)
+    try:
+        row = attach(threads, a.contact_id, a.date, a.file)
+    except ValueError as e:
+        print(f"attach: not changed: {e}")
+        return 1
+    save_threads(threads, a.threads)
+    print(f"attach: the message to {a.contact_id} on {a.date} now says: {row['summary']}")
+    return 0
+
+
 # ---------------------------------------------------------------- holds
 
 # A next_action that opens on HOLD or FREEZE is an instruction not to act yet,
@@ -2508,7 +3033,7 @@ def action_hold(next_action, today) -> str:
 # ---------------------------------------------------------------- tracker join
 
 
-def link_to_applications(contacts, tracker_rows) -> list[dict]:
+def link_to_applications(contacts, tracker_rows, threads=None) -> list[dict]:
     """Contacts that have an application at the same employer, and which one.
 
     This is the integration the brief asks for: a thread and an application at
@@ -2516,6 +3041,9 @@ def link_to_applications(contacts, tracker_rows) -> list[dict]:
     `linked_application` column is what carries it. Matching on `company_key`
     rather than the company string is what makes a contact recorded under an
     employer's legal name find the application filed under its initials.
+
+    With `threads`, each link also carries `resumes_sent` (`resumes_sent`): which resume
+    went to them and when, read from the message that carried it.
     """
     by_key: dict[str, list[dict]] = {}
     for row in tracker_rows:
@@ -2546,6 +3074,9 @@ def link_to_applications(contacts, tracker_rows) -> list[dict]:
             "linked_application": stored,
             "suggested_link": next((c for c in cv_files if c), ""),
             "link_disagrees": bool(stored) and stored not in cv_files,
+            "resumes_sent": ([{"date": s["date"], "files": s["files"]} for s in
+                              resumes_sent(threads, contact.get("contact_id"))]
+                             if threads is not None else []),
         })
     return out
 
@@ -2843,6 +3374,8 @@ def main(argv=None) -> int:
         return _cli_sent(argv[1:])
     if argv[:1] == ["text"]:
         return _cli_text(argv[1:])
+    if argv[:1] == ["attach"]:
+        return _cli_attach(argv[1:])
     if argv[:1] in (["nudge"], ["message"]):
         return _cli_followed_up(argv[1:], argv[0])
     if argv[:1] == ["resent"]:
@@ -2874,15 +3407,21 @@ def main(argv=None) -> int:
     print(f"{len(contacts)} contacts, {len(threads)} messages\n")
 
     items = owed(contacts, threads, a.today)
-    print("OWED" if items else "OWED: nothing due")
+    tracked = load_tracker(a.tracker) if os.path.exists(a.tracker) else None
+    resumes = {r["contact_id"]: r for r in resumes_owed(contacts, threads, tracked)}
+    print("OWED" if items or resumes else "OWED: nothing due")
     for i in items:
         where = f" ({i['company']})" if i["company"] else ""
+        owed_cv = resumes.pop(i["contact_id"], None)
         print(f"  [{i['kind']:5}] {i['name'] or i['contact_id']}{where} "
               f"{i['business_days']}bd since {i['since'] or 'unknown'}"
               + {"request_pending": "; not accepted, so nothing can be sent: withdraw it, "
                                     f"then record it: state.py withdraw {i['contact_id']}",
                  "first_message": "; accepted, nothing said yet: a first message, not a nudge",
-                 }.get(i["kind"], ""))
+                 }.get(i["kind"], "")
+              + (f"; {resume_owed_line(owed_cv)}" if owed_cv else ""))
+    for r in resumes.values():
+        print(f"  [{noun()}] {resume_owed_line(r)}")
     import zipfile
     import export
     if any(i["kind"] == "request_pending" for i in items):
@@ -2902,13 +3441,16 @@ def main(argv=None) -> int:
     if b["note"]:
         print("  " + b["note"])
 
-    if os.path.exists(a.tracker):
-        links = link_to_applications(contacts, load_tracker(a.tracker))
+    if tracked is not None:
+        links = link_to_applications(contacts, tracked, threads)
         print(f"\nLINKED  {len(links)} contacts sit at a company already in the tracker")
         for link in links:
-            print(f"  {link['name'] or link['contact_id']} -> {', '.join(link['roles'])}")
+            sent_line = "; ".join(
+                f"{noun()} sent {s['date']}" + (f" ({', '.join(s['files'])})" if s["files"] else "")
+                for s in link.get("resumes_sent") or [])
+            print(f"  {link['name'] or link['contact_id']} -> {', '.join(link['roles'])}"
+                  + (f"; {sent_line}" if sent_line else ""))
         import company_key
-        tracked = load_tracker(a.tracker)
         misses = company_key.near_misses({c.get("company") for c in contacts if c.get("company")},
                                          {r.get("company") for r in tracked if r.get("company")})
         if misses:
@@ -2922,7 +3464,10 @@ def main(argv=None) -> int:
     # `history_not_logged`, with the few that need a person buried in the middle.
     # That is the failure `reconcile`'s own docstring describes, and the display
     # must not reintroduce it: an `orphan_thread` would sit unnoticed.
-    problems = reconcile(contacts, threads)
+    # The tracker's half is added beside the call, so the line stays the one a person's
+    # own test finds the printer by.
+    problems = reconcile(contacts, threads) + resume_findings(
+        contacts, threads, tracked, reasons=("resume_not_logged",))
     actionable = [p for p in problems if p["reason"] not in NOTE_ONLY]
     notes = len(problems) - len(actionable)
     if actionable:

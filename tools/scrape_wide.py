@@ -121,9 +121,11 @@ def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
     """(parsed JSON, None) on success; (None, reason) on any failure.
 
     tools/portals.py run_cli, the one runner for a portal's CLI (hydrate.py and
-    job_alerts.py use it too): it says why stdout goes to a file and not a pipe, and
-    why a line where a board refused is kept wherever it falls in stderr. Kept here
-    by name, because tests and a person's own tests stand in for it here."""
+    job_alerts.py use it too): stdout goes to a file, not a pipe, because Node writes
+    to a pipe asynchronously and a CLI that exits after writing loses what has not
+    drained, so ten at once came back cut at 64 KiB mid-string with exit 0; and a line
+    where a board refused is kept wherever it falls in stderr. Kept here by name,
+    because tests and a person's own tests stand in for it here."""
     return portals.run_cli(cmd, timeout)
 
 
@@ -1135,7 +1137,11 @@ def _employer_boards(today: dt.date, seen: str | None = None,
     --no-seen-read, judged careers-site pages against the repo's file instead."""
     from ats_boards import fetch_all as _ats_fetch
     notes: dict[str, str] = {}
-    rows, quiet = _ats_fetch(notes=notes, today=today, seen=seen, keep_ruled_out=keep_ruled_out)
+    # Passed only when given, so a stand-in for fetch_all written before they existed (a
+    # person's own tests have one) still works for an ordinary round.
+    extra = dict(({"seen": seen} if seen else {}),
+                 **({"keep_ruled_out": True} if keep_ruled_out else {}))
+    rows, quiet = _ats_fetch(notes=notes, today=today, **extra)
     return rows, quiet, notes
 
 
