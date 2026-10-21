@@ -61,6 +61,7 @@ import prep  # noqa: E402
 import profile_facts  # noqa: E402
 import state  # noqa: E402
 import throttle  # noqa: E402
+import told as places_told  # noqa: E402
 import untrusted  # noqa: E402
 import voice_check  # noqa: E402
 import what_works  # noqa: E402
@@ -1095,7 +1096,11 @@ def answer_for(item, ctx) -> dict:
         # The profile's summary is written, not said: never the answer as it stands.
         lines.append("%s %s (source: %s)" % (prep.RAW_MARK, facts["summary"], prof))
     elif re.search(r"where are you based|how are you finding", q, re.I):
-        if home_place():
+        heard = places_told.place(ctx["company"])
+        if heard:
+            lines.append("You told %s you are in %s (source: profile/person.json "
+                         "identity.places_told): say the same." % (ctx["company"], heard))
+        elif home_place():
             lines.append("You live in %s (source: profile/person.json)" % home_place())
         since = newcomer(ctx)
         if since == JUST_ARRIVED:
@@ -1859,7 +1864,10 @@ def newcomer(ctx) -> str:
     """How long the person has lived where they live ("for a few weeks", "since May 2026"),
     when they moved within MOVED_MONTHS (person.json identity.moved), else "". A
     confirmed-by date counts: they had moved by then. JUST_ARRIVED where that is all they
-    say: no date and no month is printed for them, anywhere."""
+    say: no date and no month is printed for them, anywhere. An employer told another place
+    (tools/told.py) hears nothing about a move it was never told of."""
+    if places_told.differs(ctx.get("company", "")):
+        return ""
     if _person("identity.moved").lower() == JUST_ARRIVED:
         return JUST_ARRIVED
     moved = _person("identity.moved")
@@ -1871,9 +1879,14 @@ def newcomer(ctx) -> str:
     return JUST_ARRIVED if _just_arrived_rule() else _since(moved, today)
 
 
-def home_place() -> str:
-    """Where the person lives, as their profile says it."""
-    return _person("identity.area") or _person("identity.location")
+def home_place(company="") -> str:
+    """Where this employer heard the person is (tools/told.py), else where they live, as
+    their profile says it. Kept per employer, "per employer" is no place for anyone."""
+    heard = places_told.place(company) if company else ""
+    if heard:
+        return heard
+    return next((v for v in (_person("identity.area"), _person("identity.location"))
+                 if v and v.lower() != places_told.PER_EMPLOYER), "")
 
 
 # What an employer is, read from the tracker's sector, the research and the name: the
@@ -2063,7 +2076,13 @@ def told_lines(ctx) -> list:
     the move) is flagged, never passed over, and a contact with nothing logged is named."""
     here = _here(ctx)
     out, seen = [], set()
-    moved = _moved_on()
+    heard = places_told.place(ctx["company"])
+    # What this employer was told on purpose is the line to keep, not the profile's own.
+    moved = "" if heard else _moved_on()
+    if heard:
+        out.append("- You told %s you are in %s (source: profile/person.json "
+                   "identity.places_told): every answer and message to them says the same."
+                   % (ctx["company"], heard))
     current = [n for e in ctx["facts"].get("employers") or [] if isinstance(e, dict)
                and "present" in _text(e.get("dates")).lower()
                for n in (_text(e.get("company")),) if n]
@@ -2809,7 +2828,7 @@ def where_lines(ctx) -> list:
     moved = newcomer(ctx)
     if not moved:
         return []
-    place = home_place()
+    place = home_place(ctx["company"])
     return [
         "- You moved recently: you live in %s, %s (source: profile/person.json). \"How "
         "are you finding it?\" is friendly, and underneath it they are checking you are settled "
@@ -2905,7 +2924,8 @@ def conditional_questions(ctx) -> list:
     if temporary_status(ctx):
         out.append(("What about longer term, after your permit?", "your status is temporary"))
     if newcomer(ctx):
-        out.append(("How are you finding %s?" % (home_place().split(",")[0] or "it here"),
+        out.append(("How are you finding %s?" % (home_place(ctx["company"]).split(",")[0]
+                                                 or "it here"),
                     "you moved recently"))
     if employer_type(ctx) == "consulting":
         out.append(("Are you willing to travel?", "a consulting firm asks every time"))
@@ -3055,6 +3075,11 @@ def check(path) -> list:
     anything: it is what they asked for (`failures` leaves it out)."""
     text = _read(path)
     blocks = _answer_blocks(_owned(text).get("Your answers"))
+    # A question answered under another heading (Notes, a section of their own) is checked
+    # the same way and its draft listed: only Your answers was read, and nothing elsewhere
+    # was checked or listed (2026-10-21). Empty ones there are headings, never "not written".
+    elsewhere = {k: v for k, v in _question_blocks(text, skip=("Your answers",)).items()
+                 if k not in blocks and " ".join(spoken(v[1])).strip()}
     # Research the document asks Claude for is part of being ready: the person never sees a
     # RESEARCH FIRST line, only what it found.
     out = [("Research", re.sub(r"^\s*-\s*", "", ln).split(". The employer-researcher")[0])
@@ -3071,6 +3096,36 @@ def check(path) -> list:
         out += [(q, why) for why in prep.unsayable(mine)]
         if drafted(body):
             out.append((DRAFT, q))
+    for q, body in elsewhere.values():
+        out += [(q, why) for why in prep.unsayable(spoken(body))]
+        if drafted(body):
+            out.append((DRAFT, q))
+    return out
+
+
+# A heading that is a question someone could be asked: "### Why this team?", "### Tell me
+# about a time you led something." Never one of this file's own ("### What you found out").
+_ASKED = re.compile(r"\?\s*$|^(?:tell me|walk me|talk me|describe|give me)\b", re.I)
+
+
+def _question_blocks(text, skip=()) -> dict:
+    """{normalised question: (question, [lines])} for every question heading in the document
+    outside the sections named in `skip`, its block running to the next heading."""
+    out, section, q, body = {}, "", None, []
+    for line in str(text or "").splitlines() + ["## "]:
+        sec = re.match(r"^## (.*)$", line)
+        head = re.match(r"^#{3,6} (.*)$", line)
+        if sec or head:
+            if q and section not in skip:
+                out.setdefault(what_works._norm(q), (q, body))
+            q, body = None, []
+            if sec:
+                section = sec.group(1).strip()
+            elif _ASKED.search(head.group(1).strip()) and head.group(1).strip() != FOUND_OUT[4:]:
+                q = head.group(1).strip()
+            continue
+        if q is not None and not line.startswith(INTENT_MARK):
+            body.append(line)
     return out
 
 

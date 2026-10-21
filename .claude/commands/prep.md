@@ -89,7 +89,10 @@ logged, the employer's research arrived or changed, the application or process t
 changed, or the call came within two days with nothing researched. The morning brief runs
 `python3 tools/network/prep.py --stale-only`, so a prep written while waiting for a reply
 never reaches a booked call still saying "wait". Answers someone rewrote are kept; what the
-tool wrote is written again from the profile as it is now.
+tool wrote is written again from the profile as it is now. `--stale-only`, which a release
+runs too, rebuilds only a live conversation's prep (a reply, a call booked, a referral in
+flight) and never one whose only change would be its date: any other prep is rebuilt by
+`/prep <contact>` the day a call needs it.
 
 Once per session for prep documents, end with one short line inviting change: "Anything
 about the questions or the depth you'd have different? It sticks from now on." What they

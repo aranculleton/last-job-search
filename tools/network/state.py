@@ -1846,6 +1846,70 @@ def _cli_reopen_or_drop(argv, verb) -> int:
     return 0 if done else 1
 
 
+def set_contact(contacts, threads, who, status=None, next_action=None, due=None, note="",
+                today="") -> tuple[dict, list[str]]:
+    """Change one contact's status, next action, its date, or add a dated note; returns the
+    row and a line for each change. The book was edited by hand for want of this, and a note
+    with line breaks in it broke the file (2026-10-21). A note stays on one line."""
+    row = (already_contacted(contacts, contact_id=who) or already_contacted(contacts, name=who))
+    if not row:
+        raise ValueError(f"no contact matching {who!r}")
+    said = []
+    if status is not None:
+        status = status.strip()
+        if status not in schema.THREAD_STATUSES:
+            raise ValueError(f"{status!r} is not a status; one of: "
+                             f"{', '.join(schema.THREAD_STATUSES)}")
+        row["status"] = status
+        shown = effective_status(row, threads_for(threads, row.get("contact_id", "")))
+        said.append(f"status {status}" + ("" if shown == status else
+                                          f" (the message log still shows {shown}: a reply "
+                                          "owed, or a later message, outranks it)"))
+    if next_action is not None:
+        row["next_action"] = " ".join(next_action.split())
+        said.append(f"next action: {row['next_action'] or '(none)'}")
+    if due is not None:
+        due = due.strip()
+        if due and as_date(due) is None:
+            raise ValueError(f"{due!r} is not a date: YYYY-MM-DD, or \"\" to clear it")
+        row["next_action_due"] = due
+        said.append(f"due {due or '(none)'}")
+    if note.strip():
+        line = f"{today or datetime.date.today().isoformat()}: {' '.join(note.split())}"
+        _note(row, "notes", line)
+        said.append(f"note added: {line}")
+    if not said:
+        raise ValueError("say what to change: --status, --next-action, --due or --note")
+    return row, said
+
+
+def _cli_set(argv) -> int:
+    ap = argparse.ArgumentParser(prog="state.py set",
+                                 description="Change one contact's status, next action, its "
+                                             "date, or add a note, without editing the file.")
+    ap.add_argument("contact", help="their contact_id, or their name")
+    ap.add_argument("--status")
+    ap.add_argument("--next-action", dest="next_action")
+    ap.add_argument("--due", help="YYYY-MM-DD, or \"\" to clear it")
+    ap.add_argument("--note", default="", help="added to their notes with today's date")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts = load_contacts(a.contacts)
+    threads = load_threads(a.threads) if os.path.exists(a.threads) else []
+    try:
+        row, said = set_contact(contacts, threads, a.contact, a.status, a.next_action, a.due,
+                                a.note, a.today)
+    except ValueError as e:
+        print(f"set: {e}")
+        return 1
+    save_contacts(contacts, a.contacts)
+    print(f"{row.get('contact_id')} ({row.get('name')}, {row.get('company')}): "
+          + "; ".join(said))
+    return 0
+
+
 def _cli_dropped_rows(argv) -> int:
     """`state.py dropped-rows [--apply]`: closed rows that were a queue set aside."""
     contacts, threads = load_contacts(), load_threads()
@@ -2239,6 +2303,8 @@ def main(argv=None) -> int:
         return _cli_dropped_rows(argv[1:])
     if argv[:1] == ["inmail-credits"]:
         return _cli_inmail_credits(argv[1:])
+    if argv[:1] == ["set"]:
+        return _cli_set(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()

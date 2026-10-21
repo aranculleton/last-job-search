@@ -114,7 +114,13 @@ def module(name: str):
     if f not in _modules:
         spec = importlib.util.spec_from_file_location(f"ljs_profile_{name}", f)
         mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
+        # No compiled copy beside the profile: profile/__pycache__ is one more thing a forced
+        # add commits, and these files are read once a run.
+        was, sys.dont_write_bytecode = sys.dont_write_bytecode, True
+        try:
+            spec.loader.exec_module(mod)
+        finally:
+            sys.dont_write_bytecode = was
         _modules[f] = mod
     return _modules[f]
 

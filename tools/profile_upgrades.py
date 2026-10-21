@@ -561,7 +561,12 @@ def _move_and_area() -> str:
     # A marker where the date goes: the first version of this upgrade had no form for a
     # profile that only confirms they were there by a date, and wrote one.
     moved = str(ident.get("moved") or "").strip()
-    if not re.fullmatch(r"none|just arrived|(?:by\s+)?\d{4}-\d{2}(?:-\d{2})?", moved, re.I):
+    # "per employer": they tell each employer their own place (tools/told.py), so nothing
+    # single is said for everyone, and the question is answered for good. Without it the
+    # change stayed pending for someone who would never state one place, and a no lasted a
+    # month.
+    if not re.fullmatch(r"none|just arrived|per employer|(?:by\s+)?\d{4}-\d{2}(?:-\d{2})?",
+                        moved, re.I):
         return ("person.json identity.moved is %r, not a date or \"none\": the interview pack's "
                 "small talk for someone who moved recently stays off" % moved[:60])
     return ""
@@ -615,19 +620,24 @@ def _own_tests() -> str:
     it behaves. Read from the record the sync's own-tests run leaves; run again only when
     the tests have changed since. A test that used a part the update removed is the sync's
     question to the person (deleting their file is theirs to say), not this."""
-    if not os.path.isdir(os.path.join(ROOT, "profile", "tests")):
+    # The tests of the profile in use: with the example person in use (the app's own tests,
+    # run in a person's repo), the person's tests are not its, and counting them turned the
+    # app's "the example is fully upgraded" test red there.
+    prof = os.path.normpath(person.path())
+    if os.path.basename(prof) != "profile" or not os.path.isdir(os.path.join(prof, "tests")):
         return ""
+    root = os.path.dirname(prof)
     import sync_app
     why = []
-    rec = sync_app.own_tests_record(ROOT)
-    if rec and rec.get("failures") and rec.get("tree") != sync_app.tests_tree(ROOT):
-        sync_app.record_own_tests(ROOT, sync_app.own_test_failures(ROOT))
-        rec = sync_app.own_tests_record(ROOT)
+    rec = sync_app.own_tests_record(root)
+    if rec and rec.get("failures") and rec.get("tree") != sync_app.tests_tree(root):
+        sync_app.record_own_tests(root, sync_app.own_test_failures(root))
+        rec = sync_app.own_tests_record(root)
     changed = [f[0] for f in (rec or {}).get("failures") or [] if len(f) > 2 and not f[2]]
     if changed:
         why.append("%d of your own test(s) check what an update changed: %s"
                    % (len(changed), "; ".join(changed[:3])))
-    reads = sorted(f for f, v in sync_app.own_test_risks(ROOT).items()
+    reads = sorted(f for f, v in sync_app.own_test_risks(root).items()
                    if any(x.startswith("the source of ") for x in v))
     if reads:
         why.append("%d of your own test file(s) read the app's code as text, so the next "
@@ -1117,7 +1127,9 @@ REGISTRY: tuple[Upgrade, ...] = (
             "your pay band, notice, sponsorship and permit answer said the same way everywhere",
             _profile_consistency, "python3 tools/profile_consistency.py, then ask the person "
             "which is right for each fact it lists and correct the other place(s); never pick "
-            "for them", "question", "~2 min", priority=2, needs="you",
+            "for them. Where they say both are right on purpose, record that with "
+            "`python3 tools/profile_consistency.py --reviewed <file>:<line>` and change "
+            "nothing", "question", "~2 min", priority=2, needs="you",
             ask="Your profile gives two different answers on something a recruiter checks "
                 "first. Can I show you which, so you pick the right one?",
             why_ask="A form, a letter and an interview pack each read one of them, and a "
@@ -1221,9 +1233,13 @@ REGISTRY: tuple[Upgrade, ...] = (
             "person.json identity.moved as YYYY-MM or YYYY-MM-DD when they record when they moved "
             "in the last year, as \"by YYYY-MM-DD\" when the profile only confirms they were "
             "there by a date (\"in <city>, confirmed <date>\"), as \"just arrived\" when their "
-            "own rule (learned.py brief interview) is to say only that, with no date, else "
-            "\"none\"; and identity.area as the neighbourhood and city they give (else the "
-            "location); invent nothing", "edit", "~1 min",
+            "own rule (learned.py brief interview) is to say only that, with no date, as "
+            "\"per employer\" in both when they tell each employer their own place (record "
+            "each with python3 tools/told.py \"<Employer>\" \"<place>\"), else \"none\"; and "
+            "identity.area as the neighbourhood and city they give (else the location); invent "
+            "nothing, and where the profile cannot say, write a short marker "
+            "(\"[CONFIRM: when you moved]\", \"[CONFIRM: where you live]\"), never the whole "
+            "question", "edit", "~1 min",
             names=("person.json:identity.moved", "person.json:identity.area"), priority=3),
     Upgrade("work-auth-employer", "2026-10-19",
             "recruiters hear your work authorization in your own employer-facing words",
@@ -1406,6 +1422,9 @@ SAFE_DEFAULTS: dict[str, str] = {
                                           "career sets two in /setup --section documents",
     "person.json:documents.section_order": "the standard order every older repo printed",
     "person.json:documents.letter_paper": "follows documents.paper, then the country",
+    "person.json:identity.places_told": "none: every employer hears the person's own place, "
+                                        "what every older repo assumed; tools/told.py records "
+                                        "one that heard another",
     "search.MANAGES_PEOPLE": "no direct reports, what every older repo assumed; /setup "
                              "--section search sets it for someone who has managed people",
     "search.OPP_CONTRACT": "contract work docked, what every older repo did; /setup --section "
@@ -1642,15 +1661,33 @@ def _landed_elsewhere(sha: str, parents: list[str]) -> int:
 
 def owner_elsewhere(now: float | None = None) -> str:
     """"" when this chat owns the pending upgrades, else the time another chat's turn ends."""
+    return owner(now)[0]
+
+
+# Why another chat has the pending upgrades, said as it is: the sync once said they belonged
+# to "the one whose sync brought this update in" and that this chat "got the update by
+# merging master" when the other chat had only claimed it, and nothing of its had reached
+# master.
+OWNER_WHY = {
+    "claimed": "another chat on this repo took this update first (its claim is on GitHub); "
+               "its sync has not reached master yet",
+    "landed": "another chat's sync of this update reached master first",
+    "merged": "this chat got the update by merging master, where another chat's sync put it",
+}
+
+
+def owner(now: float | None = None) -> tuple[str, str]:
+    """("", "") when this chat owns the pending upgrades, else (the time another chat's turn
+    ends, the OWNER_WHY key saying why it is theirs)."""
     import time
     r = _git("log", "-1", "--format=%H %ct %P", f"--grep={SYNC_SUBJECT}", "HEAD").stdout.split()
     if len(r) < 2:
-        return ""
+        return "", ""
     sha, when = r[0], int(r[1])
     try:
         with open(_marker(), encoding="utf-8") as f:
             if f.read().strip() == "taken " + sha:
-                return ""                           # handed over by --take: no other chat open
+                return "", ""                       # handed over by --take: no other chat open
     except OSError:
         pass
     # Checked before this chat's own claim: two chats that synced the same update a minute
@@ -1661,27 +1698,28 @@ def owner_elsewhere(now: float | None = None) -> str:
     app = r[3] if len(r) > 3 else ""
     mine = bool(app) and _git("rev-parse", "-q", "--verify",
                               CLAIMS_SEEN + app).stdout.strip() == sha
-    theirs = 0 if mine else (_claimed_elsewhere(sha, app) or _landed_elsewhere(sha, r[2:]))
+    claimed = 0 if mine else _claimed_elsewhere(sha, app)
+    theirs = claimed or (0 if mine else _landed_elsewhere(sha, r[2:]))
     if theirs:
         ends = theirs + OWNER_MINUTES * 60
         if (now if now is not None else time.time()) >= ends:
-            return ""
-        return time.strftime("%H:%M UTC", time.gmtime(ends))
+            return "", ""
+        return time.strftime("%H:%M UTC", time.gmtime(ends)), "claimed" if claimed else "landed"
     try:
         with open(_marker(), encoding="utf-8") as f:
             if f.read().strip() == sha:
-                return ""                           # this chat claimed it earlier
+                return "", ""                       # this chat claimed it earlier
     except OSError:
         pass
     master = "refs/remotes/origin/master"
     if _git("rev-parse", "-q", "--verify", master).returncode != 0:
-        return ""
+        return "", ""
     if _git("merge-base", "--is-ancestor", sha, master).returncode != 0:
-        return ""                                   # this chat's own sync, not landed yet
+        return "", ""                               # this chat's own sync, not landed yet
     ends = when + OWNER_MINUTES * 60
     if (now if now is not None else time.time()) >= ends:
-        return ""
-    return time.strftime("%H:%M UTC", time.gmtime(ends))
+        return "", ""
+    return time.strftime("%H:%M UTC", time.gmtime(ends)), "merged"
 
 
 def claim(taken: bool = False) -> None:
@@ -1798,6 +1836,14 @@ def main(argv: list[str] | None = None) -> int:
         print("profile_upgrades: this chat owns the pending upgrades now; apply them "
               "(`profile_upgrades.py --plan`, then /upgrade in the background)")
         return 0
+    if a.plan or a.check:
+        # An /upgrade worktree made from a commit before the sync lists the upgrades of an
+        # older app, and named an upgrade it did not have as a KeyError.
+        import sync_app
+        behind = sync_app.behind_sync()
+        if behind:
+            print(behind)
+            return 2
     if a.check:
         # Right before an upgrade starts, master is checked: another chat may have landed it.
         if _personal_repo():
@@ -1806,7 +1852,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"done on master by another chat: merge it ({MERGE_MASTER}), never apply "
                   "it again here")
             return 0
-        why = by_id(a.check).pending()
+        try:
+            upgrade = by_id(a.check)
+        except KeyError:
+            print(f"There is no change called {a.check!r} in this copy of the app: it is "
+                  "older than the update that named it, or the name is mistyped. Update this "
+                  f"checkout first ({MERGE_MASTER}), then check again.")
+            return 2
+        why = upgrade.pending()
         print(why or "done")
         return 1 if why else 0
     if _personal_repo() and (a.after or a.plan):
@@ -1840,7 +1893,7 @@ def main(argv: list[str] | None = None) -> int:
         # winner's claim below. A chat another chat's claim or landed sync already covers
         # pushes nothing, so it never stakes a claim on top of theirs.
         push_claim()
-    elsewhere = owner_elsewhere() if rows and (a.after or a.plan or a.line) else ""
+    elsewhere, why_theirs = owner() if rows and (a.after or a.plan or a.line) else ("", "")
     if elsewhere:
         # Another chat brought this update in and is applying it: say so once, start
         # nothing and ask nothing. The instant ones still run below; they are the same
@@ -1857,9 +1910,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Profile upgrades: {len(rows)} pending, being applied by another chat "
                   f"until {elsewhere}.")
         elif rows:
-            print(f"Profile upgrades: {len(rows)} pending. They belong to another chat on this "
-                  f"repo, the one whose sync brought this update in, until {elsewhere}: this chat "
-                  f"got the update by merging master, or synced it after that chat's sync landed. "
+            done = (f"{len(landed)} of its changes are on master already" if landed
+                    else "none of its changes has reached master yet")
+            print(f"Profile upgrades: {len(rows)} pending. They belong to another chat until "
+                  f"{elsewhere}: {OWNER_WHY[why_theirs]}, and {done}. "
                   f"Claude: start nothing and ask nothing about them; merge master first "
                   f"({MERGE_MASTER}). After {elsewhere} the next sync hands what is still pending "
                   "to this chat. If the person says no other chat is open, take them now: "

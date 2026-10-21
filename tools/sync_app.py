@@ -429,8 +429,32 @@ def _record_check() -> None:
         try:
             with open(p, "w", encoding="utf-8") as fh:
                 fh.write(datetime.date.today().isoformat() + "\n")
+            # The commit the sync left this repo on, beside the date, in the folder every
+            # worktree of it shares: an /upgrade worktree made from an older commit lists the
+            # wrong upgrades, and `behind_sync()` says so instead.
+            head = git("rev-parse", "HEAD", check=False).stdout.strip()
+            if head:
+                with open(p + "-head", "w", encoding="utf-8") as fh:
+                    fh.write(head + "\n")
         except OSError:
             pass
+
+
+def behind_sync() -> str:
+    """A plain line when this checkout is older than the last sync in this repo (a worktree
+    made from a commit before it), else "". Never raises."""
+    try:
+        p = _stamp_path()
+        with open(p + "-head", encoding="utf-8") as fh:
+            head = fh.read().strip()
+    except (OSError, TypeError):
+        return ""
+    if not head or git("cat-file", "-e", head + "^{commit}", check=False).returncode:
+        return ""
+    if git("merge-base", "--is-ancestor", head, "HEAD", check=False).returncode != 1:
+        return ""
+    return ("This checkout is older than the last update of this repo, so it would list the "
+            "wrong changes. Update it first: git merge %s, then run this again." % head[:12])
 
 
 def stale() -> bool:
@@ -779,9 +803,11 @@ def own_test_failures(root: str | None = None) -> list[tuple[str, str]] | None:
     with tempfile.TemporaryDirectory() as tmp:
         report = os.path.join(tmp, "report.xml")
         try:
+            # No compiled copies left in profile/tests/__pycache__ to be committed.
             r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
                                 "--tb=no", f"--junitxml={report}", tests], cwd=root, text=True,
-                               capture_output=True, timeout=300)
+                               capture_output=True, timeout=300,
+                               env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
         except (OSError, subprocess.TimeoutExpired):
             return None
         if r.returncode != 1 or not os.path.isfile(report):   # 0 clean; 5 none collected

@@ -41,6 +41,7 @@ import company_key  # noqa: E402
 import person  # noqa: E402
 import schema  # noqa: E402
 import tone  # noqa: E402
+import told as places_told  # noqa: E402
 
 # The person's voice, work authorization and places: profile/networking.py.
 _NET = person.module("networking")
@@ -2050,7 +2051,7 @@ def inmail_words(reader: str = "peer") -> int:
 
 
 def advise(message, kind, name=None, seniority="peer", employers=(), reader=None, title="",
-           reading=None, first_contact=None, recruiter=False, their=()) -> list:
+           reading=None, first_contact=None, recruiter=False, their=(), company="") -> list:
     """Every warning for a draft that may go but reads worse than it should, each an
     advice.Advice(rule, text, fix): what reads as generated, a hedge stacked or a
     disclaimer, an exit in a first message, a claim about them written as fact, a
@@ -2060,7 +2061,8 @@ def advise(message, kind, name=None, seniority="peer", employers=(), reader=None
     the rewrite leaves standing is shown with the draft, for the person to decide, never
     in place of the rewrite.
     `their` holds the names on the reader's side, which the person's shorthand leaves as
-    written."""
+    written. `company` is the reader's employer: one told another place than the person's own
+    (tools/told.py) is warned of a draft that names the person's own city."""
     k = _KIND_ALIASES.get(str(kind or "").strip().lower(), str(kind or ""))
     text = message.body if isinstance(message, InMail) else str(message or "")
     recruiter = recruiter or bool(getattr(message, "recruiter", False))
@@ -2076,6 +2078,7 @@ def advise(message, kind, name=None, seniority="peer", employers=(), reader=None
         own += [advice.Advice("sentence_starts_with_contraction", v.text,
                               "you asked to be told: the long form where it reads better")
                 for v in tone.contractions_at_start(text)]
+    own += _place_heard(text, company)
     if k == "inmail":
         words, most = len(text.split()), inmail_words(rtype)
         if most and words > most:
@@ -2098,6 +2101,26 @@ def advise(message, kind, name=None, seniority="peer", employers=(), reader=None
                                   employers=employers, reader=rtype, _all=True)
                 if v.rule in over or _check_of(v) in over]
     return out
+
+
+def _place_heard(text, company) -> list:
+    """A warning where this employer was told another place than the person's own and the
+    draft names their own city: ABOUT_ME's "now in Toronto after London" went to an employer
+    that had heard London."""
+    if not company or not places_told.differs(company):
+        return []
+    heard = places_told.place(company)
+    own = {w for w in re.findall(r"[a-z]+", places_told.home().lower()) if len(w) > 2}
+    own |= {str(getattr(_NET, "HOME_CITY", "") or "").lower()} - {""}
+    own -= {w for w in re.findall(r"[a-z]+", heard.lower())}
+    hit = next((m.group(0) for w in sorted(own, key=len, reverse=True)
+                for m in [re.search(r"\b%s\b" % re.escape(w), text, re.I)] if m), "")
+    if not hit:
+        return []
+    return [advice.Advice(
+        "place_not_what_they_heard", hit,
+        f"you told {company} you are in {heard} (profile/person.json identity.places_told): "
+        "say the same, or record what they hear now with python3 tools/told.py")]
 
 
 # ---------------------------------------------------------------- read it aloud

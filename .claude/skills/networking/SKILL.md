@@ -461,6 +461,8 @@ standing is shown with the draft for the person to decide, never in place of the
   here" as an opener, a closing question asking how to get hired, a test question in place
   of an honest ask;
 - a list of three credentials in a row: name the one that matters to this reader;
+- the person's own city, in a draft to an employer that heard another place
+  (`company=` the reader's employer; `tools/told.py` keeps what each employer heard);
 - hedges: one light hedge per inference ("I imagine", "I'm guessing", "probably", "it
   seems like"), never two in a sentence, never a disclaimer ("I can't know from the
   outside"). A question and an offer on their terms ("if you think it might help, I can

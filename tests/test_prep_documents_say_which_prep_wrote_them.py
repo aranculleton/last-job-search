@@ -131,3 +131,38 @@ def test_a_rewrite_that_would_change_only_the_date_leaves_the_document_alone(tmp
     assert "Written 2026-10-16." in open(path, encoding="utf-8").read()
     one = prep.write_prep(CONTACTS[0], today="2026-10-17", root=str(tmp_path))
     assert "Written 2026-10-17." in open(one, encoding="utf-8").read()
+
+
+def test_a_release_rewrites_only_live_conversations_and_never_for_a_date(tmp_path, capsys):
+    """From a real repo on 2026-10-21: a release rewrote all 220 prep documents, twice when
+    two chats synced, though 141 were for conversations closed, dropped or gone cold, and in
+    many the only change was the date and the stamp."""
+    cold = dict(CONTACTS[1], contact_id="kestrel_haldane_two", name="Corwin Haldane",
+                status="gone_cold")
+    CONTACTS.append(cold)
+    try:
+        args = _book(tmp_path)
+        for c in (CONTACTS[1], cold):
+            doc = _doc(tmp_path, c["contact_id"])
+            doc.parent.mkdir(parents=True)
+            doc.write_text("# Prep - %s, Kestrel Mutual\n\nWritten 2026-09-01.\n" % c["name"],
+                           encoding="utf-8")
+        assert prep.main(["--stale-only", *args]) == 0
+        assert "1 prep documents written" in capsys.readouterr().out
+        assert "Written 2026-09-01." in _doc(tmp_path, "kestrel_haldane_two").read_text("utf-8")
+        # A document that would change only its date and its stamp is left as it is.
+        live = _doc(tmp_path, "kestrel_haldane")
+        text = live.read_text(encoding="utf-8")
+        older = re.sub(r"<!-- prep v\d+", "<!-- prep v1", text).replace(
+            "Written 2026-10-15.", "Written 2026-10-02.")
+        live.write_text(older, encoding="utf-8")
+        assert prep.stale(str(live))
+        assert prep.main(["--stale-only", *args]) == 0
+        out = capsys.readouterr().out
+        assert "0 prep documents written" in out and "1 already current" in out
+        assert live.read_text(encoding="utf-8") == older
+        # Asked for one contact, it is written, date and all.
+        assert prep.main(["kestrel_haldane_two", *args]) == 0
+        assert "Written 2026-10-15." in _doc(tmp_path, "kestrel_haldane_two").read_text("utf-8")
+    finally:
+        CONTACTS.remove(cold)

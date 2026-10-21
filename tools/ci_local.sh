@@ -148,7 +148,9 @@ run_py_module pytest "pytest (the app's suite, on the example person)" "$PY" -m 
 # read the profile once at import, so the two suites cannot share one.
 if [ -d profile/tests ]; then
   before=$FAIL
-  run_py_module pytest "pytest (profile/tests, on this person)" "$PY" -m pytest profile/tests -q
+  # No compiled copies in profile/tests/__pycache__ for a forced add to commit.
+  PYTHONDONTWRITEBYTECODE=1 run_py_module pytest "pytest (profile/tests, on this person)" \
+    "$PY" -m pytest profile/tests -q
   # A failure here is often an update that changed or removed what the test pinned: say
   # which, and what to do, rather than leave a list of names to guess from.
   if [ "$FAIL" -gt "$before" ]; then
@@ -188,7 +190,8 @@ else
   if "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
     run "$FLOOR_NAME" "$FLOOR_ENV/bin/python" -m pytest tests -q -p no:cacheprovider
     if [ -d profile/tests ]; then
-      run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV/bin/python" -m pytest profile/tests -q -p no:cacheprovider
+      PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV/bin/python" \
+        -m pytest profile/tests -q -p no:cacheprovider
     fi
   else
     skip "$FLOOR_NAME" "could not build a $FLOOR_VERSION venv with pytest (no venv module or no network)"
