@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import List
 
 from .. import _http
-from ..models import BoardError, Job, RobotsDisallowed, clean, failed, html_to_text
+from ..models import BoardError, Job, RobotsDisallowed, as_list, as_str, clean, failed, html_to_text, ident, iso_day, pay
 
 URL = "https://{host}/api/offers/"
 NEEDS_TOKEN = ("Recruitee asks for the employer's own Careers Site API token from 10 February "
@@ -70,10 +70,15 @@ def _pay(offer: dict) -> str:
     def num(v):
         try:
             return f"{int(float(v)):,}"
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             return clean(v)
     span = "-".join(num(v) for v in (lo, hi) if v not in (None, ""))
-    return clean(f"{s.get('currency') or ''} {span} {clean(s.get('period')).replace('_', ' ')}")
+    return clean(f"{clean(s.get('currency'))} {span} {clean(s.get('period')).replace('_', ' ')}")
+
+
+def _salary(offer: dict) -> dict:
+    s = offer.get("salary") if isinstance(offer.get("salary"), dict) else {}
+    return pay(s.get("min"), s.get("max"), s.get("currency"), s.get("period"))
 
 
 def fetch(token: str) -> List[Job]:
@@ -81,17 +86,17 @@ def fetch(token: str) -> List[Job]:
     for o in _offers(token):
         if not isinstance(o, dict) or (o.get("status") and o.get("status") != "published"):
             continue
-        title, url = clean(o.get("title")), o.get("careers_url") or ""
-        if not title or not url:
+        number, title, url = ident(o.get("id")), clean(o.get("title")), as_str(o.get("careers_url"))
+        if not number or not title or not url:
             continue
-        places = [p for p in (_place(loc) for loc in o.get("locations") or [] if isinstance(loc, dict)) if p]
+        places = [p for p in (_place(loc) for loc in as_list(o.get("locations")) if isinstance(loc, dict)) if p]
         places = list(dict.fromkeys(places))
         workplace = ("remote" if o.get("remote") else "hybrid" if o.get("hybrid")
                      else "onsite" if o.get("on_site") else "")
-        body = "\n\n".join(x for x in (html_to_text(o.get("description") or ""),
-                                       html_to_text(o.get("requirements") or "")) if x)
+        body = "\n\n".join(x for x in (html_to_text(o.get("description")),
+                                       html_to_text(o.get("requirements"))) if x)
         out.append(Job(
-            id=f"rc-{o.get('id')}",
+            id=f"rc-{number}",
             ats="recruitee",
             board=token,
             title=title,
@@ -99,11 +104,12 @@ def fetch(token: str) -> List[Job]:
             location="; ".join(places),
             locations=places,
             remote=True if workplace == "remote" else (False if workplace == "onsite" else None),
-            posted=str(o.get("published_at") or o.get("created_at") or "")[:10],
+            posted=iso_day(o.get("published_at"), o.get("created_at")),
             department=clean(o.get("department")),
             employment_type=clean(o.get("employment_type_code")).replace("_", " "),
             compensation=_pay(o),
-            deadline=str(o.get("close_at") or "")[:10],
+            **_salary(o),
+            deadline=iso_day(o.get("close_at")),
             description=body or None,
             workplace=workplace,
         ))

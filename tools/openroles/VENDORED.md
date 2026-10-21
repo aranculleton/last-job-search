@@ -11,4 +11,4 @@ It is vendored, not installed, so nothing new needs installing. **Do not edit it
 Change openroles upstream, then copy its `src/openroles/` over this folder (leaving out
 `py.typed`) and update the version below.
 
-Version: 0.2.0 (upstream commit dfd7569)
+Version: 0.3.0 (upstream commit ee32290)

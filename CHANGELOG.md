@@ -172,6 +172,11 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Employer boards are read by openroles 0.3.0** (vendored in `tools/openroles`). One
+  posting's odd field or pay never stops a whole board being read, a posting with no readable
+  id or title is left out, `posted` and `deadline` are real dates or empty, and a page built
+  to stall the reader no longer can. Every Workday posting keeps the id it had, so nothing
+  you have recorded against a posting changes.
 - **Each widening is 2x, then 3x, the first round's pages**, not a doubling on top of a
   doubling, and a board that asks for a crawl delay is fetched one request at a time. A
   round resumed from a saved scrape with `--expand` says before it widens that the wider

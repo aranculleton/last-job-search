@@ -99,8 +99,9 @@ METHODS: dict[str, dict] = {
             (15, "2026-10-21", False, "/add-portal says a board robots.txt disallows is built only on the person's yes while they are present, never by a background upgrade"),
             (16, "2026-10-21", False, "Employer boards are read while the portals are searched, share one body cap and one portal runner, and honour a round's own seen file"),
             (17, "2026-10-21", False, "robots_check splits reading a policy from deciding; same verdicts"),
+            (18, "2026-10-21", False, "The employer-board reader is openroles 0.3.0: one posting's odd field or pay never stops a board being read, a posting with no readable id or title is left out, dates are real dates or empty, hostile pages are read in linear time, and every Workday posting keeps its id; nothing about your boards needs redoing"),
         ),
-        "fingerprint": "55a92cbd99a800f7",
+        "fingerprint": "27ae2170d08d06d6",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
