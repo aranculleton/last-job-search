@@ -470,7 +470,11 @@ def _yes(value) -> bool:
 
 
 def _attachment(row) -> str:
-    """What was attached, said plainly: "a resume" when its name or the message says so."""
+    """What was attached, said plainly: "a resume" when its name or the message says so.
+
+    The same marker `state.attachment_note` writes for a file logged with `--attached`, and
+    `state.attached` reads back, so a resume LinkedIn's export saw and one the app logged
+    are found by one reader."""
     raw = str(row.get("ATTACHMENTS") or "").strip()
     if not raw:
         return ""

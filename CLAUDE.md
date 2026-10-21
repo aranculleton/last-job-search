@@ -494,6 +494,10 @@ contacted. Load the skill before any outreach. What a session needs before it do
 - No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays on**:
   only the person switches it off, never a session.
 - Never claim anything not in `profile/01-candidate-profile.md`.
+- A resume sent to a contact is logged with its file (`state.py message <id> --attached <file>`).
+  One made for them is staged with `stage_picks.py --for-contact <id>`, and RECONCILE says
+  where the two disagree, because the chat that logs the ask and the chat that drafts the
+  resume are often two chats at once.
 
 ## A step on another company's site is checked before it is given
 
@@ -629,6 +633,7 @@ chat has lost it.
 | The questions an interview asked, and which stories landed | `documents/interview/question_bank.csv`, via `/outcome` (`interview_pack.py asked`) |
 | Anything learned about a role, employer or process | `job_search_tracker.csv` `notes`, appended with the date |
 | Messaged someone, or they replied | `network_threads.csv`, one row per message |
+| Sent a contact a resume | that message's row, with the file: `state.py message <id> --attached <file>` |
 | A new person worth contacting | `network_contacts.csv` |
 | A contact's situation changed, or something is now owed | that contact's `status` and `next_action`: `python3 tools/network/state.py set <contact> --status <s> --next-action "<what>" --due <date> --note "<what happened>"`, never by hand |
 | An employer turns out to have no relevant presence at all | `job_scraper/do_not_target.json`, with a `review_after` |

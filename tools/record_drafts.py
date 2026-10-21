@@ -18,6 +18,13 @@ could go in above 100 on a 0-100 scale, or ten points under its fit, and
 nobody could tell from the row. This writes `fit`, and
 keeps priority and opportunity in the notes where they are labelled.
 
+A resume drafted for a contact (`stage_picks.py --for-contact`) is filed under them: the
+contact's name in `contact_person`, the channel `referral`, `recruiter` or `contact`
+(interview_pack.process_channel, the same answer a process with no application gets), and
+"made for <name> (<contact_id>)" in the notes, which is how `state.py` RECONCILE finds the
+thread it belongs to. A person named on the posting, when the research found one, is kept in
+the notes: the row's contact is who the resume goes to.
+
 The rules it keeps, from Step 6b: match company and role the way the rest of
 the app does (one employer key, one title rule); update an open match rather
 than duplicating it and never move it backwards; append beside a final one;
@@ -75,8 +82,46 @@ def _channel(portal) -> str:
     return "online" if portal in EMPLOYER_BOARDS else "portal"
 
 
-def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
+def _state():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
+    import state
+    return state
+
+
+def _contacts() -> list[dict]:
+    st = _state()
+    return st.load_contacts(person.state("network_contacts.csv"))
+
+
+def for_contact(draft: dict, meta: dict, contacts: list[dict] | None = None) -> dict | None:
+    """The contact this resume was drafted for, or None. From the contact book, or, when
+    this copy's book does not have them yet (another chat added them and has not merged),
+    from what staging recorded about them."""
+    def got(k):
+        return str(meta.get(k) or draft.get(k) or "").strip()
+    cid = got("for_contact")
+    if not cid:
+        return None
+    contacts = _contacts() if contacts is None else contacts
+    c = _state().already_contacted(contacts, contact_id=cid)
+    if c is None and got("for_contact_name"):
+        c = {"contact_id": cid, "name": got("for_contact_name"),
+             "_channel": got("for_contact_channel")}
+    return c
+
+
+def made_for_note(contact: dict) -> str:
+    """The words in a tracker row's notes that say who its resume was made for."""
+    state = _state()
+    name = state.person_name(contact.get("name")) or str(contact.get("name") or "")
+    return (f"Made for {name} ({str(contact.get('contact_id') or '').strip()}), who asked for "
+            "it: it goes to them, not through the portal.")
+
+
+def _row_for(draft: dict, meta: dict, today: str, round_name: str,
+             contacts: list[dict] | None = None) -> dict:
     fit = meta.get("fit")
+    who = for_contact(draft, meta, contacts)
     body = (draft.get("notes_for_tracker") or "").strip()
     # Drafters write the round into their own note as often as not, and the row
     # already starts with it, which would read "r1. r1.".
@@ -98,21 +143,32 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str) -> dict:
         (meta.get("warm_route_note") or ""),
         (meta.get("outreach_pending_note") or ""),
         (f"Req {str(draft['req_id']).strip()}." if str(draft.get("req_id") or "").strip() else ""),
+        made_for_note(who) if who else "",
+        (f"Letter addressed to {str(draft['contact_person']).strip()}."
+         if who and str(draft.get("contact_person") or "").strip() else ""),
     ) if x).strip()
     abbr = draft["abbr"]
+    if who:
+        import interview_pack
+        name = _state().person_name(who.get("name")) or str(who.get("name") or "")
+        channel = who.get("_channel") or interview_pack.process_channel(who)
+    else:
+        name, channel = str(draft.get("contact_person") or "").strip(), _channel(meta.get("portal"))
     return {
         "date": today, "company": draft["company"], "sector": draft.get("sector", ""),
         "role": draft["role"], "role_type": draft.get("role_type", ""),
-        "channel": _channel(meta.get("portal")),
+        "channel": channel,
         "status": "drafted",
         # Only a person the research found named for this role on the employer's
-        # own pages; the letter is addressed to them (render_application.build).
-        "contact_person": str(draft.get("contact_person") or "").strip(),
+        # own pages; the letter is addressed to them (render_application.build). A
+        # resume made for a contact is filed under the contact, who it goes to.
+        "contact_person": name,
         "fit_rating": "" if fit is None else str(int(round(float(fit)))),
         "notes": notes,
         "cv_file": docpaths.resume_rel(abbr),
         "cover_letter_file": docpaths.letter_rel(abbr),
-        "source": meta.get("url", ""),
+        "source": meta.get("url", "") or (f"contact:{str(who.get('contact_id')).strip()}"
+                                          if who else ""),
         "deadline": draft.get("deadline", "") or meta.get("deadline", "") or "",
     }
 
@@ -128,8 +184,13 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
     """
     rows = csv_store.read_rows(path, HEADER)
     done = []
+    contacts = None
     for d in drafts:
-        new = _row_for(d, metas.get(d["abbr"].upper(), {}), today, round_name)
+        meta = metas.get(d["abbr"].upper(), {})
+        if (meta.get("for_contact") or d.get("for_contact")) and contacts is None:
+            contacts = _contacts()
+        who = for_contact(d, meta, contacts)
+        new = _row_for(d, meta, today, round_name, contacts)
         open_match = next((r for r in rows if _same_application(r, new)
                            and (r.get("status") or "").strip().lower() not in FINAL), None)
         if open_match is None:
@@ -139,12 +200,20 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
         # Never move an open row backwards: refresh the documents and the score,
         # keep its status, and only move the date if nothing was ever sent.
         for col in ("cv_file", "cover_letter_file", "fit_rating", "source"):
-            if new[col]:
+            if new[col] and not (col == "source" and new[col].startswith("contact:")
+                                 and (open_match.get("source") or "").strip()):
                 open_match[col] = new[col]
         if new["deadline"]:
             open_match["deadline"] = new["deadline"]
-        if new["contact_person"] and not (open_match.get("contact_person") or "").strip():
+        if new["contact_person"] and (who or not (open_match.get("contact_person") or "").strip()):
             open_match["contact_person"] = new["contact_person"]
+        if who:
+            # Redrafted for the contact who asked: it goes through them now.
+            open_match["channel"] = new["channel"]
+            said = made_for_note(who)
+            if said not in (open_match.get("notes") or ""):
+                open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | "
+                                       + said).strip(" |")
         if (open_match.get("status") or "").strip().lower() == "drafted":
             open_match["date"] = today
         open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | redrafted").strip(" |")

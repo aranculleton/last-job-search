@@ -20,6 +20,7 @@ belongs to a different application.
 
     python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...] [--both]
     python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N]
+    python3 tools/stage_picks.py single <dir> --for-contact <contact_id> [--company C --role R --posting-file F]
     python3 tools/stage_picks.py consent <round_dir> <pick> --yes A B --no C [--draft | --skip]
     python3 tools/stage_picks.py audit <round_dir> [--only <slug> ...] [--json]
     python3 tools/stage_picks.py assemble <round_dir>
@@ -49,6 +50,18 @@ releases it, `--skip` drops it.
 `single` is /apply's way in: one posting that came from no round, staged exactly
 as a round's pick is, so a single application is drafted, rendered and verified by
 the same tools as a batch.
+
+**A resume someone asked for is drafted for them.** `--for-contact <contact_id>` (on
+`single`, or on `stage` for a round's pick) is the contact who asked: a recruiter, or
+somebody who will pass it on. It travels with the pick into `picks.json`, `apps_in.json`,
+the draft and the application's folder, so `tools/record_drafts.py` files the tracker row
+under them (`contact_person`, and the channel `referral`, `recruiter` or `contact`) and
+`tools/outreach.py` heads `outreach.md` with their thread instead of a cold note. A
+networking chat and a drafting chat working at once then leave one linked record, and
+`state.py` RECONCILE says when the resume made for them has not been logged as sent. With
+no posting (they asked for "your CV" and named no role), nothing is drafted: the
+person's current resume is what goes (`docpaths.current_resume`), never one tailored to a
+guess at the role, and the contact's row records which (`general_resume_for`).
 
 A round's own `06_shortlist.json` is read when it is there; in a later session,
 when the gitignored round directory is gone, the committed
@@ -277,20 +290,85 @@ def posting_text(row: dict, round_dir: str, s: str, fetch=_hydrate) -> str:
         "stage again.")
 
 
+def _network_state():
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
+    import state
+    return state
+
+
+def contact_for(contact_id: str, contacts: list[dict] | None = None) -> dict:
+    """The contact a resume is drafted for, from the contact book; SystemExit when absent."""
+    state = _network_state()
+    contacts = state.load_contacts(person.state("network_contacts.csv")) if contacts is None \
+        else contacts
+    c = state.already_contacted(contacts, contact_id=str(contact_id or "").strip())
+    if c is None:
+        raise SystemExit(f"stage: no contact {contact_id!r} in the contact book. Name who asked "
+                         "by their contact_id (python3 tools/network/state.py lists them), or add "
+                         "them first.")
+    return c
+
+
+def _for_contact_fields(contact: dict, company: str) -> dict:
+    """What a pick drafted for this contact carries; SystemExit when they work elsewhere,
+    unless they are a recruiter (who places roles at other employers)."""
+    from company_key import key as company_key
+    state = _network_state()
+    import prep
+    if company_key(company) != state.row_company_key(contact) and not prep.is_recruiter(contact):
+        raise SystemExit(f"stage: {contact.get('name')} works at {contact.get('company')}, not "
+                         f"{company}: a resume for them is for a role at their employer. Stage "
+                         "this pick without --for-contact.")
+    import interview_pack
+    return {"for_contact": str(contact.get("contact_id") or "").strip(),
+            "for_contact_name": state.person_name(contact.get("name")) or contact.get("name", ""),
+            "for_contact_channel": interview_pack.process_channel(contact)}
+
+
+def general_resume_for(contact_id: str, today=None, contacts_path: str = "") -> dict:
+    """No role named: the person's current resume is what goes, and the contact's row says
+    which ("<noun> to send: <file>"), so the due list, RECONCILE and the next chat know.
+
+    Returns {"file", "name", "noted"}; "file" is "" when documents/cv/ holds no resume, or
+    several with nothing saying which is current, and nothing is written then."""
+    import datetime as _dt
+    state = _network_state()
+    path = contacts_path or person.state("network_contacts.csv")
+    contacts = state.load_contacts(path)
+    c = contact_for(contact_id, contacts)
+    current = docpaths.current_resume()
+    out = {"file": current, "name": c.get("name") or contact_id, "noted": False,
+           "choices": [] if current else docpaths.general_resumes()}
+    if not current:
+        return out
+    word = state.noun()
+    line = f"{word} to send: {current} (no role named, so the current one)"
+    if line not in str(c.get("notes") or ""):
+        state._note(c, "notes", f"{today or _dt.date.today().isoformat()}: {line}")
+        state.save_contacts(contacts, path)
+        out["noted"] = True
+    return out
+
+
 def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
           root: str = ROOT, shortlist: list[dict] | None = None,
-          fetch=_hydrate, both: bool = False, today=None) -> list[dict]:
+          fetch=_hydrate, both: bool = False, today=None, for_contact: str = "") -> list[dict]:
     """Stage the picks and return every one, each with its `hold` questions (empty when
     nothing waits on the person). picks.json gets the ones nothing waits on, held.json
-    the rest. `both` is the person saying they want two roles at one employer."""
+    the rest. `both` is the person saying they want two roles at one employer.
+    `for_contact` is the contact_id of whoever asked for the resume: every pick is drafted
+    for them (see the module's note)."""
     import posting_profile
     from company_key import key as company_key
     shortlist = load_shortlist(round_dir) if shortlist is None else shortlist
     rows = _tracker_rows() if rows is None else rows
+    contact = contact_for(for_contact) if str(for_contact or "").strip() else None
     os.makedirs(os.path.join(round_dir, "picks"), exist_ok=True)
     staged, apps_in, claimed, seen_slugs = [], [], set(), set()
     for n, pick in enumerate(picks, 1):
         r = _find(shortlist, pick)
+        # Checked before the posting is fetched: a contact at another employer is a mistake.
+        mine = _for_contact_fields(contact, r["company"]) if contact is not None else {}
         abbr = choose_abbr(r["company"], r["title"], rows, root, claimed)
         claimed.add(abbr)
         if doc_name.is_shouty(abbr):
@@ -312,6 +390,11 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         asks = to_ask(r["desc"])
         prof = posting_profile.read(r, r["desc"], rows=rows, today=today)
         hold = posting_profile.questions(prof, r)
+        if mine and mine["for_contact_name"] and mine["for_contact_name"] in str(
+                (prof.get("employer") or {}).get("referral") or ""):
+            # The referral in flight there is theirs: this resume goes through it, so it is
+            # the opposite of the cold application the question guards against.
+            hold = [q for q in hold if q["id"] != "referral"]
         path = os.path.join(round_dir, "picks", f"{n:02d}_{s}.md")
         head = [
             f"# {r['company']} | {r['title']}", "",
@@ -328,6 +411,9 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             f"- throttle_override_note: {r.get('throttle_override_note') or ''}",
             f"- ask the person first: {_listed(asks) or 'nothing'}",
         ]
+        if mine:
+            head.append(f"- for contact: {mine['for_contact_name']} ({mine['for_contact']}), who "
+                        "asked for it: it goes to them, not through the portal")
         # What code read from the posting, derived values only (no posting text above the
         # fence), so the researcher and the drafter know it as well as the person does.
         head += [f"- {line}" for line in posting_profile.lines(prof, quotes=False)]
@@ -340,8 +426,8 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         staged.append({"file": path, "company": r["company"], "role": r["title"],
                        "slug": s, "abbr": abbr, "ask_first": [x["skill"] for x in asks],
                        "ask_beside": {x["skill"]: x["have"][:1] for x in asks if x["have"]},
-                       "posting_profile": prof, "hold": hold})
-        apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr))
+                       "posting_profile": prof, "hold": hold, **mine})
+        apps_in.append(dict({k: v for k, v in r.items() if k != "desc"}, abbr=abbr, **mine))
     # One role per employer, unless the person said both.
     by_employer: dict[str, list[dict]] = {}
     for p in staged:
@@ -608,6 +694,11 @@ def assemble(round_dir: str) -> tuple[list[dict], list[str], list[str]]:
             # What an interviewer could still probe, which the audit found and nothing
             # kept: the kept draft carries it to the interview pack.
             d.setdefault("residual_risks", risks)
+        for k in ("for_contact", "for_contact_name", "for_contact_channel"):
+            if p.get(k):
+                # Who asked for it travels with the draft into its folder (draft.json), so a
+                # later render or outreach run still knows it goes to them.
+                d[k] = p[k]
         drafts.append(d)
     with open(os.path.join(round_dir, "drafts.json"), "w", encoding="utf-8") as fh:
         json.dump(drafts, fh, indent=1)
@@ -619,6 +710,9 @@ def _report(staged: list[dict], round_dir: str) -> None:
     import posting_profile
     for p in staged:
         print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
+        if p.get("for_contact"):
+            print(f"    for {p['for_contact_name']} ({p['for_contact']}), who asked for it: it "
+                  "goes to them, not through the portal")
         for line in posting_profile.lines(p["posting_profile"]) if p.get("posting_profile") else ():
             print(f"    {line}")
     held = [p for p in staged if p.get("hold")]
@@ -667,6 +761,29 @@ def _report_audit(results: list[dict]) -> None:
               "packet <round_dir> <slug> prints what it reads): " + ", ".join(waiting))
 
 
+def _no_role(contact_id: str) -> int:
+    """`single --for-contact` with no posting: say which resume goes, and record it."""
+    got = general_resume_for(contact_id)
+    word = _network_state().noun()
+    if not got["file"]:
+        if got["choices"]:
+            print(f"No role named, so nothing is drafted, and documents/cv/ holds "
+                  f"{len(got['choices'])} files with nothing saying which is your current "
+                  f"{word}: put \"current\" in the name of the one you send, then run this again "
+                  f"({', '.join(got['choices'][:4])}).")
+        else:
+            print(f"No role named, so nothing is drafted, and there is no current {word} on file: "
+                  f"put the one you send when no role is named in documents/cv/, then run this "
+                  "again.")
+        return 1
+    print(f"No role named, so nothing is drafted: send {got['name']} your current {word}, "
+          f"{got['file']}, never one tailored to a guess at the role."
+          + (" Their row now says so." if got["noted"] else ""))
+    print("When it goes, log it with the file: python3 tools/network/state.py message "
+          f"{contact_id} --attached {got['file']} --text-file <the message as sent>")
+    return 0
+
+
 def main() -> int:
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
@@ -680,12 +797,17 @@ def main() -> int:
     s.add_argument("picks", nargs="+")
     s.add_argument("--both", action="store_true",
                    help="the person wants every role picked at one employer drafted")
+    s.add_argument("--for-contact", default="", metavar="CONTACT_ID",
+                   help="the contact who asked for the resume: drafted for them")
     one = sub.add_parser("single", help="one posting that came from no round: /apply")
     one.add_argument("round_dir", help="a scratch directory for this application")
-    one.add_argument("--company", required=True)
-    one.add_argument("--role", required=True)
-    one.add_argument("--posting-file", required=True,
+    one.add_argument("--company", default="")
+    one.add_argument("--role", default="")
+    one.add_argument("--posting-file", default="",
                      help="the posting text, verbatim, as fetched or pasted")
+    one.add_argument("--for-contact", default="", metavar="CONTACT_ID",
+                     help="the contact who asked for the resume: drafted for them, or with no "
+                          "posting, their current resume named for them")
     one.add_argument("--url", default="")
     one.add_argument("--location", default="")
     one.add_argument("--fit", type=int, help="the 0-100 fit /apply Step 1 scored")
@@ -730,7 +852,12 @@ def main() -> int:
         for o in waiting(args.round_dir):
             print(f"still held: [{o['slug']}] {o['company']} | {o['role']}")
         return 0
+    if args.cmd == "single" and args.for_contact and not args.posting_file:
+        return _no_role(args.for_contact)
     if args.cmd == "single":
+        if not (args.company and args.role and args.posting_file):
+            ap.error("single needs --company, --role and --posting-file (or --for-contact with "
+                     "no posting, when they asked for your resume and named no role)")
         with open(args.posting_file, encoding="utf-8") as fh:
             body = fh.read()
         row = {"company": args.company, "title": args.role, "url": args.url,
@@ -739,10 +866,12 @@ def main() -> int:
             row["fit"] = args.fit
         if args.deadline:
             row["deadline"] = args.deadline
-        _report(stage(args.round_dir, ["1"], shortlist=[row]), args.round_dir)
+        _report(stage(args.round_dir, ["1"], shortlist=[row], for_contact=args.for_contact),
+                args.round_dir)
         return 0
     if args.cmd == "stage":
-        _report(stage(args.round_dir, args.picks, both=args.both), args.round_dir)
+        _report(stage(args.round_dir, args.picks, both=args.both, for_contact=args.for_contact),
+                args.round_dir)
         return 0
     drafts, missing, rejected = assemble(args.round_dir)
     print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")

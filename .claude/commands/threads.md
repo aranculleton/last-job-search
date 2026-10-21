@@ -25,6 +25,10 @@ What is owed, what is due, what has gone cold.
 **Owed a reply** first, oldest first. These are live conversations going stale
 and they are the highest-value thing in the pipeline.
 
+**A resume owed** (`state.resumes_owed()`) rides with them: somebody asked for it and no
+message logged since says one went. Say which file goes (the guidance names the two routes)
+and the command that logs it with the file, `state.py message <id> --attached <file>`.
+
 **First message owed** next (`first_message`): they accepted a request that
 carried no note and nothing has been sent. Draft it with `compose.first_note()`; it is
 not a nudge.

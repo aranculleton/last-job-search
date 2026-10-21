@@ -54,6 +54,16 @@ Usage: `/reply <contact name or company>`, then paste their message.
    --text-file <file>` (a nudge after silence: `state.py nudge <contact_id> --text-file
    <file>`); `--texts <file.json>` takes several at once.
 
+   **A resume they asked for** (`send_resume`, or a `referral_offered` that wants one) is
+   one of two files, and `reply.guidance()` names both in `which_resume`, beside the next
+   action (show it with the action owed outside the thread): for a role they named, one drafted for
+   them (`python3 tools/stage_picks.py single <dir> ... --for-contact <contact_id>`, so the
+   tracker row and the folder are filed under them); with no role named, the person's
+   current one (`stage_picks.py single <dir> --for-contact <contact_id>` says which and
+   records it). When it goes, the message is logged with the file: `state.py message
+   <contact_id> --attached <file> --text-file <file>`. A resume sent from another chat is
+   never left as a sentence: `state.py` RECONCILE names any that is.
+
    The log decides three statuses by itself (`state.DERIVABLE`: `not_contacted`,
    `awaiting_reply`, `replied_needs_response`). Everything else is stored on the contact
    row, and this step is what sets it: when the exchange makes it so, set `status` to

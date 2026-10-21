@@ -87,6 +87,12 @@ _trailing_outbound = state._trailing_outbound
 # `classify` answering the row's own summary as a six-word reply.
 _inbound = state.said_something
 
+# The person's own word for the document, read as a resume asked for when it is not one
+# of the usual ones (person.json documents.noun).
+_NOUN_WORD = str((person.get("documents", {}) or {}).get("noun", "") or "").lower()
+if _NOUN_WORD in ("resume", "cv", "résumé"):
+    _NOUN_WORD = ""
+
 # Six words or fewer is the low-effort bar. It is deliberately generous: "sure,
 # sounds good, send it over" is four words of agreement and one of substance, and
 # treating it as a detailed reply produces the paragraph-for-one-word mismatch
@@ -302,19 +308,20 @@ def _confidence(hits) -> float:
     return round(min(0.97, best + 0.03 * (len(hits) - 1)), 2)
 
 
+# The verbs a request to be sent something is made with. Inflected forms matter more than
+# they look. "Happy to look if you're sharing your resume" missed entirely when the list
+# held "share" and not "sharing", and the message came back as detailed_generous: engaged
+# with warmly, resume never sent.
+_SEND_VERBS = (r"\b(?:send(?:s|ing)?|sent|shar(?:e|es|ed|ing)|forward(?:s|ed|ing)?|"
+               r"shoot(?:s|ing)?|pass(?:es|ed|ing)?|fir(?:e|es|ed|ing)|"
+               r"drop(?:s|ped|ping)?|e-?mail(?:s|ed|ing)?|ping(?:s|ed|ing)?)\b")
+_DOC_OVER = r"\b(resume|r[eé]sum[eé]|cv)\b[^.!?\n]{0,30}\b(over|across|through|my way|to me)\b"
+
 RESUME_ASK = _rx(
-    # Inflected forms matter more than they look. "Happy to look if you're
-    # sharing your resume" missed entirely when the list held "share" and not
-    # "sharing", and the message came back as
-    # detailed_generous: engaged with warmly, resume never sent.
     (0.92, "asked for the resume",
-     r"\b(?:send(?:s|ing)?|sent|shar(?:e|es|ed|ing)|forward(?:s|ed|ing)?|"
-     r"shoot(?:s|ing)?|pass(?:es|ed|ing)?|fir(?:e|es|ed|ing)|"
-     r"drop(?:s|ped|ping)?|e-?mail(?:s|ed|ing)?|ping(?:s|ed|ing)?)\b"
-     r"[^.!?\n]{0,40}"
+     _SEND_VERBS + r"[^.!?\n]{0,40}"
      r"\b(resume|r[eé]sum[eé]|cv|profile|background|details)\b"),
-    (0.92, "asked for the resume",
-     r"\b(resume|r[eé]sum[eé]|cv)\b[^.!?\n]{0,30}\b(over|across|through|my way|to me)\b"),
+    (0.92, "asked for the resume", _DOC_OVER),
     (0.88, "asked to be emailed", r"\b(email|e-mail|drop|shoot|write)\s+(me|us)\b[^.!?\n]{0,25}"),
     (0.85, "gave a contact route",
      r"\b(my|our)\s+e-?mail\b|\b(reach|contact)\s+me\s+(at|on)\b|\bget in touch (at|on)\b"),
@@ -356,13 +363,21 @@ SPEAK_TO = re.compile(
     r"|(?-i:\b(?:[Tt]alk|[Ss]peak|[Tt]ry|[Aa]sk|[Pp]ing|[Mm]essage)(?: to| with)? "
     r"(?!You\b|Me\b|Us\b|Them\b|It\b|Him\b|Her\b)[A-Z][a-z]+(?: [A-Z][a-z'-]+)?\b)", re.I)
 
+# What follows "pass" when it means passing something on: "I'll pass it on", "pass your
+# CV along", "pass this to the team". A bare "I'll pass" is a no, and read as an
+# introduction it made "Thanks, but I'll pass." a referral offer. REFERRAL and REJECTION
+# both read "pass" through this one pattern, so the two can never claim the same words.
+_PASSED_ON = (r"\s+(?:it|them|your|you|him|her|my|along|over|through"
+              r"|(?:this|that|these|those|the\s+\w+)\s+(?:on|along|over|to)"
+              r"|on\s+(?:to\s+)?(?:your|my|the|it|him|her|them))\b")
+
 REFERRAL = _rx(
     (0.94, "told to name them as the referrer", REFERRAL_FIELD),
     (0.92, "offered an introduction",
      r"\b(happy|glad|pleased|able)\s+to\s+(intro\w*|connect|put you|pass|forward|refer)\b"),
     (0.92, "offered an introduction",
      r"\bI(?:'ll|’ll|'d|’d| will| can| could| would| should)\s+"
-     r"(intro\w*|connect|put you|pass|forward|flag|refer|loop|mention|drop)\b"),
+     r"(intro\w*|connect|put you|pass(?=" + _PASSED_ON + r")|forward|flag|refer|loop|mention|drop)\b"),
     (0.86, "named someone to speak to", SPEAK_TO),
     (0.84, "knows someone",
      r"\b(I know (someone|a few people|some people|the)|know anyone|there'?s someone)\b"),
@@ -434,7 +449,10 @@ REJECTION = _rx(
     (0.88, "declined the conversation",
      r"\b(?:can'?t|cannot|won'?t be able to|unable to|don'?t have)\s+(?:make\s+|find\s+)?"
      r"(?:the\s+)?time\b(?![^.!?\n]{0,40}\bbut\b)"
-     r"|\b(?:going to|gonna|I'?ll|will have to|have to|need to)\s+pass\b"
+     # "I'll pass" is a no; "I'll pass it on" (_PASSED_ON) is the opposite, a referral,
+     # and read as a no it blocked the resume ask beside it and counted as one of the two
+     # declines that end a thread.
+     r"|\b(?:going to|gonna|I'?ll|I will|will have to|have to|need to)\s+pass\b(?!" + _PASSED_ON + r")"
      r"|\bnot (?:the right|a good) (?:person|fit|contact)\b|\bwrong person\b"
      r"|\bdon'?t think I'?m the right (?:person|contact)\b"),
     (0.8, "brush-off to the careers page",
@@ -559,6 +577,26 @@ _ALREADY_DONE = re.compile(
     r"(?:shared|passed|sent|forwarded|dropped|flagged|circulated)\b", re.I)
 
 
+# The document itself, by name: what `asks_for_resume` needs, where the classifier also
+# takes "send me your details" and an address in a signature as a resume to send.
+_DOC_NAMED = re.compile(_SEND_VERBS + r"[^.!?\n]{0,40}\b(resume|r[eé]sum[eé]|cv|curriculum vitae"
+                        + ("|" + re.escape(_NOUN_WORD) if _NOUN_WORD else "") + r")\b|"
+                        + _DOC_OVER, re.I)
+
+
+def asks_for_resume(text) -> bool:
+    """Do they ask for the resume itself? "Send me your CV and I'll pass it on" does;
+    their address in a signature, "send me your details", a no, a dead end, and "I've
+    passed your CV on" (done, not asked) do not. What the log reads a resume owed from
+    (state.resumes_owed), where the classifier's wider net would owe one to every
+    signature."""
+    text = str(text or "")
+    if (_ALREADY_DONE.search(text) or _hits(text, REJECTION) or _hits(text, MISMATCH)
+            or REFERRAL_FIELD.search(text)):
+        return False
+    return bool(_DOC_NAMED.search(text))
+
+
 def _match_send_resume(text, ctx):
     # A no outranks an address, whatever the ladder order says.
     #
@@ -660,6 +698,38 @@ _NOUN_RULE = tuple(f"Do not attach a file named {b}; the attachment says {_NOUN}
 # in a bounce folder.
 NO_ADDRESS_ACTION = (f"Ask for the best address, or attach the {_NOUN} in this thread if the "
                      "channel carries attachments.")
+
+# Which resume goes, said with every action that sends one. A networking chat said "Email
+# the resume today", a drafting chat made one, and nothing said which, or recorded which
+# went: a role they named gets one made for it, through the referral route; no role named
+# gets the person's current one, never a document tailored to a guess at the role.
+RESUME_ROUTE_SCENARIOS = frozenset({"send_resume", "referral_offered"})
+
+
+def resume_routes(contact_id="<contact_id>", referral_field=False) -> str:
+    """The two routes to the resume that goes, and the command that logs it with its file.
+
+    `referral_field`: they said to apply and name them, so nothing is sent to them: the
+    resume goes in through the portal, drafted for them so the tracker files it under
+    their route."""
+    if referral_field:
+        return (f"Which {_NOUN}: one drafted for the role and filed under them: python3 "
+                "tools/stage_picks.py single <dir> --company <their employer> --role <the role> "
+                f"--posting-file <the posting> --for-contact {contact_id}. It goes in through "
+                "the portal with their name where it asks for a referrer, not to them.")
+    try:
+        import docpaths
+        current = docpaths.current_resume()
+    except Exception:  # noqa: BLE001  no profile, or no documents/cv/: the folder by name
+        current = ""
+    return (f"Which {_NOUN}: for a role they named, one made for it and for them: python3 "
+            "tools/stage_picks.py single <dir> --company <their employer> --role <the role> "
+            f"--posting-file <the posting> --for-contact {contact_id}. With no role named, your "
+            f"current {_NOUN} ({current or 'the one in documents/cv/'}), never one tailored to a "
+            f"guess at the role. When it goes, log it with the file: python3 "
+            f"tools/network/state.py message {contact_id} --attached <the file> --text-file "
+            "<the message as sent>.")
+
 
 # Sent when the scenario is a booking but the message carries no link, which
 # happens when the user overrides the read by hand. Formatting the template
@@ -1043,12 +1113,15 @@ def _as_int(value) -> int:
         return 0
 
 
-def guidance(scenario, their_message="") -> dict:
+def guidance(scenario, their_message="", contact_id="") -> dict:
     """The move, the length it should run to, what to avoid, and what is owed outside the thread.
 
     `their_message` is read for two things: the length rule in brief 5.2, and the
     address or booking link that turns the next action from advice into an
     instruction with a destination in it.
+
+    `contact_id` fills the commands `which_resume` names: for a resume they asked for, or a
+    referral that will want one, which file goes and how it is logged (`resume_routes`).
 
     When `scenario` is a whole `classify()` result and the message is not passed
     again, the result is read for all three. `classify` already extracted them
@@ -1091,10 +1164,16 @@ def guidance(scenario, their_message="") -> dict:
         next_action = auto_reply_action(text)
 
     low, high = sc.sentences
-    return {"move": sc.move,
-            "target_sentences": max(low, min(high, _sentences_for_words(words))),
-            "do_not": list(sc.do_not),
-            "next_action": next_action}
+    out = {"move": sc.move,
+           "target_sentences": max(low, min(high, _sentences_for_words(words))),
+           "do_not": list(sc.do_not),
+           "next_action": next_action}
+    if sc.name in RESUME_ROUTE_SCENARIOS:
+        # Beside the next action, never inside it: the address and the resume are two
+        # questions, and a next action that asks for the address is that and nothing more.
+        out["which_resume"] = resume_routes(contact_id or "<contact_id>",
+                                            referral_field=bool(REFERRAL_FIELD.search(text)))
+    return out
 
 
 def auto_reply_action(text, sent_on=None) -> str:
@@ -1386,6 +1465,8 @@ def main() -> int:
     print("length: %d sentences" % advice["target_sentences"])
     if advice["next_action"]:
         print("owed outside the thread: %s" % advice["next_action"])
+    if advice.get("which_resume"):
+        print("which %s: %s" % (_NOUN, advice["which_resume"].split(": ", 1)[1]))
     for line in advice["do_not"]:
         print("  avoid: %s" % line)
     return 0

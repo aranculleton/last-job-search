@@ -34,6 +34,11 @@ no network and nothing but the three state files, the outreach notes and each
 live application's outcome.md, and the same files and `--today` always print
 the same text.
 
+A resume somebody asked for is owed exactly as a reply is: "a resume owed to <name>",
+from their request until a message logged to them says one went (state.resumes_owed),
+with the command that logs it with its file. A resume that went shows on its employer's
+line with the date and the file, so which one they hold is never a question.
+
 An interview booked in outcome.md (`- [ ] Phone screen (scheduled 2026-03-14,
 with Head of Planning)`, as /outcome writes it) is on the list twice over: due
 today once it is `PREP_WINDOW_DAYS` away with no `interview_prep_*.md` for that
@@ -182,12 +187,17 @@ def build(contacts, threads, tracker, today, docs=None):
             e.setdefault("nudges", []).append(n)
 
     owed_ids = {r.get("contact_id") for r in state.owed(contacts, threads, today)}
+    for item in state.resumes_owed(contacts, threads, tracker):
+        if item["company_key"]:
+            slot(item["company_key"], item["company"]).setdefault("resumes_owed", []).append(item)
     for c in contacts:
         k = state.row_company_key(c) if hasattr(state, "row_company_key") else company_key(c.get("company"))
         if not k:
             continue
         e = slot(k, (c.get("company") or "").strip())
         e["contacts"].append(c)
+        for got in state.resumes_sent(threads, c.get("contact_id")):
+            e.setdefault("resumes_sent", []).append(dict(got, name=c.get("name", "")))
         status = live.get(str(c.get("contact_id") or "").strip()) or ""
         e["heat"] = max(e["heat"], HEAT.get(status, 0))
         if c.get("contact_id") in owed_ids or (c.get("next_action") or "").strip():
@@ -208,7 +218,8 @@ def render(entries, today, only_live=True):
                      and id(a) not in superseded]
         shown = [n for n in nudges
                  if n["state"] in ("due", "held") or (n["state"] == "quiet" and n["notice"])]
-        if only_live and not e["owed"] and not live_apps and not shown:
+        resumes = e.get("resumes_owed", [])
+        if only_live and not e["owed"] and not live_apps and not shown and not resumes:
             continue
         lines.append("## %s" % (e["name"] or e["key"]))
         chat = campaigns(live_apps).get(e["key"])
@@ -253,6 +264,12 @@ def render(entries, today, only_live=True):
                                 followups.when(n), "; ".join(n["held"])))
             else:
                 lines.append("- **gone quiet, stop**: " + followups.stop_line(n))
+        for item in resumes:
+            lines.append("- " + state.resume_owed_line(item, mark="**"))
+        for got in e.get("resumes_sent", []):
+            lines.append("- %s sent to %s %s%s" % (
+                state.noun(), got["name"] or "?", got["date"] or "(no date)",
+                ": " + ", ".join(got["files"]) if got["files"] else ", which file not recorded"))
         for c, status in e["owed"]:
             who = "**%s**%s" % (c.get("name", "?"),
                                (", " + c["title"]) if c.get("title") else "")
@@ -472,7 +489,31 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "to": "",
             "text": _stored_draft(c),
             "held": [h for h in (state.action_hold(o["next_action"], today),) if h],
-            "quiet": False, "kind": o["kind"], "status": o["status"]})
+            "quiet": False, "kind": o["kind"], "status": o["status"],
+            "contact_id": o["contact_id"]})
+    # A resume somebody asked for: on their row when they have one here, else a row of its
+    # own, owed since the day they asked (or the date the person set on it).
+    for r in state.resumes_owed(contacts, threads, tracker):
+        line = state.resume_owed_line(r)
+        got = next((i for i in items if i.get("contact_id") == r["contact_id"]), None)
+        if got is not None:
+            got["what"] = line
+            continue
+        c = by_id.get(r["contact_id"], {})
+        name = r["name"] or r["contact_id"]
+        due = (state.as_date(c.get("next_action_due")) or state.as_date(r["asked"] or r["made"])
+               or today)
+        if due > today:                  # the person put a later day on it: not due yet
+            continue
+        who = name + "".join(", " + x for x in (c.get("title"), r["company"]) if x)
+        items.append({
+            "half": "contact", "key": r["company_key"], "rank": KIND_ORDER["reply"],
+            "name": name + (" (%s)" % r["company"] if r["company"] else ""),
+            "who": "%s [%s owed]" % (who, state.noun()), "due": due.isoformat(),
+            "late": (today - due).days, "what": line, "to": "", "text": "",
+            "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
+            "quiet": False, "kind": "resume", "status": c.get("status", ""),
+            "contact_id": r["contact_id"]})
     _, warm, holds = _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
