@@ -288,7 +288,10 @@ def hard_answers(path=None) -> list:
 _STOP = frozenset("""a an the and or of to in on for with you your me my i about how what why when
 where do does did is are was were have has had tell time this that it as at be by from walk
 through give example describe us our we can could would will there their they them any some
-one most""".split())
+one most now then today currently here""".split())
+# "now", "then", "today", "currently" and "here" say when or where, never what a question is
+# about. With "now" a topic word, "What would you do differently now?" matched "Why now?" at
+# 0.5 and took the answer written for leaving a consultancy, at a bank.
 
 
 def _words(text) -> set:
@@ -587,6 +590,55 @@ def _next_stage(stages, today="") -> dict:
     return {"label": "Round %d" % (len(stages) + 1), "date": "", "with": ""} if stages else {}
 
 
+# "2. <question> -> story: <title>" on one screen: the story each question was answered with
+# when the document was last built.
+_PLAN_STORY = re.compile(r"^\d+\. (.+?) -> story: (.+?)\s*$")
+
+
+def _kept_map(living) -> dict:
+    """{question: story title} from the living document's last build. A session's --map is
+    kept nowhere else, so a bank's rebuild without it gave "What would you do differently
+    now?" no story, where the last build had answered it with one the session chose."""
+    screen = str(living or "").split("## On one screen\n", 1)
+    if len(screen) < 2:
+        return {}
+    out = {}
+    for line in screen[1].split("\n## ", 1)[0].splitlines():
+        m = _PLAN_STORY.match(line.strip())
+        if m:
+            out[m.group(1)] = m.group(2)
+    return out
+
+
+def _same_round(a, b) -> bool:
+    """Do two stage names name one round? "Round 2 (technical)" and "Round 2" do; "Round 2"
+    and "Round 20" do not."""
+    a, b = what_works._norm(a), what_works._norm(b)
+    return bool(a and b) and (a == b or a.startswith(b + " ") or b.startswith(a + " "))
+
+
+def _built_for(folder, stages, found, today="") -> str:
+    """The stage the living document was last built for, when a rebuild names none and it is
+    still the one ahead: the same round as the next one on record, by its fuller name; else,
+    unless the next one is booked, the last one built while no held stage has passed it. A
+    bank's rebuild with no --stage turned "Round 2 (technical)" into "Round 2" and kept both in
+    the stages line; a checklist's unbooked "Technical interview" did the same."""
+    m = _STAGES_MARK.search(_read(os.path.join(folder, LIVING)))
+    built = [x for x in (m.group(1).split("; ") if m else []) if x]
+    ahead = _text(found.get("label"))
+    same = [x for x in built if _same_round(x, ahead)]
+    if same:
+        return max(same, key=len)
+    if not built or found.get("scheduled"):
+        return ""
+    last = built[-1]
+    # Held as _next_stage reads it: ticked, or booked for a day now past.
+    held = any((s["done"] or s["scheduled"] and today and s.get("date") and s["date"] < today)
+               and (_same_round(s["label"], last) or s["step"] == what_works.stage_step(last))
+               for s in stages)
+    return "" if held else last
+
+
 # A process came through a person, not a portal, so its posting may not be held at all. Its
 # folder still gets a job_posting.md, as every application folder has one: one without it
 # turned the person's own CI red on the app's folder test, and they could not land work.
@@ -788,7 +840,7 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         # Nothing on record yet means the first conversation, which is a screen
         # at nearly every employer; /interview asks, and passes --stage when not.
         found = _next_stage(stages, today)
-        stage = found.get("label") or "Phone screen"
+        stage = _built_for(folder, stages, found, today) or found.get("label") or "Phone screen"
         date, with_ = date or found.get("date", ""), with_ or found.get("with", "")
     else:
         same = [s for s in stages if s["label"].lower() == stage.lower()]
@@ -831,6 +883,7 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         "stories": stories(), "answers": hard_answers(),
         "bank": what_works.bank(root), "contacts": contacts, "threads": threads,
         "map": dict(story_map or {}),
+        "kept_map": _kept_map(_read(os.path.join(folder, LIVING))),
         "earlier": sorted(f for f in _listdir(folder)
                           if f.startswith("interview_prep_") and f != pack_name(stage)),
         "rework": _rework_lines(_read(os.path.join(folder, LIVING))
@@ -991,6 +1044,13 @@ def answer_for(item, ctx) -> dict:
         story = next((s for s in ctx["stories"] if s["title"].lower() == _text(mapped).lower()),
                      None)
     how = "mapped"
+    if not mapped and ctx.get("kept_map", {}).get(q):
+        # The story the last build gave it, while that story is still in the file: a rebuild
+        # never drops a choice the session made. A story since renamed or removed is passed
+        # over quietly, and matching takes it from there.
+        kept = _text(ctx["kept_map"][q]).lower()
+        story = next((s for s in ctx["stories"] if s["title"].lower() == kept), None)
+        how = "as the last build answered it"
     # What the letter evidenced comes first: the interviewer read it, and a story that
     # matches a tag better but tells something else contradicts the paper.
     if story is None and not mapped and item.get("evidence"):
@@ -1680,11 +1740,14 @@ def _noun() -> str:
 
 
 def _person(dotted) -> str:
-    """One optional value from person.json, "" when the profile does not hold it."""
+    """One optional value from person.json, "" when the profile does not hold it. A value
+    still marked `[CONFIRM: ...]` is not held: it is a question waiting for the person, and a
+    pack read the neighbourhood's marker out as "You live in [CONFIRM: Which neighbourhood..."."""
     try:
-        return _text(_PERSON[dotted]())
+        value = _text(_PERSON[dotted]())
     except person.NoProfile:
         return ""
+    return "" if "[CONFIRM" in value else value
 
 
 def _lead_id(ctx) -> str:
@@ -1831,7 +1894,8 @@ EMPLOYER_TYPES = (
 
 def employer_type(ctx) -> str:
     """The kind of employer, from the most direct source that names one: the tracker's
-    sector, then the research's own sector words, then the name, then what the research
+    sector, then the research's own sector words, then what the person's own catalogue
+    calls it (employers.py, read by tools/sector.py), then the name, then what the research
     says it does. A bank whose summary mentions a wealth-advisory arm is a bank."""
     research = ctx["research"] or {}
     # The person's own rule for what counts as public sector (profile/search.py BAR_PUBLIC,
@@ -1843,14 +1907,24 @@ def employer_type(ctx) -> str:
             return "public sector"
     except (ImportError, person.NoProfile, AttributeError):
         pass
+    # The catalogue: a consulting firm with no sector on its row and no research (its name
+    # says "consulting" nowhere) was no kind at all, and its pack offered the answer the
+    # person marked "Not for: consulting".
+    try:
+        import sector
+        listed = sector.kind(ctx["company"])
+    except (ImportError, person.NoProfile, AttributeError):
+        listed = ""
     sources = (ctx["row"].get("sector"),
                " ".join(_text(research.get(k)) for k in ("sector", "industry", "type")),
+               listed,
                ctx["company"],
                " ".join(_text(research.get(k)) for k in ("summary", "what_they_do")))
     for i, text in enumerate(sources):
         # In a summary, what the employer makes comes first: "software used by banks and
         # consulting firms" is a software company, whoever its customers are.
-        types = EMPLOYER_TYPES if i < 3 else sorted(EMPLOYER_TYPES, key=lambda t: t[0] != "product")
+        types = EMPLOYER_TYPES if i < len(sources) - 1 else sorted(
+            EMPLOYER_TYPES, key=lambda t: t[0] != "product")
         found = next((t for t, rx in types if rx.search(_text(text))), "")
         if found:
             return found
@@ -2635,6 +2709,21 @@ _TECH_STAGE = re.compile(r"\b(?:technical|case|coding|take[- ]?home|pairing|seco
                          r"round (?:2|two))\b", re.I)
 
 
+# A line of outcome.md that is advice or a guess rather than something said: "Recommendation:
+# round 2 virtual", "Likely shape of the two rounds, from reported processes". A rebuilt pack
+# listed both under "What you were told about this round". A line that says who said it
+# ("the recruiter said it is sixty minutes") stays what they were told, whatever else it holds.
+_ADVICE = re.compile(r"\b(?:recommend\w*|likely|probably|reportedly|reported|usually|typically|"
+                     r"tends? to|should|suggest\w*|consider|assum\w*|my guess|i think)\b", re.I)
+_SAID = re.compile(r"\b(?:said|says|told|mentioned|explained|confirmed|according to|wrote|"
+                   r"emailed|invit\w*|booked)\b", re.I)
+
+
+def _was_told(line) -> bool:
+    """Is this line of the record something they were told, rather than advice or a guess?"""
+    return bool(_SAID.search(line)) or not _ADVICE.search(line)
+
+
 def _stage_named(text) -> str:
     """The step a line or heading names, or "" when it names none."""
     for step, rx in what_works._STEP_RX:
@@ -2643,12 +2732,19 @@ def _stage_named(text) -> str:
     return "technical" if _TECH_STAGE.search(text or "") else ""
 
 
+# Who said it, before what they said: "The recruiter said round 2 is 45 minutes" is about
+# round 2, and read whole, "recruiter" filed it under the screen. Only a speaker of a few
+# words is taken off: "The technical round is a case, the recruiter said" keeps its subject.
+_SPEAKER = re.compile(r"^\W*(?:[\w'&.-]+[\s,]+){0,4}?(?:said|says|told (?:me|us|him|her|them)|"
+                      r"mentioned|explained|confirmed|wrote|emailed)\b[:,]?\s*", re.I)
+
+
 def _for_this_stage(ctx, heading, line) -> bool:
     """Is this line of outcome.md about the stage being prepared? The line's own words
-    first, then its heading's: by the stage's name, else by the step either names. A line
-    under no stage at all is not this one's."""
+    first (what was said, not who said it), then its heading's: by the stage's name, else by
+    the step either names. A line under no stage at all is not this one's."""
     label = what_works._norm(ctx["stage"])
-    for text in (line, heading):
+    for text in (_SPEAKER.sub("", line, count=1), heading):
         if label and label in what_works._norm(text):
             return True
         named = _stage_named(text)
@@ -2676,7 +2772,7 @@ def format_lines(ctx) -> list:
     # the technical round's pack quoted the screen's "virtual, 30 minutes" as its own.
     fmt = [rx for f, rx in FORMATS if f in formats and f != "screen"]
     told = [(h, ln) for h, ln in _record(ctx["outcome"])
-            if _for_this_stage(ctx, h, ln)
+            if _for_this_stage(ctx, h, ln) and _was_told(ln)
             and (any(rx.search(ln) for rx in fmt) or _SHAPE.search(ln))]
     out += ["- What you were told about this round: %s (source: %s/outcome.md)"
             % (prep.clip(ln, 200), _rel(ctx["folder"])) for _h, ln in told[:2]]
@@ -3036,7 +3132,11 @@ def stages_mark(ctx) -> str:
     have = [s for s in (m.group(1).split("; ") if m else []) if s]
     if ctx["stage"] not in have:
         have.append(ctx["stage"])
-    return "<!-- stages: %s -->" % "; ".join(have)
+    # One round is one entry, by its fuller name: a line already holding "Round 2
+    # (technical); Round 2" from an earlier rebuild is put right.
+    have = [s for s in have if not any(o != s and _same_round(o, s) and len(o) > len(s)
+                                       for o in have)]
+    return "<!-- stages: %s -->" % "; ".join(dict.fromkeys(have))
 
 
 def campaign_offer(ctx) -> str:

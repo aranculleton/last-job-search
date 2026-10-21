@@ -20,6 +20,29 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **"What would you do differently now?" no longer takes your answer to "Why now?".** The
+  word "now" counted as the topic, so at a bank the question matched the answer you wrote
+  for leaving a consultancy, and lost its story. Words for when or where (now, then, today,
+  currently, here) no longer count, and "Why now?" is still the leaving question.
+- **A rebuild keeps the story each question was given.** A story chosen for a question was
+  kept nowhere, so a rebuild without it left "no story yet". The pack now reads it back
+  from its own last version, while that story is still in your file.
+- **An employer your own list calls professional services is a consulting firm**, even
+  with no sector on its row and no research. A consulting firm's pack was offering the
+  answer you marked "Not for: consulting".
+- **A fact still marked to confirm is never printed as one.** A neighbourhood still waiting
+  for your answer was printed as "You live in [CONFIRM: ...]"; the pack now uses your city
+  until you answer.
+- **Advice in your outcome notes is never "what you were told".** A recommendation or a
+  guess from reported processes was listed under "What you were told about this round".
+  A line that says who said it still counts, and "The recruiter said round 2 is 45
+  minutes" is now read as about round 2, not the screen.
+- **A rebuild with no stage named keeps the round's full name.** "Round 2 (technical)"
+  became "Round 2", and the stages line held both. A stages line already doubled is put
+  right on the next rebuild.
+
 ## [3.9.0] - 2026-10-20
 
 ### Added
