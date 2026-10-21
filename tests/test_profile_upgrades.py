@@ -797,7 +797,8 @@ def test_a_checkout_older_than_the_sync_says_so_and_never_lists_or_crashes(
         run("commit", "-qm", n)
     stamp = tmp_path / "ljs-last-sync"
     monkeypatch.setattr(sync_app, "ROOT", str(repo))
-    monkeypatch.setattr(sync_app, "_stamp_path", lambda: str(stamp))
+    monkeypatch.setattr(U, "ROOT", str(repo))      # the checkout --plan runs in
+    monkeypatch.setattr(sync_app, "_stamp_path", lambda root=None: str(stamp))
     sync_app._record_check()                       # the sync left the repo on commit 2
     assert sync_app.behind_sync() == ""
     run("checkout", "-q", "HEAD~1")                # a worktree made from before it

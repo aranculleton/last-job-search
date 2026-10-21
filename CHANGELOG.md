@@ -34,6 +34,15 @@ make sense to somebody whose repo just received it.
 - **"Both are right, leave it."** When the consistency check flags a line that is right on
   purpose, `python3 tools/profile_consistency.py --reviewed <file>:<line>` records that.
   It is not raised again until that sentence changes.
+- **A rehearsal before each release.** `python3 tools/rehearse_sync.py <a person's repo>`
+  takes the update the way a cloud chat and a computer chat would, on copies, then runs the
+  day's checks and lands a change. Nothing of the real repo is touched. Its first run found
+  the two sync stops fixed below.
+- **Light local checks when only your own files changed.** When every change since master
+  is yours (contacts, tracker, messages, documents, profile), `./tools/ci_local.sh` runs
+  your own tests, reads every state and profile file the way the tools do, and runs the
+  guards and the leak scan. It skips the app's own suites, saying so, since they test the
+  app, which did not change: about 1.5 minutes instead of 2.5. `--full` runs everything.
 
 ### Changed
 
@@ -45,6 +54,10 @@ make sense to somebody whose repo just received it.
 - **The state files keep plain line endings** whatever program wrote them. A chat that
   saved the contact book with Windows line endings changed every line in the commit, so
   the diff was unreadable and the row-by-row merge saw every row as changed by both sides.
+- **A call prep is written at once, before the employer is researched.** It says at the
+  top that the company is not researched yet, and the research and an updated prep follow.
+  Before, it stopped and asked for the research first, so a call could come round with no
+  prep at all.
 - **"Moved recently?" can be answered "per employer"**, for good, by someone who tells
   each employer their own place. Before, it could only be closed by naming one place, and
   a "no" lasted a month. When nothing is known yet, it now leaves a short marker, not the
@@ -76,6 +89,19 @@ make sense to somebody whose repo just received it.
   the local CI fails with the command that removes any already committed. 128 of them had
   been committed with one person's profile.
 
+- **A prepared answer that says where you live is checked against what that employer
+  heard.** A stock answer ("my partner and I came over from London") stated a place the
+  employer had not been told. The prep and the interview pack now mark it, and their checks
+  fail it, when you told that employer somewhere else.
+- **A sync no longer stops on its own place check.** The check wrote a line and left it
+  uncommitted, so the next sync, which pulls only into a clean folder, stopped.
+- **A sync no longer stops on line endings.** State files already committed with Windows
+  line endings read as changed in a fresh copy. They are given plain endings once, in a
+  commit of their own that changes no row.
+- **The app's own tests no longer tell other copies they are behind.** A test run wrote the
+  day's sync record into the git folder every copy of a repo shares, and `/upgrade` in the
+  other copies then stopped with "older than the last update". The record now goes to the
+  repo the sync ran in, and the app itself, which takes no updates, keeps none.
 - **"What would you do differently now?" no longer takes your answer to "Why now?".** The
   word "now" counted as the topic, so at a bank the question matched the answer you wrote
   for leaving a consultancy, and lost its story. Words for when or where (now, then, today,

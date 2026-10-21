@@ -64,3 +64,74 @@ def test_the_document_folders_ship_only_the_apps_own_files():
 def test_split_keeps_order_and_partitions():
     app, mine = split(["tools/a.py", "network_contacts.csv", "README.md"])
     assert app == ["tools/a.py", "README.md"] and mine == ["network_contacts.csv"]
+
+
+def _git(cwd, *args):
+    import subprocess
+    return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c",
+                           "user.email=t@example.com", *args], capture_output=True, text=True)
+
+
+def test_local_checks_go_light_only_when_every_change_is_the_persons_own(tmp_path):
+    """From a person's repo on 2026-10-21: `ci_local.sh --quick` took 2.5 minutes, twice, for
+    changes to the contact book alone. It now skips the app's own suites when every change
+    since master is theirs, and runs everything when anything of the app changed, or nothing."""
+    import subprocess
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "master", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    (repo / "tools").mkdir()
+    (repo / "tools" / "run_round.py").write_text("x = 1\n")
+    (repo / "network_contacts.csv").write_text("id\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "push", "-q", "origin", "HEAD:master")
+    _git(repo, "fetch", "-q", "origin")
+
+    def light():
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "personal_paths.py"),
+                            "--only-personal-changed"], capture_output=True, text=True,
+                           env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                           cwd=str(repo))
+        return r.returncode == 0, r.stdout.split()
+
+    import personal_paths
+    assert personal_paths.changed(str(repo)) == []
+    (repo / "network_contacts.csv").write_text("id\nc1\n")              # their contact book
+    (repo / "documents").mkdir()
+    (repo / "documents" / "note.md").write_text("new\n")                # untracked, theirs
+    assert personal_paths.changed(str(repo)) == ["documents/note.md", "network_contacts.csv"]
+    _git(repo, "commit", "-qam", "a contact")                            # committed counts too
+    assert personal_paths.changed(str(repo)) == ["documents/note.md", "network_contacts.csv"]
+    (repo / "tools" / "run_round.py").write_text("x = 2\n")             # and now the app's
+    assert sorted(personal_paths.split(personal_paths.changed(str(repo)))[0]) == \
+        ["tools/run_round.py"]
+    assert personal_paths.changed(str(repo), base="origin/no-such") is None
+
+
+def test_the_light_check_is_asked_of_the_repo_it_runs_in(tmp_path):
+    """The flag reads the checkout ci_local.sh runs in: exit 0 for theirs alone, 1 for any
+    app file, and 1 for no change at all (a check of master itself checks everything)."""
+    import shutil
+    import subprocess
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "master", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    shutil.copytree(os.path.join(ROOT, "tools"), repo / "tools",
+                    ignore=shutil.ignore_patterns("__pycache__", "openroles"))
+    (repo / "network_contacts.csv").write_text("id\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "push", "-q", "origin", "HEAD:master")
+    _git(repo, "fetch", "-q", "origin")
+
+    def flag():
+        return subprocess.run([sys.executable, "tools/personal_paths.py",
+                               "--only-personal-changed"], capture_output=True, text=True,
+                              cwd=str(repo), env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+    assert flag().returncode == 1                                         # nothing changed
+    (repo / "network_contacts.csv").write_text("id\nc1\n")
+    got = flag()
+    assert got.returncode == 0 and got.stdout.split() == ["network_contacts.csv"]
+    (repo / "tools" / "bar.py").write_text("# changed\n")
+    assert flag().returncode == 1

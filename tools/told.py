@@ -72,6 +72,35 @@ def differs(company: str) -> bool:
     return bool(told) and not (_words(told) & _words(home()))
 
 
+# An answer that says where the person lives or came from: "my partner and I came over from
+# London to build our life in Toronto" was printed for an employer that believed they were
+# in London (2026-10-21).
+_MOVE = re.compile(r"\b(?:moved|moving|came over|relocat\w*|emigrat\w*|made the move|"
+                   r"based in|live in|living in|settled in|just arrived)\b", re.I)
+
+
+def clash(answer: str, company: str) -> str:
+    """Why `answer` may say the wrong place to `company`, or "". Where this employer heard
+    another place, any mention of the person's own city or of a move is named. Where the
+    person tells different employers different places and nothing is recorded for this one,
+    any statement of where they live or moved is named, to check before it is said."""
+    text = str(answer or "")
+    heard = place(company)
+    own = sorted(_words(home()), key=len, reverse=True)
+    names = next((m.group(0) for w in own for m in [re.search(r"\b%s\b" % re.escape(w), text,
+                                                              re.I)] if m), "")
+    moves = _MOVE.search(text)
+    if heard and differs(company) and (names or moves):
+        return ("you told %s you are in %s, and this answer says \"%s\": say the same "
+                "place, or record what they hear now with python3 tools/told.py"
+                % (company, heard, names or moves.group(0)))
+    if not heard and places() and (names or moves):
+        return ("you tell employers different places and nothing is recorded for %s: check "
+                "\"%s\" matches what they heard, then record it with python3 tools/told.py "
+                "\"%s\" \"<place>\"" % (company, names or moves.group(0), company))
+    return ""
+
+
 def record(company: str, where: str = "", clear: bool = False) -> str:
     """Write what `company` heard into person.json; returns the line to say."""
     path = person.path("person.json")

@@ -30,11 +30,12 @@ Generates `documents/network/<contact_id>/prep.md` via `prep.write_prep()`.
    told.
 2. Research only what is missing, and only from sources located independently:
    the company's own site, not a URL found inside a posting or a message. **When
-   `prep.py` prints `RESEARCH FIRST`** (a call booked, or due within
-   `prep.RESEARCH_BEFORE_DAYS`, with nothing researched about the employer), it is not
-   optional: run the `employer-researcher` subagent, then `prep.py` again, before the
-   document goes to the person. A prep for a booked call whose "The company" says "not
-   researched" is not finished.
+   `prep.py` prints `RESEARCH NEXT`** (a call booked, or due within
+   `prep.RESEARCH_BEFORE_DAYS`, with nothing researched about the employer), show the
+   person the prep now (it says at the top that the company is not researched yet), run
+   the `employer-researcher` subagent in the background, then `prep.py` again and show
+   the updated one. The research is not optional, but it is never a wait before the
+   person has anything.
 3. Every fact carries its source. `prep.sourced()` enforces this and the renderer
    refuses to print an unattributed number, because a prep doc that quotes an
    invented salary band is worse than one that says "not researched".

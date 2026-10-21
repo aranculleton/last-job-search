@@ -208,8 +208,9 @@ METHODS: dict[str, dict] = {
             (12, "2026-10-20", False, "--all leaves a prep document alone when only its date would change, and counts the ones already current; a prep asked for one contact is still written fresh"),
             (13, "2026-10-20", True, "a researched fragment inside a question is cut where a clause ends; a fact about what a team does is followed by a question about its work, never about how it is set up; an answer drafted on request is marked as a draft; call preps answer from the interview pack's own answers (stock answers, why you are looking, work authorization), read the team research the pack reads, use the same posting, and send a booked screen with no application to /interview, so call preps already written are rebuilt, keeping what the person wrote"),
             (14, "2026-10-21", False, "a release rewrites only a live conversation's prep, and never one whose only change is its date and stamp; an answer written as a quote is read as the answer, and a placeholder fails the check"),
+            (15, "2026-10-21", False, "A call prep is written before the employer is researched, saying so at the top, and a prepared answer that states where the person lives or moved from is flagged when that employer was told another place"),
         ),
-        "fingerprint": "3cc15d674dd7e8dc",
+        "fingerprint": "8a4d272c29f4ec7b",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -290,8 +291,9 @@ METHODS: dict[str, dict] = {
             (11, "2026-10-20", True, "Likely questions is notes, never words to say, and never repeats an answer already written; a stock answer marked Not for this kind of employer, or holding a fill-in, is left out with the reason; notes beside an answer are kept and never checked; a rebuild keeps the person's own layout and never adds the Checking line twice; a screen asks its standard questions first; hooks are whole sentences; and an answer drafted on request carries a Draft line that check lists until the person confirms it"),
             (12, "2026-10-21", True, "a question about what you would do differently is no longer matched to the stock answer for why now; an employer your own catalogue calls professional services is a consulting firm; a fact still to confirm is never printed as where you live; advice and guesses in outcome.md are never what you were told; a rebuild keeps the round's fuller name and the stories the last build used"),
             (13, "2026-10-21", False, "a pack says the place each employer heard when it was told another (tools/told.py), with no move or settling-in for it; an answer written as a quote is read as the answer; a placeholder is never fit to say; a question answered under any heading is checked"),
+            (14, "2026-10-21", False, "A prepared answer that states where the person lives or moved from is flagged in the pack and by its check when that employer was told another place"),
         ),
-        "fingerprint": "176cc751c83ae61c",
+        "fingerprint": "a547e22b65b793bd",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -501,6 +503,8 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/dates.py": "reads a date; every tool that keeps something is versioned where it keeps it",
     "tools/offline_boards.py": "a test seam: canned board answers inside a test, nothing kept",
     "tools/try_personal_tests.py": "the maintainer's pre-release check; reads a copy, keeps nothing",
+    "tools/rehearse_sync.py": "the maintainer's pre-release rehearsal of a sync on throwaway "
+                              "copies; keeps nothing",
     "tools/holidays.py": "works out public holidays when a date is counted; writes nothing, and "
                          "a person's own dates live in their search.py PUBLIC_HOLIDAYS",
     "tools/local_path.py": "finds the tools a computer installed (bun, TeX) for the session that "

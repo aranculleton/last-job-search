@@ -95,10 +95,23 @@ def test_a_prep_is_stale_once_the_thread_moves(tmp_path):
 
 def test_a_booked_call_with_nothing_researched_asks_for_research_first():
     need = prep.research_needed(RECRUITER, {}, today="2026-10-19")
-    assert need.startswith("RESEARCH FIRST") and "employer-researcher" in need
+    # Never a wait before the person has anything (2026-10-21): shown now, researched next.
+    assert need.startswith("RESEARCH NEXT") and "employer-researcher" in need
+    assert "show the person this prep now" in need
     assert prep.research_needed(RECRUITER, {"facts": ["x"]}, today="2026-10-19") == ""
     far = dict(PEER, status="awaiting_reply", next_action_due="2026-12-01")
     assert prep.research_needed(far, {}, today="2026-10-19") == ""
+
+
+def test_a_prep_before_research_is_whole_and_says_so_to_the_person(tmp_path):
+    """Two hours before a call, the prep was held back until the employer was researched
+    (2026-10-21). It is written in full from what is on file, and says at the top, in the
+    person's words, what is still to come."""
+    text = open(prep.write_prep(RECRUITER, profile_facts=FACTS, today="2026-10-19",
+                                root=str(tmp_path)), encoding="utf-8").read()
+    assert "**Not researched yet: %s.**" % RECRUITER["company"] in text
+    assert "Claude:" not in text and "RESEARCH" not in text
+    assert prep.SECTIONS[0] in text and prep.SECTIONS[-1] in text
 
 
 def test_a_recruiter_screen_on_a_live_process_points_at_interview():

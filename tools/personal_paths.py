@@ -126,7 +126,33 @@ def tracked(root: str = ROOT) -> list[str]:
     return [p for p in out.decode("utf-8").split("\0") if p]
 
 
+def changed(root: str = ROOT, base: str = "origin/master") -> list[str] | None:
+    """Every path this checkout changed since it left `base`: committed, staged, unstaged
+    and untracked (ignored files aside). None when `base` is not known here."""
+    def git(*args):
+        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    fork = git("merge-base", "HEAD", base)
+    if fork.returncode:
+        return None
+    out = set()
+    for args in (("diff", "--name-only", "-z", fork.stdout.strip()),
+                 ("ls-files", "--others", "--exclude-standard", "-z")):
+        r = subprocess.run(["git", "-C", root, *args], capture_output=True)
+        out.update(p for p in r.stdout.decode("utf-8", "replace").split("\0") if p)
+    return sorted(out)
+
+
 def main(argv: list[str]) -> int:
+    if "--only-personal-changed" in argv:
+        # For ./tools/ci_local.sh: exit 0, listing them, when every change since master is
+        # the person's own (their data, their profile, their tests); 1 otherwise, and when
+        # nothing changed at all, since a check of master itself checks everything.
+        got = changed()
+        if not got:
+            return 1
+        app, mine = split(got)
+        print("\n".join(mine))
+        return 0 if not app else 1
     app, mine = split(tracked())
     if "--personal" in argv:
         print("\n".join(mine))

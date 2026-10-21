@@ -100,3 +100,22 @@ def test_per_employer_answers_the_moved_question_for_good(case):
     assert U.by_id("move-and-area").pending() == ""
     # Kept per employer, "per employer" is nobody's place.
     assert told.home() == data["identity"]["location"]
+
+
+def test_an_answer_naming_a_place_is_flagged_for_an_employer_told_another(case):
+    """For one call the prep printed "my partner and I came over from <city> to build our
+    life in <city>" to someone who believed the person was still in the first (2026-10-21)."""
+    answer = "My partner and I came over to build our life in Manchester, and I want to stay."
+    assert told.clash(answer, FIRM) == ""                       # one place for everyone
+    told.record(FIRM, "Leeds")
+    said = told.clash(answer, FIRM)
+    assert "you told Calder & Rook Consulting you are in Leeds" in said
+    # Another employer, with nothing recorded, now that places differ: checked, not trusted.
+    other = told.clash(answer, "Oakmere Foods")
+    assert "nothing is recorded for Oakmere Foods" in other
+    assert told.clash("I build demand forecasts in Python.", "Oakmere Foods") == ""
+    # The call prep's check fails it, for that employer only.
+    text = ("- **Q.** Why are you looking?\n  **A.** %s\n" % answer)
+    import prep
+    assert any("Leeds" in why for _q, why in prep.check_answers(text, FIRM))
+    assert not any("Leeds" in why for _q, why in prep.check_answers(text))

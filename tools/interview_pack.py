@@ -1169,6 +1169,9 @@ def answer_for(item, ctx) -> dict:
                      "there, and the next build uses it." % (prepared["fill_in"],
                                                             prepared["source"]))
         prepared = None
+    where = places_told.clash(prepared["answer"], ctx["company"]) if prepared else ""
+    if where:
+        lines.append("Careful: %s." % where)
     if prepared:
         lines.append("Prepared: %s (source: %s)%s" % (
             prepared["answer"], prepared["source"],
@@ -3084,8 +3087,12 @@ def check(path) -> list:
     # RESEARCH FIRST line, only what it found.
     out = [("Research", re.sub(r"^\s*-\s*", "", ln).split(". The employer-researcher")[0])
            for ln in text.splitlines() if "RESEARCH FIRST (Claude" in ln]
+    company = _company_of(path)
     for i, (q, body) in enumerate(blocks.values()):
         mine = spoken(body)
+        where = places_told.clash(" ".join(mine), company) if company else ""
+        if where:
+            out.append((q, where))
         if not " ".join(mine).strip():
             # A motivation question waits on the person's own reasons, wherever it falls.
             if any(ASK_MARK in ln for ln in body):
@@ -3101,6 +3108,13 @@ def check(path) -> list:
         if drafted(body):
             out.append((DRAFT, q))
     return out
+
+
+def _company_of(path) -> str:
+    """The employer a living document is for, from its title ("# Interview prep: <role> at
+    <employer>"), or ""."""
+    m = re.search(r"^# Interview prep: .+ at (.+?)\s*$", _read(path), re.M)
+    return m.group(1).strip() if m else ""
 
 
 # A heading that is a question someone could be asked: "### Why this team?", "### Tell me
