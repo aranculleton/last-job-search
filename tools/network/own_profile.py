@@ -605,9 +605,48 @@ def _employer_names(role: dict) -> list:
     return [role.get("employer", "")] + known
 
 
+def _shortened(a, b) -> bool:
+    """Is one employer name the other with words left off the end ("Brindle & Hart" for
+    "Brindle & Hart Logistics")? Two words at least, or one of four letters or more; read
+    word for word and by the employer key (the name without Ltd and the like)."""
+    from company_key import key
+
+    def words(name) -> list:
+        return [w for w in re.findall(r"[a-z0-9]+", str(name or "").lower())
+                if w not in ("and", "the")]
+    for x, y in ((words(a), words(b)), (key(a).split(), key(b).split())):
+        short, long_ = sorted((x, y), key=len)
+        if short and long_[:len(short)] == short and (len(short) > 1 or len(short[0]) >= 4):
+            return True
+    return False
+
+
 def _same_employer(company, role) -> bool:
+    """One employer, by its join (discovery.same_employer), a name it is known by, or the
+    name shortened: a profile that matched the resume was flagged for "Brindle & Hart"
+    against "Brindle & Hart Logistics" (2026-10-21)."""
     import discovery
-    return any(discovery.same_employer(company, n) for n in _employer_names(role) if n)
+    return any(discovery.same_employer(company, n) or _shortened(company, n)
+               for n in _employer_names(role) if n)
+
+
+def _position_for(role: dict, start, theirs: list, used: set) -> list:
+    """The LinkedIn position that is this resume role, as a list of one: the same title
+    first, then the nearest start, among those no earlier role has taken; all of `theirs`
+    when the employer has none left. Pooling every position at an employer read a promotion
+    (two roles at one employer, on both) as one role starting at the earlier and still
+    current (2026-10-21)."""
+    free = [x for x in theirs if id(x) not in used] or theirs
+    if not free:
+        return []
+
+    def rank(x):
+        gap = _months_apart(x["_start"], start)
+        return (not same_title(x["title"], role.get("title")), 10 ** 6 if gap is None else gap)
+
+    best = min(free, key=rank)
+    used.add(id(best))
+    return [best]
 
 
 def _finding(fid, what, evidence, fix) -> dict:
@@ -692,11 +731,23 @@ def _roles(p, today) -> list:
                                 f"{_when(start0)}, and end the one that finished."))
     earliest = min((s for s in (span(r.get("dates"))[0] for r in mine) if s), default=None)
     flagged_current = any(f["id"] == "current-role" for f in out)
+    used, keyed = set(), set()
+    at: dict = {}                    # how many resume roles each employer has
+    for role in mine:
+        e = str(role.get("employer", "")).lower()
+        at[e] = at.get(e, 0) + 1
     for i, role in enumerate(mine):
         start, end, current = span(role.get("dates"))
         theirs = [x for x in linked if x["company"] and _same_employer(x["company"], role)]
         key = re.sub(r"[^a-z0-9]+", "-", str(role.get("employer", "")).lower()).strip("-")
         fid = f"role:{key}"
+        if fid in keyed:                 # a second role at one employer: its own finding
+            fid += ":" + re.sub(r"[^a-z0-9]+", "-", str(role.get("title", "")).lower()).strip("-")
+        keyed.add(fid)
+        if at[str(role.get("employer", "")).lower()] > 1:
+            # A promotion on the resume: each title against its own position. One entry an
+            # employer is read against all of theirs there, as it always was.
+            theirs = _position_for(role, start, theirs, used)
         if not theirs:
             if i == 0 and flagged_current:
                 continue

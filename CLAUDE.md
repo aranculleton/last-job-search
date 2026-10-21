@@ -317,7 +317,7 @@ run by name with the Workflow tool:
 
 | Workflow | Args | What it does |
 |---|---|---|
-| `draft-applications` | `{today, round_dir, picks}`, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), draft object and grounding and rules audit (both on the session's own model). Writes `round_dir/audit_<slug>.json`. |
+| `draft-applications` | the contents of `draft_args.json` (`{round_dir, pack, pack_hash, picks}`) plus `{today}`, `only` (slugs) to leave out roles the person drops, and `repo` when the session is not at the repository root | Per posting, pipelined: company research (sonnet), one drafting call from the pack, the code audit, then the model audit of one small packet for every draft that will be sent (the session's own model). Writes `draft_<slug>.json` and `model_audit_<slug>.json`; `stage_picks.py audit` writes `audit_<slug>.json`. |
 | `repo-audit` | optional `{focus}` | Four sonnet readers over docs, code, networking state and records, a sceptic per slice that re-checks every finding against the cited lines, then one ranking pass. Read-only. |
 
 Two of the **subagents** in `.claude/agents/` carry the same split for a single `/apply`, an
@@ -329,16 +329,21 @@ Two of the **subagents** in `.claude/agents/` carry the same split for a single 
 | `grounding-auditor` | none set: the session's own | The last read before anything reaches an employer or a contact: profile grounding, `check_claims`, `check_numbers`, `voice_check`, `compose.validate()` |
 
 `tools/lint_skills.py` checks their frontmatter, and a test pins the two models, so the
-auditor cannot be quietly downgraded. The drafting path is three commands around one
+auditor cannot be quietly downgraded. The drafting path is five commands around one
 workflow, for a batch from a round and a single `/apply` alike (`stage_picks.py single`
 stages the one posting):
 
 ```bash
 python3 tools/stage_picks.py stage "$SCRATCH/r1" "Acme::Demand Planning" 4 7     # picks.json, apps_in.json, fenced postings
 python3 tools/stage_picks.py consent "$SCRATCH/r1" acme --yes Looker --no Spark   # the person's answers
-# Workflow draft-applications with args {today, round_dir, picks: <picks.json>}
+python3 tools/draft_pack.py build "$SCRATCH/r1"                                  # pack.md, draft_args.json
+# Workflow draft-applications, args: draft_args.json plus {today} ("only": [slugs] for roles dropped)
+python3 tools/stage_picks.py audit "$SCRATCH/r1"                                 # both audits, the record that counts
 python3 tools/stage_picks.py assemble "$SCRATCH/r1"                              # drafts.json
 ```
+
+Every draft that will be sent gets both audits; a draft the code audit alone passed is
+never assembled.
 
 **A skill a posting names that the profile does not hold is the person's call, every time**:
 `stage` prints one short question per pick, asked as written, `consent` records each answer,

@@ -61,31 +61,66 @@ _MONTH = r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|a
 
 # ------------------------------------------------------------------ terms
 
+_NUMS = r"(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|eighteen|" \
+        r"twenty[- ]four)"
 FIXED = re.compile(
     r"\bfixed[- ]term\b|\bFTC\b|\btemporary (?:role|position|contract|assignment|post|job|"
-    r"opportunity|vacancy)\b|\bon a temporary basis\b|\btemp[- ]to[- ]perm\b|"
-    r"\b(?:maternity|paternity|parental|family)(?: leave)? (?:cover|replacement|coverage)\b|"
-    r"\bmat(?:ernity)? cover\b|\bon (?:a )?secondment\b|\b\d+[- ]month secondment\b|"
-    r"\b(?:role|position|post) is (?:offered as )?a secondment\b",
+    r"opportunity|vacancy)\b|\btemporary,? (?:full|part)[- ]time\b|\bon a temporary basis\b|"
+    r"\btemp[- ]to[- ]perm\b|\bterm (?:position|role|post|appointment|contract)\b|"
+    # Cover for someone's leave is a fixed term; a leave policy with "coverage" is a benefit
+    # ("100% parental leave coverage for 6 months", "family coverage from day one").
+    r"\b(?:maternity|paternity|parental)(?: leave)? (?:cover|replacement|contract)\b|"
+    r"\bmat(?:ernity)? cover\b|\bto cover (?:a |an )?(?:maternity|paternity|parental) leave\b|"
+    # A secondment the role IS, never one the employer offers its staff.
+    r"\b(?:role|position|post|job|this) is (?:offered as |on )?(?:a )?secondment\b|"
+    r"\b\d+[- ]month secondment\b|"
+    r"\bduration\W{1,3}\s*(?:of\s+)?(?:about\s+|approximately\s+)?" + _NUMS + r"\s+(?:months?|weeks?|years?)\b|"
+    r"\b(?:on an interim basis|interim (?:role|position|basis|assignment|contract|post|appointment|"
+    r"engagement))\b",
     re.I)
 # A title that says how the job is held, not what it is: "Analyst (Contract)", "Analyst -
-# Contract", "12 Month FTC". A contract analyst, or a manager of contracts, holds a
-# permanent job about contracts.
+# Contract", "12 Month FTC", a maternity leave cover, an analyst contractor. A contract
+# analyst, a manager of contracts or "Contract Pricing" holds a permanent job about
+# contracts, so "contract" counts only standing alone at the end of a part of the title or
+# in brackets.
 TITLE_TERMS = re.compile(
-    r"\bfixed[- ]term\b|\bFTC\b|\btemporary\b|\btemp\b|\b\d+[- ]months?\b|"
-    r"\bmat(?:ernity)? cover\b|\(\s*contract\s*\)|[-\u2013|,]\s*contract(?:or)?\b|"
-    r"\bcontract (?:role|position)\b", re.I)
+    r"\bfixed[- ]term\b|\bFTC\b|\btemporary\b|\btemp\b|\b\d+[- ]months?\b|\binterim\b|"
+    r"\bmat(?:ernity)? cover\b|\b(?:maternity|paternity|parental)(?: leave)? cover\b|"
+    r"\(\s*(?:contract|contractor|freelance)\s*\)|"
+    r"[-\u2013|,]\s*(?:contract|contractor|freelance)\s*(?=$|[-\u2013|,(])|"
+    r"\bcontractor\s*$|\bfreelance\b|\bcontract (?:role|position)\b", re.I)
 CONTRACT = re.compile(
-    r"\bcontract (?:role|position|basis|opportunity|assignment|length|duration|term|"
-    r"engagement|job|period)\b|\b(?:on|for) a (?:\d+[- ]month )?contract\b|"
+    r"\bcontract (?:role|position|basis|opportunity|assignment|engagement|job)\b|"
+    r"\bcontract (?:length|duration|term|period)\W{0,3}\s*(?:is\s+|of\s+)?(?:about\s+|approximately\s+)?"
+    + _NUMS + r"\b|"
+    # "on a contract", "for a 6-month contract", never "for a contract research organisation".
+    r"\b(?:on|for) a (?:\d+[- ]month )?contract(?=\s*(?:[.,;:)]|$|basis|role|position|"
+    r"until|till|ending|lasting|running|of\s+\d|of\s+(?:one|two|three|four|five|six|seven|"
+    r"eight|nine|ten|eleven|twelve|eighteen)|for\s+\d|with\b))|"
     r"\b" + _N + r"[- ](?:month|week)s?(?:[- ]long)?\s+(?:contract|assignment|engagement)\b|"
+    r"\b(?:initial|initially)\s+(?:\d+|" + _N[1:-1] + r")[- ]month (?:term|contract|period|assignment)\b|"
+    r"\bcontract (?:until|till|through|ending|to (?:the )?end of)\b|"
+    r"\b(?:inside|outside) IR35\b|\bIR35\b|\bday rate\b|\bfreelance (?:role|engagement|basis|contract|work)\b|"
     r"\b(?:employment|job|position|contract|work) type\W{0,3}\s*(?:contract|contractor|"
-    r"temporary|fixed[- ]term)\b|\bcontract[- ]to[- ](?:hire|perm\w*)\b|\bcontractor role\b",
+    r"temporary|fixed[- ]term|freelance)\b|\bcontract[- ]to[- ](?:hire|perm\w*)\b|\bcontractor (?:role|position|basis)\b",
     re.I)
-PERMANENT = re.compile(r"\bpermanent\b|\bregular,? full[- ]time\b|"
-                       r"\b(?:employment|job|position) type\W{0,3}\s*full[- ]time\b", re.I)
+# A permanent job as a posting states it: "This is a permanent, full-time role",
+# "Employment type: Permanent", the US "regular, full-time". Never "full-time" alone, which is
+# hours ("Employment type: Full-time" beside "Duration: 6 months"), and never "permanent"
+# in passing ("a permanent home for software teams"). Stated, it wins over a benefit, a
+# secondment the employer offers, or a stray word elsewhere in the posting.
+PERMANENT = re.compile(
+    r"\b(?:is|as) a permanent\b|\bis permanent\b|\bpermanent,? (?:(?:full|part)[- ]time,? )?(?:role|position|post|"
+    r"job|contract|opportunity|vacancy|appointment|employment|hire|basis)\b|"
+    r"\b(?:employment|job|position|contract|work) type\W{0,3}\s*permanent\b|\bregular,? full[- ]time\b",
+    re.I)
+# "Could become permanent", "with a view to a permanent position": a contract that may be.
+_MAYBE_PERMANENT = re.compile(r"\b(?:possib\w+|potential\w*|chance|opportunity|could|may|might|"
+                              r"view to|lead to|leading to|becom\w+|convert\w*|extend\w*|"
+                              r"temp[- ]to[- ]perm)\b", re.I)
 # "This is not a contract role", "permanent, not fixed-term": a term named to be denied.
 _DENIED = re.compile(r"\b(?:not|no|non)[- ](?:a |an )?(?:fixed[- ]term|contract|temporary)\b", re.I)
+_DENIED_PERM = re.compile(r"\bnot (?:a )?permanent\b|\bnon[- ]permanent\b", re.I)
 _DURATION = re.compile(r"\b" + _N + r"[- ](month|week|year)s?\b", re.I)
 _ENDS = re.compile(
     r"\b(?:until|till|through|to|ending(?: on| in)?|ends?(?: on| in)?|end date\W{0,3}|"
@@ -153,8 +188,16 @@ def terms(text: str, title: str = "", today=None) -> dict:
     today = today or dt.date.today()
     found = {"kind": "not stated", "months": None, "ends": None, "ends_about": None, "quote": ""}
     if TITLE_TERMS.search(title or "") and not _DENIED.search(title or ""):
-        fixed = re.search(r"fixed|ftc|temp|month|cover", TITLE_TERMS.search(title).group(0), re.I)
+        fixed = re.search(r"fixed|ftc|temp|month|cover|interim", TITLE_TERMS.search(title).group(0),
+                          re.I)
         found.update(kind="fixed-term" if fixed else "contract", quote=title)
+    title_said = found["kind"] != "not stated"
+    stated = next((s for s in _sentences(text) if PERMANENT.search(s) and not _DENIED_PERM.search(s)
+                   and not _MAYBE_PERMANENT.search(s) and not FIXED.search(s)
+                   and not CONTRACT.search(s)), "")
+    if stated and not title_said:
+        found.update(kind="permanent", quote=stated[:220])
+        return found
     for s in _sentences(text):
         if _DENIED.search(s):
             continue
@@ -182,7 +225,7 @@ def terms(text: str, title: str = "", today=None) -> dict:
                                        ).isoformat()
     if found["kind"] == "not stated":
         for s in _sentences(text):
-            if PERMANENT.search(s) and not re.search(r"\bnot permanent\b", s, re.I):
+            if PERMANENT.search(s) and not _DENIED_PERM.search(s):
                 found.update(kind="permanent", quote=s[:220])
                 break
     if found["ends"] and found["months"] is None:
@@ -256,6 +299,34 @@ def _other_currency(s: str) -> str:
     return ""
 
 
+_MONEY = r"[£$€]\s?\d[\d,]*(?:\.\d+)?\s?[kK]?\b"
+_BAND = re.compile(r"(" + _MONEY + r")\s*(?:-|\u2013|\u2014|to)\s*([£$€]?\s?\d[\d,]*(?:\.\d+)?\s?[kK]?\b)")
+
+
+def _money_value(tok: str) -> int | None:
+    t = re.sub(r"[£$€,\s]", "", tok or "")
+    k = t.lower().endswith("k")
+    try:
+        n = float(t[:-1] if k else t)
+    except ValueError:
+        return None
+    return int(round(n * (1000 if k else 1)))
+
+
+def _bands_in(sentence: str) -> list:
+    """[(low, high, clause)] for each pay band a sentence states, each with the words
+    around it up to the next band: the clause that says where that band applies."""
+    found = list(_BAND.finditer(sentence or ""))
+    out = []
+    for i, m in enumerate(found):
+        start = found[i - 1].end() if i else 0
+        end = found[i + 1].start() if i + 1 < len(found) else len(sentence)
+        lo, hi = _money_value(m.group(1)), _money_value(m.group(2))
+        if lo and hi:
+            out.append((lo, hi, sentence[start:end]))
+    return out
+
+
 def pay(text: str) -> dict:
     """{low, high, currency, quote, where}: where is "home", "elsewhere: <place>",
     "another currency: <code>" or "" when no pay is stated."""
@@ -264,6 +335,14 @@ def pay(text: str) -> dict:
     cur = ts.CODE or ts.CUR
     if lo or hi:
         place = _elsewhere(quote)
+        if place:
+            # "£40,000 to £48,000, or £52,000 to £60,000 for London-based colleagues": the
+            # band with no other place beside it is the person's own, and the posting
+            # does state pay for where they are.
+            for band_lo, band_hi, clause in _bands_in(quote):
+                if not _elsewhere(clause):
+                    return {"low": band_lo, "high": band_hi, "currency": cur, "quote": quote,
+                            "where": "home"}
         return {"low": lo, "high": hi, "currency": cur, "quote": quote,
                 "where": ("elsewhere: " + place) if place else "home"}
     for s in _sentences(text):
@@ -376,7 +455,10 @@ def seen(row: dict, today=None, seen_path=None) -> dict:
             other.append(d)
     ruled = ""
     try:
-        urls, pairs = throttle.ruled_out(entries)
+        try:
+            urls, pairs = throttle.ruled_out(entries, today.isoformat())
+        except TypeError:                  # a stand-in written before it took the day
+            urls, pairs = throttle.ruled_out(entries)
         ruled = urls.get(url, "") if url else ""
         ruled = ruled or throttle.ruled_pair(pairs, row)
     except Exception:
@@ -496,9 +578,14 @@ def lines(prof: dict, quotes: bool = True) -> list:
     else:
         out.append("degree: none stated")
     w = prof["where"]
+    gate = ""
+    if w["verdict"] == "FLAG":
+        gate = " [check: %s]" % _plain_why(w["why"])
+    elif w["verdict"]:
+        gate = " [%s: %s]" % (w["verdict"], _plain_why(w["why"]))
     out.append("where: %s, %s%s%s" % (w["location"] or "no location given", w["mode"],
                                       " (%d days a week in the office)" % w["days"] if w["days"] else "",
-                                      " [%s: %s]" % (w["verdict"], w["why"]) if w["verdict"] else ""))
+                                      gate))
     s = prof["seen"]
     if s["ruled_out"]:
         out.append("seen: ruled out before (%s)" % s["ruled_out"])
@@ -531,6 +618,20 @@ def lines(prof: dict, quotes: bool = True) -> list:
     return out
 
 
+_SHORT_PLACES = {"nyc", "emea", "apac", "latam", "uk", "us", "usa", "eu", "uae", "dc"}
+
+
+def _place(name: str) -> str:
+    """A place as a person writes it: "London", "New York", "EMEA"."""
+    return " ".join(w.upper() if w.lower().strip(".,") in _SHORT_PLACES else w[:1].upper() + w[1:]
+                    for w in str(name or "").split())
+
+
+def _plain_why(why: str) -> str:
+    """The location gate's reason without the pipeline's own words ("Tier 2 decides")."""
+    return re.sub(r";?\s*Tier \d+ decides\.?", "", str(why or "")).strip(" ;")
+
+
 def questions(prof: dict, row: dict) -> list:
     """[{id, question}]: what the person is asked before this posting is drafted."""
     company, role = str(row.get("company") or "this employer"), str(row.get("title") or "this role")
@@ -547,7 +648,8 @@ def questions(prof: dict, row: dict) -> list:
     if p["where"].startswith("elsewhere"):
         out.append({"id": "pay_elsewhere", "question":
                     "The only pay %s states for %s is for %s (%s), not for where you are. "
-                    "Do you still want it drafted?" % (company, role, p["where"][11:], _band(p))})
+                    "Do you still want it drafted?" % (company, role, _place(p["where"][11:]),
+                                                        _band(p))})
     elif p["where"].startswith("another currency"):
         out.append({"id": "pay_elsewhere", "question":
                     "The only pay %s states for %s is in another currency (%s), so it may be "
@@ -579,7 +681,8 @@ def questions(prof: dict, row: dict) -> list:
     w = prof["where"]
     if w["verdict"] == "FAIL":
         out.append({"id": "location", "question":
-                    "%s at %s is %s. Do you still want it drafted?" % (role, company, w["why"])})
+                    "%s at %s is %s. Do you still want it drafted?" % (role, company,
+                                                                         _plain_why(w["why"]))})
     return out
 
 

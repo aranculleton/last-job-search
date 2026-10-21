@@ -431,7 +431,7 @@ def put(key: str, value_) -> bool:
 # ------------------------------------------------------------------ friction
 
 # A signal that ends the day's reads at once, and one that slows them first.
-HARD = ("check", "signed_out", "unusual_activity", "http_999")
+HARD = ("check", "signed_out", "unusual_activity", "http_999", "other")
 SOFT = ("not_rendering", "slow")
 SOFT_STOPS = 2                  # soft signals within the hour that end the day
 SOFT_WINDOW_MINUTES = 60
@@ -476,9 +476,11 @@ def friction(data: dict | None = None) -> list:
 # page that had loaded put the ramp back, 2026-10-21). It still doubles the next pause.
 NOT_FOR_THE_RAMP = ("not_rendering",)
 
-SAID = {"check": "a security check", "signed_out": "a sign-in page",
+SAID = {"check": "a security check", "signed_out": "a sign-in page", "other": "a stop",
         "unusual_activity": "an unusual-activity notice", "http_999": "an HTTP 999 page",
         "not_rendering": "a page that came back nearly empty", "slow": "a slow page load"}
+# A stop whose words name none of the kinds above ("other") is said in those words.
+OTHER_SAID_CHARS = 80
 
 
 def ramp_friction(data: dict | None = None) -> list:
@@ -493,6 +495,11 @@ def said(rec: dict) -> str:
         when = datetime.date.fromisoformat(day).strftime("%d %b").lstrip("0")
     except ValueError:
         when = day or "an unknown day"
+    if rec.get("kind") == "other" and str(rec.get("words") or "").strip():
+        words = " ".join(str(rec["words"]).split())
+        words = words if len(words) <= OTHER_SAID_CHARS else \
+            words[:OTHER_SAID_CHARS - 3].rstrip() + "..."
+        return f"\"{words}\" on {when}"
     return f"{SAID.get(rec.get('kind'), str(rec.get('kind') or 'something'))} on {when}"
 
 
@@ -534,12 +541,16 @@ def slow(load_seconds: float, history: list) -> bool:
 
 def clean_days(today: datetime.date, loads: list, data: dict | None = None) -> int:
     """Days with at least one page load and no signal, since the last day that had one. The
-    ramp's step. `loads` are datetimes of every load on file."""
-    signal_days = {str(x.get("at", ""))[:10] for x in ramp_friction(data)}
+    ramp's step. `loads` are datetimes of every load on file.
+
+    Counted from the latest signal's day, whether or not a page was recorded on it: a check
+    on the first page of a day records no load, and the walk, meeting no signal, counted the
+    clean days before the check as days since it (2026-10-21)."""
+    last = max((str(x.get("at", ""))[:10] for x in ramp_friction(data)), default="")
     days = sorted({d.date().isoformat() for d in loads if d.date() < today}, reverse=True)
     n = 0
     for day in days:
-        if day in signal_days:
+        if last and day <= last:
             break
         n += 1
     return n
@@ -562,18 +573,32 @@ def hourly_ceiling(today: datetime.date, loads: list, data: dict | None = None) 
     """(pages an hour allowed now, why): the cap, or after friction (`ramp_friction`) the
     ramp's step for the clean days since, never above the cap. Friction today puts the
     ramp back to its first step tomorrow. Before any there is no ramp: a first day
-    read at five an hour was the slow start 3.2.5 never had. A person who set their own
-    hourly cap and not the ramp has said how fast they want to go, and the ramp does not
-    hold them below it: it once stalled a run for 44 minutes at 10 an hour while their
-    own setting said 1000."""
+    read at five an hour was the slow start 3.2.5 never had.
+
+    A cap the person wrote below the preset is a ceiling the ramp never goes over: the
+    lower of the two holds, never the higher. Writing one switched the ramp off, so a
+    careful person read twice as fast after a check as one who changed nothing
+    (2026-10-21). A person who raised their own hourly cap above the preset and wrote no
+    ramp has said how fast they want to go, and a slow page does not hold them below it:
+    it once stalled a run for 44 minutes at 10 an hour while their setting said 1000. A
+    hard signal (a security check, a sign-in page out of turn, an unusual-activity notice,
+    an HTTP 999 page) still puts them on the ramp, which then climbs to their own cap."""
     top = loads_cap("hour")
     seen = ramp_friction(data)
     if not seen:
         return top, "loads_per_hour"
-    if own_cap("hour")[0] is not None and not mine("ramp"):
-        return top, "loads_per_hour"
     steps = value("ramp")
-    n = clean_days(today, loads, data)
+    i = PRESET_NAMES.index(preset())
+    preset_top = max(LIMITS["loads_per_hour"][2 + i], LIMITS["reads_per_hour"][2 + i])
+    if top > preset_top and not mine("ramp"):
+        seen = [x for x in seen if x.get("kind") in HARD]
+        if not seen:
+            return top, "loads_per_hour"
+        n = clean_days(today, loads, {"friction": seen})
+        if n >= len(steps) - 1:
+            return top, "loads_per_hour"     # the ramp's last step is their own cap
+    else:
+        n = clean_days(today, loads, data)
     step = steps[min(n, len(steps) - 1)]
     if step >= top:
         return top, "loads_per_hour"

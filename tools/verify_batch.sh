@@ -73,6 +73,9 @@ PYX
   [ -z "$lay" ] || p="$p $lay"
   grep -qE '—|–' $VB/vb_r.txt $VB/vb_c.txt && p="$p DASH"
   grep -qE 'cid:|�|::|MOBILE-ALT|Envelope' $VB/vb_r.txt && p="$p TEXTLAYER"
+  # The letter's text layer too: a sign its font lacks prints as a replacement character,
+  # and only the resume was ever read for one.
+  grep -qE 'cid:|�' $VB/vb_c.txt && p="$p TEXTLAYER_LETTER"
   # pdftotext infers spaces from glyph positions, so every check here reads a PDF
   # whose text layer has none as if it were fine. pypdf does not infer them:
   # verify_pdf.py reads with pypdf first and fails words run together. A resume
@@ -153,7 +156,9 @@ echo "=== numbers ==="
 # verified company facts ("a 40-year lease", "12,345 daily deliveries") which
 # are not the candidate's claims about themselves, and only the draft knows
 # which paragraph holds them. `--drafts` checks the summary, the opening, the
-# bullets and the close, and allows the figures in p2 and in the posting.
+# bullets and the close, numbers written as words included, and allows the figures in p2
+# and in the posting in the opening and the close (never in the summary or the bullets,
+# which are the candidate's own work).
 python3 "$ROOT/tools/check_numbers.py" --drafts "$DRAFTS" \
   $(for a in $ABBRS; do echo "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "NUMBERS: FAILURES ABOVE"; fail=1; }

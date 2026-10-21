@@ -1248,7 +1248,9 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
         if "not recognized" in why_loc and not discovery._same_market(loc, discovery.HOME_CITY):
             return True, (f"caution: based in {loc}, a place your search does not name; check "
                           f"they work in {discovery.HOME_CITY} before writing")
-    note = place_note(reading)
+    # Two places on one page matter only for someone whose place bounds their work: a
+    # recruiter hiring nationally was cautioned for a top card and a role in two cities.
+    note = "" if works_anywhere(reading) else place_note(reading)
     if note:
         return True, "caution: " + note
     return True, ""
@@ -1737,8 +1739,14 @@ def _write_stop(reason: str, today: datetime.date | None = None, kind: str = "",
     return pace.ledger_dir() if _keep(STOP_FILE, "stop", rec) else person.state(*STOP_FILE)
 
 
+_CHECK_WORDS = re.compile(r"\b(?:check|captcha|verif\w*|security|challenge|puzzle|"
+                          r"prove you|confirm (?:you|it'?s you)|robot)", re.I)
+
+
 def _signal_kind(reason: str) -> str:
-    """The friction log's kind for what a stop said LinkedIn showed."""
+    """The friction log's kind for what a stop said LinkedIn showed. Words it does not know
+    are "other", said in their own words: "a notice that my account is temporarily
+    restricted" was kept and said as a security check (2026-10-21)."""
     r = str(reason or "").lower()
     if "999" in r:
         return "http_999"
@@ -1746,7 +1754,7 @@ def _signal_kind(reason: str) -> str:
         return "unusual_activity"
     if "signed out" in r or "sign-in page after" in r:
         return "signed_out"
-    return "check"
+    return "check" if _CHECK_WORDS.search(r) else "other"
 
 
 def stop(reason: str, today: datetime.date | None = None) -> str:
@@ -2340,16 +2348,29 @@ def _who(contact_id: str, contacts) -> dict | None:
     return None
 
 
-def at_employer(company: str, contacts, also=(), today: datetime.date | None = None) -> tuple:
+def at_employer(company: str, contacts, also=(), today: datetime.date | None = None,
+                threads=None) -> tuple:
     """(who at this employer is waiting on a reply, who of `also` is there too), by
     company_key, so an employer under another of its names is the same employer. A note
-    first sent more than WAITING_DAYS ago no longer counts; one with no date still does."""
+    first sent more than WAITING_DAYS ago no longer counts; one with no date still does.
+    Waiting is what the message log says (state.effective_status), never the stored status
+    alone: someone who had replied was counted, and named, as waiting (2026-10-21).
+    `threads` is the message log; None reads it."""
     from company_key import key as company_key
     import state
     k = company_key(company)
     if not k:
         return [], []
     today = today or datetime.date.today()
+    if threads is None:
+        try:
+            threads = (state.load_threads(state.THREADS_CSV)
+                       if os.path.exists(state.THREADS_CSV) else [])
+        except Exception:  # noqa: BLE001  a count must never break a save
+            threads = []
+
+    def status(c) -> str:
+        return state.effective_status(c, state.threads_for(threads, c.get("contact_id", "")))
 
     def recent(c) -> bool:
         try:
@@ -2359,7 +2380,7 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
         return (today - sent).days <= WAITING_DAYS
 
     waiting = [c for c in contacts or () if state.row_company_key(c) == k
-               and str(c.get("status") or "") in WAITING and recent(c)]
+               and recent(c) and status(c) in WAITING]
     there = [x for x in also if x and company_key(x.get("company")) == k]
     return waiting, there
 
@@ -2491,7 +2512,11 @@ def read_recently(reading: dict | None, today: datetime.date | None = None) -> b
 
 def queue(contacts: list, today: datetime.date | None = None) -> list:
     """Contacts with a first note waiting and nothing read about them lately, or whose
-    note still says it waits on a read: read since, and not rewritten yet."""
+    note still says it waits on a read: read since, and not rewritten yet. Also a note that
+    carries the name or employer of somebody an approved example was written for
+    (compose.example_facts): saving refuses one now, but a note queued before that check
+    sits there looking ready to send until it is rewritten."""
+    import compose
     import why
     out = []
     for c in contacts:
@@ -2508,7 +2533,18 @@ def queue(contacts: list, today: datetime.date | None = None) -> list:
             continue                     # a recruiter's card says enough: no read waits
         if waits_on_read(cid) or not read_recently(got, today):
             out.append(c)
+        elif compose.example_facts(_draft_note(cid), contact=cid, name=c.get("name", "")):
+            out.append(c)
     return out
+
+
+def _draft_note(contact_id: str) -> str:
+    """The note in their waiting draft, as it would be sent, or ""."""
+    try:
+        with open(draft_path(contact_id), encoding="utf-8") as fh:
+            return note_body(fh.read())
+    except OSError:
+        return ""
 
 
 def written_the_older_way(contact_id: str) -> bool:
@@ -2571,9 +2607,14 @@ def marked(contact_id: str) -> bool:
 
 
 def note_body(text: str) -> str:
-    """A draft file's note without the line saying what it rests on."""
+    """A draft file's note without the line saying what it rests on, and without anything
+    below a line of dashes (PASTE_SEPARATOR): notes about the draft, for the person and
+    never part of the note. Drafts holding the note, a line of ---, then notes from a
+    rewriting run were checked, refused as too long and would have been logged as sent
+    with the notes in (2026-10-21)."""
     t = str(text or "")
-    return t.split("\n\n", 1)[-1] if t.startswith(MARKERS) else t
+    t = t.split("\n\n", 1)[-1] if t.startswith(MARKERS) else t
+    return PASTE_SEPARATOR.split(t, 1)[0].rstrip() if PASTE_SEPARATOR.search(t) else t
 
 
 def card_enough(reading: dict | None, company: str = "") -> bool:
@@ -2604,7 +2645,9 @@ def card_enough(reading: dict | None, company: str = "") -> bool:
 def draft_text(contact_id: str, note: str, name: str = "", card_only: bool = False) -> str:
     """The draft file for a first note: the note, under the WAITS ON A READ line when
     nothing has been read about them, or the CARD ONLY line for a note the person chose to
-    send from the card alone (`card_only`) or a recruiter's card that says enough."""
+    send from the card alone (`card_only`) or a recruiter's card that says enough. The file
+    is the note alone: anything below a line of --- is notes for the person (note_body),
+    never checked, sent or logged as the note, and is not written here."""
     note = note_body(str(note or "").strip()).strip()
     got = load(contact_id)
     if has_read(got):
@@ -4059,6 +4102,12 @@ def save_drafts(batch: dict) -> int:
                   "under the right contact's id) and save it again.")
             refused += 1
             continue
+        import compose
+        leaked = compose.example_facts(note, contact=cid, name=row.get("name", ""))
+        if leaked:
+            print(f"reading: {cid}: not saved. The note {leaked[0].text}.")
+            refused += 1
+            continue
         got = load(cid) or {}
         if not has_read(got) and not card_only and not waits \
                 and not card_enough(got, row.get("company", "")):
@@ -4694,7 +4743,13 @@ def main(argv: list | None = None) -> int:
                 return _said_signout(signout())
             if kind == "unknown" and not rendered(text, contact.get("name", "")):
                 # A page that stopped rendering is a soft signal: the next pause doubles, and
-                # a second within the hour ends the day's reads.
+                # a second within the hour ends the day's reads. It was still a page loaded,
+                # so it is counted, with its pause: uncounted, the doubled pause ran from the
+                # page before it and the gate said go at once (2026-10-21).
+                gap_, brk_ = pause()
+                gap_ += int(round(owed_seconds(breach, now))) if breach else 0
+                note_load("profile", datetime.datetime.now().isoformat(timespec="seconds"),
+                          gap_, brk_, a.contact_id, a.load_seconds)
                 signal("not_rendering", "a page of %d characters, not a profile"
                        % len(" ".join(_clean_lines(text))))
                 why_ = stopped()

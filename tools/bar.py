@@ -44,14 +44,18 @@ Verdicts, first match wins:
 
 from __future__ import annotations
 
+import contextlib
 import datetime
 import glob
+import hashlib
 import json
 import os
 import re
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import company_key as _ck  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from opportunity import YC_AND_BACKED, _names_in, tier  # noqa: E402
 from sector import TECH_COMPANIES  # noqa: E402
@@ -109,9 +113,52 @@ def _judged_path() -> str:
     return person.path(JUDGED_FILE)
 
 
+def own_name(name: str | None) -> str:
+    """An employer's name as itself: case, accents, punctuation and its legal form set
+    aside, its line of business kept. A judgement is found by this, never by the
+    company key, which drops "Insurance", "Software" or "Global" from the end: a
+    judgement of "Brackwater Software" was read for "Brackwater Insurance"."""
+    s = _ck.PAREN.sub(" ", _ck.fold(str(name or "")).lower())
+    s = _ck.SUFFIX.sub(" ", s)
+    s = re.sub(r"\band\b", " ", _ck.PUNCT.sub(" ", s))
+    s = _ck.SPACE.sub(" ", s).strip()
+    return _ck.TRAILING_FORM.sub("", s).strip()
+
+
+class Unreadable(ValueError):
+    """profile/employers_judged.json is there and cannot be read."""
+
+
+def _read_judged(p: str) -> dict:
+    """The judged file as stored, {} when there is none; Unreadable when it is there and
+    does not parse (a merge can leave conflict markers in it, and it has no merge driver)."""
+    try:
+        with open(p, encoding="utf-8") as fh:
+            text = fh.read()
+    except FileNotFoundError:
+        return {}
+    except OSError as e:
+        raise Unreadable(f"profile/{JUDGED_FILE} could not be opened ({e})") from None
+    if not text.strip():
+        return {}
+    try:
+        got = json.loads(text)
+    except ValueError:
+        got = None
+    if not isinstance(got, dict):
+        markers = re.search(r"^(?:<{7}|={7}|>{7})", text, re.M)
+        raise Unreadable(
+            f"profile/{JUDGED_FILE} cannot be read"
+            + (" (a merge left conflict markers in it)" if markers else "")
+            + ": keep the right version of each entry, delete the marker lines, then "
+              "judge again. Nothing was written to it.")
+    return got
+
+
 def judged() -> dict:
-    """The employers judged by `judge`, by company key: {verdict, why, name, date}. The
-    profile's tier lists outrank it; it fills only what they leave unnamed."""
+    """The employers judged by `judge`: {stored key: {verdict, why, name, date}}. The
+    profile's tier lists outrank it; it fills only what they leave unnamed. A file that
+    cannot be read is said once, and read as no judgements until it is fixed."""
     try:
         p = _judged_path()
         m = os.path.getmtime(p)
@@ -119,33 +166,68 @@ def judged() -> dict:
         return {}
     if _judged_cache.get("at") != (p, m):
         try:
-            with open(p, encoding="utf-8") as fh:
-                got = json.load(fh)
-        except (OSError, ValueError):
+            got = _read_judged(p)
+        except Unreadable as e:
+            if _judged_cache.get("said") != (p, m):
+                print(f"bar: {e} Until then no judgement in it is read.", file=sys.stderr)
+            _judged_cache["said"] = (p, m)
             got = {}
-        _judged_cache.update(at=(p, m), rows=got if isinstance(got, dict) else {})
+        _judged_cache.update(at=(p, m), rows=got, by_name={
+            own_name(r.get("name") or k): r for k, r in got.items() if isinstance(r, dict)})
     return _judged_cache["rows"]
 
 
+def judgement(company: str | None) -> dict | None:
+    """The judgement recorded for this employer by its own name, or None."""
+    judged()
+    return _judged_cache.get("by_name", {}).get(own_name(company)) if company else None
+
+
+@contextlib.contextmanager
+def _one_writer(p: str):
+    """One `judge` at a time for the file, across processes: two chats judging at once
+    each wrote their own row over the other's, or crashed on the shared temporary file."""
+    lock = os.path.join(tempfile.gettempdir(), "ljs-judged-%s.lock"
+                        % hashlib.sha1(os.path.abspath(p).encode()).hexdigest()[:16])
+    with open(lock, "a+") as fh:
+        try:
+            import fcntl
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        except ImportError:                      # Windows
+            try:
+                import msvcrt
+                msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+            except (ImportError, OSError):
+                pass
+        yield
+
+
 def judge(company: str, what: str, why: str, today: str | None = None) -> str:
-    """Record a judgement of an employer no list names. Returns the line to say."""
+    """Record a judgement of an employer no list names. Returns the line to say.
+
+    Refuses, naming the file, to write over a judged file it cannot read: it used to
+    read such a file as empty and write back only the new row."""
     if what not in (PAY, PRESTIGE, SIGNAL, NONE):
         raise ValueError(f"a judgement is pay, prestige, signal or none, not {what!r}")
     why = " ".join(str(why or "").split())
     if not why:
         raise ValueError("say why, in a few words: it is printed beside every verdict")
-    k = company_key(company)
-    if not k:
+    name = own_name(company)
+    if not name or not company_key(company):
         raise ValueError("no employer name to judge")
-    rows = dict(judged())
-    rows[k] = {"name": company, "verdict": what, "why": why,
-               "date": today or datetime.date.today().isoformat()}
     p = _judged_path()
-    tmp = p + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(dict(sorted(rows.items())), fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
-    os.replace(tmp, p)
+    with _one_writer(p):
+        rows = _read_judged(p)
+        rows = {k: r for k, r in rows.items()
+                if not (isinstance(r, dict) and own_name(r.get("name") or k) == name)}
+        rows[name] = {"name": company, "verdict": what, "why": why,
+                      "date": today or datetime.date.today().isoformat()}
+        tmp = tempfile.NamedTemporaryFile("w", dir=os.path.dirname(p) or ".", delete=False,
+                                          encoding="utf-8", suffix=".tmp")
+        with tmp:
+            json.dump(dict(sorted(rows.items())), tmp, indent=2, ensure_ascii=False)
+            tmp.write("\n")
+        os.replace(tmp.name, p)
     _judged_cache.clear()
     return f"{company}: {what} ({why}), kept in profile/{JUDGED_FILE}"
 
@@ -156,7 +238,7 @@ def listed(company: str | None) -> bool:
     name = str(company or "")
     k = company_key(name)
     both = f"{name} {k}"
-    if excluded_by_name(company) or tier(name)[0] or COLLISIONS.search(both) or k in judged():
+    if excluded_by_name(company) or tier(name)[0] or COLLISIONS.search(both) or judgement(name):
         return True
     if any(rx.search(both) for rx in (PUBLIC_PRESTIGE, PENSIONS, NAMED_PUBLIC, PUBLIC)):
         return True
@@ -209,7 +291,7 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
             return SIGNAL, f"established technology company ({hit})"
     if score < 0 or collided:
         return NONE, why or "a different company wearing a listed employer's name"
-    j = judged().get(k)
+    j = judgement(name)
     if j and j.get("verdict") in (PAY, PRESTIGE, SIGNAL, NONE):
         return j["verdict"], f"judged {j.get('date', '')}: {j.get('why', '')}".replace(" :", ":")
     if mid is not None:
@@ -226,8 +308,9 @@ def unjudged(path: str | None = None) -> list[str]:
     """The employers in a saved shortlist (the newest in documents/rounds/ by default)
     that no list names and nobody has judged, each once, in shortlist order."""
     if not path:
+        from run_round import round_order
         found = sorted(glob.glob(person.state("documents", "rounds", "*.json")),
-                       key=os.path.getmtime)
+                       key=round_order)
         if not found:
             return []
         path = found[-1]
@@ -257,7 +340,7 @@ def main(argv: list[str]) -> int:
             return 2
         try:
             print(judge(argv[1], argv[2], argv[3]))
-        except ValueError as e:
+        except ValueError as e:                  # Unreadable among them
             print(f"bar: {e}")
             return 2
         return 0

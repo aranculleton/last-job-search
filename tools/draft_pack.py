@@ -27,10 +27,12 @@ same bytes and drew the same conclusions from them. That is work code can do onc
                      answers, the bridges for this posting, and the posting itself, fenced).
 
 **The profile and learned.json win.** The pack is a view of them, never a copy that can
-drift: it is rebuilt whenever an input changes (`rules_hash` covers the profile and
-learned.json; `corpus_hash` the letters already sent and the tracker), and a draft
-written against an older `rules_hash` is sent to the model auditor by
-`tools/draft_audit.py` ("a changed profile rule").
+drift: it is rebuilt whenever what it states changes (`rules_hash` is the hash of the
+rules, facts and field contract the pack gives a drafter, so a networking reaction or a
+search setting does not change it; `corpus_hash` covers the letters already sent and the
+tracker), and a draft written against an older `rules_hash` is flagged by
+`tools/draft_audit.py` ("profile-changed"). `build` keeps what each hash stood for in
+`rules_<hash>.json`, so the model auditor is shown what changed since the draft.
 
 Sizes are reported as an approximation: characters / 4 and words x 1.33, the two usual
 rules of thumb. Neither is a tokenizer's count.
@@ -57,7 +59,9 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
 
 import person  # noqa: E402
 
-VERSION = 1
+# 2: rules_hash is the hash of what the pack states (rule_lines, fact_lines), not of the
+# files it reads; research lines mark a fact nobody read on a page.
+VERSION = 2
 # The size the static part aims at, in approximate tokens. A profile with more to say
 # than this still gets all of it: the target is reported against, never enforced by
 # cutting a fact or a rule.
@@ -146,10 +150,32 @@ def _digest(items: dict) -> str:
     return hashlib.sha256(blob).hexdigest()[:16]
 
 
+def rule_lines() -> list[str]:
+    """Every rule the pack gives a drafter, in its order: the person's, what they have
+    taught it, their positioning, and the app's."""
+    return (locale_lines() + person_rules() + claims_rules() + learned_rules()
+            + positioning_lines() + list(APP_RULES))
+
+
+def fact_lines() -> list[str]:
+    """Every fact the pack gives a drafter: where they are, their right to work, the held
+    skills and each piece of work with its ids."""
+    return [f"LOC: {location_line()}", f"AUTH: {auth_line()}"] + skills_lines() \
+        + _fact_lines(facts())
+
+
 def rules_hash() -> str:
-    """What the facts and rules were built from. A draft made against another one was
-    made against a profile that has changed since."""
-    return _digest(profile_inputs())
+    """What the drafter was given: the rules, the facts and the field contract the pack
+    states. A draft made against another one was made against rules or facts that have
+    changed since.
+
+    Hashed from what the pack says, never from the files it reads: it used to hash all of
+    profile/CLAUDE.md, search.py, networking.py and the whole of learned.json, so a
+    reaction recorded about networking ("stop suggesting recruiters") or a search
+    setting changed every audited draft into one "audited against a profile that has
+    changed", and sent each back to the model auditor for nothing."""
+    return _digest({"rules": rule_lines(), "facts": fact_lines(), "contract": CONTRACT,
+                    "name": person.get("identity.name", "")})
 
 
 def corpus_hash() -> str:
@@ -962,11 +988,17 @@ def research_lines(research: dict | None) -> str:
     the same way, so an F id means one thing everywhere."""
     research = research or {}
     out = []
-    for i, f in enumerate(research.get("facts") or [], 1):
+    for i, f in enumerate([f for f in research.get("facts") or [] if isinstance(f, dict)], 1):
         caution = f" | caution: {f['caution']}" if f.get("caution") else ""
-        out.append(f"F{i}: {f.get('claim', '')} | quote: \"{f.get('quote', '')}\" | "
-                   f"{f.get('url', '')}{caution}")
+        unread = UNREAD if f.get("read") is False else ""
+        out.append(f"F{i}: {f.get('claim') or ''} | quote: \"{f.get('quote') or ''}\" | "
+                   f"{f.get('url') or ''}{caution}{unread}")
     return "\n".join(out)
+
+
+# A fact the research marked `"read": false`: a search result's summary, never read on the
+# page. 09-web-research.md says it never goes in a letter, and the audit refuses it.
+UNREAD = " | NOT READ ON THE PAGE (a search summary): never cite it"
 
 
 # ------------------------------------------------------------------ build
@@ -997,6 +1029,13 @@ def build(round_dir: str, today: str = "") -> dict:
         with open(picks_path, encoding="utf-8") as fh:
             picks = json.load(fh)
     staged = [dict(p, brief=posting_brief(p)) for p in picks]
+    # What the drafter was given, kept under its hash: when the profile changes after a
+    # draft, the model auditor is shown what changed rather than told that something did.
+    with open(os.path.join(round_dir, f"rules_{meta['rules_hash']}.json"), "w",
+              encoding="utf-8") as fh:
+        json.dump({"rules": rule_lines(), "facts": fact_lines()}, fh, indent=1,
+                  ensure_ascii=False)
+        fh.write("\n")
     args = {"round_dir": os.path.abspath(round_dir), "pack": text,
             "pack_hash": meta["rules_hash"], "corpus_hash": meta["corpus_hash"], "picks": staged}
     if today:

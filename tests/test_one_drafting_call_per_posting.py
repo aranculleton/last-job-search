@@ -31,7 +31,19 @@ SLUG = FIXTURE["slug"]
 WORKFLOW = os.path.join(ROOT, ".claude", "workflows", "draft-applications.js")
 
 
+def store_pages(research=None):
+    """Keep each research fact's page where tools/company_research.py fetch keeps the
+    pages it read, so the audit's quote check finds the quote on it (as a real research
+    run leaves it). The tests' own pages folder (conftest.py), never the machine's."""
+    import company_research
+    for f in (research or FIXTURE["research"]).get("facts") or []:
+        if f.get("url") and f.get("quote"):
+            company_research._store_page(f["url"], "About us", "About us. " + f["quote"]
+                                         + ". Read more about the group.", "page")
+
+
 def make_round(tmp_path, draft=None, slugs=(SLUG,)):
+    store_pages()
     rd = tmp_path / "r1"
     (rd / "picks").mkdir(parents=True, exist_ok=True)
     picks = []
@@ -50,11 +62,15 @@ def make_round(tmp_path, draft=None, slugs=(SLUG,)):
 
 
 def test_a_draft_that_meets_every_rule_passes_the_code_checks(tmp_path):
+    # Updated 2026-10-21: a draft code passes was `pass` and went to the renderer. Every
+    # draft that will be sent is now read by the model auditor after the code audit, so a
+    # clean code audit leaves it `needs_model`, waiting on that reading.
     rd = make_round(tmp_path)
     [r] = stage_picks.audit(str(rd))
-    assert r["verdict"] == "pass" and r["mechanical"]["findings"] == []
+    assert r["mechanical"]["gate"] == "clean" and r["mechanical"]["findings"] == []
+    assert r["mechanical"]["flags"] == [] and r["verdict"] == "needs_model"
     record = json.loads((rd / f"audit_{SLUG}.json").read_text(encoding="utf-8"))
-    assert record["verdict"] == "pass" and record["draft"]["p1"] == FIXTURE["draft"]["p1"]
+    assert record["verdict"] == "needs_model" and record["draft"]["p1"] == FIXTURE["draft"]["p1"]
 
 
 def test_the_drafter_is_shown_only_what_fails(tmp_path):
@@ -75,12 +91,18 @@ HARNESS = r"""
 const src = require('fs').readFileSync(process.argv[1], 'utf8').replace(/^export const meta/m, 'const meta');
 const gates = JSON.parse(process.argv[2]); const extra = JSON.parse(process.argv[3]);
 const calls = [];
+const picks = [{file: 'f1', company: 'A', role: 'R', slug: 'a', ask_first: [], brief: 'POSTING A'},
+               {file: 'f2', company: 'B', role: 'R', slug: 'b', ask_first: [], brief: 'POSTING B'}];
+// Agents are labelled by the pick's slug (two roles at one employer are two labels); the
+// stand-in answers by the company that slug is staged for.
+const company = (slug) => (picks.find(p => p.slug === slug) || {}).company || slug;
 const agent = async (prompt, opts) => {
   calls.push({label: opts.label, model: opts.model || null, prompt});
-  const [stage, company] = opts.label.split(':');
+  const [stage, slug] = opts.label.split(':');
+  const co = company(slug);
   if (stage === 'research') return {facts: [{claim: 'c', quote: 'q', url: 'u'}], team_context: '', do_not_claim: [], salary: '', work_model: '', location: ''};
-  if (stage === 'draft') return {company, check_output: '[{"gate": "' + gates[company] + '"}]'};
-  if (stage === 'audit') return {verdict: 'fixed', draft: {company}, changes: [], residual_risks: [], rulings: [], audited_md5: 'm', check_output: ''};
+  if (stage === 'draft') return {company: co, p1: 'drafted p1', p2: 'drafted p2', claim_map: [], check_output: '[{"gate": "' + gates[co] + '"}]'};
+  if (stage === 'audit') return {verdict: 'fixed', p1: 'audited p1', p2: 'audited p2', claim_map: [], check_output: '[{"slug": "' + slug + '", "verdict": "fixed", "gate": "clean"}]'};
   return {outreach_body: 'b', claim_map: [], check_output: ''};
 };
 const pipeline = async (items, ...stages) => {
@@ -91,8 +113,6 @@ const pipeline = async (items, ...stages) => {
   }
   return out;
 };
-const picks = [{file: 'f1', company: 'A', role: 'R', slug: 'a', ask_first: [], brief: 'POSTING A'},
-               {file: 'f2', company: 'B', role: 'R', slug: 'b', ask_first: [], brief: 'POSTING B'}];
 const f = new Function('args', 'agent', 'pipeline', 'phase', 'log', 'return (async()=>{' + src + '})()');
 f(Object.assign({today: 'd', round_dir: '/r', picks}, extra), agent, pipeline, () => {}, () => {})
   .then(r => console.log(JSON.stringify({calls, out: r})));
@@ -124,12 +144,12 @@ def test_every_draft_prompt_opens_on_the_pack_and_sends_the_drafter_to_no_file()
     assert "python3 tools/stage_picks.py audit /r --only a --json" in drafts[0]
     assert '"pack_hash": "h"' in drafts[0]
     models = {c["label"]: c["model"] for c in got["calls"]}
-    assert models["draft:A"] is None and models["research:A"] == "sonnet"
+    assert models["draft:a"] is None and models["research:a"] == "sonnet"
 
 
 def test_without_a_pack_the_drafter_builds_it_itself():
     got = run_workflow({"A": "clean", "B": "clean"})
-    draft = next(c["prompt"] for c in got["calls"] if c["label"] == "draft:A")
+    draft = next(c["prompt"] for c in got["calls"] if c["label"] == "draft:a")
     assert draft.startswith("First run: python3 tools/draft_pack.py build /r")
 
 

@@ -67,7 +67,8 @@ def test_the_audit_file_holds_the_verdict_with_the_draft(tmp_path):
     stage_picks.audit(str(rd))
     record = json.loads((rd / f"audit_{SLUG}.json").read_text(encoding="utf-8"))
     assert {"verdict", "draft", "changes", "residual_risks"} <= set(record)
-    assert record["verdict"] == "pass" and record["draft"]["company"] == "Kestrel Mutual"
+    # 2026-10-21: needs_model until the model auditor has read it, as every draft is.
+    assert record["verdict"] == "needs_model" and record["draft"]["company"] == "Kestrel Mutual"
 
 
 def test_the_model_audit_is_the_grounding_auditor_and_keeps_all_its_checks(tmp_path):

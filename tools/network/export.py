@@ -486,6 +486,18 @@ def _attachment(row) -> str:
     return f"{what} attached" + (f" ({shown})" if shown else "")
 
 
+# What the import writes about an attachment, in a row's summary: "; a resume attached
+# (Resume.pdf)". Read back, it is the attachment a message with no words is known by.
+_ATTACHED = re.compile(r"\b(?:a resume|an attachment) attached(?: \([^)]*\))?")
+
+
+def _same_attachment(row, attached: str) -> bool:
+    """Does a logged message carry this attachment (`_attachment`'s words), or, for none,
+    name no attachment at all?"""
+    summary = str(row.get("summary") or "")
+    return attached in summary if attached else not _ATTACHED.search(summary)
+
+
 def _participants(row, mine) -> tuple:
     """(direction, [(name, url)] of the others) for one message row."""
     st = _state()
@@ -506,6 +518,15 @@ def _participants(row, mine) -> tuple:
     return "in", people
 
 
+def _from_pending(row) -> bool:
+    """A request recorded from LinkedIn's own pages (state.sent outside): seen Pending, its
+    day the day it was seen or the latest a "Sent 3 weeks ago" can mean, never earlier."""
+    st = _state()
+    said = str(row.get("summary") or "").lower()
+    return st.is_request(row) and (st._scenario(row) == st.OUTSIDE_SCENARIO
+                                   or "from linkedin itself" in said)
+
+
 def _who(name, url) -> str:
     st = _state()
     h = st.profile_handle(url)
@@ -519,7 +540,9 @@ def _near(a, b, days) -> bool:
 def plan_history(contacts, threads, src=None, mine=None) -> dict:
     """What the export's history adds to the message log, decided and not yet written.
 
-    {"add": [thread rows], "fill": [(an existing row, its words)], "joined": {how: n},
+    {"add": [thread rows], "fill": [(an existing row, its words)],
+     "redate": [(a request recorded from a Pending page, the day the export says it went)],
+     "joined": {how: n},
      "unmatched": [{name, url, last, last_from, sent, received}], "ambiguous": [{name, url}],
      "groups": n, "drafts": n, "tables": [...], "problem": ""}
 
@@ -540,7 +563,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "joined": {"profile address": 0, "name": 0},
+    out = {"add": [], "fill": [], "redate": [], "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
     if not (mine[0] or mine[1]):
@@ -570,13 +593,28 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
     def mine_for(cid):
         return [r for r in log if str(r.get("contact_id") or "").strip() == cid]
 
-    def add_message(cid, when, direction, text, subject, summary):
+    claimed: set = set()
+
+    def add_message(cid, when, direction, text, subject, summary, attached=""):
         rows = mine_for(cid)
         for r in rows:
             if st._direction(r) == direction and _near(st.as_date(r.get("date")), when,
                                                         MESSAGE_SLACK_DAYS) \
                     and same_text(r.get("full_text"), text):
                 return
+        if not text:
+            # A message with no words (a resume sent alone) has no text to match on, and was
+            # added again on every run: the same day, way and attachment is the same message.
+            # Each row stands for one export message, so two sent on one day stay two.
+            for r in rows:
+                if (id(r) not in claimed and st._direction(r) == direction
+                        and _near(st.as_date(r.get("date")), when, MESSAGE_SLACK_DAYS)
+                        and not str(r.get("full_text") or "").strip()
+                        and _same_attachment(r, attached) and not st.is_request(r)
+                        and not st.is_acceptance(r) and not st.is_withdrawal(r)
+                        and not st.is_call(r)):
+                    claimed.add(id(r))
+                    return
         empty = [r for r in rows if st._direction(r) == direction
                  and _near(st.as_date(r.get("date")), when, MESSAGE_SLACK_DAYS)
                  and not str(r.get("full_text") or "").strip() and not st.is_request(r)
@@ -590,6 +628,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                "full_text": text, "subject": subject}
         out["add"].append(row)
         log.append(row)
+        if not text:
+            claimed.add(id(row))
 
     # Messages, one conversation at a time.
     if msgs["usable"]:
@@ -640,7 +680,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                            + EXPORT_NOTE + (f"; {note}" if note else "")
                            + (f": {_preview(text)}" if text else ""))
                 add_message(cid, when, direction, text, str(r.get("SUBJECT") or "").strip(),
-                            summary)
+                            summary, attached=note)
 
     # Invitations: the person's requests, and requests to them from people in the book.
     if invs["usable"]:
@@ -658,6 +698,18 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                 rows = mine_for(cid)
                 same = [x for x in rows if st.is_request(x)
                         and _near(st.as_date(x.get("date")), when, REQUEST_SLACK_DAYS)]
+                # A request recorded from a Pending page is logged the day it was seen, or the
+                # latest day "Sent 1 month ago" can mean: the export's request on or before
+                # that day is the same one, and its day is the true one. Seven days apart, it
+                # was added again and counted twice, and its withdraw clock ran from the
+                # later day (2026-10-21).
+                seen = [x for x in rows if _from_pending(x)
+                        and (st.as_date(x.get("date")) or datetime.date.min) >= when]
+                same = same or seen[:1]
+                if same and _from_pending(same[0]) \
+                        and (st.as_date(same[0].get("date")) or when) > when \
+                        and not any(x is same[0] for x, _d in out["redate"]):
+                    out["redate"].append((same[0], when.isoformat()))
                 if same:
                     if note and not str(same[0].get("full_text") or "").strip() \
                             and not any(e is same[0] for e, _ in out["fill"]):
@@ -718,7 +770,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             out["add"].append(row)
             log.append(row)
 
-    touched = {r["contact_id"] for r in out["add"]} | {r.get("contact_id") for r, _ in out["fill"]}
+    touched = ({r["contact_id"] for r in out["add"]}
+               | {r.get("contact_id") for r, _ in out["fill"] + out["redate"]})
     for cid in touched:
         how = joined_ids.get(cid)
         if how in out["joined"]:
@@ -736,11 +789,21 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
+    redate = plan.get("redate") or []
+    for row, day_ in redate:
+        old = row.get("date")
+        row["date"] = day_
+        cid = str(row.get("contact_id") or "").strip()
+        for c in contacts or ():
+            if str(c.get("contact_id") or "").strip() == cid \
+                    and str(c.get("first_contacted") or "") in ("", old):
+                c["first_contacted"] = day_      # contact began when the request went
     threads.extend(plan["add"])
     if contacts is not None:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
-               | {str(r.get("contact_id") or "") for r, _ in plan["fill"]})
-    return len(plan["add"]) + len(plan["fill"])
+               | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
+               | {str(r.get("contact_id") or "") for r, _ in redate})
+    return len(plan["add"]) + len(plan["fill"]) + len(redate)
 
 
 def settle(contacts, threads, ids) -> list:
@@ -804,15 +867,20 @@ def pending(contacts, threads, today, src=None, days: int | None = None) -> dict
            "connections": conns["usable"], "tables": [inv, conns]}
     if not inv["usable"]:
         return out
-    linked_h, linked_n = set(), set()
+    # Joined the way the import joins (match_contact): by address, and by name wherever one
+    # side has no address. Each fallback looked only at its own side, so an invitation with
+    # no address against a connection that had one, or the other way round, was listed as
+    # never accepted, and `withdrawn --oldest` would have closed someone already connected.
+    linked_h, linked_n, linked_bare = set(), set(), set()
     for r in conns["rows"]:
         h = st.profile_handle(r.get("URL"))
+        k = name_key(" ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x))
         if h:
             linked_h.add(h)
-        else:
-            k = name_key(" ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x))
-            if k:
-                linked_n.add(k)
+        if k:
+            linked_n.add(k)
+            if not h:
+                linked_bare.add(k)
     owed_ids = {i["contact_id"] for i in st.owed(contacts, threads, today)
                 if i["kind"] == "request_pending"}
     seen = set()
@@ -824,8 +892,8 @@ def pending(contacts, threads, today, src=None, days: int | None = None) -> dict
         if when is None:
             continue
         out["total_sent"] += 1
-        h = st.profile_handle(url)
-        if (h and h in linked_h) or (not h and name_key(name) in linked_n):
+        h, k = st.profile_handle(url), name_key(name)
+        if (h and h in linked_h) or (k and k in (linked_bare if h else linked_n)):
             continue
         key = h or name_key(name) or name
         if key in seen:
@@ -973,6 +1041,10 @@ def _cli_history(a) -> int:
           f"{len(plan['fill'])} already logged given their words, for {people} "
           f"{'person' if people == 1 else 'people'} in your contact book "
           f"({j['profile address']} by profile address, {j['name']} by name)")
+    if plan.get("redate"):
+        n_ = len(plan["redate"])
+        print(f"  {n_} request{'s' if n_ != 1 else ''} recorded from a Pending page, given the "
+              "earlier day the export says it went")
     if plan["groups"]:
         print(f"  {plan['groups']} group conversation{'s' if plan['groups'] != 1 else ''} left "
               "out: a message to several people is not one thread")

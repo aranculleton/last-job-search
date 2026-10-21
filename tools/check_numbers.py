@@ -24,6 +24,12 @@ and "$300M+" and "300 million" are another. A resume that rounds 2.5M to "2.5
 million" therefore still matches, and one that quietly promotes 60M to 75M
 does not.
 
+A number written as a word is a number too (`figures`): "twelve years", "forty
+spreadsheets", "more than thirty-five", "a dozen", "two and a half years", a share
+("halved" and "by a third" are 50% and 33%), a multiple ("tripled" is 3x) and an ordinal
+that counts ("the fifth consecutive year"). Read the same way in the document and in the
+profile, so "eleven spreadsheets" is grounded by "eleven spreadsheets" and "forty" is not.
+
 A count with no unit word is a count OF something, and the noun it counts has to
 agree. Matched by its size alone, "12 source systems" in the profile grounded "12
 clients" in an interview answer, and "40k+ accounts" grounded "40k customers".
@@ -46,9 +52,12 @@ WHAT IS DELIBERATELY NOT A FINDING:
 THE LETTER, with `--drafts`. Only the resume was ever checked, and the letter's
 opening, bullets and close are free model text that an interviewer reads as
 closely. So the drafts mode checks a draft's `summary`, `p1`, `lead`, `p4` and
-`cl_bullets` against the profile, and also allows what the letter may honestly
-repeat about the employer: the figures in `p2` (the one verified company fact,
-which is not itself checked here) and the figures in the posting.
+`cl_bullets` against the profile, and allows in the opening, the lead line and the
+close what the letter may honestly repeat about the employer: the figures in `p2` (the
+one verified company fact, which is not itself checked here; the claim map in
+tools/draft_audit.py checks it sentence by sentence) and the figures in the posting. The
+summary and the letter bullets state the candidate's own work, so only the profile's
+figures ground them.
 
 Measured when written: across 53 committed resumes, prose only, exactly one
 novel number, and it was LaTeX residue. The documents are already grounded, so
@@ -91,16 +100,174 @@ _RESIDUE = re.compile(r"\d[\d.]*\s*" + _UNIT_NOISE + r"\b", re.I)
 # "2024 week", which is no longer a year, so a resume whose dates run into a
 # capitalised word failed verify_batch.sh; "12 monthly reviews", "3 hourly
 # checks" and "2023 Daytime cover" broke the same way.
+_UNIT = (r"(%|(?:per\s?cent|percent|k|m|bn|b|million|billion|thousand|hours?|hrs?|days?|weeks?|"
+         r"months?|years?|x)\b)?")
 _NUM = re.compile(
     r"(?<![\w.])"
     r"(\d[\d,]*(?:\.\d+)?)"
     # "8+ years" and "9 per cent" carried no unit: the "+" sat between the number
     # and its unit, and "per cent" was not a unit, so a bare number under 10 was
-    # thrown away and an invented "8+ years of experience" passed.
-    r"\s*\+?\s*"
-    r"(%|(?:per\s?cent|percent|k|m|bn|b|million|billion|thousand|hours?|hrs?|days?|weeks?|"
-    r"months?|years?|x)\b)?",
+    # thrown away and an invented "8+ years of experience" passed. A hyphen joins
+    # them too: "a 9-hour job" is nine hours, and was read as a bare 9 and dropped.
+    r"(?:-(?=[a-z%])|\s*\+?\s*)"
+    + _UNIT,
     re.I)
+
+# A number written as a word is a number. Every check here read digits only, so "twelve
+# years", "forty spreadsheets" and "more than thirty-five" went past the resume check and
+# the claim map alike, and drafters do spell numbers ("eleven spreadsheets"). Read on both
+# sides: in the document, and in the profile and the evidence that ground it.
+_ONES = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+         "eight": 8, "nine": 9}
+_TEENS = {"ten": 10, "eleven": 11, "twelve": 12, "thirteen": 13, "fourteen": 14,
+          "fifteen": 15, "sixteen": 16, "seventeen": 17, "eighteen": 18, "nineteen": 19}
+_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70,
+         "eighty": 80, "ninety": 90}
+_SCALES = {"hundred": 100, "thousand": 1000, "million": 10 ** 6, "billion": 10 ** 9}
+
+
+def _alt(words) -> str:
+    return "|".join(sorted(words, key=len, reverse=True))
+
+
+# A run starts on a count word ("twelve", "thirty-five") or on "a"/"an" before a scale ("a
+# dozen", "a hundred"); a scale word alone never starts one, so the "million" of "1.2
+# million" is the digits' unit and not a second number.
+_NUMBER_WORD = re.compile(
+    r"(?<![\w-])(?:(?:a|an)\s+(?=(?:hundred|thousand|million|billion|dozen)\b)"
+    r"(?:" + _alt(list(_SCALES) + ["dozen"]) + r")|(?:" + _alt(list(_ONES) + list(_TEENS)
+                                                                + list(_TENS)) + r"))\b"
+    r"(?:(?:\s+and\s+|[\s-]+)(?:" + _alt(list(_ONES) + list(_TEENS) + list(_TENS)
+                                       + list(_SCALES) + ["dozen"]) + r")\b)*", re.I)
+# Counted multiples and fractions. A fraction is a share, so it is read as the percentage
+# it is ("halved" and "cut by 50%" are one claim), rounded to the whole number a document
+# would print. Only in the shapes that state a share: "a third of", "by a third", "half
+# of", "halved"; never "the first half of 2026", "a third party" or "the third quarter".
+_MULTIPLE = re.compile(r"(?<![\w-])(doubl(?:ed|ing|es)|tripl(?:ed|ing|es)|quadrupl(?:ed|ing|es)|"
+                       r"(two|three|four|five|six|seven|eight|nine|ten)[- ]?fold)\b", re.I)
+_FRACTION = {"half": 50, "third": 33, "quarter": 25, "fifth": 20, "tenth": 10}
+_FRACTION_SHARE = re.compile(
+    r"(?<![\w-])(?:(?P<by>by)\s+)?(?P<n>a|an|one|two|three)[\s-]+(?P<f>half|thirds?|quarters?|"
+    r"fifths?|tenths?)\b(?![\s-]+part(?:y|ies)\b)(?P<of>\s+of\b)?", re.I)
+_HALF = re.compile(
+    r"(?<![\w-])(?:halv(?:ed|ing|es)\b|(?:by|in)\s+half\b|"
+    r"(?<!first )(?<!second )(?<!1st )(?<!2nd )(?<!latter )(?<!former )(?<!back )(?<!front )"
+    r"(?<!other )(?<!the )half\s+(?:of|the|its|their|our|all|every)\b)", re.I)
+_HALF_UNIT = re.compile(r"(?<![\w-])(?:(?P<n>" + "|".join(list(_ONES) + list(_TEENS))
+                        + r"|\d+)\s+and\s+)?(?:a\s+)?half\s+(?:an?\s+)?(?=(?:hours?|days?|"
+                          r"weeks?|months?|years?|million|billion|thousand|dozen)\b)", re.I)
+# "the fifth consecutive year", "for the third year running": an ordinal that counts.
+_ORDINAL = {"second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7,
+            "eighth": 8, "ninth": 9, "tenth": 10, "eleventh": 11, "twelfth": 12,
+            "fifteenth": 15, "twentieth": 20}
+_ORDINAL_COUNT = re.compile(
+    r"(?<![\w-])(?P<o>" + "|".join(_ORDINAL) + r")\s+(?:(?:consecutive|straight|successive)\s+"
+    r"(?P<u1>hours?|days?|weeks?|months?|years?)\b|(?P<u2>hours?|days?|weeks?|months?|years?)"
+    r"\s+(?:running|in\s+a\s+row)\b)", re.I)
+
+
+def _word_value(words: str) -> float | None:
+    """The value of a run of number words ("two hundred and fifty", "thirty-five", "a
+    dozen"), or None when the run is not one number ("five ten" is two)."""
+    total, current, last = 0, 0, ""
+    for tok in re.split(r"[\s-]+", words.lower().strip()):
+        if tok in ("", "and"):
+            continue
+        if tok in ("a", "an"):
+            current, last = 1, "ones"
+            continue
+        if tok in _ONES:
+            if last in ("ones", "teens"):
+                return None
+            current += _ONES[tok]
+            last = "ones"
+        elif tok in _TEENS:
+            if last in ("ones", "teens", "tens"):
+                return None
+            current += _TEENS[tok]
+            last = "teens"
+        elif tok in _TENS:
+            if last in ("ones", "teens", "tens"):
+                return None
+            current += _TENS[tok]
+            last = "tens"
+        elif tok == "dozen":
+            current = (current or 1) * 12
+            last = "ones"
+        elif tok == "hundred":
+            current = (current or 1) * 100
+            last = "hundred"
+        elif tok in _SCALES:
+            total += (current or 1) * _SCALES[tok]
+            current, last = 0, "scale"
+        else:
+            return None
+    value = total + current
+    return float(value) if value else None
+
+
+def figures(body: str):
+    """(start, end, value, unit, shown) for every number in `body`: digits, number words,
+    multiples ("tripled" is 3x) and shares ("a third of" is 33%). `value` is the digits as
+    a string, the unit as written, `end` where what it counts begins, `shown` the words."""
+    out, taken = [], []
+
+    def free(a, b):
+        return not any(a < y and x < b for x, y in taken)
+
+    def add(a, b, value, unit, end=None):
+        if free(a, b):
+            taken.append((a, b))
+            out.append((a, b if end is None else end, value, unit, body[a:b]))
+
+    for m in _ORDINAL_COUNT.finditer(body):
+        add(m.start(), m.end(), str(_ORDINAL[m.group("o").lower()]), m.group("u1") or m.group("u2"))
+    for m in _HALF_UNIT.finditer(body):
+        n = m.group("n")
+        whole = (_ONES.get(n.lower()) or _TEENS.get(n.lower()) if n and not n.isdigit()
+                 else int(n) if n else 0)
+        unit = _UNIT_AFTER.match(body, m.end())
+        if unit:
+            if unit.group(1).lower() == "dozen":
+                add(m.start(), unit.end(), "%g" % (whole * 12 + 6), "")
+            else:
+                add(m.start(), unit.end(), "%g" % (whole + 0.5), unit.group(1))
+    for m in _HALF.finditer(body):
+        add(m.start(), m.end(), "50", "%")
+    for m in _FRACTION_SHARE.finditer(body):
+        if not (m.group("by") or m.group("of")):
+            continue
+        f = m.group("f").lower().rstrip("s")
+        if m.group("n").lower() in ("a", "an", "one"):
+            share = _FRACTION[f]
+        else:
+            share = round({"two": 2, "three": 3}[m.group("n").lower()] * 100 /
+                          {"half": 2, "third": 3, "quarter": 4, "fifth": 5, "tenth": 10}[f])
+        add(m.start(), m.end(), str(share), "%")
+    for m in _MULTIPLE.finditer(body):
+        word = m.group(1).lower()
+        n = 2 if word.startswith("doubl") else 3 if word.startswith("tripl") else \
+            4 if word.startswith("quadrupl") else (_ONES.get(m.group(2).lower())
+                                                   or _TEENS.get(m.group(2).lower()))
+        add(m.start(), m.end(), str(n), "x")
+    for m in _NUM.finditer(body):
+        add(m.start(), m.end(), m.group(1), m.group(2))
+    for m in _NUMBER_WORD.finditer(body):
+        value = _word_value(m.group(0))
+        if value is None:
+            continue
+        unit = _NUM_UNIT.match(body, m.end())
+        u = unit.group(1) if unit and unit.group(1) else None
+        # "one" alone is as often a pronoun as a count ("the one thing"): with no unit it
+        # is under SMALL and dropped by claim_key anyway.
+        add(m.start(), unit.end() if u else m.end(), "%g" % value, u)
+    out.sort()
+    return out
+
+
+_NUM_UNIT = re.compile(r"(?:-(?=[a-z%])|\s*\+?\s*)" + _UNIT, re.I)
+_UNIT_AFTER = re.compile(r"(hours?|days?|weeks?|months?|years?|million|billion|thousand|dozen)\b",
+                         re.I)
 
 _MAGNITUDE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6,
               "b": 1e9, "bn": 1e9, "billion": 1e9}
@@ -131,8 +298,8 @@ def claims(text: str) -> set[tuple[float, str]]:
     """Every numeric claim in `text`, normalised."""
     body = _RESIDUE.sub(" ", plain(text or ""))
     out = set()
-    for m in _NUM.finditer(body):
-        key = claim_key(m.group(1), m.group(2))
+    for _a, _b, value, unit, _shown in figures(body):
+        key = claim_key(value, unit)
         if key is not None:
             out.add(key)
     return out
@@ -229,14 +396,14 @@ class Grounded(set):
         """Every claim in `text`; with nouns=False, each matched by its size alone (the
         employer's own figures a letter may repeat, whatever it says they count)."""
         body = _RESIDUE.sub(" ", plain(text or ""))
-        for m in _NUM.finditer(body):
-            key = claim_key(m.group(1), m.group(2))
+        for _a, end, value, unit, _shown in figures(body):
+            key = claim_key(value, unit)
             if key is None:
                 continue
             self.add(key)
-            self.nouns.setdefault(key, []).append(counted(body, m.end(), wide=True) if nouns
+            self.nouns.setdefault(key, []).append(counted(body, end, wide=True) if nouns
                                                   else frozenset())
-            self.said.setdefault(key, []).append(_after(body, m.end()))
+            self.said.setdefault(key, []).append(_after(body, end))
 
     def agrees(self, key, noun: frozenset) -> bool:
         """Does an occurrence of `key` count what `noun` counts, or name nothing?"""
@@ -294,21 +461,21 @@ def check(text: str, source: str = "", allowed=None) -> list[dict]:
     allowed = allowed if allowed is not None else grounded()
     body = _RESIDUE.sub(" ", plain(text or ""))
     out = []
-    for m in _NUM.finditer(body):
-        key = claim_key(m.group(1), m.group(2))
+    for _a, end, value, unit, shown in figures(body):
+        key = claim_key(value, unit)
         if key is None:
             continue
-        noun = counted(body, m.end())
+        noun = counted(body, end)
         if key in allowed and (not isinstance(allowed, Grounded) or allowed.agrees(key, noun)):
             continue
         finding = {
             "source": source,
-            "value": m.group(0).strip(),
+            "value": shown.strip(),
             "normalised": f"{key[0]:g}{(' ' + key[1]) if key[1] else ''}",
-            "context": quote(text, m.group(1)),
+            "context": quote(text, shown.strip()) or quote(body, shown.strip()),
         }
         if key in allowed:
-            finding["counts"] = " ".join(_noun_words(body, m.end()))
+            finding["counts"] = " ".join(_noun_words(body, end))
             finding["profile_counts"] = sorted({x for x in allowed.said.get(key, ()) if x},
                                                key=len)[:2]
         out.append(finding)
@@ -327,21 +494,30 @@ def _bullet_text(b) -> str:
     return " ".join(str(x) for x in b)
 
 
+# The fields that state the candidate's own work and nothing about the employer: a figure
+# in them comes from the profile, never from the posting or p2. "Where the posting's 12
+# operations managers" put into a letter bullet is a metric moved onto the candidate.
+CANDIDATE_ONLY = ("summary", "cl_bullets")
+
+
 def check_draft(a: dict, allowed=None) -> list[dict]:
-    """Numbers in one draft's letter and summary that nothing supports."""
+    """Numbers in one draft's letter and summary that nothing supports. The opening, the
+    lead line and the close may repeat the posting's figures and p2's; the summary and the
+    letter bullets, which are the candidate's own evidence, only the profile's."""
     allowed = allowed if allowed is not None else grounded()
     if isinstance(allowed, Grounded):
         ok = Grounded(allowed, allowed.nouns, allowed.said)
         for k in ("p2", "posting"):
             ok.add_text(a.get(k) or "", nouns=False)
     else:
-        ok = set(allowed) | claims(a.get("p2") or "") | claims(a.get("posting") or "")
+        allowed = set(allowed)
+        ok = allowed | claims(a.get("p2") or "") | claims(a.get("posting") or "")
     name = a.get("abbr") or a.get("company") or "draft"
     out = []
     for k in DRAFT_FIELDS:
-        out += check(a.get(k) or "", f"{name}.{k}", ok)
+        out += check(a.get(k) or "", f"{name}.{k}", allowed if k in CANDIDATE_ONLY else ok)
     for i, b in enumerate(a.get("cl_bullets") or []):
-        out += check(_bullet_text(b), f"{name}.cl_bullets[{i}]", ok)
+        out += check(_bullet_text(b), f"{name}.cl_bullets[{i}]", allowed)
     return out
 
 

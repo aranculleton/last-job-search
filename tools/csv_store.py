@@ -27,24 +27,59 @@ class Conflicted(RuntimeError):
     """A state file git left with unresolved merge-conflict markers in it."""
 
 
-_MARKER = re.compile(r"^(?:<{7}|={7}|>{7})(?:[ \t]|\r?$)", re.M)
+# Git's own marker lines: "<<<<<<< ours", a line of exactly "=======", ">>>>>>> theirs".
+_OPEN = re.compile(r"<{7}(?:[ \t].*)?\r?$")
+_SEPARATOR = re.compile(r"={7}\r?$")
+_CLOSE = re.compile(r">{7}(?:[ \t].*)?\r?$")
+
+
+def conflict_marker(text: str):
+    """(the opening marker's line number, its text) when `text` holds a git conflict, else
+    None. A conflict is git's three lines in order, an opening "<<<<<<< ", a "=======" and a
+    closing ">>>>>>> ", and never three lines inside one quoted field: a message whose words
+    hold a line of seven "=" (an email's signature rule) made the whole log unreadable,
+    and the advice to delete the marker line would have cut a cell (2026-10-21)."""
+    marks, inside, field = [], False, 0
+    for n, line in enumerate(str(text or "").split("\n"), 1):
+        for kind, rx in (("open", _OPEN), ("sep", _SEPARATOR), ("close", _CLOSE)):
+            if rx.match(line):
+                marks.append((kind, n, line.strip(), inside, field))
+                break
+        for ch in line:                  # "" inside a field toggles twice: parity holds
+            if ch == '"':
+                inside = not inside
+                if not inside:
+                    field += 1
+    for i, (kind, n, said, _in_q, _f) in enumerate(marks):
+        if kind != "open":
+            continue
+        sep = next((j for j in range(i + 1, len(marks)) if marks[j][0] == "sep"), None)
+        close = next((j for j in range(sep + 1, len(marks)) if marks[j][0] == "close"),
+                     None) if sep is not None else None
+        if close is None:
+            continue
+        trio = (marks[i], marks[sep], marks[close])
+        if all(m[3] for m in trio) and len({m[4] for m in trio}) == 1:
+            continue                     # all three inside one quoted cell: words, not git's
+        return n, said
+    return None
 
 
 def refuse_conflicts(path: str) -> None:
-    """Raise Conflicted when `path` holds git's merge-conflict markers. Read as rows, the
-    three marker lines became three contacts and both sides of the conflicted row two
-    more, and the next save wrote the markers back."""
+    """Raise Conflicted when `path` holds git's merge-conflict markers (conflict_marker).
+    Read as rows, the three marker lines became three contacts and both sides of the
+    conflicted row two more, and the next save wrote the markers back."""
     try:
         with open(path, encoding="utf-8", errors="replace") as fh:
             text = fh.read()
     except OSError:
         return
-    m = _MARKER.search(text)
-    if m:
-        line = text.count("\n", 0, m.start()) + 1
+    found = conflict_marker(text)
+    if found:
+        line, said = found
         raise Conflicted(
             f"{os.path.basename(path)} has unresolved merge-conflict markers (the first, "
-            f"{m.group(0).strip()!r}, at line {line}), so nothing was read from it or saved "
+            f"{said!r}, at line {line}), so nothing was read from it or saved "
             "to it. Keep the right version of each conflicted row, delete the marker lines, "
             "then run this again.")
 

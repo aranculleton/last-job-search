@@ -682,8 +682,9 @@ GATE_REFUSES = frozenset({"reads_as_generated", "person_dislikes", "em_dash", "b
                           "greeting_wrong_name"})
 
 # What no recorded rule lifts (learned.py --overrides): a draft greeting somebody other
-# than the person it is for is a mistake, never a matter of taste.
-NEVER_OVERRIDDEN = frozenset({"greeting_wrong_name"})
+# than the person it is for is a mistake, never a matter of taste; so is a draft carrying
+# the name or employer of the person an approved example was written for (example_facts).
+NEVER_OVERRIDDEN = frozenset({"greeting_wrong_name", "example_facts"})
 
 
 def _gate(kind: str, text: str, what: str, **kw) -> str:
@@ -2026,6 +2027,72 @@ NO_READING = ("nothing was read about them, so this first note says nothing a se
               "and show it to them as card-only")
 
 
+EXAMPLE_FACTS = ("names {what}, from the approved note to {who}: an example gives the shape, "
+                 "never another person's name, employer or facts. Write it from this "
+                 "person's own reading")
+
+
+def example_facts(text, contact: str = "", name: str = "", referrer: str = "") -> list:
+    """[tone.Violation] for a first note that carries the name or the employer of somebody an
+    approved example was written for (learned.py approve), when it is for someone else. A
+    note to someone at one employer was copied from an approved note to someone at another,
+    that person's employer and the talk they gave included, and passed (2026-10-21).
+
+    Their full name, or their surname, anywhere; their employer when this reader works
+    somewhere else and it is none of the person's own employers (an alumni note names
+    those). A referrer named in the note is theirs to name. Nothing is judged for a reader
+    nobody can tell apart from the example's."""
+    try:
+        import learned
+        examples = [x for x in learned.approved() if str(x.get("contact_id") or "").strip()]
+    except (ImportError, SystemExit):
+        return []
+    contact = str(contact or "").strip()
+    if not examples or not (contact or name):
+        return []
+    import state
+    book = learned.contact_book()
+    r_name, r_company = learned.example_reader({"contact_id": contact}, book) if contact \
+        else ("", "")
+    r_name = name or r_name
+    mine = {company_key.key(n) for r in list(getattr(_ROLES, "ROLES", ()) or ())
+            for n in [r.get("employer")] + ([r["known_as"]] if isinstance(r.get("known_as"), str)
+                                             else list(r.get("known_as") or []))
+            if company_key.key(n)}
+    plain = tone._visible(str(text or ""))
+    out, seen = [], set()
+    for x in examples:
+        cid = str(x.get("contact_id") or "").strip()
+        if cid == contact:
+            continue
+        e_name, e_company = learned.example_reader(x, book)
+        same_person = bool(e_name) and state._match_name(e_name) == state._match_name(r_name)
+        if same_person or (referrer and state._match_name(referrer) == state._match_name(e_name)):
+            continue
+        found = []
+        words = [w for w in re.findall(r"[^\W\d_][\w'-]*", e_name) if len(w) >= 3]
+        full = " ".join(words)
+        r_surname = state.surname(r_name).lower() if r_name else ""
+        if len(words) > 1 and re.search(r"(?<![\w'-])" + r"\s+".join(map(re.escape, words))
+                                        + r"(?![\w'-])", plain, re.I):
+            found.append(full)
+        elif len(words) > 1 and words[-1].lower() != r_surname and re.search(
+                r"(?<![\w'-])" + re.escape(words[-1]) + r"(?![\w'-])", plain):
+            found.append(words[-1])
+        key = company_key.key(e_company)
+        if (key and r_company and key != company_key.key(r_company) and key not in mine):
+            pat = learned.employer_pattern(e_company)
+            m = pat.search(plain) if pat is not None else None
+            if m:
+                found.append(m.group(0))
+        for what in found:
+            if (what.lower(), cid) not in seen:
+                seen.add((what.lower(), cid))
+                out.append(tone.Violation("example_facts", EXAMPLE_FACTS.format(
+                    what=what, who=e_name or cid)))
+    return out
+
+
 def validate(message, kind, name=None, seniority="peer", employers=(),
              referrer=None, their_message=None, recruiter=False, reader=None, title="",
              work_auth=None, subject=None, _all=False, contact="", card_only=False) -> list:
@@ -2078,6 +2145,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
             known = bool(_reading.has_read(got) or _reading.card_enough(got))
         if known is False:
             out.append(tone.Violation("no_reading", NO_READING))
+    if k in FIRST_MESSAGE_KINDS:
+        out += example_facts(text, contact=contact, name=name or "", referrer=referrer or "")
     if k == "inmail":
         first = text.lstrip().split("\n", 1)[0]
         if subject is not None:

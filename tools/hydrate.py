@@ -96,6 +96,18 @@ def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> bool:
     return True
 
 
+def paced_done(skill: str, clock=time.monotonic) -> None:
+    """A paced fetch has ended: the board's next request waits its crawl-delay from now,
+    as the scrape's sweep waits after each request. Spaced only start to start, a fetch
+    slower than the delay had the next one sent while it was still running."""
+    with _PACE_GUARD:
+        got = _PACE.get(skill)
+    if got:
+        lock, times = got
+        with lock:
+            times[0] = clock()
+
+
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
 # requirements off bodies in a round, which is exactly the text the screen and
 # the scorers read.
@@ -311,9 +323,12 @@ def _fetch(job: dict, timeout: int) -> dict:
         # file, not a pipe (a body cut at 64 KiB mid-string, with exit 0, under
         # this module's workers), and a board's refusal (THROTTLED, robots.txt)
         # kept wherever it falls in stderr, where only the last line was kept.
-        d, err = portals.run_cli(
-            ["node", "--no-warnings", cli, "detail", str(ident), "--format", "json"],
-            timeout=timeout, empty=_no_body)
+        try:
+            d, err = portals.run_cli(
+                ["node", "--no-warnings", cli, "detail", str(ident), "--format", "json"],
+                timeout=timeout, empty=_no_body)
+        finally:
+            paced_done(skill)
         if err:
             return {**job, "hydrate_error": f"detail {err}"}
         if not isinstance(d, dict):
@@ -378,13 +393,14 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
     rank tied postings differently, and keep a different one of a tied pair. A posting
     whose worker failed keeps its place, unfetched, so hydration never loses one.
 
-    A board with a crawl-delay has workers of its own, as many as the shared pool. Its
-    postings used to queue in the shared pool with everyone else's, and a worker that
-    took one waited out the delay holding its place: the board's postings arrive last
-    from the scrape, so the stage ended as one board's chain of five-second waits with
-    every worker in it. `pace` still keeps the board's requests at least its
-    crawl-delay apart, start to start, as it always did; they now wait in their own
-    queue while the rest are fetched."""
+    A board with a crawl-delay has a worker of its own. Its postings used to queue in
+    the shared pool with everyone else's, and a worker that took one waited out the
+    delay holding its place: the board's postings arrive last from the scrape, so the
+    stage ended as one board's chain of five-second waits with every worker in it. They
+    now wait in their own queue while the rest are fetched, one request at a time and a
+    crawl-delay after the last one ended (`pace`, `paced_done`), as the scrape's sweep
+    sends them: with as many workers as the shared pool, a fetch slower than the delay
+    had the next request to the board sent while it was still running."""
     workers = max(1, workers)
     every = PROGRESS_SECONDS if progress_every is None else progress_every
     say = say or (lambda line: print(line, file=sys.stderr, flush=True))
@@ -428,7 +444,7 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
         while not stop.wait(every):
             say(line())
 
-    pools = {lane: ThreadPoolExecutor(max_workers=workers) for lane in lanes}
+    pools = {lane: ThreadPoolExecutor(max_workers=1 if lane else workers) for lane in lanes}
     futs: list = [None] * len(jobs)
     tick = threading.Thread(target=ticker, daemon=True)
     tick.start()
@@ -496,7 +512,10 @@ def main() -> int:
         print(f"{guarded_n} posting(s) carried text no reader sees (hidden markup, invisible "
               "characters); it was taken out before the screen, and each says what in "
               "posting_guard", file=sys.stderr)
-    if a.require is not None and frac < a.require:
+    # Nothing to fetch is not a failed fetch. A round in which nothing survived the free
+    # gates (every site blocked from the cloud, say) read 0 of 0 as 0% and ended here as a
+    # broken stage, before it could say which portals were down and the person's fix.
+    if a.require is not None and out and frac < a.require:
         print(f"FAIL: only {frac:.0%} have a description, below the required "
               f"{a.require:.0%}. Every posting without one reaches the model "
               f"blind and cannot be screened, knocked out or extracted.",

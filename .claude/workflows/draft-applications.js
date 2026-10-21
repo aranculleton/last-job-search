@@ -5,7 +5,7 @@ export const meta = {
   phases: [
     { title: 'Research', detail: 'verify employer facts from the employer own site', model: 'sonnet' },
     { title: 'Draft', detail: 'one structured call per posting from the drafting pack, then the code checks and at most two repairs' },
-    { title: 'Audit', detail: 'the model auditor, one call, only for a draft the code audit flags' },
+    { title: 'Audit', detail: 'the model auditor, one call reading one packet, for every draft that will be sent' },
     { title: 'Outreach', detail: 'a note body, only for the postings the person wants one for' },
   ],
 }
@@ -13,15 +13,17 @@ export const meta = {
 // Args: the contents of round_dir/draft_args.json, written by
 //   python3 tools/draft_pack.py build <round_dir>
 // plus {today: 'YYYY-MM-DD'}: {today, round_dir, pack, pack_hash, picks: [{file, company,
-// role, slug, abbr, ask_first, skills_yes?, skills_no?, brief}], repo?, only?, model_audit?,
-// outreach?}. Args with no pack (only {today, round_dir, picks}, the older shape) still
-// run: each drafter builds and reads the pack itself, one extra command and no shared
-// prompt cache.
+// role, slug, abbr, ask_first, skills_yes?, skills_no?, brief}], repo?, only?, outreach?}.
+// Args with no pack (only {today, round_dir, picks}, the older shape) still run: each
+// drafter builds and reads the pack itself, one extra command and no shared prompt cache,
+// and every draft it writes is flagged no-pack for the model auditor to rule on.
 //
 // What it does, per posting, pipelined (no posting waits for another):
 //   Research  the employer-researcher agent on sonnet, as before. It also leaves
-//             round_dir/research_<slug>.json, which the drafter's F ids and the code
-//             audit both read. SEAM below: a cheaper fetch script replaces this stage.
+//             round_dir/research_<slug>.json, which the code audit and the model auditor
+//             read. The drafter is shown the returned facts, numbered F1.., with their hash
+//             (research_hash): the audit hashes the file the same way, so an F id is shown
+//             to name one fact in both. SEAM below: a cheaper fetch script replaces this stage.
 //   Draft     ONE structured call on the session's own model: the pack (tools/draft_pack.py,
 //             byte-identical for the whole batch, so it is the prompt-cache prefix), then
 //             this posting's part. It reads no file: the profile's facts, the person's
@@ -31,17 +33,21 @@ export const meta = {
 //             (tools/stage_picks.py audit --only <slug> --json), which prints only what
 //             fails; it repairs from that output alone, at most twice.
 //   Audit     the model auditor (the grounding-auditor, on the session's own model,
-//             never downgraded), ONE call, only when the code audit flagged the draft: an
-//             unmapped sentence, a claim its evidence does not hold, a reported stretch, a
-//             profile changed since the pack. It reads one packet (tools/draft_audit.py
-//             packet), under 10k tokens: the draft, each sentence beside its evidence, the
-//             research facts, the flags. args.model_audit 'all' sends every draft to it;
-//             args.only (slugs) limits it to the roles the person will send.
+//             never downgraded), ONE call for every draft that will be sent, after the
+//             code audit, flagged or not: a clean code audit is not a reading. It reads one
+//             packet (tools/draft_audit.py packet), under 10k tokens: the draft, each
+//             sentence beside its evidence, the research facts and their quote checks, the
+//             flags, what changed in the profile since the draft. It opens no file and
+//             runs no other check: the packet is printed by the one command it runs, and
+//             its verdict is saved by the other (draft_audit.py verdict), which re-checks
+//             its corrected draft by code. args.only (slugs) leaves out the roles the person
+//             drops; those are never assembled.
 //   Outreach  only for the postings args.outreach names (true for all): a separate small
 //             call writes the note's body. Without one, tools/outreach.py builds the note
 //             from the letter, at no cost, as it always has.
-// Afterwards: python3 tools/stage_picks.py audit <round_dir> (code, authoritative: it
-// rewrites every audit_<slug>.json), then assemble, then RUNBOOK.md step 3.
+// Afterwards: python3 tools/stage_picks.py audit <round_dir> [--only <slugs>] (code,
+// authoritative: it rewrites every audit_<slug>.json), then assemble [--only <slugs>], then
+// RUNBOOK.md step 3. Nothing is assembled without both audits.
 //
 // Models follow .claude/skills/job-application-assistant/11-cost-model.md: research is
 // fetching and summarising (sonnet); drafting, the audit and the note inherit the
@@ -79,7 +85,6 @@ const repo = args.repo || 'the current working directory (the repository root; p
 const PACK = typeof args.pack === 'string' ? args.pack : ''
 const PACK_HASH = args.pack_hash || ''
 const ONLY = Array.isArray(args.only) ? args.only.map(String) : null
-const MODEL_ALL = args.model_audit === 'all'
 const wantsNote = (p) => args.outreach === true || (Array.isArray(args.outreach) && args.outreach.map(String).includes(p.slug))
 
 // ------------------------------------------------------------------ telemetry
@@ -154,26 +159,25 @@ const DRAFT_PROPS = {
   stretches: { type: 'array', items: { type: 'object', properties: {
     sentence: { type: 'string' }, why: { type: 'string' } }, required: ['sentence', 'why'] } },
   pack_hash: { type: 'string' },
+  research_hash: { type: 'string' },
 }
 const DRAFT_REQ = ['company', 'role', 'summary', 'tools', 'p1', 'p2', 'lead', 'cl_bullets', 'p4', 'angle', 'requirement_map', 'notes_for_tracker', 'claim_map', 'stretches']
 const DRAFT_SCHEMA = { type: 'object', properties: { ...DRAFT_PROPS, check_output: { type: 'string' } }, required: [...DRAFT_REQ, 'check_output'] }
 
+// What the model auditor returns to the script: its verdict, and the opening and the
+// researched paragraph of the draft it kept, which the Outreach step is built from. The
+// whole verdict, corrected draft included, is saved by its own command (draft_audit.py
+// verdict), so the draft is written once.
 const AUDIT_SCHEMA = {
   type: 'object',
   properties: {
     verdict: { type: 'string', enum: ['pass', 'fixed', 'reject'] },
-    draft: { type: 'object', properties: DRAFT_PROPS, required: DRAFT_REQ },
-    changes: { type: 'array', items: { type: 'object', properties: {
-      field: { type: 'string' }, before: { type: 'string' }, after: { type: 'string' }, reason: { type: 'string' } },
-      required: ['field', 'reason'] } },
-    residual_risks: { type: 'array', items: { type: 'string' } },
-    rulings: { type: 'array', items: { type: 'object', properties: {
-      sentence: { type: 'string' }, flag: { type: 'string' }, ruling: { type: 'string' }, why: { type: 'string' } },
-      required: ['sentence', 'ruling'] } },
-    audited_md5: { type: 'string' },
+    p1: { type: 'string' },
+    p2: { type: 'string' },
+    claim_map: { type: 'array', items: CLAIM },
     check_output: { type: 'string' },
   },
-  required: ['verdict', 'draft', 'changes', 'residual_risks', 'rulings', 'audited_md5', 'check_output'],
+  required: ['verdict', 'p1', 'p2', 'claim_map', 'check_output'],
 }
 
 const NOTE_SCHEMA = {
@@ -188,10 +192,26 @@ const gateOf = (out) => {
   const m = /"gate"\s*:\s*"(clean|model)"/.exec(String(out || ''))
   return m ? m[1] : 'model'
 }
+// The audit record's verdict, from the same output: pass or fixed only once code has
+// re-checked the model auditor's corrected draft and found nothing left open.
+const acceptedOf = (out) => {
+  const m = /"verdict"\s*:\s*"(pass|fixed|reject|needs_model|stale|missing)"/.exec(String(out || ''))
+  return !!m && (m[1] === 'pass' || m[1] === 'fixed')
+}
 // The research as the drafter sees it. tools/draft_pack.py research_lines() writes the
 // same lines, and the audit numbers the facts the same way, so an F id means one thing.
-const factLines = (research) => ((research && research.facts) || []).map((f, i) =>
-  `F${i + 1}: ${f.claim || ''} | quote: "${f.quote || ''}" | ${f.url || ''}${f.caution ? ' | caution: ' + f.caution : ''}`).join('\n')
+const UNREAD = ' | NOT READ ON THE PAGE (a search summary): never cite it'
+const factLines = (research) => ((research && research.facts) || [])
+  .filter(f => f && typeof f === 'object' && !Array.isArray(f)).map((f, i) =>
+    `F${i + 1}: ${f.claim || ''} | quote: "${f.quote || ''}" | ${f.url || ''}${f.caution ? ' | caution: ' + f.caution : ''}${f.read === false ? UNREAD : ''}`).join('\n')
+// FNV-1a over the UTF-16 code units of the fact lines: tools/draft_audit.py research_hash()
+// computes it the same way from research_<slug>.json.
+const researchHash = (research) => {
+  const text = factLines(research)
+  let h = 0x811c9dc5
+  for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0 }
+  return ('00000000' + (h >>> 0).toString(16)).slice(-8)
+}
 const AUDIT_CMD = (pick) => `python3 tools/stage_picks.py audit ${scratch} --only ${pick.slug} --json`
 
 // ------------------------------------------------------------------ research
@@ -211,7 +231,7 @@ You are the employer-researcher, doing the research half of Reviewer B in .claud
 Do not research the candidate. Do not draft anything.`
 
 const research = (pick) => metered(pick, 'research', 'sonnet', researchPrompt(pick), () => agent(researchPrompt(pick),
-  { label: `research:${pick.company}`, phase: 'Research', schema: RESEARCH_SCHEMA, model: 'sonnet', effort: 'medium' }))
+  { label: `research:${pick.slug}`, phase: 'Research', schema: RESEARCH_SCHEMA, model: 'sonnet', effort: 'medium' }))
 
 // ------------------------------------------------------------------ draft
 const draftPrompt = (pick, r) => {
@@ -230,7 +250,7 @@ ${factLines(res) || '(none verified: p2 states no employer fact beyond what the 
 Team: ${res.team_context || 'not stated'}. Do not claim: ${(res.do_not_claim || []).join('; ') || 'nothing listed'}. Named contact: ${res.named_contact || 'none'}. Requisition: ${res.req_id || 'none'}. Salary: ${res.salary || 'not stated'}. Deadline: ${res.deadline || 'none stated'}. Work model: ${res.work_model || 'not stated'}. Location: ${res.location || 'not stated'}.
 
 == WHAT TO DO ==
-1. Write the draft object by section 1 of the pack, with its claim_map and stretches, and "pack_hash": "${PACK_HASH}". Everything you need is in the pack and this section: open, search and fetch nothing else.
+1. Write the draft object by section 1 of the pack, with its claim_map and stretches, "pack_hash": "${PACK_HASH}" and "research_hash": "${researchHash(res)}". Everything you need is in the pack and this section: open, search and fetch nothing else. A fact marked NOT READ ON THE PAGE is never cited.
 2. Write it as one JSON object to ${scratch}/draft_${pick.slug}.json.
 3. Run: ${AUDIT_CMD(pick)}
    It is the code audit, and it prints only what fails: "fix" (rules broken; fix every one) and "flags" (grounding questions). Resolve a flag only by citing the id that truly supports the sentence or by rewriting the sentence to what its evidence says, never by citing an id that does not. Rewrite the file and run it again. At most two repair rounds; then stop, and what is left goes to the model auditor.
@@ -238,50 +258,52 @@ Team: ${res.team_context || 'not stated'}. Do not claim: ${(res.do_not_claim || 
 }
 
 const draft = (r, pick) => metered(pick, 'draft', null, draftPrompt(pick, r), () => agent(draftPrompt(pick, r),
-  { label: `draft:${pick.company}`, phase: 'Draft', schema: DRAFT_SCHEMA })).then(d => ({ research: r, draft: d }))
+  { label: `draft:${pick.slug}`, phase: 'Draft', schema: DRAFT_SCHEMA })).then(d => ({ research: r, draft: d }))
 
 // ------------------------------------------------------------------ audit
-const auditPrompt = (pick) => `You are the grounding-auditor (.claude/agents/grounding-auditor.md, in its batch mode), the last read before one application reaches an employer under the name of the candidate in profile/. Repo: ${repo}. Today is ${today}. No web access is needed or wanted.
+// One call on the strongest model for every draft that will be sent, after the code audit.
+// It reads one packet and nothing else: the packet command is the only thing it runs to
+// read, and the verdict command the only thing it runs to write.
+const auditPrompt = (pick) => `You are the grounding-auditor (.claude/agents/grounding-auditor.md, in its batch mode), the last read before one application reaches an employer under the name of the candidate in profile/. Repo: ${repo}. Today is ${today}. No web access is needed or wanted, and you open no file.
 1. Run: python3 tools/draft_audit.py packet ${scratch} ${pick.slug}
-   It prints everything you audit, and you read nothing else: the draft, each sentence beside the evidence it cites, the research facts with their cautions, the flags the code audit raised, the rules code cannot check, the person's answers, and the md5 of the version you are auditing (audit a fixed version: that one).
+   It prints everything you audit (the draft, each sentence beside the evidence it cites, the research facts with their quote checks, the flags code raised, what changed in the profile since the draft, the person's rules and answers, and the md5 of the version you audit). Read nothing else and run no other check: code has run them.
 2. Audit it by the packet's instructions: rule on every flag, read every sentence against its evidence, fix what you can in a corrected copy of the draft with its claim_map kept in step, and remove what cannot be grounded; never soften it into something vaguer that still implies it.
-3. Write the JSON object the packet describes to ${scratch}/model_audit_${pick.slug}.json.
-4. Run: ${AUDIT_CMD(pick)}
-   It re-checks your corrected draft and accepts your verdict only when no rule is still broken and every flag left has your ruling. If it lists anything under "fix" or "open_after_model", fix it, rewrite the file and run it once more.
-Return the object you wrote, with check_output set to the last output of step 4, verbatim. verdict is reject when the draft cannot be made truthful and targeted; say why in residual_risks.`
+3. Save the JSON object the packet describes with: python3 tools/draft_audit.py verdict ${scratch} ${pick.slug} <<'JSON'
+   <the object>
+   JSON
+   It checks the shape, writes model_audit_${pick.slug}.json, re-checks your corrected draft by code and prints what is still open. If it lists anything under "fix" or "open_after_model", fix it and save once more.
+Return {verdict, p1, p2, claim_map (the p1 and p2 entries only), check_output (the last output of step 3, verbatim)} for the draft you kept. verdict is reject when the draft cannot be made truthful and targeted; say why in its residual_risks.`
 
 const audit = (prev, pick) => {
   if (!prev || !prev.draft) return prev
-  const gate = gateOf(prev.draft.check_output)
-  if (gate === 'clean' && !MODEL_ALL) {
-    return { ...prev, audit: { verdict: 'pass', by: 'code' } }
-  }
   if (ONLY && !ONLY.includes(pick.slug)) {
-    log(`${pick.company}: the model audit is skipped (not in args.only); it stays unrendered until audited`)
+    log(`${pick.company}: the model audit is skipped (not in args.only); it is never assembled until audited`)
     return { ...prev, audit: { verdict: 'needs_model', by: 'nobody: not in args.only' } }
   }
   return metered(pick, 'audit', null, auditPrompt(pick), () => agent(auditPrompt(pick),
-    { label: `audit:${pick.company}`, phase: 'Audit', schema: AUDIT_SCHEMA }))
-    .then(a => ({ ...prev, audit: a ? { ...a, by: 'model' } : null }))
+    { label: `audit:${pick.slug}`, phase: 'Audit', schema: AUDIT_SCHEMA }))
+    .then(a => ({ ...prev, audit: a ? { ...a, by: 'model', code_gate: gateOf(prev.draft.check_output) } : null }))
 }
 
 // ------------------------------------------------------------------ outreach
 const notePrompt = (pick, d) => `Write the body of one LinkedIn note to the hiring manager or recruiter for ${pick.company}, ${pick.role}, for the candidate in profile/. Repo: ${repo}. Today is ${today}. Read no file: everything is here.
-The note follows a letter the code audit has passed. Its opening and researched paragraph, and what each sentence cites:
+The note follows a letter both audits have passed. Its opening and researched paragraph, and what each sentence cites:
 p1: ${d.p1 || ''}
 p2: ${d.p2 || ''}
 ${JSON.stringify((d.claim_map || []).filter(c => c && ['p1', 'p2'].includes(String(c.field))))}
 The fixed opening line ("Hi [name], I've just applied for the <role> role at <company>.") is put in front by the tool; write only what follows it. Two sentences: the employer's problem, then the candidate's evidence, naming one of their employers. Then a one-line ask worded for this note. Under 80 words with the opening line. Every fact comes from the sentences above and cites the same ids.
-Write {"outreach_body": ..., "claim_map": [{"field": "outreach_body", "sentence": ..., "cites": [...]}]} as one JSON object to ${scratch}/outreach_${pick.slug}.json, then run: ${AUDIT_CMD(pick)}
-If it lists anything for outreach_body, fix it, rewrite the file and run it once more. Return the object with check_output set to the last output, verbatim.`
+Save {"outreach_body": ..., "claim_map": [{"field": "outreach_body", "sentence": ..., "cites": [...]}]} with: python3 tools/draft_audit.py note ${scratch} ${pick.slug} <<'JSON'
+<the object>
+JSON
+It stamps the note with the version of the draft it was written for, checks the note whole, and prints what fails. If it lists anything for outreach_body, fix it and save once more. Return the object with check_output set to the last output, verbatim.`
 
 const note = (prev, pick) => {
   if (!prev || !wantsNote(pick)) return prev
-  if (prev.audit && ['reject', 'needs_model'].includes(String(prev.audit.verdict))) return prev
-  const d = (prev.audit && prev.audit.draft) || prev.draft
-  if (!d) return prev
+  // Only a draft both audits accepted: the code's word on the model auditor's draft.
+  if (!prev.audit || !acceptedOf(prev.audit.check_output)) return prev
+  const d = { ...prev.draft, p1: prev.audit.p1, p2: prev.audit.p2, claim_map: prev.audit.claim_map }
   return metered(pick, 'outreach', null, notePrompt(pick, d), () => agent(notePrompt(pick, d),
-    { label: `outreach:${pick.company}`, phase: 'Outreach', schema: NOTE_SCHEMA }))
+    { label: `outreach:${pick.slug}`, phase: 'Outreach', schema: NOTE_SCHEMA }))
     .then(n => ({ ...prev, note: n }))
 }
 
@@ -305,5 +327,5 @@ const calls = all.length
 const modelAudits = all.filter(c => c.stage === 'audit').length
 const promptTokens = all.reduce((n, c) => n + c.approx_prompt_tokens, 0)
 const outs = all.map(c => c.output_tokens_shared_counter).filter(x => x !== null)
-log(`${ok.length} of ${args.picks.length} postings came through; ${calls} agent calls, ${modelAudits} of them model audits; prompts about ${promptTokens} tokens by characters / 4${PACK ? `, the pack (${PACK.length} characters) the shared prefix of every draft` : ', with no pack in args'}; output ${outs.length ? outs.reduce((a, b) => a + b, 0) + ' tokens on the shared counter' : 'not reported'}. Seconds and tool calls are in the Workflow tool's run summary, not here. Next: python3 tools/stage_picks.py audit ${scratch}`)
+log(`${ok.length} of ${args.picks.length} postings came through; ${calls} agent calls, ${modelAudits} of them model audits; prompts about ${promptTokens} tokens by characters / 4${PACK ? `, the pack (${PACK.length} characters) the shared prefix of every draft` : ', with no pack in args'}; output ${outs.length ? outs.reduce((a, b) => a + b, 0) + ' tokens on the shared counter' : 'not reported'}. Seconds and tool calls are in the Workflow tool's run summary, not here. Next: python3 tools/stage_picks.py audit ${scratch}${ONLY ? ' --only ' + ONLY.join(' ') : ''}, then assemble the same way`)
 return ok

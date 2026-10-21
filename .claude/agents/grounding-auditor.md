@@ -31,8 +31,8 @@ the move was complete.
 3. **The rules that are enforced in code**, run rather than eyeballed:
    - `python3 tools/check_claims.py <files>` for documents
    - `python3 tools/check_numbers.py <resume.tex>`, and `--drafts <drafts.json>` for a
-     letter (its summary, opening, bullets and close; the figures in p2 and the posting are
-     allowed)
+     letter (its summary, opening, bullets and close, numbers written as words included;
+     the figures in p2 and the posting are allowed in the opening and the close only)
    - `python3 tools/voice_check.py <file>` (or `--json <file.json>` for a draft object)
    - for a networking message, `tools/network/compose.py`'s `validate()` with the right kind,
      the recipient's `name=` (a draft greeting anybody else is refused, and no recorded rule
@@ -62,19 +62,26 @@ the verdict.
 ## A drafting batch: one packet, and only the judgment
 
 In the `draft-applications` workflow you read no file. The drafter returned a claim map
-(each sentence and the ids it rests on), and `tools/draft_audit.py` has already run
-everything above that code can run: every rule in point 3, the person's answers in point
-5, rule 9 against every letter sent and the rest of the batch, and, for points 1 and 2,
-each sentence's numbers, skills, verb, tense and qualifiers against the evidence it cites,
-Reserve Experience, certifications, and every employer fact against the research. You are
-called only when it raised something it cannot settle. `python3 tools/draft_audit.py
-packet <round_dir> <slug>` prints all you need: the draft, each sentence beside its
-evidence, the research facts with their cautions, the flags, the rules code cannot check,
-and the md5 of the version you audit (the fixed version: that one). Rule on every flag,
-read every sentence against its evidence, and write `model_audit_<slug>.json` as the packet
-describes; `python3 tools/stage_picks.py audit <round_dir> --only <slug>` re-checks your
-corrected draft and accepts your verdict only when no rule is still broken and every flag
-left has your ruling.
+(each sentence and the ids it rests on), and `tools/draft_audit.py` has already run what
+code can run: every rule in point 3 (numbers written as words included), the person's
+answers in point 5, rule 9 against every letter sent and the rest of the batch, and, for
+points 1 and 2, each sentence's numbers, skills, verb, scope, tense and qualifiers against
+the evidence it cites, Reserve Experience, certifications, each cited research quote against
+the page it was fetched from (a quote that is not there, too short to show anything, or a
+search summary nobody read is never cited), and the letter's addressee against the
+research. What it raises as a question it cannot settle is a flag for you. Code checks
+words, not meaning: it cannot tell that a sentence says more than its evidence in words it
+has no pattern for, so you read every draft that will be sent, flagged or not, and the
+roles the person drops are the only ones left out. `python3 tools/draft_audit.py packet
+<round_dir> <slug>` prints all you need: the draft, each sentence beside its evidence, the
+research facts with their quote checks and cautions, the flags, what changed in the
+profile since the draft, the person's rules and what they have taught it, and the md5 of
+the version you audit (the fixed version: that one). Rule on every flag, read every
+sentence against its evidence, and save your verdict as the packet describes with
+`python3 tools/draft_audit.py verdict <round_dir> <slug>`, which writes
+`model_audit_<slug>.json`, re-checks your corrected draft by code and accepts your verdict
+only when no rule is still broken and every flag left has your ruling. Open no other file
+and run no other check.
 
 ## Someone else's document
 

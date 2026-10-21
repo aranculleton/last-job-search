@@ -1,11 +1,15 @@
-"""The model auditor reads only what code cannot settle, and nothing unaudited is rendered.
+"""Every draft that will be sent gets both audits: code first, then the model auditor.
 
-`tools/stage_picks.py audit` runs the code audit on each drafted object and writes its
-verdict: `pass` when nothing is left to judge, `needs_model` otherwise. The model auditor
-is called only for the second, given one packet, and its verdict counts only once code has
-re-checked its corrected draft and found every flag it left ruled on. `assemble` renders a
-pass or a fixed draft and nothing else: not one still waiting, not one changed since its
-audit, not one audited against a profile that has changed since.
+Renamed and updated 2026-10-21 from test_only_a_flagged_draft_reaches_the_model_auditor.py.
+That file pinned the old gate: a draft the code audit found clean was `pass` and went to
+the renderer with no model reading at all. The person's brief asks for the model auditor
+on every draft that will be sent ("one non-agentic call ... given only the draft, the cited
+evidence excerpts and the research facts, under 10k tokens"), with the roles they drop left
+out by `--only`. So `tools/stage_picks.py audit` writes `needs_model` for every draft until
+the model auditor's verdict is in, and that verdict counts only once code has re-checked
+its corrected draft and found every flag it left ruled on. `assemble` renders a pass or a
+fixed draft and nothing else: not one still waiting, not one code alone passed, not one
+changed since its audit, not one audited against a profile that has changed since.
 """
 from __future__ import annotations
 
@@ -33,16 +37,37 @@ def stretched():
     return d
 
 
-def test_a_clean_draft_passes_on_code_alone_and_is_assembled(tmp_path):
+def test_a_clean_draft_waits_for_the_model_audit_and_is_assembled_after_it(tmp_path):
+    # Was test_a_clean_draft_passes_on_code_alone_and_is_assembled: code alone no longer
+    # sends a draft to the renderer.
     rd = make_round(tmp_path)
     [r] = stage_picks.audit(str(rd))
-    assert r["verdict"] == "pass"
+    assert r["verdict"] == "needs_model" and r["mechanical"]["gate"] == "clean"
     record = json.loads((rd / f"audit_{SLUG}.json").read_text(encoding="utf-8"))
-    assert record["verdict"] == "pass" and record["model"] is None
+    assert record["verdict"] == "needs_model" and record["model"] is None
     assert record["draft"]["p1"] == FIXTURE["draft"]["p1"]
+    drafts, missing, rejected = stage_picks.assemble(str(rd))
+    assert drafts == [] and not rejected
+    assert missing == [f"{FIXTURE['company']} (waiting on the model audit (the code checks are clean))"]
+    d = json.loads((rd / f"draft_{SLUG}.json").read_text(encoding="utf-8"))
+    _model(rd, "pass", d)
+    [r] = stage_picks.audit(str(rd))
+    assert r["verdict"] == "pass"
     drafts, missing, rejected = stage_picks.assemble(str(rd))
     assert [d["company"] for d in drafts] == [FIXTURE["company"]] and not missing and not rejected
     assert drafts[0]["posting"] == FIXTURE["posting"] and "check_output" not in drafts[0]
+
+
+def test_a_record_code_alone_passed_is_never_assembled(tmp_path):
+    # An audit record written before this change: code clean, `pass`, no model audit.
+    rd = make_round(tmp_path)
+    stage_picks.audit(str(rd))
+    path = rd / f"audit_{SLUG}.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["verdict"] = "pass"
+    path.write_text(json.dumps(record), encoding="utf-8")
+    drafts, missing, _ = stage_picks.assemble(str(rd))
+    assert drafts == [] and "no model audit yet" in missing[0]
 
 
 def test_a_flagged_draft_waits_for_the_model_auditor_and_is_not_rendered(tmp_path):
@@ -112,6 +137,7 @@ def test_an_audit_of_another_version_says_nothing_and_a_reject_is_never_rendered
 
 def test_a_draft_changed_after_its_audit_or_a_profile_changed_since_is_not_rendered(tmp_path, monkeypatch):
     rd = make_round(tmp_path)
+    _model(rd, "pass", json.loads((rd / f"draft_{SLUG}.json").read_text(encoding="utf-8")))
     stage_picks.audit(str(rd))
     path = rd / f"audit_{SLUG}.json"
     record = json.loads(path.read_text(encoding="utf-8"))
@@ -138,7 +164,7 @@ def test_only_audits_the_roles_named(tmp_path):
 def test_two_drafts_in_one_batch_may_not_share_an_opening(tmp_path):
     rd = make_round(tmp_path, slugs=(SLUG, "kestrel_two"))
     first, second = stage_picks.audit(str(rd))
-    assert first["verdict"] == "pass"
+    assert first["mechanical"]["gate"] == "clean"
     assert [f["rule"] for f in second["mechanical"]["findings"]] == ["rule-9", "rule-9"]
 
 
@@ -168,24 +194,31 @@ def test_the_packet_is_small_and_carries_the_auditors_own_checks(tmp_path):
 
 # ------------------------------------------------------------------ the workflow itself
 
-def test_the_workflow_sends_only_a_flagged_draft_to_the_model_auditor():
+def test_the_workflow_sends_every_draft_to_the_model_auditor():
+    # Was test_the_workflow_sends_only_a_flagged_draft_to_the_model_auditor, which pinned
+    # audit labels ["audit:B"]: the clean draft A was passed by code alone.
     got = run_workflow({"A": "clean", "B": "model"}, pack="THE PACK\n", pack_hash="h")
-    assert labels(got, "research") == ["research:A", "research:B"]
-    assert labels(got, "draft") == ["draft:A", "draft:B"]
-    assert labels(got, "audit") == ["audit:B"]
+    assert labels(got, "research") == ["research:a", "research:b"]
+    assert labels(got, "draft") == ["draft:a", "draft:b"]
+    assert labels(got, "audit") == ["audit:a", "audit:b"]
     by = {r["pick"]["slug"]: r["audit"] for r in got["out"]}
-    assert by["a"] == {"verdict": "pass", "by": "code"} and by["b"]["by"] == "model"
+    assert by["a"]["by"] == "model" and by["a"]["code_gate"] == "clean"
+    assert by["b"]["by"] == "model" and by["b"]["code_gate"] == "model"
     # The model auditor inherits the strongest model: it is never downgraded.
     models = {c["label"]: c["model"] for c in got["calls"]}
-    assert models["audit:B"] is None
+    assert models["audit:a"] is None and models["audit:b"] is None
+    # It reads one packet and runs nothing else to read: the packet and the verdict commands.
+    prompt = next(c["prompt"] for c in got["calls"] if c["label"] == "audit:a")
+    assert "python3 tools/draft_audit.py packet /r a" in prompt
+    assert "python3 tools/draft_audit.py verdict /r a" in prompt
 
 
-def test_the_person_can_send_every_draft_to_the_model_or_skip_the_roles_they_drop():
-    got = run_workflow({"A": "clean", "B": "model"}, pack="P", model_audit="all")
-    assert labels(got, "audit") == ["audit:A", "audit:B"]
+def test_the_person_can_skip_the_roles_they_drop():
     got = run_workflow({"A": "model", "B": "model"}, pack="P", only=["b"])
-    assert labels(got, "audit") == ["audit:B"]
+    assert labels(got, "audit") == ["audit:b"]
     assert {r["pick"]["slug"]: r["audit"]["verdict"] for r in got["out"]}["a"] == "needs_model"
-    # An answer the script cannot read is a draft for the model auditor.
+    # The older "every draft" switch is the default now and changes nothing.
+    got = run_workflow({"A": "clean", "B": "model"}, pack="P", model_audit="all")
+    assert labels(got, "audit") == ["audit:a", "audit:b"]
     got = run_workflow({"A": "unreadable", "B": "clean"}, pack="P")
-    assert labels(got, "audit") == ["audit:A"]
+    assert labels(got, "audit") == ["audit:a", "audit:b"]

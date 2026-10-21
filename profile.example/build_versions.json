@@ -8,7 +8,7 @@
     "date": "2026-10-15"
   },
   "drafts": {
-    "version": 34,
+    "version": 36,
     "date": "2026-10-17"
   },
   "expand": {
@@ -28,11 +28,11 @@
     "date": "2026-10-17"
   },
   "network-notes": {
-    "version": 24,
+    "version": 25,
     "date": "2026-10-17"
   },
   "networking": {
-    "version": 42,
+    "version": 44,
     "date": "2026-10-17"
   },
   "prep-docs": {
@@ -40,7 +40,7 @@
     "date": "2026-10-17"
   },
   "research": {
-    "version": 5,
+    "version": 6,
     "date": "2026-10-17"
   },
   "routines": {
@@ -48,7 +48,7 @@
     "date": "2026-10-17"
   },
   "screening": {
-    "version": 18,
+    "version": 19,
     "date": "2026-10-17"
   },
   "search": {

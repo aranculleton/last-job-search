@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.6
+framework_version: 1.1.7
 ---
 
 # Cost Model for the Application Lifecycle
@@ -24,7 +24,7 @@ Measured on real runs in this repo:
 | **Full weighted scoring** | **~19k** | postings the estimate promoted | Was ~70k before `profile/12-scoring-brief.md`. Still the dominant cost. Ration it. |
 | Adversarial verify | ~40k | postings scoring 70+ | Only where it could change a decision. |
 | Drafting resume + letter | see below | per application | One call from the drafting pack (`tools/draft_pack.py`). |
-| Grounding audit | 0, then one model call if flagged | per application | Code first (`tools/draft_audit.py`); the model reads one packet. |
+| Grounding audit | 0, then one model call reading one packet (under 10k) | per application sent | Code first (`tools/draft_audit.py`), then the model on every draft that will be sent. |
 
 The dominant cost is full scoring. Drafting was the other, until it was measured.
 
@@ -46,21 +46,30 @@ What runs now (RUNBOOK.md step 2):
 | Research | the employer's own pages (unchanged; a cheaper fetch script is to replace it) | sonnet |
 | Draft | the pack (a few thousand tokens, the same bytes for the whole batch, so cached), the posting, the research facts: one call, no file reads, at most two repairs from the code audit's failures | strongest |
 | Code audit | the claim map against the evidence, and every existing check | none |
-| Model audit | one packet, under 10k tokens, and only for a draft the code audit flagged | strongest |
+| Model audit | one packet, under 10k tokens, for every draft that will be sent (`only` leaves out a role the person drops), after the code audit; it opens no file and runs no check of its own | strongest |
 | Outreach body | the letter's two paragraphs, only when the person wants a note written | strongest |
 
 Static reading per drafter, from the files' own sizes (characters / 4, an approximation):
 the example person's was about 16k tokens of files and is a 3k pack. A long profile makes
 a longer pack (every fact and rule is kept; nothing is cut to meet the 6k target), but the
-same profile made every drafter's reading longer by more. The auditor's reading (about 13k
-for the example person, before the posting and the draft) is gone: the code audit costs
-nothing, and the packet, about 3k for the example person, is read only when a draft is
-flagged. **A live before-and-after of tokens and time has not been run**: the next
-batch through the Workflow tool is that measurement, recorded with `tools/draft_cost.py`.
+same profile made every drafter's reading longer by more. The auditor's own reading of
+the files (about 13k for the example person, before the posting and the draft) is gone:
+the code audit costs nothing, and the model auditor reads one packet, about 4k for the
+example person, for every draft that will be sent. That reading is never skipped to save
+money: a draft code finds clean is still read, because the claims code cannot judge (a
+sentence its evidence does not hold, a gap volunteered in new words, a scope the source
+does not give) are the ones that reach an employer. Only a role the person drops goes
+without it (`only`). **A live before-and-after of tokens and time has not been run**: the
+next batch through the Workflow tool is that measurement, recorded with
+`tools/draft_cost.py`.
 
 What did not get cheaper, on purpose: drafting and the model audit stay on the strongest
-model, and every check the auditor ran still runs (the code audit's, or the model's when
-code cannot settle it). `verify_batch.sh` and the PDF read are unchanged.
+model, and both audits run on every draft that will be sent: the code audit's checks, and
+the model's reading of the packet. Code cannot settle everything the auditor agent once
+read for (a sentence its cited evidence does not hold in words code does not know, a
+concession in a phrasing no pattern lists), which is why the model reading stays. Its
+packet carries the evidence, never the files, so it costs a few thousand tokens rather than
+the agent's tens of thousands. `verify_batch.sh` and the PDF read are unchanged.
 
 **Two screens, and they are not alternatives.** The table lists both because both run, on
 different inputs at different points, and confusing them wastes a round.
@@ -140,8 +149,8 @@ These look like savings and are not:
 - **The second reviewer.** Two parallel reviewers with different jobs cost the same as one doing
   both serially, and catch more, because the grounding audit is not competing with a research pass
   for the same context. In a batch the grounding half is now code first: what the reviewer
-  checked mechanically runs in `tools/draft_audit.py`, and the model reads only what code
-  flags. That cut the re-reading, never a check.
+  checked mechanically runs in `tools/draft_audit.py`, and the model then reads one packet
+  for every draft that will be sent. That cut the re-reading, never a check.
 - **Independent verification of company claims.** Rule 5 in `03-writing-style.md`. Exercised, it
   keeps catching things: a stale strategy, a superseded plan, snippet figures that disagree
   with the live page.
