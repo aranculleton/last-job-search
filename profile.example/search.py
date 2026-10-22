@@ -256,9 +256,4 @@ PORTAL_RESEARCH: list[dict] = [
                "postings cannot be fetched; no public job-search API",
      "source": "https://uk.indeed.com/robots.txt", "checked": "2026-10-14"},
 ]
-# Read the person's LinkedIn job alerts into each round (tools/job_alerts.py), as
-# a Gmail search for the alert emails, without a date: the round adds one. Empty
-# is off, and stays off unless the person asks, because it reads their inbox.
-# /setup writes it as "from:<the sender on one of their own alerts>".
-JOB_ALERT_QUERY = ""
 CANARY_LOCATION = "United Kingdom"

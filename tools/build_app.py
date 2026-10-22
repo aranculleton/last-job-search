@@ -59,6 +59,31 @@ ALLOWED_ORGANIZATIONS = {
     "Docker",
 }
 
+# The first names the app's invented people are greeted by in its examples and tests
+# ("Hi Ana, ..."). A contact's first name goes on the denylist only as a greeting, to
+# catch a real message copied into an example; a greeting with one of these names is the
+# app's own cast, so a contact who happens to share it is still caught by full name,
+# profile address, email and contact id, and never by the greeting. Before, one contact
+# named like an example blocked every merge in the maintainer's repo (2026-10-22: "Hi Ana",
+# the app's invented Ana Rook since 2026-10-19). A greeting in the app with a first name
+# not listed here fails tests/test_an_invented_name_is_not_a_leak.py, so a name is added
+# on purpose, as tools/name_guard_allow.txt is.
+INVENTED_FIRST_NAMES = frozenset({
+    "Ana", "Bo", "Bob", "Corwin", "Cy", "Halloway", "Idris", "Ivo", "Jane", "Jean", "Juno",
+    "Morgan", "Pell", "Quillon", "Quinn", "Raj", "Rhian", "Riley", "Robin", "Rosalind",
+    "Sally", "Sasha", "Shirin", "Tamsin", "Taylor", "Thad", "Wren", "Wrenfield", "Xiu",
+    "Zo", "Zoe",
+})
+
+
+def _greetings(name: str) -> list[str]:
+    """The greeting forms of a person's given names, leaving out the app's own cast."""
+    out = []
+    for first in given_names(name):
+        if first not in INVENTED_FIRST_NAMES:
+            out += [f"=Hi {first}", f"=Dear {first}"]
+    return out
+
 
 def export(out_dir: str) -> list[str]:
     """`git archive HEAD` into out_dir, minus personal paths. Returns what was removed."""
@@ -335,10 +360,9 @@ def denylist() -> list[str]:
             # A contact also appears by first name in an example message
             # ("Hi Sasha, ..."). The greeting form is precise; the bare first
             # name would fire on every other person who shares it. Every given
-            # name gets one, because people go by a middle name too.
-            for first in given_names(name):
-                add(f"=Hi {first}")
-                add(f"=Dear {first}")
+            # name gets one, because people go by a middle name too, except the
+            # first names the app's own invented people use (INVENTED_FIRST_NAMES).
+            out.extend(_greetings(name))
         url = row.get("linkedin_url") or ""
         h = re.search(r"linkedin\.com/in/([^/?#]+)", url)
         if h:
@@ -364,9 +388,7 @@ def denylist() -> list[str]:
     # that cites "the run dropped <name>" carries them into the app.
     for name in _people():
         add(name)
-        for first in given_names(name):
-            add(f"=Hi {first}")
-            add(f"=Dear {first}")
+        out.extend(_greetings(name))
     extra = person.path("leak_tokens.txt")
     if os.path.isfile(extra):
         with open(extra, encoding="utf-8") as fh:

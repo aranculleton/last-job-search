@@ -20,6 +20,34 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **Nothing asks for your email.** The question about reading your LinkedIn job alerts from
+  Gmail is gone from setup and from the questions asked each month, and the job round no
+  longer reads email: the round itself and your brief are your alerts, inside Claude. A
+  `JOB_ALERT_QUERY` line in an older profile is left as it is and read by nothing.
+  `/gmail-sync` still runs if you type it; nothing suggests it.
+- **A leak in the public app is said in one line** (the maintainer's own repo only): how many
+  matches, where, and of what ("64 match(es) in the public app's files, all of them" and the
+  one entry), where the sync used to hand the chat 40 file paths to pass on word for word.
+  `python3 tools/app_watch.py --all` lists every match; it stopped at 40.
+
+### Fixed
+
+- **A contact named like one of the app's examples no longer blocks merges** (the
+  maintainer's own repo only). A contact's first name is on the leak list as a
+  greeting, to catch a real message copied into an example, and the app's examples greet
+  invented people by first name: one contact sharing the name of the app's invented Ana Rook
+  failed the leak scan 64 times, on the app's own tests, and no chat could get green. The
+  greeting is left out for the first names the app declares as invented
+  (`build_app.INVENTED_FIRST_NAMES`); a contact who shares one is still caught by full name,
+  profile address, email and contact id, and a test refuses any greeting in the app to a
+  first name not declared.
+- **Two different messages on one day with one summary are two, not a copy.** A day's
+  messages imported from LinkedIn's export carry one summary, and RECONCILE in `state.py`
+  read them as one message logged several times. It now compares their words too; a message
+  copied twice is still found.
+
 ## [3.10.1] - 2026-10-22
 
 ### Changed

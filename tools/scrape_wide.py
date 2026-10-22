@@ -120,8 +120,8 @@ def defaults(cloud: bool | None = None) -> tuple:
 def run(cmd: list[str], timeout: int = 90) -> tuple[dict | None, str | None]:
     """(parsed JSON, None) on success; (None, reason) on any failure.
 
-    tools/portals.py run_cli, the one runner for a portal's CLI (hydrate.py and
-    job_alerts.py use it too): stdout goes to a file, not a pipe, because Node writes
+    tools/portals.py run_cli, the one runner for a portal's CLI (hydrate.py uses
+    it too): stdout goes to a file, not a pipe, because Node writes
     to a pipe asynchronously and a CLI that exits after writing loses what has not
     drained, so ten at once came back cut at 64 KiB mid-string with exit 0; and a line
     where a board refused is kept wherever it falls in stderr. Kept here by name,
@@ -860,24 +860,6 @@ def failure_report(sent: dict[str, int], failed: dict[str, list[str]]) -> tuple[
     return "\n".join(lines), bad
 
 
-def merge_alerts(seen: dict[str, dict], alerts: list[dict]) -> int:
-    """Add job-alert postings to the scrape's pool; how many were new.
-
-    LinkedIn's search gives a slugged URL and an alert the bare one, so the
-    same posting is matched on its LinkedIn id, not its URL."""
-    from lookup_score import norm
-    have = {str(r.get("id")) for r in seen.values() if r.get("portal") == "linkedin"}
-    added = 0
-    for r in alerts:
-        jid = str(r.get("id"))
-        if (r.get("url") and jid not in have and r["url"] not in seen
-                and norm(r["url"]) not in seen):
-            seen[r["url"]] = r
-            have.add(jid)
-            added += 1
-    return added
-
-
 # What a person's portal did not reach last round, so the next round starts there:
 # {portal: {"mode": "tail" or "all", "next": an index into what rotates, "sent": the
 # requests it sent, "date": the round}}. "tail" while the board gets through its
@@ -1228,8 +1210,6 @@ def main() -> int:
                          f"in {PARTIAL}, and exit 2")
     ap.add_argument("--skip-canary", action="store_true",
                     help="skip the pre-flight portal probe (offline replays)")
-    ap.add_argument("--alerts", default=None,
-                    help="postings from the person's job-alert emails (tools/job_alerts.py)")
     ap.add_argument("--before", default=None,
                     help="a widening: the round before's scrape folder; its postings are "
                          "carried over and the requests it had answered are not sent again")
@@ -1485,19 +1465,6 @@ def main() -> int:
             print(f"  partial: {employer}: {why}")
     except Exception as e:            # a new source must never break a round
         print(f"ats boards: skipped ({type(e).__name__}: {e})", file=sys.stderr)
-
-    # The person's job alerts, already filled from each posting page by
-    # tools/job_alerts.py. A posting the search also found is kept once: the
-    # same LinkedIn id under a slugged URL is the same posting.
-    if a.alerts:
-        try:
-            alert_rows = json.load(open(a.alerts, encoding="utf-8"))
-        except (OSError, ValueError) as e:
-            alert_rows = []
-            print(f"job alerts: skipped ({type(e).__name__}: {e})", file=sys.stderr)
-        alert_rows = [r for r in alert_rows if isinstance(r, dict)] if isinstance(alert_rows, list) else []
-        added = merge_alerts(seen, alert_rows)
-        print(f"job alerts: {added} added, {len(alert_rows) - added} already found by the search")
 
     cut = [t for t in pool_tallies.values() if t.stopped and t.name in ("linkedin", "freehire")]
     notes = [f"{t.name} stopped ({t.stopped}) with {t.total - t.sent} of its "

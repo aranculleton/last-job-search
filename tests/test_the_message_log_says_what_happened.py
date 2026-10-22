@@ -363,3 +363,17 @@ def test_an_out_of_office_that_makes_an_offer_is_a_person():
                             "company.")["kind"] == "left"
     assert state.auto_reply("I am out of the office until 3 November with limited access to "
                             "email.", sent_on="2026-10-21")["kind"] == "away"
+
+
+def test_two_messages_one_day_with_one_summary_are_two_not_a_copy():
+    """An export import gives a day's messages one summary: their words tell them apart."""
+    contacts = [_c("kes_rook", "Ana Rook", status="awaiting_reply", channel="message")]
+    day = "2026-10-01"
+    two = [_t("kes_rook", day, "out", "first_message", "Hi Ana, a first message.",
+              summary="from the LinkedIn export"),
+           _t("kes_rook", day, "out", "first_message", "Hi Ana, and the file I mentioned.",
+              summary="from the LinkedIn export")]
+    assert not [p for p in state.reconcile(contacts, two) if p["reason"] == "duplicate_message"]
+    copied = two[:1] + [dict(two[0])]
+    found = [p for p in state.reconcile(contacts, copied) if p["reason"] == "duplicate_message"]
+    assert len(found) == 1 and "2 identical rows" in found[0]["detail"]

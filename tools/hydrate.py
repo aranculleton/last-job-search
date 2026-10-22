@@ -101,8 +101,8 @@ def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> bool:
 # the scorers read.
 #
 # The one cap on a posting's body, wherever it is read: the scrape (freehire and a
-# person's own boards), the employer boards (tools/ats_boards.py), job alerts and the
-# detail fetch here. freehire and person-board bodies used to arrive uncapped, so the
+# person's own boards), the employer boards (tools/ats_boards.py) and the detail
+# fetch here. freehire and person-board bodies used to arrive uncapped, so the
 # text screen read words that fit and opportunity, which stop at this many, never saw.
 BODY_CAP = 20_000
 

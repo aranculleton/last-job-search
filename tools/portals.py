@@ -243,9 +243,9 @@ def cli(skill: str, env: str | None = None) -> str:
 
 # ------------------------------------------------------------ running a portal's CLI
 #
-# The one runner for every call to a portal's CLI: a search (tools/scrape_wide.py), a
-# detail fetch (tools/hydrate.py) and a job alert's posting (tools/job_alerts.py). The
-# second and third had copies of their own that kept only stderr's last line, so a
+# The one runner for every call to a portal's CLI: a search (tools/scrape_wide.py) and a
+# detail fetch (tools/hydrate.py). The second, and a job-alert reader since removed, had
+# copies of their own that kept only stderr's last line, so a
 # board that said THROTTLED, or that robots.txt disallowed the page, and then printed a
 # JSON error, was recorded as the JSON error.
 

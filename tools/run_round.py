@@ -561,9 +561,6 @@ def main():
                          "%s under the repo). A test pointing --out at a temp "
                          "directory must point this there too, or it writes "
                          "into the committed tree." % SUMMARY_DIR)
-    ap.add_argument("--alerts", default=None,
-                    help="scrape: postings from the person's job-alert emails "
-                         "(tools/job_alerts.py output)")
     ap.add_argument("--keep-intermediates", dest="keep", action="store_true",
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
@@ -633,7 +630,6 @@ def main():
                    # was given another.
                    + (["--seen", a.seen] if a.seen else [])
                    + (["--keep-ruled-out"] if a.no_seen_read else [])
-                   + (["--alerts", a.alerts] if a.alerts else [])
                    + (["--before", a.scrape_before] if a.scrape_before else []),
                    log, deadline, ok=(0, SCRAPE_PARTIAL))
         ON_TIMEOUT.pop("scrape_wide.py", None)
@@ -778,7 +774,6 @@ def main():
             + (["--hydrate-cache", cache] if os.path.exists(cache) else [])
             + (["--scrape-before", scraped] if os.path.isdir(scraped) else [])
             + (["--keep-intermediates"] if a.keep else [])
-            + (["--alerts", a.alerts] if a.alerts else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
             + (["--tracker", a.tracker] if a.tracker else [])
             + (["--seen", a.seen] if a.seen else [])
