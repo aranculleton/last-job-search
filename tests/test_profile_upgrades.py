@@ -213,6 +213,25 @@ def test_the_reading_limits_the_app_removed_are_taken_out_of_the_profile(profile
     assert 'PROFILE_READS = "browser"' in text                         # nothing else touched
     compile(text, "networking.py", "exec")
     person._modules.clear()
+
+
+def test_the_comment_written_over_a_removed_limit_goes_with_it(profile):
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import reading
+    path = profile / "networking.py"
+    path.write_text(path.read_text(encoding="utf-8")
+                    + "\n# Reading, kept as it is.\nPROFILE_READS_PER_DAY = 80\nPROFILE_PASTE_TOP = 3\n"
+                    + "\n# The break between bursts of browser reads. A shorter break raises\n"
+                    + "# the risk to the account.\nPROFILE_READ_BREAK_MINUTES = (5, 12)\n",
+                    encoding="utf-8")
+    person._modules.clear()
+    assert reading.drop_retired().startswith("took out")
+    text = path.read_text(encoding="utf-8")
+    assert "PROFILE_READ_BREAK_MINUTES" not in text and "shorter break" not in text
+    # A comment heading a setting that stays is kept.
+    assert "# Reading, kept as it is.\nPROFILE_PASTE_TOP = 3" in text
+    compile(text, "networking.py", "exec")
+    person._modules.clear()
     assert U.by_id("reading-limits-gone").pending() == ""
     assert reading.free_break().startswith("nothing to change")
 

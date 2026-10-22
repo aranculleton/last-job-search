@@ -1710,6 +1710,13 @@ def drop_retired() -> str:
     with open(path, encoding="utf-8") as fh:
         lines = fh.read().split("\n")
     for _name, first, last in sorted(found, key=lambda x: -x[1]):
+        # The comment written over it goes too, where it is that setting's alone: the lines
+        # straight above it, with nothing but a blank line, the end of the file or another
+        # comment after the setting. A comment heading settings that stay is kept.
+        after = lines[last].strip() if last < len(lines) else ""
+        if not after or after.startswith("#"):
+            while first > 1 and lines[first - 2].lstrip().startswith("#"):
+                first -= 1
         del lines[first - 1:last]
     with open(path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
