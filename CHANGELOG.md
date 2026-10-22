@@ -34,8 +34,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
-- **A contact who shares a first name with the app's invented people no longer blocks every
-  merge** (the maintainer's own repo only). A contact's first name is on the leak list as a
+- **A contact named like one of the app's examples no longer blocks merges** (the
+  maintainer's own repo only). A contact's first name is on the leak list as a
   greeting, to catch a real message copied into an example, and the app's examples greet
   invented people by first name: one contact sharing the name of the app's invented Ana Rook
   failed the leak scan 64 times, on the app's own tests, and no chat could get green. The

@@ -14,14 +14,13 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import build_app  # noqa: E402
-from personal_paths import is_personal  # noqa: E402
+from tests import repo_files  # noqa: E402
 
 # Words a greeting opens on that are not anyone's first name: a company, a title, the
 # start of "Ph.D.", "Hiring Manager".
@@ -29,16 +28,9 @@ NOT_NAMES = {"Acme", "Dr", "Hiring", "Ms", "Ph"}
 GREETING = re.compile(r"\b(?:Hi|Dear) ([A-Z][a-z]+)\b")
 
 
-def _app_files():
-    out = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"], capture_output=True).stdout
-    for rel in out.decode("utf-8", "replace").split("\0"):
-        if rel and not is_personal(rel):
-            yield rel
-
-
 def test_every_greeting_in_the_app_names_someone_it_invented():
     undeclared = {}
-    for rel in _app_files():
+    for rel in repo_files.tracked():
         try:
             with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
                 text = fh.read()
