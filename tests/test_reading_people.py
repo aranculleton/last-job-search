@@ -253,37 +253,16 @@ def test_a_pdf_export_gives_the_current_employer_too():
     assert _read(PDF, source="pdf")["current"] == "Fernhill Freight"
 
 
-def test_browser_reads_have_3_2_5s_caps_and_a_persons_pauses():
-    # 3.3.0 cut the caps to 8 an hour and 15 a day, which read about five people a day
-    # while a person could send 25 requests. The maintainer restored 3.2.5's 30 and 80 on
-    # 2026-10-20, enough to prepare a whole week's requests in one sitting. The pauses
-    # between pages, which keep the rhythm a person's and not a machine's, are unchanged.
+def test_browser_reads_have_no_limit_of_the_apps_own():
+    # The maintainer, 2026-10-22: at one page every two minutes the waiting was most of a
+    # networking run, and only LinkedIn's real limits should stop a read. No cap, no pause,
+    # no break and no dwell of the app's own; no connection cap either.
     import schema
-    assert reading.READS_PER_DAY == 80 and reading.READS_PER_HOUR == 30
-    assert reading.LOADS_PER_DAY == 80 and reading.LOADS_PER_HOUR == 30
-    assert schema.LIMITS["connections_per_week"] + reading.SKIP_SPARE <= reading.READS_PER_DAY
-    # The pauses are the default preset's, fast's since 2026-10-22 on the maintainer's word:
-    # shorter than careful's, which held reads to half the cap, and still never a machine's.
-    assert reading.GAP_SECONDS[0] >= 20 and reading.BREAK_SECONDS[0] >= 180
-    assert reading.DWELL_SECONDS[0] >= 10
-
-
-def test_a_day_reads_no_more_than_the_week_can_send(tmp_path, monkeypatch):
-    now = datetime.datetime(2026, 10, 17, 15, 0, 0)
-    _browse(tmp_path, monkeypatch, [now.replace(hour=9) + datetime.timedelta(minutes=20 * i)
-                                    for i in range(5)])
-    assert reading.browser_gate(now, sends_left=10) == ""
-    held = reading.browser_gate(now, sends_left=2)          # 5 read, 2 left to send, 3 spare
-    assert "left this week" in held and "read only for someone to write to" in held
-    assert "paste" not in held
-
-
-def test_a_week_of_requests_is_never_sent_in_one_day():
-    # LinkedIn publishes no limit; about 100 a week is what is reported. The week
-    # stays well under it, and a day can never send the week's whole budget.
-    import schema
-    week, day = schema.LIMITS["connections_per_week"], schema.LIMITS["connections_per_day"]
-    assert week <= 60 and day < week
+    for gone in ("READS_PER_HOUR", "READS_PER_DAY", "LOADS_PER_HOUR", "LOADS_PER_DAY",
+                 "GAP_SECONDS", "BREAK_SECONDS", "DWELL_SECONDS", "SKIP_SPARE", "READS_PER_RUN"):
+        assert not hasattr(reading, gone), gone
+    assert "connections_per_week" not in schema.LIMITS
+    assert "connections_per_day" not in schema.LIMITS
 
 
 def _browse(tmp_path, monkeypatch, times, gap=30):
@@ -293,22 +272,15 @@ def _browse(tmp_path, monkeypatch, times, gap=30):
                                             "next_gap": gap}]})
 
 
-def test_the_gate_holds_a_read_back_until_a_person_would_have_got_there(tmp_path, monkeypatch):
+def test_the_gate_holds_no_read_back(tmp_path, monkeypatch):
+    # A page a second after the last, and the hundredth page of an hour and of a day, all go.
     now = datetime.datetime(2026, 10, 17, 10, 0, 0)
-    _browse(tmp_path, monkeypatch, [now - datetime.timedelta(seconds=10)])
-    assert "wait 20s more" in reading.browser_gate(now)
-    assert reading.browser_gate(now + datetime.timedelta(seconds=25)) == ""
-
-
-def test_an_hour_and_a_day_have_their_caps(tmp_path, monkeypatch):
-    now = datetime.datetime(2026, 10, 17, 10, 0, 0)
-    hour = [now - datetime.timedelta(minutes=i + 1) for i in range(reading.READS_PER_HOUR)]
-    _browse(tmp_path, monkeypatch, hour)
-    assert "in the last hour" in reading.browser_gate(now)
-    day = [now.replace(hour=0, minute=1) + datetime.timedelta(minutes=3 * i)
-           for i in range(reading.READS_PER_DAY)]
-    _browse(tmp_path, monkeypatch, day)
-    assert "today" in reading.browser_gate(now.replace(hour=23))
+    _browse(tmp_path, monkeypatch, [now - datetime.timedelta(seconds=1)])
+    assert reading.browser_gate(now) == ""
+    _browse(tmp_path, monkeypatch, [now - datetime.timedelta(seconds=20 * i + 1)
+                                    for i in range(100)])
+    assert reading.browser_gate(now) == ""
+    assert reading.browser_gate(now, sends_left=0) == ""
 
 
 def test_a_warning_from_linkedin_ends_the_days_reads(tmp_path, monkeypatch):
@@ -316,36 +288,6 @@ def test_a_warning_from_linkedin_ends_the_days_reads(tmp_path, monkeypatch):
     reading.stop("a security check appeared", TODAY)
     assert "security check" in reading.browser_gate(datetime.datetime(2026, 10, 17, 12))
     assert reading.browser_gate(datetime.datetime(2026, 10, 18, 12)) == ""
-
-
-def test_the_pause_varies_and_the_long_break_never_lands_on_a_fixed_count():
-    # The pause was an even 25 to 75 seconds and the long break came on exactly every
-    # fifth read: a rhythm, which is what automation checks look for.
-    import random
-    gaps = [reading.next_gap(random.Random(i), reads=[]) for i in range(60)]
-    assert len(set(gaps)) > 20
-    assert all(reading.GAP_SECONDS[0] <= g <= reading.GAP_SECONDS[1] for g in gaps)
-    assert sorted(gaps)[len(gaps) // 2] >= 45               # most near a minute
-    t = datetime.datetime(2026, 10, 17, 9)
-    where = set()
-    for seed in range(40):
-        rng, reads = random.Random(seed), []
-        for n in range(1, 12):
-            gap = reading.next_gap(rng, reads=reads)
-            reads.append((t, gap))
-            if gap >= reading.BREAK_SECONDS[0]:
-                where.add(n)
-                break
-        else:
-            raise AssertionError("no long break in eleven reads")
-    assert len(where) >= 3 and max(where) <= reading.BREAK_AFTER[1]
-    # An ordinary gap at its longest is never taken for a break, which would restart
-    # the count and push the real break later.
-    assert reading.BREAK_SECONDS[0] > reading.GAP_SECONDS[1]
-    longest = [(t, reading.GAP_SECONDS[1])] * (reading.BREAK_AFTER[1] - 1)
-    assert reading.next_gap(random.Random(0), reads=longest) >= reading.BREAK_SECONDS[0]
-    assert all(reading.DWELL_SECONDS[0] <= reading.dwell(random.Random(s)) <= reading.DWELL_SECONDS[1]
-               for s in range(10))
 
 
 def test_the_profile_says_whether_they_can_be_reached_without_clicking_anything():

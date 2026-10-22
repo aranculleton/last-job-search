@@ -586,7 +586,7 @@ def render_due(items, today):
     ready = sum(1 for i in apps if i.get("ready"))
     # "N overdue" as the whole first line is the line a phone shows. It lumps
     # people waiting on a reply with a queue of first messages nobody is
-    # waiting for (they wait on the weekly connection cap) and application
+    # waiting for (they wait on the person to send them) and application
     # follow-ups with no one to send them to. The count stays, and says what it
     # is made of.
     replies = sum(1 for i in over + now if i.get("kind") == "reply")

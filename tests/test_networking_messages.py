@@ -77,16 +77,15 @@ def test_the_budget_says_the_plan_and_counts_what_is_queued():
     assert b["queued_unsent"] == {"connection": 1, "inmail": 1}
 
 
-def test_a_day_sends_its_cap_and_the_week_keeps_the_rest():
-    # 2026-10-15 is a Thursday: 25 requests went today and 5 on Monday.
+def test_the_budget_counts_requests_sent_and_caps_none():
+    # 2026-10-15 is a Thursday: 125 requests went today and 5 on Monday. The app holds
+    # nothing back: LinkedIn says when its own weekly limit is reached (2026-10-22).
     sent = [{"contact_id": f"c{i}", "status": "awaiting_reply", "channel": "connection",
-             "first_contacted": "2026-10-15" if i < 25 else "2026-10-12"} for i in range(30)]
+             "first_contacted": "2026-10-15" if i < 125 else "2026-10-12"} for i in range(130)]
     b = state.platform_budget(sent, [], "2026-10-15")
-    assert b["connections_today"] == 25 and b["connections_left_today"] == 0
-    assert b["connections_left"] == schema.LIMITS["connections_per_week"] - 30
-    tomorrow = state.platform_budget(sent, [], "2026-10-16")
-    assert tomorrow["connections_left_today"] == min(schema.LIMITS["connections_per_day"],
-                                                     tomorrow["connections_left"])
+    assert b["connections_today"] == 125 and b["connections_sent"] == 130
+    assert not any(k.startswith("connections_left") or k == "connections_limit" for k in b)
+    assert b["note"] == ""
 
 
 # ------------------------------------------------------------------ InMail

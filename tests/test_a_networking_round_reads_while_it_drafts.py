@@ -79,18 +79,18 @@ def _row(cid, name, company, **kw):
 # ------------------------------------------------------------ 1. a round, in plain time
 
 def test_the_round_says_how_long_its_reads_take_before_they_start(book):
-    got = reading.estimate(20, sends_left=200)
+    got = reading.estimate(20, sends_left=5)
+    # Every one of them today, whatever is left to send: no cap of the app's own, and the
+    # time is the browser's own speed, with no pause added (2026-10-22).
     assert got["today"] == 20 and got["later"] == 0
-    # Made of the pauses already set, never a new pace: a page's dwell, the pause between
-    # pages, the longer breaks and the hourly ceiling.
-    least = 20 * reading.CARD_DWELL_SECONDS[0] + 19 * reading.GAP_MEDIAN
-    assert got["seconds"] >= least
+    assert got["seconds"] == 20 * reading.SECONDS_A_READ
     assert got["line"].startswith("Reading these 20 takes about ")
-    assert "card-only" in got["line"]
-    # Past what the day allows, it says how many wait for tomorrow and what holds them.
-    few = reading.estimate(20, sends_left=5)
-    assert few["today"] == 5 + reading.SKIP_SPARE and few["later"] == 20 - few["today"]
-    assert "wait for tomorrow" in few["line"] and "request(s) left this week" in few["line"]
+    assert "no waiting of the app's own" in got["line"]
+    # Stopped by LinkedIn, none can be read today, and the cards are offered instead.
+    reading.stop("a security check appeared")
+    held = reading.estimate(20)
+    assert held["today"] == 0 and "cannot start today" in held["line"]
+    assert "card-only" in held["line"]
 
 
 def test_reading_waits_are_spent_on_notes_that_can_be_written_now(book):
@@ -610,46 +610,44 @@ def test_a_vague_ask_about_how_the_team_spends_its_time_is_caught_by_its_shape()
         "Hi Ana, what is the forecasting team working on at the moment?", "connection"))
 
 
-# ------------------------------------------------------------ 8. whose cap
+# ------------------------------------------------------------ 8. no cap, said plainly
 
-def test_the_budget_line_says_the_weekly_cap_is_the_apps_and_names_its_setting():
+def test_the_budget_line_counts_what_went_and_gives_no_cap_of_its_own():
     b = state.platform_budget([], [], "2026-10-21")
     line = state.budget_line(b)
-    assert "planning cap, not LinkedIn's" in line and "CONNECTIONS_PER_WEEK" in line
+    assert "sent: 0 this week, 0 today" in line and "no cap of the app's own" in line
+    # No number LinkedIn never gave: "50 left" misled a person into reading it as LinkedIn's.
+    assert " left this week" not in line and "connections_left" not in b
 
 
-def test_the_weekly_cap_is_the_persons_to_set(monkeypatch):
+def test_a_connection_cap_written_in_the_profile_holds_nothing(monkeypatch):
     import importlib
     import person
 
     class Mine:
         CONNECTIONS_PER_WEEK = 80
         LINKEDIN_PLAN = "premium"
+        LINKEDIN_LIMITS = {"connections_per_week": 10000, "connections_per_day": 1000,
+                           "inmail_credits_per_month": 30}
     real = person.module
     monkeypatch.setattr(person, "module", lambda name: Mine if name == "networking" else real(name))
     try:
         importlib.reload(schema)
-        assert schema.LIMITS["connections_per_week"] == 80
-        assert "your CONNECTIONS_PER_WEEK" in schema.weekly_cap_source()
+        assert "connections_per_week" not in schema.LIMITS
+        assert "connections_per_day" not in schema.LIMITS
+        assert schema.LIMITS["inmail_credits_per_month"] == 30    # their plan's limit stands
     finally:
         monkeypatch.undo()
         importlib.reload(schema)
-    assert schema.LIMITS["connections_per_week"] == 50
 
 
 # ------------------------------------------------------------ 17. what the friction was
 
-def test_friction_is_said_as_what_happened_and_an_empty_page_never_moves_the_ramp(book):
+def test_friction_is_said_as_what_happened(book):
     day = datetime.datetime.combine(TODAY - datetime.timedelta(days=1), datetime.time(10))
-    pace.record_friction("not_rendering", "a page of 211 characters", now=day)
-    loads = [day]
-    top = pace.loads_cap("hour")
-    assert pace.hourly_ceiling(TODAY, loads) == (top, "loads_per_hour")
-    pace.record_friction("signed_out", "the sign-in page", now=day)
-    n, why = pace.hourly_ceiling(TODAY, loads)
-    assert n < top and "a sign-in page on 20 Oct" in why and "LinkedIn's" not in why
     assert pace.said({"kind": "not_rendering", "at": day.isoformat()}) == \
         "a page that came back nearly empty on 20 Oct"
+    assert pace.said({"kind": "signed_out", "at": day.isoformat()}) == "a sign-in page on 20 Oct"
 
 
 # ------------------------------------------------------------ 14. what they approved

@@ -115,8 +115,6 @@ TRACKER_FINAL = frozenset(_THROTTLE_FINAL)
 # exactly the way the brief describes.
 NO_NUDGE = frozenset(schema.TERMINAL | {"call_booked", "not_contacted"})
 
-# The brief's instruction for a hit connection cap, kept here so every caller
-# gives the same advice.
 # What a free account does when its personalised notes for the month are spent,
 # and why it has no InMail. LinkedIn lets a request go without a note, and a
 # 1st-degree connection can be messaged without limit.
@@ -124,8 +122,6 @@ NO_NOTES_LEFT = ("This month's personalised notes are used up: send the connecti
                  "without a note, and send the drafted note as a message once they accept.")
 NO_INMAIL = ("No InMail on a free account, except to an Open Profile (their profile shows a "
              "Message button). Use a connection request instead.")
-CAPPED_NOTE = ("Connection cap reached for this week. Following a target costs nothing "
-               "and lets the request go out warm when the cap resets.")
 
 
 # ---------------------------------------------------------------- dates
@@ -3592,7 +3588,8 @@ def _inmails_left(contacts, threads, today, month_start, month_end, limit, recor
 
 
 def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
-    """Connection requests and InMail credits left, against `schema.LIMITS`.
+    """Connection requests sent, and InMail credits left, against `schema.LIMITS`. The app
+    sets no cap on connection requests (2026-10-22): LinkedIn says when its own is reached.
 
     Counted from the contact rows as well as the message log, deduplicated on
     person, channel and date. A discovery run writes the contact row with its
@@ -3614,18 +3611,10 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
     requests = connection_requests(contacts, threads)
     connections = sum(1 for _, d in requests if week_start <= d <= week_end)
     connections_today = sum(1 for _, d in requests if d == today)
-    conn_limit = schema.LIMITS["connections_per_week"]
     inmail_limit = schema.LIMITS["inmail_credits_per_month"]
     inmail = _inmails_left(contacts, threads, today, month_start, month_end, inmail_limit,
                            recorded_inmails(today) if inmail_balance is None else inmail_balance)
-    day_limit = schema.LIMITS.get("connections_per_day") or conn_limit
-    conn_left = max(conn_limit - connections, 0)
-    # What one sitting can send today: the day's cap, never more than the week has left.
-    today_left = min(max(day_limit - connections_today, 0), conn_left)
-    # Drafts queued and not yet sent spend the same budget the moment they go,
-    # and a second /network in the same week sized itself as though they did not
-    # exist. Reported beside the budget rather than taken off it: a row queued
-    # months ago and never sent should not hold the budget down for ever.
+    # Drafts queued and not yet sent, reported beside the counts.
     queued = {"connection": 0, "inmail": 0}
     for contact in contacts:
         if (str(contact.get("status") or "").strip() == "not_contacted"
@@ -3644,9 +3633,7 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
     notes_sent = sum(1 for cid, d in requests if month_start <= d <= month_end
                      and ((cid, d) in noted or (cid, d) not in bare))
     notes_left = None if notes_limit is None else max(notes_limit - notes_sent, 0)
-    note = CAPPED_NOTE if conn_left == 0 else ""
-    if notes_left == 0 and conn_left:
-        note = NO_NOTES_LEFT
+    note = NO_NOTES_LEFT if notes_left == 0 else ""
     return {
         "plan": schema.PLAN,
         "queued_unsent": queued,
@@ -3657,11 +3644,7 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
         "month_start": month_start.isoformat(),
         "month_end": month_end.isoformat(),
         "connections_sent": connections,
-        "connections_limit": conn_limit,
-        "connections_left": conn_left,
         "connections_today": connections_today,
-        "connections_per_day": day_limit,
-        "connections_left_today": today_left,
         "inmails_sent": inmail["inmails_sent"],
         "inmails_limit": inmail_limit,
         "inmails_left": inmail["inmails_left"],
@@ -3671,19 +3654,18 @@ def platform_budget(contacts, threads, today, inmail_balance=None) -> dict:
         "inmail_words": schema.LIMITS["inmail_words"],
         "note": note,
         "inmail_note": "" if inmail_limit else NO_INMAIL,
-        "connections_limit_source": schema.weekly_cap_source(),
     }
 
 
 def budget_line(b: dict) -> str:
-    """The BUDGET line `state.py` prints: the requests left this week and today, whose cap
-    that is (the app's planning cap unless the person set their own) and the setting that
-    changes it, and the InMail credits left. "50 left" read as LinkedIn's own limit, and the
-    one way to change it was a setting nothing named (2026-10-21)."""
-    return (f"\nBUDGET  connections {b['connections_left']}/{b['connections_limit']} left "
-            f"this week ({b['connections_left_today']} of them today); the "
-            f"{b['connections_limit']} is {b.get('connections_limit_source') or schema.weekly_cap_source()}. "
-            f"InMail {b['inmails_left']} left this month ({b['inmails_source']})")
+    """The BUDGET line `state.py` prints: the requests sent this week and today, with no cap
+    of the app's own, and the InMail credits left. A planning cap printed as "50 left" read as
+    LinkedIn's own limit and misled a person (2026-10-22): no number is printed that LinkedIn
+    did not give."""
+    return (f"\nBUDGET  connection requests sent: {b['connections_sent']} this week, "
+            f"{b['connections_today']} today (no cap of the app's own; LinkedIn says when its "
+            f"own limit is reached). InMail {b['inmails_left']} left this month "
+            f"({b['inmails_source']})")
 
 
 # ---------------------------------------------------------------- CLI

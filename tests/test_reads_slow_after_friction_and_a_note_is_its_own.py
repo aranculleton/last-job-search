@@ -1,10 +1,10 @@
-"""Reads slow down after friction, and every note rests on its own reader, from the networking
-audit of 2026-10-21.
+"""Reads stop on what LinkedIn shows, and every note rests on its own reader, from the
+networking audit of 2026-10-21.
 
-A security check on the first page of a day left the ramp counting the clean days before
-it; a person who lowered their own hourly cap read twice as fast after a check as one who
-changed nothing; a page that came back nearly empty was never counted, so its doubled pause
-ran from the page before; a stop in words nothing knew was said as a security check; a
+The slow start after friction (the ramp) and the paused pages are gone since 2026-10-22, on
+the maintainer's word: the app sets no reading limit of its own. What stays from the audit: a
+security check on the first page of a day stops that day; a page that came back nearly empty
+is counted; a stop in words nothing knew was said as a security check; a
 national recruiter was cautioned for two cities; a queued draft was read with the notes
 below its line of dashes; a promotion on LinkedIn was read as a contradiction; an approved
 note's employer and hook reached a note to somebody else; short forms of a name were refused
@@ -18,7 +18,6 @@ import json
 import os
 import shutil
 import sys
-import types
 
 import pytest
 
@@ -34,8 +33,6 @@ import state  # noqa: E402
 import tone  # noqa: E402
 
 D = datetime.datetime
-CHECK = {"friction": [{"at": "2026-10-16T09:00:00", "kind": "check",
-                       "words": "a security check on the first page"}]}
 
 
 @pytest.fixture
@@ -46,45 +43,23 @@ def here(tmp_path, monkeypatch):
     return tmp_path
 
 
-# ------------------------------------------------------------ the ramp after a check
+# ------------------------------------------------------------ a check, and the day after
 
-def test_a_check_on_a_day_with_no_page_recorded_still_starts_the_ramp(monkeypatch):
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace())
-    before = [D(2026, 10, 14, 10), D(2026, 10, 15, 10)]       # two clean days before it
-    assert pace.clean_days(datetime.date(2026, 10, 17), before, CHECK) == 0
-    assert pace.hourly_ceiling(datetime.date(2026, 10, 17), before, CHECK)[0] == 5
-    after = before + [D(2026, 10, 17, 10)]
-    assert pace.clean_days(datetime.date(2026, 10, 18), after, CHECK) == 1
-    assert pace.hourly_ceiling(datetime.date(2026, 10, 18), after, CHECK)[0] == 10
-
-
-def test_a_lower_cap_of_their_own_never_reads_faster_than_the_ramp(monkeypatch):
-    loads = [D(2026, 10, 14, 10), D(2026, 10, 15, 10), D(2026, 10, 16, 9)]
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace())
-    unchanged = pace.hourly_ceiling(datetime.date(2026, 10, 17), loads, CHECK)[0]
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR=10))
-    careful = pace.hourly_ceiling(datetime.date(2026, 10, 17), loads, CHECK)[0]
-    assert careful == unchanged == 5
-    # With the ramp at its top, their own 10 still holds the profiles: the lower of the two.
-    later = loads + [D(2026, 10, d, 10) for d in (17, 18, 19, 20)]
-    assert min(pace.hourly_ceiling(datetime.date(2026, 10, 21), later, CHECK)[0],
-               pace.value("reads_per_hour")) == 10
-
-
-def test_a_raised_cap_still_ramps_after_a_hard_signal_and_climbs_to_their_own(monkeypatch):
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR=1000))
-    loads = [D(2026, 10, 14, 10), D(2026, 10, 15, 10)]
-    assert pace.hourly_ceiling(datetime.date(2026, 10, 17), loads, CHECK)[0] == 5
-    later = loads + [D(2026, 10, d, 10) for d in (17, 18, 19)]
-    assert pace.hourly_ceiling(datetime.date(2026, 10, 20), later, CHECK)[0] == 1000
-    # A slow page alone does not hold them below what they asked for (2026-10-20).
-    slow = {"friction": [{"at": "2026-10-16T09:00:00", "kind": "slow"}]}
-    assert pace.hourly_ceiling(datetime.date(2026, 10, 17), loads, slow)[0] == 1000
+def test_a_check_on_a_day_with_no_page_recorded_stops_that_day_and_holds_back_no_other(here):
+    # A check on the first page of a day records no load; it stops that day all the same,
+    # and the next day reads go at once, with no slow start (the ramp was removed).
+    day = D(2026, 10, 16, 9)
+    reading.stop("LinkedIn showed a check: a security check on the first page", day.date())
+    assert not reading._loads()
+    assert reading.gate_state(day + datetime.timedelta(hours=3))["kind"] == "tomorrow"
+    next_day = day + datetime.timedelta(days=1)
+    assert reading.gate_state(next_day)["kind"] == "go"
+    assert [x["kind"] for x in pace.friction()] == ["check"]
 
 
 # ------------------------------------------------------------ a page that came back empty
 
-def test_a_page_that_came_back_nearly_empty_is_counted_and_its_pause_doubles(here, monkeypatch):
+def test_a_page_that_came_back_nearly_empty_is_counted_and_holds_nothing_back(here, monkeypatch):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     reading.shortlist(["c9"], datetime.date.today(),
                       contacts=[{"contact_id": "c9", "location": "Leeds"}], sends_left=10)
@@ -96,9 +71,10 @@ def test_a_page_that_came_back_nearly_empty_is_counted_and_its_pause_doubles(her
     assert code == reading.EXIT["unknown"]
     loads = reading._loads()
     assert len(loads) == 1
-    g = reading.gate_state(loads[0]["when"] + datetime.timedelta(seconds=loads[0]["gap"] + 1),
-                           sends_left=None)
-    assert g["kind"] == "wait"            # the pause after it, doubled
+    # No pause after it: one alone is said, and only a second within the hour stops the day.
+    g = reading.gate_state(loads[0]["when"] + datetime.timedelta(seconds=1), sends_left=None)
+    assert g["kind"] == "go"
+    assert [x["kind"] for x in pace.friction()] == ["not_rendering"]
 
 
 # ------------------------------------------------------------ said as what happened

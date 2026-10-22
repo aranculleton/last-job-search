@@ -893,6 +893,11 @@ def _same_key(a: str, b: str) -> bool:
         return False
     if ka == kb:
         return True
+    # One name written with its spaces and once without: "JPMorganChase" on every card of a
+    # search narrowed by the right company number, against "JPMorgan Chase", threw the
+    # number away as someone else's (2026-10-22).
+    if len(ka.replace(" ", "")) >= 6 and ka.replace(" ", "") == kb.replace(" ", ""):
+        return True
     if _company_key.SEPARATE.match(ka) or _company_key.SEPARATE.match(kb):
         return False
     short, long_ = sorted((ka.split(), kb.split()), key=len)
@@ -927,7 +932,9 @@ def _names_employer(text: str, company: str) -> bool:
     low = text.lower()
     for want in dict.fromkeys((search_name(company).lower(), company_key(company))):
         words = re.findall(r"[a-z0-9&]+", want or "")
-        if words and re.search(r"(?<![a-z0-9])" + r"\W+".join(map(re.escape, words))
+        # The words with or without the spaces between them: "JPMorganChase" names
+        # "JPMorgan Chase" (2026-10-22).
+        if words and re.search(r"(?<![a-z0-9])" + r"\W*".join(map(re.escape, words))
                                + r"(?![a-z0-9])", low):
             return True
     return any(same_employer("%s, by %s" % (m.group(1), m.group(2)), company)

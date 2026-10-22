@@ -4,14 +4,14 @@ From a long networking session on 3.7.0 (2026-10-19): a round that should take m
 took over two hours, nearly all of it waiting on fixed pacing; the limits were constants a
 person could not change; a short list made before the release filled the day with people
 already read or closed; each worktree kept its own count, so two chats on one account each
-read a full day; and the session spent its tool calls polling "wait: Ns". Invented people
-and employers only.
+read a full day; and the session spent its tool calls polling "wait: Ns". Since 2026-10-22
+the app sets no reading limit of its own (no caps, pauses, breaks or ramp, and no dial):
+only LinkedIn's own signals stop a read. Invented people and employers only.
 """
 from __future__ import annotations
 
 import datetime
 import os
-import random
 import sys
 import types
 
@@ -41,56 +41,51 @@ def _profile_load(cid, when, gap=60):
                                     "date": when.date().isoformat()}]})
 
 
-# ------------------------------------------------------------------ one dial, every limit
+# ------------------------------------------------------------------ no limit of the app's own
 
-def test_the_caps_are_3_2_5s_at_every_preset_and_careful_keeps_its_pauses():
-    # The maintainer's word, 2026-10-20: 3.3.0's 8 an hour and 15 a day were too slow to
-    # be worth having, and 3.2.5's 30 and 80 came back. The pauses were not part of it.
-    for risk in pace.PRESET_NAMES:
-        for name, cap in (("reads_per_hour", 30), ("reads_per_day", 80), ("loads_per_hour", 30),
-                          ("loads_per_day", 80), ("reads_per_run", 80)):
-            assert pace.value(name, risk) == cap, (risk, name)
-    for name, old in (("gap_seconds", (45, 240)), ("gap_median", 90), ("break_after", (3, 7)),
-                      ("break_minutes", (5, 12)), ("dwell_seconds", (20, 60)),
-                      ("card_dwell_seconds", (20, 60)), ("paste_top", 3), ("fresh_days", 30)):
-        assert pace.value(name, "careful") == old, name
-    # Careful's pauses held reads to about 17 an hour, half the cap: fast is the default
-    # since 2026-10-22, on the maintainer's word, and reaches it.
-    assert pace.DEFAULT_PRESET == "fast"
-    # No preset reads a list page more often than the profiles' own pace allows.
-    for risk in pace.PRESET_NAMES:
-        assert pace.value("pages_per_day", risk) <= pace.value("loads_per_day", risk)
-
-
-def test_the_dial_sets_every_limit_and_a_setting_beats_it(monkeypatch):
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READ_RISK="fast"))
-    assert pace.preset() == "fast" and pace.value("reads_per_hour") == 30
-    assert pace.value("gap_seconds") == (25, 150)
+def test_no_page_waits_on_a_limit_of_the_apps_own(here, monkeypatch):
+    # The maintainer's word, 2026-10-22: at one page every two minutes the waiting was most
+    # of a networking run, and only LinkedIn's real limits should stop a read.
+    for i in range(120):
+        reading.page_read("people", f"https://example.org/p{i}", NOW - datetime.timedelta(seconds=i))
+    for i in range(120):
+        _profile_load(f"x{i}", NOW - datetime.timedelta(seconds=i))
+    assert reading.gate_state(NOW)["kind"] == "go"                     # a page right after one
+    assert reading.gate_state(NOW, profile=False)["kind"] == "go"
+    assert reading.gate_state(NOW, sends_left=0)["kind"] == "go"       # no requests-left sizing
+    assert reading.reads_left(NOW) == (None, reading.NO_LIMITS)
+    # A setting of a limit the app removed holds nothing.
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
-        PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=6, PROFILE_READ_GAP_SECONDS=(60, 300)))
-    assert pace.value("reads_per_hour") == 6 and pace.value("gap_seconds") == (60, 300)
-    assert "your setting" in pace.source("reads_per_hour")
-    # Unreadable: the preset, said so; an unknown dial: the default.
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR="lots",
-                                                           PROFILE_READ_RISK="reckless"))
-    assert pace.preset() == pace.DEFAULT_PRESET and pace.value("reads_per_hour") == 30
-    assert "could not be read" in pace.source("reads_per_hour")
+        PROFILE_READ_RISK="careful", PROFILE_READS_PER_HOUR=1, PROFILE_READ_GAP_SECONDS=(600, 900)))
+    assert reading.gate_state(NOW)["kind"] == "go"
+    assert "PROFILE_READS_PER_HOUR" in pace.RETIRED and "PROFILE_READ_RISK" in pace.RETIRED
+    for gone in ("LIMITS", "PRESET_NAMES", "value", "hourly_ceiling", "record_breach"):
+        assert not hasattr(pace, gone), gone
 
 
-def test_every_limit_is_named_with_its_reason_in_one_report():
-    lines = "\n".join(pace.report())
-    for name in pace.LIMITS:
-        assert pace.SETTING[name] in lines
-    assert "No pace is safe" in lines and "terms forbid automated access" in lines
-    # Why reads per run is 5: said in the code and the report.
-    assert "five of seven profile reads" in pace.LIMITS["reads_per_run"][1]
-
-
-def test_limits_prints_the_value_the_source_and_what_binds_now(here, capsys):
+def test_limits_says_there_is_none_of_the_apps_own(here, capsys):
     assert reading.main(["limits"]) == 0
     out = capsys.readouterr().out
-    assert "PROFILE_READ_RISK" in out and "PROFILE_READS_PER_RUN = 80 (the fast preset)" in out
-    assert "What binds:" in out and "in profile/networking.py" in out
+    assert "no limit of the app's own" in out
+    assert "security check" in out
+    # What stops a read, said as a fact; no warning about the person's own account in it.
+    assert "terms forbid" not in out and "safe" not in out
+    assert "PROFILE_READ_RISK" not in out and "What binds" not in out
+
+
+def test_a_signal_yesterday_holds_nothing_back_today(here):
+    yesterday = NOW - datetime.timedelta(days=1)
+    reading.stop("LinkedIn showed a check: security verification", yesterday.date())
+    assert reading.stopped(yesterday.date())
+    assert not reading.stopped(NOW.date()) and reading.gate_state(NOW)["kind"] == "go"
+
+
+def test_the_time_a_round_takes_is_the_browsers_own(here):
+    got = reading.estimate(3, NOW)
+    assert got["seconds"] == 3 * reading.SECONDS_A_READ and got["today"] == 3
+    assert "no waiting of the app's own" in got["line"]
+    reading.stop("LinkedIn showed a check: security verification", NOW.date())
+    assert "cannot start today" in reading.estimate(3, NOW)["line"]
 
 
 # ------------------------------------------------------------------ one count a machine
@@ -124,28 +119,24 @@ def test_a_hard_signal_stops_the_day_and_is_kept(here):
     assert reading.page_kind("This page isn't working\nHTTP ERROR 999")[0] == "check"
 
 
-def test_a_soft_signal_doubles_the_pause_and_a_second_stops(here):
+def test_a_page_that_came_back_empty_is_said_and_a_second_within_the_hour_stops(here):
     reading.page_read("people", "https://example.org/p", NOW - datetime.timedelta(seconds=70))
-    last = reading._loads()[-1]
     reading.signal("not_rendering", "a page of 40 characters", NOW - datetime.timedelta(seconds=60))
-    g = reading.gate_state(NOW + datetime.timedelta(seconds=last["gap"] - 69), profile=False)
-    assert g["kind"] == "wait"                       # the gap it asked for, doubled
     assert not reading.stopped(NOW.date())
+    assert reading.gate_state(NOW, profile=False)["kind"] == "go"      # no pause doubled
     reading.signal("not_rendering", "a page of 38 characters", NOW)
     assert reading.stopped(NOW.date())
+    assert reading.gate_state(NOW)["kind"] == "tomorrow"
 
 
-def test_a_slow_load_doubles_the_pause_and_never_stops_the_day_or_starts_the_ramp(here):
+def test_a_slow_load_stops_nothing(here):
     # A slow page is far more often the person's own connection than LinkedIn (2026-10-22).
     reading.page_read("people", "https://example.org/p", NOW - datetime.timedelta(seconds=70))
-    last = reading._loads()[-1]
     for secs in (60, 30, 0):
         reading.signal("slow", "the page took 40s", NOW - datetime.timedelta(seconds=secs))
     assert not reading.stopped(NOW.date())
-    g = reading.gate_state(NOW + datetime.timedelta(seconds=last["gap"] - 69), profile=False)
-    assert g["kind"] == "wait"                       # still doubled
-    tomorrow = NOW.date() + datetime.timedelta(days=1)
-    assert pace.hourly_ceiling(tomorrow, [])[1] == "loads_per_hour"
+    assert reading.gate_state(NOW, profile=False)["kind"] == "go"
+    assert [x["kind"] for x in pace.friction()] == ["slow", "slow", "slow"]
 
 
 def test_a_load_far_slower_than_usual_is_a_soft_signal(here):
@@ -170,32 +161,6 @@ def test_a_page_that_did_not_render_is_not_a_read(here, monkeypatch, capsys):
     assert [x["kind"] for x in pace.friction()] == ["not_rendering"]
 
 
-def test_the_ramp_comes_only_after_a_signal_and_rises_on_clean_days(monkeypatch):
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READ_RISK="fast"))
-    today = NOW.date()
-    days = [NOW - datetime.timedelta(days=d) for d in (3, 2, 1)]
-    # Before LinkedIn has shown anything, a first day reads at the cap: no slow start.
-    assert pace.hourly_ceiling(today, [], {}) == (30, "loads_per_hour")
-    # After a signal, it starts low and rises one step a clean day.
-    old = {"friction": [{"at": (NOW - datetime.timedelta(days=4)).isoformat(), "kind": "check"}]}
-    assert pace.hourly_ceiling(today, [], old)[0] == 5
-    assert pace.hourly_ceiling(today, days[-1:], old)[0] == 10
-    assert pace.hourly_ceiling(today, days, old) == (30, "loads_per_hour")
-    signalled = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(), "kind": "check"}]}
-    assert pace.hourly_ceiling(today, days, signalled)[0] == 5
-
-
-# ------------------------------------------------------------------ pages by kind
-
-def test_list_pages_have_their_own_caps_and_all_loads_one_more(here):
-    for i in range(reading.PAGES_PER_HOUR):
-        reading.page_read("search", f"https://example.org/s{i}", NOW - datetime.timedelta(minutes=55 - i * 5))
-    g = reading.gate_state(NOW, profile=False)
-    assert g["kind"] == "later" and "PROFILE_PAGES_PER_HOUR" in g["why"]
-    # A profile is still within its own cap, but every load counts toward the ramp.
-    assert reading.gate_state(NOW, sends_left=10)["kind"] in ("go", "wait", "later")
-
-
 # ------------------------------------------------------------------ the short list
 
 def test_the_list_drops_people_read_before_or_closed_and_counts_only_who_is_left(here):
@@ -209,25 +174,20 @@ def test_the_list_drops_people_read_before_or_closed_and_counts_only_who_is_left
     reading._save_shortlist(["p0", "p1", "p2", "p3", "p4", "p5"], NOW.date())
     got = reading.shortlist(["p6"], NOW.date(), contacts=contacts, sends_left=2)
     assert set(got["pruned"]) == {"p1", "p2"}
-    assert got["ids"] == ["p0", "p3", "p4", "p5", "p6"] and got["cap"] == 2 + reading.SKIP_SPARE
+    assert got["ids"] == ["p0", "p3", "p4", "p5", "p6"] and got["cap"] is None
     got = reading.shortlist(["p7"], NOW.date(), contacts=contacts, remove=["p0"], sends_left=2)
     assert got["removed"] == ["p0"] and "p7" in got["ids"] and "p0" not in got["ids"]
 
 
-def test_the_list_is_sized_to_the_requests_left_this_week(here, monkeypatch):
-    contacts = [{"contact_id": f"q{i}", "location": "Leeds"} for i in range(6)]
+def test_the_list_has_no_cap_of_the_apps_own(here):
+    # It was sized to the requests left this week and held under 80 (2026-10-20); with no
+    # limit of the app's own, everyone worth writing to goes on it.
+    contacts = [{"contact_id": f"q{i}", "location": "Leeds", "company": f"Firm {i}"}
+                for i in range(100)]
     got = reading.shortlist([c["contact_id"] for c in contacts], NOW.date(), contacts=contacts,
                             sends_left=1)
-    assert got["cap"] == 1 + reading.SKIP_SPARE and len(got["ids"]) == got["cap"]
-    assert "1 request(s) left this week" in got["why"]
-    # Read from the contact book, it is the week's requests, not today's: with 25 a day and
-    # 50 a week, a list sized to the day could never prepare the week in one sitting.
-    import state
-    budget = {"connections_left": 40, "connections_left_today": 25}
-    monkeypatch.setattr(state, "platform_budget", lambda *a, **k: budget)
-    monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
-    assert reading.sends_left_week(NOW.date()) == 40
-    assert reading.shortlist_cap(today=NOW.date())[0] == 40 + reading.SKIP_SPARE
+    assert got["cap"] is None and len(got["ids"]) == 100 and not got["full"]
+    assert reading.shortlist_cap(today=NOW.date())[0] is None
 
 
 # ------------------------------------------------------------------ reads off the critical path
@@ -246,11 +206,6 @@ def test_next_names_who_to_read_and_says_done_at_the_end(here, monkeypatch, caps
     _profile_load("r1", datetime.datetime.now())
     assert reading.main(["next"]) == reading.EXIT["done"]
     assert "done: nothing left to read" in capsys.readouterr().out
-
-
-def test_a_card_read_dwells_in_its_own_range():
-    lo, hi = reading.CARD_DWELL_SECONDS
-    assert all(lo <= reading.dwell(random.Random(s), mode="card") <= hi for s in range(20))
 
 
 # ------------------------------------------------------------------ fewer pages
@@ -284,74 +239,25 @@ def test_the_fast_path_prints_only_the_addresses_to_open(here, monkeypatch, caps
     assert "reading.py paste -" in out[-1]
 
 
-def test_a_person_who_lifts_the_caps_is_not_held_by_the_ramp_or_the_loads_cap(monkeypatch):
-    # From a real round (2026-10-20): PROFILE_READS_PER_HOUR = 1000 and "fast" written to
-    # lift every cap, yet the ramp held reads to 10 an hour and the run stalled 44 minutes.
-    today = NOW.date()
-    yesterday = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(),
-                               "kind": "slow"}]}
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READ_RISK="fast",
-                                                           PROFILE_READS_PER_HOUR=1000))
-    assert pace.loads_cap("hour") == 1000
-    assert pace.hourly_ceiling(today, [], yesterday) == (1000, "loads_per_hour")
-    # A ramp they wrote themselves still applies after friction that moves it: it is theirs.
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
-        PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=1000, PROFILE_READ_RAMP=(5, 10, 20)))
-    checked = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(),
-                             "kind": "check"}]}
-    assert pace.hourly_ceiling(today, [], checked)[0] == 5
+# ------------------------------------------------------------------ the line before a round
 
-
-def test_a_wait_on_the_ramp_names_the_setting_and_where_to_change_it(here):
-    pace.record_friction("check", "a security check",
-                         NOW - datetime.timedelta(days=1))
-    for i in range(5):
-        _profile_load(f"r{i}", NOW - datetime.timedelta(minutes=50 - i * 5))
-    g = reading.gate_state(NOW, sends_left=None)
-    assert g["kind"] == "later" and "PROFILE_READ_RAMP in profile/networking.py" in g["why"]
-
-
-# ------------------------------------------------------------------ the person's caps bind
-
-def test_reads_already_sent_to_do_not_count_against_the_requests_still_to_go(here, monkeypatch):
+def test_reads_already_sent_to_hold_nothing_back(here, monkeypatch):
     # From a real run (2026-10-20): 18 read today, 10 of them already sent to, and the gate
-    # said "18 profiles read today, enough for the 13 request(s) that can still go".
+    # said "18 profiles read today, enough for the 13 request(s) that can still go". There
+    # is no such count now, whoever was sent to.
     import state
     start = NOW.replace(hour=8, minute=0)
     for i in range(18):
         _profile_load(f"p{i}", start + datetime.timedelta(minutes=20 * i))
-    sent = [{"contact_id": f"p{i}", "status": "awaiting_reply",
-             "first_contacted": NOW.date().isoformat()} for i in range(10)]
-    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: sent)
-    later = start + datetime.timedelta(hours=8)
-    g = reading.gate_state(later, sends_left=13)
-    assert g["kind"] != "tomorrow", g
-    assert reading.reads_left(later, sends_left=13)[0] == 13 + reading.SKIP_SPARE - 8
-    # With nobody sent to, all 18 still count, as before.
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [])
-    assert reading.gate_state(later, sends_left=13)["kind"] == "tomorrow"
+    later = start + datetime.timedelta(hours=8)
+    assert reading.gate_state(later, sends_left=13)["kind"] == "go"
+    assert reading.reads_left(later, sends_left=13)[0] is None
 
 
-def test_a_cap_the_person_sets_outranks_every_preset_cap_of_its_period(monkeypatch):
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
-        PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=1000, PROFILE_READS_PER_DAY=1000))
-    for name in ("pages_per_hour", "loads_per_hour", "pages_per_day", "loads_per_day",
-                 "reads_per_run"):
-        assert pace.value(name) == 1000, name
-    assert "raised to your own PROFILE_READS_PER_HOUR (1000), which outranks it" in \
-        pace.source("pages_per_hour")
-    report = "\n".join(pace.report())
-    assert "PROFILE_LOADS_PER_HOUR = 1000" in report
-    # A lower cap of theirs lowers only what they set; it never lowers another.
-    monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR=4))
-    assert pace.value("reads_per_hour") == 4 and pace.value("pages_per_hour") == 10
-
-
-def test_the_budget_line_says_what_binds_and_the_line_that_changes_it(here):
+def test_the_budget_line_says_there_is_no_limit_or_that_linkedin_stopped_the_day(here):
     line = reading.budget_line(NOW, sends_left=None)
-    assert line.startswith("Reads today: up to 30 profile(s) and 20 list page(s).")
-    assert "set `PROFILE_READS_PER_HOUR = <a higher number>` in profile/networking.py" in line
-    tight = reading.budget_line(NOW, sends_left=2)
-    assert "the 2 request(s) left this week" in tight and "PROFILE_READ_SKIP_SPARE" in tight
+    assert line == f"Reads today: {reading.NO_LIMITS}."
+    assert "request(s) left" not in reading.budget_line(NOW, sends_left=2)
     reading.stop("LinkedIn showed a check: Let's do a quick security check", NOW.date())
     assert "stopped for today" in reading.budget_line(NOW, sends_left=None)

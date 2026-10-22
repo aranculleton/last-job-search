@@ -48,8 +48,8 @@ trading name alone misses everyone whose profile shows the entity.
 
 **Run alumni before cold, every time.** Alumni answer far more often than cold
 contacts, and that gap is why the order in the table above is not a preference. A run
-that opens with cold outreach has spent its weekly connection budget on the worst
-channel available.
+that opens with cold outreach has spent its connection requests on the worst channel
+available.
 
 ## Why a title query returns executives, and what to do instead
 

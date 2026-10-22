@@ -123,8 +123,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-17", False, "the browser-read question names screenshots as the way that works on a phone"),
             (7, "2026-10-18", False, "the profile-reads question says finding people never needs a read, and that a read is for the best ten a run finds"),
             (8, "2026-10-19", False, "skills.py may list the tools a field treats as interchangeable (FAMILIES); the app's own list applies without it"),
+            (9, "2026-10-22", False, "the setup question on reading profiles says reads go one page at a time and stop at LinkedIn's first sign"),
         ),
-        "fingerprint": "214fc1cce51145ba",
+        "fingerprint": "b2bf34bacf4467b3",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -302,8 +303,9 @@ METHODS: dict[str, dict] = {
             (41, "2026-10-22", False, "the instructions no longer name the job-alert email reader"),
             (42, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (43, "2026-10-22", False, "the writing guide says work authorization goes to a recruiter by default, and to a decision-maker once the person's approved messages say it"),
+            (44, "2026-10-22", False, "the runbook names what the networking state shows: requests sent and InMail credits left"),
         ),
-        "fingerprint": "2934465013576898",
+        "fingerprint": "9575c07191c0f45b",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -445,8 +447,9 @@ METHODS: dict[str, dict] = {
             (49, "2026-10-22", False, "work authorization to a recruiter by default and to a decision-maker once approved messages say it; notes nobody would say aloud flagged; a never-say phrase written as a sentence opens bans only that sentence"),
             (50, "2026-10-22", False, "advise() warns of telling them what they do, a googled detail, underselling, a vague close, swap notes, it looks like (out of the hedge bank), Since you, a recruiter's own path, a thread between us, pretty much, sometime, the X side and hoping to; a batch logged as sent reads the sent list first; an Open Profile channel apart from InMail credits; a paragraph labelled by its subject"),
             (51, "2026-10-22", False, "no best hour to send and nothing held for one; a reader in another time zone gets it in their working day"),
+            (52, "2026-10-22", False, "no reading limit and no connection cap of the app's own; reads stop only on LinkedIn's own signals; an employer written without spaces is that employer"),
         ),
-        "fingerprint": "0ab99ec9b7411f73",
+        "fingerprint": "e68a7cc9cefb754c",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -491,8 +494,9 @@ METHODS: dict[str, dict] = {
             (27, "2026-10-22", False, "fast pauses by default and the same counts at every preset; a slow load never stops a day or starts the ramp; the break an upgrade wrote is freed"),
             (28, "2026-10-22", False, "search-url takes the employer first and a company number already read; the footer is never About; a third-degree page with no Experience is read as it is; grouped roles read as one employer; --remove repeats; card-enough recruiters leave the read list; the extractor's output reaches read as it came; a batch opening on the person's own line and a note that does not read aloud are not saved"),
             (29, "2026-10-22", False, "drafts and the queue check are held to the plan's length; a short request for a chat or call is always an allowed close; the sent list logs each note's words and says how far back it reached; a second-degree page with Follow and Message says Connect is under More"),
+            (30, "2026-10-22", False, "reads and saves hold nothing back of the app's own; a page loaded after LinkedIn stopped the day is kept and stops the run"),
         ),
-        "fingerprint": "3570342f8654afa3",
+        "fingerprint": "11d2fec63615fe06",
     },
     "screening": {
         "by": "round", "priority": 2,

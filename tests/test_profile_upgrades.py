@@ -181,46 +181,40 @@ def test_the_read_break_is_written_for_nobody_now(profile):
     assert U.by_id("read-break").pending() == ""
 
 
-def _profile_git(profile, *args):
-    return subprocess.run(["git", "-C", str(profile), "-c", "user.name=t",
-                           "-c", "user.email=t@example.com", *args],
-                          capture_output=True, text=True, check=True)
+LIMITS_WRITTEN = ("\n# The break, in minutes, between bursts of browser reads.\n"
+                  "PROFILE_READ_BREAK_MINUTES = (5, 12)\n"
+                  "PROFILE_READS_PER_HOUR = 1000\n"
+                  "PROFILE_READ_RAMP = (\n    5,\n    10,\n)\n"
+                  "CONNECTIONS_PER_WEEK = 10000\n")
 
 
-BREAK = ("# The break, in minutes, chosen at random in this range between bursts of browser\n"
-         "# reads. A shorter break raises the risk to their LinkedIn account; yours to change.\n"
-         "PROFILE_READ_BREAK_MINUTES = (5, 12)\n")
-
-
-def test_the_break_an_update_wrote_is_taken_out_and_one_the_person_wrote_is_kept(profile):
+def test_the_reading_limits_the_app_removed_are_taken_out_of_the_profile(profile):
     sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import learned
     import reading
     path = profile / "networking.py"
+    assert U.by_id("reading-limits-gone").pending() == ""      # none written
+    assert U.by_id("read-break-freed").pending() == ""         # retired: this one does it
     path.write_text(path.read_text(encoding="utf-8").replace(
-        'PROFILE_READS = "paste"', 'PROFILE_READS = "browser"'), encoding="utf-8")
-    _profile_git(profile, "init", "-q")
-    _profile_git(profile, "add", "-A")
-    _profile_git(profile, "commit", "-qm", "the profile")
-    assert U.by_id("read-break-freed").pending() == ""      # no break line at all
-    path.write_text(path.read_text(encoding="utf-8") + "\n" + BREAK, encoding="utf-8")
-    _profile_git(profile, "commit", "-qam", "Profile upgrade: read-break")
+        'PROFILE_READS = "paste"', 'PROFILE_READS = "browser"') + LIMITS_WRITTEN,
+        encoding="utf-8")
     person._modules.clear()
-    assert "(5, 12)" in U.by_id("read-break-freed").pending()
-    assert reading.free_break().startswith("took out")
+    why = U.by_id("reading-limits-gone").pending()
+    assert "PROFILE_READS_PER_HOUR" in why and "CONNECTIONS_PER_WEEK" in why
+    # One the person's own reaction recorded stays theirs.
+    learned.record(area="other", said="I want ramps", rule="keep my ramp",
+                   applied_to=("profile/networking.py PROFILE_READ_RAMP",))
+    assert reading.drop_retired().startswith("took out")
     text = path.read_text(encoding="utf-8")
-    assert "PROFILE_READ_BREAK_MINUTES" not in text and "chosen at random" not in text
-    assert 'PROFILE_READS = "browser"' in text                 # nothing else touched
-    _profile_git(profile, "commit", "-qam", "freed")
+    for gone in ("PROFILE_READ_BREAK_MINUTES = (5, 12)", "PROFILE_READS_PER_HOUR",
+                 "CONNECTIONS_PER_WEEK"):
+        assert gone not in text, gone
+    assert "PROFILE_READ_RAMP = (" in text and "    10,\n)" in text   # kept whole
+    assert 'PROFILE_READS = "browser"' in text                         # nothing else touched
+    compile(text, "networking.py", "exec")
     person._modules.clear()
-    assert U.by_id("read-break-freed").pending() == ""
+    assert U.by_id("reading-limits-gone").pending() == ""
     assert reading.free_break().startswith("nothing to change")
-    # The same value the person wrote themselves, or one an upgrade wrote and they changed
-    # since: theirs, and kept.
-    path.write_text(path.read_text(encoding="utf-8") + "\n" + BREAK, encoding="utf-8")
-    _profile_git(profile, "commit", "-qam", "my own break")
-    person._modules.clear()
-    assert reading.frozen_break() is None
-    assert U.by_id("read-break-freed").pending() == ""
 
 
 def test_the_market_language_is_asked_only_outside_english_markets(profile):

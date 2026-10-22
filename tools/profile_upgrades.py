@@ -690,23 +690,30 @@ def _job_alerts_retired() -> str:
 def _read_break() -> str:
     """Retired 2026-10-22. It wrote the app's break into the profile at the app's value, and
     written there it read as the person's own setting, so no later change to the pace could
-    reach them. The break stays theirs to set (`reading.py limits` shows it); nothing is
-    written for them now, and `read-break-freed` takes out the line it wrote."""
+    reach them. Since then the app sets no break at all, and `reading-limits-gone` takes
+    out the line it wrote."""
     return ""
 
 
 def _frozen_break() -> str:
-    """The break line read-break wrote, untouched since: it holds reads to the old pace."""
+    """Retired 2026-10-22: the break line it took out is one of the reading limits
+    `reading-limits-gone` takes out with the rest."""
+    return ""
+
+
+def _reading_limits_gone() -> str:
+    """A reading limit the app removed on 2026-10-22, still written in the profile: read by
+    nothing, it says something the app no longer does."""
     import importlib
     try:
         sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
         reading = importlib.import_module("reading")
-        found = reading.frozen_break()
+        found = reading.retired_settings()
     except Exception:
         return ""
-    return ("profile/networking.py holds PROFILE_READ_BREAK_MINUTES = (5, 12), which an earlier "
-            "update wrote at the app's value then; as your setting it outranks the app's pace, "
-            "so profile reads wait longer than they need to") if found else ""
+    return ("profile/networking.py still sets %s, reading limits the app no longer has: "
+            "profile reads go as fast as the browser loads them" % ", ".join(
+                n for n, _f, _l in found)) if found else ""
 
 
 def _move_and_area() -> str:
@@ -1406,12 +1413,18 @@ REGISTRY: tuple[Upgrade, ...] = (
             "beside PROFILE_READS_PER_HOUR, with a comment: the break, in minutes, chosen at "
             "random in that range between bursts of browser reads; a shorter break raises the "
             "risk to their LinkedIn account. Change nothing else", "edit", "~1 min",
-            names=("networking.PROFILE_READ_BREAK_MINUTES",), conditional=True, priority=3),
+            conditional=True, priority=3),
     Upgrade("read-break-freed", "2026-10-22",
             "profile reads at the app's pace, not one an earlier update wrote into your profile",
             _frozen_break, "python3 tools/network/reading.py free-break", "instant",
             command=("python3", "tools/network/reading.py", "free-break"),
             paths=("profile/networking.py",), conditional=True, priority=3),
+    Upgrade("reading-limits-gone", "2026-10-22",
+            "profile reads with no waiting: the old reading limits taken out of your profile",
+            _reading_limits_gone, "python3 tools/network/reading.py retired-settings --apply",
+            "instant",
+            command=("python3", "tools/network/reading.py", "retired-settings", "--apply"),
+            paths=("profile/networking.py",), conditional=True, priority=2),
     Upgrade("move-and-area", "2026-10-19",
             "honest small talk prepared for an interview when you moved recently",
             _move_and_area, "read profile/01-candidate-profile.md and profile/CLAUDE.md; write "
@@ -1513,9 +1526,8 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.HOME_ADJECTIVE": "unset, the nationality word in a reply's status and "
                                  "presence checks matches nothing, as it always did for a "
                                  "profile without it",
-    # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
-    # the default preset, fast since 2026-10-22: shorter pauses than careful's, the same
-    # counts at every preset, and 3.2.5's caps.
+    # What the reading tools need to know (tools/network/pace.py), none of them a limit on
+    # pace: the app sets none since 2026-10-22.
     "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "
                                "\"warn\" or \"refuse\" bring back the old rule for a person "
                                "who wants it",
@@ -1533,32 +1545,12 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
-    "networking.PROFILE_READ_RISK": "\"fast\": pauses that let reads reach the cap, about one "
-    "page every two minutes; normal or careful, the old default, when the person writes it",
-    "networking.PROFILE_PAGES_PER_HOUR": "10 list pages an hour, inside the 30 pages of any kind",
-    "networking.PROFILE_PAGES_PER_DAY": "20 list pages a day, inside the 80 pages of any kind",
-    "networking.PROFILE_LOADS_PER_HOUR": "30 page loads of any kind an hour, 3.2.5's cap, so list "
-    "pages never add to it",
-    "networking.PROFILE_LOADS_PER_DAY": "80 page loads of any kind a day, 3.2.5's cap",
-    "networking.PROFILE_READ_GAP_SECONDS": "25 to 150 seconds between pages at the default",
-    "networking.PROFILE_READ_GAP_MEDIAN": "55 seconds at the default",
-    "networking.PROFILE_READ_BREAK_AFTER": "a break after 5 to 10 pages at the default",
-    "networking.PROFILE_READ_DWELL_SECONDS": "12 to 40 seconds on a page read in full",
-    "networking.PROFILE_READ_CARD_DWELL_SECONDS": "8 to 20 seconds on a card at the default",
-    "networking.PROFILE_READS_PER_RUN": "80, the day's cap: the list is sized to the requests "
-    "left this week and three spare",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
     "networking.PROFILE_PASTE_TOP": "3 profiles offered for a paste, as before",
     "networking.PROFILE_READ_FRESH_DAYS": "a reading stands for 30 days, as before",
-    "networking.PROFILE_READ_SKIP_SPARE": "3 reads beyond the requests left this week",
     "networking.PROFILE_SESSION_EXPIRY_HOURS": "4 hours: a sign-in page that long after the last "
                                                 "page or sign-in is a session that expired, not "
                                                 "friction; within it, the day stops as before",
-    "networking.PROFILE_READ_RAMP": "only after LinkedIn shows a signal: 5 pages an hour the "
-    "next day, then 10, 20 and 30 on clean days; before any signal, no ramp",
-    "networking.PROFILE_READ_BREAK_MINUTES": "a break of 3 to 8 minutes at the default, chosen "
-                                             "at random, between bursts of browser reads; theirs "
-                                             "to set",
     "networking.VARY_ABOUT_ME": "False: the line about themselves is theirs to repeat in every "
                                 "note; True holds it to the same rule as anything else a batch "
                                 "repeats",
@@ -1572,11 +1564,6 @@ SAFE_DEFAULTS: dict[str, str] = {
     "search.HOURS_PER_YEAR": "2,080 hours, a full-time year of 40 hours a week, to read a band "
                              "stated by the hour as a year's pay; a market that works fewer "
                              "hours sets its own",
-    "networking.PROFILE_READS_PER_DAY": "80 browser reads a day, 3.2.5's cap, and never more than "
-                                        "the requests left this week plus three; raising it "
-                                        "raises the risk to their LinkedIn account",
-    "networking.PROFILE_READS_PER_HOUR": "30 browser reads an hour, 3.2.5's cap; the varied "
-                                            "pauses around a minute and a half hold it to about 17",
     "networking.UNSUPPORTED_WHY": "the reason printed beside an unsupported-status finding in a "
                                   "resume or letter; unset, it says 'check it'",
     "networking.OPENALEX": "off: research papers find people only in fields that publish, and "
@@ -1597,9 +1584,6 @@ SAFE_DEFAULTS: dict[str, str] = {
                                "words alone decide without it",
     "networking.LINKEDIN_LIMITS": "the plan's own limits apply; set only for a plan with more "
                                   "InMail credits than Premium's",
-    "networking.CONNECTIONS_PER_WEEK": "50 connection requests a week, the app's planning cap "
-                                       "as before (half the 100 a week reported for LinkedIn, "
-                                       "which publishes no number); the BUDGET line names it",
     "search.OPP_SCALE": "computed from the profile's own opportunity weights when absent",
     "skills.MAX_PER_LINE": "six items a line unless the person wants another number",
     "skills.FAMILIES": "none: the app's own families of interchangeable tools apply "

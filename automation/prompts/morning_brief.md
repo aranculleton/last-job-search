@@ -43,9 +43,9 @@ It is what makes the brief this person's rather than a template:
    stop after two nos, the candidate's exclusions (`profile/CLAUDE.md`), nothing to anyone at
    `awaiting_reply` before their window opens. Application follow-ups are a separate clock,
    two follow-ups 7 days apart: use the text, recipient and schedule the tool prints
-   (RUNBOOK.md step 5), and one with no recipient gets only the line saying who to find. First notes are limited by `state.platform_budget()`: draft only as many as there
-   are connection requests left this week, highest tier and employer value first, from
-   contacts already in the book (no discovery runs here).
+   (RUNBOOK.md step 5), and one with no recipient gets only the line saying who to find. First notes: draft for the contacts already in the book (no discovery runs here),
+   highest tier and employer value first. The app sets no cap on how many; when LinkedIn
+   has said its weekly invitation limit is reached, say so and keep the rest for next week.
 3. Write `documents/network/followup_pack_<today>.md` in the previous pack's layout. If
    nothing is due, write no pack. Beside each networking draft, the time where its reader is
    (`python3 tools/network/reading.py send-time <contact_id>`), said only, never a reason to
