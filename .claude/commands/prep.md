@@ -80,9 +80,10 @@ name leads.
 The fit assessment is the part that matters. Name the gap the person will probe,
 and the strongest honest framing for it.
 
-**Show the whole document in the reply**, ready to read before the call, and send the
-file with the session's file-sending tool (SendUserFile or its equivalent). The file is the
-record; its path alone is never the answer.
+**Send the file** with the session's file-sending tool (SendUserFile or its equivalent), and
+paste beside it the part to read before the call: the fit assessment and anything that changed
+(CLAUDE.md, "Every output is shown"). The file is the record; its path alone is never the
+answer.
 
 **It is rebuilt when anything it rests on moves.** A prep counts as stale when, since it was
 written, the contact's status, next action or its date changed, a message with them was

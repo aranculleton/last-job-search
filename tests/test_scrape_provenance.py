@@ -13,6 +13,14 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SKILL = REPO / ".claude" / "skills" / "job-scraper" / "SKILL.md"
+# The hand-run round lives beside the skill (manual-round.md), read only when
+# run_round.py cannot run; the skill is both files.
+MANUAL_ROUND = SKILL.parent / "manual-round.md"
+
+
+def _skill_text() -> str:
+    return (SKILL.read_text(encoding="utf-8") + "\n"
+            + MANUAL_ROUND.read_text(encoding="utf-8"))
 
 
 def _steps(text: str) -> dict[str, str]:
@@ -31,7 +39,7 @@ def _steps(text: str) -> dict[str, str]:
 class ScrapeProvenanceSpec(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.text = SKILL.read_text(encoding="utf-8")
+        cls.text = _skill_text()
         cls.steps = _steps(cls.text)
 
     def test_schema_block_carries_source_field(self):
@@ -88,7 +96,7 @@ class TestRecencyFallback(unittest.TestCase):
     client-side filtering is always available as the fallback."""
 
     def test_step1b_names_a_client_side_fallback_for_flagless_portals(self):
-        text = SKILL.read_text(encoding="utf-8")
+        text = _skill_text()
         self.assertIn(
             "no recency flag",
             text,

@@ -14,18 +14,26 @@ Follow these steps **in order**.
 
 - If `$ARGUMENTS` contains `--list`: use Glob with `.agents/skills/*/SKILL.md`, print a table of installed portal skills (name, market from the description, data source from `url-reference.md`), and stop.
 - If `$ARGUMENTS` contains a URL: treat it as the portal URL and carry it into Step 1.
-- Otherwise: start the interview at Step 1.
+- Otherwise: go to Step 1.
 
 ---
 
-## Step 1: Interview - Portal Basics
+## Step 1: Portal Basics, worked out, never asked
 
-Ask the user (skip anything already answered by `$ARGUMENTS`):
+Nobody is asked to name a job board or a config value (CLAUDE.md, "Claude does the
+tailoring"). Work each out, and say what you chose in one line:
 
-1. **Portal URL** - the job board's public site (e.g. `https://www.seek.com.au`, `https://www.stepstone.de`).
-2. **Skill name** - kebab-case, suffixed `-search` (e.g. `seek-search`, `stepstone-search`). Must not collide with an existing folder in `.agents/skills/`.
-3. **Market and language** - which country/region the portal covers and what language its postings use. This drives the trigger phrases in `SKILL.md` (include the market's own terms, e.g. "Stellenangebote", "Jobsuche" for a German board).
-4. **A realistic test query** - a job title or skill the user would actually search for, used for the live test in Step 4.
+1. **Portal URL** - from `$ARGUMENTS`, else the board `profile/search.py` `PORTAL_RESEARCH`
+   names with no portal yet (`python3 tools/portals.py` lists them), else found the way
+   `/setup`'s boards section researches one for this person's market and field.
+2. **Skill name** - kebab-case from the board's own name, suffixed `-search` (e.g.
+   `seek-search`, `stepstone-search`), never one already in `.agents/skills/`.
+3. **Market and language** - the country or region the board covers and the language its
+   postings use, from its own pages and `profile/person.json`. This drives the trigger
+   phrases in `SKILL.md` (include the market's own terms, e.g. "Stellenangebote",
+   "Jobsuche" for a German board).
+4. **A realistic test query** - the first of `profile/search.py` `SCRAPE_QUERIES`, used for
+   the live test in Step 4.
 
 ---
 

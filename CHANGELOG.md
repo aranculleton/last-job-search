@@ -81,6 +81,26 @@ make sense to somebody whose repo just received it.
 - **`ats_boards.py --probe` reads the employer boards side by side**, as a round does, with
   the same verdicts in the same order. One after another, 92 boards took minutes.
 
+- **Shorter replies and fewer steps, with every check still run.** Where code already runs
+  a check, a chat no longer runs it again by hand, and a reply says what failed instead of
+  listing everything that passed. The biggest:
+  - The document checklist is one line (all passed, or what failed and what needs you),
+    not thirty.
+  - `/apply` stops once before drafting, with the score, a five-line plan, whether you have
+    already applied, and the skills question together, where it stopped twice.
+  - A search's reply is one line of counts and the table, plus a line only for what is off;
+    after it, one question: which to take forward, and whether you have applied to any.
+  - The hand-run steps of a search moved out of the job-scraper skill into
+    `manual-round.md` beside it, read only when `run_round.py` cannot run, so a normal search
+    loads about 570 fewer lines of instructions.
+  - A networking reply shows each note once (the version kept), and each person in a few
+    lines; queued drafts come in the same reply as the new ones.
+  - An interview pack is sent once at the end of a turn that changed it, and is built
+    before asking which stage it is for. `/prep` sends the file with the part to read.
+  - `/add-portal` works out the board, its name, its market and a test search itself
+    instead of asking.
+  - In a person's repo, `./tools/ci_local.sh --quick` is the check before merging.
+
 ### Fixed
 
 - **A town whose name starts with a home town's is read again, not passed as home.** "Bury

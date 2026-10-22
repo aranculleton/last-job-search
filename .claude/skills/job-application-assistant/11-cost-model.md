@@ -1,5 +1,5 @@
 ---
-framework_version: 1.1.7
+framework_version: 1.1.8
 ---
 
 # Cost Model for the Application Lifecycle
@@ -140,7 +140,7 @@ were measured against a capable model's scores and both failed - a small model e
 score directly was off by 18 points on average, and a deterministic formula over extracted
 features was off by 21. Fit turns on whether adjacent-sounding work is actually adjacent, which
 is a judgment. The saving comes from sending *fewer postings* to that judgment, never from
-faking it. See the table in `job-scraper/SKILL.md` Tier 2.5.
+faking it. See the table in `job-scraper/manual-round.md` Tier 2.5.
 
 ## What not to cut
 

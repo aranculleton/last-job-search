@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tier 1 mechanical pre-filter for the job-search pipeline.
 
-The scrape pipeline in `.claude/skills/job-scraper/SKILL.md` describes a Tier 1
+The scrape pipeline in `.claude/skills/job-scraper/manual-round.md` describes a Tier 1
 "mechanical pre-filter. Title and location regex. No model tokens." Until this
 file existed that filter was improvised per run, and an improvised version
 dropped a genuinely good posting ("Manager, Demand Modelling & Analytics,
