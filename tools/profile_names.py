@@ -67,7 +67,10 @@ def collect() -> dict:
     for path in _files():
         rel = os.path.relpath(path, ROOT)
         with open(path, encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
+            text = fh.read()
+        if "person.module(" not in text:
+            continue                    # every pattern below needs it: nothing to find here
+        lines = text.splitlines()
         alias = {a: m for line in lines for a, m in _BIND.findall(line)}
         text = "\n".join(lines)
         getters = {fn: alias[a] for fn, _, _, a in _GETTER_DEF.findall(text) if a in alias}
@@ -125,8 +128,11 @@ def collect_person() -> dict:
     for path in _files():
         rel = os.path.relpath(path, ROOT)
         with open(path, encoding="utf-8") as fh:
-            lines = fh.read().splitlines()
+            text = fh.read()
         own = os.path.basename(path) == "person.py"
+        if not own and "person.get(" not in text:
+            continue                    # every read below needs it: nothing to find here
+        lines = text.splitlines()
         sections = {a: sec for line in lines for a, sec in _SECTION_BIND.findall(line)
                     if sec in SECTIONS}
         reads: dict = defaultdict(list)          # key -> [(hard, where)]

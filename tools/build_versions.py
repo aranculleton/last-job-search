@@ -292,8 +292,9 @@ METHODS: dict[str, dict] = {
             (36, "2026-10-21", True, "Every draft that will be sent gets the code audit and the model audit; numbers written as words are checked like digits, posting figures never lend themselves to the candidate's work, every research fact a letter cites is checked against its fetched page, a trimmed letter keeps its closing sentence, and a symbol the letter's font lacks is caught. Unsent drafts are re-rendered and re-checked"),
             (37, "2026-10-21", True, "Staging reads long-term, project-duration, day-rate, IR35 and interim-reporting wording as permanent and pay for your own area as yours; a draft counts as a pick's only for that exact role; file names skip requisition codes and gender markers; the audit reads concessions only about the candidate, skips call lengths, time words and dates, checks decades and factors, folds accents in names, and survives half an emoji; a contact's apply-and-name-me route is said one way in the tracker note and outreach.md. Unsent drafts are re-checked"),
             (38, "2026-10-22", False, "A notice period or start date the profile does not hold is flagged with where to write it (01-candidate-profile.md), and is clean once written there."),
+            (39, "2026-10-22", False, "a notice period hint only for notice wording, beside the audit's own advice"),
         ),
-        "fingerprint": "009bfbfcda5f0865",
+        "fingerprint": "cf68027dd74e8ae6",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -508,8 +509,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-21", True, "A second language asked as a plus or named as a market is ranked, not cut, and the rulings it saved are released; a remote region that takes in home passes beside any country, home written as a code is home, a time zone is hours, a country the profile does not list is flagged; 'U.S. Citizen' reaches the eligibility gate; a data role beside a profession and supply-chain Master terms are read right; a ruling on one posting no longer hides a new opening months later, and a skip recorded for a score no longer blocks; bar.py judge keeps every judgement for its own employer"),
             (20, "2026-10-21", True, "A second language, or your own, asked as a nice-to-have ('a huge plus', 'Bonus:', or under a 'Nice to have:' heading) is ranked, not cut, while one in the same sentence as an unrelated preference word still cuts; inclusion wording never lifts the credential gate; a sentence ending 'in the U.S.' is not joined to the next as a citizenship condition; a remote role in a state abroad is flagged and an on-site home-town name abroad fails; a region alone is read by both gates the same way; a heading word inside a sentence no longer splits it"),
             (21, "2026-10-22", False, "A home town's name that starts a longer town's name (Bury St Edmunds, Bolton-on-Dearne) is flagged for a closer read, and so is one beside a state of home the profile does not place (Manhattan, KS for New York). Nothing ruled out before would now pass, so no ruling is released."),
+            (22, "2026-10-22", False, "a province code between hyphens and a home town named like a state are home again"),
         ),
-        "fingerprint": "865b7e6bdea019c9",
+        "fingerprint": "796ccace7c5f9457",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
