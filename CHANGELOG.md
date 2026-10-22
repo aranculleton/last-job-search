@@ -34,6 +34,18 @@ make sense to somebody whose repo just received it.
   - Real boards have not been timed. A board with a crawl delay now gets its requests at the
     pace it asks for, where 3.10.0 sent them further apart than that.
 
+- **The day's first check is quicker, and says the same thing.** A chat checks for updates
+  before each piece of work. Every check after the first that day only reads a date, as
+  before; the first one no longer does the same work twice. Measured on a copy of one
+  person's repo, with the same output word for word: 9 seconds to 3.5 on a day with no
+  update, and 40 to 28 on the day one arrives, where most of what is left is your own
+  tests, which still run one file after another.
+  - The list of what your repo still needs is worked out once, not twice, unless an instant
+    change ran or something it reads changed in between, and its probes share one
+    interpreter instead of starting sixteen.
+  - The maintainer's leak list reads each old copy of the contact book once, and each row
+    in it once: 1.4 seconds to 0.7.
+
 ### Fixed
 
 - **A town whose name starts with a home town's is read again, not passed as home.** "Bury
@@ -61,6 +73,9 @@ make sense to somebody whose repo just received it.
   did), with the command filled in, or the ones you had if more than one arrived together,
   so settling it is a yes. Where the newest you had that day has been deleted since, it
   asks you to name it, never offering an older one.
+- **An upgrade another chat has already landed is not listed again as waiting.** After the
+  instant upgrades ran, the list was worked out a second time without leaving out what
+  another chat had landed on master, so this chat was told to make it again.
 - **The maintainer's check of the public app reads every pull request, not only the newest
   fifty.** `tools/app_watch.py --all` read one page of fifty and called it everything, and a
   look after more than fifty had changed moved its mark past the ones it never read. It now
