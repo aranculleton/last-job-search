@@ -151,3 +151,6 @@ Renee Thistlewood       # invented, tests/test_the_code_audit_reads_what_it_was_
 Inigo Ibarrondo         # invented, the same test
 Soren Halvardsen        # invented, the same test
 Lucja Wrobelska         # invented, the same test
+New Jersey              # a US state, tests/test_a_home_town_name_abroad_is_not_home.py
+Jersey City             # a US city, the same test
+Manchester Airport      # a place, the same test

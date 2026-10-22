@@ -276,18 +276,33 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     # A home-metro city counts only when the region token is the home region
     # or absent: a city of the same name in another country is not it.
     if prov in (None, _HOME_REGION):
-        for g in METRO:
-            if re.search(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low):
-                # A home city's name beside another country's state or province is that
-                # place, not home: "Manchester, NH", "Sale, VIC" and "Salford, ON" passed as
-                # Greater Manchester. The state is read the way the remote branch reads it
-                # (places.subdivision_abroad).
-                state = _places.subdivision_abroad(loc or "", _CC)
-                if state:
-                    return "FAIL", (f"on-site in {state}, a state or province outside "
-                                    f"{_HOME}, in a town that shares a {_METRO} name; "
-                                    f"relocation abroad is a deal-breaker")
-                return "PASS", f"{_METRO} ({g})"
+        found = [(m.start(), m.end(), g) for g in METRO
+                 for m in [re.search(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low)] if m]
+        for _, _, g in found[:1]:
+            # A home city's name beside another country's state or province is that
+            # place, not home: "Manchester, NH", "Sale, VIC" and "Salford, ON" passed as
+            # Greater Manchester. The state is read the way the remote branch reads it
+            # (places.subdivision_abroad).
+            state = _places.subdivision_abroad(loc or "", _CC)
+            if state:
+                return "FAIL", (f"on-site in {state}, a state or province outside "
+                                f"{_HOME}, in a town that shares a {_METRO} name; "
+                                f"relocation abroad is a deal-breaker")
+            # The same beside a state of home that is not the home region: "Manhattan, KS"
+            # passed for somebody in New York.
+            state = _places.subdivision_elsewhere_at_home(loc or "", _HOME_REGION or "", _CC)
+            if state and prov is None:
+                return "FLAG", (f"a {_METRO} town name in {state}, outside "
+                                f"{_LOC.get('home_region_name', 'the home region')}; "
+                                f"Tier 2 decides")
+            # A longer town that starts with a home town's name: "Bury St Edmunds" passed
+            # as Bury, in Greater Manchester. Read on the longest name the location
+            # holds, since "Ashton-under-Lyne" is a town of its own on the list.
+            _, end, _ = max(found, key=lambda f: f[1] - f[0])
+            if _places.runs_on(low, end):
+                return "FLAG", (f"a town whose name starts with {g}, not {g} itself; "
+                                f"Tier 2 decides")
+            return "PASS", f"{_METRO} ({g})"
     for o in OUTSIDE:
         if _has(low, o):
             return "FAIL", f"on-site outside the {_METRO} ({o})"

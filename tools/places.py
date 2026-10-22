@@ -282,6 +282,48 @@ def subdivision_abroad(location: str, own: str = ""):
     return None
 
 
+def subdivision_elsewhere_at_home(location: str, home_region: str, own: str = ""):
+    """The state or province of the person's own country a location names, as written,
+    when it is not their home region and the profile does not place it (LOCATION
+    regions), or None.
+
+    "Manhattan, KS" passed as home for somebody in New York: a home town's name with a
+    state of the same country beside it was read as the home town, wherever the state
+    was. Only a home region the tables know is compared: "England" is no state, so a
+    person in the UK sees no change."""
+    own = CODE_COUNTRY.get(str(own or "").upper(), str(own or "").upper()) or _own_code()
+    home = str(home_region or "").strip()
+    home_names = {home.lower()}
+    for table_cc, table in (("US", _US_STATES), ("CA", _CA_PROVINCES), ("AU", _AU_STATES)):
+        if table_cc != own:
+            continue
+        if home.upper() in table:
+            home_names.add(table[home.upper()])
+        home_names |= {code.lower() for code, name in table.items() if name == home.lower()}
+    known = any(n in SUBDIVISION_NAMES and own in SUBDIVISION_NAMES[n] for n in home_names)
+    if not known:
+        return None
+    for part in _PART_SPLIT.split(str(location or "")):
+        p = part.strip()
+        if not p or p.lower() in REGIONS or p.lower() in home_names:
+            continue
+        where = SUBDIVISION_CODES.get(p) if p.isupper() else SUBDIVISION_NAMES.get(p.lower())
+        if where and own in where and len(where) == 1:
+            return p
+    return None
+
+
+# A town whose name runs on from a home town's: "Bury St Edmunds" is not Bury, and
+# "Stratford-upon-Avon" is not Stratford. Read from what follows the home town's name in
+# the same part of the location, never a bare "on" or "in" ("Toronto ON", "Leeds in office").
+COMPOUND_TOWN = re.compile(r"^(?:\s+(?:st\.?|saint|upon|under)\s+\w|-(?:on|upon|under|in|by|le|en|sur)-\w)")
+
+
+def runs_on(low: str, end: int) -> bool:
+    """True when the home town's name ending at low[end] starts a longer town's name."""
+    return bool(COMPOUND_TOWN.match(low[end:]))
+
+
 def abroad_short(sentence: str):
     """The first shorthand for somewhere abroad in `sentence`, as a match, or None."""
     s = sentence or ""
