@@ -79,7 +79,7 @@ def test_the_update_lines_a_person_hears_name_no_tool_and_no_maintainer_news():
 # An instruction that has a chat put git in front of the person: each of these is how it
 # was worded before 2026-10-22.
 TOLD = re.compile(
-    r"<PR link>|`git revert <sha>` to undo it|show the person what it listed and ask"
+    r"<PR link>|`git revert <sha>`,?\s+to undo|show the person what it listed and ask"
     r"|name the branch, so the next chat|with the PR link|the person merges it"
     r"|(?:tell|show|give|say to) (?:the person|them)[^.\n]{0,60}\b(?:branch name|pull request"
     r" link|git command|the commit)\b", re.I)
