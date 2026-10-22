@@ -276,6 +276,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **`rehearse_sync.py` rehearses a commit held only by `origin/master`**, as the new master is
+  once a PR merges. A clone copies branches alone, so the release candidate was "not a tree"
+  in the copy and the rehearsal stopped before it began.
 - **A second language stated as a requirement is cut again when a preference word in the
   same sentence is about something else** ("Fluent Portuguese is required to support our
   priority accounts"), and saved rulings like it are no longer released. A language asked as
