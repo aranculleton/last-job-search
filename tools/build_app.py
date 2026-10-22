@@ -96,7 +96,8 @@ def _csv_ever(path: str) -> list[dict]:
     names a real employer and is still in this repo's history; a denylist built from
     today's file alone had forgotten it, and only an older copy kept by hand still
     caught it. Read through one `git cat-file --batch`, so a long history costs one
-    process, not one per version.
+    process, not one per version, and each distinct row is kept once: a contact book's
+    history held 26,744 rows and 1,156 different ones.
     """
     rows = _csv(path)
     folder = os.path.dirname(path) or "."
@@ -114,16 +115,31 @@ def _csv_ever(path: str) -> list[dict]:
     batch = subprocess.run(["git", "-C", root, "cat-file", "--batch"],
                            input="".join(f"{r}:{rel}\n" for r in revs).encode(),
                            capture_output=True)
-    out, data = list(rows), batch.stdout
-    while data:
-        head, _, data = data.partition(b"\n")
-        parts = head.split()
+    out, data, at = [], batch.stdout, 0
+    seen: set = set()
+
+    def keep(got: list[dict]) -> None:
+        for row in got:
+            key = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in row.items())
+            if key not in seen:
+                seen.add(key)
+                out.append(row)
+
+    keep(rows)
+    # Read by position: cutting the rest of the batch off after each version copied it
+    # again every time, a fifth of a second on 19 MB.
+    while at < len(data):
+        end = data.find(b"\n", at)
+        if end < 0:
+            break
+        parts = data[at:end].split()
+        at = end + 1
         if len(parts) < 3 or parts[1] != b"blob":       # "<rev>:<path> missing", a deletion
             continue
         size = int(parts[2])
-        blob, data = data[:size], data[size + 1:]
+        blob, at = data[at:at + size], at + size + 1
         try:
-            out += list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace"))))
+            keep(list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace")))))
         except csv.Error:
             continue
     return out
@@ -311,7 +327,8 @@ def denylist() -> list[str]:
         m = re.search(r" of ([A-Z]\w+)$", s)
         if m:
             add(m.group(1))
-    for row in _csv_ever(person.state("network_contacts.csv")):
+    contacts = _csv_ever(person.state("network_contacts.csv"))
+    for row in contacts:
         name = (row.get("name") or "").strip()
         if len(name.split()) >= 2:
             out.extend(name_forms(name))
@@ -330,7 +347,7 @@ def denylist() -> list[str]:
             add(row["email"].strip())
     # Threads name their person by contact_id, which is itself a name slug
     # ("firstname_lastname"); the contacts file holds the names.
-    ids = {(r.get("contact_id") or "").strip() for r in _csv_ever(person.state("network_contacts.csv"))}
+    ids = {(r.get("contact_id") or "").strip() for r in contacts}
     ids |= {(r.get("contact_id") or "").strip() for r in _csv_ever(person.state("network_threads.csv"))}
     out += sorted(i for i in ids if "_" in i)
     for row in _csv_ever(person.state("job_search_tracker.csv")):
