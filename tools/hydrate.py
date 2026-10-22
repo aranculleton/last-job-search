@@ -96,18 +96,6 @@ def pace(skill: str, sleep=time.sleep, clock=time.monotonic) -> bool:
     return True
 
 
-def paced_done(skill: str, clock=time.monotonic) -> None:
-    """A paced fetch has ended: the board's next request waits its crawl-delay from now,
-    as the scrape's sweep waits after each request. Spaced only start to start, a fetch
-    slower than the delay had the next one sent while it was still running."""
-    with _PACE_GUARD:
-        got = _PACE.get(skill)
-    if got:
-        lock, times = got
-        with lock:
-            times[0] = clock()
-
-
 # Requirements sit at the END of a posting. A 9,000-character cap cut the
 # requirements off bodies in a round, which is exactly the text the screen and
 # the scorers read.
@@ -323,12 +311,9 @@ def _fetch(job: dict, timeout: int) -> dict:
         # file, not a pipe (a body cut at 64 KiB mid-string, with exit 0, under
         # this module's workers), and a board's refusal (THROTTLED, robots.txt)
         # kept wherever it falls in stderr, where only the last line was kept.
-        try:
-            d, err = portals.run_cli(
-                ["node", "--no-warnings", cli, "detail", str(ident), "--format", "json"],
-                timeout=timeout, empty=_no_body)
-        finally:
-            paced_done(skill)
+        d, err = portals.run_cli(
+            ["node", "--no-warnings", cli, "detail", str(ident), "--format", "json"],
+            timeout=timeout, empty=_no_body)
         if err:
             return {**job, "hydrate_error": f"detail {err}"}
         if not isinstance(d, dict):
@@ -397,10 +382,11 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
     the shared pool with everyone else's, and a worker that took one waited out the
     delay holding its place: the board's postings arrive last from the scrape, so the
     stage ended as one board's chain of five-second waits with every worker in it. They
-    now wait in their own queue while the rest are fetched, one request at a time and a
-    crawl-delay after the last one ended (`pace`, `paced_done`), as the scrape's sweep
+    now wait in their own queue while the rest are fetched, one request at a time, each
+    starting a crawl-delay after the last one started (`pace`), as the scrape's sweep
     sends them: with as many workers as the shared pool, a fetch slower than the delay
-    had the next request to the board sent while it was still running."""
+    had the next request to the board sent while it was still running, and one worker
+    waiting the delay after each fetch ended added every fetch's time to every gap."""
     workers = max(1, workers)
     every = PROGRESS_SECONDS if progress_every is None else progress_every
     say = say or (lambda line: print(line, file=sys.stderr, flush=True))

@@ -121,8 +121,33 @@ def test_a_sweep_waits_the_crawl_delay_between_requests(skills, monkeypatch):
     waits = []
     tasks = [("cityboard-search", "q", "Townsville, QX", p) for p in (1, 2, 3)]
     rows, n, failed = scrape_wide.sweep("cityboard-search", tasks, 14, sleep=waits.append)
-    assert waits == [5, 5, 5]                                   # the probe went just before
+    assert waits[0] == 5                                        # the probe went just before
+    assert waits[1:] == [pytest.approx(5, abs=0.05)] * 2        # an instant request: the delay
     assert n == 3 and failed == ["exit 1: 503"] and len(rows) == 3
+
+
+def test_a_sweep_counts_the_delay_from_each_request_start(skills, monkeypatch):
+    # Waiting the whole delay after each request ended added the request's own time to
+    # every gap: a board asking for 5 seconds got one request every 7.
+    now, waits = [100.0], []
+
+    def sleep(s):
+        waits.append(round(s, 6))
+        now[0] += s
+
+    def slow(took):
+        def contract(*a, **k):
+            now[0] += took
+            return [{"url": f"u{a[3]}"}], None
+        return contract
+    tasks = [("cityboard-search", "q", "Townsville, QX", p) for p in (1, 2, 3)]
+    monkeypatch.setattr(scrape_wide, "contract", slow(2.0))
+    scrape_wide.sweep("cityboard-search", tasks, 14, sleep=sleep, clock=lambda: now[0])
+    assert waits == [5, 3, 3]                                   # starts 5 seconds apart
+    waits.clear()
+    monkeypatch.setattr(scrape_wide, "contract", slow(7.0))
+    scrape_wide.sweep("cityboard-search", tasks, 14, sleep=sleep, clock=lambda: now[0])
+    assert waits == [5]                                         # slower than the delay: next at once
 
 
 def test_the_canary_probes_a_persons_portal_too(skills, monkeypatch):

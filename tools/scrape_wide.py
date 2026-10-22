@@ -375,7 +375,11 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
 
     Its own thread, so a board that asks for five seconds between requests
     takes its time without holding a worker the app's portals need. It waits
-    before the first request too: the health probe has just asked. It says up
+    before the first request too: the health probe has just asked. After that a
+    request starts a crawl-delay after the last one started, never while it runs:
+    waiting the whole delay after each one ended added every request's own time
+    to every gap, so the board got its requests further apart than it asked and the
+    sweep took that much longer. It says up
     front when the requests will not all fit its budget, stops at SWEEP_BUDGET or
     SWEEP_MAX_FAILS failures in a row, and names what it did not send and why.
 
@@ -384,6 +388,7 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
     """
     delay, rows, failed = portals.crawl_delay(skill), [], []
     start, streak, sent, last, why = clock(), 0, 0, "", ""
+    began = None
     plan = plan_line(skill, len(tasks), delay)
     if plan:
         _say(plan, log)
@@ -401,7 +406,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
             why = f"its {SWEEP_BUDGET // 60}-minute budget ran out"
             break
         if delay:
-            sleep(delay)
+            wait = delay if began is None else began + delay - clock()
+            if wait > 0:
+                sleep(wait)
         began = clock()
         try:
             got, err = (contract(skill, q, loc, pg, jobage, remote=True) if remote
