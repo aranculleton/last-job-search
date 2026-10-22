@@ -1,10 +1,12 @@
-"""hydrate sends a paced board one request at a time, a crawl-delay after the last ended.
+"""hydrate sends a paced board one request at a time, each a crawl-delay after the last began.
 
 A board with a crawl-delay got as many detail workers as the shared pool, and `pace`
 spaced their starts but not their ends: with a fetch slower than the delay, the next
 request to the board was sent while the last was still running, two or more in flight
-at once. The scrape's own sweep of the same board is strictly one at a time, with the
-delay after each.
+at once. Then one worker waited the delay after each fetch ended, which added every
+fetch's own time to every gap and made a round slower than 3.9.0. Now it is one at a
+time, as the scrape's own sweep of the same board is, each starting a crawl-delay
+after the last one started.
 """
 from __future__ import annotations
 
@@ -22,7 +24,7 @@ import portals  # noqa: E402
 DELAY, FETCH = 0.3, 0.5
 
 
-def test_one_request_in_flight_and_the_delay_after_each(monkeypatch):
+def test_one_request_in_flight_and_each_a_delay_after_the_last_began(monkeypatch):
     monkeypatch.setattr(portals, "crawl_delay", lambda skill: DELAY)
     monkeypatch.setattr(portals, "skill_of", lambda portal: "cityboard-search")
     monkeypatch.setattr(portals, "has_cli", lambda skill: True)
@@ -51,5 +53,8 @@ def test_one_request_in_flight_and_the_delay_after_each(monkeypatch):
     assert all(j.get("desc") for j in out)
     assert peak[0] == 1
     spans.sort()
-    for (_, ended), (began, _) in zip(spans, spans[1:]):
-        assert began - ended >= DELAY - 0.02
+    for (first, ended), (began, _) in zip(spans, spans[1:]):
+        assert began >= ended - 0.01                            # never while one runs
+        assert began - first >= DELAY - 0.02                    # never closer than asked
+        # A fetch slower than the delay: the next goes when it ends, no gap added on top.
+        assert began - ended < 0.15

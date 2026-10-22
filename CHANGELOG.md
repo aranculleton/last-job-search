@@ -20,6 +20,20 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Changed
+
+- **A round is faster than 3.9.0's, and finds and ranks the same postings.** 3.10.0 made the
+  search faster but the fetch from a board with a crawl delay slower: each request waited
+  the whole delay after the last one ended, which added every request's own time to every
+  gap. Now each request to such a board starts a crawl delay after the last one started, in
+  the search and in the fetch: still one at a time, never two at once, and never closer
+  together than the board asks.
+  - Measured offline against 3.9.0: the pinned search from 18.8 to 7.5 seconds, and a whole
+    simulated round with a paced board of 95 postings from 61 to 44 seconds, with the same
+    postings shortlisted on the same scores.
+  - Real boards have not been timed. A board with a crawl delay now gets its requests at the
+    pace it asks for, where 3.10.0 sent them further apart than that.
+
 ### Fixed
 
 - **The maintainer's check of the public app reads every pull request, not only the newest
