@@ -100,8 +100,9 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-21", False, "Employer boards are read while the portals are searched, share one body cap and one portal runner, and honour a round's own seen file"),
             (17, "2026-10-21", False, "robots_check splits reading a policy from deciding; same verdicts"),
             (18, "2026-10-21", False, "The employer-board reader is openroles 0.3.0: one posting's odd field or pay never stops a board being read, a posting with no readable id or title is left out, dates are real dates or empty, hostile pages are read in linear time, and every Workday posting keeps its id; nothing about your boards needs redoing"),
+            (19, "2026-10-22", False, "the probe reads the boards side by side, the same verdicts in the same order"),
         ),
-        "fingerprint": "27ae2170d08d06d6",
+        "fingerprint": "ca0e0e50236a933f",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -468,8 +469,9 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-21", True, "Queued first notes are re-checked: one with nothing read, a blunt recruiter ask, a gatekeeping question or one template frame across a batch is refused"),
             (25, "2026-10-21", False, "Drafts are read without the notes below their line of dashes, someone who replied is not counted as waiting, a nearly empty page counts as a page loaded, and a waiting note that carries an approved example's names is listed for a rewrite"),
             (26, "2026-10-21", False, "Saving and the queue judge a note against its referrer and the people it could really be for"),
+            (27, "2026-10-22", False, "fast pauses by default and the same counts at every preset; a slow load never stops a day or starts the ramp; the break an upgrade wrote is freed"),
         ),
-        "fingerprint": "070d38916b0b1caa",
+        "fingerprint": "d5bd3788953c4d12",
     },
     "screening": {
         "by": "round", "priority": 2,

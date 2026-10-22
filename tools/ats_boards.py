@@ -571,31 +571,35 @@ def _probe_refused(host: str, paths, why: str, add: str) -> str:
     return f"still refused: {now} (recorded: {why})"
 
 
-def probe(boards=None) -> dict[str, str]:
-    """{employer: verdict}. A token that stops resolving is a repair, not news."""
+def _probe_one(employer: str, kind: str, token: str) -> str:
+    """One board's verdict for `probe`."""
+    if kind == "workday":
+        return _probe_workday(token)
+    if kind not in READERS:
+        return f"NO READER ({kind!r})"
+    try:
+        if kind == "careersite":
+            # Its sitemap only: reading the pages is a round's work, not a probe's.
+            if not READERS[kind].exists(token):
+                return "NO JOBS (robots.txt says no, or the sitemap lists no job pages)"
+            return f"{len(READERS[kind].job_pages(token))} job pages listed"
+        jobs = READERS[kind].fetch(token)        # one read; bodies are not asked for
+    except BoardError as e:
+        return f"NO JOBS ({str(e).split(': ', 1)[-1]})"
+    return (f"{len(jobs)} open, {len(_rows(employer, jobs))} in range" if jobs
+            else "NO JOBS (token may be wrong)")
+
+
+def probe(boards=None, workers: int = 16) -> dict[str, str]:
+    """{employer: verdict}. A token that stops resolving is a repair, not news.
+
+    The boards are read side by side, as a round reads them (fetch_all), and openroles still
+    holds each host to its own few at once: one after another, 92 boards took minutes."""
     boards = BOARDS if boards is None else boards
-    out = {}
-    for employer, (kind, token) in sorted(boards.items()):
-        if kind == "workday":
-            out[employer] = _probe_workday(token)
-            continue
-        if kind not in READERS:
-            out[employer] = f"NO READER ({kind!r})"
-            continue
-        try:
-            if kind == "careersite":
-                # Its sitemap only: reading the pages is a round's work, not a probe's.
-                if not READERS[kind].exists(token):
-                    out[employer] = "NO JOBS (robots.txt says no, or the sitemap lists no job pages)"
-                    continue
-                out[employer] = f"{len(READERS[kind].job_pages(token))} job pages listed"
-                continue
-            jobs = READERS[kind].fetch(token)        # one read; bodies are not asked for
-        except BoardError as e:
-            out[employer] = f"NO JOBS ({str(e).split(': ', 1)[-1]})"
-            continue
-        out[employer] = (f"{len(jobs)} open, {len(_rows(employer, jobs))} in range" if jobs
-                         else "NO JOBS (token may be wrong)")
+    items = sorted(boards.items())
+    with ThreadPoolExecutor(max_workers=max(1, workers)) as ex:
+        verdicts = list(ex.map(lambda kv: _probe_one(kv[0], *kv[1]), items))
+    out = dict(zip((employer for employer, _ in items), verdicts))
     for employer, (kind, token, why) in sorted(REFUSED.items()):
         board = _wd.WorkdayBoard(token) if workday_board(token) else None
         if board is None:

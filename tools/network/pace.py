@@ -10,26 +10,29 @@ react to what actually happens instead of guessing a number once and making ever
   together, at every preset. 3.3.0 cut them to 8 and 15, and with a reading list of 5 and a
   slow first day that read about five people a day while a person could send 25 requests;
   the maintainer restored them on 2026-10-20. A person who wants fewer writes their own.
-- **One dial for the pauses**, PROFILE_READ_RISK in profile/networking.py: "careful" (the
-  default), "normal" or "fast" sets how long the pauses between pages are, how long a page
-  is read and how often a longer break comes. Careful's pauses are unchanged since 3.3.0.
-  A setting the person writes for one limit beats the preset.
+- **One dial for the pauses**, PROFILE_READ_RISK in profile/networking.py: "fast" (the
+  default since 2026-10-22, on the maintainer's word), "normal" or "careful" sets how long the
+  pauses between pages are, how long a page is read and how often a longer break comes.
+  Careful's pauses, the default before, held reads to about 17 an hour, half the cap, so 25
+  reads took an hour and a half; fast's let the pace reach the cap, about one page every two
+  minutes, and add no page to an hour or a day. A setting the person writes beats the preset.
 - **Signals, not guesses.** Every page load is recorded with what it showed. A sign-in wall
   within `expiry_hours` of the last page or sign-in (or a second sign-out in a day), a
   security check or CAPTCHA, an "unusual activity" banner or an HTTP 999 page stops reads
   for the day at once (a hard signal). A sign-in wall on the first page of the day, or that
   long after the last, is a session that expired: a sign-in, no stop and no signal. A
   sign-out stop is the one the person may lift, once a day, after a clean sign-in
-  (`reading.py resume`); the signal stays in the log, marked as they said. A page that does not render, or one
-  that takes far longer to load than the person's own recent pages, is a soft signal: the
-  next pause doubles, and a second soft signal within the hour stops the day. The friction
-  log keeps every signal, dated, across days.
+  (`reading.py resume`); the signal stays in the log, marked as they said. A page that does
+  not render is a soft signal: the next pause doubles, and a second within the hour stops
+  the day. A page that takes far longer to load than the person's own recent pages only
+  doubles the next pause: a slow page is far more often their own connection than LinkedIn.
+  The friction log keeps every signal, dated, across days.
 - **A ramp after friction.** Once a read has met friction (a check, a sign-in page out of
-  turn, a slow load), the pages-an-hour ceiling starts low the next day and rises one step
+  turn, an unusual-activity notice), the pages-an-hour ceiling starts low the next day and rises one step
   for each clean day of reading (5, then the preset's next steps), never above the cap or the
   person's own setting. Before any there is no ramp: a first day reads at the cap, as 3.2.5
-  did. A page that came back nearly empty never moves the ramp: it is as often a paste the
-  session made too short as anything LinkedIn did. Friction is said as what happened ("a
+  did. A page that came back nearly empty, or loaded slowly, never moves the ramp: either is
+  as often the session or the connection as anything LinkedIn did. Friction is said as what happened ("a
   sign-in page on 20 Oct"), never as a warning from LinkedIn: one was repeated to a person
   as "a LinkedIn warning" that LinkedIn never gave (2026-10-21).
 - **Pages counted by kind.** A list page (the sent-invitations list, an employer's people,
@@ -73,16 +76,21 @@ import person  # noqa: E402
 _NET = person.module("networking") if person.exists("networking.py") else None
 
 PRESET_NAMES = ("careful", "normal", "fast")
-DEFAULT_PRESET = "careful"
+DEFAULT_PRESET = "fast"
 
 # Every limit: (what it controls, why, careful, normal, fast). The profile setting that
 # overrides it is SETTING[name]. The caps (pages an hour and a day, the list, the unplaced)
 # are the same at every preset: 3.2.5's, restored on the maintainer's word of 2026-10-20.
-# The dial sets the pauses, and careful's pauses are 3.3.0's, value for value.
+# So is every other count (the spare reads, the paste list, how long a reading stands, the
+# ramp): the dial sets the pauses and nothing else, as it says, so fast's being the default
+# shortens the waits and changes no count (2026-10-22).
+# The dial sets the pauses: careful's are 3.3.0's, value for value, and fast, the default
+# since 2026-10-22, lets the pace reach the caps.
 LIMITS = {
     "reads_per_hour": (
         "profile pages read in any rolling hour",
-        "3.2.5's cap, about one every two minutes; careful's pauses hold an hour to about 17",
+        "3.2.5's cap, about one every two minutes, which fast's pauses reach; careful's hold "
+        "an hour to about 17",
         30, 30, 30),
     "reads_per_day": (
         "profile pages read in a day, before the requests left this week bind it lower",
@@ -107,7 +115,7 @@ LIMITS = {
         (45, 240), (35, 200), (25, 150)),
     "gap_median": (
         "where most pauses sit, in seconds",
-        "most gaps near a minute and a half at careful, as a person reads",
+        "most gaps near a minute at fast, a minute and a half at careful",
         90, 70, 55),
     "break_after": (
         "a longer break after this many pages, drawn again each time",
@@ -134,24 +142,24 @@ LIMITS = {
     "unplaced": (
         "of those, the most nothing has placed in the person's city yet",
         "a place rules many out, and a list page places a dozen at once",
-        10, 10, 15),
+        10, 10, 10),
     "paste_top": (
         "how many profiles a paste is offered for, with no browser",
-        "the best few, never everyone", 3, 5, 8),
+        "the best few, never everyone", 3, 3, 3),
     "fresh_days": (
         "how long a reading of someone stands before it is read again",
         "a profile is opened once; a month later it may have changed",
-        30, 30, 45),
+        30, 30, 30),
     "skip_spare": (
         "profile reads allowed beyond the requests left today",
-        "for the people a read rules out", 3, 3, 4),
+        "for the people a read rules out", 3, 3, 3),
     "ramp": (
         "pages an hour allowed on each clean day of reading after friction (a check, a "
-        "sign-in page out of turn, a slow load)",
+        "sign-in page out of turn, an unusual-activity notice)",
         "after friction, start low and rise on clean days, never above the cap or the "
         "person's setting; before any there is no ramp, and a page that came back nearly "
-        "empty never moves it",
-        (5, 10, 20, 30), (5, 10, 20, 30), (5, 15, 30)),
+        "empty, or loaded slowly, never moves it",
+        (5, 10, 20, 30), (5, 10, 20, 30), (5, 10, 20, 30)),
     "expiry_hours": (
         "hours after the last page load from which LinkedIn's sign-in page is a session that "
         "expired, not a sign-out",
@@ -208,7 +216,7 @@ _MINE = {
 
 
 def preset() -> str:
-    """The person's dial, PROFILE_READ_RISK: careful unless they wrote another."""
+    """The person's dial, PROFILE_READ_RISK: DEFAULT_PRESET unless they wrote another."""
     got = str(getattr(_NET, "PROFILE_READ_RISK", DEFAULT_PRESET) or DEFAULT_PRESET).strip().lower()
     return got if got in PRESET_NAMES else DEFAULT_PRESET
 
@@ -433,7 +441,10 @@ def put(key: str, value_) -> bool:
 # A signal that ends the day's reads at once, and one that slows them first.
 HARD = ("check", "signed_out", "unusual_activity", "http_999", "other")
 SOFT = ("not_rendering", "slow")
-SOFT_STOPS = 2                  # soft signals within the hour that end the day
+SOFT_STOPS = 2                  # pages that did not render, within the hour, that end the day
+# A slow load doubles the next pause and does nothing more: it never ends the day, and never
+# moves the ramp (NOT_FOR_THE_RAMP).
+SOFT_STOP_KINDS = ("not_rendering",)
 SOFT_WINDOW_MINUTES = 60
 SLOW_FLOOR_SECONDS = 15         # never "slow" below this, however quick the rest were
 SLOW_FACTOR = 3                 # a load this many times the person's own median is slow
@@ -473,8 +484,9 @@ def friction(data: dict | None = None) -> list:
 
 # What never moves the ramp: a page that came back nearly empty, which is as often a paste
 # the session made too short as a page LinkedIn did not serve (a 211-character paste of a
-# page that had loaded put the ramp back, 2026-10-21). It still doubles the next pause.
-NOT_FOR_THE_RAMP = ("not_rendering",)
+# page that had loaded put the ramp back, 2026-10-21), and a slow load, which is far more
+# often the person's own connection. Each still doubles the next pause.
+NOT_FOR_THE_RAMP = ("not_rendering", "slow")
 
 SAID = {"check": "a security check", "signed_out": "a sign-in page", "other": "a stop",
         "unusual_activity": "an unusual-activity notice", "http_999": "an HTTP 999 page",
@@ -525,9 +537,9 @@ def breaches(data: dict | None = None) -> list:
             if isinstance(x, dict) and x.get("at")]
 
 
-def soft_recent(now: datetime.datetime, data: dict | None = None) -> int:
+def soft_recent(now: datetime.datetime, data: dict | None = None, kinds=SOFT) -> int:
     since = (now - datetime.timedelta(minutes=SOFT_WINDOW_MINUTES)).isoformat(timespec="seconds")
-    return sum(1 for x in friction(data) if x["kind"] in SOFT and str(x.get("at")) >= since)
+    return sum(1 for x in friction(data) if x["kind"] in kinds and str(x.get("at")) >= since)
 
 
 def slow(load_seconds: float, history: list) -> bool:

@@ -566,15 +566,25 @@ def _old_sweep_cursor() -> str:
 
 
 def _read_break() -> str:
-    """Browser reads pause between bursts; how long is the person's call, so it is written
-    into their profile where they can see and change it, at the app's value."""
-    net = _mod("networking")
-    if net is None or str(getattr(net, "PROFILE_READS", "") or "").lower() != "browser":
+    """Retired 2026-10-22. It wrote the app's break into the profile at the app's value, and
+    written there it read as the person's own setting, so no later change to the pace could
+    reach them. The break stays theirs to set (`reading.py limits` shows it); nothing is
+    written for them now, and `read-break-freed` takes out the line it wrote."""
+    return ""
+
+
+def _frozen_break() -> str:
+    """The break line read-break wrote, untouched since: it holds reads to the old pace."""
+    import importlib
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+        reading = importlib.import_module("reading")
+        found = reading.frozen_break()
+    except Exception:
         return ""
-    if hasattr(net, "PROFILE_READ_BREAK_MINUTES"):
-        return ""
-    return ("profile/networking.py has no PROFILE_READ_BREAK_MINUTES: the break between bursts "
-            "of profile reads is the app's, not yours to see or change")
+    return ("profile/networking.py holds PROFILE_READ_BREAK_MINUTES = (5, 12), which an earlier "
+            "update wrote at the app's value then; as your setting it outranks the app's pace, "
+            "so profile reads wait longer than they need to") if found else ""
 
 
 def _move_and_area() -> str:
@@ -1282,6 +1292,11 @@ REGISTRY: tuple[Upgrade, ...] = (
             "random in that range between bursts of browser reads; a shorter break raises the "
             "risk to their LinkedIn account. Change nothing else", "edit", "~1 min",
             names=("networking.PROFILE_READ_BREAK_MINUTES",), conditional=True, priority=3),
+    Upgrade("read-break-freed", "2026-10-22",
+            "profile reads at the app's pace, not one an earlier update wrote into your profile",
+            _frozen_break, "python3 tools/network/reading.py free-break", "instant",
+            command=("python3", "tools/network/reading.py", "free-break"),
+            paths=("profile/networking.py",), conditional=True, priority=3),
     Upgrade("move-and-area", "2026-10-19",
             "honest small talk prepared for an interview when you moved recently",
             _move_and_area, "read profile/01-candidate-profile.md and profile/CLAUDE.md; write "
@@ -1384,7 +1399,8 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "presence checks matches nothing, as it always did for a "
                                  "profile without it",
     # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
-    # the careful preset: the pauses of the release before the dial, and 3.2.5's caps.
+    # the default preset, fast since 2026-10-22: shorter pauses than careful's, the same
+    # counts at every preset, and 3.2.5's caps.
     "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "
                                "\"warn\" or \"refuse\" bring back the old rule for a person "
                                "who wants it",
@@ -1402,19 +1418,18 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
-    "networking.PROFILE_READ_RISK": "\"careful\": the slowest pauses, those before the dial "
-    "existed; normal or fast only when the person writes it",
+    "networking.PROFILE_READ_RISK": "\"fast\": pauses that let reads reach the cap, about one "
+    "page every two minutes; normal or careful, the old default, when the person writes it",
     "networking.PROFILE_PAGES_PER_HOUR": "10 list pages an hour, inside the 30 pages of any kind",
     "networking.PROFILE_PAGES_PER_DAY": "20 list pages a day, inside the 80 pages of any kind",
     "networking.PROFILE_LOADS_PER_HOUR": "30 page loads of any kind an hour, 3.2.5's cap, so list "
     "pages never add to it",
     "networking.PROFILE_LOADS_PER_DAY": "80 page loads of any kind a day, 3.2.5's cap",
-    "networking.PROFILE_READ_GAP_SECONDS": "45 to 240 seconds between pages at careful, as before",
-    "networking.PROFILE_READ_GAP_MEDIAN": "90 seconds at careful, as before",
-    "networking.PROFILE_READ_BREAK_AFTER": "a break after 3 to 7 pages at careful, as before",
-    "networking.PROFILE_READ_DWELL_SECONDS": "20 to 60 seconds on a page read in full, as before",
-    "networking.PROFILE_READ_CARD_DWELL_SECONDS": "20 to 60 seconds on a card at careful, the "
-    "same as a full read, so nothing is shortened unless the person chooses it",
+    "networking.PROFILE_READ_GAP_SECONDS": "25 to 150 seconds between pages at the default",
+    "networking.PROFILE_READ_GAP_MEDIAN": "55 seconds at the default",
+    "networking.PROFILE_READ_BREAK_AFTER": "a break after 5 to 10 pages at the default",
+    "networking.PROFILE_READ_DWELL_SECONDS": "12 to 40 seconds on a page read in full",
+    "networking.PROFILE_READ_CARD_DWELL_SECONDS": "8 to 20 seconds on a card at the default",
     "networking.PROFILE_READS_PER_RUN": "80, the day's cap: the list is sized to the requests "
     "left this week and three spare",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
@@ -1426,10 +1441,9 @@ SAFE_DEFAULTS: dict[str, str] = {
                                                 "friction; within it, the day stops as before",
     "networking.PROFILE_READ_RAMP": "only after LinkedIn shows a signal: 5 pages an hour the "
     "next day, then 10, 20 and 30 on clean days; before any signal, no ramp",
-    "networking.PROFILE_READ_BREAK_MINUTES": "a break of 5 to 12 minutes, chosen at random, "
-                                             "between bursts of browser reads; shortening it "
-                                             "raises the risk to their LinkedIn account, so only "
-                                             "they set it",
+    "networking.PROFILE_READ_BREAK_MINUTES": "a break of 3 to 8 minutes at the default, chosen "
+                                             "at random, between bursts of browser reads; theirs "
+                                             "to set",
     "networking.VARY_ABOUT_ME": "False: the line about themselves is theirs to repeat in every "
                                 "note; True holds it to the same rule as anything else a batch "
                                 "repeats",

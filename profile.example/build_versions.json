@@ -1,6 +1,6 @@
 {
   "boards": {
-    "version": 18,
+    "version": 19,
     "date": "2026-10-15"
   },
   "documents": {
@@ -28,7 +28,7 @@
     "date": "2026-10-17"
   },
   "network-notes": {
-    "version": 26,
+    "version": 27,
     "date": "2026-10-17"
   },
   "networking": {

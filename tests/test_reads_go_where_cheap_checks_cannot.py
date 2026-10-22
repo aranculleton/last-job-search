@@ -139,11 +139,14 @@ def test_gate_wait_holds_until_the_gate_opens(here):
 def test_the_pacing_text_states_the_numbers_the_code_uses():
     import inspect
     src = inspect.getsource(reading)
-    assert "never under 45 seconds or over 240" in src and reading.GAP_SECONDS == (45, 240)
-    assert "middle at GAP_MEDIAN (90 seconds)" in src and reading.GAP_MEDIAN == 90
-    assert "varying 3 to 7" in src and reading.BREAK_AFTER == (3, 7)
+    import pace
+    assert ("never under 45 seconds or over 240" in src
+            and pace.value("gap_seconds", "careful") == (45, 240))
+    # The comment states careful's pace, the default before 2026-10-22, by its numbers.
+    assert "middle at GAP_MEDIAN (90 seconds)" in src and pace.value("gap_median", "careful") == 90
+    assert "varying 3 to 7" in src and pace.value("break_after", "careful") == (3, 7)
     assert "5\n# to 12 minutes" in src or "5 to 12 minutes" in src.replace("\n# ", " ")
-    assert reading.BREAK_MINUTES_DEFAULT == (5, 12)
+    assert pace.value("break_minutes", "careful") == (5, 12)
     assert "an even 25 to 75 second gap" in src         # what it replaced, said as history
 
 
@@ -201,8 +204,7 @@ def test_a_first_day_reads_at_the_cap_and_only_a_signal_brings_the_ramp(here, mo
     _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(3)])
     n, what = reading.reads_left(now, sends_left=None)
     assert n == reading.READS_PER_HOUR - 3 and "the ramp" not in what
-    pace.record_friction("slow", "a page took far longer than usual",
-                         now - datetime.timedelta(days=1))
+    pace.record_friction("check", "a security check", now - datetime.timedelta(days=1))
     n, what = reading.reads_left(now, sends_left=None)
     assert n == 2 and "the ramp" in what           # 5 an hour the day after a signal, 3 read
 

@@ -50,6 +50,17 @@ describe("htmlFetch retry/backoff", () => {
     expect(state.calls).toBe(1);
   });
 
+  test("says LinkedIn's 999 refusal at once, never asking again", async () => {
+    instantTimers();
+    // Response() refuses to be built with 999; a fetched one carries it as LinkedIn sent it.
+    const refused = { status: 999, statusText: "Request denied", ok: false,
+                      text: async () => "" } as unknown as Response;
+    const state = stubFetch([() => refused]);
+
+    await expect(htmlFetch("https://www.linkedin.com/x")).rejects.toThrow(/Request failed: 999/);
+    expect(state.calls).toBe(1);
+  });
+
   test("gives up after the initial attempt plus six retries on persistent 5xx", async () => {
     instantTimers();
     const state = stubFetch([() => new Response("", { status: 500 })]);
