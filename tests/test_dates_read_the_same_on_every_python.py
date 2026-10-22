@@ -15,7 +15,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
 import company_research  # noqa: E402
-import job_alerts  # noqa: E402
 import opportunity  # noqa: E402
 
 TODAY = dt.date(2026, 10, 19)
@@ -26,7 +25,6 @@ def test_a_compact_date_is_no_date_to_every_reader():
            "desc": "x" * 500}
     assert not [w for w in opportunity.score(row, TODAY)["why"] if "posted" in w]
     assert company_research.age_days({"fetched_date": "20261017"}, TODAY) is None
-    assert job_alerts.day("20261017") == ""
 
 
 def test_an_iso_date_and_a_timestamp_still_read():

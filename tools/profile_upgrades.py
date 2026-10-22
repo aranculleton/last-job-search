@@ -376,16 +376,6 @@ def _boards() -> str:
     return ""
 
 
-def _alerts() -> str:
-    if _missing("search", "JOB_ALERT_QUERY"):
-        return ("nobody has asked whether rounds should read your LinkedIn job alerts "
-                "(profile/search.py has no JOB_ALERT_QUERY)")
-    if not str(getattr(_mod("search"), "JOB_ALERT_QUERY", "") or "").strip():
-        u = by_id("job-alerts")
-        return again("job-alerts", u.ask_version, u.changed)
-    return ""
-
-
 def _learned_choices() -> str:
     try:
         import learned
@@ -687,6 +677,14 @@ def _old_sweep_cursor() -> str:
     old = person.state("documents", "rounds", ".sweep.json")
     return ("documents/rounds/.sweep.json sits among your round summaries, where a check "
             "that every file there is a round reads it" if os.path.exists(old) else "")
+
+
+def _job_alerts_retired() -> str:
+    """Retired 2026-10-22, with the job-alert reader it asked about. It asked to read the
+    person's LinkedIn alert emails into each round, and came back every month after a no;
+    nothing asks for anyone's email now, and anything like an alert reaches them inside
+    Claude (the brief, the job round). Kept so a no recorded against it still reads."""
+    return ""
 
 
 def _read_break() -> str:
@@ -1094,15 +1092,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "(python3 tools/learned.py list), change nothing else; one commit, and its git "
             "revert line in the reply", "research", "~2 min", priority=2),
     Upgrade("job-alerts", "2026-10-15",
-            "your LinkedIn job alerts read into every round, if you want them",
-            _alerts, "/setup --section boards; a no again is `python3 tools/profile_upgrades.py "
-            "--no job-alerts`", "question", "~2 min",
-            names=("search.JOB_ALERT_QUERY",),
-            priority=3,
-            needs="you",
-            ask="Do you get LinkedIn job alerts by email? I can add those jobs to every search, "
-                "reading only those emails, nothing else in your inbox. Yes, or not now?",
-            why_ask="An alert often names a job before a search finds it."),
+            "nothing: retired with the job-alert email reader, since nothing asks for your email",
+            _job_alerts_retired, "nothing to do", "question", "~0 min", priority=3),
     Upgrade("learned-choices", "2026-10-15",
             "app improvements to things you chose, offered rather than imposed",
             _learned_choices, "ask each `python3 tools/learned.py offers` question; record the "

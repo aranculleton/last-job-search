@@ -17,7 +17,7 @@ anywhere. A finding is printed for Claude to put in front of the person before a
 else; a clean check says so in one line.
 
     python3 tools/app_watch.py            # what sync_app.py runs; a no-op in anyone else's repo
-    python3 tools/app_watch.py --all      # everything again, not only what changed
+    python3 tools/app_watch.py --all      # everything again, and every match listed
 
 Exit 0 clean or not the maintainer's repo, 1 with findings, 2 when the app could not be
 reached. What it has scanned is remembered in .git/ljs-app-watch.json, never committed.
@@ -255,22 +255,61 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
     return findings, summary
 
 
+_ENTRY = re.compile(r"denylist entry \d+ \((.*)\)$")
+_KIND = re.compile(r": (email address|phone number|LinkedIn profile)(?: (.+))?$")
+
+
+def what(finding: str) -> str:
+    """What a finding matched, for the one-line report: the denylist entry's words, the
+    kind and value of a contact detail, or what the scan said about a path."""
+    m = _ENTRY.search(finding)
+    if m:
+        return f"'{m.group(1)}'"
+    m = _KIND.search(finding)
+    if m:
+        return f"{m.group(1)} {m.group(2)}" if m.group(2) else m.group(1)
+    return finding.rsplit(": ", 1)[-1]
+
+
+def headline(findings: list[str]) -> str:
+    """One line for the person: how many matches, of what. The sync passed 40 file paths
+    on as "tell the person exactly this" (2026-10-22), where one line said all of it:
+    64 matches, every one the same greeting."""
+    counts: dict[str, int] = {}
+    places: dict[str, int] = {}
+    for f in findings:
+        counts[what(f)] = counts.get(what(f), 0) + 1
+        place = ("commit messages" if f.startswith("commit ") else
+                 "pull request text" if f.startswith("pull request ") else "files")
+        places[place] = places.get(place, 0) + 1
+    ranked = sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    n = len(findings)
+    where = (f"in the public app's {next(iter(places))}" if len(places) == 1 else
+             "in the public app (" + ", ".join(f"{v} in {k}" for k, v in places.items()) + ")")
+    if len(ranked) == 1:
+        return f"{n} match(es) {where}, all of them {ranked[0][0]}"
+    shown = ", ".join(f"{k} ({v})" for k, v in ranked[:5])
+    more = f", and {len(ranked) - 5} more" if len(ranked) > 5 else ""
+    return f"{n} matches {where}, of {len(ranked)} entries: {shown}{more}"
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not is_maintainers():
         return 0
-    findings, summary = watch(everything="--all" in argv)
+    everything = "--all" in argv
+    findings, summary = watch(everything=everything)
     if summary.startswith("the app could not be reached"):
         print(f"App watch: {summary}; checked again on the next sync.")
         return 2
     if findings:
-        print(f"APP LEAK: {len(findings)} finding(s) of this person's own data in the public app. "
-              "Claude: before anything else, tell the person exactly this, and change nothing "
-              "in the app without them:")
-        for f in findings[:40]:
-            print(f"  - {f}")
-        if len(findings) > 40:
-            print(f"  - and {len(findings) - 40} more (python3 tools/app_watch.py --all)")
+        print(f"APP LEAK: {headline(findings)}. Claude: before anything else, tell the person "
+              "this one line, and change nothing in the app without them.")
+        if everything:
+            for f in findings:
+                print(f"  - {f}")
+        else:
+            print("  Every match, where it is: python3 tools/app_watch.py --all")
         return 1
     print(f"App watch: clean ({summary}).")
     return 0

@@ -11,17 +11,8 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    (`python3 tools/sync_app.py --if-stale --on "<the model this run is on>"`, then `/upgrade 20`): a job board an upgrade
    builds is searched this round.
 
-   **Job alerts, if the person reads theirs here.** `python3 tools/job_alerts.py --query --days 8`
-   prints a Gmail search, or exits 1 when they have not asked for alerts to be read: then
-   skip to the run. With a query and the Gmail tools in this chat, `search_threads` with it
-   (paginate), `get_thread` with `messageFormat: FULL_CONTENT` for each, and write only the
-   messages in each thread from the sender the query names, as `{"id", "date", "body"}`,
-   into a JSON list at `$SCRATCH/alerts_in.json`. Read nothing else in the inbox. Then
-   `python3 tools/job_alerts.py "$SCRATCH/alerts_in.json" --out "$SCRATCH/alerts.json"`.
-   Without the Gmail tools here, say so in one line of the message and run without.
-
-   Run: `python3 tools/run_round.py --out "$SCRATCH/rN" --jobage 7 --expand`, adding
-   `--alerts "$SCRATCH/alerts.json"` when step 1 wrote it.
+   Run: `python3 tools/run_round.py --out "$SCRATCH/rN" --jobage 7 --expand`. Never read or
+   ask for the person's email: this round, and its message, is their job alert.
    Read the exit code: 0 met the yield target, 2 missed it (report what the MISSED message
    says), 1 a stage broke (diagnose it and say so; never paper over it). A portal the
    health probe reports DOWN goes in the message's first line: a quiet board is not a

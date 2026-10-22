@@ -403,7 +403,7 @@ command; its four actions are the command files `/network`, `/reply`, `/threads`
   here). `python3
   tools/portals.py` prints what the next round searches; the rest is in the job-scraper skill.
 
-**Tools run directly, not through a slash command**: `run_round.py`, `job_alerts.py`,
+**Tools run directly, not through a slash command**: `run_round.py`,
 `stage_picks.py`, `verify_batch.sh`, `record_drafts.py`, `open_actions.py` (`--due`,
 `--company`), `followups.py` (`--close-quiet`), `what_works.py`, `interview_pack.py`, `bar.py`, `network/state.py`, `network/reading.py`,
 `network/prep.py --all`, `network/profile_facts.py` and `bridges.py`. What each does, its flags and its exit

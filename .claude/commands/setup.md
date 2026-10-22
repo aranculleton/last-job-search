@@ -98,8 +98,8 @@ later, by itself.
 **`--section boards`** is Step 2's "Job boards" research and Step 3.9's build, on their own:
 the boards for their country, field and level, each recorded in `profile/search.py`
 `PORTAL_RESEARCH` with its source and the date (`"checked"`), the best one or two built with
-`/add-portal`, `PORTAL_LOCATIONS` where a board writes places its own way, and the job-alerts
-question (`JOB_ALERT_QUERY`). It touches nothing else in the profile.
+`/add-portal`, and `PORTAL_LOCATIONS` where a board writes places its own way. It touches
+nothing else in the profile.
 
 ---
 
@@ -429,10 +429,8 @@ where the board cannot read those names, and mark each built board
 are offered again when a round comes back thin. `python3 tools/portals.py` shows the result:
 what the next round searches, and what was researched and not built.
 
-If they get LinkedIn job alerts by email and have the Gmail connector, ask whether rounds
-should read them: it searches their inbox for the alert emails only, and adds LinkedIn's own
-matches for them to every round. On a yes, check the sender on one of their alerts and write
-`JOB_ALERT_QUERY = "from:<that sender>"` in `search.py`; otherwise leave it empty.
+Never ask for their email or to connect Gmail: the job round and the brief are their alerts,
+inside Claude.
 <!-- /section -->
 
 <!-- section: none -->

@@ -312,7 +312,8 @@ def test_a_field_the_scoring_vocabulary_was_not_written_for(profile):
 
 
 def test_the_round_line_says_what_claude_applies_and_what_needs_you(profile):
-    _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
+    _drop(profile, "search", "PORTAL_RESEARCH")
+    _drop(profile, "networking", "LINKEDIN_PLAN")
     # Plain words only: an id or a version number reaches the person as jargon.
     assert U.line() == ("Improvements waiting: 1 Claude applies itself; 1 short question for "
                         "you (python3 tools/profile_upgrades.py).")
@@ -329,7 +330,7 @@ def test_every_upgrade_says_how_urgent_it_is_and_who_it_needs():
 def test_only_what_truly_needs_the_person_waits_for_them():
     """A list a person has to read and act on is a list nobody acts on. Adding to
     this set is a decision: the upgrade cannot be done from the profile and research."""
-    assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"job-alerts", "unconfirmed-facts",
+    assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
                                                                  "connections-export", "work-place",
@@ -339,7 +340,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  # Only they can give their own
                                                                  # profile (2026-10-21).
                                                                  "own-profile-review"}
-    assert "inbox" in U.by_id("job-alerts").ask
+    # Nothing asks for their email: anything like an alert reaches them inside Claude
+    # (the maintainer's instruction, 2026-10-22).
+    assert not [u.id for u in U.REGISTRY
+                if re.search(r"\b(?:inbox|gmail|e-?mails?)\b", u.ask or "", re.I)]
     # Consent to a risk to their own account names the risk.
     assert "terms forbid" in U.by_id("profile-reads").ask
     # Only the person can download their own connections; Claude never touches LinkedIn.
@@ -383,11 +387,12 @@ def test_an_unconfirmed_fact_is_asked_until_it_is_answered(profile):
 
 
 def test_the_sync_block_splits_what_claude_does_from_what_needs_you(profile):
-    _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
+    _drop(profile, "search", "PORTAL_RESEARCH")
+    _drop(profile, "networking", "LINKEDIN_PLAN")
     block = U.block(U.pending())
     alone, yours = block.split("These need you")
     assert "[boards]" in alone and "Claude applies these itself" in alone
-    assert "[job-alerts]" in yours and "inbox" in yours
+    assert "[linkedin-plan]" in yours and "Premium" in yours
 
 
 def _read(*parts):
@@ -570,10 +575,9 @@ def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
                    today + dt.timedelta(days=U.REASK_DAYS - 1)) == ""
     later = U.again(u.id, u.ask_version, u.changed, today + dt.timedelta(days=U.REASK_DAYS))
     assert later.startswith("you said no on 2026-10-18, 30 days ago")
-    # A no from before this was kept, to a question that has not changed ("not now" to
-    # job alerts three days earlier): held until REASK_DAYS after the question shipped,
-    # never asked again the day the upgrade lands.
-    a = U.by_id("job-alerts")
+    # A no from before this was kept, to a question that has not changed: held until
+    # REASK_DAYS after the question shipped, never asked again the day the upgrade lands.
+    a = U.by_id("own-profile-review")
     assert a.ask_version == 1 and U.again(a.id, a.ask_version, a.changed, today) == ""
     added = dt.date.fromisoformat(a.added)
     assert U.again(a.id, a.ask_version, a.changed,
@@ -584,7 +588,7 @@ def test_a_no_is_for_now_never_for_ever(profile, monkeypatch):
     # The question changes: asked again at once, saying how.
     assert U.again(u.id, u.ask_version + 1, "something new", today).endswith("something new")
     # Every question a no can answer is re-askable, and says what it changed when it did.
-    for uid in ("connections-export", "job-alerts", "profile-reads"):
+    for uid in ("connections-export", "own-profile-review", "profile-reads"):
         x = U.by_id(uid)
         assert x.needs == "you" and (x.ask_version == 1 or x.changed), uid
         assert "--no " + uid in x.run, uid
@@ -645,7 +649,8 @@ def test_a_kept_choice_and_a_no_come_back_on_the_same_day_count():
 
 def test_the_sync_block_shows_no_id_or_version_outside_its_brackets(profile):
     (profile / "build_versions.json").unlink(missing_ok=True)
-    _drop(profile, "search", "PORTAL_RESEARCH", "JOB_ALERT_QUERY")
+    _drop(profile, "search", "PORTAL_RESEARCH")
+    _drop(profile, "networking", "LINKEDIN_PLAN")
     block = U.block(U.pending())
     said = [re.sub(r"\s*\[[a-z0-9-]+\]$", "", ln) for ln in block.splitlines()
             if ln.startswith("    - ")]

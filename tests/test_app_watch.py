@@ -51,8 +51,40 @@ def test_a_name_in_the_app_is_found_and_said_first(tmp_path, monkeypatch, capsys
     app, _ = _setup(tmp_path, monkeypatch, "Thanks to Zorblax Quux for the idea.\n")
     assert app_watch.main([]) == 1
     out = capsys.readouterr().out
-    assert out.startswith("APP LEAK: 1 finding") and "README.md:1" in out
+    assert out.startswith("APP LEAK: 1 match(es) in the public app's files, all of them 'Zorblax Quux'.")
     assert "change nothing in the app without them" in out
+    assert "README.md" not in out and "app_watch.py --all" in out
+    # --all is where every match is, with where it is.
+    assert app_watch.main(["--all"]) == 1
+    assert "README.md:1" in capsys.readouterr().out
+
+
+def test_many_matches_of_one_entry_are_one_line_and_all_listed_with_all(tmp_path, monkeypatch,
+                                                                        capsys):
+    body = "".join(f"line {n}: thanks Zorblax Quux\n" for n in range(64))
+    _setup(tmp_path, monkeypatch, body)
+    assert app_watch.main([]) == 1
+    out = capsys.readouterr().out.splitlines()
+    assert out[0].startswith("APP LEAK: 64 match(es) in the public app's files, all of "
+                             "them 'Zorblax Quux'.")
+    assert len(out) == 2                    # the line for the person, and where the rest is
+    assert app_watch.main(["--all"]) == 1
+    listed = [ln for ln in capsys.readouterr().out.splitlines() if ln.startswith("  - ")]
+    assert len(listed) == 64                # every one, where it stopped at forty
+
+
+def test_the_headline_counts_each_entry():
+    found = (["README.md:%d: denylist entry 3 (Hi Wren)" % n for n in range(3)]
+             + ["NOTES.md:1: email address someone@example.org",
+                "docs/a.md:2: personal path (tools/personal_paths.py)"])
+    line = app_watch.headline(found)
+    assert line.startswith("5 matches in the public app's files, of 3 entries: 'Hi Wren' (3)")
+    assert "email address someone@example.org (1)" in line
+    mixed = app_watch.headline(["branch master: README.md:1: denylist entry 1 (Hi Wren)",
+                                "commit 0123456789ab message: messages:1: denylist entry 1 "
+                                "(Hi Wren)"])
+    assert mixed == ("2 match(es) in the public app (1 in files, 1 in commit messages), all of "
+                     "them 'Hi Wren'")
 
 
 def test_clean_says_so_once_and_the_next_look_reads_only_what_is_new(tmp_path, monkeypatch, capsys):
@@ -66,7 +98,7 @@ def test_clean_says_so_once_and_the_next_look_reads_only_what_is_new(tmp_path, m
     _git(app, "add", "-A")
     _git(app, "commit", "-qm", "Thanks Zorblax Quux")
     assert app_watch.main([]) == 1
-    assert "message" in capsys.readouterr().out
+    assert "commit messages" in capsys.readouterr().out
 
 
 def test_a_pull_request_description_is_checked(tmp_path, monkeypatch):

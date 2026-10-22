@@ -112,10 +112,9 @@ Just talk to it. For example:
 - **"What do I owe?"** lists replies and follow-ups that are due.
 - **"Prep me for my interview at Acme"** gives you likely questions and your best answers.
 - **"I got an interview"** or **"they replied"** updates the record and says what is next.
-- **"Check my email"**, **"make me a dashboard"** or **"what should I learn?"** do what they
-  say. It can also read your LinkedIn job alerts into each search, use your own resume
-  template, or start your search over. You connect Gmail yourself, once, at
-  [claude.ai/customize/connectors](https://claude.ai/customize/connectors).
+- **"Make me a dashboard"** or **"what should I learn?"** do what they say. It can also use
+  your own resume template, or start your search over. It never asks for your email: new jobs
+  and what is due reach you in Claude.
 
 You do not need to remember any commands. If you react to something ("too formal", "not this
 kind of company"), it remembers for next time, until you say you have changed your mind.

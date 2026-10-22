@@ -365,23 +365,6 @@ def test_a_detail_fetch_keeps_what_a_refusing_board_said(tmp_path, monkeypatch):
     assert hydrate.fetch(job)["desc"] == "The whole posting."
 
 
-def test_a_job_alert_keeps_what_a_refusing_board_said(tmp_path, monkeypatch):
-    import subprocess
-    sys.path.insert(0, os.path.join(F.ROOT, "tools"))
-    import job_alerts
-    import portals
-    cli = tmp_path / "cli.mjs"
-    cli.write_text("// stand-in build\n")
-    monkeypatch.setenv("LINKEDIN_CLI", str(cli))
-    portals.cli.cache_clear()
-    monkeypatch.setattr(subprocess, "run", _answers(1))
-    try:
-        d, err = job_alerts.detail("4000000101")
-    finally:
-        portals.cli.cache_clear()
-    assert d is None and err.startswith("detail exit 1: ") and "THROTTLED" in err
-
-
 # ------------------------------------------------- one posting, one row
 
 def test_one_posting_under_two_addresses_is_kept_once(tmp_path):

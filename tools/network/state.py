@@ -1339,12 +1339,15 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
     # the obvious repair - repoint the orphans at the renamed contact - would
     # produce identical rows and a silent bug where there had been a loud one.
     # Checked per contact, because two contacts can legitimately be sent the
-    # same sentence on the same day.
+    # same sentence on the same day. The words count too: messages imported from
+    # LinkedIn's export carry one summary for a whole day's batch, and two different
+    # messages to one person that day read as one logged twice (2026-10-22).
     per_contact = {}
     for row in threads:
         cid = str(row.get("contact_id") or "").strip()
         sig = tuple(str(row.get(k) or "").strip()
-                    for k in ("date", "direction", "channel", "scenario", "summary"))
+                    for k in ("date", "direction", "channel", "scenario", "summary",
+                              "full_text"))
         per_contact.setdefault(cid, []).append(sig)
     for cid, sigs in per_contact.items():
         for sig, n in Counter(sigs).items():
