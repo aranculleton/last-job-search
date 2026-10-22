@@ -21,7 +21,8 @@ It checks two kinds of thing.
       secret). The list itself is personal data: it never lives in the app.
       A plain line matches case-insensitively on word boundaries; a line
       starting "=" matches case-sensitively ("=AB" must not hit "ab").
-      Lines starting "#" are comments.
+      Lines starting "#" are comments. An entry with accents matches without
+      them too: "Zoë" in the list finds "zoe-quillfeather" in a filename.
 
 Findings name the file, the line and WHICH denylist entry matched (by number),
 never the token itself: CI logs of a public repo are public, and printing the
@@ -47,6 +48,7 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from personal_paths import _regex, is_personal  # noqa: E402
@@ -116,9 +118,28 @@ def load_tokens(path: str | None) -> list[tuple[re.Pattern, int]]:
         if not t or t.startswith("#"):
             continue
         exact = t.startswith("=")
-        pat = re.compile(_token_regex(t[1:] if exact else t), 0 if exact else re.I)
-        out.append((pat, n))
+        body = unicodedata.normalize("NFC", t[1:] if exact else t)
+        for form in dict.fromkeys((body, plain(body))):
+            out.append((re.compile(_token_regex(form), 0 if exact else re.I), n))
     return out
+
+
+# A name loses its accents on the way into a filename, a slug or a contact id ("Zoë
+# Quillfeather" becomes zoe_quillfeather, "Søren" soren), and an entry matched only as
+# the list held it. Letters with no accent to strip are spelled out. One way only: a
+# plain entry does not find an accented word, since the app's invented "Renée" would
+# then fail the scan of everybody called Renee.
+_SPELLED = str.maketrans({"ø": "o", "Ø": "O", "ł": "l", "Ł": "L", "æ": "ae", "Æ": "AE",
+                          "œ": "oe", "Œ": "OE", "ß": "ss", "đ": "d", "Đ": "D", "ð": "d",
+                          "Ð": "D", "þ": "th", "Þ": "Th", "ı": "i"})
+
+
+def plain(text: str) -> str:
+    """`text` with its accents taken off, the way a slug or a filename writes it."""
+    if text.isascii():
+        return text
+    decomposed = unicodedata.normalize("NFKD", text.translate(_SPELLED))
+    return "".join(c for c in decomposed if not unicodedata.combining(c))
 
 
 # A name reaches a file in more shapes than the way it is written: in a filename
@@ -209,6 +230,8 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
 
 def _scan_text(rel: str, text: str, rules, keyed, show: bool) -> list[str]:
     findings: list[str] = []
+    # One way of writing each accented letter, the list's: "e" and a combining accent is "é".
+    text = unicodedata.normalize("NFC", text)
     # Only the entries whose longest word is somewhere in the file run
     # at all: a handful, against 1,200 on every line.
     low = text.lower()
@@ -230,9 +253,11 @@ def _scan_text(rel: str, text: str, rules, keyed, show: bool) -> list[str]:
             h = m.group(1)
             if not PLACEHOLDER_HANDLE.match(h) and not h.startswith(("<", "%", "[")):
                 findings.append(f"{rel}:{ln}: LinkedIn profile" + (f" {h}" if show else ""))
+        hit = set()                # an entry's forms report its line once
         for pat, n in file_tokens:
-            m = pat.search(line)
+            m = None if n in hit else pat.search(line)
             if m:
+                hit.add(n)
                 findings.append(f"{rel}:{ln}: denylist entry {n}" + (f" ({m.group(0)})" if show else ""))
     findings += _across_lines(rel, kept, file_tokens, show)
     return findings
@@ -255,13 +280,15 @@ def _across_lines(rel: str, lines: list[str], tokens, show: bool) -> list[str]:
         joined.append(piece)
         pos += len(piece) + 1
     text = " ".join(joined)
+    done = set()                   # two forms of an entry, one match: reported once
     for pat, n in tokens:
         if _GAP not in pat.pattern:
             continue                   # one-word entries cannot straddle a line break
         for m in pat.finditer(text):
             first = max(i for i, st in enumerate(starts) if st <= m.start())
             last = max(i for i, st in enumerate(starts) if st <= m.end() - 1)
-            if first != last:
+            if first != last and (n, m.start()) not in done:
+                done.add((n, m.start()))
                 out.append(f"{rel}:{first + 1}: denylist entry {n} (across a line break)"
                            + (f" ({m.group(0)})" if show else ""))
     return out

@@ -126,6 +126,25 @@ def test_a_name_in_a_filename_slug_or_handle_is_caught(tmp_path, monkeypatch):
     assert len(_scan(t, f"{first} {last}", monkeypatch=monkeypatch)) == len(shapes)
 
 
+def test_an_accented_name_is_caught_written_plainly(tmp_path, monkeypatch):
+    """An accent is lost on the way into a filename or a slug, and the list held the name
+    as written: "Zörblax" in the list never found zorblax_quux_CV.pdf."""
+    first, last = "Zörb" + "lax", "Qu" + "ux"
+    shapes = [f"{first.lower()}_{last.lower()}_CV.pdf".replace("ö", "o"),   # a slug
+              f"Zorb{'lax'} {last} wrote",                                  # plainly
+              f"{first} {last}",                                            # as written
+              f"Zo\u0308rb{'lax'} {last}"]                                   # combining mark
+    t = _tree(tmp_path, {f"f{i}.md": s + "\n" for i, s in enumerate(shapes)})
+    assert len(_scan(t, f"{first} {last}", monkeypatch=monkeypatch)) == len(shapes)
+    # One finding a place, never one a form, and the entry by number alone.
+    t2 = _tree(tmp_path / "b", {"g.md": f"{first} {last} and Zorb{'lax'} {last}\n"})
+    assert _scan(t2, f"{first} {last}", monkeypatch=monkeypatch) == ["g.md:1: denylist entry 1"]
+    # One way only: a plain entry does not find an accented word, or everybody called
+    # Renee would fail on the app's invented Renée.
+    t3 = _tree(tmp_path / "c", {"h.md": f"{first} {last}\n"})
+    assert _scan(t3, f"Zorb{'lax'} {last}", monkeypatch=monkeypatch) == []
+
+
 def test_every_form_of_a_recorded_name_and_company_is_an_entry():
     import build_app
     forms = build_app.name_forms("Xiu Mei (Sally) Ho, PhD")

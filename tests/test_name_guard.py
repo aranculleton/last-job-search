@@ -31,6 +31,32 @@ def test_a_name_the_app_never_carried_is_found_and_known_words_are_not():
     assert name_guard.names("CSV TSV HTTP are acronyms", KNOWN) == []
 
 
+def test_a_name_with_an_accented_letter_is_a_name_too():
+    # Written as [A-Z][a-z], a word with one letter outside ASCII was never a word, so a
+    # full name with an accent in it passed whatever it was.
+    assert name_guard.names("met Zoë Quillfeather and Íñigo Ibarrondo", KNOWN) == [
+        "Zoë Quillfeather", "Íñigo Ibarrondo"]
+    assert name_guard.names("then Łucja Wróbelska wrote", KNOWN) == ["Łucja Wróbelska"]
+    # The same name typed with combining accents is the same name.
+    assert name_guard.names("met Zoe\u0308 Quillfeather", KNOWN) == ["Zoë Quillfeather"]
+    assert name_guard.names("Morgan Ellis in Montréal", KNOWN | {"Montréal"}) == []
+    assert name_guard.names("ASCII only: Then Quillon Varga", KNOWN) == ["Then Quillon Varga"]
+
+
+def test_an_accented_word_the_app_holds_is_known(tmp_path, monkeypatch):
+    git = _repo(tmp_path)
+    monkeypatch.setattr(name_guard, "ROOT", str(tmp_path))
+    (tmp_path / "places.md").write_text("Nørrebro and Montréal are places.\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "places")
+    known = name_guard.vocabulary("HEAD")
+    assert {"Nørrebro", "Montréal", "Morgan"} <= known
+    (tmp_path / "places.md").write_text("Nørrebro and Montréal are places.\n"
+                                        "Montréal Kestrel, and Søren Quillfeather.\n",
+                                        encoding="utf-8")
+    assert name_guard.check_diff("master") == ["places.md:2: Søren Quillfeather"]
+
+
 def _repo(tmp_path):
     env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
                GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@example.com")

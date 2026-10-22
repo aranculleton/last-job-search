@@ -276,6 +276,17 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The leak scan finds an accented name written without its accents.** A name loses its
+  accents on the way into a filename, a slug or a contact id ("Zoë Quillfeather" becomes
+  zoe_quillfeather), and the scan matched only the form the denylist held, so it passed.
+  Letters with no accent to strip (ø, ł, æ, ß) are spelled out, and a name typed with
+  combining accents is the same name. It works one way only: a plain entry does not find an
+  accented word, or the app's invented "Renée" would fail the scan of everybody called
+  Renee. The app and its history were scanned again this way and are clean.
+- **The name guard reads a name with an accented letter in it.** It read capital and small
+  letters as ASCII only, so "Zoë Quillfeather" or "Íñigo Ibarrondo" was never a name and
+  passed, in a change and in PR text alike. Words the app already holds with accents
+  ("Montréal") are known, as plain ones always were.
 - **`rehearse_sync.py` rehearses a commit held only by `origin/master`**, as the new master is
   once a PR merges. A clone copies branches alone, so the release candidate was "not a tree"
   in the copy and the rehearsal stopped before it began.

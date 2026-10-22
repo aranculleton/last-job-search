@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import unicodedata
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ALLOW = "tools/name_guard_allow.txt"
@@ -36,15 +37,22 @@ ALLOW = "tools/name_guard_allow.txt"
 # not people (font names, package authors).
 SKIP = (ALLOW, "tools/openroles/", "texmf/", ".agents/skills/*/cli/bun.lock")
 
-_WORD = r"[A-Z][a-z][A-Za-z'’-]*"
-_INITIAL = r"[A-Z]\."
+# Capital and small letters beyond ASCII too: written as [A-Z][a-z], a name with one
+# accented letter in it ("Zoë", "Núñez", "Łukasz") was never a word, so it passed.
+_UP = "A-Z" + "".join(re.escape(chr(c)) for c in range(0xC0, 0x2000) if chr(c).isupper())
+_LO = "a-z" + "".join(re.escape(chr(c)) for c in range(0xC0, 0x2000) if chr(c).islower())
+_WORD = rf"[{_UP}][{_LO}][{_UP}{_LO}'’-]*"
+_INITIAL = rf"[{_UP}]\."
 # Words on one line, a single space apart: a run of capitalised words, with initials.
 _RUN = re.compile(rf"(?<![\w.'’-])(?:(?:{_WORD}|{_INITIAL}) ){{1,3}}(?:{_WORD})(?![\w'’-])")
 
 
-def _git(*args: str) -> str:
-    return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True,
-                          check=True).stdout
+def _git(*args: str, ok=(0,), env=None) -> str:
+    r = subprocess.run(["git", "-C", ROOT, *args], capture_output=True, encoding="utf-8",
+                       errors="replace", env=dict(os.environ, **env) if env else None)
+    if r.returncode not in ok:
+        raise subprocess.CalledProcessError(r.returncode, r.args, r.stdout, r.stderr)
+    return r.stdout
 
 
 def _skipped(path: str) -> bool:
@@ -57,6 +65,11 @@ def vocabulary(ref: str = "HEAD") -> set[str]:
     out = _git("grep", "-h", "-o", "-I", "-E", "[A-Z][a-z][A-Za-z'-]*", ref, "--", ".",
                *(f":!{s}" for s in SKIP))
     words = set(out.split())
+    # git grep's pattern is ASCII, so it cuts "Montréal" to "Montr": the lines holding
+    # anything else are read again here, with the guard's own word.
+    wide = _git("grep", "-h", "-I", "-E", "[^ -~\t]", ref, "--", ".",
+                *(f":!{s}" for s in SKIP), ok=(0, 1), env={"LC_ALL": "C"})
+    words |= set(re.findall(_WORD, unicodedata.normalize("NFC", wide)))
     return words | allowed_words()
 
 
@@ -72,7 +85,7 @@ def allowed_words() -> set[str]:
 def names(text: str, known: set[str]) -> list[str]:
     """The runs of capitalised words in `text` with a word `known` does not hold."""
     out = []
-    for line in str(text or "").splitlines():
+    for line in unicodedata.normalize("NFC", str(text or "")).splitlines():
         for m in _RUN.finditer(line):
             words = [w for w in m.group(0).split() if not re.fullmatch(_INITIAL, w)]
             if len(words) >= 2 and any(w not in known for w in words):
