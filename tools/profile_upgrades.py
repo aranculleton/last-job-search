@@ -56,13 +56,16 @@ existing users to do something without naming its upgrade.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import fnmatch
 import json
 import os
+import queue
 import re
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -204,17 +207,138 @@ def again(uid: str, version: int, changed: str, today: dt.date | None = None) ->
 
 
 def _probe(code: str) -> str:
-    """Run `code` in a fresh interpreter against this profile and return what it
+    """Run `code` in an interpreter of its own against this profile and return what it
     prints. The tools read the profile when imported, so a check that needs one
-    of them runs it apart. A probe that fails reports nothing, never noise."""
-    prelude = ("import sys; sys.path[:0] = [%r, %r]\n"
-               % (os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")))
+    of them runs it apart. A probe that fails reports nothing, never noise.
+
+    While a look runs (`pending()`), every probe goes to that look's one interpreter
+    (`_WORKER`); outside one, or where that interpreter cannot answer, the probe has a
+    fresh interpreter to itself, as it always did."""
+    if _LOOK:
+        got = _ask(code)
+        if got is not None:
+            return got
+    prelude = "import sys; sys.path[:0] = %r\n" % (_probe_path(),)
     try:
         r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=os.environ,
-                           capture_output=True, text=True, timeout=120)
+                           capture_output=True, text=True, timeout=PROBE_SECONDS)
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return r.stdout.strip() if r.returncode == 0 else ""
+
+
+PROBE_SECONDS = 120
+
+
+def _probe_path() -> list[str]:
+    return [os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")]
+
+
+# One interpreter answers every probe of one look. Sixteen fresh ones, each importing the
+# same tools again, were three of the ten seconds the day's first check spent here
+# (2026-10-22). Nothing a probe reads changes while a look runs, so a tool imported once
+# gives each later probe what it would have read itself. Each probe still runs as `-c`
+# code would: in a namespace of its own, with what it prints caught (its children's too,
+# in the order a pipe gives them), and only a clean finish, or exit 0, counts. Replies
+# travel on a copy of the interpreter's output, so nothing printed is taken for one.
+_WORKER = r"""
+import contextlib, io, json, os, sys, tempfile
+sys.path[:0] = %r
+reply = os.fdopen(os.dup(1), "w", encoding="ascii")
+asked = sys.stdin
+sys.stdin = open(os.devnull)
+for line in asked:
+    out, ok = io.StringIO(), True
+    with tempfile.TemporaryFile() as raw:
+        os.dup2(raw.fileno(), 1)
+        try:
+            with contextlib.redirect_stdout(out):
+                exec(compile(json.loads(line), "<probe>", "exec"), {"__name__": "__main__"})
+        except SystemExit as e:
+            ok = e.code in (None, 0)
+        except BaseException:
+            ok = False
+        raw.seek(0)
+        text = raw.read().decode("utf-8", "replace") + out.getvalue()
+    reply.write(json.dumps([ok, text]) + "\n")
+    reply.flush()
+"""
+_LOOK: list = []        # while pending() runs: [that look's interpreter, or None before the first probe]
+
+
+@contextlib.contextmanager
+def _one_interpreter():
+    _LOOK.append(None)
+    try:
+        yield
+    finally:
+        proc = _LOOK.pop()
+        if proc is not None:
+            _stop(proc)
+
+
+def _start_worker():
+    try:
+        proc = subprocess.Popen([sys.executable, "-c", _WORKER % (_probe_path(),)], cwd=ROOT,
+                                env=os.environ, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, text=True, encoding="ascii",
+                                errors="replace")
+    except OSError:
+        return None
+    replies: queue.Queue = queue.Queue()
+
+    def read() -> None:
+        # A thread, not select(): Windows cannot wait on a pipe.
+        for line in proc.stdout:
+            replies.put(line)
+        replies.put("")                             # the interpreter has gone
+
+    threading.Thread(target=read, daemon=True).start()
+    proc.replies = replies
+    return proc
+
+
+def _stop(proc, kill: bool = False) -> None:
+    try:
+        if not kill:
+            proc.stdin.close()
+            proc.wait(timeout=5)
+            return
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        pass
+    try:
+        proc.kill()
+        proc.wait(timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+
+
+def _ask(code: str) -> str | None:
+    """What `code` prints, from the look's interpreter; None where it cannot say, so the
+    probe runs on its own instead. Out of time is "", as it is for a probe on its own,
+    and never run twice."""
+    proc = _LOOK[-1]
+    if proc is None or proc.poll() is not None:
+        proc = _LOOK[-1] = _start_worker()
+        if proc is None:
+            return None
+    try:
+        proc.stdin.write(json.dumps(code) + "\n")
+        proc.stdin.flush()
+        line = proc.replies.get(timeout=PROBE_SECONDS)
+    except queue.Empty:
+        _stop(proc, kill=True)
+        _LOOK[-1] = None
+        return ""
+    except (OSError, ValueError):
+        line = ""
+    try:
+        ok, out = json.loads(line)
+    except (ValueError, TypeError):
+        _stop(proc, kill=True)
+        _LOOK[-1] = None
+        return None
+    return out.strip() if ok else ""
 
 
 # Countries whose working week does not end on Saturday and Sunday. A country
@@ -566,15 +690,25 @@ def _old_sweep_cursor() -> str:
 
 
 def _read_break() -> str:
-    """Browser reads pause between bursts; how long is the person's call, so it is written
-    into their profile where they can see and change it, at the app's value."""
-    net = _mod("networking")
-    if net is None or str(getattr(net, "PROFILE_READS", "") or "").lower() != "browser":
+    """Retired 2026-10-22. It wrote the app's break into the profile at the app's value, and
+    written there it read as the person's own setting, so no later change to the pace could
+    reach them. The break stays theirs to set (`reading.py limits` shows it); nothing is
+    written for them now, and `read-break-freed` takes out the line it wrote."""
+    return ""
+
+
+def _frozen_break() -> str:
+    """The break line read-break wrote, untouched since: it holds reads to the old pace."""
+    import importlib
+    try:
+        sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+        reading = importlib.import_module("reading")
+        found = reading.frozen_break()
+    except Exception:
         return ""
-    if hasattr(net, "PROFILE_READ_BREAK_MINUTES"):
-        return ""
-    return ("profile/networking.py has no PROFILE_READ_BREAK_MINUTES: the break between bursts "
-            "of profile reads is the app's, not yours to see or change")
+    return ("profile/networking.py holds PROFILE_READ_BREAK_MINUTES = (5, 12), which an earlier "
+            "update wrote at the app's value then; as your setting it outranks the app's pace, "
+            "so profile reads wait longer than they need to") if found else ""
 
 
 def _move_and_area() -> str:
@@ -1282,6 +1416,11 @@ REGISTRY: tuple[Upgrade, ...] = (
             "random in that range between bursts of browser reads; a shorter break raises the "
             "risk to their LinkedIn account. Change nothing else", "edit", "~1 min",
             names=("networking.PROFILE_READ_BREAK_MINUTES",), conditional=True, priority=3),
+    Upgrade("read-break-freed", "2026-10-22",
+            "profile reads at the app's pace, not one an earlier update wrote into your profile",
+            _frozen_break, "python3 tools/network/reading.py free-break", "instant",
+            command=("python3", "tools/network/reading.py", "free-break"),
+            paths=("profile/networking.py",), conditional=True, priority=3),
     Upgrade("move-and-area", "2026-10-19",
             "honest small talk prepared for an interview when you moved recently",
             _move_and_area, "read profile/01-candidate-profile.md and profile/CLAUDE.md; write "
@@ -1384,7 +1523,8 @@ SAFE_DEFAULTS: dict[str, str] = {
                                  "presence checks matches nothing, as it always did for a "
                                  "profile without it",
     # The reading dial and the limits it sets (tools/network/pace.py): absent, every one takes
-    # the careful preset: the pauses of the release before the dial, and 3.2.5's caps.
+    # the default preset, fast since 2026-10-22: shorter pauses than careful's, the same
+    # counts at every preset, and 3.2.5's caps.
     "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "
                                "\"warn\" or \"refuse\" bring back the old rule for a person "
                                "who wants it",
@@ -1402,19 +1542,18 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
-    "networking.PROFILE_READ_RISK": "\"careful\": the slowest pauses, those before the dial "
-    "existed; normal or fast only when the person writes it",
+    "networking.PROFILE_READ_RISK": "\"fast\": pauses that let reads reach the cap, about one "
+    "page every two minutes; normal or careful, the old default, when the person writes it",
     "networking.PROFILE_PAGES_PER_HOUR": "10 list pages an hour, inside the 30 pages of any kind",
     "networking.PROFILE_PAGES_PER_DAY": "20 list pages a day, inside the 80 pages of any kind",
     "networking.PROFILE_LOADS_PER_HOUR": "30 page loads of any kind an hour, 3.2.5's cap, so list "
     "pages never add to it",
     "networking.PROFILE_LOADS_PER_DAY": "80 page loads of any kind a day, 3.2.5's cap",
-    "networking.PROFILE_READ_GAP_SECONDS": "45 to 240 seconds between pages at careful, as before",
-    "networking.PROFILE_READ_GAP_MEDIAN": "90 seconds at careful, as before",
-    "networking.PROFILE_READ_BREAK_AFTER": "a break after 3 to 7 pages at careful, as before",
-    "networking.PROFILE_READ_DWELL_SECONDS": "20 to 60 seconds on a page read in full, as before",
-    "networking.PROFILE_READ_CARD_DWELL_SECONDS": "20 to 60 seconds on a card at careful, the "
-    "same as a full read, so nothing is shortened unless the person chooses it",
+    "networking.PROFILE_READ_GAP_SECONDS": "25 to 150 seconds between pages at the default",
+    "networking.PROFILE_READ_GAP_MEDIAN": "55 seconds at the default",
+    "networking.PROFILE_READ_BREAK_AFTER": "a break after 5 to 10 pages at the default",
+    "networking.PROFILE_READ_DWELL_SECONDS": "12 to 40 seconds on a page read in full",
+    "networking.PROFILE_READ_CARD_DWELL_SECONDS": "8 to 20 seconds on a card at the default",
     "networking.PROFILE_READS_PER_RUN": "80, the day's cap: the list is sized to the requests "
     "left this week and three spare",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
@@ -1426,10 +1565,9 @@ SAFE_DEFAULTS: dict[str, str] = {
                                                 "friction; within it, the day stops as before",
     "networking.PROFILE_READ_RAMP": "only after LinkedIn shows a signal: 5 pages an hour the "
     "next day, then 10, 20 and 30 on clean days; before any signal, no ramp",
-    "networking.PROFILE_READ_BREAK_MINUTES": "a break of 5 to 12 minutes, chosen at random, "
-                                             "between bursts of browser reads; shortening it "
-                                             "raises the risk to their LinkedIn account, so only "
-                                             "they set it",
+    "networking.PROFILE_READ_BREAK_MINUTES": "a break of 3 to 8 minutes at the default, chosen "
+                                             "at random, between bursts of browser reads; theirs "
+                                             "to set",
     "networking.VARY_ABOUT_ME": "False: the line about themselves is theirs to repeat in every "
                                 "note; True holds it to the same rule as anything else a batch "
                                 "repeats",
@@ -1506,6 +1644,11 @@ def by_id(uid: str) -> Upgrade:
 
 def pending() -> list[tuple[Upgrade, str]]:
     """[(upgrade, what is missing)] for every upgrade still pending, most urgent first."""
+    with _one_interpreter():
+        return _pending()
+
+
+def _pending() -> list[tuple[Upgrade, str]]:
     out = []
     for u in sorted(REGISTRY, key=lambda u: (u.priority, u.added, u.id)):
         try:
@@ -1630,13 +1773,19 @@ CLAIMS_SEEN = "refs/remotes/origin-ljs-upgrades/"
 def fetch_master() -> None:
     """origin/master as it is now, and every chat's claim, so what another chat landed or
     took is seen before this one starts the same work. Best effort: offline, the last fetch
-    stands."""
-    for spec in (("master",), ("+%s*:%s*" % (CLAIM_REFS, CLAIMS_SEEN),)):
-        try:
-            subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", *spec],
-                           capture_output=True, text=True, timeout=60)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+    stands. One fetch for both, which halves the wait; where git refuses it, the claims are
+    fetched alone, as they were before."""
+    claims = "+%s*:%s*" % (CLAIM_REFS, CLAIMS_SEEN)
+    if not _fetch("master", claims):
+        _fetch(claims)
+
+
+def _fetch(*spec: str) -> bool:
+    try:
+        return subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", *spec],
+                              capture_output=True, text=True, timeout=60).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
 
 
 def _sync_head() -> tuple:
@@ -1835,6 +1984,32 @@ def already_in_place(rows: list[tuple[Upgrade, str]]) -> list[str]:
     return [i for i in _listed_ids() if i not in now]
 
 
+def _looked_at() -> tuple:
+    """What a look reads that the rest of a run after a sync can change: the commit (an
+    instant upgrade, the state files' line endings), the files in the checkout, and the
+    record of the person's own tests (run once for each update)."""
+    import sync_app
+    rec = sync_app.own_tests_record(ROOT)
+    return (_git("rev-parse", "HEAD").stdout.strip(), sorted(_changed()),
+            json.dumps(rec, sort_keys=True) if rec is not None else None)
+
+
+def _look_again(first: list[tuple[Upgrade, str]], seen: tuple, landed: set[str],
+                ran: bool) -> list[tuple[Upgrade, str]]:
+    """What is still pending once the instant upgrades have run: the first look again
+    where none was due (`ran`) and nothing the look reads has changed since, which is most
+    days and took four seconds to work out a second time; else a new look, since an
+    instant upgrade can write files git ignores and commit nothing. Either way without what
+    another chat has already landed on master, which the second look used to list again as
+    waiting, for this chat to make a second time."""
+    rows = first if not ran and _looked_at() == seen else pending()
+    return [(u, why) for u, why in rows if u.id not in landed]
+
+
+def _instant_due(rows: list[tuple[Upgrade, str]]) -> bool:
+    return any(u.cost == "instant" and u.command for u, _ in rows)
+
+
 def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     """Run each pending instant upgrade and commit it on its own. An upgrade that
     touches anything outside its own personal paths is undone, never committed."""
@@ -1930,6 +2105,7 @@ def main(argv: list[str] | None = None) -> int:
     if _personal_repo() and (a.after or a.plan):
         fetch_master()
     rows = pending()
+    first, seen = rows, (_looked_at() if a.after else None)
     landed = done_on_master() if rows else set()
     if landed:
         # Applied by another chat and on master already: this chat merges them, never makes
@@ -1974,7 +2150,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.after:
             for note in run_instant(rows):
                 print(f"profile upgrades: {note}")
-            rows = pending()
+            rows = _look_again(first, seen, landed, _instant_due(rows))
             remember_listed(rows)
         if rows and a.line:
             print(f"Profile upgrades: {len(rows)} pending, being applied by another chat "
@@ -2017,7 +2193,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.after:
         for note in run_instant(rows):
             print(f"profile upgrades: {note}")
-        rows = pending()
+        rows = _look_again(first, seen, landed, _instant_due(rows))
         remember_listed(rows)
     text = block(rows)
     print(text or "Profile upgrades: none pending.")

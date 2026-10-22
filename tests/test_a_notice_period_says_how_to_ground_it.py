@@ -24,6 +24,26 @@ def test_a_period_of_work_gets_no_such_hint():
     assert found and "hint" not in found[0]
 
 
+def test_an_achievement_after_joining_gets_no_such_hint():
+    # Grounding "six weeks" by writing it in the profile would ground an achievement figure.
+    found = check_numbers.check("Within six weeks of joining, I rebuilt the pipeline and cut "
+                                "the run from three days to four hours.", "p4")
+    assert found and all("hint" not in f for f in found)
+
+
+def test_notice_wording_in_its_usual_forms_gets_the_hint():
+    for text in ("I am available to start in four weeks.", "I can join within six weeks.",
+                 "My notice period is four weeks.", "I would need four weeks' notice."):
+        found = check_numbers.check(text, "p4")
+        assert found and "hint" in found[0], text
+
+
+def test_the_audit_keeps_its_own_advice_beside_the_hint():
+    import draft_audit
+    src = open(draft_audit.__file__, encoding="utf-8").read()
+    assert 'f"{said}; or, {f[\'hint\']}"' in src
+
+
 def test_written_in_the_profile_it_is_grounded(tmp_path):
     shutil.copy(os.path.join(ROOT, "profile.example", "01-candidate-profile.md"),
                 tmp_path / "01.md")

@@ -436,6 +436,9 @@ WIDENINGS = (2.0, 3.0)
 # What a widened round reuses from the one before it, so it does not fetch the
 # same bodies again: the hydrated file, held back from the prune until it has run.
 HYDRATED = "02_hydrated.json"
+# And so it does not send the same searches again: the scrape folder, whose postings it
+# carries over and whose answered requests it skips (scrape_wide --before).
+SCRAPED = "00_scrape"
 
 
 def yield_of(path):
@@ -551,6 +554,8 @@ def main():
                     help=argparse.SUPPRESS)
     ap.add_argument("--hydrate-cache", dest="hydrate_cache", default=None,
                     help=argparse.SUPPRESS)
+    ap.add_argument("--scrape-before", dest="scrape_before", default=None,
+                    help=argparse.SUPPRESS)
     ap.add_argument("--summary-dir", dest="summary_dir", default=None,
                     help="where the compact shortlist is written (default: "
                          "%s under the repo). A test pointing --out at a temp "
@@ -583,7 +588,7 @@ def main():
     deadline = started + ROUND_BUDGET_SEC
     TIMES.clear()
     RESUME.clear()
-    scrape_dir = f("00_scrape")
+    scrape_dir = f(SCRAPED)
     partial = ""
 
     if a.from_scraped:
@@ -628,7 +633,8 @@ def main():
                    # was given another.
                    + (["--seen", a.seen] if a.seen else [])
                    + (["--keep-ruled-out"] if a.no_seen_read else [])
-                   + (["--alerts", a.alerts] if a.alerts else []),
+                   + (["--alerts", a.alerts] if a.alerts else [])
+                   + (["--before", a.scrape_before] if a.scrape_before else []),
                    log, deadline, ok=(0, SCRAPE_PARTIAL))
         ON_TIMEOUT.pop("scrape_wide.py", None)
         keep_requests(log, requests)
@@ -736,7 +742,7 @@ def main():
         # those survive with their posting bodies stripped. A round
         # about to widen holds its hydrated bodies back for the next one.
         freed = prune(a.out, keep=() if met else DIAGNOSTICS,
-                      hold=(HYDRATED,) if widen else ())
+                      hold=(HYDRATED, SCRAPED) if widen else ())
         print(f"pruned {freed // (1024 * 1024)}MB of reproducible stage files "
               f"(--keep-intermediates to retain them)"
               + ("" if met else f"; kept {', '.join(DIAGNOSTICS)} without bodies"))
@@ -762,7 +768,7 @@ def main():
         if a.from_scraped:
             print("  this round read a saved scrape; the wider round scrapes the portals live "
                   "for its extra pages")
-        cache = f(HYDRATED)
+        cache, scraped = f(HYDRATED), f(SCRAPED)
         code = subprocess.call(
             [sys.executable, __file__, "--out", nxt,
              "--pages", str(pages), "--first-pages", str(first),
@@ -770,6 +776,7 @@ def main():
              "--workers", str(a.workers), "--top", str(a.top), "--today", a.today,
              "--require", a.require, "--expand", "--round", str(a.round + 1)]
             + (["--hydrate-cache", cache] if os.path.exists(cache) else [])
+            + (["--scrape-before", scraped] if os.path.isdir(scraped) else [])
             + (["--keep-intermediates"] if a.keep else [])
             + (["--alerts", a.alerts] if a.alerts else [])
             + (["--summary-dir", a.summary_dir] if a.summary_dir else [])
@@ -782,6 +789,7 @@ def main():
                 os.remove(cache)
             except OSError:
                 pass
+            shutil.rmtree(scraped, ignore_errors=True)
         return code
 
     # CLAUDE.md: "If the target is still missed after 3 rounds, say so

@@ -93,4 +93,26 @@ def test_a_bare_on_after_a_home_town_is_a_province_not_a_longer_town(monkeypatch
     monkeypatch.setattr(prefilter, "METRO", ["toronto"])
     monkeypatch.setattr(prefilter, "_CC", "ca")
     assert "starts with" not in prefilter.location_verdict("Toronto ON")[1]
+
+
+def test_a_province_code_between_hyphens_is_not_a_longer_town(monkeypatch):
+    # "Toronto-ON-Canada" was read as a town that starts with Toronto, as "Bolton-on-Dearne"
+    # is: a town's name joins with a lower-case word, and ON is the province.
+    monkeypatch.setattr(prefilter, "METRO", ["toronto", "mississauga"])
+    monkeypatch.setattr(prefilter, "_CC", "ca")
+    for loc in ("Toronto-ON-Canada", "Toronto-ON-CA", "Mississauga-ON-Canada"):
+        assert "starts with" not in prefilter.location_verdict(loc)[1], loc
+
+
+def test_a_home_town_named_like_a_state_is_the_town(monkeypatch):
+    # For somebody in DC, "Washington, D.C." was read as the state of Washington.
+    import places
+    regions = {"dc": "DC", "district of columbia": "DC", "va": "VA", "md": "MD"}
+    monkeypatch.setattr(prefilter, "METRO", ["washington", "arlington", "bethesda"])
+    monkeypatch.setattr(prefilter, "_CC", "us")
+    monkeypatch.setattr(prefilter, "_HOME_REGION", "DC")
+    monkeypatch.setattr(prefilter, "REGIONS", regions)
+    monkeypatch.setattr(places, "REGIONS", regions)
+    for loc in ("Washington, D.C.", "Washington", "Washington, DC"):
+        assert "outside" not in prefilter.location_verdict(loc)[1], loc
     assert "starts with" not in prefilter.location_verdict("Toronto in office")[1]

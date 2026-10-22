@@ -34,6 +34,53 @@ make sense to somebody whose repo just received it.
   - Real boards have not been timed. A board with a crawl delay now gets its requests at the
     pace it asks for, where 3.10.0 sent them further apart than that.
 
+- **The day's first check is quicker, and says the same thing.** A chat checks for updates
+  before each piece of work. Every check after the first that day only reads a date, as
+  before; the first one no longer does the same work twice. Measured on a copy of one
+  person's repo, with the same output word for word: 9 seconds to 3.5 on a day with no
+  update, and 40 to 28 on the day one arrives, where most of what is left is your own
+  tests, which still run one file after another.
+  - The list of what your repo still needs is worked out once, not twice, unless an instant
+    change ran or something it reads changed in between, and its probes share one
+    interpreter instead of starting sixteen.
+  - The maintainer's leak list reads each old copy of the contact book once, and each row
+    in it once: 1.4 seconds to 0.7.
+
+- **A wider round sends only the searches the round before did not have answered.** When a
+  round misses its target it searches again with more pages, and it used to send every
+  request of the first round again from page one: at twice the pages, nine in ten of its
+  LinkedIn requests repeated the first round's, and on your own computer, under its cap, it
+  sent the same 300 again and searched nothing new. It now carries the first round's
+  postings over and sends the rest; a request that failed is asked again. Your own boards
+  and the employer boards are read as before.
+  - Measured on a simulated round that widens twice: 585 requests to 361, the same postings
+    found and ranked in every round. Where one job is listed on two boards with the same
+    scores, the copy the first round showed is kept, where it used to be whichever arrived
+    first.
+- **Profile reads go about twice as fast, with no more pages opened.** The default pace was
+  careful's, whose pauses held reads to about 17 an hour, half the cap of 30, so 25 reads
+  took about an hour and a half. The default is now fast's pauses, about one page every two
+  minutes, which is what the cap was set for: 25 reads in about 45 minutes, simulated. The
+  caps are unchanged (30 an hour, 80 a day), and every count is now the same at every pace
+  (the spare reads, the paste list, how long a reading stands, the ramp), so the dial sets
+  the pauses and nothing else, as it always said. `PROFILE_READ_RISK = "careful"` in
+  `profile/networking.py` keeps the old pace.
+  - A slow page still doubles the next pause, and no longer stops the day's reads or slows
+    the days after: it is far more often your own connection than LinkedIn. A security
+    check, a sign-in page out of turn, an unusual-activity notice or a blocked page still
+    stops reads at once and starts the ramp.
+  - The 5-to-12-minute break an earlier update wrote into your profile, as if you had chosen
+    it, is taken out where nobody has changed it since, so the app's pace reaches you. A
+    break you set yourself is kept. `git revert` undoes it.
+  - No pace is safe: LinkedIn's terms forbid automated access at any pace and it publishes
+    no limits. Shorter pauses make a check or a restriction somewhat more likely; stopping
+    at the first sign of one is what protects your account, and that is unchanged.
+- **LinkedIn's refusal is said at once.** A 999, how LinkedIn refuses a machine, was asked
+  six more times over about 25 seconds before the round heard of it. It does not change
+  within a round, so it is no longer asked again.
+- **`ats_boards.py --probe` reads the employer boards side by side**, as a round does, with
+  the same verdicts in the same order. One after another, 92 boards took minutes.
+
 - **Shorter replies and fewer steps, with every check still run.** Where code already runs
   a check, a chat no longer runs it again by hand, and a reply says what failed instead of
   listing everything that passed. The biggest:
@@ -61,21 +108,29 @@ make sense to somebody whose repo just received it.
   town's name followed by "St", "Saint", "upon" or "under", or joined by "-on-", "-in-" and
   the like, is now flagged for a closer read. A town of its own on your list
   ("Ashton-under-Lyne") still passes, and so does a bare "ON" or "in" after a town
-  ("Toronto ON").
+  ("Toronto ON"), or a code between hyphens, since a town's joining word is lower case
+  ("Toronto-ON-Canada").
 - **A home town's name beside another state of your own country is read again.** "Manhattan,
   KS" passed as Manhattan for somebody in New York. Where your profile names its home region
   as a state or province and does not place the one beside the town, it is flagged. A state
-  your profile places is judged as it always was, and a home region that is not a state
+  your profile places is judged as it always was, a home town named like a state is the
+  town ("Washington, D.C." for somebody in DC), and a home region that is not a state
   ("England") sees no change. Checked on 458 real locations from one person's rounds: none
   changed.
 - **A notice period in a letter says how to ground it.** "I could start within four weeks"
   was flagged as a number the profile does not hold, and read like a figure to take out. The
-  finding now says to write the notice period in `01-candidate-profile.md`; once it is
-  there, it is grounded and the flag clears.
+  finding now also says to write the notice period in `01-candidate-profile.md`; once it is
+  there, it is grounded and the flag clears. Only notice wording gets it ("could start
+  within", "available to start in", "weeks' notice"), never "within six weeks of joining".
 - **A resume sent with no file named comes with the likely file.** RECONCILE said only "name
   it". When nothing was made for that contact, it now names the general resume you had on
-  that day (from `documents/cv/`, by when each arrived), with the command filled in, or the
-  ones you had if more than one arrived together, so settling it is a yes.
+  that day (from `documents/cv/`, by when each arrived, a renamed one by when it first
+  did), with the command filled in, or the ones you had if more than one arrived together,
+  so settling it is a yes. Where the newest you had that day has been deleted since, it
+  asks you to name it, never offering an older one.
+- **An upgrade another chat has already landed is not listed again as waiting.** After the
+  instant upgrades ran, the list was worked out a second time without leaving out what
+  another chat had landed on master, so this chat was told to make it again.
 - **The maintainer's check of the public app reads every pull request, not only the newest
   fifty.** `tools/app_watch.py --all` read one page of fifty and called it everything, and a
   look after more than fifty had changed moved its mark past the ones it never read. It now

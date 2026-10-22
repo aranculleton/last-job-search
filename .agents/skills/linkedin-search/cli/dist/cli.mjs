@@ -23,6 +23,9 @@ async function htmlFetch(url) {
       redirect: "follow",
       signal: AbortSignal.timeout(15000)
     });
+    if (response.status === 999) {
+      throw new Error(`Request failed: ${response.status} ${response.statusText}`.trim());
+    }
     if (response.status === 429 || response.status >= 500) {
       if (attempt === maxRetries) {
         throw new Error(`Request failed: ${response.status} ${response.statusText}`);

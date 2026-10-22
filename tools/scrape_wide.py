@@ -581,7 +581,7 @@ def _say(line: str, log=None) -> None:
 
 def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int | None = None,
          clock=time.monotonic, sleep=time.sleep, tallies: dict | None = None,
-         on_rows=None) -> tuple[list[dict], dict]:
+         on_rows=None, on_sent=None) -> tuple[list[dict], dict]:
     """Run [(portal, fn, args)] on `workers` threads until done or `budget` runs out.
 
     Each portal gets a Tally (in `tallies`, shared with the progress line). A 429
@@ -589,7 +589,8 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
     BACKOFF_SECONDS times the run of 429s); POOL_MAX_LIMITED in a row stops it, and
     POOL_MAX_FAILS identical failures in a row of any kind stop it too. `cap`
     is the most requests a portal may send. `on_rows` sees each batch of rows as it
-    lands, which is how a partial scrape survives a stage that is killed.
+    lands, which is how a partial scrape survives a stage that is killed, and
+    `on_sent` each job that was answered without an error.
     Returns (rows, tallies)."""
     tallies = {} if tallies is None else tallies
     start = clock()
@@ -670,6 +671,8 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
                     rows.extend(got or ())
                     if on_rows and got:
                         on_rows(list(got))
+                    if on_sent:
+                        on_sent(job)
                 if not t.active and (t.stopped or not t.queued
                                      or (t.cap and t.sent >= t.cap)):
                     t.finished = True
@@ -1087,6 +1090,48 @@ def _write_partial(out: str, seen: dict) -> None:
         pass
 
 
+# A widening asks for more pages of the same searches. It used to send every request of the
+# round before again from page one: at twice the pages, nine in ten of its LinkedIn requests
+# repeated the first round's, and on a computer, under its cap, it sent the same 300 again.
+# Each scrape now writes the requests that were answered (SENT) beside its postings, and a
+# widened round given that folder (--before) carries the postings over, before anything else
+# lands, and sends only what was not answered yet. A request that failed is asked again,
+# as it would have been before. The person's paced boards and the employer boards are read
+# as they always were: the paced boards already go on from where the last round stopped,
+# and an employer's careers site can page on between rounds.
+SENT = "sent.json"
+
+
+def request_key(job: tuple) -> str:
+    """One pool job as the request it sends: the portal, the query, the place, the page and
+    the freshness window, so a wider round never counts a different request as sent."""
+    _portal, fn, args = job
+    if fn is linkedin:
+        q, loc, pg, jobage = args[:4]
+        kind = "lir" if len(args) > 4 and args[4] else "li"
+    else:
+        q, pg, jobage = args[:3]
+        kind, loc = "fh", None
+    return json.dumps([kind, q, loc, pg, jobage])
+
+
+def before(folder: str | None) -> tuple[list[dict], set[str]]:
+    """(the postings, the requests answered) of the scrape in `folder`, the round before a
+    widening; ([], set()) where there is none, and the round then sends everything."""
+    if not folder:
+        return [], set()
+    try:
+        rows = json.load(open(os.path.join(folder, "scraped.json"), encoding="utf-8"))
+    except (OSError, ValueError):
+        return [], set()
+    try:
+        sent = json.load(open(os.path.join(folder, SENT), encoding="utf-8"))
+    except (OSError, ValueError):
+        sent = []
+    rows = [r for r in rows if isinstance(r, dict)] if isinstance(rows, list) else []
+    return rows, {k for k in sent if isinstance(k, str)} if isinstance(sent, list) else set()
+
+
 def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
            sent: dict, failed: dict, partial: str = "") -> int:
     """The scrape's files from what was found: scraped, kept and dropped. Exit 2 when
@@ -1185,6 +1230,9 @@ def main() -> int:
                     help="skip the pre-flight portal probe (offline replays)")
     ap.add_argument("--alerts", default=None,
                     help="postings from the person's job-alert emails (tools/job_alerts.py)")
+    ap.add_argument("--before", default=None,
+                    help="a widening: the round before's scrape folder; its postings are "
+                         "carried over and the requests it had answered are not sent again")
     a = ap.parse_args()
     if a.move_cursor:
         said = move_cursor()
@@ -1297,6 +1345,9 @@ def main() -> int:
                     new += 1
         return new
 
+    carried, answered = before(a.before)
+    if carried:
+        landed(carried)
     for task in tasks:
         if task[0] not in ("li", "lir", "fh"):
             mine.setdefault(task[0], []).append(task)
@@ -1323,6 +1374,17 @@ def main() -> int:
     # is the deep pages, never a query or a place that was never asked at all.
     jobs.sort(key=lambda j: (j[2][2] if j[1] is linkedin else j[2][1],
                              0 if j[1] is not linkedin or str(j[2][1]).startswith(DEEP) else 1))
+    if answered:
+        planned = len(jobs)
+        jobs = [j for j in jobs if request_key(j) not in answered]
+        print(f"widening: {len(carried)} postings carried over from the round before, and "
+              f"{planned - len(jobs)} of its {planned} LinkedIn and freehire requests not "
+              "sent again")
+    sent_now: set[str] = set(answered)
+
+    def answered_now(job):
+        with lock:
+            sent_now.add(request_key(job))
     done = threading.Event()
     shown: dict = {}
 
@@ -1349,7 +1411,9 @@ def main() -> int:
     employer_boards = boards.submit(read_boards)
     boards.shutdown(wait=False)
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
-                           on_rows=landed)
+                           on_rows=landed, on_sent=answered_now)
+    with open(os.path.join(a.out, SENT), "w", encoding="utf-8") as fh:
+        json.dump(sorted(sent_now), fh)
     if jobs:
         timing("LinkedIn and freehire finished after", searching)
     swept: dict[str, int] = {}

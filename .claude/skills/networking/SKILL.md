@@ -224,7 +224,9 @@ limit with its reason (`reading.py limits` prints them):
   request answers HTTP 999.
 - **Fewer, better-spent reads.** Free sources make the list, one-page reads screen it, and a
   profile read goes only to the few the person will write to today; read, judge, next. A
-  first note with nothing read is refused unless the person chose card-only.
+  first note with nothing read is refused unless the person chose card-only. No change to
+  the funnel may add a page load or a click, or shorten the pauses below the dial's preset,
+  unless the person sets it in their profile.
 - **The browser read is the person's call.** LinkedIn's User Agreement forbids automated
   access, browser extensions included, at any pace, and the risk is to their own account, so
   it is asked once, plainly (the `profile-reads` upgrade, and `/setup`), kept to what a person

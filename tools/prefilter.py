@@ -166,6 +166,11 @@ def _region_takes_in_home(loc: str) -> tuple:
 def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     low = _MODE.sub(" ", (loc or "").lower()).strip()
     low = re.sub(r"\s+", " ", low).strip(" -,")
+    # The same text with its capitals, for what is read as written ("-on-" joins a town's
+    # name, "-ON-" is a province code); None where it does not line up with `low`.
+    cased = re.sub(r"\s+", " ", re.sub(_MODE.pattern, " ", loc or "", flags=re.I).strip())
+    cased = cased.strip(" -,")
+    cased = cased if cased.lower() == low else None
     tl = (title or "").lower()
     parts = _parts(low)
     prov = next((REGIONS[p] for p in parts if p in REGIONS), None)
@@ -290,7 +295,8 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
                                 f"relocation abroad is a deal-breaker")
             # The same beside a state of home that is not the home region: "Manhattan, KS"
             # passed for somebody in New York.
-            state = _places.subdivision_elsewhere_at_home(loc or "", _HOME_REGION or "", _CC)
+            state = _places.subdivision_elsewhere_at_home(loc or "", _HOME_REGION or "", _CC,
+                                                          towns=[f[2] for f in found])
             if state and prov is None:
                 return "FLAG", (f"a {_METRO} town name in {state}, outside "
                                 f"{_LOC.get('home_region_name', 'the home region')}; "
@@ -299,7 +305,7 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
             # as Bury, in Greater Manchester. Read on the longest name the location
             # holds, since "Ashton-under-Lyne" is a town of its own on the list.
             _, end, _ = max(found, key=lambda f: f[1] - f[0])
-            if _places.runs_on(low, end):
+            if _places.runs_on(low, end, cased):
                 return "FLAG", (f"a town whose name starts with {g}, not {g} itself; "
                                 f"Tier 2 decides")
             return "PASS", f"{_METRO} ({g})"
