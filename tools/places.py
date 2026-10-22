@@ -282,7 +282,8 @@ def subdivision_abroad(location: str, own: str = ""):
     return None
 
 
-def subdivision_elsewhere_at_home(location: str, home_region: str, own: str = ""):
+def subdivision_elsewhere_at_home(location: str, home_region: str, own: str = "",
+                                  towns=()):
     """The state or province of the person's own country a location names, as written,
     when it is not their home region and the profile does not place it (LOCATION
     regions), or None.
@@ -290,10 +291,11 @@ def subdivision_elsewhere_at_home(location: str, home_region: str, own: str = ""
     "Manhattan, KS" passed as home for somebody in New York: a home town's name with a
     state of the same country beside it was read as the home town, wherever the state
     was. Only a home region the tables know is compared: "England" is no state, so a
-    person in the UK sees no change."""
+    person in the UK sees no change. A part that is itself one of `towns`, the home towns
+    the location names, is the town, never a state: "Washington, D.C." for somebody in DC."""
     own = CODE_COUNTRY.get(str(own or "").upper(), str(own or "").upper()) or _own_code()
     home = str(home_region or "").strip()
-    home_names = {home.lower()}
+    home_names = {home.lower()} | {str(t).strip().lower() for t in towns if t}
     for table_cc, table in (("US", _US_STATES), ("CA", _CA_PROVINCES), ("AU", _AU_STATES)):
         if table_cc != own:
             continue
@@ -316,12 +318,20 @@ def subdivision_elsewhere_at_home(location: str, home_region: str, own: str = ""
 # A town whose name runs on from a home town's: "Bury St Edmunds" is not Bury, and
 # "Stratford-upon-Avon" is not Stratford. Read from what follows the home town's name in
 # the same part of the location, never a bare "on" or "in" ("Toronto ON", "Leeds in office").
+# The joining word between hyphens is read as written, and only in lower case: a town's
+# name joins with "-on-" ("Henley-on-Thames"), and "Toronto-ON-Canada" is a province code.
 COMPOUND_TOWN = re.compile(r"^(?:\s+(?:st\.?|saint|upon|under)\s+\w|-(?:on|upon|under|in|by|le|en|sur)-\w)")
+_COMPOUND_WORD = re.compile(r"^\s+(?:st\.?|saint|upon|under)\s+\w", re.I)
+_COMPOUND_HYPHEN = re.compile(r"^-(?:on|upon|under|in|by|le|en|sur)-\w")
 
 
-def runs_on(low: str, end: int) -> bool:
-    """True when the home town's name ending at low[end] starts a longer town's name."""
-    return bool(COMPOUND_TOWN.match(low[end:]))
+def runs_on(low: str, end: int, text: str | None = None) -> bool:
+    """True when the home town's name ending at low[end] starts a longer town's name.
+    `text` is the location as written, where it lines up with `low`."""
+    if text is None or len(text) != len(low):
+        return bool(COMPOUND_TOWN.match(low[end:]))
+    rest = text[end:]
+    return bool(_COMPOUND_WORD.match(rest) or _COMPOUND_HYPHEN.match(rest))
 
 
 def abroad_short(sentence: str):

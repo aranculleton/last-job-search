@@ -57,6 +57,7 @@ import functools
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -3024,35 +3025,55 @@ def resume_owed_line(item, mark="") -> str:
 
 @functools.lru_cache(maxsize=4)
 def _general_resume_dates(root: str) -> tuple:
-    """((path, the day git first holds it), ...) for each general resume in documents/cv/
-    that is still there: the ones not made for one employer."""
+    """((path now, the day it first arrived, the day it went or "", on disk), ...) for each
+    general resume documents/cv/ has ever held: the ones not made for one employer. A file
+    renamed keeps the day it arrived, under its name now; a file deleted is kept, with the
+    day it went, so it is never passed over for an older one."""
     try:
-        log = subprocess.run(["git", "-C", root, "log", "--diff-filter=A", "--format=%x00%ad",
-                              "--date=short", "--name-only", "--", RESUME_DIRS[1]],
+        log = subprocess.run(["git", "-C", root, "log", "--reverse", "-M", "--diff-filter=ADR",
+                              "--format=%x00%ad", "--date=short", "--name-status", "--",
+                              RESUME_DIRS[1]],
                              capture_output=True, text=True, timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
         return ()
-    out: dict = {}
+    arrived: dict = {}
+    gone: dict = {}
     day = ""
     for line in log.splitlines():
         if line.startswith("\0"):
             day = line[1:].strip()
-        elif line.strip() and is_resume_file(line.strip()) and \
-                os.path.isfile(os.path.join(root, line.strip())):
-            out.setdefault(line.strip(), day)       # newest first: the latest time it arrived
-    return tuple(out.items())
+            continue
+        f = line.split("\t")
+        if len(f) < 2:
+            continue
+        kind, paths = f[0][:1], [x.strip() for x in f[1:]]
+        if kind == "A":
+            arrived[paths[0]] = day
+            gone.pop(paths[0], None)
+        elif kind == "R" and len(paths) == 2:
+            arrived[paths[1]] = arrived.pop(paths[0], day)
+            gone.pop(paths[1], None)
+        elif kind == "D" and paths[0] in arrived:
+            gone[paths[0]] = day
+    return tuple((p, d, gone.get(p, ""), os.path.isfile(os.path.join(root, p)))
+                 for p, d in arrived.items() if is_resume_file(p))
 
 
 def general_resumes_on(day: str, root: str | None = None) -> list[str]:
-    """The person's general resumes that were newest on `day`, by when each arrived. A
-    message that says one went, to somebody nothing was made for, carried one of these.
-    [] when there is no history to read (no git, or a copy of the state outside it)."""
-    held = [(d, p) for p, d in _general_resume_dates(os.path.normpath(root or person.state()))
-            if d and d <= str(day or "")]
+    """The person's general resumes that were newest on `day`, by when each arrived, under
+    the names they have now. A message that says one went, to somebody nothing was made
+    for, carried one of these. [] when there is no history to read (no git, or a copy of the
+    state outside it), and when the newest they had then is no longer there: an older one
+    is never offered in its place."""
+    day = str(day or "")
+    held = [(d, p, here) for p, d, went, here in
+            _general_resume_dates(os.path.normpath(root or person.state()))
+            if d and d <= day and not (went and went <= day)]
     if not held:
         return []
-    newest = max(d for d, _ in held)
-    return sorted(p for d, p in held if d == newest)
+    newest = max(d for d, _, _ in held)
+    top = [(p, here) for d, p, here in held if d == newest]
+    return sorted(p for p, _ in top) if all(here for _, here in top) else []
 
 
 def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]:
@@ -3075,16 +3096,19 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
 
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     for cid, contact in by_id.items():
-        made = [str(row.get("cv_file") or "").strip() for row in tracker or ()
-                if str(row.get("cv_file") or "").strip() and made_for(row, [contact])]
+        made = None
         for r in threads_for(threads, cid):
             if says_resume_went(r) and not names_a_file(r):
+                if made is None:
+                    made = [str(row.get("cv_file") or "").strip() for row in tracker or ()
+                            if str(row.get("cv_file") or "").strip() and made_for(row, [contact])]
                 day = str(r.get("date") or "").strip()
                 attach_cmd = f"python3 tools/network/state.py attach {cid} --date {day} --file"
                 likely = [] if made else general_resumes_on(day)
                 if len(likely) == 1:
                     say = (f"nothing was made for them, so it was most likely your general "
-                           f"{word}, the newest you had then: {attach_cmd} {likely[0]} (or "
+                           f"{word}, the newest you had then: {attach_cmd} "
+                           f"{shlex.quote(likely[0])} (or "
                            "the file that went; --file unknown if nobody kept it)")
                 elif likely:
                     say = (f"nothing was made for them, so it was most likely one of the "

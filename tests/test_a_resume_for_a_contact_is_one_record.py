@@ -509,6 +509,35 @@ def test_a_resume_with_no_file_named_names_the_general_one_held_that_day(repo):
     state._general_resume_dates.cache_clear()
 
 
+def test_a_renamed_resume_keeps_the_day_it_arrived_and_a_deleted_one_is_never_passed_over(repo):
+    # Renamed with git mv, the newest file was missed, and an older one was offered as "the
+    # newest you had then", with the command filled in.
+    state._general_resume_dates.cache_clear()
+    _git(repo, "init", "-q", "-b", "master")
+    _dated_commit(repo, ["documents/cv/Morgan_Ellis_CV_A.pdf"], "2026-08-01")
+    _dated_commit(repo, ["documents/cv/Morgan_Ellis_CV_B.pdf"], "2026-09-01")
+    _git(repo, "mv", "documents/cv/Morgan_Ellis_CV_B.pdf", "documents/cv/Morgan Ellis CV.pdf")
+    _dated_commit(repo, [], "2026-09-10")
+    root = str(repo)
+    assert state.general_resumes_on("2026-09-20", root) == ["documents/cv/Morgan Ellis CV.pdf"]
+    assert state.general_resumes_on("2026-09-05", root) == ["documents/cv/Morgan Ellis CV.pdf"]
+    assert state.general_resumes_on("2026-08-15", root) == ["documents/cv/Morgan_Ellis_CV_A.pdf"]
+    # The command it fills in holds a name with a space as one argument.
+    threads = THREADS + [{"contact_id": CID, "date": "2026-09-20", "direction": "out",
+                          "channel": "email", "scenario": "", "summary": "CV sent as asked.",
+                          "full_text": ""}]
+    _repo(repo, threads=threads)
+    detail = _reasons(repo)[(CID, "resume_file_not_named")]
+    assert "--file 'documents/cv/Morgan Ellis CV.pdf'" in detail
+    # Deleted later, the newest of that day is not replaced by an older one.
+    state._general_resume_dates.cache_clear()
+    _git(repo, "rm", "-q", "documents/cv/Morgan Ellis CV.pdf")
+    _dated_commit(repo, [], "2026-09-25")
+    assert state.general_resumes_on("2026-09-20", root) == []
+    assert state.general_resumes_on("2026-09-30", root) == ["documents/cv/Morgan_Ellis_CV_A.pdf"]
+    state._general_resume_dates.cache_clear()
+
+
 # ------------------------------------------------------------------ 5. two chats at once
 
 def _git(cwd, *args):
