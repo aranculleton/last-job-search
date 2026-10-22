@@ -636,9 +636,8 @@ connection request; on a free account there is no InMail, so say so once rather
 than recommending one. If the connection cap is hit, say so and note that following
 costs nothing and lets the request go out warm when the cap resets.
 
-Once per session for messages, end with one short line inviting change: "Anything about
-the people or the wording you'd have different? It sticks from now on." What they say goes
-through CLAUDE.md, "Learning the person".
+End with the line `python3 tools/tips.py networking` prints, if it prints one (it decides when: the first time, then now and then). What they say back
+goes through CLAUDE.md, "Learning the person".
 
 ## When they say a note went
 

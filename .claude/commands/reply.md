@@ -92,6 +92,5 @@ a date.
 If the person is a genuine mismatch, say so instead of drafting something
 optimistic. A polite two-line exit preserves the relationship at zero cost.
 
-Once per session for messages, end with one short line inviting change: "Anything about
-the tone or the wording you'd have different? It sticks from now on." What they say goes
-through CLAUDE.md, "Learning the person".
+End with the line `python3 tools/tips.py reply` prints, if it prints one (it decides when: the first time, then now and then). What they say back
+goes through CLAUDE.md, "Learning the person".

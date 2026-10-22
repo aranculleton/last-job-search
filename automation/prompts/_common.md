@@ -25,30 +25,33 @@ employer or a contact.
    is on>"`. A person may not open a chat for days, so this run is what keeps their copy
    current. Its model check and its place check are for a person's own chat: leave both out of the message. Exit 1 or 2: one line in the
    message, and carry on with the run. If it lists upgrades Claude applies itself, run
-   `/upgrade 20` now; at the end of the message, one line per upgrade it applied (what
-   changed, `git revert <sha>` to undo it). Never put a question to the person mid-run: at
+   `/upgrade 20` now; at the end of the message, one plain line per change it made for
+   them, never a commit or a command. Never put a question to the person mid-run: at
    most three of the ones that need them go at the end of the message.
 3. If an earlier `claude/ops-*` branch has an open, unmerged PR, it is an earlier run's
-   unfinished work: say so in one line of the message, with the PR link.
+   unfinished work: land it now (merge master into it, `./tools/ci_local.sh --quick`, merge
+   it). Only if that fails, one plain line in the message: "An earlier run's notes are not
+   saved yet; the next run tries again." Never a branch, a PR or a link.
 4. `./tools/setup_env.sh --python` (seconds). Run it without `--python` only if this run
    compiles a document.
 
 ## Landing work
 
 Commit only the files the task names, with `git add -f` where CLAUDE.md's persistence
-rule says to. Run `./tools/ci_local.sh --quick`; it must end green. Then
+rule says to, and `profile/tips.json` when the message's tip line wrote it. Run `./tools/ci_local.sh --quick`; it must end green. Then
 `git push -u origin <this run's branch>`, open a PR to master that states the ci_local
 result, and merge it. GitHub's checks show as skipped on this private repo by design (they
 cost billed minutes, and ci_local.sh runs the same checks); do not wait for them and do not
 dispatch them. Never push to master directly. If the push or the merge is
-refused, do not work around it: deliver the message anyway, with the refusal in its first
-line, and leave the branch for a person.
+refused, do not work around it: deliver the message anyway, its first line plain ("Today's
+notes could not be saved; the next run tries again."), and leave the branch for the next run.
 
 ## Delivering the message
 
 **Your final reply is the message.** It is what the person reads: the reply in the chat
 this task is bound to, or the push notification a Routines-screen task sends when it
-finishes. Write it last, and write nothing after it. Nothing else delivers it, and nothing
+finishes. Write it last, and write nothing after it. Its last line is what `python3
+tools/tips.py brief` prints (`search` for the job round), and nothing if it prints nothing. Nothing else delivers it, and nothing
 else is needed.
 
 Where the message tells the person to reply (the job round's picks), it names the chat to

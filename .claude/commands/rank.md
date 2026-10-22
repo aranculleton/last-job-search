@@ -189,7 +189,7 @@ Rules for the presentation:
 - Every claim traces to fetched posting text or the profile - no invented details.
 - Say explicitly that these are **triage scores from the posting text only**, and that `/apply` will re-evaluate with company research before anything is drafted.
 - Then ask: "Want to apply to any of these? Give me the number(s), and say if you have already applied to any of them anywhere, so I can record it rather than draft it." The tracker knows only what was recorded here; a yes is recorded through `/outcome <company>` (its Step 1.2 adds the row for an application made elsewhere), and nothing is drafted for it.
-- End with one short line inviting change, once per session for shortlists: "Anything about the kind of roles or employers here you'd have different? It sticks from now on." What they say goes through CLAUDE.md, "Learning the person".
+- End with the line `python3 tools/tips.py search` prints, if it prints one (it decides when: the first time, then now and then). What they say back goes through CLAUDE.md, "Learning the person".
 - If the user picks one, run the `/apply` workflow on that job's URL, passing the triage verdict as prior context but **re-running the full Step 1 evaluation** - triage never substitutes for it.
 
 ---

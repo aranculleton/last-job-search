@@ -113,7 +113,7 @@ Enter this branch from the `followup` argument (Step 0) or from the offer under 
 2. Apply the writing style rules from `03-writing-style.md` (no cliches, no em-dashes, warm but direct), and match the application's language - draw the register from the archived cover letter.
 3. Write roughly **60 to 120 words**: address the `contact_person` from the tracker if present (otherwise the team, in the application's language); one sentence restating interest in the specific role; one concrete value-reminder drawn from the submitted materials; one polite question about the timeline. No pressure, no "just checking in" filler.
 4. Shape it for the `channel` column: email (with a subject line reusing the application's headline), LinkedIn message (shorter, no subject), or portal message (plain text).
-5. Present the draft and iterate until the user is happy. End with one short line inviting change, once per session for follow-up and thank-you notes: "Anything about the tone or the wording you'd have different? It sticks from now on." What they say goes through CLAUDE.md, "Learning the person".
+5. Present the draft and iterate until the user is happy. End with the line `python3 tools/tips.py reply` prints, if it prints one (it decides when: the first time, then now and then). What they say back goes through CLAUDE.md, "Learning the person".
 
 **Logging.** Once the user confirms they will send it (or have sent it), log it in the same turn - an unlogged follow-up breaks the next run's quiet-days math:
 

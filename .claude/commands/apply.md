@@ -564,8 +564,7 @@ List the files written:
 
 **Show them, never only point at them.** Send both PDFs into the conversation with the session's file-sending tool (SendUserFile or its equivalent) so they open in one tap, and paste into the reply what they need without opening anything: the cover letter's text, the outreach note ready to paste, and the two screening answers marked **(decide per application)**. The paths go underneath, for the record. "The files are in cv/" is never the whole answer.
 
-End with one short line inviting change, once per session for documents: "Anything about the
-tone, the evidence or the wording you'd have different? It sticks from now on." What they say
+End with the line `python3 tools/tips.py apply` prints, if it prints one (it decides when: the first time, then now and then). What they say back
 goes through CLAUDE.md, "Learning the person".
 
 ### Step 6b: Record the Application

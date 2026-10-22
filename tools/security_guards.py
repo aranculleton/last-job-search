@@ -52,6 +52,23 @@ ALLOWED_PERMISSIONS = {
     "Bash(python tools/verify_pdf.py:*)",
     "Bash(python3 tools/verify_pdf.py:*)",
     "Bash(pdftotext:*)",
+    # Saving and landing a chat's work, which a person is never asked about (CLAUDE.md,
+    # "Talking to the person"): a chat on their computer stopped at the desktop app's
+    # approval box for each commit and merge, and the person was asked to merge it
+    # (2026-10-22, approved by the maintainer). Narrow on purpose: the push is the one
+    # exact command RUNBOOK.md step 4 runs, to their own copy, so no force push, no
+    # deleted branch and no other remote is pre-approved; the rest act on their own repo.
+    # They apply only once the person has trusted the folder.
+    "Bash(git add:*)",
+    "Bash(git commit:*)",
+    "Bash(git fetch origin:*)",
+    "Bash(git merge origin/master:*)",
+    "Bash(git push -u origin HEAD)",
+    "Bash(gh pr create:*)",
+    "Bash(gh pr merge:*)",
+    "Bash(gh pr view:*)",
+    "Bash(python3 tools/sync_app.py:*)",
+    "Bash(./tools/ci_local.sh:*)",
 }
 
 # Personal-data ignore rules that must never disappear from .gitignore.
