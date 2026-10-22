@@ -49,6 +49,22 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A chat that can't reach the job sites says so first, and runs no search.** A cloud chat
+  whose settings reach only a few websites searched the web instead and showed jobs that had
+  closed months before as leads. Now every chat checks when it starts and tells you the one
+  fix before anything else, until it is made, and no search runs in the meantime. Where a web search is still used (one board down while the others work), a lead
+  is shown only once its own page shows it is still open.
+- **Your checks before saving no longer fail on ordinary words.** Outside the maintainer's own
+  copy, the check that scanned the app's files for your data is skipped: you never build or
+  publish the app, so it could only match your own words, such as a first name one of the
+  app's examples shares, and it stopped every save. In the maintainer's copy a job title in
+  brackets beside a name is no longer read as a name, and an accented first name is matched
+  like the app's own.
+- **A stored score is reused whatever shape the seen-jobs file is in.** A copy holding the
+  postings without its top-level "seen" key crashed the score lookup `/apply` uses, and the
+  round read it as empty, so jobs it had ruled out came back. Both shapes are read the same,
+  and the file is saved back in the usual one.
+
 - **A contact named like one of the app's examples no longer blocks merges** (the
   maintainer's own repo only). A contact's first name is on the leak list as a
   greeting, to catch a real message copied into an example, and the app's examples greet

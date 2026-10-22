@@ -72,14 +72,27 @@ If a CLI tool exits with a non-zero code, log the error message and continue - d
 
 #### 1c. WebSearch fallback
 
-Use `WebSearch` for:
+**Never when this chat's cloud settings block the job sites.** If `python3 tools/env_check.py
+--say` prints anything, tell the person those words first and run no search at all until
+they say it is done: a web search in place of the job sites returned postings closed for
+months and presented them as leads (2026-10-22). A person must never be left with a search
+that quietly does not work.
+
+Otherwise, use `WebSearch` for:
 - Portals listed in `profile/search-queries.md` that do **not** have a corresponding directory under `.agents/skills/`
-- Any portal whose CLI fails at runtime
+- Any portal whose CLI fails at runtime while the others work
 - When bun is unavailable (Step 1a failed)
 
 Use the site-specific query strings from `profile/search-queries.md` directly as WebSearch queries for these portals.
 
 Tag each fallback result as WebSearch-sourced, keeping the portal tag when the fallback stands in for an installed portal whose CLI failed. Step 4 persists this as the entry's `source`, and Step 5 reports which portals ran on the fallback this run.
+
+**A web-search lead is shown only once its own page proves it is open.** A search engine's
+index holds postings long after they close. Before a lead reaches the person, fetch its
+posting page (Step 2) and keep it only when the page itself is the posting, carries no
+closed notice ("no longer accepting applications", "this job has expired", "position
+filled"), and shows a closing date, if any, that has not passed. Anything else is dropped
+and written to `seen_jobs.json` as `"status": "expired"`, never shown.
 
 ### Step 2: Fetch & Parse
 

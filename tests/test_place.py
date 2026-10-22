@@ -278,7 +278,7 @@ def test_the_answer_is_recorded_only_in_a_profile_that_exists(tmp_path, monkeypa
 def test_the_sync_runs_the_check_in_every_chat_not_only_the_days_first(sync_steps):
     # Run the sync both ways and read what it did, rather than search its source.
     rc, steps = sync_steps("--if-stale", stale=False)          # a day already checked
-    assert rc == 0 and steps == ["place_check"]
+    assert rc == 0 and steps == ["network_check", "place_check"]
     rc, steps = sync_steps("--if-stale", stale=True)
     assert rc == 0 and steps[-2:] == ["model_check", "place_check"], steps
 

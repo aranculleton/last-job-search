@@ -76,11 +76,17 @@ INVENTED_FIRST_NAMES = frozenset({
 })
 
 
+def _fold(word: str) -> str:
+    """A word without its accents: the leak scan matches accent-blind, so "Zoë" is "Zoe"."""
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", word) if not unicodedata.combining(c))
+
+
 def _greetings(name: str) -> list[str]:
     """The greeting forms of a person's given names, leaving out the app's own cast."""
     out = []
     for first in given_names(name):
-        if first not in INVENTED_FIRST_NAMES:
+        if _fold(first) not in INVENTED_FIRST_NAMES:
             out += [f"=Hi {first}", f"=Dear {first}"]
     return out
 
@@ -191,6 +197,25 @@ _PREP_HEADING = re.compile(r"^# Prep - ([^,\n]+),", re.M)
 _CREDENTIAL = re.compile(r"^(?:[A-Z]{2,5}|Ph\.?D\.?|P\.Eng\.?|M\.?Sc\.?|B\.?Sc\.?)$")
 
 
+# A bracket that is not a nickname: a role or a note written beside a name, as a tracker's
+# contact_person holds "<name> (Talent Acquisition Partner, <employer>)". Read as part of
+# the name, its last words became a "name" ("Acquisition Partner") that matched the app's
+# own files, and the leak scan failed on them (2026-10-22).
+_NICKNAME = re.compile(r"[A-Z][\w'.-]*")
+
+
+def _without_roles(name: str) -> str:
+    """The name with every bracket that is not a one-word nickname taken out, an unclosed
+    one included."""
+    name = re.sub(r"\(([^)]*)\)",
+                  lambda m: m.group(0) if _NICKNAME.fullmatch(m.group(1).strip()) else " ",
+                  str(name or ""))
+    cut = name.rfind("(")
+    if cut >= 0 and ")" not in name[cut:]:
+        name = name[:cut]
+    return " ".join(name.split())
+
+
 def name_forms(name: str) -> list[str]:
     """Every form a recorded name is written in elsewhere.
 
@@ -198,7 +223,7 @@ def name_forms(name: str) -> list[str]:
     "Xiu Mei (Sally) Ho", "Xiu Mei Ho" or "Sally Ho". An entry matches
     only the form it holds, so each form is its own entry.
     """
-    base = name.split(",")[0].split()
+    base = _without_roles(name).split(",")[0].split()
     while len(base) > 2 and _CREDENTIAL.match(base[-1]):
         base.pop()
     base = " ".join(base)
@@ -217,6 +242,7 @@ def name_forms(name: str) -> list[str]:
 
 def given_names(name: str) -> list[str]:
     """Each name a person might be greeted by: every capitalised word but the last."""
+    name = _without_roles(name)
     words = " ".join(re.sub(r"\([^)]*\)", " ", name.split(",")[0]).split()).split()
     while len(words) > 2 and _CREDENTIAL.match(words[-1]):
         words.pop()

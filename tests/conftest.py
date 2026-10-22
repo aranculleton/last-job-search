@@ -107,8 +107,8 @@ def sync_steps(monkeypatch):
 
     def step(name, value=None):
         return lambda *a, **k: steps.append(name) or value
-    for name in ("_record_check", "own_tests", "app_watch", "model_check", "place_check",
-                 "upgrades"):
+    for name in ("_record_check", "own_tests", "app_watch", "network_check", "model_check",
+                 "place_check", "upgrades"):
         monkeypatch.setattr(sync_app, name, step(name))
     monkeypatch.setattr(sync_app, "is_the_app", lambda: False)
     monkeypatch.setattr(sync_app, "own_folder", lambda: "")

@@ -137,18 +137,20 @@ def blocked_say(names) -> str:
          "a computer in the cloud that only reaches a few websites until you allow more.",
          "Recommended, once:"]
         + claude_surfaces.steps("cloud-internet")
-        + ["Until then I'll search the web, which finds fewer jobs."])
+        + ["Until then I won't search: it would only find old jobs. Say \"done\" once it's "
+           "changed."])
 
 
 def blocked_names() -> list[str]:
     """The job sites this chat's cloud settings refuse, probed now; [] off the cloud."""
     if not CLOUD:
         return []
-    out = []
-    for name, url in hosts() + board_hosts():
-        if probe(url)[0] == "blocked":
-            out.append(name)
-    return out
+    # Side by side: the day's sync runs this, and one after another took a second a host.
+    from concurrent.futures import ThreadPoolExecutor
+    found = hosts() + board_hosts()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        verdicts = list(pool.map(lambda nu: probe(nu[1])[0], found))
+    return [name for (name, _), v in zip(found, verdicts) if v == "blocked"]
 
 
 def allowlist() -> list[str]:

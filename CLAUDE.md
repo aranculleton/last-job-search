@@ -258,7 +258,8 @@ third-party data) or `gmail_sync/state.json`.
   denial, not a bug: do not route around it. Tell the person what `python3 tools/env_check.py
   --say` prints, word for word (a round prints the same under "Tell the person"): one
   recommended fix in numbered steps, which reaches the running chat within about a minute.
-  Meanwhile the web search fallback, and `/apply <pasted posting text>`, need no job board.
+  The day's sync checks it and prints the same words first. Until it is fixed, run no search:
+  a web search in its place finds old, closed jobs. `/apply <pasted posting text>` still works.
 
 ## Automation: what runs without anyone asking
 

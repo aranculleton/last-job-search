@@ -45,7 +45,10 @@ def test_a_cloud_chat_that_cannot_reach_job_sites_says_why_and_one_fix_in_steps(
     assert "can't reach the job sites (LinkedIn, freehire)" in lines[0]
     assert "Recommended, once:" in said
     assert re.search(r"^1\. .+\n2\. Set Network access to Full", said, re.M)
-    assert said.endswith("Until then I'll search the web, which finds fewer jobs.")
+    # No search runs in its place: a web search there turned up jobs closed for months,
+    # shown as leads (2026-10-22).
+    assert said.endswith("Say \"done\" once it's changed.")
+    assert "won't search" in said
     assert len(said.split()) <= 110
 
 
@@ -108,3 +111,11 @@ def test_every_upgrade_says_what_it_gives_and_asks_in_plain_words(monkeypatch):
         for field in ("gives", "ask", "why_ask"):
             if getattr(u, field, ""):
                 _plain(getattr(u, field))
+
+
+def test_blocked_job_sites_are_checked_by_every_chat_in_the_cloud(sync_steps):
+    """Each cloud chat runs on its own computer with its own settings, so a chat opened on a
+    day already checked is checked too, not only the day's first."""
+    for stale in (False, True):
+        rc, steps = sync_steps("--if-stale", stale=stale)
+        assert rc == 0 and "network_check" in steps, (stale, steps)
