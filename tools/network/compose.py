@@ -960,6 +960,43 @@ def _about_me_for(common_ground, about_me):
 _WORK_AUTH_ANY = _NET.WORK_AUTH_ANY
 
 
+def _employer_spans(text, employers) -> list:
+    """Where each employer is named in `text`, as a name is written: capitalized, its words
+    in order. "Visa" the company, never "visa" the word."""
+    spans = []
+    for e in employers or ():
+        for form in {str(e or "").strip(), company_key.key(e) or ""}:
+            words = re.findall(r"[^\W_]+", form)
+            if not words:
+                continue
+            rx = r"(?<!\w)" + r"\W*".join(map(re.escape, words)) + r"(?!\w)"
+            spans += [m.span() for m in re.finditer(rx, text, re.I) if m.group(0)[:1].isupper()]
+    return spans
+
+
+def work_auth_said(text, employers=()) -> list:
+    """The work-authorization phrases in `text` (networking.py WORK_AUTH_ANY), as matches,
+    less any that is only an employer's own name. "The data science team at Visa works on"
+    names the reader's employer and says nothing about a visa, and was refused as work
+    authorization (2026-10-22)."""
+    text = str(text or "")
+    spans = _employer_spans(text, employers)
+    return [m for m in _WORK_AUTH_ANY.finditer(text)
+            if not any(a <= m.start() and m.end() <= b for a, b in spans)]
+
+
+def _reader_company(contact) -> str:
+    """The employer on this contact's row, or ""."""
+    contact = str(contact or "").strip()
+    if not contact:
+        return ""
+    try:
+        import learned
+        return learned.example_reader({"contact_id": contact})[1]
+    except (ImportError, SystemExit):
+        return ""
+
+
 # Who counts as a recruiter for the one exception: their job is roles, so a
 # role question and work authorization are what they need to hear.
 # A recruiter by job, not anyone whose snippet says "recruiting": a hiring
@@ -1046,7 +1083,8 @@ def eligible(reader: str) -> bool:
         return ELIGIBILITY.get(reader, False)
     try:
         import learned
-        said = [bool(_WORK_AUTH_ANY.search(str(x.get("text") or "")))
+        book = learned.contact_book()
+        said = [bool(work_auth_said(x.get("text"), (learned.example_reader(x, book)[1],)))
                 for x in learned.approved()
                 if x.get("reader") == reader and x.get("channel") in _FIRST_CHANNELS]
     except Exception:  # noqa: BLE001  a note must never break on the learned file
@@ -1077,12 +1115,14 @@ def reader_type(title="", seniority=None, recruiter=False) -> str:
     return "peer"
 
 
-def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> list:
+def first_note_findings(text, recruiter=False, reader=None, work_auth=None,
+                        employers=()) -> list:
     """Why this first message reads as asking for the job, as (rule, text) pairs, each
     naming the phrase and what to write instead. `reader` (READER_TYPES) and the person's
     settings decide what is allowed: a recruiter is asked about roles; a decision-maker
     may be told the role wanted and the sender's work authorization; a peer neither,
-    unless `work_auth=True` says this message should state it."""
+    unless `work_auth=True` says this message should state it. An employer in
+    `employers` named in the note is its name, never work authorization ("Visa")."""
     blunt = [(m.span(), tone.Violation("asks_for_the_job", f"\"{m.group(0)}\": {_RECRUITER_FIX}"))
              for rx in _BLUNT_ASKS for m in rx.finditer(text)]
     if recruiter or reader == "recruiter":
@@ -1102,7 +1142,7 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> l
                                f"\"{m.group(0)}\": a {reader.replace('_', '-')} is not told "
                                "this in a first message (profile/networking.py ELIGIBILITY); "
                                "pass work_auth=True to say it in this one")
-                for m in _WORK_AUTH_ANY.finditer(text)]
+                for m in work_auth_said(text, employers)]
     # A blunt ask the list above has already named is said once.
     return out + [v for (a, b), v in blunt if not any(a < y and x < b for x, y in spans)]
 
@@ -1542,7 +1582,8 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     note = advice.spoken(" ".join(p for p in parts if p), keep=keep)
     _honest(note, looked, said=(how_found,))
     findings = first_note_findings(note, recruiter=recruiter, reader=rtype,
-                                   work_auth=say_auth or None) + gatekeeping_findings(note)
+                                   work_auth=say_auth or None, employers=their) \
+        + gatekeeping_findings(note)
     if findings:
         raise AsksForTheJob(
             "this first note asks for the job: %s. A first note asks for a conversation; "
@@ -1909,7 +1950,7 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
     body = advice.spoken("\n\n".join(p for p in paragraphs if p), keep=their)
     _honest(body, looked, said=(how_found,))
     findings = first_note_findings(body, recruiter=recruiter, reader=rtype,
-                                   work_auth=say_auth or None)
+                                   work_auth=say_auth or None, employers=their)
     if findings:
         raise AsksForTheJob(
             "this InMail asks for the job: %s. It asks for a conversation; the role belongs "
@@ -2168,6 +2209,10 @@ def example_fact_names(text, contact: str = "", name: str = "", referrer: str = 
             for n in [r.get("employer")] + ([r["known_as"]] if isinstance(r.get("known_as"), str)
                                              else list(r.get("known_as") or []))
             if company_key.key(n)}
+    # Every word of the reader's own name is theirs: a note greeting its reader by a first
+    # name that was an approved example reader's surname was refused as that name
+    # (2026-10-22).
+    r_words = {w.lower() for w in re.findall(r"[^\W\d_][\w'-]*", r_name or "")}
     ref_names, ref_keys = _referrers(referrer, row, book)
     ref_names = {state._match_name(n) for n in ref_names}
     theirs = None                       # what is known about the reader, read once if needed
@@ -2184,11 +2229,10 @@ def example_fact_names(text, contact: str = "", name: str = "", referrer: str = 
         found = []
         words = [w for w in re.findall(r"[^\W\d_][\w'-]*", e_name) if len(w) >= 3]
         full = " ".join(words)
-        r_surname = state.surname(r_name).lower() if r_name else ""
         if len(words) > 1 and re.search(r"(?<![\w'-])" + r"\s+".join(map(re.escape, words))
                                         + _NAME_END, plain, re.I):
             found.append(full)
-        elif (len(words) > 1 and words[-1].lower() != r_surname
+        elif (len(words) > 1 and words[-1].lower() not in r_words
               and _surname_alone(words[-1], plain)):
             found.append(words[-1])
         key = company_key.key(e_company)
@@ -2288,7 +2332,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
                           live_thread=(k in ("reply", "referral_ask")),
                           others=book_names(contact) if contact else ()))
     if k in FIRST_MESSAGE_KINDS:
-        out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth)
+        out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth,
+                                   employers=tuple(employers or ()) + (_reader_company(contact),))
     if k in FIRST_MESSAGE_KINDS + ("nudge",):
         out += gatekeeping_findings(text)
     # A first message with nothing read about them: refused unless the person chose a note

@@ -357,7 +357,7 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `python3 tools/exclude.py` | Rulings in `seen_jobs.json`, each with what it rests on. `add <url> --reason "<why>" [--basis person] [--rests-on "<part>"]` rules a posting out (a reason that cites "blocker N" names its part by itself), `lift "<words in the reason>"` takes rulings off when the person changes their mind, `review` groups older rulings that record no basis, `stamp "<words>" --basis rules\|person` records what a group rests on, `parts` lists the parts of the rules a ruling can rest on, `lapsed` the rulings a rules change lapsed and `restamp "<words>" --rests-on "<part>"\|all` keeps the ones that still hold; `--url` narrows lift, stamp and restamp to named postings when reasons are word for word the same; and `rules` prints the rules fingerprint. |
 | `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
 | `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, Poppler, pypdf, Bun and every job board's host, with what to do about anything missing. |
-| `python3 tools/network/state.py` | What is owed, the requests sent and InMail credits left, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. `nudge <contact_id> --text-file <file>` logs a nudge that went, with its words, and `message <contact_id> ...` any other later message (`--texts <file.json>` for several); the BUDGET line says the 50 a week is the app's planning cap and names `CONNECTIONS_PER_WEEK`. |
+| `python3 tools/network/state.py` | What is owed, the requests sent and InMail credits left, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. `nudge <contact_id> --text-file <file>` logs a nudge that went, with its words, and `message <contact_id> ...` any other later message (`--texts <file.json>` for several); the BUDGET line counts the requests sent this week and today, with no cap of the app's own: LinkedIn says when its own limit is reached. |
 
 `tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each
 skill a posting might ask about, what the candidate genuinely holds that does the same job
@@ -391,16 +391,14 @@ not a bug in the update.
    that pin the person's own data through the app's public names (a job board through
    `tools/offline_boards.py`), keeping every assertion; the rest are retired.
 3. **It checks behaviour the update changed.** Read the CHANGELOG entry for the change and
-   bring the test in line with it. If the new behaviour looks wrong for this person, report
-   it to the app (the way this repo's `profile/CLAUDE.md` says, or an issue on the app) and
-   leave the test failing rather than weaken it.
-4. **Deleting a failing test is the person's call, asked in plain words.** The sync prints
-   the exact question, its two answers with "Yes (recommended)" first, what to say if they
-   ask what it means, and the reply to each (`ASK_TIDY` and the lines under it in
-   `tools/sync_app.py`). Ask once, in those words: most
-   people have never seen a test, and "retire 57 tests?" means nothing to them. When none
-   needs deleting there is no question. A permission check that stops an unexplained
-   deletion is right to.
+   bring the test in line with it. If the new behaviour looks wrong for this person, bring the
+   test in line all the same and report it to the app (the way this repo's `profile/CLAUDE.md`
+   says, or an issue on the app): a failing test would hold the whole update back.
+4. **All of it is Claude's, in the same turn, with nothing asked.** Rewrite, retire and bring
+   in line, run them again, and commit with the sync's work, naming each test in the commit so
+   a revert brings any back. The person hears one plain line at most (`OWN_CHECKS_SAID` in
+   `tools/sync_app.py`); most have never seen a test, and a question or a to-do about one is
+   one they cannot act on.
 5. Run `./tools/ci_local.sh`, then land on master as usual. Until it is green, master stays
    on the old version and nothing breaks.
 

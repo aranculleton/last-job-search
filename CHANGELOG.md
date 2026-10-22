@@ -98,6 +98,15 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A note to someone at Visa is no longer refused as talking about a visa.** The employer's
+  own name was read as work authorization, so a note to a peer there could not name where
+  they work. The word still counts where it is the word ("my visa is sorted").
+- **A note greeting someone by their own first name is no longer refused as copied.** When
+  their first name was the surname of someone you had approved a note to, the greeting was
+  read as that other person's name. Every part of the reader's own name is theirs.
+- **After an update, your setup's own checks are kept in line for you.** A chat could say it
+  would "flag those for you to update yourself". Nothing about them is ever yours to do or to
+  answer any more: they are brought in line in the same go, and at most one plain line says so.
 - **A people search narrowed by the right company number keeps it.** Every card said
   "JPMorganChase" and the employer was written "JPMorgan Chase", so the number was thrown
   away as someone else's. A name written with or without its spaces is the same employer.

@@ -185,3 +185,56 @@ def test_a_greeting_that_starts_a_name_is_theirs_only_when_nobody_else_answers_t
     assert tone.wrong_greeting("Hi Thad, hope you're well.", "Thaddeus Venn", ["Thaddea Rook"])
     assert tone.wrong_greeting("Hi Thad, hope you're well.", "Thaddea Rook",
                                ["Thaddeus Venn"]) == []
+
+
+# Two notes from 2026-10-22: a reader whose first name is an approved example's surname was
+# refused on their own greeting, and an employer called Visa was read as work authorization.
+
+def test_the_readers_own_name_is_never_borrowed_from_an_example(approved, capsys):
+    import learned
+    _book([{"contact_id": "kes_castellan", "name": "Ana Castellan", "company": "Kestrel Mutual",
+            "status": "replied_positive"},
+           {"contact_id": "kes_pell", "name": "Pell Juno", "company": "Kestrel Mutual",
+            "status": "replied_positive"},
+           {"contact_id": "fern_orrin", "name": "Juno Orrin", "company": "Fernhill Freight",
+            "status": "not_contacted"},
+           {"contact_id": "oak_reed", "name": "Riley Reed", "company": "Oakmere Foods",
+            "status": "not_contacted"}])
+    learned.approve("this one is good too", "Hi Pell, your post on stock cover stuck with me. "
+                    "I build demand forecasts in Manchester and would love 15 minutes.",
+                    channel="connection", reader="peer", contact_id="kes_pell",
+                    today="2026-10-02")
+    note = ("Hi Juno, I build demand forecasts in Manchester and would value 15 minutes on "
+            "how your planning team works.")
+    # Juno is this reader's own first name, and the surname of the approved note's reader.
+    assert _facts(note, "fern_orrin", "Juno Orrin") == []
+    assert reading.save_drafts({"fern_orrin": (note, True)}) == reading.EXIT["ok"]
+    assert "not saved" not in capsys.readouterr().out
+    # The example's reader is still theirs alone: the full name, and the surname to anyone else.
+    assert _facts("Hi Juno, Pell Juno's post stuck with me.", "fern_orrin", "Juno Orrin")
+    assert _facts("Hi Riley, your chat with Juno at the meetup stuck with me.",
+                  "oak_reed", "Riley Reed")
+
+
+def test_an_employer_named_visa_is_its_name_not_work_authorization(approved):
+    _book([{"contact_id": "visa_orrin", "name": "Juno Orrin", "company": "Visa",
+            "status": "not_contacted"}])
+    note = ("Hi Juno, the data science team at Visa works on the fraud models I build too. "
+            "Would you have 15 minutes?")
+
+    def auth(text, **kw):
+        return [v.text for v in compose.validate(text, "connection", name="Juno Orrin",
+                                                 reader="peer", card_only=True, **kw)
+                if v.rule == "work_auth_in_first_note"]
+    assert auth(note, employers=("Visa",)) == []
+    assert auth(note, contact="visa_orrin") == []         # their employer, from their row
+    assert auth(note)                                     # nothing says Visa is an employer
+    # The word is still the word: lower case, or beside the name.
+    assert auth(note + " My visa is sorted.", employers=("Visa",))
+    assert auth(note.replace("at Visa", "at Kestrel Mutual") + " No visa needed.",
+                employers=("Visa",))
+    # The composer passes the names it keeps (`their`) the same way.
+    made = compose.first_note("Juno Orrin", common_ground="the data science team at Visa "
+                              "works on the fraud models I build too", their=("Visa",),
+                              reader="peer", card_only=True)
+    assert "Visa" in made

@@ -304,8 +304,9 @@ METHODS: dict[str, dict] = {
             (42, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (43, "2026-10-22", False, "the writing guide says work authorization goes to a recruiter by default, and to a decision-maker once the person's approved messages say it"),
             (44, "2026-10-22", False, "the runbook names what the networking state shows: requests sent and InMail credits left"),
+            (45, "2026-10-22", False, "A first note to an employer called Visa, or to a reader whose first name is an approved example's surname, is no longer refused for it; checks only, nothing to redo"),
         ),
-        "fingerprint": "9575c07191c0f45b",
+        "fingerprint": "61c3df2c2e71adb6",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -448,8 +449,9 @@ METHODS: dict[str, dict] = {
             (50, "2026-10-22", False, "advise() warns of telling them what they do, a googled detail, underselling, a vague close, swap notes, it looks like (out of the hedge bank), Since you, a recruiter's own path, a thread between us, pretty much, sometime, the X side and hoping to; a batch logged as sent reads the sent list first; an Open Profile channel apart from InMail credits; a paragraph labelled by its subject"),
             (51, "2026-10-22", False, "no best hour to send and nothing held for one; a reader in another time zone gets it in their working day"),
             (52, "2026-10-22", False, "no reading limit and no connection cap of the app's own; reads stop only on LinkedIn's own signals; an employer written without spaces is that employer"),
+            (53, "2026-10-22", False, "An employer's own name is never read as work authorization, and the reader's own name never as borrowed from an example; checks only, nothing to redo"),
         ),
-        "fingerprint": "929d69d219927dfd",
+        "fingerprint": "05751b7345ecd0db",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
