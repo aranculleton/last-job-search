@@ -153,16 +153,32 @@ def _text_findings(label: str, text: str, tokens) -> list[str]:
         return leak_scan.scan_text([path], tokens, show=True)
 
 
+PER_PAGE = 50     # API's per_page
+# Pages of pull requests read at most in one look: ten requests of the sixty an hour
+# GitHub allows a reader with no account, and five hundred pull requests.
+MAX_PAGES = 10
+
+
 def _pull_requests(since: str) -> tuple[list[dict], str]:
     """The app's pull requests updated after `since` (an ISO time), newest first, and ""
-    or why they could not be read. Public data, read with no account."""
-    try:
-        req = urllib.request.Request(API, headers=UA)
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            got = json.loads(resp.read().decode("utf-8"))
-    except Exception as exc:  # noqa: BLE001  unreachable is reported, never fatal
-        return [], f"pull request text not checked ({type(exc).__name__})"
-    return [p for p in got if str(p.get("updated_at") or "") > since], ""
+    or why they could not all be read. Public data, read with no account.
+
+    One page of fifty was read, so `--all` checked the fifty most recently updated and
+    called it everything, and a look after more than fifty had changed moved its mark
+    past the ones it never read. Pages are read until one reaches what was read before."""
+    got: list = []
+    for page in range(1, MAX_PAGES + 1):
+        try:
+            req = urllib.request.Request(f"{API}&page={page}", headers=UA)
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                batch = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:  # noqa: BLE001  unreachable is reported, never fatal
+            return [], f"pull request text not checked ({type(exc).__name__})"
+        got += batch
+        if len(batch) < PER_PAGE or str(batch[-1].get("updated_at") or "") <= since:
+            return [p for p in got if str(p.get("updated_at") or "") > since], ""
+    return ([p for p in got if str(p.get("updated_at") or "") > since],
+            f"over {MAX_PAGES * PER_PAGE} pull requests changed; the rest wait for the next look")
 
 
 def watch(everything: bool = False) -> tuple[list[str], str]:

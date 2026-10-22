@@ -77,6 +77,50 @@ def test_a_pull_request_description_is_checked(tmp_path, monkeypatch):
     assert findings == ["pull request #9: denylist entry 1 (Zorblax Quux)"]
 
 
+def _pages(monkeypatch, prs):
+    """GitHub's pull request list, newest update first, a page at a time."""
+    import io
+    import json
+    import urllib.parse
+    asked = []
+
+    def urlopen(req, timeout=15):
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(req.full_url).query)
+        page, per = int(q["page"][0]), int(q["per_page"][0])
+        asked.append(page)
+        return io.BytesIO(json.dumps(prs[(page - 1) * per:page * per]).encode())
+    monkeypatch.setattr(app_watch.urllib.request, "urlopen", urlopen)
+    return asked
+
+
+def _prs(n):
+    return [{"number": i, "title": "t", "body": "b",
+             "updated_at": f"2026-10-{1 + i // 10:02d}T00:00:{i % 60:02d}Z"}
+            for i in range(n, 0, -1)]
+
+
+def test_every_pull_request_is_read_not_only_the_newest_fifty(monkeypatch):
+    # One page of fifty was read, so --all checked fifty and called it everything.
+    asked = _pages(monkeypatch, _prs(230))
+    got, unread = app_watch._pull_requests("")
+    assert (len(got), unread, asked) == (230, "", [1, 2, 3, 4, 5])
+
+
+def test_a_look_reads_back_only_to_the_last_one_it_read(monkeypatch):
+    prs = _prs(230)
+    asked = _pages(monkeypatch, prs)
+    since = prs[149]["updated_at"]                     # 150 changed since the last look
+    got, unread = app_watch._pull_requests(since)
+    assert (len(got), unread, asked) == (149, "", [1, 2, 3])
+
+
+def test_a_page_that_cannot_be_read_moves_no_mark(monkeypatch):
+    def down(req, timeout=15):
+        raise OSError("unreachable")
+    monkeypatch.setattr(app_watch.urllib.request, "urlopen", down)
+    assert app_watch._pull_requests("") == ([], "pull request text not checked (OSError)")
+
+
 def test_the_sync_runs_it_after_every_successful_sync(sync_steps):
     # Run the sync and read what it did, rather than search its source for the call.
     rc, steps = sync_steps()
