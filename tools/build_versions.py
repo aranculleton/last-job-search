@@ -450,8 +450,9 @@ METHODS: dict[str, dict] = {
             (51, "2026-10-22", False, "no best hour to send and nothing held for one; a reader in another time zone gets it in their working day"),
             (52, "2026-10-22", False, "no reading limit and no connection cap of the app's own; reads stop only on LinkedIn's own signals; an employer written without spaces is that employer"),
             (53, "2026-10-22", False, "An employer's own name is never read as work authorization, and the reader's own name never as borrowed from an example; checks only, nothing to redo"),
+            (54, "2026-10-22", False, "first notes vary their sentence order by contact (order= to choose); no close is held to ASK word for word"),
         ),
-        "fingerprint": "05751b7345ecd0db",
+        "fingerprint": "99d81bc62132241a",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -497,8 +498,9 @@ METHODS: dict[str, dict] = {
             (28, "2026-10-22", False, "search-url takes the employer first and a company number already read; the footer is never About; a third-degree page with no Experience is read as it is; grouped roles read as one employer; --remove repeats; card-enough recruiters leave the read list; the extractor's output reaches read as it came; a batch opening on the person's own line and a note that does not read aloud are not saved"),
             (29, "2026-10-22", False, "drafts and the queue check are held to the plan's length; a short request for a chat or call is always an allowed close; the sent list logs each note's words and says how far back it reached; a second-degree page with Follow and Message says Connect is under More"),
             (30, "2026-10-22", False, "reads and saves hold nothing back of the app's own; a page loaded after LinkedIn stopped the day is kept and stops the run"),
+            (31, "2026-10-22", False, "a batch of six or more notes all in one sentence order is not saved, and reading.py batch says so; the queue is checked at the next save or batch, not redone"),
         ),
-        "fingerprint": "11d2fec63615fe06",
+        "fingerprint": "3b836e6c4236f807",
     },
     "screening": {
         "by": "round", "priority": 2,

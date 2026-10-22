@@ -1468,11 +1468,50 @@ def shape_for(title="", reading=None, route="") -> str:
 _DEFAULT = object()      # "the caller did not say": the phrase bank chooses
 
 
+# The orders a first note's sentences come in. One order for every note was a batch
+# "identical in structure": twenty notes of greeting, who-line, one line about them and the
+# ask (2026-10-22). Each keeps a reason for writing first except "me_first", which opens on
+# the line about the sender: chosen only when asked for, because most of a batch opening on
+# that one line is a template of its own (reading.alike).
+FIRST_NOTE_ORDERS = ("them_first", "me_second", "question_then_me", "me_first")
+
+
+def first_note_order(key="", order=None, warm=False, about_me=True, reasons=1,
+                     question=False) -> str:
+    """The order for this note: `order` where given, else one chosen by `key` (the contact
+    id) among the orders this note's parts allow, so a batch varies and a redraft does not.
+    "me_second" needs two reasons for writing, "question_then_me" a question, and every
+    order but "them_first" a line about the sender; a warm introduction leads with the
+    person who made it."""
+    usable = ["them_first"]
+    if about_me:
+        usable += (["me_second"] if reasons >= 2 else []) + (["question_then_me"] if question else [])
+    if order is not None:
+        if order not in FIRST_NOTE_ORDERS:
+            raise ValueError(f"order is one of {', '.join(FIRST_NOTE_ORDERS)}, not {order!r}")
+        if order == "me_first" and about_me and not warm:
+            return order
+        if order not in usable:
+            raise ValueError(
+                f"order {order!r} does not fit this note: " + (
+                    "a warm introduction leads with the person who made it" if warm
+                    and order == "me_first" else
+                    "it has no line about the sender" if not about_me else
+                    "me_second needs two reasons for writing" if order == "me_second" else
+                    "question_then_me needs a question"))
+        return order
+    if not key or len(usable) == 1:
+        return usable[0]
+    import hashlib
+    i = int(hashlib.sha1(("order:" + str(key)).encode()).hexdigest(), 16)
+    return usable[i % len(usable)]
+
+
 def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DEFAULT,
                opener=_DEFAULT, recruiter=False, seniority="peer", their=(),
                reading=_DEFAULT, shape="shared", title="", reader=None, work_auth=None,
                how_found="", looked=False, parallel="", mutual="", variant_key="",
-               hedged=True, card_only=False) -> str:
+               hedged=True, card_only=False, order=None) -> str:
     """The first message to anyone, as a connection request: a reply is the goal.
 
         Hi Robin, hope you're well. <the reason for writing>. <about me>. <question>? <ask>.
@@ -1493,7 +1532,9 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     decision-maker by default, never a peer unless `work_auth=True`), the role wanted by
     SAY_THE_ROLE, and the ask from the phrase bank for that reader unless `ask=` is
     given (`ask=None` when the question carries it). `variant_key` (the contact id)
-    picks the variant, so a batch varies.
+    picks the variant, so a batch varies, and the order too (`first_note_order()`;
+    `order=` to choose, one of FIRST_NOTE_ORDERS). A warm introduction always leads with
+    the referrer or the mutual connection.
 
     `reading` is what was read about them. A common ground given alone must rest on it
     (their name and employer do not count: a snippet had them). A note that says the
@@ -1571,14 +1612,23 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     # With no opener the reason runs straight on from "Hi Robin," and takes the case a
     # clause after a comma takes: "Hi Robin, Saw your post" is the capital the other
     # composers already fixed.
-    first, rest = reasons[0], reasons[1:]
     # The referrer's name in "Ana suggested I get in touch" keeps its capital after the comma.
     referrer = re.match(r"\s*(\S+(?:\s+\S+)?)\s+suggested\b", str(how_found or ""))
     keep = tuple(their or ()) + (mutual,) + ((referrer.group(1),) if referrer else ())
-    lead = (f"{_greeting(name)} {opener}. {_sentence(first)}" if opener
+    order = first_note_order(variant_key, order, warm=bool(referrer or str(mutual or "").strip()),
+                             about_me=bool(str(about_me or "").strip()), reasons=len(reasons),
+                             question=bool(q))
+    rs = [_sentence(r) for r in reasons]
+    me = [_sentence(about_me) if about_me else "", auth]
+    body = {"them_first": rs + me + [q],
+            "me_second": rs[:1] + me + rs[1:] + [q],
+            "question_then_me": rs + [q] + me,
+            "me_first": me + rs + [q]}[order]
+    body = [p for p in body if p]
+    first, rest = body[0], body[1:]
+    lead = (f"{_greeting(name)} {opener}. {first}" if opener
             else f"{_greeting(name)} {_after_greeting(first, keep=keep)}")
-    parts = [lead] + [_sentence(r) for r in rest] + [
-        _sentence(about_me) if about_me else "", auth, q, _sentence(ask) if ask else ""]
+    parts = [lead] + rest + [_sentence(ask) if ask else ""]
     note = advice.spoken(" ".join(p for p in parts if p), keep=keep)
     _honest(note, looked, said=(how_found,))
     findings = first_note_findings(note, recruiter=recruiter, reader=rtype,
@@ -2684,6 +2734,19 @@ def skeleton(text: str, own=None) -> tuple:
             continue
         words = re.findall(r"[a-z']+", tone._plain(s).lower())[:2]
         out.append(" ".join(words))
+    return tuple(out)
+
+
+def sentence_order(text) -> tuple:
+    """What a note does, sentence by sentence after the greeting: "me" (the sender), "them"
+    (the reader) or "ask", with a run of one kind said once. Twenty notes of "me / them /
+    ask" were one template though every line in them was the person's own or different."""
+    out = []
+    for s in body_sentences(text):
+        role = paragraph_role(s) or "me"
+        role = "me" if role == "work" else role
+        if not out or out[-1] != role:
+            out.append(role)
     return tuple(out)
 
 

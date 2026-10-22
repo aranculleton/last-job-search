@@ -529,8 +529,12 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
      the pairs that say the same thing to different people; rewrite one of each pair from
      its own reading. Saving them (`reading.py draft` or `drafts`, step 7) checks the whole
      batch with the queue: it exits 11 when a sentence repeats in more than two notes or a
-     third of them, or a note ends on an ask that is not the person's own `ASK`, the one place
-     the ask lives, or two InMails share a subject, a paragraph order or a close.
+     third of them, when six or more notes all run in one order (who you are, then them,
+     then the ask; nine in ten from ten notes), or when two InMails share a subject, a
+     paragraph order or a close. The composer varies its order by contact (`order=` to
+     choose: the line about the sender second, after the question, or first in a few, never
+     most). A close is never held to `ASK` word for word: any natural ask is fine, and the
+     same close in many notes is what is caught.
      `reading.py batch` runs the same check on the queue alone.
      Their opener, `ABOUT_ME` and `ASK` are theirs to repeat, unless `VARY_ABOUT_ME` in
      `profile/networking.py` says the background line is chosen per person. When a common ground already names an employer, the about-me line

@@ -358,8 +358,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
   the same way (`reading.py batch` reports "same shape"). What a batch is judged on is its
   frames, not one phrase: one sentence with the nouns swapped ("<years of X>, which I imagine
   <employer> values"), one opening after the greeting or one close across more than a third
-  of the batch, or two notes to people at one employer sharing a sentence, saves none of
-  them (`reading.py draft` and `drafts` check every save, exit 11). A phrase the person
+  of the batch, two notes to people at one employer sharing a sentence, or six or more notes
+  all in one sentence order ("same sentence order": twenty notes of who-line, one line about
+  them and the ask, 2026-10-22), saves none of them (`reading.py draft` and `drafts` check
+  every save, exit 11). `compose.first_note` varies its order by contact; `order=` chooses
+  one. No close is held to `ASK` word for word. A phrase the person
   reuses for strangers at different employers is theirs; the house style in one message is
   a stock phrase, and the person's own (`OWN_VOICE`, their `OPENER` and `ASK`) is allowed in
   every kind of message.

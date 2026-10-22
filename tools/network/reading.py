@@ -3114,19 +3114,6 @@ def _sentences(note: str) -> list:
     return [x.strip() for x in re.split(r"(?<=[.?!])\s+", body) if len(x.strip()) >= 12]
 
 
-# A short request for a chat or a call is always an allowed close, whatever ASK says:
-# "Would you have time for a quick chat next week?" was refused as "not your ask"
-# (2026-10-22). Short: a question of at most SHORT_ASK_WORDS words.
-SHORT_ASK_WORDS = 15
-_CHAT_OR_CALL = re.compile(r"\b(?:chat|call|coffee|catch[- ]up|conversation|talk)\b", re.I)
-
-
-def short_chat_ask(sentence: str) -> bool:
-    s = str(sentence or "").strip()
-    return (s.endswith("?") and len(s.split()) <= SHORT_ASK_WORDS
-            and bool(_CHAT_OR_CALL.search(s)))
-
-
 def _opening_slot(sents: list, openers) -> str:
     """The sentence a note opens on after the greeting. The person's opener ("hope you're
     well") is a phrase, taken off the front; what follows it is the slot."""
@@ -3166,6 +3153,11 @@ same too very much more most own new""".split())
 FRAME_MIN_WORDS = 4      # a frame with fewer fixed words is how any sentence starts
 OPENING_WORDS = 3
 OPENING_SLOT_MIN = 3     # most of a batch, and never fewer notes than this, open the same way
+# A batch of at least ORDER_MIN notes all in one sentence order ("me / them / ask") reads as
+# one template, and from ORDER_SHARE_FROM notes, ORDER_SHARE of it does.
+ORDER_MIN = 6
+ORDER_SHARE_FROM = 10
+ORDER_SHARE = 0.9
 
 
 def frame(sentence: str) -> tuple:
@@ -3305,18 +3297,21 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
         if (len(ids) >= OPENING_SLOT_MIN and 2 * len(ids) > len(notes)
                 and any(_same(x, o) for o in own)):
             out.append(("same first sentence, your own words included", x, ids))
-    if ask:
-        asks = {}
-        for cid, sents in per.items():
-            last = sents[-1] if sents else ""
-            if short_chat_ask(last):
-                continue
-            if last.endswith("?") and not any(_same(last, x) for x in [ask] + bank) and re.search(
-                    r"\b(?:open to|quick (?:chat|call)|minutes|few questions|grab a coffee|"
-                    r"catch up|connect)\b", last, re.I):
-                asks.setdefault(last, []).append(cid)
-        for sent, ids in asks.items():
-            out.append(("not your ask", sent, ids))
+    # One sentence order across nearly the whole batch. Twenty notes were greeting, the same
+    # who-line, one line about them and the ask, and nothing here said so: each line was the
+    # person's own or different (2026-10-22). An ask is never held to the person's ASK word
+    # for word any more: "not your ask" pushed every close to the one sentence.
+    if len(notes) >= ORDER_MIN:
+        import compose
+        orders: dict = {}
+        for cid, t in notes.items():
+            o = compose.sentence_order(t)
+            if len(o) >= 3:
+                orders.setdefault(o, []).append(cid)
+        share = ORDER_SHARE if len(notes) >= ORDER_SHARE_FROM else 1.0
+        for o, ids in orders.items():
+            if len(ids) >= share * len(notes):
+                out.append(("same sentence order", " / ".join(o), sorted(ids)))
     # Built the same way: "identical in structure" was the person's word for a batch whose
     # sentences differed and whose shape did not.
     for a, b, shape in compose.alike(notes):
@@ -4265,9 +4260,10 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
             print(f"  {what}: \"{_clip(detail, 100)}\" in {len(ids)}: {', '.join(ids[:8])}"
                   + (" ..." if len(ids) > 8 else ""))
         print("  write each from its own reading: its own first sentence after the greeting, "
-              "its own way of saying what you have done, and its own close; the person's own "
-              "opener, line about them and ask are theirs to repeat, but not as the first "
-              "sentence of most notes")
+              "its own way of saying what you have done, its own close, and not all in one "
+              "order (compose.first_note order=: the line about you second, after a question, "
+              "or first in a few, never most); the person's own opener, line about them and "
+              "ask are theirs to repeat, but not as the first sentence of most notes")
         return EXIT["alike"]
     if added_lines:
         state.save_contacts(contacts)
@@ -4790,14 +4786,14 @@ def main(argv: list | None = None) -> int:
                   + (" ..." if len(ids) > 8 else ""))
         if found:
             print("  too alike to send as a batch: rewrite each from its own reading (the "
-                  "background line chosen per person where the profile says so), the ask from "
-                  "ASK or the phrase bank (compose.phrase, by contact), and no two built the "
-                  "same way")
-            if any(what.startswith("same ") and what != "same shape" for what, _s, _i in found):
+                  "background line chosen per person where the profile says so), each close "
+                  "its own, no two built the same way, and not all in one order")
+            if any(what.startswith("same ") and what not in ("same shape", "same sentence order")
+                   for what, _s, _i in found):
                 import compose
                 print(f"  the InMails: {compose.ROUND_FIX}")
             return EXIT["alike"]
-        print("  no sentence repeats past the limit, and every ask is the person's own")
+        print("  no sentence repeats past the limit, and the batch is not all in one order")
         return EXIT["ok"]
     if a.cmd == "verdict":
         found = load(a.contact_id)

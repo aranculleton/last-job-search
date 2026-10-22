@@ -98,6 +98,13 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A batch of notes all built the same way is caught, and closes are no longer pushed to one
+  sentence.** Twenty notes were saved that were all hello, the same line about you, one line
+  about them and "I'd love to hear ...", and nothing said they read as one template. Six or
+  more notes in one order are now held back until some are written another way, and notes
+  the app writes vary their order by person. A closing question was refused unless it was
+  your own ask word for word, which sent every close to the same sentence; any natural ask
+  is fine now, and the same close in many notes is what is caught.
 - **A note to someone at Visa is no longer refused as talking about a visa.** The employer's
   own name was read as work authorization, so a note to a peer there could not name where
   they work. The word still counts where it is the word ("my visa is sorted").
