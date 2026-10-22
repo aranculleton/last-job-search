@@ -314,9 +314,11 @@ def test_a_field_the_scoring_vocabulary_was_not_written_for(profile):
 def test_the_round_line_says_what_claude_applies_and_what_needs_you(profile):
     _drop(profile, "search", "PORTAL_RESEARCH")
     _drop(profile, "networking", "LINKEDIN_PLAN")
-    # Plain words only: an id or a version number reaches the person as jargon.
-    assert U.line() == ("Improvements waiting: 1 Claude applies itself; 1 short question for "
-                        "you (python3 tools/profile_upgrades.py).")
+    # Marked for Claude, never for the person: no id, no version, and the command is
+    # Claude's to run, never to say.
+    assert U.line() == ("Claude: improvements waiting: 1 you apply yourself; 1 short question "
+                        "for the person (python3 tools/profile_upgrades.py lists them; never "
+                        "say the command).")
 
 
 # ------------------------------------------------------------------ nobody has to ask

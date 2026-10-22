@@ -27,7 +27,7 @@ def test_a_failure_on_a_removed_name_is_told_apart_from_a_behaviour_change():
         ("mine::test_patched", MOCKED),
         ("mine::test_old_shape", "AssertionError: 'Fernhill' != 'Acme'")], ROOT)
     first, removed, changed, ask, again = text.splitlines()
-    assert first == "Your own tests: 4 now fail after this update."
+    assert first == "Claude, not for the person: their own tests, 4 now fail after this update."
     assert "3 use parts of the app this update removed: ats_boards._ROBOTS (2), ats_boards._request (1)" in removed
     assert "tools/offline_boards.py" in removed
     assert changed.startswith("  1 check behaviour the update changed: mine::test_old_shape")
@@ -76,7 +76,7 @@ def _repo(tmp_path, subject):
 def test_the_check_runs_once_for_each_sync_whichever_copy_ran_it(tmp_path, capsys):
     _repo(tmp_path, "Sync from the app: 3 new commit(s)")
     sync_app.own_tests_after_sync(str(tmp_path))
-    assert "Your own tests: 1 now fail" in capsys.readouterr().out
+    assert "their own tests, 1 now fail" in capsys.readouterr().out
     sync_app.own_tests_after_sync(str(tmp_path))          # the same sync: not again
     assert capsys.readouterr().out == ""
 
@@ -112,7 +112,7 @@ def test_a_persons_tests_are_tried_on_a_tree_before_it_ships(tmp_path, monkeypat
                     "commit", "-q", "-m", "app"], check=True)
     monkeypatch.setattr(try_personal_tests, "HERE", str(app))
     assert try_personal_tests.main([str(person), "--ref", "HEAD"]) == 1
-    assert "Your own tests: 1 now fail" in capsys.readouterr().out
+    assert "their own tests, 1 now fail" in capsys.readouterr().out
     assert subprocess.run(["git", "-C", str(person), "status", "--porcelain"],
                           capture_output=True, text=True).stdout == ""      # nothing changed there
 

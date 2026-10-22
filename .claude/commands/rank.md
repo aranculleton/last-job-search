@@ -32,7 +32,7 @@ Follow these steps **in order**.
 
 ## Step 1: Load State
 
-1. Read the round summary Step 0 names (newest `documents/rounds/*.json` by default) and `job_scraper/seen_jobs.json`. If there is no round summary and no `seen_jobs.json` entry at `new`, tell the user to run `/scrape` first and stop. A round row is matched to a `seen_jobs.json` entry with `tools/lookup_score.py`'s `norm()` on its `url`, never on the raw string; a row with no entry gets one in Step 4, keyed by its `url`.
+1. Read the round summary Step 0 names (newest `documents/rounds/*.json` by default) and `job_scraper/seen_jobs.json`. If there is no round summary and no `seen_jobs.json` entry at `new`, there is nothing to rank yet: run a search first (`/scrape`), then rank it, without asking them to. A round row is matched to a `seen_jobs.json` entry with `tools/lookup_score.py`'s `norm()` on its `url`, never on the raw string; a row with no entry gets one in Step 4, keyed by its `url`.
 2. Read `job_search_tracker.csv`. Build the exclusion set: any company+role already in the tracker is out of scope regardless of flags - it has been applied to or consciously tracked.
 3. Select candidates: the round rows with no `ranked` entry and the entries with status `new`
    (or, with `--all`, entries of any status as well), minus the exclusion set, filtered by the

@@ -429,7 +429,9 @@ def main(argv: list[str]) -> int:
     with open(ours_p, "w", encoding="utf-8", newline="") as f:
         f.write(text)
     for p in settled:
-        print(f"merge_state: {p}. Tell the person; their word outranks this.", file=sys.stderr)
+        print(f"merge_state: {p}. Claude: tell the person in plain words which of their two "
+              "answers was kept and what the other said, never a file or field name; their "
+              "word outranks this.", file=sys.stderr)
     for p in problems:
         print(f"merge_state: {p}", file=sys.stderr)
     return 1 if problems else 0

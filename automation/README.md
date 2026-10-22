@@ -139,9 +139,9 @@ a new one with no repo, which fails. Instead, in the task's own chat, say:
 > Create a one-off scheduled task bound to this chat, with `run_once_at` three minutes from
 > now and the same prompt as this chat's scheduled task. Do not use fire_trigger.
 
-It disables itself after it fires. Then check three things: the reply in the chat, the PR
-it opened, and that the PR merged into master. A Routines-screen task runs once with
-**Run now** on its page.
+It disables itself after it fires. Then check that the reply arrived in the chat; the chat
+checks for itself that the run's work was saved (its pull request merged into master), and
+says so in one plain line. A Routines-screen task runs once with **Run now** on its page.
 
 ### Keep a long-lived chat small
 
