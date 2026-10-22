@@ -1519,9 +1519,9 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.CONTRACTIONS": "\"allow\": opening a sentence on \"I'm\" is natural speech; "
                                "\"warn\" or \"refuse\" bring back the old rule for a person "
                                "who wants it",
-    "networking.ELIGIBILITY": "work authorization for a recruiter and a decision-maker, never a "
-                              "peer, as the profile's own rule (\"anyone whose reply could be "
-                              "about a role\") reads; recruiters always had it",
+    "networking.ELIGIBILITY": "work authorization for a recruiter, never a peer, and for a "
+                              "decision-maker only once most of the messages the person "
+                              "approved for one say it (2026-10-22); recruiters always had it",
     "networking.SAY_THE_ROLE": "a recruiter and a decision-maker may be told the role wanted, "
                                "a peer is not; before, only a recruiter",
     "networking.INMAIL_WORDS": "a warning only, past 170 words to a decision-maker or recruiter "

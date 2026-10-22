@@ -59,10 +59,14 @@ it. LinkedIn is never fetched from a session.
    clicked), behind `reading.py gate --page`, and pipe its text to
    `python3 tools/network/reading.py invitations - --record`. Anyone the person sent a request
    to from the LinkedIn app is recorded as sent (`state.py sent <id> --outside`) and their draft
-   removed, so the queue stops saying "send now" to someone already Pending. The page loads
-   only the newest few of the list, so a request the log has as waiting is called no longer
-   pending only when it went after the oldest card loaded; one sent before that is listed as
-   not checked, and is never taken for accepted. Without a browser,
+   removed, so the queue stops saying "send now" to someone already Pending, each logged with
+   the note the page shows (the draft whole, where the page folds the note and the draft
+   opens the same way), so nobody copies a note off the page. The page loads
+   only the newest few of the list, and `invitations` says how far back it reached; a request
+   the log has as waiting is called no longer pending only when it went after the oldest card
+   loaded; one sent before that is listed as not checked, and is never taken for accepted.
+   Older ones show only after the page's Load more button, which a chat never presses: the
+   person can press it and paste the page again. Without a browser,
    a queued send whose day has passed with nothing logged is listed as UNCONFIRMED (`open_actions
    --due`): ask whether it went, and record it with `state.py sent <id> --draft` (or
    `--text-file` with the words that went) if it did.
@@ -193,7 +197,11 @@ it. LinkedIn is never fetched from a session.
      `--keywords` for anything else). Where the employer's LinkedIn company number is known,
      `--company-id <n>` builds it without the hand-filtered address; it stays unconfirmed
      until `people` reads the first page of results, which says how many there work there
-     ("7 of 10 at <employer>") and keeps the number, or says it is someone else's. Several at
+     ("7 of 10 at <employer>") and keeps the number, or says it is someone else's. A profile
+     already read with the extractor keeps the numbers of the employers its Experience links
+     to, so `search-url "<employer>"` (the employer named first, as `--company`) builds the
+     narrowed search from one of those with no page loaded for it, and says whose profile
+     showed it. Several at
      once, when the person has found the numbers: `reading.py company-ids "<employer>=<n>"
      "<employer>=<n>"`, each kept in their own files and unconfirmed the same way. With no
      filter on file, `search-url` builds nothing and says why: a keyword search with the
@@ -416,14 +424,19 @@ it. LinkedIn is never fetched from a session.
         Experience decide most keep or skip. Read deep (`--mode deep`) where the note needs
         their Activity too. A read with no Experience in its text exits 14 ("scroll"): scroll
         the same page to its end and read it again, no new page loaded (`--no-experience` only
-        when their page has none at all). Click nothing, read the whole page text once, close the tab, and pipe the text to
-        `python3 tools/network/reading.py read <contact_id> - --source browser --mode <card or
-        deep>`. Where
-        the browser tool can run a script on the page, run `reading.py extractor`'s read-only
-        snippet instead and pipe its JSON to `read <contact_id> - --source browser --json`: the
-        top card, About, Experience and Education, found whatever order the page puts them in
-        (`extractor --activity` adds Activity and Featured), never re-typed by hand. It clicks,
-        scrolls and loads nothing. Without a browser script, a short structured paste of the
+        when their page has none at all; a third-degree profile that shows no Experience to
+        anyone outside their network is read as it is, with no exit 14). Click nothing.
+        Where the browser tool can run a script on the page, and most can, the extractor is
+        the way: run `reading.py extractor`'s read-only snippet and pipe what the tool hands
+        back, as it came, to `python3 tools/network/reading.py read <contact_id> - --source
+        browser --mode <card or deep>`. `read` finds the snippet's JSON by itself, quoted once
+        more, in a code fence or after a label, so nothing is re-typed and no flag is needed
+        (`--json` still says so outright). It is the top card, About, Experience and
+        Education, found whatever order the page puts them in (`extractor --activity` adds
+        Activity and Featured), a few thousand characters where the page text is tens of
+        thousands. It clicks, scrolls and loads nothing, and the pace gate is the same either
+        way. Without a browser script, read the whole page text once, close the tab, and pipe
+        the text to the same command. Failing both, a short structured paste of the
         same parts reads as the page: `Headline: ...`, `Location: ...`, `About: ...`, one
         `Experience: <title> | <employer> | <dates> | <place>` line a role, `Education: ...`.
         That one read keeps everything a note and the send need: the headline, the current
@@ -521,13 +534,19 @@ it. LinkedIn is never fetched from a session.
    draft is rewritten on `advise()`'s warnings first, and a warning the rewrite leaves
    standing is shown with the draft for the person to decide, never in place of the
    rewrite. Then the read-aloud pass (`compose.READ_ALOUD`): the spoken version is kept
-   only if `compose.read_aloud(original, rewrite)` passes; show the one kept, never both. The
+   only if `compose.read_aloud(original, rewrite)` passes; show the one kept, never both.
+   `reading.py draft` and `drafts` check every note for what nobody says aloud
+   (`compose.unspoken()`: a sentence with its subject dropped, "Love to hear what's coming
+   up", or nouns stacked where speech puts a verb, "pricing models with Airflow
+   underneath") and save none of it until the read-aloud pass has rewritten it. The
    rules are in "Composition" in `networking/SKILL.md`; the short version:
 
    - The note asks for a conversation. Asking about openings, "are you hiring", "is it on
-     your team" are a recruiter's alone; work authorization and the role wanted go to a
-     recruiter and a decision-maker by default and to a peer only when that message passes
-     `work_auth=True` (`ELIGIBILITY`, `SAY_THE_ROLE`). `AsksForTheJob` names the phrase
+     your team" are a recruiter's alone; the role wanted goes to a recruiter and a
+     decision-maker by default, work authorization to a recruiter (to a decision-maker once
+     most of the messages the person approved for one say it, `compose.eligible()`), and
+     either to a peer only when that message passes `work_auth=True` (`ELIGIBILITY`,
+     `SAY_THE_ROLE`). `AsksForTheJob` names the phrase
      and the fix.
    - Per person, write the **reason for writing**, true and specific to them: how they
      were found (`how_found=compose.how_found_line(...)`), a mutual connection the person
@@ -642,11 +661,18 @@ goes through CLAUDE.md, "Learning the person".
 ## When they say a note went
 
 A draft stays at `not_contacted` until the person says it went: a draft is not a message.
+**Several requests at once ("sent to all of those") are logged from LinkedIn's sent list,
+never from memory**: read it (`reading.py invitations <the page> --record`), which logs only
+the requests it shows, with their words. "Sent to all of those" once logged 14 where 7 went.
+`state.py sent` refuses several connection requests at once unless the person named each one
+as sent (`--each-went`).
 When they say it did, record it in the same turn, in one command per contact:
 `python3 tools/network/state.py sent <contact_id> --draft` when it went as drafted,
 `--text-file <file>` with their edits (the edit is recorded as their preference by itself),
 `--no-note` for a request with no note, `--outside` when it went from the LinkedIn app,
-`--date` for another day, and `--channel inmail --subject "<the subject>"` for an InMail
+`--date` for another day, `--channel open_profile` for a free message to an Open Profile (only
+Message showed and LinkedIn used no credit, so none is counted), and `--channel inmail
+--subject "<the subject>"` for an InMail
 (it says how many credits are left: an InMail answered within 90 days gives its credit back,
 and when LinkedIn shows another balance, `state.py inmail-credits <n>` keeps it until the
 month turns). Someone only read (`reading.py read --name --company`) and never written to the

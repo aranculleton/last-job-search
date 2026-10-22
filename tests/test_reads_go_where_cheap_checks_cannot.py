@@ -405,7 +405,16 @@ def test_a_batch_ending_on_one_sentence_is_too_alike():
     found = reading.alike(notes, ask="Would you have 15 minutes for a few questions sometime?",
                           about_me="", opener="hope you're well")
     kinds = {k for k, _, _ in found}
-    assert "shared" in kinds and "not your ask" in kinds
+    # A short request for a chat is always an allowed close (2026-10-22); a longer ask that
+    # is not the person's is still "not your ask".
+    assert "shared" in kinds and "not your ask" not in kinds
+    long_ask = ("Would you be open to connecting and sharing a few thoughts on how your team "
+                "approaches forecasting?")
+    notes = {f"c{i}": _note(f"Your talk number {i} on cold-chain forecasting stayed with me.",
+                            ask=long_ask) for i in range(6)}
+    found = reading.alike(notes, ask="Would you have 15 minutes for a few questions sometime?",
+                          about_me="", opener="hope you're well")
+    assert "not your ask" in {k for k, _, _ in found}
 
 
 def test_the_persons_own_lines_are_theirs_to_repeat_unless_they_vary_them():

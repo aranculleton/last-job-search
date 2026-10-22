@@ -30,6 +30,35 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **More of what reads badly is pointed out before a note is shown.** Telling someone what
+  they do ("You recruit for ..."), reading back a detail off their profile, underselling
+  yourself ("a long way from my background"), a vague close ("great to hear more"), "swap
+  notes", "it looks like", a reason opening "Since you ...", asking a recruiter how they got
+  into recruiting, "pretty much", "sometime", "the hardware side" and "hoping to". "It looks
+  like" is no longer one of the app's own hedges.
+- **Several requests are logged as sent from LinkedIn's sent list, not from memory.** Logging
+  a batch at once now asks for the sent list to be read first, which records only what it
+  shows; "sent to all of those" once logged 14 where 7 went. Where you named each one as
+  sent, that still works.
+- **A free message to an Open Profile has a channel of its own** (`--channel open_profile`),
+  so it is never counted as an InMail credit spent.
+
+- **Your work authorization goes to recruiters by default, not decision-makers.** A first
+  note to a recruiter still says you need no sponsorship; one to a senior reader says it once
+  most of the messages you approve for senior readers do (a setting in your profile still
+  decides it outright).
+- **A profile is read through the page extractor first.** Its output goes to the reading as
+  it came back from the browser, quoted, fenced or labelled, with nothing re-typed; the whole
+  page text is the fallback. The pace between pages is unchanged.
+- **A note nobody would say aloud is not saved.** A sentence with its subject dropped ("Love
+  to hear what's coming up", "New to Manchester from Leeds") or nouns stacked where speech
+  puts a verb ("pricing models with Airflow underneath") is refused until it is rewritten
+  the way you would say it.
+- **A never-say phrase written as a sentence opens bans only that.** "Love to hear" now
+  refuses the clipped sentence and leaves "I'd love to hear" alone; written in lower case, a
+  phrase is banned anywhere as before. Recording one that would refuse your own opener, ask
+  or line about you says so at once.
+
 - **Saving and updating are never your job.** Your chats save their work, take the newest
   version and settle any clash between two chats themselves, without asking and without
   explaining how: you hear "Saved." or nothing. They no longer show you git commands, branch
@@ -56,8 +85,9 @@ make sense to somebody whose repo just received it.
 - **A chat that can't reach the job sites says so first, and runs no search.** A cloud chat
   whose settings reach only a few websites searched the web instead and showed jobs that had
   closed months before as leads. Now every chat checks when it starts and tells you the one
-  fix before anything else, until it is made, and no search runs in the meantime. Where a web search is still used (one board down while the others work), a lead
-  is shown only once its own page shows it is still open.
+  fix before anything else, until it is made, and no search runs in the meantime. Where a
+  web search is still used (one board down while the others work), a lead is shown only once
+  its own page shows it is still open.
 - **Your checks before saving no longer fail on ordinary words.** Outside the maintainer's own
   copy, the check that scanned the app's files for your data is skipped: you never build or
   publish the app, so it could only match your own words, such as a first name one of the
@@ -68,6 +98,31 @@ make sense to somebody whose repo just received it.
   postings without its top-level "seen" key crashed the score lookup `/apply` uses, and the
   round read it as empty, so jobs it had ruled out came back. Both shapes are read the same,
   and the file is saved back in the usual one.
+- **A note longer than your plan allows is not saved.** Drafts are held to the same length
+  check as everything else: a 307- and a 301-character note had been saved on a 300-character
+  plan. One saved before this is caught by the check of the queue before it goes.
+- **A short request for a chat or a call is always an allowed close,** whatever your own ask
+  says: "Would you have time for a quick chat next week?" was refused as not your ask.
+- **The sent list logs each note's words itself and says how far back it looked.** Where the
+  page folds a note, the draft it came from is logged whole; and a read of the newest ten of
+  four hundred says the date it reached back to.
+- **A second-degree page with Follow and Message says Connect is under More,** instead of
+  warning that LinkedIn may take no request from you, which stays for everyone else.
+- **A paragraph about the reader's path is labelled theirs,** even when "I" comes later in
+  it, so the batch check no longer calls it a paragraph about you.
+- **A people search at an employer uses the company number a profile already showed.**
+  `search-url "<employer>"` takes the employer first and builds the narrowed search from a
+  number read off any profile's Experience, with no page loaded for it.
+- **LinkedIn's page footer is never someone's About,** and a third-degree profile that shows
+  no Experience to strangers is read as it is instead of asking for a scroll for ever.
+- **Several roles under one employer read as one employer.** A time there written "5 yrs, 6
+  mos" or "5 years 6 months", a logo line or the job type before it no longer turned a job
+  title into their employer ("has moved on") or into where they work ("role is in").
+- **`shortlist --remove a --remove b` removes both.**
+- **A recruiter whose card says enough leaves the read list** even when they were put on it
+  before their card was read, and is drafted from the card.
+- **A batch whose notes mostly open on your own line is caught.** Your opener, ask and line
+  about you are yours to repeat, but not as the first sentence of most notes.
 
 - **A contact named like one of the app's examples no longer blocks merges** (the
   maintainer's own repo only). A contact's first name is on the leak list as a
