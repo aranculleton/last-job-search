@@ -100,8 +100,9 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-21", False, "Employer boards are read while the portals are searched, share one body cap and one portal runner, and honour a round's own seen file"),
             (17, "2026-10-21", False, "robots_check splits reading a policy from deciding; same verdicts"),
             (18, "2026-10-21", False, "The employer-board reader is openroles 0.3.0: one posting's odd field or pay never stops a board being read, a posting with no readable id or title is left out, dates are real dates or empty, hostile pages are read in linear time, and every Workday posting keeps its id; nothing about your boards needs redoing"),
+            (19, "2026-10-22", False, "add-portal works out the board, its name, market and test query instead of asking"),
         ),
-        "fingerprint": "27ae2170d08d06d6",
+        "fingerprint": "7c2656c27dc41461",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -218,8 +219,9 @@ METHODS: dict[str, dict] = {
             (17, "2026-10-21", False, "bridges.py gains the learn-or-show nudge; preps unchanged"),
             (18, "2026-10-21", False, "bridges.py gains COVERED_BY; no document text changes"),
             (19, "2026-10-21", True, "What is personal about a contact is read as their own life (IVF, an illness, a vote, a death), never a field of work (pensions, mental health services, cancer research), so a call prep shows their work and leaves their life out; recording what an employer heard or changing a stock answer rebuilds a live prep; and the daily run's dry run counts only what a real run writes"),
+            (20, "2026-10-22", False, "the prep document is sent with the part to read, not pasted whole"),
         ),
-        "fingerprint": "7a61b19d7984acd8",
+        "fingerprint": "70a9fbf0471eaa73",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -291,8 +293,9 @@ METHODS: dict[str, dict] = {
             (36, "2026-10-21", True, "Every draft that will be sent gets the code audit and the model audit; numbers written as words are checked like digits, posting figures never lend themselves to the candidate's work, every research fact a letter cites is checked against its fetched page, a trimmed letter keeps its closing sentence, and a symbol the letter's font lacks is caught. Unsent drafts are re-rendered and re-checked"),
             (37, "2026-10-21", True, "Staging reads long-term, project-duration, day-rate, IR35 and interim-reporting wording as permanent and pay for your own area as yours; a draft counts as a pick's only for that exact role; file names skip requisition codes and gender markers; the audit reads concessions only about the candidate, skips call lengths, time words and dates, checks decades and factors, folds accents in names, and survives half an emoji; a contact's apply-and-name-me route is said one way in the tracker note and outreach.md. Unsent drafts are re-checked"),
             (38, "2026-10-22", False, "A notice period or start date the profile does not hold is flagged with where to write it (01-candidate-profile.md), and is clean once written there."),
+            (39, "2026-10-22", False, "shorter instructions: one stop before drafting, no hand reruns of checks verify_batch and the code audit run, a one-line checklist report"),
         ),
-        "fingerprint": "009bfbfcda5f0865",
+        "fingerprint": "5d7e4a109e86e008",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -322,8 +325,9 @@ METHODS: dict[str, dict] = {
             (16, "2026-10-21", False, "process_channel is read by the drafting step too; no pack changes"),
             (17, "2026-10-21", False, "The pack says which resume each contact at the employer was sent, from the message log"),
             (18, "2026-10-21", True, "A rebuild changes only what the tool wrote: every line and section you wrote stays where you put it, a rebuild that would lose one writes nothing, and a document written by hand is never rebuilt over; a later round is prepared with stories that employer has not heard; and the place each employer heard is checked only where an answer says where you live, under any heading and where they will push"),
+            (19, "2026-10-22", False, "the pack is built before the stage is asked, and sent once per turn that changed it"),
         ),
-        "fingerprint": "ef5621729bf2b790",
+        "fingerprint": "5aa5c043f8890de3",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -425,8 +429,9 @@ METHODS: dict[str, dict] = {
             (43, "2026-10-21", False, "why.py reads the highest numbered saved round as the newest"),
             (44, "2026-10-21", False, "Logging and checking fixes: a nudge after answering their reply is the one nudge, unsend and resent act on the latest message, the export adds a wordless message once, a reply to someone who wrote first is a reply, approved examples lend their shape and none of their facts, a greeting that starts their given name is theirs, sources.py answers --help"),
             (45, "2026-10-21", False, "A decline is a decline: passing on the opportunity or the call, a polite 'not sure I can help', and a no that points on is a referral, not a no; the export knows the app's own resume names and logs a resume once; a greeting another contact answers to is refused; a warm intro naming its referrer saves, with an override kept with its reason"),
+            (46, "2026-10-22", False, "a shorter reply per person, one version of each note, queued drafts in the same reply, no separate batch check before saving"),
         ),
-        "fingerprint": "fa5198f58431946b",
+        "fingerprint": "15fa4f14cc1497d1",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -505,8 +510,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-21", True, "A second language asked as a plus or named as a market is ranked, not cut, and the rulings it saved are released; a remote region that takes in home passes beside any country, home written as a code is home, a time zone is hours, a country the profile does not list is flagged; 'U.S. Citizen' reaches the eligibility gate; a data role beside a profession and supply-chain Master terms are read right; a ruling on one posting no longer hides a new opening months later, and a skip recorded for a score no longer blocks; bar.py judge keeps every judgement for its own employer"),
             (20, "2026-10-21", True, "A second language, or your own, asked as a nice-to-have ('a huge plus', 'Bonus:', or under a 'Nice to have:' heading) is ranked, not cut, while one in the same sentence as an unrelated preference word still cuts; inclusion wording never lifts the credential gate; a sentence ending 'in the U.S.' is not joined to the next as a citizenship condition; a remote role in a state abroad is flagged and an on-site home-town name abroad fails; a region alone is read by both gates the same way; a heading word inside a sentence no longer splits it"),
             (21, "2026-10-22", False, "A home town's name that starts a longer town's name (Bury St Edmunds, Bolton-on-Dearne) is flagged for a closer read, and so is one beside a state of home the profile does not place (Manhattan, KS for New York). Nothing ruled out before would now pass, so no ruling is released."),
+            (22, "2026-10-22", False, "the hand-run round moved to manual-round.md; the round's reply is shorter"),
         ),
-        "fingerprint": "865b7e6bdea019c9",
+        "fingerprint": "2e41c70011296d15",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -601,6 +607,7 @@ KEEPS_NOTHING: dict[str, str] = {
     ".agents/skills/linkedin-search/*": "the app's own portal, searched afresh by every round",
     ".agents/skills/freehire-search/*": "the app's own portal, searched afresh by every round",
     ".claude/skills/job-scraper/SKILL.md": "how a round searches; every round runs it afresh",
+    ".claude/skills/job-scraper/manual-round.md": "a round done by hand, read afresh each time",
     ".claude/skills/job-application-assistant/SKILL.md": "routing: which command handles what",
     ".claude/skills/job-application-assistant/11-cost-model.md":
         "which model runs each stage; what it writes is held to the same checks",

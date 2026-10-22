@@ -26,6 +26,14 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRAPER_SKILL = REPO_ROOT / ".claude" / "skills" / "job-scraper" / "SKILL.md"
+# The hand-run round lives beside the skill (manual-round.md), read only when
+# run_round.py cannot run; the skill is both files.
+MANUAL_ROUND = SCRAPER_SKILL.parent / "manual-round.md"
+
+
+def _skill_text() -> str:
+    return (SCRAPER_SKILL.read_text(encoding="utf-8") + "\n"
+            + MANUAL_ROUND.read_text(encoding="utf-8"))
 # An installed portal is a folder with a SKILL.md, as tools/portals.py counts
 # them. A folder without one is what a deleted portal leaves in a container that
 # ran `bun install` before the sync deleted it: an ignored node_modules, which is
@@ -40,7 +48,7 @@ _CONTRACT_SENTENCE = re.compile(r"Search output already includes ([a-zA-Z0-9\s,]
 
 
 def derive_contract_fields() -> frozenset[str]:
-    text = SCRAPER_SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     match = _CONTRACT_SENTENCE.search(text)
     if match is None:
         raise AssertionError("Step 2 contract sentence not found in job-scraper/SKILL.md")
@@ -87,7 +95,7 @@ _STEP4_SCHEMA_BLOCK = re.compile(r"Add ALL fetched jobs.*?```json(.*?)```", re.D
 
 
 def derive_stored_fields() -> frozenset[str]:
-    text = SCRAPER_SKILL.read_text(encoding="utf-8")
+    text = _skill_text()
     match = _STEP4_SCHEMA_BLOCK.search(text)
     if match is None:
         raise AssertionError("Step 4 seen_jobs.json schema block not found in job-scraper/SKILL.md")
@@ -132,7 +140,7 @@ class SeenJobsPostingDateTests(unittest.TestCase):
 
     def test_posted_date_semantics_are_documented(self):
         """A stored field the spec never explains gets backfilled by guessing."""
-        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        text = _skill_text()
         self.assertIn("`posted_date`", text, "posted_date is in the schema but never documented")
         self.assertRegex(
             text,

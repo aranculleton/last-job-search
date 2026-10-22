@@ -6,7 +6,7 @@
 
 Runs every free stage in order and stops at the shortlist, which is where a
 person decides. Nothing here spends model tokens. The stages and why each one
-exists are in .claude/skills/job-scraper/SKILL.md and 11-cost-model.md; this
+exists are in .claude/skills/job-scraper/manual-round.md and 11-cost-model.md; this
 file just makes the order impossible to get wrong, because it was got wrong:
 one round ranked 70 postings that had never been hydrated, another wrote a
 one-row shortlist because --top truncated the --out file upstream, and the

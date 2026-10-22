@@ -91,15 +91,10 @@ Every session in a person's repo starts with the same five steps, before anythin
      commit it. The rest wait for the next session.
    If the sync printed nothing about upgrades (its first run after this arrived is the old
    copy), run `python3 tools/profile_upgrades.py` yourself and do the same.
-   - **One chat per update.** Only the chat whose own sync brought an update in applies its
-     upgrades and asks its questions; where two chats synced the same update, the one whose
-     sync reached master first. Master is checked before any chat is told to start, and
-     again before each upgrade: one another chat landed is merged, never made twice. Any
-     other chat open on the repo is told they belong to another chat until a time 20
-     minutes on, and starts nothing and asks nothing; after that its next sync hands them
-     over. When the person says no other chat is open,
-     `python3 tools/profile_upgrades.py --take` hands them over at once. So the chat that
-     brought the update in lands that sync on master promptly, before its other work.
+   - **One chat per update.** When the sync says the upgrades belong to another chat, start
+     nothing and ask nothing about them, and follow what it prints; when the person says no
+     other chat is open, `python3 tools/profile_upgrades.py --take` hands them over. The chat
+     that brought an update in lands that sync on master promptly, before its other work.
 
 **A chat that carries on for days does this every day, not once.** Most people keep one
 chat going, so "the start of a session" may be days ago. Before each new piece of work (a
@@ -179,7 +174,7 @@ So, every session:
    above). Another chat may have merged since this container was built. Do this before
    writing anything, not before pushing.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master.
-   Open the pull request, run `./tools/ci_local.sh`, merge it. A branch left behind at the end of a
+   Open the pull request, run `./tools/ci_local.sh --quick`, merge it. A branch left behind at the end of a
    session is work the next chat cannot see and will duplicate.
 3. **Never leave a merged branch around**, and never start new work on an old one.
 4. If the work genuinely is not finishable this session, say so in the last message and
@@ -206,7 +201,8 @@ without CI green. It is the branch every other chat starts from, so a broken mas
 breaks all of them at once.
 
 **On a private repo, green is established locally, and that is the rule:
-`./tools/ci_local.sh`** (`--quick` skips the LaTeX compile). A clean run is the evidence and
+`./tools/ci_local.sh --quick`** (it skips only the compile of the app's example documents,
+which a person's repo never edits; the full run is for a change to the app). A clean run is the evidence and
 merging on it is allowed; say so in the PR and name anything it reported as SKIP. Why, what
 CI's Python 3.9 leg is for, and the one case worth a billed CI run: `MAINTAINING.md`, "CI on
 a private repo". Batch the commits and push once, when a unit of work is finished.
@@ -663,7 +659,9 @@ before anything is drafted: a yes is a tracker row at `applied` with the date th
 ## Verification Checklist
 
 After creating or updating a CV or cover letter, go through **every** item in
-`.claude/skills/job-application-assistant/verification-checklist.md` and report it as a
-pass/fail checklist before presenting anything: factual accuracy, targeting, consistency,
-quality (including every document rule `profile/CLAUDE.md` adds), both documents compiled and
-read back as PDFs (mandatory, never skipped), and the resume's text layer as an ATS parses it.
+`.claude/skills/job-application-assistant/verification-checklist.md` before presenting
+anything: factual accuracy, targeting, consistency, quality (including every document rule
+`profile/CLAUDE.md` adds), both documents compiled and read back as PDFs (mandatory, never
+skipped), and the resume's text layer as an ATS parses it. Report it in one line (all of
+them passed, or `verify_batch.sh`'s last line), plus each item that failed or needs the
+person's call; never the whole list.

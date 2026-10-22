@@ -11,9 +11,11 @@ the same line START_HERE.md has a person paste into the cloud environment's setu
 TeX and Poppler, then `cffi` before the Python packages. Then:
 
 ```bash
-python3 -m pytest tests -q          # over 1,200 tests; all green before anything else
-./tools/ci_local.sh                 # or this: every check CI runs, under two minutes, no Actions minutes
+./tools/ci_local.sh                 # in the app, before a change: every check CI runs, under two minutes
 ```
+
+A person's repo needs neither before work starts: the day's sync runs their own tests when an
+update arrives, and `./tools/ci_local.sh --quick` runs before a merge.
 
 On a Mac (Homebrew; the TeX install asks for the Mac's password once):
 
@@ -218,8 +220,7 @@ inside the posting.
 
 ```bash
 python3 tools/fit_to_page.py "$SCRATCH/r1/drafts.json"
-python3 tools/check_claims.py cv/*_Resume_*.tex cv/*_CV_*.tex cover_letters/*_Cover_Letter_*.tex
-tools/verify_batch.sh "$SCRATCH/r1/drafts.json"
+tools/verify_batch.sh "$SCRATCH/r1/drafts.json"     # runs check_claims, check_numbers and voice_check too
 python3 tools/outreach.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json"
 ```
 
@@ -232,8 +233,8 @@ the letter, is named.
 `fit_to_page` allocates bullets, renders, compiles, trims the weakest bullet for *this*
 posting until one page, then grows back the strongest absent one that still fits.
 
-`check_claims` must report **0 error-level findings**. `audit_letters`, which
-`verify_batch.sh` runs, must report every letter clean. `verify_batch.sh` exits non-zero
+`check_claims` must report **0 error-level findings**, and `audit_letters` must report
+every letter clean; `verify_batch.sh` runs both, and exits non-zero
 on any finding and checks pages, chronology, section order, bullets per employer, contact
 details as literal text, duplicated phrasing, em and en dashes, the document nouns the profile
 bans (`person.json` `documents.banned_nouns`), the ATS text layer (read with pypdf, which alone
@@ -243,7 +244,7 @@ written as words included; the summary and the letter bullets against the profil
 the opening and close also against the posting and p2), and a letter bullet that repeats a
 resume bullet. The resume's filename
 noun is the profile's own word (`documents.noun`), so a profile that says "CV" writes
-`cv/<Prefix>_CV_<ABBR>`; the globs here cover both.
+`cv/<Prefix>_CV_<ABBR>`.
 
 `outreach` writes `documents/applications/<slug>/job_posting.md` and `outreach.md`. The
 outreach note is a sub-80-word message to the hiring manager or recruiter built from the
@@ -262,16 +263,12 @@ predictable from source, which is the whole reason this step exists.
 adds a row per application at `status=drafted` (fit in `fit_rating`, never priority) and
 writes each `screening_answers.md`. Then:
 
-```bash
-git add -f job_search_tracker.csv documents/applications/ job_scraper/seen_jobs.json
-git add -f cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf
-git add -f cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf
-git add documents/rounds/
-git commit && git push
-```
+Then CLAUDE.md's persistence loop ("Persistence rule for a person's repo"), which adds each
+path that exists one at a time (a single `git add` naming a path that does not exist stages
+nothing at all), and `git commit && git push`.
 
 Never `*.aux *.log *.out *.fls *.fdb_latexmk *.synctex.gz cv/*.txt`. Never edit
-`.gitignore`. The full list of what persists is in CLAUDE.md under the persistence rule.
+`.gitignore`.
 
 Then get it onto master. A branch left behind at the end of a session is work the next
 session cannot see and will duplicate.

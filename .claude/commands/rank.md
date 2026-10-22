@@ -12,7 +12,7 @@ how a relisted posting stays as old as it is. Never `new` or `ranked` ones. So `
 round summaries, and the scores it writes go to `seen_jobs.json`, where `tools/lookup_score.py`
 and `/apply` read them.
 
-`/rank` produces **triage scores**, not final evaluations. It scores from the posting text and the candidate profile only - no company research, no reviewer agent. `/apply`'s Step 1 evaluation (which adds company research) remains authoritative and always re-runs when the user applies.
+`/rank` produces **triage scores**, not final evaluations. It scores from the posting text and the candidate profile only - no company research, no reviewer agent. `/apply` reuses a current score from here and re-derives it only in the cases its Step 1a names.
 
 Follow these steps **in order**.
 
@@ -63,7 +63,7 @@ Follow these steps **in order**.
    overturn.
 
 3b. **Knockout triage before full scoring.** For any candidate whose stored entry has no
-   `rank_score`, run the Tier 2 knockout pass from `.claude/skills/job-scraper/SKILL.md` Step 3
+   `rank_score`, run the Tier 2 knockout pass from `.claude/skills/job-scraper/manual-round.md` Step 3
    first: a small-model agent reading only
    `profile/10-triage-blockers.md` and the posting, at a few
    thousand tokens rather than the full weighted pass. Knockouts are written straight to

@@ -3,7 +3,7 @@
 
 ## Why this exists
 
-`.claude/skills/job-scraper/SKILL.md` Step 2.9 and Step 4.4 describe three
+`.claude/skills/job-scraper/manual-round.md` Step 2.9 and Step 4.4 describe three
 bookkeeping rules, and until this file existed none of them was code:
 
   company throttle     an employer with an open application is not surfaced

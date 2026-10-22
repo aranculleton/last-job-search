@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.7
+framework_version: 1.5.8
 ---
 
 # Job Application Assistant
@@ -19,7 +19,6 @@ When the user provides a job posting (URL or text), follow this workflow:
 
 ### Step 1: Research & Evaluate Fit
 - Follow **`/apply` Steps 0 to 1c** (`.claude/commands/apply.md`) exactly: the posting fetched (a 403 is not a dead end, `09-web-research.md`), its **full posting text verbatim** kept for Step 3b to archive (never a summary), the score looked up or derived against `profile/04-job-evaluation.md`, the evaluation table and verdict presented, the plan, the already-applied question and the skills question, then stop until the user answers. It is stated there once so the two paths cannot drift.
-- Beside the verdict, suggest whether the candidate should call the employer before applying (`04-job-evaluation.md`, "Pre-Application: Call the Employer").
 
 ### Step 2: Tailor CV
 - Both documents come from **`/apply` Step 2**, the same pipeline a batch from a round takes: staged with `tools/stage_picks.py`, drafted and audited by the `draft-applications` workflow, bullets allocated per posting by `tools/allocate.py`, rendered and fitted by `tools/fit_to_page.py`, checked by `check_claims.py` and `verify_batch.sh`. **Never write the `.tex` by hand**, and never start from an existing resume in `cv/`: a hand-written document bypasses every check. Only a custom template (`profile/templates/ACTIVE.md`) is drafted by hand, and `/apply` Step 2H says how.

@@ -20,6 +20,14 @@ except ImportError:
 REPO = Path(__file__).resolve().parent.parent
 COMMAND = REPO / ".claude" / "commands" / "rank.md"
 SCRAPER_SKILL = REPO / ".claude" / "skills" / "job-scraper" / "SKILL.md"
+# The hand-run round lives beside the skill (manual-round.md), read only when
+# run_round.py cannot run; the skill is both files.
+MANUAL_ROUND = SCRAPER_SKILL.parent / "manual-round.md"
+
+
+def _skill_text() -> str:
+    return (SCRAPER_SKILL.read_text(encoding="utf-8") + "\n"
+            + MANUAL_ROUND.read_text(encoding="utf-8"))
 EVALUATION = (
     REPO / ".claude" / "skills" / "job-application-assistant" / "04-job-evaluation.md"
 )
@@ -72,7 +80,7 @@ class RankCommandSpec(unittest.TestCase):
         )
 
     def test_job_scraper_schema_note_mentions_strengths_and_gaps(self):
-        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        text = _skill_text()
         self.assertIn("strengths", text)
         self.assertIn("gaps", text)
         self.assertIn(
@@ -86,7 +94,7 @@ class RankCommandSpec(unittest.TestCase):
         never-infer note. Step 2's detail fetch already extracts the deadline, so
         /scrape writes it at first sight instead of leaving it to /rank (#319).
         """
-        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        text = _skill_text()
         self.assertIn(
             '"deadline": "YYYY-MM-DD" | null',
             text,
@@ -136,7 +144,7 @@ class RankCommandSpec(unittest.TestCase):
         protect fields it does not name - and it omitted exactly the three
         rank.md calls as important to persist as the score itself (review
         finding F27 Part A, 2026-08-19)."""
-        text = SCRAPER_SKILL.read_text(encoding="utf-8")
+        text = _skill_text()
         for field in ("location_verdict", "language_gate", "language_note"):
             self.assertIn(
                 field,

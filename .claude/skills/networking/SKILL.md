@@ -214,104 +214,26 @@ came out as one background line with a different name on it, which a person
 caught at once. So between finding and writing there is a read, and
 `tools/network/reading.py` holds it (`/network` step 5 says how):
 
-- **Their profile.** In the person's own signed-in browser when `PROFILE_READS` is
-  `"browser"` in `profile/networking.py` (Claude in Chrome, or the Claude desktop app's
-  built-in browser, which a cloud chat with the remote-devices browser tools reaches too:
-  `claude_surfaces.py show cloud-linked-browser`),
-  otherwise from them: pasted (select all, copy), LinkedIn's Save to PDF, or, on a phone or
-  in a web session, screenshots from the LinkedIn app, transcribed word for word. That
-  takes seconds because they open the profile anyway to send the request, and it works
-  wherever the session runs. This session never
-  fetches LinkedIn itself: its robots.txt disallows every crawler it does not name and a
-  profile request answers HTTP 999.
-- **The funnel: fewer, better-spent reads, never faster ones.** A profile read is the
-  scarcest thing a run spends and the one that touches the person's account, and in one
-  session five of seven went on facts a cheaper check held: a request already Pending, a
-  city elsewhere, a role outside the function. So the order is fixed. **Free sources**
-  make the list: search results with the search tool's own summary of each (which often
-  names the place and the employer), and the connections export. **One-page reads**
-  screen it: the sent-invitations list once a session (who already has a request
-  pending, everyone at once) and a people search narrowed to the employer with its Current
-  company filter (a dozen people's headline, place and degree for one load), paced, with caps
-  of their own. A plain keyword search with the employer's name in it is not that filter: for
-  two large employers it returned almost nobody who works there, and it worked for two others
-  only because their people name the employer in their headline. The filtered address is
-  learned once from a search the person narrowed by hand (`reading.py search-url --learn`), or
-  built from the employer's company number (`--company-id`) and confirmed by the first page
-  of results before it is kept, and the People tab's `?keywords=` address is not used, because LinkedIn drops
-  it on load. **A profile read**, their own page, only then, and only for the few the person
-  will write to: as many as the requests left this week and three spare, never above
-  `READS_PER_RUN` (80), of whom at most ten may be people nothing has placed yet.
-  Scroll each page to the very end before taking its text: on the current layout Experience
-  and Education appear only then, and a read with no Experience is read again from the same
-  page (`read` exits 14). Before any read, say how long it takes (`reading.py estimate`: "Reading
-  these 20 takes about 60 minutes today") and let the person choose between waiting for notes
-  written from each page and notes from the cards alone, each saved `--card-only` and shown as
-  card-only. A recruiter whose card says enough (`reading.card_enough`) is drafted from it with
-  no read. A first note with nothing read is otherwise refused (`reading.py draft`,
-  `compose.validate(contact=)`). No change to the funnel may add a page load, shorten the
-  pacing or add a click unless the person sets it in their profile.
-- **One title search, many employers.** A search with no employer in it feeds every employer
-  it finds: `sources.py harvest <results.json>` and `reading.py people <file>`, each with no
-  `--company`, group the people by the employer each names and leave out employers the
-  search has ruled out.
-- **Every limit is the person's, behind one dial.** `PROFILE_READ_RISK` in
-  `profile/networking.py` picks a preset (`careful`, the default and the pace before the dial;
-  `normal`; `fast`) and every limit derives from it, each overridable on its own
-  (`tools/network/pace.py` holds them in one place with the reason for each; `reading.py
-  limits` prints them). What is known and what is assumed is said there too: no preset is
-  safe, the numbers are a judgement of a person's pace, not a measured rate.
-- **React to signals, not a guess.** Run at a person's pace and watch: a check or CAPTCHA,
-  an "unusual activity" banner, HTTP 999, or the sign-in page within four hours of the last
-  page or sign-in (or a second sign-out that day) stops the day at once. The sign-in page on
-  the first page of the day, or hours after the last, is a session that expired: the person
-  signs in and nothing stops. A sign-out stop is the one they may lift, once, after a clean
-  sign-in, on their own word (`reading.py resume --reason "<their words>"`), and the signal
-  stays in the log, marked; a page that came back nearly empty (no name, no section, no
-  structured extract: never a short paste of a page that loaded) or loads far slower than
-  usual doubles the next pause, and a second within the hour stops the day. The friction log
-  keeps each, dated, across days, and the pages-an-hour ceiling ramps up only on clean days
-  since the last one (5, then the preset's next steps); a page that came back nearly empty
-  never moves the ramp. Say what happened ("a sign-in page on 20 Oct"), never "a LinkedIn
-  warning" unless LinkedIn showed one. The count is one per computer, so every worktree's chat shares it.
-- **Reads never block the chat.** `reading.py next --wait` runs in the background and names
-  who to read once a page may load; meanwhile the chat writes and shows the notes it can
-  (`reading.py meanwhile`), so the person sends one batch while the next is read.
-  When the person is at the keyboard, the fast path beats any pace: `reading.py queue --urls`
-  for the addresses, and one paste back.
-- **The route is chosen, never asked.** `reading.py route` reads which browser the chat
-  has, never where it was started, and says what to do: read the best few in the browser,
-  switch it on first, or offer a paste for the best three only (screenshots on a phone, a
-  paste on a computer). The person is never told to press a key, click, tap or find
-  anything; a path comes from `tools/claude_surfaces.py`, with its official page.
-- **Read, judge, next.** How many are read is however many it takes to fill the run's
-  batch with people worth writing to, the way a round runs until its yield target.
-  `reading.verdict()` skips someone the page shows has moved on or holds a role the search
-  filters out, and the next person is read instead. Where a contact sits is a caution, never
-  a skip (the location gate is for where the person would work), and a recruiter or anyone
-  whose role says Remote or national is not cautioned. A headline's "at <phrase>" is never
-  the employer when the card or Experience names another ("Responsible AI at Scale").
-- **Their public work.** A talk, an article, a podcast, code, a quote in the press,
-  and their posts as a search engine shows them. Never a people-search or data-broker
-  site.
-- **Why the browser read is the person's call.** LinkedIn's User Agreement forbids
-  automated access, browser extensions included. The risk is to their own account, the
-  one the whole of this skill runs on, so it is asked once, plainly (the `profile-reads`
-  upgrade, and `/setup`), and kept to what a person reading profiles by hand would do:
-  only the people public sources left likely and a request goes to that day, each opened
-  once, one at a time with a varied gap around a minute and a half and a longer break of
-  5 to 12 minutes (theirs to change: `PROFILE_READ_BREAK_MINUTES`) after a varying three
-  to seven, each page scrolled to its end at reading pace with
-  nothing clicked, and a stop for the day at any check or warning, or at a sign-in page soon
-  after a page or a sign-in (`reading.py gate` and `stop`; a sign-out stop alone can be lifted
-  once on their word, `reading.py resume`). The first sign-in is theirs to do, in
-  the pane, and is a wait rather than a stop (`reading.py signin`). The caps are 3.2.5's,
-  restored on 2026-10-20: `PROFILE_READS_PER_HOUR` (30 an hour) and `PROFILE_READS_PER_DAY`
-  (80), every kind of page together, never more in a day than the requests left this week
-  plus three (the pauses hold an hour to about 17), and at most
-  `connections_per_day` (25) requests go in a day, inside the week's 50. That lowers
-  the risk to their account; it does not remove it, because the terms forbid automated
-  access at any pace. Never call this route safe.
+The rules, in short; `/network` step 5 has every step, and `tools/network/pace.py` every
+limit with its reason (`reading.py limits` prints them):
+
+- **Their profile** comes from the person's own signed-in browser when `PROFILE_READS` is
+  `"browser"` in `profile/networking.py`, otherwise from them (a paste, LinkedIn's Save to
+  PDF, or screenshots from the app, transcribed word for word). This session never fetches
+  LinkedIn itself: its robots.txt disallows every crawler it does not name and a profile
+  request answers HTTP 999.
+- **Fewer, better-spent reads.** Free sources make the list, one-page reads screen it, and a
+  profile read goes only to the few the person will write to today; read, judge, next. A
+  first note with nothing read is refused unless the person chose card-only.
+- **The browser read is the person's call.** LinkedIn's User Agreement forbids automated
+  access, browser extensions included, at any pace, and the risk is to their own account, so
+  it is asked once, plainly (the `profile-reads` upgrade, and `/setup`), kept to what a person
+  reading by hand would do, and stopped at the first sign of friction. That lowers the risk;
+  it does not remove it. Never call this route safe.
+- **Their public work** (a talk, an article, a podcast, code, a quote in the press, their
+  posts as a search engine shows them), never a people-search or data-broker site.
+- A headline's "at <phrase>" is never the employer when the card or Experience names another
+  ("Responsible AI at Scale").
 
 What a reading keeps is what a note could rest on: their headline, their About (the
 summary of their work they wrote for anyone to read, kept whole up to LinkedIn's own
@@ -569,12 +491,12 @@ in is `validate(kind="message")`, with no length of its own (`outreach.check_not
 it): saying it was applied for is the point there, and a job ask everywhere else.
 
 **Then read it aloud.** `compose.READ_ALOUD` says how: the most natural spoken version,
-every fact, name and number kept, nothing added, their rules kept. Show it beside the
-original; `compose.read_aloud(original, rewrite)` keeps it only if no fact was lost or
-added and it still passes `validate()`.
+every fact, name and number kept, nothing added, their rules kept.
+`compose.read_aloud(original, rewrite)` keeps it only if no fact was lost or added and it
+still passes `validate()`; show the one kept, never both.
 
-**Their own messages that drew replies come first.** `python3 tools/network/compose.py
-examples` lists them, with their words: match their shape and their wording ahead of every
+**Their own messages that drew replies come first.** `python3 tools/what_works.py brief
+messages` shows them, with their words: match their shape and their wording ahead of every
 default here. A message logged without its words cannot be one, which is why every send is
 logged with them.
 
