@@ -181,6 +181,24 @@ def start_commit(repo: str, ref: str, origin: str) -> tuple[str, str]:
     return sha, said
 
 
+def copy_app(here: str, app: str, sha: str) -> str:
+    """Clone the app at `here` into `app` with `sha` checked out as master, or say why not.
+
+    A clone copies branches alone, so the commit a release rehearses (the new master, held
+    by origin/master after a PR merges) was "not a tree" in the copy: fetched by its commit
+    when the clone lacks it, as start_commit fetches the person's."""
+    r = _git("clone", "-q", "--no-local", here, app, cwd=os.path.dirname(app))
+    if r.returncode:
+        return f"git clone: {(r.stderr or r.stdout).strip()[:300]}"
+    if _git("cat-file", "-e", sha + "^{commit}", cwd=app).returncode:
+        r = _git("-c", "protocol.version=2", "fetch", "-q", "--no-tags", "--upload-pack",
+                 "git -c uploadpack.allowAnySHA1InWant=true upload-pack", here, sha, cwd=app)
+        if r.returncode or _git("cat-file", "-e", sha + "^{commit}", cwd=app).returncode:
+            return f"{sha[:12]} could not be copied from {here}: {(r.stderr or r.stdout).strip()[:200]}"
+    r = _git("checkout", "-q", "-B", "master", sha, cwd=app)
+    return "" if not r.returncode else f"git checkout: {(r.stderr or r.stdout).strip()[:300]}"
+
+
 def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
     tmp = tempfile.mkdtemp(prefix="ljs_rehearse_")
     reh = Rehearsal()
@@ -193,15 +211,17 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
         if not sha:
             print(f"rehearse_sync: {app_ref} is not a commit of this app")
             return 2
-        for cmd, cwd in ((["git", "clone", "-q", "--no-local", HERE, app], tmp),
-                         (["git", "checkout", "-q", "-B", "master", sha], app),
-                         (["git", "tag", "-f", CANDIDATE_TAG, sha], app),
-                         (["git", "clone", "-q", "--bare", "--no-local", repo, origin], tmp)):
+        failed = copy_app(HERE, app, sha)
+        for cmd, cwd in (() if failed else
+                         ((["git", "tag", "-f", CANDIDATE_TAG, sha], app),
+                          (["git", "clone", "-q", "--bare", "--no-local", repo, origin], tmp))):
             r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
             if r.returncode:
-                print(f"rehearse_sync: could not make the copies: {' '.join(cmd[:3])}: "
-                      f"{(r.stderr or r.stdout).strip()[:300]}")
-                return 2
+                failed = f"{' '.join(cmd[:3])}: {(r.stderr or r.stdout).strip()[:300]}"
+                break
+        if failed:
+            print(f"rehearse_sync: could not make the copies: {failed}")
+            return 2
         start, said = start_commit(repo, ref, origin)
         if not start:
             print(f"rehearse_sync: {said}")

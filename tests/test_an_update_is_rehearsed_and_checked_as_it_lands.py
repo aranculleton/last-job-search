@@ -93,3 +93,17 @@ def test_an_app_file_moved_into_a_personal_folder_is_an_app_change(tmp_path):
     assert "tools/fit.py" in got and "documents/fit_notes.py" in got
     app, _mine = personal_paths.split(got)
     assert "tools/fit.py" in app
+
+
+def test_an_app_commit_held_only_by_origin_master_is_copied_by_its_commit(tmp_path):
+    # The commit a release rehearses is the new master, which after a PR merges is often
+    # held only by origin/master: a clone copies branches alone, and it was "not a tree".
+    app_repo = _repo_on_no_branch(tmp_path)
+    want = _git(app_repo, "rev-parse", "origin/master").stdout.strip()
+    copy = str(tmp_path / "app")
+    assert rehearse_sync.copy_app(app_repo, copy, want) == ""
+    assert _git(copy, "rev-parse", "master").stdout.strip() == want
+    # A commit nowhere in the app is said plainly.
+    missing = "0" * 40
+    said = rehearse_sync.copy_app(app_repo, str(tmp_path / "app2"), missing)
+    assert said.startswith("000000000000 could not be copied from")
