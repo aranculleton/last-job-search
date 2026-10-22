@@ -486,8 +486,9 @@ contacted. Load the skill before any outreach. What a session needs before it do
   asks for a conversation (`compose.first_note()`), the conversation, then a referral ask for
   one linked role (`compose.referral_ask()`).
 - **Who reads a first note decides what it says** (`compose.READER_TYPES`, each a setting in
-  `profile/networking.py`): a recruiter and a decision-maker may be told the role wanted and
-  the person's work authorization, and a decision-maker gets the open ask ("anything coming
+  `profile/networking.py`): a recruiter may be told the role wanted and the person's work
+  authorization, a decision-maker the role wanted (their work authorization once the messages
+  the person approves say it), and a decision-maker gets the open ask ("anything coming
   up"); asking whether they are hiring, or for a referral, is a recruiter's alone; a peer is
   told neither unless that message asks.
 - Before a draft is shown, `compose.advise()`: the draft is rewritten on its warnings first,

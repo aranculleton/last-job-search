@@ -82,7 +82,8 @@ def test_a_batch_sharing_the_persons_work_authorization_line_is_not_alike():
                "a3": {"common_ground": "We both worked at Oakmere Foods"},
                "a4": {"how_found": compose.how_found_line("event", event="the depot summit")}}
     names = {"a1": "Ana Rook", "a2": "Bo Venn", "a3": "Juno Castellan", "a4": "Wren Halloway"}
-    notes = {cid: compose.first_note(names[cid], reader="decision_maker", variant_key=cid, **kw)
+    notes = {cid: compose.first_note(names[cid], reader="decision_maker", variant_key=cid,
+                                     work_auth=True, **kw)
              for cid, kw in reasons.items()}
     line = compose.work_auth_line("senior")
     assert all(line in n for n in notes.values())        # the line is in every note

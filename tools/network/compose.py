@@ -1019,11 +1019,31 @@ def _per_reader(got, default: dict) -> dict:
     return out
 
 
-# Whether a first message states work authorization. The profile's own rule: "for a
-# recruiter or anyone whose reply could be about a role"; left out for a peer, who keeps
-# it for the reply or the referral stage.
-ELIGIBILITY = _per_reader(getattr(_NET, "ELIGIBILITY", None),
-                          {"recruiter": True, "decision_maker": True, "peer": False})
+# Whether a first message states work authorization. To a recruiter, whose reply is about
+# roles; to a decision-maker only once the messages the person approves say so (the
+# maintainer, 2026-10-22: a recruiter's by default, not a decision-maker's); never to a
+# peer, who keeps it for the reply or the referral stage. A reader the profile names keeps
+# the profile's answer.
+_ELIGIBILITY_SET = getattr(_NET, "ELIGIBILITY", None)
+ELIGIBILITY = _per_reader(_ELIGIBILITY_SET,
+                          {"recruiter": True, "decision_maker": False, "peer": False})
+
+
+def eligible(reader: str) -> bool:
+    """Whether a first message to this kind of reader states work authorization: the
+    profile's ELIGIBILITY where it names the reader; otherwise what most of the messages the
+    person approved for that reader did (learned.py approve), and ELIGIBILITY's default
+    where none were approved or they split evenly."""
+    if isinstance(_ELIGIBILITY_SET, dict) and reader in _ELIGIBILITY_SET:
+        return ELIGIBILITY.get(reader, False)
+    try:
+        import learned
+        said = [bool(_WORK_AUTH_ANY.search(str(x.get("text") or "")))
+                for x in learned.approved() if x.get("reader") == reader]
+    except Exception:  # noqa: BLE001  a note must never break on the learned file
+        said = []
+    yes, no = said.count(True), said.count(False)
+    return ELIGIBILITY.get(reader, False) if yes == no else yes > no
 # Whether a first message may say the role the sender wants. Asking for the job stays a
 # recruiter's alone.
 SAY_THE_ROLE = _per_reader(getattr(_NET, "SAY_THE_ROLE", None),
@@ -1067,7 +1087,7 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> l
             spans.append(m.span())
             out.append(tone.Violation("asks_for_the_job",
                                       f"\"{m.group(0)}\": {advice.with_open_ask(fix)}"))
-    allowed = ELIGIBILITY.get(reader, False) if work_auth is None else bool(work_auth)
+    allowed = eligible(reader) if work_auth is None else bool(work_auth)
     if not allowed:
         out += [tone.Violation("work_auth_in_first_note",
                                f"\"{m.group(0)}\": a {reader.replace('_', '-')} is not told "
@@ -1470,7 +1490,7 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     about_me = _about_me_for(" ".join(reasons), about_me)
     # A brief note to a senior reader has no room for it: there it is said only when this
     # message asks for it.
-    say_auth = (ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth))
+    say_auth = (eligible(rtype) if work_auth is None else bool(work_auth))
     if shape == "brief" and work_auth is None:
         say_auth = False
     register = "senior" if rtype == "decision_maker" else seniority
@@ -1819,7 +1839,7 @@ def inmail(name, subject=None, common_ground="", question=None, evidence="",
     if ask is _DEFAULT:
         ask = phrase("ask", rtype, variant_key, fallback=ASK if rtype == "peer" else "")
     about_me = _about_me_for(" ".join(reasons), about_me)
-    say_auth = ELIGIBILITY.get(rtype, False) if work_auth is None else bool(work_auth)
+    say_auth = eligible(rtype) if work_auth is None else bool(work_auth)
     register = "senior" if rtype == "decision_maker" else seniority
     auth = ((_checked_claim(work_auth, register) if isinstance(work_auth, str)
              else work_auth_line(register)) if say_auth else "")
@@ -2499,6 +2519,60 @@ def read_aloud(original: str, rewrite: str, kind: str = "connection", **kw) -> d
     findings = [f"{v.rule}: {v.text}" for v in validate(rewrite, kind, **kw)]
     return {"ok": not (lost or added or findings), "lost": lost, "added": added,
             "findings": findings}
+
+
+# What reads wrong said aloud though every word is right: a sentence with its subject
+# dropped ("Love to hear what's coming up", "New to Manchester from Leeds") and nouns
+# stacked where speech puts a verb ("pricing models with Airflow underneath", "the
+# platform clients model on", "like your Larkspur days"). A batch carried each of them past
+# every check (2026-10-22). Narrow on purpose: a check that refused natural notes would
+# be switched off. "Would love to hear" keeps its subject's place, and is not one.
+_DROPPED_SUBJECT = re.compile(
+    r"^(?:love to|keen to|eager to|hoping to|looking to|new (?:to|in)|based in|"
+    r"moved (?:to|here|over|from)|(?:recently|just) (?:moved|joined|started|relocated))\b",
+    re.I)
+# "Based in Leeds, I ..." has its subject after the comma.
+_SUBJECT_LATER = re.compile(r",\s+(?:I|I'm|I've|I'd|we|we're)\b")
+_STACKED = (
+    re.compile(r"\bwith\s+(?:[\w&'-]+\s+){1,3}(?:underneath|beneath|on top|alongside|"
+               r"under the hood)\b", re.I),
+    re.compile(r"\b(?:the|a|an|your|their|our|its)\s+[a-z][\w-]*\s+[a-z][\w-]*s\s+"
+               r"(?:model|work|plan|test|build|report|price|run|ship|record|design|forecast|"
+               r"score|bank|train|base|deploy)\s+(?:on|in|with|for|from|at|by|against|around|"
+               r"off)\s*(?=[.,;:?!]|$)"),
+    re.compile(r"\b(?:like|from|in|during|since)\s+(?:your|their|his|her)\s+"
+               r"(?:[" + _CAP + r"][\w&'.-]*\s+){1,3}(?:days|years|stint|era|time|tenure)\b"),
+)
+UNSPOKEN_FIX = {
+    "dropped_subject": "say who, as you would aloud: \"I'd love to hear\", \"I'm new to "
+                       "Manchester\"",
+    "stacked_noun_phrase": "say it with a verb, as you would aloud: \"pricing models that run "
+                           "on Airflow\", \"the platform clients build their models on\", "
+                           "\"like when you were at Larkspur\"",
+}
+
+
+def unspoken(text: str) -> list:
+    """What a note says that nobody would say aloud, as advice.Advice: a sentence with its
+    subject dropped, or nouns stacked where speech puts a verb. The read-aloud pass
+    (READ_ALOUD) is what rewrites them; this is what `reading.py drafts` refuses to save
+    without it. The person's own phrases (OWN_VOICE, their opener, ask and line about
+    them) are theirs to say."""
+    mine = own_words()
+    out = []
+    for i, s in enumerate(tone.sentences(text)):
+        if i == 0:
+            s = _SALUTATION.sub("", s, count=1)
+        m = _DROPPED_SUBJECT.match(s.strip())
+        if m and not _SUBJECT_LATER.search(s) and not mine.match(s.strip()[:m.end() + 12]):
+            out.append(advice.Advice("dropped_subject", s.strip()[:80],
+                                     UNSPOKEN_FIX["dropped_subject"]))
+        for rx in _STACKED:
+            for hit in rx.finditer(s):
+                if not mine.match(hit.group(0)):
+                    out.append(advice.Advice("stacked_noun_phrase", hit.group(0).strip(),
+                                             UNSPOKEN_FIX["stacked_noun_phrase"]))
+    return out
 
 
 # ---------------------------------------------------------------- what drew replies

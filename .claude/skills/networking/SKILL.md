@@ -279,12 +279,13 @@ the person's settings in `profile/networking.py`:
 | Reader | Work authorization (`ELIGIBILITY`) | The role wanted (`SAY_THE_ROLE`) | The ask | InMail length (`INMAIL_WORDS`) |
 |---|---|---|---|---|
 | recruiter | yes | yes | anything coming up that fits | about 170 words |
-| decision-maker | yes | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 170 words |
+| decision-maker | once the messages the person approves say it | yes | "Would love to hear if you have anything coming up, or know the right person to speak to." | about 170 words |
 | peer | no, unless `work_auth=True` for that message | no | a short call, or a pointer | about 130 words |
 
 The decision-maker's row is the message that drew a reply from a senior reader within
 three hours: who the sender is, with the years; one piece of real work with its numbers;
-why this person; a plain statement of eligibility; the open ask. Asking about openings,
+why this person; a plain statement of eligibility, which a draft carries once the person's
+approved messages to decision-makers do; the open ask. Asking about openings,
 "are you hiring", "refer me" stay a recruiter's alone, at every reader type: a job-ask
 finding names the phrase and what to write instead.
 
@@ -399,8 +400,9 @@ on Premium. That is the shape, and `first_note()` assembles it:
   who hires for it
 - say where the candidate wants their next role to be ("Acme is where I want my
   next role")
-- state work authorization to a peer. To a recruiter and a decision-maker it goes in by
-  default (`ELIGIBILITY`), because their reply could be about a role; to a peer only when
+- state work authorization to a peer. To a recruiter it goes in by default (`ELIGIBILITY`),
+  because their reply is about roles; to a decision-maker once most of the messages the person
+  approved for one say it (`compose.eligible()`); to a peer only when
   that message passes `work_auth=True`. A brief note to a senior reader leaves it out unless
   asked, for want of room.
 

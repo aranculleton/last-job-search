@@ -300,8 +300,9 @@ METHODS: dict[str, dict] = {
             (40, "2026-10-22", False, "shorter instructions: one stop before drafting, no hand reruns of checks verify_batch and the code audit run, a one-line checklist report"),
             (41, "2026-10-22", False, "the instructions no longer name the job-alert email reader"),
             (42, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
+            (43, "2026-10-22", False, "the writing guide says work authorization goes to a recruiter by default, and to a decision-maker once the person's approved messages say it"),
         ),
-        "fingerprint": "c70f629510224c3d",
+        "fingerprint": "022def81c79feccf",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -439,8 +440,9 @@ METHODS: dict[str, dict] = {
             (46, "2026-10-22", False, "the networking skill and /network say fast is the default pace and a slow load only doubles the next pause"),
             (47, "2026-10-22", False, "a shorter reply per person, one version of each note, queued drafts in the same reply, no separate batch check before saving"),
             (48, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
+            (49, "2026-10-22", False, "work authorization to a recruiter by default and to a decision-maker once approved messages say it; notes nobody would say aloud flagged; a never-say phrase written as a sentence opens bans only that sentence"),
         ),
-        "fingerprint": "98ed4b2de89ec120",
+        "fingerprint": "772d481c531c06b2",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -483,8 +485,9 @@ METHODS: dict[str, dict] = {
             (25, "2026-10-21", False, "Drafts are read without the notes below their line of dashes, someone who replied is not counted as waiting, a nearly empty page counts as a page loaded, and a waiting note that carries an approved example's names is listed for a rewrite"),
             (26, "2026-10-21", False, "Saving and the queue judge a note against its referrer and the people it could really be for"),
             (27, "2026-10-22", False, "fast pauses by default and the same counts at every preset; a slow load never stops a day or starts the ramp; the break an upgrade wrote is freed"),
+            (28, "2026-10-22", False, "search-url takes the employer first and a company number already read; the footer is never About; a third-degree page with no Experience is read as it is; grouped roles read as one employer; --remove repeats; card-enough recruiters leave the read list; the extractor's output reaches read as it came; a batch opening on the person's own line and a note that does not read aloud are not saved"),
         ),
-        "fingerprint": "c35a69ec1a23c641",
+        "fingerprint": "8c5010d580d83708",
     },
     "screening": {
         "by": "round", "priority": 2,

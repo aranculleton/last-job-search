@@ -30,6 +30,22 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Your work authorization goes to recruiters by default, not decision-makers.** A first
+  note to a recruiter still says you need no sponsorship; one to a senior reader says it once
+  most of the messages you approve for senior readers do (a setting in your profile still
+  decides it outright).
+- **A profile is read through the page extractor first.** Its output goes to the reading as
+  it came back from the browser, quoted, fenced or labelled, with nothing re-typed; the whole
+  page text is the fallback. The pace between pages is unchanged.
+- **A note nobody would say aloud is not saved.** A sentence with its subject dropped ("Love
+  to hear what's coming up", "New to Manchester from Leeds") or nouns stacked where speech
+  puts a verb ("pricing models with Airflow underneath") is refused until it is rewritten
+  the way you would say it.
+- **A never-say phrase written as a sentence opens bans only that.** "Love to hear" now
+  refuses the clipped sentence and leaves "I'd love to hear" alone; written in lower case, a
+  phrase is banned anywhere as before. Recording one that would refuse your own opener, ask
+  or line about you says so at once.
+
 - **Saving and updating are never your job.** Your chats save their work, take the newest
   version and settle any clash between two chats themselves, without asking and without
   explaining how: you hear "Saved." or nothing. They no longer show you git commands, branch
@@ -48,6 +64,20 @@ make sense to somebody whose repo just received it.
   `python3 tools/app_watch.py --all` lists every match; it stopped at 40.
 
 ### Fixed
+
+- **A people search at an employer uses the company number a profile already showed.**
+  `search-url "<employer>"` takes the employer first and builds the narrowed search from a
+  number read off any profile's Experience, with no page loaded for it.
+- **LinkedIn's page footer is never someone's About,** and a third-degree profile that shows
+  no Experience to strangers is read as it is instead of asking for a scroll for ever.
+- **Several roles under one employer read as one employer.** A time there written "5 yrs, 6
+  mos" or "5 years 6 months", a logo line or the job type before it no longer turned a job
+  title into their employer ("has moved on") or into where they work ("role is in").
+- **`shortlist --remove a --remove b` removes both.**
+- **A recruiter whose card says enough leaves the read list** even when they were put on it
+  before their card was read, and is drafted from the card.
+- **A batch whose notes mostly open on your own line is caught.** Your opener, ask and line
+  about you are yours to repeat, but not as the first sentence of most notes.
 
 - **A contact named like one of the app's examples no longer blocks merges** (the
   maintainer's own repo only). A contact's first name is on the leak list as a
