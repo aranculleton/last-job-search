@@ -51,9 +51,8 @@ make sense to somebody whose repo just received it.
 
 - **A chat that can't reach the job sites says so first, and runs no search.** A cloud chat
   whose settings reach only a few websites searched the web instead and showed jobs that had
-  closed months before as leads. Now the day's first check finds it and the chat tells you the
-  one fix before anything else, every day until it is made, and no search runs in the
-  meantime. Where a web search is still used (one board down while the others work), a lead
+  closed months before as leads. Now every chat checks when it starts and tells you the one
+  fix before anything else, until it is made, and no search runs in the meantime. Where a web search is still used (one board down while the others work), a lead
   is shown only once its own page shows it is still open.
 - **Your checks before saving no longer fail on ordinary words.** Outside the maintainer's own
   copy, the check that scanned the app's files for your data is skipped: you never build or

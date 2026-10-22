@@ -851,7 +851,10 @@ def main(argv: list[str]) -> int:
     if a.if_stale:
         if not stale():
             print("sync_app: already checked today.")
-            place_check(a.tools)    # a new chat on a day already checked still hears it once
+            # A new chat on a day already checked still hears these: each chat runs on its
+            # own cloud computer, so blocked job sites are checked for every chat.
+            network_check()
+            place_check(a.tools)
             return 0
         if _dirty():
             return sync()  # prints what is uncommitted and stops, changing nothing

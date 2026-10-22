@@ -111,3 +111,11 @@ def test_every_upgrade_says_what_it_gives_and_asks_in_plain_words(monkeypatch):
         for field in ("gives", "ask", "why_ask"):
             if getattr(u, field, ""):
                 _plain(getattr(u, field))
+
+
+def test_blocked_job_sites_are_checked_by_every_chat_in_the_cloud(sync_steps):
+    """Each cloud chat runs on its own computer with its own settings, so a chat opened on a
+    day already checked is checked too, not only the day's first."""
+    for stale in (False, True):
+        rc, steps = sync_steps("--if-stale", stale=stale)
+        assert rc == 0 and "network_check" in steps, (stale, steps)
