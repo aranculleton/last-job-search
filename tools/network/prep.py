@@ -2482,7 +2482,15 @@ def main(argv=None) -> int:
         print("would write %s; nothing written" % os.path.relpath(prep_path(row, a.root), a.root))
         return 0
     tracker = state.load_tracker(a.tracker) if os.path.exists(a.tracker) else []
-    print(os.path.relpath(_write_one(row, tracker, a), a.root))
+    written = _write_one(row, tracker, a)
+    print(os.path.relpath(written, a.root))
+    # The copy to send, named for whose it is: every contact's file is called prep.md.
+    try:
+        import shown
+        print("send: %s (this copy, never the file above: its name says whose it is)"
+              % shown.copy(written, a.root))
+    except Exception as exc:  # noqa: BLE001  the document is written; only its copy failed
+        print("send: no named copy (%s); send %s" % (exc, os.path.relpath(written, a.root)))
     need = research_needed(row, load_research(row.get("company"), a.root), a.today)
     if need:
         print(need)

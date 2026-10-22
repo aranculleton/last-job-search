@@ -189,7 +189,7 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
     _save(rows)
     if answers:
         resolve_pending(entry["said"])
-    return {**entry, "conflicts": found}
+    return {**entry, "conflicts": found, "own_overlaps": own_overlaps(entry["never_say"])}
 
 
 # Words that change nothing about what a phrase says: "recently moved" and "just moved"
@@ -393,6 +393,25 @@ def locked() -> list[str]:
     return out
 
 
+# Where a sentence or a clause opens: the start of a line, after a full stop, question or
+# exclamation mark (a closing quote between them), or after a comma or a colon.
+_OPENS = (r"(?:^|(?<=[.!?,;:]\s)|(?<=[.!?,;:]\s\s)|(?<=[.!?][\"'\u201d\u2019)]\s)"
+          r"|(?<=[\u2013-]\s))")
+_ALWAYS_CAPITAL = {"i", "i'm", "i'd", "i've", "i'll"}
+
+
+def opens_a_sentence(phrase: str) -> bool:
+    """Is this never-say phrase written the way a sentence opens ("Love to hear"): two words
+    or more, the first capitalised and the rest in lower case? Then it is matched only where
+    a sentence or clause opens, so "Love to hear" bans the clipped sentence and leaves "I'd
+    love to hear" alone, which matching it anywhere refused (2026-10-22). A name ("Larkspur
+    Foods") and a phrase written in lower case are matched anywhere, as before."""
+    words = str(phrase or "").split()
+    return (len(words) >= 2 and bool(re.fullmatch(r"[A-Z][a-z'\u2019]+", words[0]))
+            and words[0].lower().replace("\u2019", "'") not in _ALWAYS_CAPITAL
+            and all(not w[:1].isupper() for w in words[1:]))
+
+
 def never_say() -> list[tuple[str, re.Pattern]]:
     """(phrase, pattern) for every phrase the person has said never to use."""
     out = []
@@ -406,8 +425,46 @@ def never_say() -> list[tuple[str, re.Pattern]]:
             if words:
                 # Edges that work for a phrase that opens or closes on punctuation: \b
                 # needs a word character there, so "(remote)" or "[sic]" never matched.
-                out.append((phrase, re.compile(r"(?<!\w)" + r"\s+".join(words) + r"(?!\w)",
-                                               re.I)))
+                # A phrase quoted in profile/CLAUDE.md's prose takes its capital from the
+                # sentence it was quoted in, so it is matched anywhere.
+                quoted = str(r.get("rule") or "").endswith(FROM_PROFILE_RULES)
+                start = _OPENS if opens_a_sentence(phrase) and not quoted else r"(?<!\w)"
+                out.append((phrase, re.compile(start + r"\s+".join(words) + r"(?!\w)",
+                                               re.I | re.M)))
+    return out
+
+
+def own_overlaps(phrases) -> list[tuple[str, str, str]]:
+    """[(phrase, setting, the line)] where a never-say phrase would refuse the person's own
+    words: their OWN_VOICE, OPENER, ASK, ABOUT_ME or TEMPLATES in profile/networking.py.
+    Every draft using that line would then be refused, so record() says so at once."""
+    try:
+        net = person.module("networking") if person.exists("networking.py") else None
+    except person.NoProfile:
+        net = None
+    if net is None:
+        return []
+    own = []
+    for name in ("OPENER", "ASK", "ABOUT_ME"):
+        if str(getattr(net, name, "") or "").strip():
+            own.append((name, str(getattr(net, name))))
+    for key, got in (getattr(net, "TEMPLATES", None) or {}).items():
+        for v in (got.values() if isinstance(got, dict) else [got]):
+            for line in (v if isinstance(v, (list, tuple)) else [v]):
+                if str(line or "").strip():
+                    own.append((f"TEMPLATES {key}", str(line)))
+    voice = getattr(net, "OWN_VOICE", None)
+    if voice is not None and getattr(voice, "pattern", ""):
+        # The pattern's own words, without its escapes: "I\'d love to hear" reads as said.
+        own.append(("OWN_VOICE", re.sub(r"\\(.)", r"\1", voice.pattern)))
+    out = []
+    for phrase in phrases:
+        words = [re.escape(w).replace("'", "['’]") for w in str(phrase).replace("’", "'").split()]
+        if not words:
+            continue
+        start = _OPENS if opens_a_sentence(phrase) else r"(?<!\w)"
+        rx = re.compile(start + r"\s+".join(words) + r"(?!\w)", re.I | re.M)
+        out += [(phrase, setting, line) for setting, line in own if rx.search(line)]
     return out
 
 
@@ -421,6 +478,7 @@ _QUOTED = re.compile(r'(?<![*\w])"([^"\n]{1,60})"(?![*\w])'
                      r"|(?<![*\w])\u201c([^\u201d\n]{1,60})\u201d(?![*\w])")
 _CLAUSE_END = re.compile(r"[;:(]|\.(?:\s|$)|\n\s*\n|\bbut\b|\bthe line is\b|\binstead\b", re.I)
 PROFILE_RULES = "CLAUDE.md"
+FROM_PROFILE_RULES = " (a rule in profile/CLAUDE.md)"
 MAX_PHRASE_WORDS = 6
 
 
@@ -465,7 +523,7 @@ def adopt_profile_rules(today: str | None = None) -> list[str]:
         by_rule.setdefault(why, []).append(phrase)
     for why, phrases in by_rule.items():
         record("documents", why, "never write " + ", ".join('"%s"' % p for p in phrases)
-               + " (a rule in profile/CLAUDE.md)", applied_to=["profile/CLAUDE.md"],
+               + FROM_PROFILE_RULES, applied_to=["profile/CLAUDE.md"],
                never_say=phrases, today=today, answers=False)
     return [p for ps in by_rule.values() for p in ps]
 
@@ -1184,7 +1242,10 @@ def main(argv=None) -> int:
     r.add_argument("--said", required=True)
     r.add_argument("--rule", required=True)
     r.add_argument("--applied-to", action="append", default=[])
-    r.add_argument("--never-say", action="append", default=[])
+    r.add_argument("--never-say", action="append", default=[],
+                   help="a phrase never to use: in lower case, matched anywhere; capitalised "
+                        "as a sentence opens (\"Love to hear\"), only where a sentence or "
+                        "clause opens, so \"I'd love to hear\" stays allowed")
     r.add_argument("--overrides", action="append", default=[],
                    help="a check this rule outranks, by its name (compose.py prints it)")
     r.add_argument("--replaces", action="append", default=[], type=int,
@@ -1249,6 +1310,11 @@ def main(argv=None) -> int:
               f"\"{e['said'][:160]}\").")
         if e.get("overrides"):
             print(f"  outranks the check(s): {', '.join(e['overrides'])}")
+        for phrase, setting, line in e.get("own_overlaps") or ():
+            print(f"  WARNING: never saying \"{phrase}\" refuses your own {setting} "
+                  f"(\"{' '.join(line.split())[:90]}\"), so every draft using it is refused. "
+                  "Capitalised as a sentence opens (\"Love to hear\"), it bans only the "
+                  "clipped sentence; or change that line.")
         for n, old, why in e["conflicts"]:
             where = f"entry {n}" if n else "a rule in profile/CLAUDE.md"
             print(f"  CONTRADICTS {where} ({old.get('date')}: {old.get('rule')}): {why}.")

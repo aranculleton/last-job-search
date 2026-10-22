@@ -489,8 +489,9 @@ contacted. Load the skill before any outreach. What a session needs before it do
   asks for a conversation (`compose.first_note()`), the conversation, then a referral ask for
   one linked role (`compose.referral_ask()`).
 - **Who reads a first note decides what it says** (`compose.READER_TYPES`, each a setting in
-  `profile/networking.py`): a recruiter and a decision-maker may be told the role wanted and
-  the person's work authorization, and a decision-maker gets the open ask ("anything coming
+  `profile/networking.py`): a recruiter may be told the role wanted and the person's work
+  authorization, a decision-maker the role wanted (their work authorization once the messages
+  the person approves say it), and a decision-maker gets the open ask ("anything coming
   up"); asking whether they are hiring, or for a referral, is a recruiter's alone; a peer is
   told neither unless that message asks.
 - Before a draft is shown, `compose.advise()`: the draft is rewritten on its warnings first,
@@ -525,9 +526,11 @@ a shortlist. Nobody should have to go looking in the repo. Text they will read o
 (messages, notes, questions, a pack) is pasted in full, ready to copy. A document (a
 PDF, a long file) is sent with the session's file-sending tool (SendUserFile or its
 equivalent) so it opens in one tap, with the part they need to judge it pasted beside
-it. The file path is the record, written underneath, and never the answer on its own:
-"I've put it in documents/..." is not done. The same goes for anything updated: show
-the new version, not where it went.
+it, under a name that says whose it is: a prep document is sent as the copy `python3
+tools/shown.py <file>` makes ("Acme Analyst interview prep.md", never "prep.md"), which
+the prep tools print as `send:`. The file path is the record, written underneath, and
+never the answer on its own: "I've put it in documents/..." is not done. The same goes
+for anything updated: show the new version, not where it went.
 
 ## Talking to the person: plain words, one recommendation, short
 

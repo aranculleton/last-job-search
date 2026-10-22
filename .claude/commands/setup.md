@@ -463,15 +463,19 @@ And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_targe
 
 Then tell them, in a few lines:
 
-> **You're set up.** Your profile is in `profile/`, private to this repo.
+> **You're set up.** Everything about you stays in your private copy.
 >
-> - Say **"find me jobs"** (or `/scrape`) for a scored shortlist. It searches <the portals
->   that are on, by name>, and the employer boards of <the employers in `boards.py`>.
-> - Paste a posting (or `/apply <link>`) for a tailored resume and cover letter.
-> - `/network` finds people worth talking to at the employers you want.
-> - Updates to the app arrive on their own at the start of each session.
-> - A twice-weekly brief (what you owe, what changed, what to do next) is optional, as a
->   chat you check or a push to your phone: `automation/README.md` sets it up.
+> - Say **"find me jobs"** for a scored shortlist. It searches <the job sites that are on,
+>   by name>, and the careers pages of <the employers in `boards.py`>.
+> - Paste a posting, or its link, for a tailored resume and cover letter.
+> - Say **"who should I talk to at <employer>?"** to find people worth contacting.
+> - Updates to the app arrive by themselves.
+
+Then the brief, the other half of the two chats `place.py` recommends: one line saying what
+it is (twice a week, what they owe and what changed, arriving even when their computer is
+off) and asking whether to set it up now. On a yes, run "Set up my brief" (CLAUDE.md,
+Automation) in this chat, straight away; on a no, one line, "Say 'set up my brief' any
+time." Never a file, a command or a setting name in either.
 
 ---
 

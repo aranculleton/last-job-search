@@ -748,6 +748,7 @@ _CHANNEL_ALIASES = {
     "linkedin": "connection",
     "in-mail": "inmail", "in mail": "inmail", "in_mail": "inmail",
     "linkedin inmail": "inmail",
+    "open profile": "open_profile", "open-profile": "open_profile", "openprofile": "open_profile",
     "e-mail": "email", "mail": "email",
     "introduction": "intro", "warm intro": "intro", "warm_intro": "intro",
 }
@@ -1832,7 +1833,7 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         # They wrote first: the answer goes back the way they came, and an answer on
         # LinkedIn is a message, never a request or a paid InMail.
         chan = channel_of(said[-1]) or "message"
-        chan = "message" if chan in ("connection", "inmail") else chan
+        chan = "message" if chan in ("connection", "inmail", "open_profile") else chan
     elif not chan:
         chan = channel_of(outs[-1]) or channel_of(contact) or "message"
         if chan == "connection" and (accepted or scenario != "first_message"):
@@ -2237,6 +2238,14 @@ def _cli_text(argv) -> int:
     return 0
 
 
+BATCH_SENT_CHECK = (
+    "sent: not recorded. Several requests at once are logged from LinkedIn's sent list, which "
+    "shows what actually went: open it (python3 tools/claude_surfaces.py show "
+    "linkedin-sent-invitations) and read it with python3 tools/network/reading.py "
+    "invitations <the page> --record, which logs only the requests it shows, with the words "
+    "each went with. Where the person named each one as sent, run this again with --each-went.")
+
+
 def _cli_sent(argv) -> int:
     ap = argparse.ArgumentParser(
         prog="state.py sent",
@@ -2244,13 +2253,18 @@ def _cli_sent(argv) -> int:
     ap.add_argument("contact_ids", nargs="+")
     ap.add_argument("--date", default="", help="the day it went (default today)")
     ap.add_argument("--channel", default="connection",
-                    choices=("connection", "inmail", "email", "intro", "message"))
+                    choices=("connection", "inmail", "open_profile", "email", "intro", "message"),
+                    help="open_profile: a free message to an Open Profile (only Message showed "
+                         "and LinkedIn used no InMail credit), kept apart from the credits")
     ap.add_argument("--text-file", default="", help="the message as sent, with any edits")
     ap.add_argument("--draft", action="store_true",
                     help="it went exactly as drafted: log the draft's words")
     ap.add_argument("--outside", action="store_true",
                     help="sent from LinkedIn itself, words not seen (a request seen as Pending)")
     ap.add_argument("--no-note", action="store_true", help="a connection request with no note")
+    ap.add_argument("--each-went", action="store_true",
+                    help="several requests at once: the person named each one as sent (else "
+                         "LinkedIn's sent list is read first, and only what it shows is logged)")
     ap.add_argument("--subject", default="", help="an InMail's subject as sent")
     ap.add_argument("--attached", default="", metavar="FILE",
                     help="a file that went with it, as it sits in the repo (a resume: "
@@ -2264,6 +2278,11 @@ def _cli_sent(argv) -> int:
         return 1
     if a.attached and len(a.contact_ids) > 1:
         print("sent: --attached is one person's file; name one contact")
+        return 1
+    if len(a.contact_ids) > 1 and a.channel == "connection" and not a.outside and not a.each_went:
+        # "Sent to all of those" logged 14 where 7 went (2026-10-22). The sent list shows what
+        # went, with the words each carried.
+        print(BATCH_SENT_CHECK)
         return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
@@ -2317,6 +2336,8 @@ def _cli_sent(argv) -> int:
         print("Ask the person once: did any of these go with edits, or on another day? For "
               "each that did: python3 tools/network/state.py resent <id> --text-file <the "
               "words as sent> [--date YYYY-MM-DD]. The edit is recorded as their preference.")
+    if done and a.channel == "open_profile":
+        print("Open Profile: free, so no InMail credit is counted for it")
     if done and a.channel == "inmail":
         b = platform_budget(contacts, threads, a.today)
         print(f"InMail credits: {b['inmails_left']} left this month ({b['inmails_source']})")
@@ -2339,7 +2360,8 @@ def _cli_followed_up(argv, kind) -> int:
                     help="it went exactly as drafted: log each one's draft.md")
     ap.add_argument("--date", default="", help="the day it went (default today)")
     ap.add_argument("--channel", default="",
-                    choices=("", "message", "connection", "inmail", "email", "intro"),
+                    choices=("", "message", "connection", "inmail", "open_profile", "email",
+                             "intro"),
                     help="default: the thread's own; a message once they are connected")
     ap.add_argument("--subject", default="")
     ap.add_argument("--attached", default="", metavar="FILE",
@@ -3463,7 +3485,7 @@ def connection_requests(contacts, threads) -> set:
 # LinkedIn shows, kept with `state.py inmail-credits <n>`, wins until the month turns.
 INMAIL_REFUND_DAYS = 90
 INMAIL_FILE = ("documents", "network", ".inmail_credits.json")
-_LINKEDIN_CHANNELS = frozenset({"inmail", "connection", "message", ""})
+_LINKEDIN_CHANNELS = frozenset({"inmail", "open_profile", "connection", "message", ""})
 
 
 def _inmail_sends(contacts, threads) -> set:

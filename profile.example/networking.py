@@ -70,7 +70,9 @@ CONTRACTIONS = "allow"
 #            "shorthand": {"Saltmarsh Analytics": "Saltmarsh", "macroeconomics": "macro"}}
 VOICE = {"contractions": False, "shorthand": {}}
 # Work authorization in a first message, by who reads it; a message can still override it.
-ELIGIBILITY = {"recruiter": True, "decision_maker": True, "peer": False}
+# A reader left out here (a decision-maker, as here) follows the messages the person
+# approves for that reader, and is not told it until they do.
+ELIGIBILITY = {"recruiter": True, "peer": False}
 # Saying the role wanted in a first message. Asking for the job stays a recruiter's alone.
 SAY_THE_ROLE = {"recruiter": True, "decision_maker": True, "peer": False}
 # The brief note's length for a senior reader.

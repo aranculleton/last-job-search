@@ -89,11 +89,42 @@ def test_an_exit_that_invites_no_reply_is_warned_in_a_first_message_only():
 
 # ------------------------------------------------------------ eligibility by reader
 
-def test_eligibility_is_said_to_a_decision_maker_and_a_recruiter_and_never_to_a_peer():
-    to_head = compose.first_note("Juno Castellan", how_found=FOUND, title="Head of Data",
-                                 variant_key="a", shape="shared",
-                                 about_me="I work in supply-chain analytics")
-    assert compose.work_auth_line("senior") in to_head          # the senior register
+def test_eligibility_is_said_to_a_recruiter_to_a_decision_maker_once_approved_never_a_peer(
+        monkeypatch):
+    import learned
+    monkeypatch.setattr(learned, "approved", lambda include_retired=False: [])
+
+    def to_head():
+        return compose.first_note("Juno Castellan", how_found=FOUND, title="Head of Data",
+                                  variant_key="a", shape="shared",
+                                  about_me="I work in supply-chain analytics")
+    # The maintainer, 2026-10-22: a recruiter's by default, not a decision-maker's.
+    assert "sponsorship" not in to_head()
+    assert compose.eligible("recruiter") and not compose.eligible("decision_maker")
+    # Learned from the messages the person approves for that kind of reader.
+    said = {"reader": "decision_maker", "channel": "connection",
+            "text": "Hi Juno. " + compose.work_auth_line("senior")}
+    monkeypatch.setattr(learned, "approved", lambda include_retired=False: [said])
+    assert compose.work_auth_line("senior") in to_head()        # the senior register
+    left_out = {"reader": "decision_maker", "channel": "connection",
+                "text": "Hi Bo, hope you're well."}
+    monkeypatch.setattr(learned, "approved",
+                        lambda include_retired=False: [said, left_out, left_out])
+    assert "sponsorship" not in to_head()                        # most of them leave it out
+    # A reply inside a thread never restates it, so it counts for nothing: one approved
+    # thank-you to a recruiter turned their first notes off (2026-10-22).
+    # The profile here names a recruiter, so the setting is taken away for this one check.
+    thanks = {"reader": "recruiter", "channel": "dm", "text": "Thanks Bo, I appreciate it."}
+    monkeypatch.setattr(learned, "approved", lambda include_retired=False: [thanks])
+    kept = compose._ELIGIBILITY_SET
+    monkeypatch.setattr(compose, "_ELIGIBILITY_SET", None)
+    assert compose.eligible("recruiter")
+    monkeypatch.setattr(compose, "_ELIGIBILITY_SET", kept)
+    # A reader the profile names keeps the profile's answer, whatever was approved.
+    monkeypatch.setattr(compose, "_ELIGIBILITY_SET", {"decision_maker": True})
+    monkeypatch.setitem(compose.ELIGIBILITY, "decision_maker", True)
+    assert compose.eligible("decision_maker")
+    monkeypatch.setattr(learned, "approved", lambda include_retired=False: [])
     to_peer = compose.first_note("Ana Rook", how_found=FOUND, title="Data Analyst",
                                  variant_key="a")
     assert "sponsorship" not in to_peer
@@ -188,7 +219,7 @@ def test_a_credential_with_no_reason_in_its_sentence_is_warned():
 def test_an_inmail_is_a_subject_and_a_body_in_the_shape_that_drew_a_reply():
     m = compose.inmail("Juno Castellan", how_found="I found you on Larkspur's people page",
                        evidence="At Brindle & Hart I cut forecast error from 22% to 14%",
-                       title="Head of Data", variant_key="x")
+                       title="Head of Data", variant_key="x", work_auth=True)
     assert m.subject == compose.identity_subject() and m["subject"] == m.subject
     paras = m.body.split("\n\n")
     assert paras[0] == "Hi Juno, hope you're well."
@@ -196,7 +227,7 @@ def test_an_inmail_is_a_subject_and_a_body_in_the_shape_that_drew_a_reply():
     assert compose.work_auth_line("senior") in paras[3]          # a decision-maker's register
     assert any(p in paras[3] for p in compose.BANK["ask"]["decision_maker"])
     assert paras[-1] == compose.SIGN_OFF["senior"]
-    assert compose.validate(m, "inmail", title="Head of Data") == []
+    assert compose.validate(m, "inmail", title="Head of Data", work_auth=True) == []
 
 
 def test_an_inmail_longer_than_its_reader_needs_is_warned_not_refused():

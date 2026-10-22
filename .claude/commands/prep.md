@@ -80,7 +80,9 @@ name leads.
 The fit assessment is the part that matters. Name the gap the person will probe,
 and the strongest honest framing for it.
 
-**Send the file** with the session's file-sending tool (SendUserFile or its equivalent), and
+**Send the file** under the contact's name, as the copy `prep.py` prints on its `send:` line
+(`python3 tools/shown.py <the document>` after an edit by hand: every contact's file is
+called `prep.md`), with the session's file-sending tool (SendUserFile or its equivalent), and
 paste beside it the part to read before the call: the fit assessment and anything that changed
 (CLAUDE.md, "Every output is shown"). The file is the record; its path alone is never the
 answer.

@@ -59,8 +59,9 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py extractor [--list]            # the read-only page snippet
     python3 tools/network/reading.py next [--wait] [--mode card|deep]   # who to read next, once a page may load
     python3 tools/network/reading.py shortlist [<id>...] [--remove <id>...]  # today's short list
-    python3 tools/network/reading.py search-url --company C [--place P] [--keywords K | --function]
+    python3 tools/network/reading.py search-url <employer> [--place P] [--keywords K | --function]
                                                 [--learn ADDRESS | --company-id N]
+                                                # the employer's number from a profile read, if any
     python3 tools/network/reading.py queue --urls                  # the fast path: addresses to open and paste
     python3 tools/network/reading.py limits                        # every limit, its value and why
     python3 tools/network/reading.py friction [--kind K --words W] # the friction reads met, and the ramp
@@ -659,8 +660,28 @@ def _shared(secs: dict) -> dict:
 _EMPLOYMENT = re.compile(r"^(.+?)\s+·\s+(?:full-time|part-time|contract|internship|"
                          r"self-employed|freelance|seasonal|apprenticeship|permanent|"
                          r"temporary)\b", re.I)
-_TENURE = re.compile(r"^(?:(?:full-time|part-time|contract)\s+·\s+)?\d+\s+yrs?(?:\s+\d+\s+mos?)?$|"
-                     r"^\d+\s+mos?$", re.I)
+# The time at one employer, above the roles grouped under it: "5 yrs 6 mos", "5 yrs, 6 mos",
+# "5 years 6 months", "11 mos", after an employment type or not. Only the first form was
+# read, and a group written another way gave the role's title as the employer (2026-10-22).
+_TENURE = re.compile(r"^(?:(?:full-time|part-time|contract)\s+·\s+)?(?:\d+\s+(?:yrs?|years?)"
+                     r"(?:,?\s+\d+\s+(?:mos?|months?))?|\d+\s+(?:mos?|months?))$", re.I)
+# A company's logo, as a page's text names it above the company: "Fernhill Freight logo".
+_LOGO = re.compile(r"\s+logo$", re.I)
+
+
+def _exp_lines(exp: list) -> list:
+    """An Experience section's lines as one reading of them: no "see more", no logo label,
+    and a line a page prints twice (once for the eye, once for a screen reader) taken once.
+    Printed twice, a group's tenure sat two lines below its company and the role's title was
+    taken for the employer (2026-10-22)."""
+    out = []
+    for x in exp:
+        if _NOISE.match(x):
+            continue
+        x = _LOGO.sub("", x).strip()
+        if x and (not out or out[-1] != x):
+            out.append(x)
+    return out
 
 
 _DATES = re.compile(r"\b(?:19|20)\d{2}\b.*?(?:-|–|to)\s*(?:present|\w+\s+(?:19|20)\d{2}|(?:19|20)\d{2})|"
@@ -722,15 +743,45 @@ def _reach_and_connect(pre: list) -> tuple[str, str, str]:
     return degree, reach, connect
 
 
+# LinkedIn's footer links, which open on one called About. On a profile with no About of
+# its own the footer was returned as their About, "Accessibility, Talent Solutions,
+# Careers" (2026-10-22).
+_FOOTER_LINKS = re.compile(r"\b(?:accessibility|talent solutions|professional community policies|"
+                           r"community guidelines|careers|marketing solutions|privacy & terms|"
+                           r"ad choices|advertising|sales solutions|small business|"
+                           r"safety center)\b", re.I)
+
+
+def footer_text(text: str) -> bool:
+    """Is this LinkedIn's footer rather than something a person wrote: three or more of its
+    links named in it?"""
+    return len({m.group(0).lower() for m in _FOOTER_LINKS.finditer(str(text or ""))}) >= 3
+
+
+def page_degree(text: str) -> str:
+    """"1st", "2nd", "3rd" or "": the degree the page's top card shows them at."""
+    if is_structured(text):
+        for k, v in _struct_fields(text):
+            m = re.search(r"\b(1st|2nd|3rd)", v, re.I) if k == "degree" else None
+            if m:
+                return m.group(1).lower()
+        text = from_structured(text)
+    pre, _secs, _b = _sections(_clean_lines(text))
+    return _reach_and_connect(pre)[0]
+
+
 def _current(exp: list) -> str:
     """The employer of their first, most recent Experience entry, or "" if unclear."""
-    lines = [x for x in exp[:10] if not _NOISE.match(x)]
+    lines = _exp_lines(exp[:20])[:10]
     for line in lines[:6]:
         m = _EMPLOYMENT.match(line)
         if m:
             return m.group(1).strip()[:120]
-    if len(lines) >= 2 and _TENURE.match(lines[1]):
-        return lines[0][:120]                      # several roles grouped under one employer
+    for k, line in enumerate(lines[:6]):
+        if not k or _DATES.search(lines[k - 1]):
+            continue
+        if _TENURE.match(line) and not any(_DATES.search(x) for x in lines[:k]):
+            return lines[k - 1][:120]              # several roles grouped under one employer
     if len(lines) >= 3 and any("present" in x.lower() for x in lines[1:4]) \
             and not _DATES.search(lines[1]):
         if _DATES.search(lines[2]) and not _DATES.search(lines[0]) and _PDF_LIKE.search(lines[2]):
@@ -741,6 +792,9 @@ def _current(exp: list) -> str:
     return ""
 
 
+# A role's employment type on a line of its own, under its title: "Full-time".
+_TYPE_ONLY = re.compile(r"^(?:full-time|part-time|contract|internship|self-employed|freelance|"
+                        r"seasonal|apprenticeship|permanent|temporary)$", re.I)
 # A place line under a role's dates: "Leeds, England, United Kingdom · Hybrid", "Remote".
 _WORK_MODE = re.compile(r"\s*[·•]\s*(?:on-?site|hybrid|remote)\s*$", re.I)
 
@@ -749,7 +803,7 @@ def _entries(exp: list, most: int = 6) -> list:
     """[{employer, title, dates, place}] for their Experience, most recent first, read
     from the lines a profile page gives: a role's title and employer sit just above its
     dates, its place just below. Only what they wrote under Experience; nothing inferred."""
-    lines = [x for x in exp if not _NOISE.match(x)]
+    lines = _exp_lines(exp)
     out = []
     group = ""
     for i, line in enumerate(lines):
@@ -770,6 +824,13 @@ def _entries(exp: list, most: int = 6) -> list:
             if employer == title:
                 title = above[0] if len(above) > 1 else ""
         nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        # The next role in a group comes straight after these dates: its title, with its own
+        # dates below it, is never this role's place ("Sr. Staff Engineer, Compilers" was
+        # read as where a manager worked, 2026-10-22).
+        if nxt and i + 2 < len(lines) and (_DATES.search(lines[i + 2]) or (
+                _TYPE_ONLY.match(lines[i + 2]) and i + 3 < len(lines)
+                and _DATES.search(lines[i + 3]))):
+            nxt = ""
         place, mode = "", ""
         if nxt and len(nxt) < 80 and not _DATES.search(nxt) and (
                 "," in nxt or _WORK_MODE.search(nxt) or fold(nxt).strip() in ("remote",)):
@@ -849,7 +910,7 @@ def path_parallels(reading: dict) -> list:
     candidate's, from their Experience. A reason to write that is about them, never a
     generic fit: they moved into where they are now from the kind of employer the
     candidate is at, or from one the candidate also came from. Inferred from what they
-    listed, so a note hedges it once ("it looks like ...")."""
+    listed, so a note hedges it once ("I imagine ...")."""
     exp = reading.get("experience") or []
     if len(exp) < 2:
         return []
@@ -920,6 +981,8 @@ def parse(text: str, *, name: str = "", company: str = "", source: str = "paste"
     headline, location, org = _top(pre, before_main, name)
     degree, reach, connect = _reach_and_connect(pre)
     about = _clip(" ".join(x for x in secs.get("about", []) if not _NOISE.match(x)), ABOUT_KEEP)
+    if footer_text(about):
+        about = ""                 # LinkedIn's footer, taken for an About they never wrote
     items = (_posts(secs.get("activity", []), today, name)
              + _titled(secs.get("featured", []), "featured", 2)
              + _titled(secs.get("publications", []), "publication", 2))
@@ -1176,6 +1239,8 @@ def merge(old: dict | None, new: dict) -> dict:
     seen = {(i.get("kind"), i.get("text")) for i in old.get("items", [])}
     out["items"] = old.get("items", []) + [i for i in new.get("items", [])
                                            if (i.get("kind"), i.get("text")) not in seen]
+    if new.get("company_ids") or old.get("company_ids"):
+        out["company_ids"] = {**(old.get("company_ids") or {}), **(new.get("company_ids") or {})}
     out["read_on"] = max(old.get("read_on", ""), new.get("read_on", ""))
     out["name"] = new.get("name") or old.get("name", "")
     out["company"] = new.get("company") or old.get("company", "")
@@ -2358,6 +2423,19 @@ def _gone(contact_id: str, contacts, today: datetime.date) -> str:
     return ""
 
 
+def _card_says_enough(contact_id: str, contacts, today: datetime.date) -> str:
+    """Why a recruiter on the list needs no read, or "": their card, read since they were
+    added (a one-page read), says enough for their note (`card_enough`). A list made from a
+    search holds recruiters before any card is read, and they stayed on it and were read
+    page by page, though the card had said enough (2026-10-22)."""
+    if _read_on(contact_id, today.isoformat()):
+        return ""                        # read today already: it stays as read
+    who = _who(contact_id, contacts) or {}
+    if card_enough(load(contact_id), who.get("company", "")):
+        return "a recruiter whose card says enough: draft their note from the card"
+    return ""
+
+
 def shortlist_cap(sends_left: int | None = -1, today: datetime.date | None = None) -> tuple:
     """(how many may be on today's list, why): the requests left this week and SKIP_SPARE
     for those a read rules out, never above READS_PER_RUN."""
@@ -2497,7 +2575,8 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
             contacts = []
     had = _shortlist_file(today)
     removed = [i for i in had if i in set(remove)]
-    pruned = {i: why for i in had if i not in removed for why in [_gone(i, contacts, today)] if why}
+    pruned = {i: why for i in had if i not in removed
+              for why in [_gone(i, contacts, today) or _card_says_enough(i, contacts, today)] if why}
     have = [i for i in had if i not in removed and i not in pruned]
     cap, why = shortlist_cap(sends_left, today)
     unplaced_on = sum(1 for i in have if not placed(i, contacts))
@@ -2551,7 +2630,8 @@ def next_up(today: datetime.date | None = None, contacts=None) -> dict | None:
         except Exception:  # noqa: BLE001
             contacts = []
     for i in _shortlist_file(today):
-        if _gone(i, contacts, today) or _read_on(i, today.isoformat()):
+        if (_gone(i, contacts, today) or _read_on(i, today.isoformat())
+                or _card_says_enough(i, contacts, today)):
             continue
         row = next((c for c in contacts if c.get("contact_id") == i), None)
         if row is not None:
@@ -2862,6 +2942,38 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
             continue
         block.append(line)
     return out
+
+
+def reach_back(cards: list) -> str:
+    """How far back a read of the sent list reached, said plainly: the oldest request on it,
+    as a day ("about 14 Oct"). The list loads the newest few first, so a check of ten out of
+    four hundred says how far it went, never "all of them" (2026-10-22)."""
+    days = sorted(c.get("sent", "") for c in cards if c.get("sent"))
+    if not days:
+        return ""
+    d = datetime.date.fromisoformat(days[0])
+    return f"{d.day} {d:%b}"
+
+
+def sent_words(contact_id: str, card: dict) -> tuple:
+    """(the words a request seen on the sent list went with, whether they are cut short): the
+    note the page shows, or, where the page folded it at "show more" and the draft waiting
+    for them opens with the same words, the draft whole. So `invitations --record` logs the
+    message's words and nobody copies them off the page (2026-10-22)."""
+    shown = " ".join(str(card.get("note") or "").split())
+    cut = bool(card.get("note_cut"))
+    if not shown or not cut:
+        return shown, cut
+    try:
+        with open(draft_path(contact_id), encoding="utf-8") as fh:
+            draft = " ".join(note_body(fh.read()).split())
+    except OSError:
+        return shown, cut
+    a, b = (re.findall(r"[a-z0-9]+", fold(x).lower()) for x in (shown, draft))
+    # The fold can cut the last word shown in half.
+    if a and len(b) >= len(a) and b[:len(a) - 1] == a[:-1] and b[len(a) - 1].startswith(a[-1]):
+        return draft, False
+    return shown, cut
 
 
 def invitations_total(text: str) -> int | None:
@@ -3274,6 +3386,38 @@ def _sentences(note: str) -> list:
     return [x.strip() for x in re.split(r"(?<=[.?!])\s+", body) if len(x.strip()) >= 12]
 
 
+# A short request for a chat or a call is always an allowed close, whatever ASK says:
+# "Would you have time for a quick chat next week?" was refused as "not your ask"
+# (2026-10-22). Short: a question of at most SHORT_ASK_WORDS words.
+SHORT_ASK_WORDS = 15
+_CHAT_OR_CALL = re.compile(r"\b(?:chat|call|coffee|catch[- ]up|conversation|talk)\b", re.I)
+
+
+def short_chat_ask(sentence: str) -> bool:
+    s = str(sentence or "").strip()
+    return (s.endswith("?") and len(s.split()) <= SHORT_ASK_WORDS
+            and bool(_CHAT_OR_CALL.search(s)))
+
+
+def _opening_slot(sents: list, openers) -> str:
+    """The sentence a note opens on after the greeting. The person's opener ("hope you're
+    well") is a phrase, taken off the front; what follows it is the slot."""
+    import advice
+    ours = sorted({advice._norm(o) for o in openers if str(o or "").strip()}, key=len,
+                  reverse=True)
+    for s in sents:
+        n = advice._norm(s)
+        for o in ours:
+            if n == o or n.startswith(o + " "):
+                k = len(o.split())
+                s = re.sub(r"^(?:[^A-Za-z0-9]*[A-Za-z0-9]+){%d}[^A-Za-z0-9]*" % k, "", s)
+                n = n[len(o):].strip()
+                break
+        if len(n.split()) >= 3:
+            return s.strip()
+    return ""
+
+
 def _same(a: str, b: str) -> bool:
     """Two sentences that share four words in five: compose's one test of it."""
     import compose
@@ -3293,6 +3437,7 @@ probably seems seem looks like think thought wonder wondering curious sure since
 same too very much more most own new""".split())
 FRAME_MIN_WORDS = 4      # a frame with fewer fixed words is how any sentence starts
 OPENING_WORDS = 3
+OPENING_SLOT_MIN = 3     # most of a batch, and never fewer notes than this, open the same way
 
 
 def frame(sentence: str) -> tuple:
@@ -3418,10 +3563,26 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
             if len(ids) > limit and not any(w == "same frame" and set(ids) <= set(i)
                                             for w, _d, i in out):
                 out.append((what, key_, sorted(ids)))
+    # The person's own words are theirs to repeat as a phrase, not as the whole opening:
+    # most of a batch opening on one sentence reads as a template even when the sentence is
+    # their own line about them (2026-10-22). Any other sentence is judged above.
+    openers = [opener] + [v for rt in compose.READER_TYPES for v in compose.options("opener", rt)]
+    slots = {cid: _opening_slot(sents, openers) for cid, sents in per.items()}
+    judged = []
+    for x in slots.values():
+        if not x or any(_same(x, y) for y in seen + judged):
+            continue
+        judged.append(x)
+        ids = sorted(i for i, y in slots.items() if y and _same(x, y))
+        if (len(ids) >= OPENING_SLOT_MIN and 2 * len(ids) > len(notes)
+                and any(_same(x, o) for o in own)):
+            out.append(("same first sentence, your own words included", x, ids))
     if ask:
         asks = {}
         for cid, sents in per.items():
             last = sents[-1] if sents else ""
+            if short_chat_ask(last):
+                continue
             if last.endswith("?") and not any(_same(last, x) for x in [ask] + bank) and re.search(
                     r"\b(?:open to|quick (?:chat|call)|minutes|few questions|grab a coffee|"
                     r"catch up|connect)\b", last, re.I):
@@ -3471,6 +3632,10 @@ def queued_notes(contacts: list) -> dict:
 # and Featured for a deep read.
 _EXTRACTOR = r"""(() => {
   const WANT = __WANT__;
+  // LinkedIn's footer opens on a link called About, followed by Accessibility, Talent
+  // Solutions and the rest: on a profile with no About of its own, that link was taken as
+  // the section and the footer returned as their About (2026-10-22).
+  const FOOT = /^(accessibility|talent solutions|professional community policies|community guidelines|careers|marketing solutions|privacy & terms|ad choices|advertising|sales solutions|mobile|small business|safety center|linkedin corporation.*)$/i;
   const clip = (t, n) => (t || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, n);
   const first = t => ((t || "").split("\n").map(x => x.trim()).find(Boolean) || "");
   const main = document.querySelector("main") || document.body;
@@ -3484,6 +3649,8 @@ _EXTRACTOR = r"""(() => {
   const keep = (head, text) => {
     const k = head.toLowerCase();
     if (!WANT.includes(k) || got[k]) return;
+    const ls = (text || "").split("\n").map(x => x.trim()).filter(Boolean);
+    if (ls.length > 1 && FOOT.test(ls[1])) return;             // the footer, not a section
     got[k] = {heading: head, text: clip(text, 2500)};
   };
   for (const s of main.querySelectorAll("section")) {
@@ -3498,11 +3665,15 @@ _EXTRACTOR = r"""(() => {
   }
   const HEADS = /^(about|activity|experience|education|featured|publications|skills|licenses (&|and) certifications|certifications|volunteering|volunteer experience|recommendations|projects|honors (&|and) awards|languages|interests|courses|organizations|causes|patents|test scores|people also viewed|people you may know|more profiles for you|explore premium profiles|you might like|pages for you)$/i;
   const lines = (main.innerText || "").split("\n").map(x => x.trim()).filter(Boolean);
+  const expAt = lines.findIndex(x => x.toLowerCase() === "experience");
   for (let i = 0; i < lines.length; i++) {
     const k = lines[i].toLowerCase();
     if (!WANT.includes(k) || got[k]) continue;
+    if (i + 1 < lines.length && FOOT.test(lines[i + 1])) continue;   // the footer's link
+    if (k === "about" && expAt >= 0 && i > expAt) continue;          // About comes first
     let j = i + 1;
-    while (j < lines.length && !(HEADS.test(lines[j]) && lines[j].toLowerCase() !== k)) j++;
+    while (j < lines.length && !FOOT.test(lines[j])
+           && !(HEADS.test(lines[j]) && lines[j].toLowerCase() !== k)) j++;
     keep(lines[i], lines.slice(i, j).join("\n"));
   }
   if (!out.top) {
@@ -3510,6 +3681,16 @@ _EXTRACTOR = r"""(() => {
     out.top = clip(lines.slice(0, cut < 0 ? 12 : Math.min(cut, 12)).join("\n"), 1500);
   }
   out.sections = WANT.filter(k => got[k]).map(k => got[k]);
+  // The employers their Experience links to, by LinkedIn's company number: what a people
+  // search narrowed to one employer needs, read off a page already open (2026-10-22).
+  out.companies = [];
+  for (const a of main.querySelectorAll('a[href*="/company/"]')) {
+    const m = (a.getAttribute("href") || "").match(/\/company\/(\d+)/);
+    const img = a.querySelector("img");
+    const name = first(a.innerText) || (img ? (img.getAttribute("alt") || "").replace(/\s+logo$/i, "") : "");
+    if (m && name && !out.companies.some(c => c.id === m[1])) out.companies.push({name: name.slice(0, 120), id: m[1]});
+    if (out.companies.length >= 12) break;
+  }
   return JSON.stringify(out);
 })()"""
 EXTRACTOR = _EXTRACTOR.replace("__WANT__", '["about", "experience", "education"]')
@@ -3583,6 +3764,60 @@ _VIEW_PROFILE = re.compile(r"\bView\s+[^\n]{1,80}?['\u2019]s?\s+profile\b", re.I
 def _list_json(text: str) -> bool:
     t = str(text or "").lstrip()
     return t.startswith("{") and '"cards"' in t[:4000]
+
+
+def companies_from_extract(raw: str) -> dict:
+    """{company key: {"name", "id"}} for the employers a profile's Experience links to, by
+    LinkedIn's company number, from the extractor's JSON. {} when it carries none."""
+    from company_key import key as company_key
+    try:
+        got = json.loads(raw)
+        if isinstance(got, str):
+            got = json.loads(got)
+    except (ValueError, TypeError):
+        return {}
+    out = {}
+    for c in (got.get("companies") if isinstance(got, dict) else None) or []:
+        name, number = str(c.get("name") or "").strip(), str(c.get("id") or "").strip()
+        if name and number.isdigit() and company_key(name):
+            out.setdefault(company_key(name), {"name": name, "id": number})
+    return out
+
+
+def known_company_id(company: str) -> tuple:
+    """(company number, whose profile showed it) for this employer, from any profile already
+    read, or ("", ""): the number a narrowed people search needs, with no page loaded for it."""
+    from company_key import key as company_key
+    k = company_key(company)
+    for f in sorted(glob.glob(person.state(*DIR, "*", "reading.json"))):
+        try:
+            with open(f, encoding="utf-8") as fh:
+                got = (json.load(fh).get("company_ids") or {}).get(k)
+        except (OSError, ValueError, AttributeError):
+            continue
+        if got and str(got.get("id") or "").isdigit():
+            return str(got["id"]), os.path.basename(os.path.dirname(f))
+    return "", ""
+
+
+def extract_json(text: str) -> str:
+    """The profile extractor's JSON in what a browser tool handed back, or "" for page text:
+    as it came, quoted as a string once more, in a code fence or after a short label
+    ("Result:"). The snippet's return value goes to `read` as it is, with no --json and
+    nothing re-typed (2026-10-22)."""
+    t = re.sub(r"^```\w*\s*|\s*```\s*$", "", str(text or "").strip())
+    at = [k for k in (t.find("{"), t.find('"{')) if 0 <= k <= 40]
+    if not at:
+        return ""
+    try:
+        got, _end = json.JSONDecoder().raw_decode(t[min(at):])
+        if isinstance(got, str):
+            got = json.loads(got)
+    except ValueError:
+        return ""
+    if isinstance(got, dict) and ("top" in got or "sections" in got) and "cards" not in got:
+        return json.dumps(got)
+    return ""
 
 
 def from_extract(raw: str) -> str:
@@ -3966,7 +4201,7 @@ def _show(reading: dict) -> None:
         print(f"  [{strength}] {kind}: {what}" + (f'\n        "{_clip(ev, 150)}"' if ev else ""))
     for par in reading.get("parallels") or []:
         print(f"  [INFERRED] path parallel: {par['text']}\n        a reason to write that is "
-              "about them: hedge it once in the note (\"it looks like ...\")")
+              "about them: hedge it once in the note (\"I imagine ...\")")
     if reading.get("mutuals"):
         print(f"  mutual connections on the page: {', '.join(reading['mutuals'])}. Ask the "
               "person \"mention <name>?\" before using one; never say how well they know them")
@@ -3987,6 +4222,19 @@ def _clip(text: str, n: int) -> str:
 NO_CONNECT = ("their page shows no Connect button (only Message or Follow): LinkedIn may keep "
               "it under More, or take no request from you at all. Check their page before "
               "writing a connection note; an InMail (a credit) or an email reaches them without one")
+# A second-degree page that shows Follow and Message keeps Connect under More: warned as one
+# that "may take no request from you", a note to a mutual's colleague was nearly turned into
+# an InMail credit (2026-10-22).
+NO_CONNECT_2ND = ("Connect is under More on their page (a second-degree profile showing Follow "
+                  "and Message keeps it there): the request goes from More, then Connect")
+
+
+def no_connect_line(reading: dict) -> str:
+    """What to say of a page with no Connect button: under More for a second-degree page,
+    and perhaps no request at all for anyone else."""
+    r = reading or {}
+    return (NO_CONNECT_2ND if r.get("degree") == "2nd" and r.get("reach") == "request under More"
+            else NO_CONNECT)
 
 
 def channel_for(reading: dict) -> str:
@@ -4235,6 +4483,27 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
                   "under the right contact's id) and save it again.")
             refused += 1
             continue
+        # The length validate() holds a note to, by the channel it goes by: a 307-character
+        # note was saved on a 300-character plan, and LinkedIn cuts it (2026-10-22).
+        kind = {"inmail": "inmail", "message": "dm", "dm": "dm"}.get(
+            str(row.get("channel") or "").strip().lower(), "connection")
+        long_ = compose.length_findings(note_body(note).strip(), kind)
+        if long_:
+            as_ = {"connection": "a connection note", "dm": "a message", "inmail": "an InMail"}
+            print(f"reading: {cid}: not saved. As {as_[kind]} it is too long "
+                  f"({long_[0].text}): cut it and save it again.")
+            refused += 1
+            continue
+        # The read-aloud pass, on every note: what nobody would say aloud is not saved.
+        over = compose._overrides()
+        spoken = [a for a in compose.unspoken(note_body(note)) if a.rule not in over]
+        if spoken:
+            print(f"reading: {cid}: not saved. Read aloud, it does not sound like speech:")
+            for a in spoken:
+                print(f"  {a.rule.replace('_', ' ')}: \"{_clip(a.text, 80)}\"; {a.fix}")
+            print("  " + compose.READ_ALOUD.format(who=row.get("name") or cid))
+            refused += 1
+            continue
         leaked = compose.example_fact_names(note, contact=cid, name=row.get("name", ""),
                                             referrer=row.get("referred_by", ""))
         if leaked and str(own_facts_why.get(cid) or "").strip():
@@ -4288,7 +4557,8 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
                   + (" ..." if len(ids) > 8 else ""))
         print("  write each from its own reading: its own first sentence after the greeting, "
               "its own way of saying what you have done, and its own close; the person's own "
-              "opener, line about them and ask are theirs to repeat")
+              "opener, line about them and ask are theirs to repeat, but not as the first "
+              "sentence of most notes")
         return EXIT["alike"]
     if added_lines:
         state.save_contacts(contacts)
@@ -4299,7 +4569,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
         subject, _body = state.split_subject(note)
         if got.get("connect") == "missing" and not subject \
                 and str(row.get("channel") or "connection") == "connection":
-            print("warning, before this connection note: " + NO_CONNECT)
+            print("warning, before this connection note: " + no_connect_line(got))
         p = write_draft(cid, note, row.get("name", ""), card_only=card_only)
         how = ""
         if card_only_draft(cid):
@@ -4331,7 +4601,8 @@ def main(argv: list | None = None) -> int:
     r.add_argument("--name", default="", help="for a candidate not in the contact book yet")
     r.add_argument("--company", default="")
     r.add_argument("--json", action="store_true",
-                   help="the file is the `extractor` snippet's JSON, not page text")
+                   help="the file is the `extractor` snippet's JSON, not page text (found by "
+                        "itself when it is: the snippet's return value goes in as it came)")
     r.add_argument("--mode", choices=READ_MODES, default="deep",
                    help="card: read from the top card and About; deep: scrolled to the end")
     r.add_argument("--load-seconds", type=float, default=None,
@@ -4383,8 +4654,8 @@ def main(argv: list | None = None) -> int:
                          "paste back in one go (no automation at all)")
     sl = sub.add_parser("shortlist", help="add to today's short list for deep reads, best first")
     sl.add_argument("ids", nargs="*")
-    sl.add_argument("--remove", nargs="+", default=[], metavar="ID",
-                    help="take people off today's list")
+    sl.add_argument("--remove", nargs="+", action="extend", default=[], metavar="ID",
+                    help="take people off today's list (repeat it, or give several)")
     nx = sub.add_parser("next", help="the next person on today's list to read, once a page may "
                                      "load (run with --wait in the background)")
     nx.add_argument("--wait", action="store_true")
@@ -4412,6 +4683,8 @@ def main(argv: list | None = None) -> int:
     fr.add_argument("--words", default="", help="what it showed, word for word")
     su = sub.add_parser("search-url", help="a people search narrowed to one employer (and a "
                                            "place), from the filters the person set once")
+    su.add_argument("employer", nargs="?", default="",
+                    help="the employer to narrow to, as a word or with --company")
     su.add_argument("--company", default="",
                     help="the employer to narrow to; leave it out for a search by title across "
                          "employers (--keywords or --function, and --place)")
@@ -4568,6 +4841,11 @@ def main(argv: list | None = None) -> int:
             print(f"  {row.get('name') or cid} [{cid}]: {line}")
         return EXIT["ok"]
     if a.cmd == "search-url":
+        if a.employer and a.company and a.employer != a.company:
+            print(f"reading: two employers given ({a.employer!r} and --company {a.company!r}): "
+                  "give one")
+            return EXIT["error"]
+        a.company = a.company or a.employer
         try:
             if a.learn and not a.company:
                 raise ValueError("--learn keeps the filters of a search narrowed to an employer: "
@@ -4588,6 +4866,14 @@ def main(argv: list | None = None) -> int:
                 return EXIT["ok"]
             if a.company_id:
                 learn_company_id(a.company, a.company_id)
+            elif not _employer_filter(a.company):
+                # A profile already read links to this employer by its company number: a
+                # keyword search with the name in it matched people who list it as a skill,
+                # or everyone, and a third of one round's pages went on it (2026-10-22).
+                number, whose = known_company_id(a.company)
+                if number:
+                    learn_company_id(a.company, number)
+                    print(f"  company number {number} for {a.company}, from {whose}'s profile")
             keywords = a.keywords or (function_keywords() if a.function else "")
             print(search_url(a.company, a.place, keywords))
             if _employer_filter(a.company).get("unconfirmed"):
@@ -4767,6 +5053,14 @@ def main(argv: list | None = None) -> int:
         contacts = state.load_contacts()
         found = alike(notes, employers={c.get("contact_id"): c.get("company", "")
                                         for c in contacts})
+        # A note saved before drafts were held to the plan's length is caught before it goes.
+        import compose
+        kinds = {c.get("contact_id"): {"inmail": "inmail", "message": "dm"}.get(
+            str(c.get("channel") or "").strip().lower(), "connection") for c in contacts}
+        for cid, note in notes.items():
+            long_ = compose.length_findings(note, kinds.get(cid, "connection"))
+            if long_:
+                found.append(("too long", long_[0].text, [cid]))
         # The company limit, as the short list and a draft hold it: the notes waiting at one
         # employer beside the people there already waiting on a reply.
         from company_key import key as company_key
@@ -4880,9 +5174,12 @@ def main(argv: list | None = None) -> int:
         else:
             with open(a.file, encoding="utf-8") as fh:
                 text = fh.read()
-        if a.json:
+        company_ids = {}
+        extract = extract_json(text)
+        if a.json or extract:
             try:
-                text = from_extract(text)
+                company_ids = companies_from_extract(extract or text)
+                text = from_extract(extract or text)
             except (ValueError, AttributeError, TypeError) as e:
                 raise SystemExit(f"reading: --json needs the extractor's output ({e})") from None
         if source == "browser":
@@ -4915,6 +5212,13 @@ def main(argv: list | None = None) -> int:
                              "read is for the people on today's list only: rank everyone "
                              "found, then `reading.py shortlist <ids, best first>`")
         if source == "browser":
+            if not a.no_experience and not has_experience(text) and page_degree(text) == "3rd":
+                # LinkedIn shows a third-degree profile's Experience to nobody outside their
+                # network: scrolling never brings it, and the read asked for another scroll
+                # for ever (2026-10-22). The page is read as it is.
+                print("reading: a third-degree profile shows no Experience to anyone outside "
+                      "their network, so the page is read as it is.")
+                a.no_experience = True
             if not a.no_experience and not has_experience(text):
                 # On the current layout Experience and Education are on the page only once it
                 # has been scrolled to the very end; read before that, a real profile looks
@@ -4933,6 +5237,8 @@ def main(argv: list | None = None) -> int:
                         url=a.url or contact.get("linkedin_url", ""))
         except ValueError as e:
             raise SystemExit(f"reading: {e}") from None
+        if company_ids:
+            new["company_ids"] = company_ids
         slow_, breach_line = "", ""
         if source == "browser":
             gap, brk = pause()
@@ -4965,7 +5271,7 @@ def main(argv: list | None = None) -> int:
             if line:
                 print(line)
             if reading.get("connect") == "missing":
-                print("caution: " + NO_CONNECT)
+                print("caution: " + no_connect_line(reading))
         if source == "browser":
             if breach_line:
                 print(breach_line)
@@ -5326,6 +5632,7 @@ def _cli_invitations(a) -> int:
     got = match_invitations(cards, contacts, threads=threads, total=total)
     print(f"invitations: {len(cards)} request(s) pending on the page"
           + (f", {len(cards)} of {total} loaded" if total is not None and total > len(cards) else "")
+          + (f"; it reaches back to requests sent about {reach_back(cards)}" if cards else "")
           + f"; the next page at "
           f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
     done = 0
@@ -5334,9 +5641,9 @@ def _cli_invitations(a) -> int:
                 f"about {card['sent']} [{c['contact_id']}]")
         if a.record:
             try:
+                words, cut = sent_words(c["contact_id"], card)
                 state.sent(contacts, threads, c["contact_id"], datetime.date.today(),
-                           date=card["sent"], outside=True, text=card.get("note", ""),
-                           preview=bool(card.get("note_cut")))
+                           date=card["sent"], outside=True, text=words, preview=cut)
                 done += 1
                 line += ": recorded as sent, draft removed"
             except ValueError as e:
@@ -5358,7 +5665,9 @@ def _cli_invitations(a) -> int:
         print(f"  not checked: {len(got['unchecked'])} request(s) the log has as waiting went "
               f"on or before the oldest one loaded ({got['oldest'] or 'none loaded'}); only "
               f"{loaded} are on the page, newest first, so whether theirs is still pending is "
-              "not known: "
+              "not known. The page shows older ones only after its Load more button, which a "
+              "chat never presses; the person can press it until those dates show and paste the "
+              "page again: "
               + ", ".join(f"{c.get('name')} [{c['contact_id']}]" for c in shown)
               + (" ..." if len(got["unchecked"]) > len(shown) else ""))
     if got["unknown"]:

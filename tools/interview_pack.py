@@ -790,6 +790,19 @@ def _same_round(a, b) -> bool:
     return bool(a and b) and (a == b or a.startswith(b + " ") or b.startswith(a + " "))
 
 
+def _round_words(text) -> frozenset:
+    return frozenset(re.findall(r"[a-z]+|\d+", _text(text).lower()))
+
+
+def _pack_for_round(filename, stage) -> bool:
+    """Is `interview_prep_<x>.md` a pack for this round, under any of the names chats gave
+    one: "round2_technical", "round_2" and "technical_round_2" are all "Round 2 (technical)".
+    Its words and the stage's, one set inside the other; "round_20" is not "Round 2"."""
+    m = re.match(r"interview_prep_(.+)\.md$", filename)
+    a, b = _round_words(m.group(1) if m else ""), _round_words(stage)
+    return bool(a and b) and (a <= b or b <= a)
+
+
 def _built_for(folder, stages, found, today="") -> str:
     """The stage the living document was last built for, when a rebuild names none and it is
     still the one ahead: the same round as the next one on record, by its fuller name; else,
@@ -1065,8 +1078,11 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         "map": dict(story_map or {}),
         "kept_map": kept_stories(folder, stage),
         "built": last_build(folder),
+        # A pack for this same round under another name is an older draft of it, not an
+        # earlier round: its stories were never told (handkept_notes has it folded in).
         "earlier": sorted(f for f in _listdir(folder)
-                          if f.startswith("interview_prep_") and f != pack_name(stage)),
+                          if f.startswith("interview_prep_") and f != pack_name(stage)
+                          and not _pack_for_round(f, stage)),
         "rework": _rework_lines(_read(os.path.join(folder, LIVING))
                                 or _read(os.path.join(folder, pack_name(stage)))),
         "living": _read(os.path.join(folder, LIVING)),
@@ -3851,7 +3867,8 @@ def handkept_notes(tracker=None, contacts=None) -> list:
     """[{company, role, path, living}] for every hand-kept note about an employer with a live
     hiring process that its living document has not folded in yet: a file in documents/network
     that names the employer, one in a contact's folder there for someone at it, or one beside
-    the process that no tool wrote."""
+    the process that no tool wrote. Beside an application's living document, the same: what
+    no tool wrote, and an older pack for a round the document covers."""
     import glob
     tracker = what_works._csv(person.state("job_search_tracker.csv")) if tracker is None \
         else tracker
@@ -3861,22 +3878,36 @@ def handkept_notes(tracker=None, contacts=None) -> list:
     top = glob.glob(person.state("documents", "network", "*.md"))
     out = []
     for r in tracker:
-        if not is_process(r) or _text(r.get("status")).lower() in throttle.FINAL:
+        if _text(r.get("status")).lower() in throttle.FINAL:
             continue
         company, role = _text(r.get("company")), _text(r.get("role"))
         k = company_key(company)
         folder = outreach.app_folder(company, role)
         living = _read(os.path.join(folder, LIVING))
-        named = [p for p in top if _NOTE_WORDS.search(os.path.basename(p).replace("_", " "))
-                 and _names_employer(os.path.basename(p), k)]
-        mine = [c for c in contacts if company_key(c.get("company")) == k]
-        for c in mine:
-            named += glob.glob(person.state("documents", "network",
-                                            _text(c.get("contact_id")) or "-", "*.md"))
-        named += glob.glob(os.path.join(folder, "*.md"))
+        # An application with interviews has a living document too: what sits beside it is
+        # read (an older pack for the round it covers, 2026-10-22); notes elsewhere that name
+        # the employer are a process's alone, since an application's contacts are many.
+        if not is_process(r):
+            if not living:
+                continue
+            named = glob.glob(os.path.join(folder, "*.md"))
+        else:
+            named = [p for p in top
+                     if _NOTE_WORDS.search(os.path.basename(p).replace("_", " "))
+                     and _names_employer(os.path.basename(p), k)]
+            mine = [c for c in contacts if company_key(c.get("company")) == k]
+            for c in mine:
+                named += glob.glob(person.state("documents", "network",
+                                                _text(c.get("contact_id")) or "-", "*.md"))
+            named += glob.glob(os.path.join(folder, "*.md"))
+        # The rounds the living document is for: a pack kept for one of them beside it is
+        # an older draft of the same round, and what it holds is folded in like a note.
+        m = _STAGES_MARK.search(living)
+        rounds = [x for x in (m.group(1).split("; ") if m else []) if x]
         for p in sorted(set(named)):
             base = os.path.basename(p)
-            if base in _WRITTEN or base.startswith("interview_prep_"):
+            if base in _WRITTEN or (base.startswith("interview_prep_") and not (
+                    living and any(_pack_for_round(base, r) for r in rounds))):
                 continue
             if "%s %s" % (FOLDED, _rel(p)) in living:
                 continue
@@ -4604,9 +4635,21 @@ def _keep(ctx) -> None:
     _report(ctx, write_pack(ctx))
 
 
+def _send_line(path) -> None:
+    """The copy to send, named for whose it is (tools/shown.py): the kept file's own name is
+    the same for every employer."""
+    try:
+        import shown
+        print("send: %s (this copy, never the file above: its name says whose it is)"
+              % shown.copy(path))
+    except Exception as exc:  # noqa: BLE001  the document is written; only its copy failed
+        print("send: no named copy (%s); send %s" % (exc, _rel(path)))
+
+
 def _report(ctx, path) -> None:
     """What is left before the document just written goes to the person."""
     print("\nwritten: %s" % _rel(path))
+    _send_line(path)
     left = ctx.get("kept_from_before") or []
     if left:
         print("kept from the version before this one: %d line(s) this tool no longer writes "

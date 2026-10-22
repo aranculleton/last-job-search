@@ -52,7 +52,7 @@ AI_TELLS = (
      "say the link plainly, or cut it"),
     ("is the kind of path", re.compile(
         r"\b(?:is|was) (?:exactly |just )?the (?:kind|sort) of (?:path|route|move|career)\b", re.I),
-     "say it directly: \"your move from <X> into <Y> is the one I'm hoping to make\""),
+     "say it directly: \"your move from <X> into <Y> is the one I'm making\""),
     ("I would value", re.compile(r"\bI(?:'d| would) (?:really |truly )?value\b", re.I),
      "\"I'd really appreciate\", or just ask"),
     ("praise of the company", re.compile(
@@ -62,7 +62,7 @@ AI_TELLS = (
     ("the route I would most like", re.compile(
         r"\b(?:route|path|direction|move) I(?:'d| would) (?:most )?(?:like|love) to (?:follow|take|make)\b"
         r"|\bwhere I(?:'d| would) most like to (?:work|be|end up)\b", re.I),
-     "say it plainly: \"I'm hoping to move into <the work>\""),
+     "say it plainly: \"I'm moving into <the work>\""),
     ("which teams to look at", re.compile(
         r"\bwhich teams? to (?:look at|target|approach)\b|\bhow to approach (?:them|the team|teams)\b",
         re.I),
@@ -157,8 +157,8 @@ def with_open_ask(fix: str) -> str:
 # ------------------------------------------------------------------ hedges
 
 # One light hedge per inference, from these; never two in a sentence, never a disclaimer.
-HEDGES = ("I imagine", "I can imagine", "I'm guessing", "probably", "it seems like",
-          "it looks like")
+# "It looks like" left the bank on 2026-10-22: it reads as a guess made from their profile.
+HEDGES = ("I imagine", "I can imagine", "I'm guessing", "probably", "it seems like")
 _HEDGE = re.compile(
     r"\b(?:I (?:can )?imagine|I'?m guessing|guess|guessing|probably|presumably|seems?|"
     r"looks? like|I think|think|thought|maybe|perhaps|possibly|might|could|not sure|suppose)\b",
@@ -790,6 +790,51 @@ def _theirs(sentence: str, own: set) -> bool:
 
 # ------------------------------------------------------------------ the whole check
 
+# Phrasings that read badly in any message, to anyone: each was in a batch the person
+# rewrote by hand (2026-10-22). (rule, pattern, what to write instead). Narrow on purpose:
+# "side" only as "the <word> side", "sometime" never "sometimes".
+_NOT_A_SIDE = (r"(?!(?:other|flip|bright|far|near|right|left|wrong|same|opposite|east|west|"
+               r"north|south|outside|inside|plus|minus)\b)")
+PHRASINGS = (
+    ("tells_them_their_job", re.compile(r"\b(?:as |since )?you (?:recruit|hire)\b", re.I),
+     "they know what they do: say why it matters to you, or ask about it"),
+    ("reads_as_googled", re.compile(
+        r"\byour\s+(?:[a-z-]+\s+){0,3}(?:model|project|pipeline|dashboard|platform|tool|system|"
+        r"analysis|programme|program|work)\s+(?:for|on|at)\s+[A-Z][\w&'-]*(?:\s+[A-Z][\w&'-]*)"
+        r"{0,3}['\u2019]s\s+[a-z]"),
+     "a detail off their profile read back reads as googled: say what it made you think, or "
+     "ask about it"),
+    ("undersells", re.compile(r"\ba long way from\b|\b(?:quite|very|completely|totally) "
+                              r"different from (?:my|what I)\b", re.I),
+     "say what carries over from your work to theirs, not how far apart they are"),
+    ("vague_close", re.compile(r"\bwhat you(?:'re|\u2019re| are) seeing\b|"
+                               r"\bgreat to hear more\b", re.I),
+     "say what you'd like to hear about: the team's work, what's coming up, how they got there"),
+    ("swap_notes", re.compile(r"\b(?:swap|compare|trade|exchange) notes\b", re.I),
+     "say the one thing you'd ask them"),
+    ("it_looks_like", re.compile(r"\bit looks like\b", re.I),
+     "it reads as a guess from their profile: say what you saw, or ask"),
+    ("since_you", re.compile(r"^(?:(?:hi|hey|hello|dear)\b[^,]{0,40},\s*)?since you\b", re.I),
+     "open on the reason itself (what you share, what you saw), not \"Since you ...\""),
+    ("how_they_got_into_recruiting", re.compile(
+        r"\bhow\b[^.?!]{0,40}\b(?:into|in to)\s+(?:recruit\w*|talent acquisition)\b", re.I),
+     "a recruiter is asked about roles, not about their own path"),
+    ("thread_between_us", re.compile(
+        r"\b(?:a|the|one) (?:common )?thread between us\b|\bfor you,\s*[^,.;!?]{1,40}\bfor me\b",
+        re.I),
+     "say the one thing you share plainly: \"we both worked on <X>\""),
+    ("pretty_much", re.compile(r"\bpretty much\b", re.I), "cut it, or say how much"),
+    ("sometime", re.compile(r"\bsometime\b", re.I),
+     "name a time: \"in the next couple of weeks\", \"one afternoon next week\""),
+    ("the_x_side", re.compile(r"\bthe " + _NOT_A_SIDE + r"[a-z-]+ side\b(?! by side)", re.I),
+     "name the thing itself: \"hardware\", \"the hardware team\""),
+    ("hoping_to", re.compile(r"\bhoping to\b", re.I),
+     "it reads as asking them for it now: say what you're doing (\"I'm moving into ...\")"),
+)
+# Asked as a question, these are fine: "Who do you hire for?"
+_ASKED_IS_FINE = frozenset({"tells_them_their_job"})
+
+
 def check(text: str, kind: str = "connection", reader: str = "peer", first_contact=None,
           reading: dict | None = None, creds=None, keep=()) -> list[Advice]:
     """Every warning for this draft, each with its fix. `first_contact` defaults to the
@@ -835,6 +880,10 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
             out.append(Advice("guesses_from_their_level", seen,
                               "what they see is a guess from their title: ask it (\"how do "
                               "the teams there tend to ...?\"), or cut it"))
+        for rule, rx, fix in PHRASINGS:
+            m = rx.search(s)
+            if m and not (rule in _ASKED_IS_FINE and s.rstrip().endswith("?")):
+                out.append(Advice(rule, m.group(0), fix))
         m = VAGUE_COMPARISON.search(s)
         if m and not _SAYS_HOW.search(s):
             out.append(Advice("vague_comparison", m.group(0), VAGUE_FIX))
@@ -852,7 +901,7 @@ def check(text: str, kind: str = "connection", reader: str = "peer", first_conta
         elif p in (INFERRED, GUESS) and not found:
             out.append(Advice("unhedged_inference", s[:100],
                               "an inference written as fact: hedge it once (\"I imagine\", "
-                              "\"I'm guessing\", \"it looks like\"), or say what they wrote"))
+                              "\"I'm guessing\", \"probably\"), or say what they wrote"))
     out += [a for a in without_purpose(text, creds)
             if not any(_theirs(s, own) and a.text in s for s in tone.sentences(text))]
     out += _whole(text, kind, first_contact)

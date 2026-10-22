@@ -51,7 +51,7 @@ brief".
 
 Go to [claude.ai/code](https://claude.ai/code), start a new chat, and choose your copy.
 
-**Once, so it can reach job sites (recommended, about a minute).** A cloud chat runs on a
+**Once, so it can reach job sites (needed for searching, about a minute).** A cloud chat runs on a
 computer in the cloud that can only reach a few websites until you allow more. Claude calls
 that computer's settings an "environment". Do this from your first chat:
 
@@ -82,8 +82,9 @@ Make each new chat start with the PDF tools in place. At the time of writing (ch
 3. It applies from your next new chat. In this one, Claude installs the same tools itself.
 <!-- /claude-surface -->
 
-Skip both and Claude still works: it says, in a line, what it needs the first time it needs
-it. (Want to allow only the job sites rather than every website? [SETUP.md](SETUP.md) lists
+Skip the first and Claude still writes, preps and finds people, but it searches for no jobs
+until it is done: each chat checks when it starts and tells you the one fix first. Skip the
+second and nothing is lost but a few minutes. (Want to allow only the job sites rather than every website? [SETUP.md](SETUP.md) lists
 them.)
 
 ## 4. Say "set me up"

@@ -1,5 +1,5 @@
 ---
-framework_version: 1.12.7
+framework_version: 1.12.8
 ---
 
 # Writing Style Guide
@@ -151,8 +151,9 @@ are looking for, and say one true thing about the reader):
 3. **What the candidate is looking for**, said as context and not as a demand: the person's
    `ABOUT_ME` line does it without naming a job. Say where they are based exactly as
    `profile/CLAUDE.md` words it. Never ask whether the team is hiring, except of a recruiter.
-   The role wanted and work authorization go to a recruiter and a decision-maker by default,
-   and never to a peer unless that message asks for it (`SAY_THE_ROLE` and `ELIGIBILITY` in
+   The role wanted goes to a recruiter and a decision-maker by default, work authorization
+   to a recruiter (and to a decision-maker once the messages the person approves say it),
+   and neither to a peer unless that message asks for it (`SAY_THE_ROLE` and `ELIGIBILITY` in
    `profile/networking.py`; `compose.validate()` flags each by reader); for a peer they belong
    in the referral ask or in the reply to "are you able to work here?". Whatever is said has to be true (see the Work
    authorization line in `profile/01-candidate-profile.md`).
