@@ -42,7 +42,7 @@ def test_the_boards_are_read_at_once_and_said_in_order(monkeypatch):
     monkeypatch.setattr(ats_boards, "REFUSED", {})
     monkeypatch.setattr(ats_boards, "REFUSED_PROVIDERS", {})
     boards = {f"Employer {n:02d}": ("greenhouse", "gone" if n == 3 else f"t{n}") for n in range(8)}
-    boards["Odd One"] = ("nosuchsystem", "x")
+    boards["Employer 99"] = ("nosuchsystem", "x")
     began = time.monotonic()
     got = ats_boards.probe(boards)
     assert time.monotonic() - began < 8 * 0.2
@@ -50,4 +50,4 @@ def test_the_boards_are_read_at_once_and_said_in_order(monkeypatch):
     assert list(got) == sorted(boards)
     assert got["Employer 03"] == "NO JOBS (404 Not Found)"
     assert got["Employer 00"] == "NO JOBS (token may be wrong)"
-    assert got["Odd One"] == "NO READER ('nosuchsystem')"
+    assert got["Employer 99"] == "NO READER ('nosuchsystem')"

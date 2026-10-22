@@ -473,7 +473,7 @@ METHODS: dict[str, dict] = {
             (26, "2026-10-21", False, "Saving and the queue judge a note against its referrer and the people it could really be for"),
             (27, "2026-10-22", False, "fast pauses by default and the same counts at every preset; a slow load never stops a day or starts the ramp; the break an upgrade wrote is freed"),
         ),
-        "fingerprint": "d5bd3788953c4d12",
+        "fingerprint": "c35a69ec1a23c641",
     },
     "screening": {
         "by": "round", "priority": 2,

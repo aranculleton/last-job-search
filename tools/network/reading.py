@@ -1681,7 +1681,7 @@ def frozen_break() -> tuple[str, int, int] | None:
     """(networking.py, first line, last line) of the break line the read-break upgrade
     wrote, with its comment above it, where nobody has touched it since: still the value it
     wrote, its only change ever the upgrade's own commit, and no choice of the person's
-    recorded for it (learned.py). Else None, and their setting stands."""
+    recorded for it (learned.py); None otherwise, and their setting stands."""
     if not person.exists("networking.py"):
         return None
     path = person.path("networking.py")
