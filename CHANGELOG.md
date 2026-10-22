@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.11.0] - 2026-10-22
+
 ### Added
 
 - **A short tip now and then, and a word the first time.** The first time you run a search,
@@ -52,7 +54,6 @@ make sense to somebody whose repo just received it.
   sent, that still works.
 - **A free message to an Open Profile has a channel of its own** (`--channel open_profile`),
   so it is never counted as an InMail credit spent.
-
 - **Your work authorization goes to recruiters by default, not decision-makers.** A first
   note to a recruiter still says you need no sponsorship; one to a senior reader says it once
   most of the messages you approve for senior readers do (a setting in your profile still
@@ -68,7 +69,6 @@ make sense to somebody whose repo just received it.
   refuses the clipped sentence and leaves "I'd love to hear" alone; written in lower case, a
   phrase is banned anywhere as before. Recording one that would refuse your own opener, ask
   or line about you says so at once.
-
 - **Saving and updating are never your job.** Your chats save their work, take the newest
   version and settle any clash between two chats themselves, without asking and without
   explaining how: you hear "Saved." or nothing. They no longer show you git commands, branch
@@ -148,8 +148,6 @@ make sense to somebody whose repo just received it.
 - **A note longer than your plan allows is not saved.** Drafts are held to the same length
   check as everything else: a 307- and a 301-character note had been saved on a 300-character
   plan. One saved before this is caught by the check of the queue before it goes.
-- **A short request for a chat or a call is always an allowed close,** whatever your own ask
-  says: "Would you have time for a quick chat next week?" was refused as not your ask.
 - **The sent list logs each note's words itself and says how far back it looked.** Where the
   page folds a note, the draft it came from is logged whole; and a read of the newest ten of
   four hundred says the date it reached back to.
@@ -170,7 +168,6 @@ make sense to somebody whose repo just received it.
   before their card was read, and is drafted from the card.
 - **A batch whose notes mostly open on your own line is caught.** Your opener, ask and line
   about you are yours to repeat, but not as the first sentence of most notes.
-
 - **A contact named like one of the app's examples no longer blocks merges** (the
   maintainer's own repo only). A contact's first name is on the leak list as a
   greeting, to catch a real message copied into an example, and the app's examples greet
