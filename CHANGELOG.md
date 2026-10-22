@@ -82,6 +82,9 @@ make sense to somebody whose repo just received it.
 - **No best hour to send, and nothing is held for one.** A request waits until they next
   open LinkedIn, so who is asked and what the note says matter far more than the hour. A
   reader in another time zone is the one exception: their working day, not their night.
+- **Setup ends by offering your brief,** the other half of the two chats it recommends, and
+  sets it up there and then on a yes; its closing lines name no file or command. The getting
+  started guide says the cloud chat's internet setting is needed for searching, not optional.
 
 ### Fixed
 
