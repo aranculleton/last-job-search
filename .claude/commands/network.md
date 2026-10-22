@@ -383,7 +383,7 @@ it. LinkedIn is never fetched from a session.
         varying few, caps for profiles, for list pages and for all loads together, and a ramp
         that starts at 5 pages an hour and rises one step for each clean day of reading. Every
         limit is in `profile/networking.py`, set at once by the dial `PROFILE_READ_RISK`
-        (`careful` unless the person chooses `normal` or `fast`) and each overridable by the
+        (`fast` unless the person chooses `normal` or `careful`) and each overridable by the
         person; `reading.py limits` prints every one, its value, where it came from and why.
         Never open two pages at once. A page opened before the gate said go is still read
         (`read`, `people` and `invitations` never refuse a page already loaded, which would
@@ -397,12 +397,13 @@ it. LinkedIn is never fetched from a session.
         nothing stops. After a clean sign-in, a sign-out stop is lifted only on their word, once
         a day: `reading.py resume --reason "<their words>"`. Never edit the ledger by hand.
         A page that came back nearly empty (no name, no section of a profile, nothing of a
-        structured extract), or one far slower to load than their recent ones (pass
-        `--load-seconds` when the browser tool times it), doubles the next pause, and a second
-        within the hour stops the day. A short paste of a page that loaded is a page, not this. Each is kept, dated, in the friction log (`reading.py
+        structured extract) doubles the next pause, and a second within the hour stops the
+        day; one far slower to load than their recent ones (pass `--load-seconds` when the
+        browser tool times it) doubles the next pause and nothing more. A short paste of a page that loaded is a page, not this. Each is kept, dated, in the friction log (`reading.py
         friction`; `friction --kind <kind> --words "<what it showed>"` keeps one the chat saw
-        itself), and a check, a sign-in page out of turn or a slow load puts the ramp back to
-        its first step; a page that came back nearly empty never moves it. Tell the person what
+        itself), and a check, a sign-in page out of turn or an unusual-activity notice puts the
+        ramp back to its first step; a page that came back nearly empty, or loaded slowly,
+        never moves it. Tell the person what
         happened in the words `friction` prints ("a sign-in page on 20 Oct"), never "a
         LinkedIn warning" unless LinkedIn showed one. The count, the stop and the
         list are one per computer, shared by every worktree's chat.

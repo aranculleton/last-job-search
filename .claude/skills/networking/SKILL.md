@@ -250,14 +250,15 @@ caught at once. So between finding and writing there is a read, and
   card-only. A recruiter whose card says enough (`reading.card_enough`) is drafted from it with
   no read. A first note with nothing read is otherwise refused (`reading.py draft`,
   `compose.validate(contact=)`). No change to the funnel may add a page load, shorten the
-  pacing or add a click unless the person sets it in their profile.
+  pauses below the dial's preset or add a click unless the person sets it in their profile.
 - **One title search, many employers.** A search with no employer in it feeds every employer
   it finds: `sources.py harvest <results.json>` and `reading.py people <file>`, each with no
   `--company`, group the people by the employer each names and leave out employers the
   search has ruled out.
 - **Every limit is the person's, behind one dial.** `PROFILE_READ_RISK` in
-  `profile/networking.py` picks a preset (`careful`, the default and the pace before the dial;
-  `normal`; `fast`) and every limit derives from it, each overridable on its own
+  `profile/networking.py` picks a preset (`fast`, the default since 2026-10-22, whose pauses
+  let reads reach the hourly cap; `normal`; `careful`, the pace before) that sets the pauses,
+  every count being the same at every preset, and each limit is overridable on its own
   (`tools/network/pace.py` holds them in one place with the reason for each; `reading.py
   limits` prints them). What is known and what is assumed is said there too: no preset is
   safe, the numbers are a judgement of a person's pace, not a measured rate.
@@ -268,11 +269,12 @@ caught at once. So between finding and writing there is a read, and
   signs in and nothing stops. A sign-out stop is the one they may lift, once, after a clean
   sign-in, on their own word (`reading.py resume --reason "<their words>"`), and the signal
   stays in the log, marked; a page that came back nearly empty (no name, no section, no
-  structured extract: never a short paste of a page that loaded) or loads far slower than
-  usual doubles the next pause, and a second within the hour stops the day. The friction log
+  structured extract: never a short paste of a page that loaded) doubles the next pause, and
+  a second within the hour stops the day; one that loads far slower than usual doubles the
+  next pause and nothing more. The friction log
   keeps each, dated, across days, and the pages-an-hour ceiling ramps up only on clean days
-  since the last one (5, then the preset's next steps); a page that came back nearly empty
-  never moves the ramp. Say what happened ("a sign-in page on 20 Oct"), never "a LinkedIn
+  since the last one (5, then the preset's next steps); a page that came back nearly empty,
+  or loaded slowly, never moves the ramp. Say what happened ("a sign-in page on 20 Oct"), never "a LinkedIn
   warning" unless LinkedIn showed one. The count is one per computer, so every worktree's chat shares it.
 - **Reads never block the chat.** `reading.py next --wait` runs in the background and names
   who to read once a page may load; meanwhile the chat writes and shows the notes it can

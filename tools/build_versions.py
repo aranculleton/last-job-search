@@ -426,8 +426,9 @@ METHODS: dict[str, dict] = {
             (43, "2026-10-21", False, "why.py reads the highest numbered saved round as the newest"),
             (44, "2026-10-21", False, "Logging and checking fixes: a nudge after answering their reply is the one nudge, unsend and resent act on the latest message, the export adds a wordless message once, a reply to someone who wrote first is a reply, approved examples lend their shape and none of their facts, a greeting that starts their given name is theirs, sources.py answers --help"),
             (45, "2026-10-21", False, "A decline is a decline: passing on the opportunity or the call, a polite 'not sure I can help', and a no that points on is a referral, not a no; the export knows the app's own resume names and logs a resume once; a greeting another contact answers to is refused; a warm intro naming its referrer saves, with an override kept with its reason"),
+            (46, "2026-10-22", False, "the networking skill and /network say fast is the default pace and a slow load only doubles the next pause"),
         ),
-        "fingerprint": "fa5198f58431946b",
+        "fingerprint": "c254885e2f66051b",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
