@@ -79,6 +79,9 @@ make sense to somebody whose repo just received it.
   matches, where, and of what ("64 match(es) in the public app's files, all of them" and the
   one entry), where the sync used to hand the chat 40 file paths to pass on word for word.
   `python3 tools/app_watch.py --all` lists every match; it stopped at 40.
+- **No best hour to send, and nothing is held for one.** A request waits until they next
+  open LinkedIn, so who is asked and what the note says matter far more than the hour. A
+  reader in another time zone is the one exception: their working day, not their night.
 
 ### Fixed
 

@@ -923,6 +923,12 @@ and offers waiting to be taken up. A nudge to someone who has not
 replied is the least valuable thing in that list, and it is the only thing the
 clock shows.
 
+**There is no best hour to send, and nothing is held for one.** A request waits in their
+invitations until they next open LinkedIn, and who is asked and what the note says decide a
+reply far more than the hour (the person's question of 2026-10-22). The one exception: a reader
+in another time zone gets it in their working day, not their night or weekend, and the
+hand-over says so in one line only when it applies.
+
 Say plainly when a company or a person is a dead end, and why. Distinguish a
 **skills gap** (bridgeable, name it honestly, a named gap plus genuine strengths
 beats an overclaim) from a **categorical blocker** (citizenship, clearance, a

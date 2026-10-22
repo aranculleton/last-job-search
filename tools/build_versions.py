@@ -442,8 +442,9 @@ METHODS: dict[str, dict] = {
             (48, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (49, "2026-10-22", False, "work authorization to a recruiter by default and to a decision-maker once approved messages say it; notes nobody would say aloud flagged; a never-say phrase written as a sentence opens bans only that sentence"),
             (50, "2026-10-22", False, "advise() warns of telling them what they do, a googled detail, underselling, a vague close, swap notes, it looks like (out of the hedge bank), Since you, a recruiter's own path, a thread between us, pretty much, sometime, the X side and hoping to; a batch logged as sent reads the sent list first; an Open Profile channel apart from InMail credits; a paragraph labelled by its subject"),
+            (51, "2026-10-22", False, "no best hour to send and nothing held for one; a reader in another time zone gets it in their working day"),
         ),
-        "fingerprint": "316420533f93d72a",
+        "fingerprint": "0ab99ec9b7411f73",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
