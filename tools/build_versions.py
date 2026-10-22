@@ -302,7 +302,7 @@ METHODS: dict[str, dict] = {
             (42, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (43, "2026-10-22", False, "the writing guide says work authorization goes to a recruiter by default, and to a decision-maker once the person's approved messages say it"),
         ),
-        "fingerprint": "022def81c79feccf",
+        "fingerprint": "2934465013576898",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -441,8 +441,9 @@ METHODS: dict[str, dict] = {
             (47, "2026-10-22", False, "a shorter reply per person, one version of each note, queued drafts in the same reply, no separate batch check before saving"),
             (48, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (49, "2026-10-22", False, "work authorization to a recruiter by default and to a decision-maker once approved messages say it; notes nobody would say aloud flagged; a never-say phrase written as a sentence opens bans only that sentence"),
+            (50, "2026-10-22", False, "advise() warns of telling them what they do, a googled detail, underselling, a vague close, swap notes, it looks like (out of the hedge bank), Since you, a recruiter's own path, a thread between us, pretty much, sometime, the X side and hoping to; a batch logged as sent reads the sent list first; an Open Profile channel apart from InMail credits; a paragraph labelled by its subject"),
         ),
-        "fingerprint": "772d481c531c06b2",
+        "fingerprint": "316420533f93d72a",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -486,8 +487,9 @@ METHODS: dict[str, dict] = {
             (26, "2026-10-21", False, "Saving and the queue judge a note against its referrer and the people it could really be for"),
             (27, "2026-10-22", False, "fast pauses by default and the same counts at every preset; a slow load never stops a day or starts the ramp; the break an upgrade wrote is freed"),
             (28, "2026-10-22", False, "search-url takes the employer first and a company number already read; the footer is never About; a third-degree page with no Experience is read as it is; grouped roles read as one employer; --remove repeats; card-enough recruiters leave the read list; the extractor's output reaches read as it came; a batch opening on the person's own line and a note that does not read aloud are not saved"),
+            (29, "2026-10-22", False, "drafts and the queue check are held to the plan's length; a short request for a chat or call is always an allowed close; the sent list logs each note's words and says how far back it reached; a second-degree page with Follow and Message says Connect is under More"),
         ),
-        "fingerprint": "8c5010d580d83708",
+        "fingerprint": "3570342f8654afa3",
     },
     "screening": {
         "by": "round", "priority": 2,

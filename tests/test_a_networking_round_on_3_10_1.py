@@ -30,7 +30,6 @@ import learned  # noqa: E402
 import person  # noqa: E402
 import reading  # noqa: E402
 import state  # noqa: E402
-from company_key import key as company_key  # noqa: E402
 
 TODAY = datetime.date(2026, 10, 22)
 
@@ -341,3 +340,162 @@ def test_a_never_say_that_refuses_the_persons_own_words_is_said_at_once(profile,
     learned.main(["record", "--area", "voice", "--said", "and this", "--rule", "never it",
                   "--never-say", "15 minutes"])
     assert "WARNING" in capsys.readouterr().out
+
+
+# ============================================================ the same round, second pass
+
+import advice  # noqa: E402
+
+
+def _recruiter(book, cid="kestrel_corrie"):
+    book.put(_row(cid, "Idris Corrie", "Kestrel Mutual", title=RECRUITER["headline"]))
+    reading.save(cid, dict(RECRUITER))
+
+
+# ------------------------------------------------------------ 1. a note past the plan's limit
+
+def test_a_note_past_the_plans_limit_is_not_saved(book, capsys, monkeypatch):
+    monkeypatch.setitem(compose.KIND_LIMITS, "connection", {"chars": 300})
+    _recruiter(book)
+    head = ("Hi Idris, I'm a supply-chain analyst in Manchester looking for my next role. "
+            "I've spent four years forecasting depot demand and cutting waste across stores. ")
+    tail = "If anything you're working on fits, it'd be great to hear."
+    long_ = head + "I'd like to keep doing that work in a team that ships it. " + tail
+    note = book.path / "note.txt"
+    note.write_text(long_ + "x" * (301 - len(long_) - 1) + ".", encoding="utf-8")
+    assert len(note.read_text()) == 301
+    assert reading.main(["draft", "kestrel_corrie", str(note)]) == reading.EXIT["error"]
+    assert "too long (301 characters, limit 300)" in capsys.readouterr().out
+    note.write_text(head + tail, encoding="utf-8")
+    assert reading.main(["draft", "kestrel_corrie", str(note)]) == reading.EXIT["ok"]
+
+
+# ------------------------------------------------------------ 2. a short request for a chat
+
+def test_a_short_request_for_a_chat_or_a_call_is_always_an_allowed_close():
+    notes = {"a1": "Hi Ana, I found you on Larkspur's people page. Would you have time for a "
+                   "quick chat next week?",
+             "a2": "Hi Bo, we both worked at Oakmere Foods. Would you be up for a quick call "
+                   "next week?"}
+    assert not [f for f in reading.alike(notes) if f[0] == "not your ask"]
+
+
+# ------------------------------------------------------------ 3. phrasings that read badly
+
+PHRASED = {
+    "tells_them_their_job": "You recruit for the data teams at Larkspur.",
+    "reads_as_googled": "I saw your propensity model for Larkspur's trial outreach.",
+    "undersells": "Freight forecasting is a long way from my background.",
+    "vague_close": "Would be great to hear more.",
+    "swap_notes": "Would love to swap notes on forecasting.",
+    "it_looks_like": "It looks like you moved into pricing.",
+    "since_you": "Since you moved into pricing, I wanted to ask about it.",
+    "how_they_got_into_recruiting": "How did you get into recruiting?",
+    "thread_between_us": "Freight is a thread between us: logistics for you, stores for me.",
+    "pretty_much": "It's pretty much the same work.",
+    "sometime": "Would you have time for a call sometime?",
+    "the_x_side": "I worked on the hardware side at Oakmere Foods.",
+    "hoping_to": "I'm hoping to move into pricing.",
+}
+
+
+def test_phrasings_that_read_badly_are_warned_for_everyone():
+    for rule, text in PHRASED.items():
+        assert rule in {a.rule for a in advice.check(text, "connection")}, rule
+    ours = {r for r, _rx, _fix in advice.PHRASINGS}
+    for text in ("Sometimes the data is late.", "Who do you hire for?", "on the other side",
+                 "side by side", "I'd like to hear more about the team.",
+                 "What are you seeing in the market?", "We compared the notes afterwards."):
+        assert not ours & {a.rule for a in advice.check(text, "connection")}, text
+    # The app's own lines carry none of them, and "it looks like" left the hedge bank.
+    lines = [v for by in compose.BANK.values() for vs in by.values() for v in vs]
+    for line in lines:
+        assert not ours & {a.rule for a in advice.check(str(line), "connection")}, line
+    assert not [h for h in advice.HEDGES if "looks like" in h.lower()]
+
+
+# ------------------------------------------------------------ 4. a batch logged as sent
+
+def test_a_batch_is_logged_from_the_sent_list_not_from_memory(book, capsys):
+    for cid, name in (("larkspur_rook", "Ana Rook"), ("larkspur_venn", "Bo Venn")):
+        book.put(_row(cid, name, "Larkspur"))
+        reading.write_draft(cid, f"Hi {name.split()[0]}, I found you on Larkspur's people page. "
+                                 "Would you have time for a quick chat next week?", name)
+    args = ["sent", "larkspur_rook", "larkspur_venn", "--draft", "--contacts",
+            state.CONTACTS_CSV, "--threads", state.THREADS_CSV]
+    assert state.main(args) == 1
+    assert "invitations <the page> --record" in capsys.readouterr().out
+    assert state.load_threads() == []
+    assert state.main(args + ["--each-went"]) == 0
+    assert len(state.load_threads()) == 2
+
+
+# ------------------------------------------------------------ 5 and 6. the sent list
+
+def test_the_sent_list_logs_the_whole_note_and_says_how_far_back_it_reached(book, capsys):
+    book.put(_row("kestrel_rook", "Ana Rook", "Kestrel Mutual"))
+    whole = ("Hi Ana, I'm a data analyst in Leeds and I've spent four years forecasting depot "
+             "demand. Would you have time for a quick chat next week?")
+    reading.write_draft("kestrel_rook", whole, "Ana Rook")
+    page = book.path / "invites.txt"
+    page.write_text("\n".join(["Sent", "People (461)", "Ana Rook",
+                               "Head of Pricing at Kestrel Mutual", "Sent 3 days ago", "Withdraw",
+                               "Hi Ana, I'm a data analyst in Leeds and I've spe",
+                               "...show more"]), encoding="utf-8")
+    assert reading.main(["invitations", str(page), "--record"]) == 0
+    out = capsys.readouterr().out
+    assert "1 of 461 loaded" in out and "reaches back to requests sent about" in out
+    row = state.load_threads()[0]
+    assert row["full_text"] == whole and "cut where the page folds" not in row["summary"]
+
+
+# ------------------------------------------------------------ 7. a free Open Profile message
+
+def test_a_free_open_profile_message_spends_no_inmail_credit(book, capsys):
+    book.put(_row("fernhill_venn", "Bo Venn", "Fernhill Freight"),
+             _row("fernhill_mire", "Sasha Reed", "Fernhill Freight"))
+    before = state.platform_budget(book.contacts(), [], TODAY.isoformat())["inmails_left"]
+    words = book.path / "words.txt"
+    words.write_text("Hi Bo, we both worked at Oakmere Foods.", encoding="utf-8")
+    assert state.main(["sent", "fernhill_venn", "--channel", "open_profile", "--text-file",
+                       str(words), "--contacts", state.CONTACTS_CSV, "--threads",
+                       state.THREADS_CSV, "--today", TODAY.isoformat()]) == 0
+    assert "no InMail credit" in capsys.readouterr().out
+    contacts, threads = book.contacts(), state.load_threads()
+    assert state.platform_budget(contacts, threads, TODAY.isoformat())["inmails_left"] == before
+    state.sent(contacts, threads, "fernhill_mire", TODAY, channel="inmail", subject="Forecasting",
+               text="Hi Sasha, we both worked at Oakmere Foods.")
+    assert state.platform_budget(contacts, threads, TODAY.isoformat())["inmails_left"] < before
+
+
+# ------------------------------------------------------------ 8. no Connect button
+
+def test_a_second_degree_page_keeps_connect_under_more():
+    page = "\n".join(["Bo Venn", "2nd", "Head of Pricing at Larkspur", "Manchester",
+                      "Follow", "Message", "More", "Experience", "Head of Pricing", "Larkspur",
+                      "Jan 2022 - Present"])
+    r = reading.parse(page, name="Bo Venn", company="Larkspur", today=TODAY)
+    assert r["connect"] == "missing" and "under More" in reading.no_connect_line(r)
+    r3 = reading.parse(page.replace("2nd", "3rd"), name="Bo Venn", company="Larkspur",
+                       today=TODAY)
+    assert "no request from you" in reading.no_connect_line(r3)
+
+
+# ------------------------------------------------------------ 9. a paragraph by its subject
+
+def test_a_paragraph_about_the_readers_path_is_about_them_whatever_i_comes_later():
+    assert compose.paragraph_role(
+        "Going from astrophysics research to running data science at a pension fund is quite "
+        "a route, and since I moved from economics into pricing, I had to say hi.") == "them"
+    assert compose.paragraph_role("From logistics to forecasting is the move I'm making.") == "me"
+    assert compose.paragraph_role("Moving from logistics into forecasting, I found the maths "
+                                  "the easy part.") == "me"
+
+
+def test_a_note_queued_before_the_length_check_is_caught_by_the_batch_check(book, capsys,
+                                                                           monkeypatch):
+    monkeypatch.setitem(compose.KIND_LIMITS, "connection", {"chars": 300})
+    book.put(_row("larkspur_rook", "Ana Rook", "Larkspur"))
+    reading.write_draft("larkspur_rook", "Hi Ana, " + "I forecast depot demand. " * 13, "Ana Rook")
+    assert reading.main(["batch"]) == reading.EXIT["alike"]
+    assert "too long" in capsys.readouterr().out

@@ -30,6 +30,19 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **More of what reads badly is pointed out before a note is shown.** Telling someone what
+  they do ("You recruit for ..."), reading back a detail off their profile, underselling
+  yourself ("a long way from my background"), a vague close ("great to hear more"), "swap
+  notes", "it looks like", a reason opening "Since you ...", asking a recruiter how they got
+  into recruiting, "pretty much", "sometime", "the hardware side" and "hoping to". "It looks
+  like" is no longer one of the app's own hedges.
+- **Several requests are logged as sent from LinkedIn's sent list, not from memory.** Logging
+  a batch at once now asks for the sent list to be read first, which records only what it
+  shows; "sent to all of those" once logged 14 where 7 went. Where you named each one as
+  sent, that still works.
+- **A free message to an Open Profile has a channel of its own** (`--channel open_profile`),
+  so it is never counted as an InMail credit spent.
+
 - **Your work authorization goes to recruiters by default, not decision-makers.** A first
   note to a recruiter still says you need no sponsorship; one to a senior reader says it once
   most of the messages you approve for senior readers do (a setting in your profile still
@@ -64,6 +77,19 @@ make sense to somebody whose repo just received it.
   `python3 tools/app_watch.py --all` lists every match; it stopped at 40.
 
 ### Fixed
+
+- **A note longer than your plan allows is not saved.** Drafts are held to the same length
+  check as everything else: a 307- and a 301-character note had been saved on a 300-character
+  plan. One saved before this is caught by the check of the queue before it goes.
+- **A short request for a chat or a call is always an allowed close,** whatever your own ask
+  says: "Would you have time for a quick chat next week?" was refused as not your ask.
+- **The sent list logs each note's words itself and says how far back it looked.** Where the
+  page folds a note, the draft it came from is logged whole; and a read of the newest ten of
+  four hundred says the date it reached back to.
+- **A second-degree page with Follow and Message says Connect is under More,** instead of
+  warning that LinkedIn may take no request from you, which stays for everyone else.
+- **A paragraph about the reader's path is labelled theirs,** even when "I" comes later in
+  it, so the batch check no longer calls it a paragraph about you.
 
 - **A people search at an employer uses the company number a profile already showed.**
   `search-url "<employer>"` takes the employer first and builds the narrowed search from a

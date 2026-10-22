@@ -59,10 +59,14 @@ it. LinkedIn is never fetched from a session.
    clicked), behind `reading.py gate --page`, and pipe its text to
    `python3 tools/network/reading.py invitations - --record`. Anyone the person sent a request
    to from the LinkedIn app is recorded as sent (`state.py sent <id> --outside`) and their draft
-   removed, so the queue stops saying "send now" to someone already Pending. The page loads
-   only the newest few of the list, so a request the log has as waiting is called no longer
-   pending only when it went after the oldest card loaded; one sent before that is listed as
-   not checked, and is never taken for accepted. Without a browser,
+   removed, so the queue stops saying "send now" to someone already Pending, each logged with
+   the note the page shows (the draft whole, where the page folds the note and the draft
+   opens the same way), so nobody copies a note off the page. The page loads
+   only the newest few of the list, and `invitations` says how far back it reached; a request
+   the log has as waiting is called no longer pending only when it went after the oldest card
+   loaded; one sent before that is listed as not checked, and is never taken for accepted.
+   Older ones show only after the page's Load more button, which a chat never presses: the
+   person can press it and paste the page again. Without a browser,
    a queued send whose day has passed with nothing logged is listed as UNCONFIRMED (`open_actions
    --due`): ask whether it went, and record it with `state.py sent <id> --draft` (or
    `--text-file` with the words that went) if it did.
@@ -657,11 +661,18 @@ goes through CLAUDE.md, "Learning the person".
 ## When they say a note went
 
 A draft stays at `not_contacted` until the person says it went: a draft is not a message.
+**Several requests at once ("sent to all of those") are logged from LinkedIn's sent list,
+never from memory**: read it (`reading.py invitations <the page> --record`), which logs only
+the requests it shows, with their words. "Sent to all of those" once logged 14 where 7 went.
+`state.py sent` refuses several connection requests at once unless the person named each one
+as sent (`--each-went`).
 When they say it did, record it in the same turn, in one command per contact:
 `python3 tools/network/state.py sent <contact_id> --draft` when it went as drafted,
 `--text-file <file>` with their edits (the edit is recorded as their preference by itself),
 `--no-note` for a request with no note, `--outside` when it went from the LinkedIn app,
-`--date` for another day, and `--channel inmail --subject "<the subject>"` for an InMail
+`--date` for another day, `--channel open_profile` for a free message to an Open Profile (only
+Message showed and LinkedIn used no credit, so none is counted), and `--channel inmail
+--subject "<the subject>"` for an InMail
 (it says how many credits are left: an InMail answered within 90 days gives its credit back,
 and when LinkedIn shows another balance, `state.py inmail-credits <n>` keeps it until the
 month turns). Someone only read (`reading.py read --name --company`) and never written to the

@@ -910,7 +910,7 @@ def path_parallels(reading: dict) -> list:
     candidate's, from their Experience. A reason to write that is about them, never a
     generic fit: they moved into where they are now from the kind of employer the
     candidate is at, or from one the candidate also came from. Inferred from what they
-    listed, so a note hedges it once ("it looks like ...")."""
+    listed, so a note hedges it once ("I imagine ...")."""
     exp = reading.get("experience") or []
     if len(exp) < 2:
         return []
@@ -2944,6 +2944,38 @@ def invitations(text: str, today: datetime.date | None = None) -> list:
     return out
 
 
+def reach_back(cards: list) -> str:
+    """How far back a read of the sent list reached, said plainly: the oldest request on it,
+    as a day ("about 14 Oct"). The list loads the newest few first, so a check of ten out of
+    four hundred says how far it went, never "all of them" (2026-10-22)."""
+    days = sorted(c.get("sent", "") for c in cards if c.get("sent"))
+    if not days:
+        return ""
+    d = datetime.date.fromisoformat(days[0])
+    return f"{d.day} {d:%b}"
+
+
+def sent_words(contact_id: str, card: dict) -> tuple:
+    """(the words a request seen on the sent list went with, whether they are cut short): the
+    note the page shows, or, where the page folded it at "show more" and the draft waiting
+    for them opens with the same words, the draft whole. So `invitations --record` logs the
+    message's words and nobody copies them off the page (2026-10-22)."""
+    shown = " ".join(str(card.get("note") or "").split())
+    cut = bool(card.get("note_cut"))
+    if not shown or not cut:
+        return shown, cut
+    try:
+        with open(draft_path(contact_id), encoding="utf-8") as fh:
+            draft = " ".join(note_body(fh.read()).split())
+    except OSError:
+        return shown, cut
+    a, b = (re.findall(r"[a-z0-9]+", fold(x).lower()) for x in (shown, draft))
+    # The fold can cut the last word shown in half.
+    if a and len(b) >= len(a) and b[:len(a) - 1] == a[:-1] and b[len(a) - 1].startswith(a[-1]):
+        return draft, False
+    return shown, cut
+
+
 def invitations_total(text: str) -> int | None:
     """How many requests the list says are pending in all ("People (425)"), or None.
     The tab's own count first; "425 people" only where the page has no tab count."""
@@ -3354,6 +3386,19 @@ def _sentences(note: str) -> list:
     return [x.strip() for x in re.split(r"(?<=[.?!])\s+", body) if len(x.strip()) >= 12]
 
 
+# A short request for a chat or a call is always an allowed close, whatever ASK says:
+# "Would you have time for a quick chat next week?" was refused as "not your ask"
+# (2026-10-22). Short: a question of at most SHORT_ASK_WORDS words.
+SHORT_ASK_WORDS = 15
+_CHAT_OR_CALL = re.compile(r"\b(?:chat|call|coffee|catch[- ]up|conversation|talk)\b", re.I)
+
+
+def short_chat_ask(sentence: str) -> bool:
+    s = str(sentence or "").strip()
+    return (s.endswith("?") and len(s.split()) <= SHORT_ASK_WORDS
+            and bool(_CHAT_OR_CALL.search(s)))
+
+
 def _opening_slot(sents: list, openers) -> str:
     """The sentence a note opens on after the greeting. The person's opener ("hope you're
     well") is a phrase, taken off the front; what follows it is the slot."""
@@ -3536,6 +3581,8 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
         asks = {}
         for cid, sents in per.items():
             last = sents[-1] if sents else ""
+            if short_chat_ask(last):
+                continue
             if last.endswith("?") and not any(_same(last, x) for x in [ask] + bank) and re.search(
                     r"\b(?:open to|quick (?:chat|call)|minutes|few questions|grab a coffee|"
                     r"catch up|connect)\b", last, re.I):
@@ -4154,7 +4201,7 @@ def _show(reading: dict) -> None:
         print(f"  [{strength}] {kind}: {what}" + (f'\n        "{_clip(ev, 150)}"' if ev else ""))
     for par in reading.get("parallels") or []:
         print(f"  [INFERRED] path parallel: {par['text']}\n        a reason to write that is "
-              "about them: hedge it once in the note (\"it looks like ...\")")
+              "about them: hedge it once in the note (\"I imagine ...\")")
     if reading.get("mutuals"):
         print(f"  mutual connections on the page: {', '.join(reading['mutuals'])}. Ask the "
               "person \"mention <name>?\" before using one; never say how well they know them")
@@ -4175,6 +4222,19 @@ def _clip(text: str, n: int) -> str:
 NO_CONNECT = ("their page shows no Connect button (only Message or Follow): LinkedIn may keep "
               "it under More, or take no request from you at all. Check their page before "
               "writing a connection note; an InMail (a credit) or an email reaches them without one")
+# A second-degree page that shows Follow and Message keeps Connect under More: warned as one
+# that "may take no request from you", a note to a mutual's colleague was nearly turned into
+# an InMail credit (2026-10-22).
+NO_CONNECT_2ND = ("Connect is under More on their page (a second-degree profile showing Follow "
+                  "and Message keeps it there): the request goes from More, then Connect")
+
+
+def no_connect_line(reading: dict) -> str:
+    """What to say of a page with no Connect button: under More for a second-degree page,
+    and perhaps no request at all for anyone else."""
+    r = reading or {}
+    return (NO_CONNECT_2ND if r.get("degree") == "2nd" and r.get("reach") == "request under More"
+            else NO_CONNECT)
 
 
 def channel_for(reading: dict) -> str:
@@ -4423,6 +4483,17 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
                   "under the right contact's id) and save it again.")
             refused += 1
             continue
+        # The length validate() holds a note to, by the channel it goes by: a 307-character
+        # note was saved on a 300-character plan, and LinkedIn cuts it (2026-10-22).
+        kind = {"inmail": "inmail", "message": "dm", "dm": "dm"}.get(
+            str(row.get("channel") or "").strip().lower(), "connection")
+        long_ = compose.length_findings(note_body(note).strip(), kind)
+        if long_:
+            as_ = {"connection": "a connection note", "dm": "a message", "inmail": "an InMail"}
+            print(f"reading: {cid}: not saved. As {as_[kind]} it is too long "
+                  f"({long_[0].text}): cut it and save it again.")
+            refused += 1
+            continue
         # The read-aloud pass, on every note: what nobody would say aloud is not saved.
         over = compose._overrides()
         spoken = [a for a in compose.unspoken(note_body(note)) if a.rule not in over]
@@ -4498,7 +4569,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
         subject, _body = state.split_subject(note)
         if got.get("connect") == "missing" and not subject \
                 and str(row.get("channel") or "connection") == "connection":
-            print("warning, before this connection note: " + NO_CONNECT)
+            print("warning, before this connection note: " + no_connect_line(got))
         p = write_draft(cid, note, row.get("name", ""), card_only=card_only)
         how = ""
         if card_only_draft(cid):
@@ -4982,6 +5053,14 @@ def main(argv: list | None = None) -> int:
         contacts = state.load_contacts()
         found = alike(notes, employers={c.get("contact_id"): c.get("company", "")
                                         for c in contacts})
+        # A note saved before drafts were held to the plan's length is caught before it goes.
+        import compose
+        kinds = {c.get("contact_id"): {"inmail": "inmail", "message": "dm"}.get(
+            str(c.get("channel") or "").strip().lower(), "connection") for c in contacts}
+        for cid, note in notes.items():
+            long_ = compose.length_findings(note, kinds.get(cid, "connection"))
+            if long_:
+                found.append(("too long", long_[0].text, [cid]))
         # The company limit, as the short list and a draft hold it: the notes waiting at one
         # employer beside the people there already waiting on a reply.
         from company_key import key as company_key
@@ -5192,7 +5271,7 @@ def main(argv: list | None = None) -> int:
             if line:
                 print(line)
             if reading.get("connect") == "missing":
-                print("caution: " + NO_CONNECT)
+                print("caution: " + no_connect_line(reading))
         if source == "browser":
             if breach_line:
                 print(breach_line)
@@ -5553,6 +5632,7 @@ def _cli_invitations(a) -> int:
     got = match_invitations(cards, contacts, threads=threads, total=total)
     print(f"invitations: {len(cards)} request(s) pending on the page"
           + (f", {len(cards)} of {total} loaded" if total is not None and total > len(cards) else "")
+          + (f"; it reaches back to requests sent about {reach_back(cards)}" if cards else "")
           + f"; the next page at "
           f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
     done = 0
@@ -5561,9 +5641,9 @@ def _cli_invitations(a) -> int:
                 f"about {card['sent']} [{c['contact_id']}]")
         if a.record:
             try:
+                words, cut = sent_words(c["contact_id"], card)
                 state.sent(contacts, threads, c["contact_id"], datetime.date.today(),
-                           date=card["sent"], outside=True, text=card.get("note", ""),
-                           preview=bool(card.get("note_cut")))
+                           date=card["sent"], outside=True, text=words, preview=cut)
                 done += 1
                 line += ": recorded as sent, draft removed"
             except ValueError as e:
@@ -5585,7 +5665,9 @@ def _cli_invitations(a) -> int:
         print(f"  not checked: {len(got['unchecked'])} request(s) the log has as waiting went "
               f"on or before the oldest one loaded ({got['oldest'] or 'none loaded'}); only "
               f"{loaded} are on the page, newest first, so whether theirs is still pending is "
-              "not known: "
+              "not known. The page shows older ones only after its Load more button, which a "
+              "chat never presses; the person can press it until those dates show and paste the "
+              "page again: "
               + ", ".join(f"{c.get('name')} [{c['contact_id']}]" for c in shown)
               + (" ..." if len(got["unchecked"]) > len(shown) else ""))
     if got["unknown"]:

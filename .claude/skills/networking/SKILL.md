@@ -344,8 +344,8 @@ on Premium. That is the shape, and `first_note()` assembles it:
     that made the candidate write, taken from their reading (`UngroundedNote` when it
     rests on nothing read; their name or employer alone does not count);
   - a **parallel in their path** (`parallel=`): `reading.py show` lists them, marked
-    INFERRED, so the note hedges it once ("It looks like you moved into <X> from <Y>,
-    which is the move I'm hoping to make"). The composers do that themselves
+    INFERRED, so the note hedges it once ("I imagine you moved into <X> from <Y>,
+    which is the move I'm making"). The composers do that themselves
     (`compose.hedge()`): a common ground or parallel whose subject is the reader and which
     their page does not state comes out with one hedge from the person's own (TEMPLATES
     "hedge") or the bank; `hedged=False` leaves it as written. A generic fit ("useful on a
@@ -435,6 +435,13 @@ standing is shown with the draft for the person to decide, never in place of the
   here" as an opener, a closing question asking how to get hired, a test question in place
   of an honest ask, and a vague ask about how their team works or spends its days, caught
   by its shape ("I'd love to hear what your team spends its days on");
+- phrasings that read badly to anyone (`advice.PHRASINGS`): telling them what they do ("You
+  recruit for ..."), a detail off their profile read back so it reads as googled ("your
+  <model> for <employer>'s <project>"), underselling ("a long way from my background"), a vague
+  close ("what you're seeing", "great to hear more"), "swap notes" or "compare notes", "it
+  looks like", a reason opening "Since you ...", asking a recruiter how they got into
+  recruiting, "<X> is a thread between us: A for you, B for me", "pretty much", "sometime",
+  "the <X> side", and "hoping to", which reads as asking for it now;
 - a list of three credentials in a row: name the one that matters to this reader. Never the
   person's own who-line (as `ABOUT_ME` sets it, or as it stands in a message they approved),
   and never a list with a place in it ("moved from Leeds to Manchester, ex-<A> and <B>");

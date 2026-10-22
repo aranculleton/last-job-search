@@ -271,7 +271,8 @@ def _closeness(c: dict, route=None, channel=None, tier=None) -> tuple:
 
 
 _CHANNEL_NAMES = {"connection": "connection note", "inmail": "InMail", "email": "email",
-                  "message": "message", "intro": "introduction"}
+                  "message": "message", "intro": "introduction",
+                  "open_profile": "Open Profile message"}
 
 
 def _channel_name(channel: str) -> str:

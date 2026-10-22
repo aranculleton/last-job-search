@@ -206,6 +206,7 @@ _KIND_ALIASES = {
     "connection request": "connection",
     "note": "connection",
     "inmail": "inmail",
+    "open_profile": "inmail",
     "email": "email",
     "intro": "intro",
     "warm_intro": "intro",
@@ -1109,7 +1110,7 @@ def first_note_findings(text, recruiter=False, reader=None, work_auth=None) -> l
 # opener, since every "hope you're well" shape is the house style voice_check refuses.
 BANK = {
     "ask": {
-        "peer": ("Would you be up for a quick chat sometime?",
+        "peer": ("Would you be up for a quick chat in the next few weeks?",
                  "Would you have 15 minutes for a call in the next couple of weeks?",
                  "I'd really appreciate a short call if you're open to it."),
         "decision_maker": (advice.OPEN_ASK,
@@ -1337,7 +1338,7 @@ def hedge(sentence, reading=None, reader="peer", key="") -> str:
                and (_variants("hedge", reader) or not re.match(r"I can imagine", str(h)))]
     import hashlib
     h = (opening[int(hashlib.sha1(str(key or "").encode()).hexdigest(), 16) % len(opening)]
-         if opening and key else opening[0] if opening else "It looks like").strip()
+         if opening and key else opening[0] if opening else "I imagine").strip()
     h = h[:1].upper() + h[1:]
     return f"{h} {_after_greeting(s)}"
 
@@ -1356,6 +1357,29 @@ SHAPES = ("shared", "their_work", "brief", "recruiter", "connected", "pointer")
 # The brief note's length for a senior reader: profile/networking.py SENIOR_NOTE_CHARS.
 BRIEF_CHARS = _as(getattr(_NET, "SENIOR_NOTE_CHARS", 0) or 220, 220)
 CONNECTED_CHARS = 600
+
+
+def length_findings(text, kind: str = "connection", shape: str = "") -> list:
+    """The length check validate() runs, alone: every character of the text as it goes is
+    counted against the kind's limit (a connection note's is the plan's, or the shape's),
+    and words where the kind has a range. `reading.py draft` and `drafts` run it before
+    saving: a 307-character note was saved on a 300-character plan (2026-10-22)."""
+    k = _KIND_ALIASES.get(str(kind or "").strip().lower(), "connection")
+    sent_text = str(text or "")
+    limits = dict(KIND_LIMITS[k])
+    if k == "connection" and shape:
+        limits["chars"] = note_chars(shape)
+    chars, words = len(sent_text), len(tone._visible(sent_text).split())
+    out = []
+    if "chars" in limits and chars > limits["chars"]:
+        out.append(tone.Violation("too_long", f"{chars} characters, limit {limits['chars']}"))
+    if "words" in limits:
+        low, high = limits["words"]
+        if high and words > high:
+            out.append(tone.Violation("too_long", f"{words} words, limit {high}"))
+        elif low and words < low:
+            out.append(tone.Violation("too_short", f"{words} words, at least {low}"))
+    return out
 
 
 def note_chars(shape: str = "") -> int:
@@ -2284,18 +2308,7 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
                                                     "(or a 'Subject:' first line)"))
         elif _GENERIC_SUBJECT.match(_SUBJECT_LINE.sub("", first)):
             out.append(tone.Violation("generic_subject", first.strip()))
-    limits = dict(KIND_LIMITS[k])
-    if k == "connection" and getattr(message, "shape", ""):
-        limits["chars"] = note_chars(message.shape)
-    chars, words = len(sent_text), len(text.split())
-    if "chars" in limits and chars > limits["chars"]:
-        out.append(tone.Violation("too_long", f"{chars} characters, limit {limits['chars']}"))
-    if "words" in limits:
-        low, high = limits["words"]
-        if high and words > high:
-            out.append(tone.Violation("too_long", f"{words} words, limit {high}"))
-        elif low and words < low:
-            out.append(tone.Violation("too_short", f"{words} words, at least {low}"))
+    out += length_findings(sent_text, k, getattr(message, "shape", ""))
     for word in lowered_names(text):
         out.append(tone.Violation("lowercase_name", word))
     # A check-in phrase tone already refuses as a banned phrase ("circle back") is
@@ -2669,11 +2682,31 @@ def paragraph_role(paragraph: str) -> str:
     if first.rstrip().endswith("?") or advice.ASK_SHAPED.match(first) \
             or _QUESTION_OPENER.match(first):
         return "ask"
-    if tone._SECOND_PERSON.search(first):
+    if tone._SECOND_PERSON.search(first) or _theirs_path(first):
         return "them"
     if re.search(r"\d", first):
         return "work"
     return "me"
+
+
+# A paragraph opening on a path ("Going from astrophysics research to running data science at
+# a pension fund is quite a route, and since I ...") is about the reader, whatever "I" comes
+# later in it: it was labelled "me" for the "I" (2026-10-22). Its subject decides.
+_THEIR_PATH = re.compile(
+    r"^(?:(?:going|moving|switching|jumping|getting|coming|heading|stepping|pivoting)\s+"
+    r"(?:from|out of|over from)\b|(?:the|that|a) (?:move|jump|switch|path|route|leap) from\b|"
+    r"from\s+[^,.;]{2,60}\s+(?:to|into)\s)", re.I)
+# The path is the sender's where its own clause says so ("From logistics to forecasting is
+# the move I'm making"), or where the sender is the subject straight after it ("Moving from
+# logistics into forecasting, I found ...").
+_FIRST_PERSON = re.compile(r"\b(?:I|I'm|I've|I'd|my|me)\b")
+
+
+def _theirs_path(sentence: str) -> bool:
+    if not _THEIR_PATH.match(sentence):
+        return False
+    head, rest = (re.split(r"[,;:]", sentence, maxsplit=1) + [""])[:2]
+    return not _FIRST_PERSON.search(head) and not re.match(r"\s*(?:I|I'm|I've|I'd|my)\b", rest)
 
 
 def _same_words(a: str, b: str) -> bool:
