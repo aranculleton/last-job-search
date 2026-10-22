@@ -524,8 +524,9 @@ METHODS: dict[str, dict] = {
             (23, "2026-10-22", False, "the hand-run round moved to manual-round.md; the round's reply is shorter"),
             (24, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (25, "2026-10-22", False, "no search runs while job sites are blocked; a web-search lead is shown only once its page proves it open"),
+            (26, "2026-10-22", False, "plain words to the person: no file, id, command or pull request link"),
         ),
-        "fingerprint": "95a6bb54c9491de4",
+        "fingerprint": "2f33fcf09c843fa5",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -541,8 +542,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-18", False, "finds an existing brief by the registry or its prompt, never its title, so a second is never made"),
             (6, "2026-10-18", False, "the words for making the brief from a computer come from the registry, and Claude never starts a cloud chat from its own shell"),
             (7, "2026-10-21", False, "The job round judges employers the bar does not know yet before applying the bar"),
+            (8, "2026-10-22", False, "plain words to the person: no file, id, command or pull request link"),
         ),
-        "fingerprint": "e258c3dde2ac882c",
+        "fingerprint": "34bfa4f9248048e4",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",

@@ -293,7 +293,9 @@ tool, make it yourself as (b), on the private repo, the stub as its prompt, noti
 recorded as `routines_screen`; without it, ask them once, in the words `claude_surfaces.py say
 routines-cloud` prints. Never start a cloud chat from your own shell (cli-cloud: the command
 refuses a shell that is not an interactive terminal, which yours is not), and never make a
-desktop scheduled task for the brief (it runs on the computer). Say the line `routines.py brief` prints. (b) is also for someone who
+desktop scheduled task for the brief (it runs on the computer). The line `routines.py brief`
+prints is for you: act on it, and tell the person in one plain line only that their brief is
+set up or is being set up, never its file, id or task name. (b) is also for someone who
 would rather have each run arrive as a new chat and a notification.
 
 **Silence is the alarm**: the brief is delivered on each of its days even when nothing is

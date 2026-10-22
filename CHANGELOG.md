@@ -36,7 +36,11 @@ make sense to somebody whose repo just received it.
   names, merges or links to their own work, and what an update changed is said in one plain
   line, leaving out the app maintainer's own news. On your computer, saving no longer stops
   for the desktop app's approval each time once you have trusted the folder.
-
+- **What reaches you is plain words, everywhere.** The morning brief ends with a link to the
+  brief itself, not to a page about saving it; checks of your own setup, settled clashes
+  between two chats, your brief's set-up and the list of improvements waiting are said in
+  plain words or not at all, never as a file, an id or a command; and a chat asked to rank
+  jobs before any search runs the search itself instead of telling you to.
 - **Nothing asks for your email.** The question about reading your LinkedIn job alerts from
   Gmail is gone from setup and from the questions asked each month, and the job round no
   longer reads email: the round itself and your brief are your alerts, inside Claude. A
