@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.10.1] - 2026-10-22
+
 ### Changed
 
 - **A round is faster than 3.9.0's, and finds and ranks the same postings.** 3.10.0 made the
@@ -71,7 +73,7 @@ make sense to somebody whose repo just received it.
     stops reads at once and starts the ramp.
   - The 5-to-12-minute break an earlier update wrote into your profile, as if you had chosen
     it, is taken out where nobody has changed it since, so the app's pace reaches you. A
-    break you set yourself is kept. `git revert` undoes it.
+    break you set yourself is kept. `git revert` undoes it. Profile upgrade: read-break-freed.
   - No pace is safe: LinkedIn's terms forbid automated access at any pace and it publishes
     no limits. Shorter pauses make a check or a restriction somewhat more likely; stopping
     at the first sign of one is what protects your account, and that is unchanged.
