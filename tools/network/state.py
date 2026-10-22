@@ -53,9 +53,11 @@ import argparse
 from collections import Counter
 import csv
 import datetime
+import functools
 import json
 import os
 import re
+import subprocess
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -3020,6 +3022,39 @@ def resume_owed_line(item, mark="") -> str:
             + log_resume_command(item["contact_id"], item.get("file")))
 
 
+@functools.lru_cache(maxsize=4)
+def _general_resume_dates(root: str) -> tuple:
+    """((path, the day git first holds it), ...) for each general resume in documents/cv/
+    that is still there: the ones not made for one employer."""
+    try:
+        log = subprocess.run(["git", "-C", root, "log", "--diff-filter=A", "--format=%x00%ad",
+                              "--date=short", "--name-only", "--", RESUME_DIRS[1]],
+                             capture_output=True, text=True, timeout=20).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ()
+    out: dict = {}
+    day = ""
+    for line in log.splitlines():
+        if line.startswith("\0"):
+            day = line[1:].strip()
+        elif line.strip() and is_resume_file(line.strip()) and \
+                os.path.isfile(os.path.join(root, line.strip())):
+            out.setdefault(line.strip(), day)       # newest first: the latest time it arrived
+    return tuple(out.items())
+
+
+def general_resumes_on(day: str, root: str | None = None) -> list[str]:
+    """The person's general resumes that were newest on `day`, by when each arrived. A
+    message that says one went, to somebody nothing was made for, carried one of these.
+    [] when there is no history to read (no git, or a copy of the state outside it)."""
+    held = [(d, p) for p, d in _general_resume_dates(os.path.normpath(root or person.state()))
+            if d and d <= str(day or "")]
+    if not held:
+        return []
+    newest = max(d for d, _ in held)
+    return sorted(p for d, p in held if d == newest)
+
+
 def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]:
     """The three places a resume and the log disagree, each with the command that settles it.
 
@@ -3040,13 +3075,27 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
 
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
     for cid, contact in by_id.items():
+        made = [str(row.get("cv_file") or "").strip() for row in tracker or ()
+                if str(row.get("cv_file") or "").strip() and made_for(row, [contact])]
         for r in threads_for(threads, cid):
             if says_resume_went(r) and not names_a_file(r):
                 day = str(r.get("date") or "").strip()
+                attach_cmd = f"python3 tools/network/state.py attach {cid} --date {day} --file"
+                likely = [] if made else general_resumes_on(day)
+                if len(likely) == 1:
+                    say = (f"nothing was made for them, so it was most likely your general "
+                           f"{word}, the newest you had then: {attach_cmd} {likely[0]} (or "
+                           "the file that went; --file unknown if nobody kept it)")
+                elif likely:
+                    say = (f"nothing was made for them, so it was most likely one of the "
+                           f"general {word}s you had then ({', '.join(likely)}): "
+                           f"{attach_cmd} <the one that went> (--file unknown if nobody "
+                           "kept it)")
+                else:
+                    say = (f"name it: {attach_cmd} <the file that went> (--file unknown if "
+                           "nobody kept it)")
                 add(contact, "resume_file_not_named",
-                    f"the message of {day} says a {word} went but not which file: name it: "
-                    f"python3 tools/network/state.py attach {cid} --date {day} --file <the "
-                    "file that went> (--file unknown if nobody kept it)")
+                    f"the message of {day} says a {word} went but not which file: {say}")
     for row in tracker or ():
         status = str(row.get("status") or "").strip().lower()
         cv = str(row.get("cv_file") or "").strip()

@@ -509,6 +509,15 @@ def without_drafts(text: str) -> str:
     return "\n".join(out)
 
 
+# A notice period or a start date is a fact about the person, so a letter that says "I
+# could start within four weeks" was flagged with nothing to say how to make it true: the
+# finding read like a figure to take out. Said beside the sentence, the fix is one line.
+_WHEN_FREE = re.compile(r"\b(?:start|starting|available|availability|notice|join|joining)\b", re.I)
+NOTICE_HINT = ("a notice period or start date is a fact about you: write it in "
+               "01-candidate-profile.md (for example \"Notice period: four weeks\") and it is "
+               "grounded")
+
+
 def check(text: str, source: str = "", allowed=None) -> list[dict]:
     """Numbers in `text` that the source of truth does not support: a figure it never
     states, and a count of something else (`Grounded.agrees`). A plain set passed as
@@ -529,6 +538,8 @@ def check(text: str, source: str = "", allowed=None) -> list[dict]:
             "normalised": f"{key[0]:g}{(' ' + key[1]) if key[1] else ''}",
             "context": quote(text, shown.strip()) or quote(body, shown.strip()),
         }
+        if key[1] in ("week", "month", "day") and _WHEN_FREE.search(finding["context"] or ""):
+            finding["hint"] = NOTICE_HINT
         if key in allowed:
             finding["counts"] = " ".join(_noun_words(body, end))
             finding["profile_counts"] = sorted({x for x in allowed.said.get(key, ()) if x},
@@ -626,6 +637,8 @@ def main() -> int:
                 f["profile_counts"]) + f"\", and this counts \"{f['counts']}\"")
         if f["context"]:
             print(f"      ...{f['context']}...")
+        if f.get("hint"):
+            print(f"      {f['hint']}")
     print("  Either the profile is missing a fact the document states, or the "
           "document states a fact the candidate cannot support. Both need a "
           "person; neither is safe to ship.")

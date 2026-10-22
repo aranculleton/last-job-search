@@ -473,6 +473,42 @@ def test_the_example_person_is_quiet():
     assert owed["contact_id"] == "larkspur_retail_castellan" and owed["recorded"]
 
 
+def _dated_commit(root, files, day):
+    for f in files:
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_bytes(b"%PDF-1.4 an invented CV\n")
+    _git(root, "add", "-A")
+    env = dict(os.environ, GIT_AUTHOR_DATE=f"{day}T12:00:00", GIT_COMMITTER_DATE=f"{day}T12:00:00")
+    subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.com",
+                    "commit", "-qm", f"files of {day}"], env=env, capture_output=True, check=True)
+
+
+def test_a_resume_with_no_file_named_names_the_general_one_held_that_day(repo):
+    # Seven messages in a real log said a resume went and named none, and RECONCILE could
+    # only say "name it". Nothing had been made for those contacts, so the resume that
+    # went was the general one: the newest the person had that day is now named, with
+    # the command filled in, and the person says yes or names another.
+    state._general_resume_dates.cache_clear()
+    _git(repo, "init", "-q", "-b", "master")
+    _dated_commit(repo, ["documents/cv/Morgan_Ellis_CV_2026-08.pdf"], "2026-08-20")
+    _dated_commit(repo, ["documents/cv/Morgan_Ellis_CV_2026-10.pdf"], "2026-10-20")
+    threads = THREADS + [{"contact_id": CID, "date": "2026-10-16", "direction": "out",
+                          "channel": "email", "scenario": "", "summary": "CV sent as asked.",
+                          "full_text": ""}]
+    _repo(repo, threads=threads)
+    detail = _reasons(repo)[(CID, "resume_file_not_named")]
+    assert (f"state.py attach {CID} --date 2026-10-16 --file "
+            "documents/cv/Morgan_Ellis_CV_2026-08.pdf") in detail
+    assert "2026-10.pdf" not in detail                         # not yet made that day
+    # Two arrived together: both are named, and neither is chosen for the person.
+    state._general_resume_dates.cache_clear()
+    _dated_commit(repo, ["documents/cv/Morgan_Ellis_CV_short.pdf"], "2026-08-20")
+    detail = _reasons(repo)[(CID, "resume_file_not_named")]
+    assert "Morgan_Ellis_CV_2026-08.pdf, documents/cv/Morgan_Ellis_CV_short.pdf" in detail
+    assert "--file <the one that went>" in detail
+    state._general_resume_dates.cache_clear()
+
+
 # ------------------------------------------------------------------ 5. two chats at once
 
 def _git(cwd, *args):

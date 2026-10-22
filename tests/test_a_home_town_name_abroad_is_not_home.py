@@ -45,3 +45,52 @@ def test_a_state_of_the_persons_own_country_is_home(monkeypatch):
     assert prefilter.location_verdict("Sydney, NSW")[0] == "PASS"
     assert prefilter.location_verdict("Parramatta, NSW")[0] == "PASS"
     assert prefilter.location_verdict("Sydney, NS")[0] == "FAIL"     # a Canadian province
+
+
+def _new_york(monkeypatch):
+    """An invented home in New York, whose metro holds Manhattan."""
+    import places
+    monkeypatch.setattr(prefilter, "METRO", ["manhattan", "brooklyn", "jersey city"])
+    monkeypatch.setattr(prefilter, "_CC", "us")
+    monkeypatch.setattr(prefilter, "_HOME_REGION", "NY")
+    monkeypatch.setattr(prefilter, "REGIONS", {"ny": "NY", "new york": "NY", "nj": "NJ"})
+    monkeypatch.setattr(places, "REGIONS", {"ny": "NY", "new york": "NY", "nj": "NJ"})
+
+
+def test_a_home_town_name_beside_another_state_at_home_is_read_again(monkeypatch):
+    # "Manhattan, KS" passed as home for somebody in New York.
+    _new_york(monkeypatch)
+    verdict, why = prefilter.location_verdict("Manhattan, KS")
+    assert verdict == "FLAG" and "KS" in why
+    assert prefilter.location_verdict("Manhattan, Kansas")[0] == "FLAG"
+    assert prefilter.location_verdict("Manhattan, NY")[0] == "PASS"
+    assert prefilter.location_verdict("Brooklyn, New York")[0] == "PASS"
+    assert prefilter.location_verdict("Manhattan")[0] == "PASS"
+
+
+def test_a_state_the_profile_places_is_read_as_it_always_was(monkeypatch):
+    # New Jersey is on this profile's region list, so its verdict is the region's rule,
+    # never the new one.
+    _new_york(monkeypatch)
+    assert "town name in" not in prefilter.location_verdict("Jersey City, NJ")[1]
+
+
+@pytest.mark.parametrize("loc", ["Bury St Edmunds, England", "Bury St. Edmunds",
+                                 "Bolton-on-Dearne, England", "Salford-upon-Somewhere"])
+def test_a_longer_town_that_starts_with_a_home_towns_name_is_read_again(loc):
+    # "Bury St Edmunds" passed as Bury, in Greater Manchester; it is in Suffolk.
+    verdict, why = prefilter.location_verdict(loc)
+    assert verdict == "FLAG" and "starts with" in why, (loc, why)
+
+
+@pytest.mark.parametrize("loc", ["Bury", "Ashton-under-Lyne", "Ashton-under-Lyne, England",
+                                 "Manchester Airport", "Sale, England, United Kingdom"])
+def test_a_home_town_and_a_town_of_its_own_on_the_list_still_pass(loc):
+    assert prefilter.location_verdict(loc)[0] == "PASS", loc
+
+
+def test_a_bare_on_after_a_home_town_is_a_province_not_a_longer_town(monkeypatch):
+    monkeypatch.setattr(prefilter, "METRO", ["toronto"])
+    monkeypatch.setattr(prefilter, "_CC", "ca")
+    assert "starts with" not in prefilter.location_verdict("Toronto ON")[1]
+    assert "starts with" not in prefilter.location_verdict("Toronto in office")[1]

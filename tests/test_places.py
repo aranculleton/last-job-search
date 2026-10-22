@@ -109,11 +109,13 @@ GATE = {
         "Salford Quays", "Stockport, Cheshire", "Stockport, England, United Kingdom",
         "Trafford", "Stretford", "Stretford, England, United Kingdom", "Sale",
         "Sale, England, United Kingdom", "Sale, Wexmoor", "Altrincham", "Bolton", "Bolton, England",
-        "Bury", "Bury, England, United Kingdom", "Bury St Edmunds, England", "Oldham",
+        "Bury", "Bury, England, United Kingdom", "Oldham",
         "Rochdale", "Wigan, England, United Kingdom", "Tameside", "Tameside, England",
         "Ashton-under-Lyne", "Ashton-under-Lyne, England, United Kingdom", "England",
         "England, United Kingdom", "England, UK", "UK", "United Kingdom"],
     "FLAG": [
+        # Moved from PASS on purpose: Bury St Edmunds is in Suffolk, not Bury.
+        "Bury St Edmunds, England",
         "", "Aylesbury, England, United Kingdom", "Leeds, England, United Kingdom",
         "Liverpool", "Warrington", "Preston, England", "Sheffield", "North West",
         "North West England", "New York, NY", "San Diego, CA", "Austin, TX", "EMEA", "Europe",

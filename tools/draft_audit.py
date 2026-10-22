@@ -540,8 +540,8 @@ def rule_findings(d: dict, pick: dict, posting: str, corpus: dict | None = None,
     # Numbers against the profile, with the posting's own figures and p2's allowed.
     for f in check_numbers.check_draft(dict(d, posting=posting)):
         findings.append(_finding("number", f["source"].rsplit(".", 1)[-1], f["value"],
-                                 "a number the profile does not hold: take it out, or cite "
-                                 "the fact that states it"))
+                                 f.get("hint") or "a number the profile does not hold: take "
+                                 "it out, or cite the fact that states it"))
     # check_claims on what each document will say, with the person's answers in the header.
     resume, letter = document_texts(d, _consent_header(d, pick))
     for text, is_letter, where in ((resume, False, "resume"), (letter, True, "letter")):
