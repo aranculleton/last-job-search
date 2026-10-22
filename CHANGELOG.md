@@ -46,6 +46,41 @@ make sense to somebody whose repo just received it.
   - The maintainer's leak list reads each old copy of the contact book once, and each row
     in it once: 1.4 seconds to 0.7.
 
+- **A wider round sends only the searches the round before did not have answered.** When a
+  round misses its target it searches again with more pages, and it used to send every
+  request of the first round again from page one: at twice the pages, nine in ten of its
+  LinkedIn requests repeated the first round's, and on your own computer, under its cap, it
+  sent the same 300 again and searched nothing new. It now carries the first round's
+  postings over and sends the rest; a request that failed is asked again. Your own boards
+  and the employer boards are read as before.
+  - Measured on a simulated round that widens twice: 585 requests to 361, the same postings
+    found and ranked in every round. Where one job is listed on two boards with the same
+    scores, the copy the first round showed is kept, where it used to be whichever arrived
+    first.
+- **Profile reads go about twice as fast, with no more pages opened.** The default pace was
+  careful's, whose pauses held reads to about 17 an hour, half the cap of 30, so 25 reads
+  took about an hour and a half. The default is now fast's pauses, about one page every two
+  minutes, which is what the cap was set for: 25 reads in about 45 minutes, simulated. The
+  caps are unchanged (30 an hour, 80 a day), and every count is now the same at every pace
+  (the spare reads, the paste list, how long a reading stands, the ramp), so the dial sets
+  the pauses and nothing else, as it always said. `PROFILE_READ_RISK = "careful"` in
+  `profile/networking.py` keeps the old pace.
+  - A slow page still doubles the next pause, and no longer stops the day's reads or slows
+    the days after: it is far more often your own connection than LinkedIn. A security
+    check, a sign-in page out of turn, an unusual-activity notice or a blocked page still
+    stops reads at once and starts the ramp.
+  - The 5-to-12-minute break an earlier update wrote into your profile, as if you had chosen
+    it, is taken out where nobody has changed it since, so the app's pace reaches you. A
+    break you set yourself is kept. `git revert` undoes it.
+  - No pace is safe: LinkedIn's terms forbid automated access at any pace and it publishes
+    no limits. Shorter pauses make a check or a restriction somewhat more likely; stopping
+    at the first sign of one is what protects your account, and that is unchanged.
+- **LinkedIn's refusal is said at once.** A 999, how LinkedIn refuses a machine, was asked
+  six more times over about 25 seconds before the round heard of it. It does not change
+  within a round, so it is no longer asked again.
+- **`ats_boards.py --probe` reads the employer boards side by side**, as a round does, with
+  the same verdicts in the same order. One after another, 92 boards took minutes.
+
 ### Fixed
 
 - **A town whose name starts with a home town's is read again, not passed as home.** "Bury

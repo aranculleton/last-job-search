@@ -54,7 +54,9 @@ def test_the_caps_are_3_2_5s_at_every_preset_and_careful_keeps_its_pauses():
                       ("break_minutes", (5, 12)), ("dwell_seconds", (20, 60)),
                       ("card_dwell_seconds", (20, 60)), ("paste_top", 3), ("fresh_days", 30)):
         assert pace.value(name, "careful") == old, name
-    assert pace.DEFAULT_PRESET == "careful"
+    # Careful's pauses held reads to about 17 an hour, half the cap: fast is the default
+    # since 2026-10-22, on the maintainer's word, and reaches it.
+    assert pace.DEFAULT_PRESET == "fast"
     # No preset reads a list page more often than the profiles' own pace allows.
     for risk in pace.PRESET_NAMES:
         assert pace.value("pages_per_day", risk) <= pace.value("loads_per_day", risk)
@@ -68,10 +70,10 @@ def test_the_dial_sets_every_limit_and_a_setting_beats_it(monkeypatch):
         PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=6, PROFILE_READ_GAP_SECONDS=(60, 300)))
     assert pace.value("reads_per_hour") == 6 and pace.value("gap_seconds") == (60, 300)
     assert "your setting" in pace.source("reads_per_hour")
-    # Unreadable: the preset, said so; an unknown dial: careful.
+    # Unreadable: the preset, said so; an unknown dial: the default.
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(PROFILE_READS_PER_HOUR="lots",
                                                            PROFILE_READ_RISK="reckless"))
-    assert pace.preset() == "careful" and pace.value("reads_per_hour") == 30
+    assert pace.preset() == pace.DEFAULT_PRESET and pace.value("reads_per_hour") == 30
     assert "could not be read" in pace.source("reads_per_hour")
 
 
@@ -87,7 +89,7 @@ def test_every_limit_is_named_with_its_reason_in_one_report():
 def test_limits_prints_the_value_the_source_and_what_binds_now(here, capsys):
     assert reading.main(["limits"]) == 0
     out = capsys.readouterr().out
-    assert "PROFILE_READ_RISK" in out and "PROFILE_READS_PER_RUN = 80 (the careful preset)" in out
+    assert "PROFILE_READ_RISK" in out and "PROFILE_READS_PER_RUN = 80 (the fast preset)" in out
     assert "What binds:" in out and "in profile/networking.py" in out
 
 
@@ -129,8 +131,21 @@ def test_a_soft_signal_doubles_the_pause_and_a_second_stops(here):
     g = reading.gate_state(NOW + datetime.timedelta(seconds=last["gap"] - 69), profile=False)
     assert g["kind"] == "wait"                       # the gap it asked for, doubled
     assert not reading.stopped(NOW.date())
-    reading.signal("slow", "the page took 40s", NOW)
+    reading.signal("not_rendering", "a page of 38 characters", NOW)
     assert reading.stopped(NOW.date())
+
+
+def test_a_slow_load_doubles_the_pause_and_never_stops_the_day_or_starts_the_ramp(here):
+    # A slow page is far more often the person's own connection than LinkedIn (2026-10-22).
+    reading.page_read("people", "https://example.org/p", NOW - datetime.timedelta(seconds=70))
+    last = reading._loads()[-1]
+    for secs in (60, 30, 0):
+        reading.signal("slow", "the page took 40s", NOW - datetime.timedelta(seconds=secs))
+    assert not reading.stopped(NOW.date())
+    g = reading.gate_state(NOW + datetime.timedelta(seconds=last["gap"] - 69), profile=False)
+    assert g["kind"] == "wait"                       # still doubled
+    tomorrow = NOW.date() + datetime.timedelta(days=1)
+    assert pace.hourly_ceiling(tomorrow, [])[1] == "loads_per_hour"
 
 
 def test_a_load_far_slower_than_usual_is_a_soft_signal(here):
@@ -162,11 +177,11 @@ def test_the_ramp_comes_only_after_a_signal_and_rises_on_clean_days(monkeypatch)
     # Before LinkedIn has shown anything, a first day reads at the cap: no slow start.
     assert pace.hourly_ceiling(today, [], {}) == (30, "loads_per_hour")
     # After a signal, it starts low and rises one step a clean day.
-    old = {"friction": [{"at": (NOW - datetime.timedelta(days=4)).isoformat(), "kind": "slow"}]}
+    old = {"friction": [{"at": (NOW - datetime.timedelta(days=4)).isoformat(), "kind": "check"}]}
     assert pace.hourly_ceiling(today, [], old)[0] == 5
-    assert pace.hourly_ceiling(today, days[-1:], old)[0] == 15
+    assert pace.hourly_ceiling(today, days[-1:], old)[0] == 10
     assert pace.hourly_ceiling(today, days, old) == (30, "loads_per_hour")
-    signalled = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(), "kind": "slow"}]}
+    signalled = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(), "kind": "check"}]}
     assert pace.hourly_ceiling(today, days, signalled)[0] == 5
 
 
@@ -194,7 +209,7 @@ def test_the_list_drops_people_read_before_or_closed_and_counts_only_who_is_left
     reading._save_shortlist(["p0", "p1", "p2", "p3", "p4", "p5"], NOW.date())
     got = reading.shortlist(["p6"], NOW.date(), contacts=contacts, sends_left=2)
     assert set(got["pruned"]) == {"p1", "p2"}
-    assert got["ids"] == ["p0", "p3", "p4", "p5", "p6"] and got["cap"] == 5
+    assert got["ids"] == ["p0", "p3", "p4", "p5", "p6"] and got["cap"] == 2 + reading.SKIP_SPARE
     got = reading.shortlist(["p7"], NOW.date(), contacts=contacts, remove=["p0"], sends_left=2)
     assert got["removed"] == ["p0"] and "p7" in got["ids"] and "p0" not in got["ids"]
 
@@ -203,7 +218,7 @@ def test_the_list_is_sized_to_the_requests_left_this_week(here, monkeypatch):
     contacts = [{"contact_id": f"q{i}", "location": "Leeds"} for i in range(6)]
     got = reading.shortlist([c["contact_id"] for c in contacts], NOW.date(), contacts=contacts,
                             sends_left=1)
-    assert got["cap"] == 1 + reading.SKIP_SPARE and len(got["ids"]) == 4
+    assert got["cap"] == 1 + reading.SKIP_SPARE and len(got["ids"]) == got["cap"]
     assert "1 request(s) left this week" in got["why"]
     # Read from the contact book, it is the week's requests, not today's: with 25 a day and
     # 50 a week, a list sized to the day could never prepare the week in one sitting.
@@ -279,14 +294,16 @@ def test_a_person_who_lifts_the_caps_is_not_held_by_the_ramp_or_the_loads_cap(mo
                                                            PROFILE_READS_PER_HOUR=1000))
     assert pace.loads_cap("hour") == 1000
     assert pace.hourly_ceiling(today, [], yesterday) == (1000, "loads_per_hour")
-    # A ramp they wrote themselves still applies: it is theirs.
+    # A ramp they wrote themselves still applies after friction that moves it: it is theirs.
     monkeypatch.setattr(pace, "_NET", types.SimpleNamespace(
         PROFILE_READ_RISK="fast", PROFILE_READS_PER_HOUR=1000, PROFILE_READ_RAMP=(5, 10, 20)))
-    assert pace.hourly_ceiling(today, [], yesterday)[0] == 5
+    checked = {"friction": [{"at": (NOW - datetime.timedelta(days=1)).isoformat(),
+                             "kind": "check"}]}
+    assert pace.hourly_ceiling(today, [], checked)[0] == 5
 
 
 def test_a_wait_on_the_ramp_names_the_setting_and_where_to_change_it(here):
-    pace.record_friction("slow", "a page took far longer than usual",
+    pace.record_friction("check", "a security check",
                          NOW - datetime.timedelta(days=1))
     for i in range(5):
         _profile_load(f"r{i}", NOW - datetime.timedelta(minutes=50 - i * 5))

@@ -93,6 +93,7 @@ import glob
 import json
 import os
 import re
+import subprocess
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -136,14 +137,14 @@ PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
 # failure they replaced: an even 25 to 75 second gap with a break on exactly every
 # fifth read, which is a rhythm a machine has and a person does not. 3.3.0 also cut the
 # caps from 30 an hour and 80 a day to 8 and 15; they are 30 and 80 again since
-# 2026-10-20, and these pauses hold an hour to about 17 in practice (simulated).
+# 2026-10-20. These pauses (careful's) held an hour to about 17 in practice (simulated), so
+# since 2026-10-22 the default is fast's shorter ones, which reach the cap and no more.
 #
 # The person owns the trade-off: every limit below is a setting in profile/networking.py,
-# and one dial, PROFILE_READ_RISK, sets the pauses from a named preset ("careful" by
-# default, which is this pace exactly; "normal"; "fast"). tools/network/pace.py holds them
-# in one place, each with its default and why, and `reading.py limits` prints them. No
-# preset but careful applies unless they write it, and no setting here shortens anything
-# they have not set themselves.
+# and one dial, PROFILE_READ_RISK, sets the pauses from a named preset ("fast" by default;
+# "normal"; "careful", which is the pace above exactly). tools/network/pace.py holds them in
+# one place, each with its default and why, and `reading.py limits` prints them. A setting
+# the person writes outranks every preset.
 import pace  # noqa: E402
 
 READS_PER_HOUR = pace.value("reads_per_hour")
@@ -1632,10 +1633,12 @@ def note_load(kind: str, at: str, gap: float, brk: bool, ident: str = "",
 
 def signal(kind: str, words: str = "", now: datetime.datetime | None = None) -> str:
     """Keep one friction signal, and stop the day's reads on a hard one, or on the second
-    soft one within the hour. Returns the kind."""
+    page within the hour that did not render. A slow load never stops them. Returns the
+    kind."""
     now = now or datetime.datetime.now()
     pace.record_friction(kind, words, now)
-    if kind in pace.HARD or pace.soft_recent(now) >= pace.SOFT_STOPS:
+    if kind in pace.HARD or (kind in pace.SOFT_STOP_KINDS and pace.soft_recent(
+            now, kinds=pace.SOFT_STOP_KINDS) >= pace.SOFT_STOPS):
         _write_stop("%s: %s" % (kind.replace("_", " "), words) if words else kind, now.date())
     return kind
 
@@ -1666,6 +1669,67 @@ def page_read(kind: str, url: str = "", now: datetime.datetime | None = None,
         _write_file(PAGES_FILE, {"reads": reads})
     note_load(kind, rec["at"], gap, brk, rec["url"], load_seconds, now)
     return rec
+
+
+# The break line the read-break upgrade wrote into every browser reader's profile at the
+# app's value then, (5, 12). Written there, it read as the person's own setting, outranking
+# every preset, so no later change to the app's pace could reach them (2026-10-22).
+FROZEN_BREAK = re.compile(r"^PROFILE_READ_BREAK_MINUTES\s*=\s*\(\s*5\s*,\s*12\s*\)\s*(?:#.*)?$")
+
+
+def frozen_break() -> tuple[str, int, int] | None:
+    """(networking.py, first line, last line) of the break line the read-break upgrade
+    wrote, with its comment above it, where nobody has touched it since: still the value it
+    wrote, its only change ever the upgrade's own commit, and no choice of the person's
+    recorded for it (learned.py); None otherwise, and their setting stands."""
+    if not person.exists("networking.py"):
+        return None
+    path = person.path("networking.py")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            lines = fh.read().split("\n")
+    except OSError:
+        return None
+    at = [n for n, ln in enumerate(lines) if FROZEN_BREAK.match(ln)]
+    if len(at) != 1:
+        return None
+    try:
+        import learned
+        if any("PROFILE_READ_BREAK_MINUTES" in str(x) for x in learned.locked()):
+            return None
+    except Exception:          # no record to read: nothing says it was their choice
+        pass
+    folder = os.path.dirname(path)
+    try:
+        log = subprocess.run(["git", "-C", folder, "log", "--format=%s", "-G",
+                              "^PROFILE_READ_BREAK_MINUTES", "--", os.path.basename(path)],
+                             capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    subjects = [x for x in log.stdout.splitlines() if x.strip()]
+    if log.returncode or len(subjects) != 1 or not subjects[0].startswith(
+            "Profile upgrade: read-break"):
+        return None
+    first = at[0]
+    while first > 0 and lines[first - 1].lstrip().startswith("#") and \
+            "break" in lines[first - 1].lower():
+        first -= 1
+    return path, first, at[0]
+
+
+def free_break() -> str:
+    """Take out the break line `frozen_break` finds, and its comment; what was done."""
+    found = frozen_break()
+    if not found:
+        return "nothing to change: no break line in profile/networking.py is the app's old one"
+    path, first, last = found
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    del lines[first:last + 1]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    return ("took out PROFILE_READ_BREAK_MINUTES = (5, 12), which an earlier update wrote into "
+            "profile/networking.py: the break between bursts of reads is the app's pace again")
 
 
 def move_runtime() -> list:
@@ -4340,6 +4404,8 @@ def main(argv: list | None = None) -> int:
                                      "page waits")
     sub.add_parser("move-runtime", help="move the reading files an older copy kept in "
                                         "documents/network into this computer's ledger")
+    sub.add_parser("free-break", help="take out the break line an earlier update wrote into "
+                                      "profile/networking.py, where nobody has changed it")
     fr = sub.add_parser("friction", help="the friction reads met (what each was, and when), and "
                                          "the ramp; or keep one")
     fr.add_argument("--kind", choices=pace.HARD + pace.SOFT, default=None)
@@ -4428,6 +4494,9 @@ def main(argv: list | None = None) -> int:
 
     if a.cmd == "extractor":
         print(LIST_EXTRACTOR if a.list else EXTRACTOR_ACTIVITY if a.activity else EXTRACTOR)
+        return EXIT["ok"]
+    if a.cmd == "free-break":
+        print("reading: " + free_break())
         return EXIT["ok"]
     if a.cmd == "move-runtime":
         moved = move_runtime()

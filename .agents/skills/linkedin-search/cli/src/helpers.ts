@@ -14,7 +14,9 @@ export function writeError(error: string, code: string): void {
 
 const UA = "Mozilla/5.0 (compatible; linkedin-search-cli/1.0)"
 
-/** Fetch HTML with exponential backoff on 429/5xx. Returns "" on a 404. */
+/** Fetch HTML with exponential backoff on 429/5xx. Returns "" on a 404. A 999, how LinkedIn
+ * refuses a machine, does not change within a round, so it is said at once rather than asked
+ * six more times over about 25 seconds. */
 export async function htmlFetch(url: string): Promise<string> {
   const maxRetries = 6
   let delay = 500
@@ -29,6 +31,9 @@ export async function htmlFetch(url: string): Promise<string> {
       redirect: "follow",
       signal: AbortSignal.timeout(15000),
     })
+    if (response.status === 999) {
+      throw new Error(`Request failed: ${response.status} ${response.statusText}`.trim())
+    }
     if (response.status === 429 || response.status >= 500) {
       if (attempt === maxRetries) {
         throw new Error(`Request failed: ${response.status} ${response.statusText}`)

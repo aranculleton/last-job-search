@@ -262,8 +262,10 @@ def test_browser_reads_have_3_2_5s_caps_and_a_persons_pauses():
     assert reading.READS_PER_DAY == 80 and reading.READS_PER_HOUR == 30
     assert reading.LOADS_PER_DAY == 80 and reading.LOADS_PER_HOUR == 30
     assert schema.LIMITS["connections_per_week"] + reading.SKIP_SPARE <= reading.READS_PER_DAY
-    assert reading.GAP_SECONDS[0] >= 40 and reading.BREAK_SECONDS[0] >= 180
-    assert reading.DWELL_SECONDS[0] >= 20
+    # The pauses are the default preset's, fast's since 2026-10-22 on the maintainer's word:
+    # shorter than careful's, which held reads to half the cap, and still never a machine's.
+    assert reading.GAP_SECONDS[0] >= 20 and reading.BREAK_SECONDS[0] >= 180
+    assert reading.DWELL_SECONDS[0] >= 10
 
 
 def test_a_day_reads_no_more_than_the_week_can_send(tmp_path, monkeypatch):
@@ -323,7 +325,7 @@ def test_the_pause_varies_and_the_long_break_never_lands_on_a_fixed_count():
     gaps = [reading.next_gap(random.Random(i), reads=[]) for i in range(60)]
     assert len(set(gaps)) > 20
     assert all(reading.GAP_SECONDS[0] <= g <= reading.GAP_SECONDS[1] for g in gaps)
-    assert sorted(gaps)[len(gaps) // 2] >= 60               # most near a minute and a half
+    assert sorted(gaps)[len(gaps) // 2] >= 45               # most near a minute
     t = datetime.datetime(2026, 10, 17, 9)
     where = set()
     for seed in range(40):
