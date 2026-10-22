@@ -88,6 +88,10 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **The checks before saving no longer take an update halfway through.** One of the app's own
+  checks ran the update command with nothing after it, which in your copy is a real update: it
+  merged the newest release mid-run and could put files back to it, so the checks then failed
+  on what they had just changed. Found by rehearsing this update on a copy of a real repo.
 - **A prep document arrives under whose it is.** Each employer's interview prep and each
   contact's call prep was always its own file, but every one was sent as "interview_prep.md"
   or "prep.md", so two employers' documents looked the same in the chat. What is sent is now

@@ -35,6 +35,12 @@ def _positional_commands() -> list[str]:
 
 COMMANDS = _positional_commands()
 
+# Run with nothing, these act on the repo they sit in, whatever directory they are run from:
+# only --help is tried. sync_app.py with nothing takes the app's update; in the app it does
+# nothing, but in a person's repo, where ci_local.sh runs this suite, it merged and committed
+# a release mid-run and put 68 app files back to it (a rehearsal on a copy, 2026-10-22).
+ACTS_ON_THE_REPO = frozenset({os.path.join("tools", "sync_app.py")})
+
 
 def test_the_commands_that_read_arguments_by_position_are_found():
     for name in ("audit_letters.py", "fit_to_page.py", "outreach.py", "render_application.py",
@@ -45,7 +51,7 @@ def test_the_commands_that_read_arguments_by_position_are_found():
 @pytest.mark.parametrize("cmd", COMMANDS)
 def test_nothing_or_help_never_crashes(cmd, tmp_path):
     env = dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example"), LJS_STATE=str(tmp_path))
-    for args in ([], ["--help"]):
+    for args in (["--help"],) if cmd in ACTS_ON_THE_REPO else ([], ["--help"]):
         r = subprocess.run([sys.executable, os.path.join(ROOT, cmd), *args], cwd=str(tmp_path),
                            capture_output=True, text=True, env=env, timeout=120,
                            stdin=subprocess.DEVNULL)
@@ -57,3 +63,8 @@ def test_nothing_or_help_never_crashes(cmd, tmp_path):
         elif args:
             assert "usage" in (r.stdout + r.stderr).lower(), (cmd, r.stdout[:200])
             assert r.returncode == 0, (cmd, r.returncode)
+
+
+def test_no_command_that_acts_on_the_repo_is_run_with_nothing():
+    assert os.path.join("tools", "sync_app.py") in COMMANDS
+    assert ACTS_ON_THE_REPO <= set(COMMANDS)
