@@ -20,6 +20,13 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The maintainer's check of the public app reads every pull request, not only the newest
+  fifty.** `tools/app_watch.py --all` read one page of fifty and called it everything, and a
+  look after more than fifty had changed moved its mark past the ones it never read. It now
+  reads page after page, back to the last one it read before.
+
 ## [3.10.0] - 2026-10-22
 
 ### Added
