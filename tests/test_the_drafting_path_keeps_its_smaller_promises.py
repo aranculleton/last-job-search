@@ -3,6 +3,8 @@
 - A second role at an employer whose title is all filler ("Senior Analyst") got the
   machine-looking "KestrelMutual_Role", and a third crashed staging with a traceback whose
   advice could not apply to /apply.
+- A second role's name took the title's requisition code or gender marker: "Senior Data
+  Analyst - REQ-2026-0412" was "KestrelMutual_REQ2026", "Data Analyst (m/w/d)" "_MW".
 - `stage` printed `picks.json` as the workflow's args; the args are `draft_args.json`,
   which `tools/draft_pack.py build` writes, and without it every draft was flagged no-pack.
 - A bare domain redirecting to www (robots.txt included) was read as a refusal and noted
@@ -57,6 +59,23 @@ def test_a_filler_only_title_is_named_by_its_own_words_and_never_crashes(tmp_pat
     third = stage_picks.choose_abbr("Kestrel Mutual", "Senior Analyst", rows, str(tmp_path))
     assert third not in (abbr, "KestrelMutual") and third.startswith("KestrelMutual_")
     assert not third.endswith("_Role")
+
+
+def test_a_requisition_code_or_gender_marker_never_names_the_file(tmp_path):
+    rows = [_row("Pricing Analyst", "applied", "KestrelMutual")]
+    for title, want in [("Senior Data Analyst - REQ-2026-0412", "KestrelMutual_Data"),
+                        ("Data Analyst (m/w/d)", "KestrelMutual_Data"),
+                        ("Claims Analyst (f/m/x)", "KestrelMutual_Claims"),
+                        ("Claims Analyst (H/F)", "KestrelMutual_Claims"),
+                        ("Data Analyst - Req #40912", "KestrelMutual_Data"),
+                        ("Data Analyst (Job ID: 88231)", "KestrelMutual_Data"),
+                        ("Analyst, Pricing Strategy (all genders)", "KestrelMutual_PricingStrategy")]:
+        abbr = stage_picks.choose_abbr("Kestrel Mutual", title, rows, str(tmp_path))
+        assert abbr == want, (title, abbr)
+        assert not any(c.isdigit() for c in abbr), (title, abbr)
+    for title in ("Senior Data Analyst - REQ-2026-0412", "Data Analyst (m/w/d)"):
+        assert not any(t.startswith(("REQ", "Req", "MW", "Mw")) for t in
+                       stage_picks.role_tokens(title)[:3]), title
 
 
 def test_stage_names_the_pack_build_and_the_workflow_args(tmp_path, capsys):

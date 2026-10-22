@@ -107,6 +107,34 @@ def is_shouty(name: str) -> bool:
     return len(n) > 4 and n.isupper()
 
 
+# A gender marker a posting adds to its title ("(m/w/d)", "f/m/x", "(H/F)", "(all
+# genders)"): it says who may apply, never which role it is.
+_GENDER = re.compile(
+    r"\(\s*(?:all genders|any gender|gn|m/w/d|w/m/d)\s*\)|"
+    r"\(?(?<![\w/])(?:m|f|w|d|h|x|div|divers|diverse)(?:\s*/\s*(?:m|f|w|d|h|x|div|divers|"
+    r"diverse)){1,3}(?![\w/])\)?", re.I)
+# A requisition code or posting number: "REQ-2026-0412", "Req #1234", "Job ID: 88231",
+# "JR0099", "R-12345", "Ref AB1234", a bare "40912".
+_REQ = re.compile(
+    r"(?<![\w-])(?:req(?:uisition)?|job|ref(?:erence)?|vacancy|posting|position)\.?\s*"
+    r"(?:id|no|number|code|ref)?\.?\s*[:#-]?\s*#?\s*[A-Za-z]{0,4}[-_]?\d[\w/-]*|"
+    r"(?<![\w-])#\s*\d[\w-]*|"
+    r"(?<![\w-])(?:[A-Za-z]{1,4}[-_]?)?\d{3,}(?:[-_/][A-Za-z0-9]+)*(?![\w-])", re.I)
+
+
+def role_core(title: str) -> str:
+    """A posting title without its requisition code or gender marker: "Senior Data
+    Analyst - REQ-2026-0412" and "Data Analyst (m/w/d)" are "Senior Data Analyst" and
+    "Data Analyst". Neither belongs in a file name, and neither says which role it is."""
+    s = _GENDER.sub(" ", str(title or ""))
+    s = _REQ.sub(" ", s)
+    s = re.sub(r"\(\s*[,;:/|-]*\s*\)|\[\s*[,;:/|-]*\s*\]", " ", s)
+    s = re.sub(r"(?:\s*[-\u2013\u2014|:,;/]+)+\s*$", "", s.strip())
+    s = re.sub(r"^\s*[-\u2013\u2014|:,;/]+\s*", "", s)
+    s = re.sub(r"(\s[-\u2013\u2014|]\s)(?:\s*[-\u2013\u2014|]\s)+", r"\1", s)
+    return " ".join(s.split())
+
+
 def tracker_rows(path: str = TRACKER) -> list[dict]:
     """The rows, through csv_store.read_rows, the one state-file reader: a conflicted file
     is refused, and a short row's missing cells read as blanks, never None."""

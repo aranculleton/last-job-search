@@ -552,8 +552,10 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         named = isinstance(e.get("rests_on"), dict) and bool(e.get("rests_on"))
         # A ruling the screen wrote that today's screen would not make, read on the
         # sentence it quotes (text_screen.ruling_refused): a second language named only
-        # as a nice-to-have, or a nationality word, cut as a language requirement. It
-        # rests on settings the person never changed, so nothing else would ever lift it.
+        # as a nice-to-have, or a nationality word, cut as a language requirement; home or
+        # a time zone cut as somewhere else to live; a place ending one sentence joined to
+        # the next and cut as a status. It rests on settings the person never changed, so
+        # nothing else would ever lift it.
         if status == "excluded" and not own_call and ruling_refused(reason):
             continue
         # Scored out under rules that no longer say to cut on a score. The entry

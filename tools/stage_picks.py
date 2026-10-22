@@ -20,7 +20,7 @@ belongs to a different application.
 
     python3 tools/stage_picks.py stage <round_dir> <pick> [<pick> ...] [--both]
     python3 tools/stage_picks.py single <dir> --company C --role R --posting-file F [--url U] [--fit N]
-    python3 tools/stage_picks.py single <dir> --for-contact <contact_id> [--company C --role R --posting-file F]
+    python3 tools/stage_picks.py single <dir> --for-contact <contact_id> [--company C --role R --posting-file F] [--referral-field]
     python3 tools/stage_picks.py consent <round_dir> <pick> --yes A B --no C [--draft | --skip]
     python3 tools/stage_picks.py audit <round_dir> [--only <slug> ...] [--json]
     python3 tools/stage_picks.py assemble <round_dir>
@@ -62,6 +62,10 @@ networking chat and a drafting chat working at once then leave one linked record
 no posting (they asked for "your CV" and named no role), nothing is drafted: the
 person's current resume is what goes (`docpaths.current_resume`), never one tailored to a
 guess at the role, and the contact's row records which (`general_resume_for`).
+When they said to apply and name them as the referrer (`--referral-field`, or read from
+their thread when it is not given), it goes in through the portal under their name, not
+to them: staging, the tracker note and `outreach.md` say so, and RECONCILE asks for no
+message, because none goes.
 
 A round's own `06_shortlist.json` is read when it is there; in a later session,
 when the gitignored round directory is gone, the committed
@@ -182,8 +186,12 @@ def role_tokens(role: str) -> list[str]:
     The role's own distinguishing words first ("PricingStrategy"); when every word is
     filler ("Senior Analyst"), the title's own words are still a name a person reads
     ("SeniorAnalyst"), where the old fallback was "Role", the same machine-looking token
-    every time. Then the first of them numbered, so a filename is always found."""
+    every time. Then the first of them numbered, so a filename is always found.
+
+    A requisition code or a gender marker is never a name: "Senior Data Analyst -
+    REQ-2026-0412" was "REQ2026" and "Data Analyst (m/w/d)" was "MW"."""
     out = []
+    role = doc_name.role_core(role or "")
     parts = [p for p in re.split(r"\s[-–—]\s|,|\(|\)", role or "") if p.strip()]
     for text in list(reversed(parts)) + [role or ""]:
         words = [w for w in re.findall(r"[A-Za-z0-9]+", text) if w.lower() not in _FILLER]
@@ -344,9 +352,24 @@ def contact_for(contact_id: str, contacts: list[dict] | None = None) -> dict:
     return c
 
 
-def _for_contact_fields(contact: dict, company: str) -> dict:
+def contact_route(contact_id: str, referral_field: bool | None = None) -> str:
+    """How a resume drafted for this contact goes (state.ROUTE_PORTAL or ROUTE_TO_THEM):
+    through the portal naming them when `referral_field` says so, or, not said, when the
+    last thing they said about it was to apply and name them (state.resume_route)."""
+    state = _network_state()
+    if referral_field:
+        return state.ROUTE_PORTAL
+    if referral_field is None:
+        path = person.state("network_threads.csv")
+        threads = state.load_threads(path) if os.path.exists(path) else []
+        return state.resume_route(threads, str(contact_id or "").strip())
+    return state.ROUTE_TO_THEM
+
+
+def _for_contact_fields(contact: dict, company: str, route: str = "") -> dict:
     """What a pick drafted for this contact carries; SystemExit when they work elsewhere,
-    unless they are a recruiter (who places roles at other employers)."""
+    unless they are a recruiter (who places roles at other employers). `route` is how it
+    goes (contact_route): through the portal naming them, or to them."""
     from company_key import key as company_key
     state = _network_state()
     import prep
@@ -355,9 +378,12 @@ def _for_contact_fields(contact: dict, company: str) -> dict:
                          f"{company}: a resume for them is for a role at their employer. Stage "
                          "this pick without --for-contact.")
     import interview_pack
+    portal = route == state.ROUTE_PORTAL
     return {"for_contact": str(contact.get("contact_id") or "").strip(),
             "for_contact_name": state.person_name(contact.get("name")) or contact.get("name", ""),
-            "for_contact_channel": interview_pack.process_channel(contact)}
+            # Named as the referrer on the application: the tracker files it as a referral.
+            "for_contact_channel": "referral" if portal else interview_pack.process_channel(contact),
+            "for_contact_route": state.ROUTE_PORTAL if portal else state.ROUTE_TO_THEM}
 
 
 def general_resume_for(contact_id: str, today=None, contacts_path: str = "") -> dict:
@@ -387,25 +413,31 @@ def general_resume_for(contact_id: str, today=None, contacts_path: str = "") -> 
 
 def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
           root: str = ROOT, shortlist: list[dict] | None = None,
-          fetch=_hydrate, both: bool = False, today=None, for_contact: str = "") -> list[dict]:
+          fetch=_hydrate, both: bool = False, today=None, for_contact: str = "",
+          referral_field: bool | None = None) -> list[dict]:
     """Stage the picks and return every one, each with its `hold` questions (empty when
     nothing waits on the person). picks.json gets the ones nothing waits on, held.json
     the rest. `both` is the person saying they want two roles at one employer.
     `for_contact` is the contact_id of whoever asked for the resume: every pick is drafted
-    for them (see the module's note)."""
+    for them (see the module's note). `referral_field`: they said to apply and name them,
+    so it goes in through the portal (None: read from their thread, `contact_route`)."""
     import posting_profile
     from company_key import key as company_key
     shortlist = load_shortlist(round_dir) if shortlist is None else shortlist
     rows = _tracker_rows() if rows is None else rows
     contact = contact_for(for_contact) if str(for_contact or "").strip() else None
+    route = contact_route(contact.get("contact_id", ""), referral_field) if contact else ""
     os.makedirs(os.path.join(round_dir, "picks"), exist_ok=True)
     before = {p.get("slug"): p for p in _read_picks(round_dir) + _read_held(round_dir)
               if isinstance(p, dict)}
+    # Every slug's last staged role, kept beside picks.json: staging another employer
+    # rewrites picks.json, and the files a slug holds still need to say whose they are.
+    staged_roles = _read_roles(round_dir)
     staged, apps_in, claimed, seen_slugs = [], [], set(), set()
     for n, pick in enumerate(picks, 1):
         r = _find(shortlist, pick)
         # Checked before the posting is fetched: a contact at another employer is a mistake.
-        mine = _for_contact_fields(contact, r["company"]) if contact is not None else {}
+        mine = _for_contact_fields(contact, r["company"], route) if contact is not None else {}
         abbr = choose_abbr(r["company"], r["title"], rows, root, claimed)
         claimed.add(abbr)
         if doc_name.is_shouty(abbr):
@@ -423,7 +455,9 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         if s in seen_slugs:
             s = f"{s}_{n}"
         seen_slugs.add(s)
-        _set_aside(round_dir, s, before.get(s), r)
+        _set_aside(round_dir, s, before.get(s) or staged_roles.get(s), r)
+        staged_roles[s] = {"slug": s, "company": r["company"], "role": r["title"]}
+        _write_roles(round_dir, staged_roles)
         r = dict(r, desc=posting_text(r, round_dir, s, fetch))
         asks = to_ask(r["desc"])
         prof = posting_profile.read(r, r["desc"], rows=rows, today=today)
@@ -451,7 +485,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
         ]
         if mine:
             head.append(f"- for contact: {mine['for_contact_name']} ({mine['for_contact']}), who "
-                        "asked for it: it goes to them, not through the portal")
+                        f"asked for it: {_network_state().route_words(mine['for_contact_route'])}")
         # What code read from the posting, derived values only (no posting text above the
         # fence), so the researcher and the drafter know it as well as the person does.
         head += [f"- {line}" for line in posting_profile.lines(prof, quotes=False)]
@@ -492,6 +526,24 @@ SLUG_FILES = ("draft_{}.json", "research_{}.json", "audit_{}.json", "model_audit
               "outreach_{}.json", os.path.join("postings", "{}.txt"))
 
 
+ROLES = "staged_roles.json"
+
+
+def _read_roles(round_dir: str) -> dict:
+    """{slug: {slug, company, role}}: the role each slug was last staged for."""
+    try:
+        with open(os.path.join(round_dir, ROLES), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in got.items() if isinstance(v, dict)} if isinstance(got, dict) else {}
+
+
+def _write_roles(round_dir: str, roles: dict) -> None:
+    with open(os.path.join(round_dir, ROLES), "w", encoding="utf-8") as fh:
+        json.dump(roles, fh, indent=1, sort_keys=True)
+
+
 def _read_picks(round_dir: str) -> list[dict]:
     try:
         with open(os.path.join(round_dir, "picks.json"), encoding="utf-8") as fh:
@@ -506,7 +558,9 @@ def _set_aside(round_dir: str, s: str, old: dict | None, row: dict) -> list[str]
     another role: they are named by the company alone, so a second role at an employer
     read the first one's draft, research, audit and note as its own, and assemble put
     the first role's letter under the second role's file name. A re-stage of the same
-    role keeps them."""
+    role keeps them. The role is compared exactly (draft_audit.other_role): "Data Analyst"
+    is never the "Senior Data Analyst" staged after it, whether the earlier pick is still
+    in picks.json, only in staged_roles.json, or known only from its draft."""
     from company_key import key as company_key
     import draft_audit
     new = {"company": row.get("company"), "role": row.get("title")}
@@ -815,7 +869,7 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
             # What an interviewer could still probe, which the audit found and nothing
             # kept: the kept draft carries it to the interview pack.
             d.setdefault("residual_risks", risks)
-        for k in ("for_contact", "for_contact_name", "for_contact_channel"):
+        for k in ("for_contact", "for_contact_name", "for_contact_channel", "for_contact_route"):
             if p.get(k):
                 # Who asked for it travels with the draft into its folder (draft.json), so a
                 # later render or outreach run still knows it goes to them.
@@ -832,8 +886,8 @@ def _report(staged: list[dict], round_dir: str) -> None:
     for p in staged:
         print(f"staged {p['abbr']:<28} {p['company']} | {p['role']}")
         if p.get("for_contact"):
-            print(f"    for {p['for_contact_name']} ({p['for_contact']}), who asked for it: it "
-                  "goes to them, not through the portal")
+            print(f"    for {p['for_contact_name']} ({p['for_contact']}), who asked for it: "
+                  + _network_state().route_words(p.get("for_contact_route")))
         for line in posting_profile.lines(p["posting_profile"]) if p.get("posting_profile") else ():
             print(f"    {line}")
     held = [p for p in staged if p.get("hold")]
@@ -927,6 +981,9 @@ def main() -> int:
                    help="the person wants every role picked at one employer drafted")
     s.add_argument("--for-contact", default="", metavar="CONTACT_ID",
                    help="the contact who asked for the resume: drafted for them")
+    s.add_argument("--referral-field", action="store_true", default=None,
+                   help="with --for-contact: they said to apply and name them as the referrer, "
+                        "so it goes in through the portal, not to them")
     one = sub.add_parser("single", help="one posting that came from no round: /apply")
     one.add_argument("round_dir", help="a scratch directory for this application")
     one.add_argument("--company", default="")
@@ -936,6 +993,9 @@ def main() -> int:
     one.add_argument("--for-contact", default="", metavar="CONTACT_ID",
                      help="the contact who asked for the resume: drafted for them, or with no "
                           "posting, their current resume named for them")
+    one.add_argument("--referral-field", action="store_true", default=None,
+                     help="with --for-contact: they said to apply and name them as the "
+                          "referrer, so it goes in through the portal, not to them")
     one.add_argument("--url", default="")
     one.add_argument("--location", default="")
     one.add_argument("--fit", type=int, help="the 0-100 fit /apply Step 1 scored")
@@ -963,8 +1023,7 @@ def main() -> int:
         results = audit(args.round_dir, args.only)
         if args.json:
             import draft_audit
-            print(json.dumps([draft_audit.failing(r) for r in results], indent=1,
-                             ensure_ascii=False))
+            print(draft_audit.json_text([draft_audit.failing(r) for r in results], indent=1))
         else:
             _report_audit(results)
         return 0 if all(r["verdict"] in ("pass", "fixed") for r in results) else 1
@@ -983,6 +1042,12 @@ def main() -> int:
             print(f"still held: [{o['slug']}] {o['company']} | {o['role']}")
         return 0
     if args.cmd == "single" and args.for_contact and not args.posting_file:
+        if str(args.role or "").strip():
+            # A role named is a resume tailored to it, which needs its posting: the current
+            # resume is only for when no role is named.
+            raise SystemExit(f"single: there is no posting file for {args.role.strip()}. Save the "
+                             "posting's text in a file and run this again with --posting-file "
+                             "<that file>.")
         return _no_role(args.for_contact)
     if args.cmd == "single":
         if not (str(args.company or "").strip() and str(args.role or "").strip()
@@ -1004,12 +1069,12 @@ def main() -> int:
             row["fit"] = args.fit
         if args.deadline:
             row["deadline"] = args.deadline
-        _report(stage(args.round_dir, ["1"], shortlist=[row], for_contact=args.for_contact),
-                args.round_dir)
+        _report(stage(args.round_dir, ["1"], shortlist=[row], for_contact=args.for_contact,
+                      referral_field=args.referral_field), args.round_dir)
         return 0
     if args.cmd == "stage":
-        _report(stage(args.round_dir, args.picks, both=args.both, for_contact=args.for_contact),
-                args.round_dir)
+        _report(stage(args.round_dir, args.picks, both=args.both, for_contact=args.for_contact,
+                      referral_field=args.referral_field), args.round_dir)
         return 0
     drafts, missing, rejected = assemble(args.round_dir, args.only)
     print(f"assembled {len(drafts)} drafts into {os.path.join(args.round_dir, 'drafts.json')}")

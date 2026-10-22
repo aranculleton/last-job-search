@@ -5,9 +5,13 @@ person (profile.example), mutated one sentence at a time:
 
 - The words "the profile uses" included its target sectors and rules, so a claim of work
   in a sector the person only wants ("models for manufacturing clients") passed.
-- A `contact_person` nobody named became the letter's salutation.
+- A `contact_person` nobody named became the letter's salutation. Then the same person
+  written without an accent ("Renee" for the research's "Renée") was a different one.
 - A gap volunteered in a phrasing outside two patterns ("my exposure ... is limited",
   "would be a new domain for me") went to render with nothing reading it.
+- Then the wider shapes refused correct letters that describe other people or results:
+  "reporting that let 30 managers get up to speed", "managers with little experience of
+  SQL", "teams with limited exposure to the data". A gap is the candidate's own.
 - Leadership and scope the source never gives ("I led a team of four analysts", "for the
   whole company") passed unless the source carried a hedge word.
 - One draft with letter bullets as pairs crashed the audit of the whole batch.
@@ -95,6 +99,22 @@ def test_a_sector_the_person_only_targets_is_not_their_vocabulary():
     assert any(f["flag"] == "posting-term" and "manufacturing" in f["detail"] for f in m["flags"])
 
 
+@pytest.mark.parametrize("named,written", [
+    ("Renée Thistlewood", "Renee Thistlewood"),
+    ("Íñigo Ibarrondo", "Inigo Ibarrondo"),
+    ("Søren Halvardsen", "Soren Halvardsen"),
+    ("Zoë Quillfeather", "ZOE QUILLFEATHER"),
+    ("Dr Łucja Wróbelska", "Lucja Wrobelska"),
+])
+def test_the_named_contact_is_the_same_person_with_or_without_accents(named, written):
+    research = dict(copy.deepcopy(FIXTURE["research"]), named_contact=named)
+    d = dict(copy.deepcopy(GOOD), contact_person=written)
+    assert "contact" not in _rules(_audit(d, research=research)), (named, written)
+    # Another person with the same surname is still someone else.
+    other = dict(d, contact_person="Quenby " + written.split()[-1])
+    assert "contact" in _rules(_audit(other, research=research))
+
+
 def test_a_name_from_the_target_list_is_an_unknown_name_in_a_candidate_sentence(tmp_path,
                                                                               monkeypatch):
     dst = tmp_path / "profile"
@@ -127,6 +147,35 @@ def test_an_addressee_nobody_named_is_a_broken_rule():
 def test_a_gap_volunteered_in_any_of_the_softer_shapes_is_a_broken_rule(gap):
     d = _edited("p4", P4_LAST, gap, cites=[])
     assert "letter" in _rules(_audit(d)), gap
+
+
+@pytest.mark.parametrize("gap", [
+    "I'm keen to build experience in insurance pricing.",
+    "I have limited exposure to insurance data.",
+    "I've had little experience with claims systems.",
+    "With my limited exposure to insurance, I would lean on your claims team.",
+    "Morgan's exposure to claims data is limited so far.",
+    "I would quickly get up to speed on your claims data.",
+])
+def test_the_softer_shapes_said_of_the_candidate_are_still_caught(gap):
+    d = _edited("p4", P4_LAST, gap, cites=[])
+    assert "letter" in _rules(_audit(d)), gap
+
+
+def _concessions(m):
+    return [f for f in m["findings"] if "concession" in str(f.get("text") or "")]
+
+
+@pytest.mark.parametrize("about_others", [
+    P4_LAST[:-1] + ", so that your handlers get up to speed on a surge in minutes.",
+    P4_LAST[:-1] + ", for claims handlers with little experience of SQL.",
+    P4_LAST[:-1] + ", for teams with limited exposure to the data.",
+    P4_LAST[:-1] + ", and your handlers have been keen to build their reporting skills.",
+    P4_LAST[:-1] + ", because their experience of the weather data has been limited.",
+])
+def test_the_softer_shapes_said_of_other_people_are_not_a_concession(about_others):
+    m = _audit(_edited("p4", P4_LAST, about_others))
+    assert _concessions(m) == [], about_others
 
 
 def test_the_close_written_for_the_role_is_still_clean():

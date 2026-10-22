@@ -66,7 +66,13 @@ _NUMS = r"(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twe
 FIXED = re.compile(
     r"\bfixed[- ]term\b|\bFTC\b|\btemporary (?:role|position|contract|assignment|post|job|"
     r"opportunity|vacancy)\b|\btemporary,? (?:full|part)[- ]time\b|\bon a temporary basis\b|"
-    r"\btemp[- ]to[- ]perm\b|\bterm (?:position|role|post|appointment|contract)\b|"
+    r"\btemp[- ]to[- ]perm\b|"
+    # "A term position" is a fixed term; "a long-term position" is the opposite, a job
+    # meant to last, so "term" counts only on its own. A short-term role is still one,
+    # and a long-term contract is still a contract.
+    r"(?<![-\w])(?<!long )(?<!medium )(?<!mid )term (?:position|role|post|appointment)\b|"
+    r"\bterm contract\b|\bshort[- ]term (?:role|position|post|appointment|assignment|"
+    r"placement|job)\b|"
     # Cover for someone's leave is a fixed term; a leave policy with "coverage" is a benefit
     # ("100% parental leave coverage for 6 months", "family coverage from day one").
     r"\b(?:maternity|paternity|parental)(?: leave)? (?:cover|replacement|contract)\b|"
@@ -74,7 +80,16 @@ FIXED = re.compile(
     # A secondment the role IS, never one the employer offers its staff.
     r"\b(?:role|position|post|job|this) is (?:offered as |on )?(?:a )?secondment\b|"
     r"\b\d+[- ]month secondment\b|"
-    r"\bduration\W{1,3}\s*(?:of\s+)?(?:about\s+|approximately\s+)?" + _NUMS + r"\s+(?:months?|weeks?|years?)\b|"
+    # A duration is the job's only when it is said of the job: "Duration: 6 months" as a
+    # line of its own, "assignment duration", "the duration of the contract is 6 months".
+    # "Projects with a typical duration of 6 months" is the work, not the job.
+    r"(?:^|[|\u2022\u00b7(]\s*|\b(?:contract|role|position|assignment|engagement|placement|"
+    r"secondment|post|job|appointment)\s+)duration\s*[:\-\u2013]?\s*(?:is\s+|of\s+)?(?:about\s+|"
+    r"approximately\s+)?" + _NUMS + r"\s+(?:months?|weeks?|years?)\b|"
+    r"\bduration of (?:the |this |your )?(?:contract|role|position|assignment|engagement|"
+    r"placement|secondment|post|job|appointment|cover)\W{0,3}\s*(?:is\s+|will be\s+|of\s+)?"
+    r"(?:about\s+|approximately\s+|around\s+)?(?:\d{1,2}|" + _NUMS[3:-1] + r")\s*[- ]?"
+    r"(?:months?|weeks?|years?)\b|"
     r"\b(?:on an interim basis|interim (?:role|position|basis|assignment|contract|post|appointment|"
     r"engagement))\b",
     re.I)
@@ -84,7 +99,12 @@ FIXED = re.compile(
 # contracts, so "contract" counts only standing alone at the end of a part of the title or
 # in brackets.
 TITLE_TERMS = re.compile(
-    r"\bfixed[- ]term\b|\bFTC\b|\btemporary\b|\btemp\b|\b\d+[- ]months?\b|\binterim\b|"
+    r"\bfixed[- ]term\b|\bFTC\b|\btemporary\b|\btemp\b|\b\d+[- ]months?\b|"
+    # "Interim Finance Analyst" holds the job for a while; "Interim and Annual Reporting"
+    # is the work, a company's half-year accounts.
+    r"\binterim\b(?!\s*(?:and\b|&|/)|\s+(?:reporting|reports?|results|"
+    r"accounts|financials?|statements?|close|audits?|dividends?|filings?|management "
+    r"accounts)\b)|"
     r"\bmat(?:ernity)? cover\b|\b(?:maternity|paternity|parental)(?: leave)? cover\b|"
     r"\(\s*(?:contract|contractor|freelance)\s*\)|"
     r"[-\u2013|,]\s*(?:contract|contractor|freelance)\s*(?=$|[-\u2013|,(])|"
@@ -99,8 +119,22 @@ CONTRACT = re.compile(
     r"eight|nine|ten|eleven|twelve|eighteen)|for\s+\d|with\b))|"
     r"\b" + _N + r"[- ](?:month|week)s?(?:[- ]long)?\s+(?:contract|assignment|engagement)\b|"
     r"\b(?:initial|initially)\s+(?:\d+|" + _N[1:-1] + r")[- ]month (?:term|contract|period|assignment)\b|"
-    r"\bcontract (?:until|till|through|ending|to (?:the )?end of)\b|"
-    r"\b(?:inside|outside) IR35\b|\bIR35\b|\bday rate\b|\bfreelance (?:role|engagement|basis|contract|work)\b|"
+    # "Contract until June 2027" is the job's end; "every supplier contract until
+    # signature" is the work. So the end has to be a date.
+    r"\bcontract (?:until|till|through|ending(?: on| in)?|to|runs? (?:until|to|through))\s+"
+    r"(?:(?:the )?end of\s+)?(?:" + _MONTH + r"(?=\s|$|[.,;])|\d{1,2}(?:st|nd|rd|th)?\s|\d{4}\b|"
+    r"(?:the |this |next )?(?:financial|calendar|fiscal|academic|school) year\b|further notice\b|"
+    r"(?:this|next) year\b)|"
+    # IR35 as the engagement's status, never the work ("our IR35 compliance reviews",
+    # "whether each contractor sits inside or outside IR35"). A day rate as pay, never a
+    # product ("spot and day rate pricing").
+    r"(?<!inside or )(?<!inside and )(?<!in or )\b(?:inside|outside) (?:of )?IR35\b(?!\s+(?:or|and)\b)|"
+    r"\bIR35(?: status| determination| position)?\W{1,3}\s*(?:inside|outside)\b(?!\s+(?:or|and)\b)|"
+    r"\bday rate\W{0,3}\s*(?:of\s+|is\s+|up to\s+|from\s+|between\s+|c\.?\s*|circa\s+|around\s+)*[£$€]?\s?\d|"
+    r"\b(?:competitive|negotiable|attractive|excellent|market|daily) day rate\b|"
+    r"\bday rate (?:negotiable|dependent|depending|DOE|available|on offer|paid)\b|"
+    r"[£$€]\s?\d[\d,.]*\s?(?:k\s?)?(?:-|\u2013|to)?\s*(?:[£$€]\s?\d[\d,.]*\s?)?(?:per day|a day|/\s?day|p/?d)\b|"
+    r"\bfreelance (?:role|engagement|basis|contract|work)\b|"
     r"\b(?:employment|job|position|contract|work) type\W{0,3}\s*(?:contract|contractor|"
     r"temporary|fixed[- ]term|freelance)\b|\bcontract[- ]to[- ](?:hire|perm\w*)\b|\bcontractor (?:role|position|basis)\b",
     re.I)
@@ -269,8 +303,21 @@ def _names_home(s: str) -> bool:
         m and re.search(r"\b%s\b" % re.escape(str(m).lower()), low) for m in places.METRO)
 
 
+# "£45,000 - £50,000 plus London weighting of £4,000": an allowance on top of the band,
+# never the band's place. The band itself is the national one.
+_ALLOWANCE = re.compile(r"\b(?:(?:inner|outer)\s+)?[\w-]+(?:\s+[\w-]+)?\s+(?:weighting|"
+                        r"(?:location |cost[- ]of[- ]living |area )?allowance|supplement)\b", re.I)
+
+
+def _names_metro(s: str) -> bool:
+    import places
+    low = (s or "").lower()
+    return any(m and re.search(r"\b%s\b" % re.escape(str(m).lower()), low) for m in places.METRO)
+
+
 def _elsewhere(s: str) -> str:
     """The place another than the person's own a pay sentence names, or ""."""
+    s = _ALLOWANCE.sub(" ", s or "")
     if _names_home(s):
         return ""
     import places
@@ -313,18 +360,41 @@ def _money_value(tok: str) -> int | None:
     return int(round(n * (1000 if k else 1)))
 
 
+_GAP = re.compile(r"\s*(?:/|;|,?\s+(?:and|or|while|whereas|but)\b|,)\s*", re.I)
+
+
 def _bands_in(sentence: str) -> list:
     """[(low, high, clause)] for each pay band a sentence states, each with the words
-    around it up to the next band: the clause that says where that band applies."""
-    found = list(_BAND.finditer(sentence or ""))
+    around it: the clause that says where that band applies. The words between two
+    bands are split where they break ("(London) / £40,000", "in London, and £40,000"),
+    the first part the earlier band's and the rest the later one's, so "(London)" after
+    the first band is never read as the place of the second."""
+    sentence = sentence or ""
+    found = list(_BAND.finditer(sentence))
+    cuts = []
+    for a, b in zip(found, found[1:]):
+        gap = sentence[a.end():b.start()]
+        brk = _GAP.search(gap)
+        cuts.append(a.end() + (brk.start() if brk else 0))
     out = []
     for i, m in enumerate(found):
-        start = found[i - 1].end() if i else 0
-        end = found[i + 1].start() if i + 1 < len(found) else len(sentence)
+        start = cuts[i - 1] if i else 0
+        end = cuts[i] if i < len(cuts) else len(sentence)
         lo, hi = _money_value(m.group(1)), _money_value(m.group(2))
         if lo and hi:
             out.append((lo, hi, sentence[start:end]))
     return out
+
+
+def _standing(clause: str) -> int:
+    """How surely a band is the person's own: 3 names their metro, 2 their region or
+    country, 1 no place at all ("(national)"), 0 somewhere else."""
+    if _elsewhere(clause):
+        return 0
+    bare = _ALLOWANCE.sub(" ", clause)
+    if _names_metro(bare):
+        return 3
+    return 2 if _names_home(bare) else 1
 
 
 def pay(text: str) -> dict:
@@ -335,14 +405,16 @@ def pay(text: str) -> dict:
     cur = ts.CODE or ts.CUR
     if lo or hi:
         place = _elsewhere(quote)
-        if place:
+        bands = [b + (_standing(b[2]),) for b in _bands_in(quote)]
+        if place or len({b[3] for b in bands}) > 1:
             # "£40,000 to £48,000, or £52,000 to £60,000 for London-based colleagues": the
             # band with no other place beside it is the person's own, and the posting
-            # does state pay for where they are.
-            for band_lo, band_hi, clause in _bands_in(quote):
-                if not _elsewhere(clause):
-                    return {"low": band_lo, "high": band_hi, "currency": cur, "quote": quote,
-                            "where": "home"}
+            # does state pay for where they are. One that names their own city beats one
+            # for the country ("(London) / (national)" for someone in London).
+            best = max(bands, key=lambda b: b[3], default=None)
+            if best and best[3]:
+                return {"low": best[0], "high": best[1], "currency": cur, "quote": quote,
+                        "where": "home"}
         return {"low": lo, "high": hi, "currency": cur, "quote": quote,
                 "where": ("elsewhere: " + place) if place else "home"}
     for s in _sentences(text):

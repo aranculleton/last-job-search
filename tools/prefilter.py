@@ -248,6 +248,13 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
             if named:
                 return "FLAG", (f"remote, but names {named[0]}; whether that includes "
                                 f"{_HOME} is for Tier 2")
+            # A state or province in another country is not a nominal office either:
+            # "Remote, CA" and "Remote, California" passed clean for somebody in the UK.
+            # It is flagged the same way (places.subdivision_abroad).
+            state = _places.subdivision_abroad(loc or "", _CC)
+            if state:
+                return "FLAG", (f"remote, but names {state}, a state or province outside "
+                                f"{_HOME}; whether that includes {_HOME} is for Tier 2")
         return "PASS", "explicitly remote; the stated city is a nominal office"
     if not low:
         return "FLAG", "no location stated; Tier 2 decides"
@@ -271,6 +278,15 @@ def location_verdict(loc: str, title: str = "") -> tuple[str, str]:
     if prov in (None, _HOME_REGION):
         for g in METRO:
             if re.search(r"(?<!\w)" + re.escape(g) + r"(?!\w)", low):
+                # A home city's name beside another country's state or province is that
+                # place, not home: "Manchester, NH", "Sale, VIC" and "Salford, ON" passed as
+                # Greater Manchester. The state is read the way the remote branch reads it
+                # (places.subdivision_abroad).
+                state = _places.subdivision_abroad(loc or "", _CC)
+                if state:
+                    return "FAIL", (f"on-site in {state}, a state or province outside "
+                                    f"{_HOME}, in a town that shares a {_METRO} name; "
+                                    f"relocation abroad is a deal-breaker")
                 return "PASS", f"{_METRO} ({g})"
     for o in OUTSIDE:
         if _has(low, o):

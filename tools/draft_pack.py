@@ -212,7 +212,7 @@ def _lines(name: str) -> list[str]:
 
 
 def _hex(text: str, n: int = 4) -> str:
-    return hashlib.sha1(plain(text).lower().encode("utf-8")).hexdigest()[:n]
+    return hashlib.sha1(plain(text).lower().encode("utf-8", errors="surrogatepass")).hexdigest()[:n]
 
 
 def _words(text: str) -> set[str]:

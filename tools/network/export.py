@@ -480,8 +480,11 @@ def _attachment(row) -> str:
         return ""
     urls = _URLS.findall(raw)
     names = [os.path.basename(u.split("?")[0]) for u in urls] if urls else [raw]
-    said = " ".join(names) + " " + str(row.get("CONTENT") or "")
-    what = "a resume" if _RESUME.search(said) else "an attachment"
+    # A file is a resume by `state.is_resume_file`, the reader the app's own log uses:
+    # "_" is a word character, so "Morgan_Ellis_CV_KestrelMutual.pdf", the app's own
+    # <Prefix>_CV_<ABBR> name, was "an attachment" here and the resume stayed owed.
+    what = ("a resume" if any(_state().is_resume_file(n) for n in names)
+            or _RESUME.search(str(row.get("CONTENT") or "")) else "an attachment")
     shown = ", ".join(n for n in names if n and "." in n and len(n) <= 80)
     return f"{what} attached" + (f" ({shown})" if shown else "")
 
@@ -489,6 +492,15 @@ def _attachment(row) -> str:
 # What the import writes about an attachment, in a row's summary: "; a resume attached
 # (Resume.pdf)". Read back, it is the attachment a message with no words is known by.
 _ATTACHED = re.compile(r"\b(?:a resume|an attachment) attached(?: \([^)]*\))?")
+
+
+def _file_names(summary) -> set:
+    """The file names (no folder, lower case) an attachment marker names, in a row's
+    summary or in `_attachment`'s words: "documents/cv/Morgan_Ellis_CV.pdf" logged by the
+    app and "Morgan_Ellis_CV.pdf" in the export are one file."""
+    return {os.path.basename(f.replace("\\", "/")).lower()
+            for f in _state().attached({"summary": str(summary or "")})
+            if f and f != _state().NOT_KEPT}
 
 
 def _same_attachment(row, attached: str) -> bool:
@@ -602,6 +614,20 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                                                         MESSAGE_SLACK_DAYS) \
                     and same_text(r.get("full_text"), text):
                 return
+        files = _file_names(attached)
+        if not text and files:
+            # A resume sent alone on LinkedIn, which the app logged with words: it needs
+            # words to log a message, and the person wrote what they did ("Sent my CV as an
+            # attachment."). The same day, way and file is that message, words or not; a
+            # second, wordless row beside it was the same resume twice (2026-10-21).
+            for r in rows:
+                if (id(r) not in claimed and st._direction(r) == direction
+                        and _near(st.as_date(r.get("date")), when, MESSAGE_SLACK_DAYS)
+                        and files & _file_names(r.get("summary")) and not st.is_request(r)
+                        and not st.is_acceptance(r) and not st.is_withdrawal(r)
+                        and not st.is_call(r)):
+                    claimed.add(id(r))
+                    return
         if not text:
             # A message with no words (a resume sent alone) has no text to match on, and was
             # added again on every run: the same day, way and attachment is the same message.

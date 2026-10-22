@@ -13,6 +13,9 @@ Two holes let an invented claim through the code audit with nothing for the mode
   audit took numbers from the researcher's own `claim` as well as the quote; a one-word
   quote passed the substring check and was stamped `quote_checked`; and a search summary
   marked `read: false` was cited like any fact.
+- **A lone surrogate stopped the audit of the whole batch.** A quote holding half an emoji
+  ("\\ud83d", as a page cut short leaves it) raised UnicodeEncodeError in the research hash,
+  the draft's md5 and the audit record, so no pick in the round was audited.
 
 Every employer, posting and figure here is invented.
 """
@@ -33,7 +36,7 @@ import pytest  # noqa: E402
 import company_research  # noqa: E402
 import draft_audit  # noqa: E402
 import draft_pack  # noqa: E402
-from test_one_drafting_call_per_posting import FIXTURE, WORKFLOW, store_pages  # noqa: E402
+from test_one_drafting_call_per_posting import FIXTURE, SLUG, WORKFLOW, make_round, store_pages  # noqa: E402,E501
 
 GOOD = FIXTURE["draft"]
 PICK = {"company": FIXTURE["company"], "role": FIXTURE["role"], "slug": FIXTURE["slug"],
@@ -202,9 +205,61 @@ def test_the_workflow_hashes_the_research_the_way_the_audit_does():
     research = {"facts": [{"claim": "Café “opened”", "quote": "a quote \U0001F600",
                            "url": "u", "caution": "old", "read": False},
                           {"claim": None, "quote": "q"}, "not a fact"]}
-    for r in (FIXTURE["research"], research):
+    for r in (FIXTURE["research"], research, _HALF_AN_EMOJI):
         got = json.loads(subprocess.run(["node", "-e", probe, WORKFLOW, json.dumps(r)],
                                         capture_output=True, text=True, check=True).stdout)
         assert got == [draft_audit.research_hash(r), draft_pack.research_lines(r)]
     # A search summary is marked for the drafter in both copies of the lines.
     assert "NOT READ ON THE PAGE" in draft_pack.research_lines(research)
+
+
+_HALF_AN_EMOJI = {"facts": [{"claim": "Kestrel Mutual looks after homes \ud83d",
+                             "quote": "We look after 1.2 million homes across the north \ud83d",
+                             "url": "https://kestrel.example/about\ud83d"},
+                            {"claim": "A second fact", "quote": "a whole emoji \U0001F3E0 here"}]}
+
+
+def _fnv_over_code_units(text):
+    # UTF-16 code units, worked out by hand: a character past U+FFFF is two, anything else
+    # (a lone surrogate included) is one, as JavaScript's charCodeAt reads them.
+    h = 0x811C9DC5
+    for ch in text:
+        n = ord(ch)
+        units = [0xD800 + ((n - 0x10000) >> 10), 0xDC00 + ((n - 0x10000) & 0x3FF)] \
+            if n > 0xFFFF else [n]
+        for u in units:
+            h ^= u
+            h = (h * 0x01000193) & 0xFFFFFFFF
+    return "%08x" % h
+
+
+def test_half_an_emoji_is_hashed_like_any_other_code_unit():
+    want = _fnv_over_code_units(draft_pack.research_lines(_HALF_AN_EMOJI))
+    assert draft_audit.research_hash(_HALF_AN_EMOJI) == want
+    assert draft_audit.research_hash(FIXTURE["research"]) == \
+        _fnv_over_code_units(draft_pack.research_lines(FIXTURE["research"]))
+    # Valid text keeps the md5 it always had; a lone surrogate gets one too.
+    plain = {"p4": "Café, naïve, Zoë \U0001F600"}
+    import hashlib
+    assert draft_audit.md5(plain) == hashlib.md5(json.dumps(
+        plain, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+    assert draft_audit.md5({"p4": "x \ud83d"}) != draft_audit.md5({"p4": "x \ud83e"})
+
+
+def test_half_an_emoji_never_stops_the_batch_audit(tmp_path, monkeypatch, capsys):
+    import stage_picks
+    d = copy.deepcopy(GOOD)
+    d["p4"] = d["p4"] + " \ud83d"
+    rd = make_round(tmp_path, draft=d, slugs=(SLUG, SLUG + "_2"))
+    res = copy.deepcopy(FIXTURE["research"])
+    res["facts"][0]["quote"] += " \ud83d"
+    (rd / f"research_{SLUG}.json").write_text(json.dumps(res), encoding="utf-8")
+    results = stage_picks.audit(str(rd))
+    assert [r["slug"] for r in results] == [SLUG, SLUG + "_2"]
+    assert all(r["verdict"] in ("needs_model", "pass", "fixed", "reject") for r in results)
+    record = json.loads((rd / f"audit_{SLUG}.json").read_text(encoding="utf-8"))
+    assert record["draft"]["p4"].endswith("\ud83d")
+    # And the drafter's --json view prints.
+    monkeypatch.setattr(sys, "argv", ["stage_picks.py", "audit", str(rd), "--json"])
+    stage_picks.main()
+    assert json.loads(capsys.readouterr().out)[0]["slug"] == SLUG

@@ -128,6 +128,7 @@ Fernwick Foods          # invented employer, tests/test_a_second_language_asked_
 Brindlehart Freight     # invented employer, tests/test_the_screen_reads_a_status_a_team_and_a_schedule.py
 Native Japanese         # a language requirement as a posting writes it, not a name
 Fluent German           # a language requirement as a posting writes it, not a name
+Fluent Hindi            # a language requirement as a posting writes it, not a name
 New York-wide           # a place, an invented profile's region reason in a test
 Master Production Schedule  # a supply-chain term, tools/text_screen.py NOT_A_DEGREE
 Master Scheduler        # a supply-chain job, tools/text_screen.py NOT_A_DEGREE
@@ -142,3 +143,11 @@ Ysolde Brackwater       # invented, tests/test_the_code_audit_reads_what_it_was_
 Maternity Leave Cover   # a job title's terms, tests/test_a_postings_terms_are_read_both_ways.py
 Data Analyst Contractor # a job title, tests/test_a_postings_terms_are_read_both_ways.py
 Interim Finance Analyst # a job title, tests/test_a_postings_terms_are_read_both_ways.py
+Tax Data Analyst        # a job title, tests/test_a_postings_terms_are_read_both_ways.py
+Quillmere Foods         # invented employer, tests/test_a_postings_terms_are_read_both_ways.py
+Fixed Term              # a job's terms in a posting title, tests/test_a_draft_never_crosses_to_another_role.py
+Underwriting Analyst    # a job title, tests/test_a_draft_never_crosses_to_another_role.py
+Renee Thistlewood       # invented, tests/test_the_code_audit_reads_what_it_was_missing.py
+Inigo Ibarrondo         # invented, the same test
+Soren Halvardsen        # invented, the same test
+Lucja Wrobelska         # invented, the same test

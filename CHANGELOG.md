@@ -276,6 +276,51 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A second language stated as a requirement is cut again when a preference word in the
+  same sentence is about something else** ("Fluent Portuguese is required to support our
+  priority accounts"), and saved rulings like it are no longer released. A language asked as
+  a nice-to-have ("a huge plus", "Desired:", "Bonus:", "an asset", "would be great"), or
+  listed under a heading such as "Nice to have:" or "Preferred qualifications:", is ranked,
+  your profile's own language included; one under "Requirements:" or "Must have:" still cuts.
+- **The credential gate is lifted only by a sentence saying the credential itself is a
+  preference or not needed**, never by a welcome, inclusion, accommodation or "priority"
+  line.
+- **A sentence ending "in the U.S." is no longer joined to the next and cut as a citizenship
+  condition**, and rulings saved that way are released.
+- **Places:** a remote role in a state or province of another country ("Remote, CA",
+  "Remote, California") is flagged for a closer read; an on-site town abroad that shares a
+  home town's name ("Manchester, NH") no longer passes as home; and the residence cut reads
+  a region named alone ("open to candidates in APAC only") the way the location gate reads
+  "Remote - APAC".
+- **A heading word inside a sentence no longer splits it** ("Actuarial qualifications are not
+  required, but..."), and "Preferred Qualifications" is read as one heading, so a degree
+  listed under it is not read as a minimum. Every public screen function takes an empty
+  value without crashing.
+- **LinkedIn's export knows the app's own resume file names**, so a resume you sent there
+  stops being owed, and a resume you logged with its words is not added again without them.
+  A resume sent through the portal, or attached to your LinkedIn profile, does not count as
+  reaching the contact.
+- **"Apply and put me down as your referrer" is one route everywhere.** Staging
+  (`--referral-field`), the tracker note and `outreach.md` say it goes in through the portal
+  under their name, and RECONCILE no longer asks you to log a message that never goes.
+- **A company named as the subject of "is no longer part of" is not an automatic reply about
+  a person leaving**, and a CV you logged is shown in your own word and case ("CV sent ... a
+  CV attached").
+- **Permanent jobs are no longer held as contracts** for "a long-term position", a project's
+  typical duration, day rate pricing, a supplier contract until signature, IR35 compliance
+  work or "Interim Reporting" in a title; "the duration of the contract is 6 months" and
+  "£450 per day" are. Pay written "(London) / (national)" or with a London weighting is read
+  as your own band.
+- **A draft for one role is never read as another role's at the same employer**, even when
+  the earlier pick is no longer staged, and file names never take a requisition code or a
+  gender marker ("REQ2026", "m/w/d").
+- **The code audit reads concessions only in sentences about you**, so a letter about the
+  team's managers is not refused. A call's length, a stretch of time and a date are not
+  checked as figures; "over a decade" and "by a factor of three" are. Half an emoji in
+  research or a draft no longer stops the batch audit, and a named contact written without
+  accents is the same person.
+- **`stage_picks.py single --for-contact` with a role but no posting file asks for the
+  posting**, rather than saying no role was named.
 - **Rebuilding an interview pack keeps every line and section you wrote, where you put it.**
   The tool keeps a record of what it wrote (`.interview_prep.built.json`) and changes only
   its own lines. A rebuild that would lose a line of yours writes nothing and says so, and a
@@ -357,12 +402,16 @@ make sense to somebody whose repo just received it.
 - **A note rests on its own reader.**
   - Approved examples are shown to the drafter without their reader's name and employer, and
     a first note naming the person or employer an example was written for is refused when it
-    is for someone else. A waiting note queued before this check is listed for a rewrite.
+    is for someone else, unless it is the referrer, the referrer's employer or the reader's
+    own past employer. A wrong refusal can be lifted for one reader with your reason kept
+    (`reading.py draft --own-facts "<why>"`). A waiting note queued before this check is
+    listed for a rewrite.
   - Notes below a line of `---` in a queued draft are never read, checked or logged as part
     of the note.
   - The per-employer limit reads the message log, so someone who replied is not counted as
     waiting.
-  - A greeting that starts the person's given name (three letters or more) is theirs.
+  - A greeting that starts the person's given name (three letters or more) is theirs, unless
+    someone else in your contact book answers to it.
   - An out-of-office reply that offers to help is read as a person, and a sentence about a
     team is no longer read as a "no longer with us" message.
   - A recruiter hiring nationally is not cautioned for two cities on their page.
@@ -397,8 +446,10 @@ make sense to somebody whose repo just received it.
 - **"I'll pass it on" is a referral, and a bare "I'll pass" is a no.** "Send me your CV and
   I'll pass it on" was read as a decline, which hid the resume ask beside it and counted
   towards the two declines that end a thread. "Thanks, but I'll pass." was read as an offer
-  of an introduction, and "I will pass on this one" as nothing at all. Both now read as a
-  no.
+  of an introduction, and "I will pass on this one" as nothing at all. "I'll pass", "I'll
+  pass on this one" and "I'll pass on the opportunity" are now a no; passing on your CV or
+  details is still a referral. A polite "I'm not sure I can help" is a no too, and a no that
+  points you on to someone is a referral that never counts towards the two nos.
 - **A short paste of a page that loaded is no longer "did not render".** A labelled paste or a
   structured extract is read as the page. A page read before it was scrolled to its end,
   with no Experience on it, is asked for again rather than counted as a failure.

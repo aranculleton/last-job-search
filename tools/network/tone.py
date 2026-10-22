@@ -570,9 +570,37 @@ def _their_names(name) -> set:
 SHORT_FORM_LETTERS = 3
 
 
-def wrong_greeting(text, name) -> list:
+def _given_names(name) -> set:
+    """The given names someone is greeted by: the one they go by and its parts."""
+    return {_fold_name(p) for g_ in (first_name(name), preferred_name(name))
+            for p in str(g_ or "").split("-") if p}
+
+
+def _someone_elses(greeting: str, given: set, name, others) -> bool:
+    """Is a greeting that only starts this reader's given name somebody else's name? Another
+    person in the book (or the batch) is greeted by it, or a name of theirs it starts is a
+    closer fit than this reader's. "Hi Raj" saved under Rajesh Venn, with Raj Allard in the
+    book, is Raj's note shuffled onto Rajesh (2026-10-21)."""
+    mine = _fold_name(_plain(name))
+    closest = min((len(n) for n in given if n.startswith(greeting)), default=0)
+    for other in others or ():
+        if not other or _fold_name(_plain(other)) == mine:
+            continue
+        for n in _given_names(other):
+            if n == greeting or same_given_name(greeting, n):
+                return True
+            if n.startswith(greeting) and len(n) < closest:
+                return True
+    return False
+
+
+def wrong_greeting(text, name, others=()) -> list:
     """[the greeting_wrong_name Violation] when the salutation greets somebody other than
-    `name`, else []. Nothing is judged without a name, or with a greeting to nobody by name."""
+    `name`, else []. Nothing is judged without a name, or with a greeting to nobody by name.
+
+    `others` is everybody else the note could have been for (the contact book, the batch):
+    a greeting that only starts this reader's given name is theirs unless it is one of
+    those people's names, or starts one of them more closely."""
     if not name:
         return []
     names = greeted(text)
@@ -587,13 +615,13 @@ def wrong_greeting(text, name) -> list:
     # Oluwaseun, "Max" for Maximilian) is theirs: the table of English short forms alone
     # refused every one of those (2026-10-21). Three letters at least, so one stray letter
     # pair never passes for a name.
-    given = {_fold_name(p) for g_ in (first_name(name), preferred_name(name))
-             for p in str(g_ or "").split("-") if p}
+    given = _given_names(name)
     for g in names:
         f = _fold_name(g)
         if (f in ok or any(same_given_name(f, n) for n in ok)
                 or any(f.startswith(i) for i in initials)
-                or (len(f) >= SHORT_FORM_LETTERS and any(n.startswith(f) for n in given))):
+                or (len(f) >= SHORT_FORM_LETTERS and any(n.startswith(f) for n in given)
+                    and not _someone_elses(f, given, name, others))):
             return []
     return [Violation("greeting_wrong_name",
                       "greets %s, but this message is for %s" % (" and ".join(names), name))]
@@ -929,7 +957,7 @@ def _person_dislikes(text) -> list:
     return [Violation("person_dislikes", m) for m in learned.dislikes(text)]
 
 
-def check(text, recipient_seniority="peer", name=None, live_thread=False) -> list:
+def check(text, recipient_seniority="peer", name=None, live_thread=False, others=()) -> list:
     """Every tone violation in `text`, as (rule, offending_text) pairs.
 
     Returns rather than raises: a draft usually breaks two or three rules at
@@ -938,12 +966,14 @@ def check(text, recipient_seniority="peer", name=None, live_thread=False) -> lis
     `live_thread=True` drops COLD_ONLY_RULES. Pass it whenever the recipient has
     already replied: the register is different and enforcing cold-open rules
     there is what makes a warm reply read like a form letter.
+
+    `others` is the names of everybody else the message could be for (`wrong_greeting`).
     """
     plain = _plain(text)
     found = (_dashes(plain)
             + _banned(plain)
             + _name_starts_sentence(plain, name)
-            + wrong_greeting(plain, name)
+            + wrong_greeting(plain, name, others)
             + _opens_with_laugh(plain)
             + _stacked_thanks(plain)
             + _exclamation(plain, recipient_seniority)

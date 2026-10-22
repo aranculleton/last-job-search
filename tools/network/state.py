@@ -904,15 +904,68 @@ _ENGAGED = re.compile(
 # no longer at Acme" is them, writing, and reply.py reads that; "our team is no longer part
 # of the Manchester office" is a person explaining, and was read as the template.
 _SUBJECT_OF_LEFT = (r"(?:\b(?:[Hh]e|[Ss]he|[Tt]hey)\s+"
-                    r"|\b(?!(?:We|I|You|It|Our|My|Your|This|That|There|The)\b)[A-Z][\w'-]+"
-                    r"(?: [A-Z][\w'-]+){0,2}\s+"
+                    r"|\b(?P<who>(?!(?:We|I|You|It|Our|My|Your|This|That|There|The)\b)[A-Z][\w'-]+"
+                    r"(?: [A-Z][\w'-]+){0,2})\s+"
                     # "The person you are trying to reach is no longer with ...": a person
                     # named by their place in the template, anywhere in the sentence.
                     r"|(?i:\b(?:person|employee|individual|recipient|colleague|team member|"
                     r"staff member|user|addressee)\b)[^.!?\n]{0,60}?\s)")
-_LEFT = re.compile(_SUBJECT_OF_LEFT + r"(?i:(?:is|are) no longer (?:with|at|employed (?:by|at)|"
+_LEFT = re.compile(_SUBJECT_OF_LEFT + r"(?i:(?:is|are) no longer (?P<how>with|at|employed (?:by|at)|"
                    r"working (?:for|at)|part of)\b|has left (?:the (?:company|firm|business|"
                    r"organi[sz]ation|team)))")
+# A capitalised subject that is an organisation, not a person: "Fernhill Freight is no
+# longer part of the Brindle group, so I'm not sure I can help" is a person explaining,
+# and was read as the "no longer with us" template, so nothing was drafted and the decline
+# was never counted (2026-10-21). An organisation by a word in its name, by the group it
+# is "no longer part of", or by being an employer in the contact book.
+_ORG_WORD = re.compile(
+    r"\b(?:group|holdings|ltd|limited|inc|llc|llp|plc|corp|corporation|company|co|gmbh|bank|"
+    r"partners|partnership|team|office|department|division|unit|business|firm|agency|fund|"
+    r"trust|foundation|council|authority|ministry|university|college|school|hospital|"
+    r"services|solutions|technologies|technology|software|insurance|international|global|"
+    r"labs?|systems)\b", re.I)
+_ORG_OBJECT = re.compile(r"\s*(?:the|a|an|our|its)\s+[^.!?\n]{0,40}?\b(?:group|family|portfolio|"
+                         r"network|alliance|business|brand|parent|company)\b", re.I)
+_BOOK_EMPLOYERS: dict = {}
+
+
+def _book_employers() -> set:
+    """The employer keys in the contact book, read once per change to it; never raises."""
+    p = person.state("network_contacts.csv")
+    try:
+        stamp = os.path.getmtime(p)
+    except OSError:
+        return set()
+    if _BOOK_EMPLOYERS.get("key") != (p, stamp):
+        try:
+            import csv_store
+            rows = csv_store.read_rows(p)
+        except Exception:  # noqa: BLE001  an unreadable book: judged on the words alone
+            rows = []
+        _BOOK_EMPLOYERS.update(key=(p, stamp), keys={k for k in (row_company_key(r)
+                                                                 for r in rows) if k})
+    return _BOOK_EMPLOYERS.get("keys") or set()
+
+
+def _an_organisation(m, words) -> bool:
+    """Is the capitalised subject of this "no longer with" match an organisation?"""
+    who = m.group("who")
+    if not who:
+        return False
+    if _ORG_WORD.search(who):
+        return True
+    if (m.group("how") or "").lower() == "part of" and _ORG_OBJECT.match(words, m.end()):
+        return True
+    k = company_key(who)
+    return bool(k) and k in _book_employers()
+
+
+def _left(words):
+    """The "no longer with" template's sentence about a person, or None."""
+    for m in _LEFT.finditer(words):
+        if not _an_organisation(m, words):
+            return m
+    return None
 
 _MONTHS = {m: i for i, names in enumerate((
     ("jan", "january"), ("feb", "february"), ("mar", "march"), ("apr", "april"), ("may",),
@@ -971,7 +1024,7 @@ def auto_reply(text, subject="", sent_on=None) -> dict | None:
     """
     body = str(text or "")
     words = "%s\n%s" % (subject or "", body)
-    left = _LEFT.search(words)
+    left = _left(words)
     said = _AUTO_SAYS.search(words)
     away = _AWAY.search(words)
     if left and (said or not _ENGAGED.search(body)):
@@ -2661,10 +2714,26 @@ def attached(row) -> list[str]:
 
 
 def shown_summary(row) -> str:
-    """A row's summary as a line says it: lower case, the file it names as it is spelled."""
+    """A row's summary as a line says it, mid-sentence: its first word in lower case unless
+    it is written in capitals ("CV sent", never "cv sent"), every other word as it is
+    spelled ("LinkedIn's export"), and a resume it carries called by the person's own word
+    ("a CV attached"). The stored marker stays the one word every reader shares (_ATTACHED):
+    shown whole in lower case, a CV person read "cv sent (message), as asked; a resume
+    attached" (2026-10-21)."""
     summary = str((row or {}).get("summary") or "")
-    m = _ATTACHED.search(summary)
-    return summary.lower() if not m else summary[:m.start()].lower() + summary[m.start():]
+    own = noun()
+    first = re.match(r"[^\W\d_][\w'\u2019-]*", summary)
+    word = first.group(0) if first else ""
+    if word.lower() == own.lower():
+        summary = own + summary[len(word):]            # their word, as they spell it
+    elif word and not word.isupper() and word[1:] == word[1:].lower():
+        summary = summary[:1].lower() + summary[1:]
+
+    def said(m):
+        if m.group(1).lower() == "an attachment":
+            return m.group(0)
+        return f"a {own} attached" + (f" ({m.group(2)})" if m.group(2) is not None else "")
+    return _ATTACHED.sub(said, summary)
 
 
 def _marked(row) -> list:
@@ -2696,7 +2765,15 @@ _NOT_THIS_ONE = re.compile(
     r"\bfollow(?:ing|ed)?[ -]?up on\b|\bthank(?:s| you)\b[^.!?\n]{0,30}\b(?:pass|passing|"
     r"forward|forwarding|sharing|for)\b|\b(?:will|I'?ll|can|happy to|shall I|should I|"
     r"want me to)\s+(?:send|share|email|forward)\b"
-    r"|\b(?:not|never|haven'?t|hasn'?t|didn'?t|without)\b", re.I)
+    r"|\b(?:not|never|haven'?t|hasn'?t|didn'?t|without)\b"
+    # A resume that went to the employer, or sits on their profile, never reached the
+    # contact: "my CV went through the portal this morning", "I applied with my CV", "my
+    # CV is attached to my LinkedIn profile" each closed a resume owed (2026-10-21).
+    r"|\bthrough\s+(?:the|your|their|its)\s+(?:[\w'-]+\s+)?(?:portal|careers?\s+(?:site|"
+    r"page|portal)|website|site|system|ats|application\s+form)\b"
+    r"|\bapplied\b(?!\s+(?:the|your|their|those|these|all|some)\s+(?:[\w'-]+\s+)?"
+    r"(?:changes|edits|feedback|suggestions|tips|comments|notes)\b)"
+    r"|\b(?:to|on)\s+my\s+(?:linkedin\s+)?profile\b", re.I)
 
 
 def says_resume_went(row) -> bool:
@@ -2785,6 +2862,52 @@ def _row_records_resume(contact) -> bool:
                 or _owed_note_file(contact))
 
 
+# The two routes a resume made for a contact takes, said one way everywhere: staging,
+# the tracker row's notes (record_drafts.made_for_note), outreach.md and RECONCILE.
+# "Apply through the careers site and put me down as your referrer" is the portal route:
+# the resume goes in through the portal with their name in its referral field and never
+# to them, so no message of the person's ever logs it, and RECONCILE asked for one that
+# never happens (2026-10-21). Any other ask is the route to them.
+ROUTE_PORTAL, ROUTE_TO_THEM = "portal", "them"
+ROUTE_WORDS = {
+    ROUTE_PORTAL: "it goes in through the portal, with their name where it asks for a "
+                  "referrer, not to them",
+    ROUTE_TO_THEM: "it goes to them, not through the portal",
+}
+
+
+def route_words(route) -> str:
+    """How a resume made for a contact goes, in the words every place says it in."""
+    return ROUTE_WORDS[ROUTE_PORTAL if route == ROUTE_PORTAL else ROUTE_TO_THEM]
+
+
+def through_portal(row) -> bool:
+    """Does this tracker row say its resume goes in through the portal under the contact's
+    name (the portal route's words, the later of the two when a redraft added both)?"""
+    notes = " ".join(str((row or {}).get("notes") or "").split()).lower()
+    portal = notes.rfind(ROUTE_WORDS[ROUTE_PORTAL].lower())
+    return portal >= 0 and portal > notes.rfind(ROUTE_WORDS[ROUTE_TO_THEM].lower())
+
+
+def resume_route(threads, contact_id) -> str:
+    """How a resume for this contact goes, from what they said last about it: the portal
+    route when their latest message that asks for the resume or names a referral field
+    names the field, else the route to them."""
+    try:
+        import reply
+    except Exception:  # noqa: BLE001  the classifier unavailable: the route to them
+        return ROUTE_TO_THEM
+    for r in reversed(threads_for(threads, contact_id)):
+        if not said_something(r):
+            continue
+        text = str(r.get("full_text") or r.get("summary") or "")
+        if reply.REFERRAL_FIELD.search(text):
+            return ROUTE_PORTAL
+        if asks_for_resume(r):
+            return ROUTE_TO_THEM
+    return ROUTE_TO_THEM
+
+
 def made_for(row, contacts) -> dict | None:
     """The contact a tracker row's documents were made for, or who leads its process.
 
@@ -2851,8 +2974,11 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
         ask_at = next((i for i in range(len(rows) - 1, -1, -1) if asks_for_resume(rows[i])),
                       None)
         asked = as_date(rows[ask_at].get("date")) if ask_at is not None else None
+        # "Send me your CV", then "apply and put me down as your referrer": the later word
+        # sends it through the portal, so nothing is owed to them.
         if (ask_at is not None and not any(says_resume_went(r) for r in rows[ask_at + 1:])
-                and not _settled_since(contact, asked)):
+                and not _settled_since(contact, asked)
+                and resume_route(rows, cid) != ROUTE_PORTAL):
             made = [r for r in made_rows
                     if (as_date(r.get("date")) or datetime.date.min) >= (asked or datetime.date.min)]
             words = " ".join(str(rows[ask_at].get("full_text") or rows[ask_at].get("summary")
@@ -2864,9 +2990,10 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
             continue
         for r in made_rows:
             day = as_date(r.get("date"))
+            # Made for them to go in through the portal under their name: owed to nobody.
             if (str(r.get("status") or "").strip().lower() not in _THROTTLE_UNSENT
                     or any(d >= (day or datetime.date.min) for d in sent_on)
-                    or _settled_since(contact, day)):
+                    or _settled_since(contact, day) or through_portal(r)):
                 continue
             out.append(dict(base, made=day.isoformat() if day else "",
                             role=str(r.get("role") or "").strip(), file=_pdf(r["cv_file"]),
@@ -2929,6 +3056,10 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
         if contact is None:
             continue
         cid = str(contact.get("contact_id") or "").strip()
+        # The portal route: it went in through the portal under their name, never to them,
+        # so there is no message to log. Said by the row, or by what they asked for last.
+        if through_portal(row) or resume_route(threads, cid) == ROUTE_PORTAL:
+            continue
         day = as_date(row.get("date"))
         stem = _resume_stem(cv)
         went = [s for s in resumes_sent(threads, cid)
