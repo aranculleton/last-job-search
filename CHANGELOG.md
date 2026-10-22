@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.10.0] - 2026-10-22
+
 ### Added
 
 - **A resume a contact asked for is one record across chats.** When a networking chat logs
@@ -181,7 +183,8 @@ make sense to somebody whose repo just received it.
   doubling, and a board that asks for a crawl delay is fetched one request at a time. A
   round resumed from a saved scrape with `--expand` says before it widens that the wider
   round scrapes the portals live, since only they have the extra pages.
-- **If one of your own tests fails after this update**, these four changes are deliberate:
+- **Four deliberate changes can fail a test of your own.** If one fails after this update,
+  it is one of these:
   - A reply can now be read as an automatic one, a new scenario called `auto_reply`. It
     drafts nothing (0 sentences), because nothing is sent. A test that lists every reply
     scenario, or asks each for at least one sentence, needs to know about it.
@@ -221,15 +224,17 @@ make sense to somebody whose repo just received it.
   - checks every quote against the page.
 
   Research saved for a posting in another country is kept apart from the home entity's.
-- **A round is faster, and finds and ranks the same postings.**
+- **A round's search is faster, and it finds and ranks the same postings.**
   - Employer boards are read while the job boards are searched, not after.
   - The health check asks every board at once.
-  - A board with a crawl delay fetches its postings in a queue of its own, still its
-    delay apart, and the fetch says how far it has got.
-  - Measured offline on the pinned round: the scrape went from 18.8 to 10.8 seconds, and
-    the whole simulated round from about 77 to 64 seconds.
-  - Estimated for a real round: about 34 minutes down to 27 to 29. Real boards have not
-    been timed.
+  - A board with a crawl delay fetches its postings in a queue of its own, one at a time,
+    its full delay after each one ends, as the search's own sweep of it does, and the fetch
+    says how far it has got. No two requests reach it at once, which 3.9.0 allowed. That
+    part is slower than 3.9.0: each of that board's postings takes its fetch time longer.
+  - Measured offline on the pinned round against 3.9.0: the search went from 18.8 to 10.7
+    seconds. A whole simulated round with a paced board of 95 postings went from 64 to 72
+    seconds, and the paced board's fetches are the difference. Real boards have not been
+    timed.
   - Two orders change: postings tied on every score now always come out in the same order,
     and one posting found under two addresses is one row.
 - **A region beside "remote" is judged by whether it takes in your country.** For someone in
@@ -276,20 +281,6 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
-- **The leak scan finds an accented name written without its accents.** A name loses its
-  accents on the way into a filename, a slug or a contact id ("Zoë Quillfeather" becomes
-  zoe_quillfeather), and the scan matched only the form the denylist held, so it passed.
-  Letters with no accent to strip (ø, ł, æ, ß) are spelled out, and a name typed with
-  combining accents is the same name. It works one way only: a plain entry does not find an
-  accented word, or the app's invented "Renée" would fail the scan of everybody called
-  Renee. The app and its history were scanned again this way and are clean.
-- **The name guard reads a name with an accented letter in it.** It read capital and small
-  letters as ASCII only, so "Zoë Quillfeather" or "Íñigo Ibarrondo" was never a name and
-  passed, in a change and in PR text alike. Words the app already holds with accents
-  ("Montréal") are known, as plain ones always were.
-- **`rehearse_sync.py` rehearses a commit held only by `origin/master`**, as the new master is
-  once a PR merges. A clone copies branches alone, so the release candidate was "not a tree"
-  in the copy and the rehearsal stopped before it began.
 - **A second language stated as a requirement is cut again when a preference word in the
   same sentence is about something else** ("Fluent Portuguese is required to support our
   priority accounts"), and saved rulings like it are no longer released. A language asked as
@@ -301,11 +292,11 @@ make sense to somebody whose repo just received it.
   line.
 - **A sentence ending "in the U.S." is no longer joined to the next and cut as a citizenship
   condition**, and rulings saved that way are released.
-- **Places:** a remote role in a state or province of another country ("Remote, CA",
-  "Remote, California") is flagged for a closer read; an on-site town abroad that shares a
-  home town's name ("Manchester, NH") no longer passes as home; and the residence cut reads
-  a region named alone ("open to candidates in APAC only") the way the location gate reads
-  "Remote - APAC".
+- **A place abroad is read as abroad.** A remote role in a state or province of another
+  country ("Remote, CA", "Remote, California") is flagged for a closer read; an on-site town
+  abroad that shares a home town's name ("Manchester, NH") no longer passes as home; and the
+  residence cut reads a region named alone ("open to candidates in APAC only") the way the
+  location gate reads "Remote - APAC".
 - **A heading word inside a sentence no longer splits it** ("Actuarial qualifications are not
   required, but..."), and "Preferred Qualifications" is read as one heading, so a degree
   listed under it is not read as a minimum. Every public screen function takes an empty
@@ -589,6 +580,20 @@ make sense to somebody whose repo just received it.
 - **A rebuild with no stage named keeps the round's full name.** "Round 2 (technical)"
   became "Round 2", and the stages line held both. A stages line already doubled is put
   right on the next rebuild.
+- **The leak scan finds an accented name written without its accents.** A name loses its
+  accents on the way into a filename, a slug or a contact id ("Zoë Quillfeather" becomes
+  zoe_quillfeather), and the scan matched only the form the denylist held, so it passed.
+  Letters with no accent to strip (ø, ł, æ, ß) are spelled out, and a name typed with
+  combining accents is the same name. It works one way only: a plain entry does not find an
+  accented word, or the app's invented "Renée" would fail the scan of everybody called
+  Renee. The app and its history were scanned again this way and are clean.
+- **The name guard reads a name with an accented letter in it.** It read capital and small
+  letters as ASCII only, so "Zoë Quillfeather" or "Íñigo Ibarrondo" was never a name and
+  passed, in a change and in PR text alike. Words the app already holds with accents
+  ("Montréal") are known, as plain ones always were.
+- **`rehearse_sync.py` rehearses a commit held only by `origin/master`**, as the new master is
+  once a PR merges. A clone copies branches alone, so the release candidate was "not a tree"
+  in the copy and the rehearsal stopped before it began.
 
 ## [3.9.0] - 2026-10-20
 
