@@ -21,9 +21,8 @@ this chat can use, cheapest and safest first:
    search cannot prove someone has no profile, and nothing is fetched.
 4. **A read in their own browser**, where this chat has one: first the pages that hold many
    people at once (the sent-invitations list, a people search narrowed to the employer), then
-   the profiles of the people being written to: as many as the requests left this week and
-   three spare, never above `reading.READS_PER_RUN`,
-   each read as its card when the card decides it, paced (step 5).
+   the profiles of the people being written to, each read as its card when the card decides
+   it, one page at a time and as fast as the browser loads it (step 5).
 5. **A paste or screenshots from them**, for the best `reading.HAND_TOP` (3) at most, and only
    where there is no browser. It is never how the list is made, and never asked for everyone.
 
@@ -32,9 +31,8 @@ under the list, the one line `ladder` prints about what reading would add, and o
 for the top few. Rungs 1 to 3 use no LinkedIn account at all (a web search engine and their
 own file), so they cannot get anyone restricted; that is what makes the list faster than
 searching LinkedIn by hand without adding any risk. Only rung 4 uses their account. Nothing is sent, clicked, connected or submitted by any rung; the person
-acts. Automating a site can break its terms: LinkedIn's forbid automated access, so a browser
-read is paced, read only and the person's own choice, and lowers that risk without removing
-it. LinkedIn is never fetched from a session.
+acts. A browser read is read only, one page at a time and the person's own choice, and it
+stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
 
 ## Run it
 
@@ -103,20 +101,17 @@ it. LinkedIn is never fetched from a session.
    only when a look is worth it, and nothing otherwise. Act on that line alone: ask its question
    once, at the end of the reply.
 
-2. **Check the budget before searching.** `state.platform_budget(contacts, threads,
-   today)` returns the connection requests and InMail credits left on the person's
-   LinkedIn plan (`plan`), the personalised notes left this month on a free account,
-   and the drafts already queued and unsent (`queued_unsent`), which spend the same
-   budget the moment they go. There is no point producing fifteen drafts against five
-   remaining slots. Size the run to the week's budget, net of the queue, and say what it
-   is and how many can go today (`connections_left_today`, 25 by default inside the
-   week's 50, the app's planning cap rather than LinkedIn's, which publishes no number;
-   `CONNECTIONS_PER_WEEK` in `profile/networking.py` changes it): the rest stay queued and go
-   on the following days. Show drafts as they
-   are ready, five at a time, never only once the whole batch has been read.
-   `note` and `inmail_note` say what to do when a limit is reached: a request with no
-   note and the draft sent as a message after they accept, and no InMail on a free
-   account except to an Open Profile.
+2. **Check what the plan allows before searching.** `state.platform_budget(contacts,
+   threads, today)` returns the InMail credits left on the person's LinkedIn plan (`plan`),
+   the personalised notes left this month on a free account, the connection requests sent
+   this week and today, and the drafts already queued and unsent (`queued_unsent`). The app
+   sets no cap on connection requests (2026-10-22): LinkedIn publishes no number and says
+   itself when its weekly limit is reached, so never print or imply "N requests left". When
+   LinkedIn shows that limit, say so in its words and keep the rest queued for the next
+   week. Show drafts as they are ready, five at a time, never only once the whole batch has
+   been read. `note` and `inmail_note` say what to do when a plan's limit is reached: a
+   request with no note and the draft sent as a message after they accept, and no InMail on
+   a free account except to an Open Profile.
 
 3. **Where to look: this person's own plan, inside a fixed budget.**
    `python3 tools/network/sources.py "<employer>" ...` prints it: the kinds of place where
@@ -282,15 +277,11 @@ it. LinkedIn is never fetched from a session.
    the connections export); one-page reads screen it (the sent-invitations list once, an
    employer's People tab); and only then a profile read, for the people the person will write
    to today. Put the best by `why_them` on the day's short list, `python3
-   tools/network/reading.py shortlist <ids, best first>`. It is sized to the requests left
-   this week and three spare (a read stops counting once its note is sent), never above
-   `reading.READS_PER_RUN` (80 unless the person set it), and takes at most
-   `reading.UNVERIFIED_ON_SHORTLIST` (10) people nothing has placed in a city yet. It ends on
-   one line, "Reads today: up to N profile(s) and M list page(s). What binds: ...", with the
-   exact line in profile/networking.py that changes it (`reading.py budget` prints it alone):
-   show the person that line before the reads start, never only after a wait. A cap the
-   person sets there outranks every preset cap of its period. It adds to the day's list and
-   refuses past the cap; people read on an
+   tools/network/reading.py shortlist <ids, best first>`. The app sets no cap on its length
+   and no limit on reading of its own (2026-10-22): reads go one page at a time, as fast as
+   the browser loads them, and stop only when LinkedIn shows a security check, a sign-out or
+   an unusual-activity notice. It takes at most `reading.UNVERIFIED_ON_SHORTLIST` (10) people
+   nothing has placed in a city yet. It adds to the day's list; people read on an
    earlier day, or past a first note in the contact book, leave it by themselves and are
    named, and `--remove <id>` takes someone off. A browser read refuses anyone not on it.
    It refuses an id that names nobody (not in the contact book, nothing read about them):
@@ -298,22 +289,18 @@ it. LinkedIn is never fetched from a session.
    so the read, the draft and the send all find them. It takes at most
    `reading.PER_EMPLOYER` (2) people an employer, and the people there already waiting on a
    reply count against the two: it names them and adds nobody past it.
-   **Say the time first, and let the person choose.** Before any read, `python3
-   tools/network/reading.py estimate` says how long today's list takes at the pace already set
-   ("Reading these 20 takes about 60 minutes today ..."; the `shortlist` output ends on it too).
-   Tell the person in those words and let them choose: wait for the reads and get notes written
-   from each page, or have notes now from the cards alone, each saved `--card-only` and shown
-   to them as card-only. Never choose card-only for them. A recruiter whose card names them a
+   Read straight away; never ask the person whether to wait for reads, because nothing is
+   waited for. A recruiter whose card names them a
    recruiter at the employer and places them in the person's market needs no read
    (`reading.card_enough`): `shortlist` leaves them off and their note is drafted from the card,
    saved marked CARD ONLY. Score each again after the read, which adds shared history, activity
    and reach, and read the next on the list when one is skipped. With no browser, nobody is
    read: present the list and offer a paste for the best `reading.HAND_TOP` (3) only
-   (`reading.py queue`, which lists those three). **The fast path, with no automation at
-   all:** when the person is at the keyboard, even with a browser, offer it first: `reading.py
+   (`reading.py queue`, which lists those three). **The path with no automation at
+   all:** when the person is at the keyboard and would rather, `reading.py
    queue --urls` prints just the addresses to open; they open each, select all and copy, and
    send them back in one message with a line of `---` between, which `reading.py paste -`
-   reads. It is faster than a paced read and carries no automation risk. Give each candidate its id first
+   reads. It carries no automation risk. Give each candidate its id first
    (`state.unique_contact_id()`), and record what is read with `tools/network/reading.py`,
    which keeps only what a note could rest on, under
    `documents/network/<contact_id>/reading.json` (`--name` and `--company` for a
@@ -370,58 +357,38 @@ it. LinkedIn is never fetched from a session.
         waiting. After 5 minutes, ask once more: sign in now, or send a paste of each
         profile instead. Claude never types in the sign-in page, reads it, or sees, stores
         or asks for a password.
-      - **Read only the people a request goes to today.** A read is spent on someone the
-        person is about to write to, never on a list for later: `gate` caps the day's reads
-        at the connection requests still left today plus three for people a read rules out.
-      - **Reads run off the critical path, while the person sends.** Run `python3
-        tools/network/reading.py next --wait` in the background (the Bash tool's background
-        mode): it exits when the next page may load, naming who to read and their address, and
-        in the meantime the chat drafts and shows the notes it can write now (`reading.py
-        meanwhile` lists them: those read today, and recruiters whose card says enough), so the
-        person sends the last batch while the next is read. Never
-        poll a clock, and never sleep in the foreground. When it says `new day` (exit 13), a wait ran
-        past midnight: do what it prints (the day's check, then today's list). When `next` says `done` (exit 12),
-        show any draft not yet shown and tell the person the run is done, with a notification
-        where the session has one.
-      - **Before each page**, `next` (or `python3 tools/network/reading.py gate`, `--page` for a
-        one-page read) answers `go` with how long to stay on the page, or why not with the clock
-        time of the next page, each with its own exit code: 7 a short wait (the pause after the
-        last page), 8 later today (an hourly cap or the ramp), 9 tomorrow (a day's cap, the
-        send-day cap, or a stop). It holds a varied gap between pages, a longer break after a
-        varying few, caps for profiles, for list pages and for all loads together, and, only
-        after friction, a ramp that starts at 5 pages an hour and rises one step for each
-        clean day of reading. Every
-        limit is in `profile/networking.py`, set at once by the dial `PROFILE_READ_RISK`
-        (`fast` unless the person chooses `normal` or `careful`) and each overridable by the
-        person; `reading.py limits` prints every one, its value, where it came from and why.
-        Never open two pages at once. A page opened before the gate said go is still read
-        (`read`, `people` and `invitations` never refuse a page already loaded, which would
-        mean loading it again): the breach of the person's own pace is logged once, apart from
-        LinkedIn's signals (`reading.py friction` lists it), and the next pause is longer by
-        what it skipped. Ask the gate first all the same.
-      - **Signals, not a guess.** A security check or CAPTCHA, an "unusual activity" banner, an
-        HTTP 999 page, or the sign-in page within four hours of the last page or sign-in (or a
-        second sign-out that day) stops the day's reads at once. The sign-in page on the first
-        page of the day, or hours after the last, is a session that expired: ask them to sign in,
-        nothing stops. After a clean sign-in, a sign-out stop is lifted only on their word, once
-        a day: `reading.py resume --reason "<their words>"`. Never edit the ledger by hand.
-        A page that came back nearly empty (no name, no section of a profile, nothing of a
-        structured extract) doubles the next pause, and a second within the hour stops the
-        day; one far slower to load than their recent ones (pass `--load-seconds` when the
-        browser tool times it) doubles the next pause and nothing more. A short paste of a page that loaded is a page, not this. Each is kept, dated, in the friction log (`reading.py
-        friction`; `friction --kind <kind> --words "<what it showed>"` keeps one the chat saw
-        itself), and a check, a sign-in page out of turn or an unusual-activity notice puts the
-        ramp back to its first step; a page that came back nearly empty, or loaded slowly,
-        never moves it. Tell the person what
-        happened in the words `friction` prints ("a sign-in page on 20 Oct"), never "a
-        LinkedIn warning" unless LinkedIn showed one. The count, the stop and the
-        list are one per computer, shared by every worktree's chat.
+      - **Read the people a note goes to.** A read is spent on someone the person is about
+        to write to, never on a list for later.
+      - **One page after another, with nothing waited for.** The app sets no pause, cap or
+        slow start of its own (2026-10-22: at one page every two minutes, the waiting was
+        most of a run). Run `python3 tools/network/reading.py next`: it names who to read and
+        their address. Read the page, run `read`, show the note it allows, then `next` again,
+        straight away. When it says `new day` (exit 13), a run went past midnight: do what it
+        prints (the day's check, then today's list). When `next` says `done` (exit 12), show
+        any draft not yet shown and tell the person the run is done, with a notification
+        where the session has one. Never open two pages at once.
+      - **Only LinkedIn stops a read.** A security check or CAPTCHA, an "unusual activity"
+        banner, an HTTP 999 page, or the sign-in page within four hours of the last page or
+        sign-in (or a second sign-out that day) stops the day's reads at once (`next` and
+        `gate` then exit 9, tomorrow). The sign-in page on the first page of the day, or hours
+        after the last, is a session that expired: ask them to sign in, nothing stops. After a
+        clean sign-in, a sign-out stop is lifted only on their word, once a day: `reading.py
+        resume --reason "<their words>"`. Never edit the ledger by hand. A page that came back
+        nearly empty (no name, no section of a profile, nothing of a structured extract) is
+        said, and a second within the hour stops the day; one far slower to load than their
+        recent ones (pass `--load-seconds` when the browser tool times it) is said and holds
+        nothing back. A short paste of a page that loaded is a page, not this. Each is kept,
+        dated, in the friction log (`reading.py friction`; `friction --kind <kind> --words
+        "<what it showed>"` keeps one the chat saw itself). Tell the person what happened in
+        the words `friction` prints ("a sign-in page on 20 Oct"), never "a LinkedIn warning"
+        unless LinkedIn showed one. The stop is one per computer, shared by every worktree's
+        chat.
       - **One pass per profile, scrolled to the very end.** Open their `linkedin_url` in a new
-        tab and scroll it slowly to the very bottom before taking its text: on the current
+        tab and scroll it to the very bottom before taking its text: on the current
         layout the page holds the top card and the Activity feed until then, and Experience and
-        Education appear only at the end. A card read (`--mode card`, the default for `next`)
-        stays the time `next` gave; their headline, place, current employer, About and
-        Experience decide most keep or skip. Read deep (`--mode deep`) where the note needs
+        Education appear only at the end. A card read (`--mode card`, the default for `next`):
+        their headline, place, current employer, About and Experience decide most keep or
+        skip. Read deep (`--mode deep`) where the note needs
         their Activity too. A read with no Experience in its text exits 14 ("scroll"): scroll
         the same page to its end and read it again, no new page loaded (`--no-experience` only
         when their page has none at all; a third-degree profile that shows no Experience to
@@ -434,8 +401,7 @@ it. LinkedIn is never fetched from a session.
         (`--json` still says so outright). It is the top card, About, Experience and
         Education, found whatever order the page puts them in (`extractor --activity` adds
         Activity and Featured), a few thousand characters where the page text is tens of
-        thousands. It clicks, scrolls and loads nothing, and the pace gate is the same either
-        way. Without a browser script, read the whole page text once, close the tab, and pipe
+        thousands. It clicks, scrolls and loads nothing. Without a browser script, read the whole page text once, close the tab, and pipe
         the text to the same command. Failing both, a short structured paste of the
         same parts reads as the page: `Headline: ...`, `Location: ...`, `About: ...`, one
         `Experience: <title> | <employer> | <dates> | <place>` line a role, `Education: ...`.
@@ -453,10 +419,8 @@ it. LinkedIn is never fetched from a session.
         Tell the person what it showed. Never try to get past one.
       - Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
         scroll into other people's profiles. It is the person's own account doing the
-        reading. One at a time at a person's pace is how a person prospects, and a burst of
-        page loads is what LinkedIn's automation checks look for. That pacing lowers the
-        risk of a restriction on their account; it does not remove it, and LinkedIn's
-        terms forbid automated access whatever the pace. Never call this route safe.
+        reading. Reads stop at LinkedIn's first signal. Never call this route safe, and never
+        warn the person about it unprompted: they chose it.
       With the setting on and no browser tool in the session (a phone, the web), say once
       that profiles are read in the browser only when the session is linked to the desktop
       app on their computer, and ask for screenshots or a paste instead (4).
@@ -565,8 +529,12 @@ it. LinkedIn is never fetched from a session.
      the pairs that say the same thing to different people; rewrite one of each pair from
      its own reading. Saving them (`reading.py draft` or `drafts`, step 7) checks the whole
      batch with the queue: it exits 11 when a sentence repeats in more than two notes or a
-     third of them, or a note ends on an ask that is not the person's own `ASK`, the one place
-     the ask lives, or two InMails share a subject, a paragraph order or a close.
+     third of them, when six or more notes all run in one order (who you are, then them,
+     then the ask; nine in ten from ten notes), or when two InMails share a subject, a
+     paragraph order or a close. The composer varies its order by contact (`order=` to
+     choose: the line about the sender second, after the question, or first in a few, never
+     most). A close is never held to `ASK` word for word: any natural ask is fine, and the
+     same close in many notes is what is caught.
      `reading.py batch` runs the same check on the queue alone.
      Their opener, `ABOUT_ME` and `ASK` are theirs to repeat, unless `VARY_ABOUT_ME` in
      `profile/networking.py` says the background line is chosen per person. When a common ground already names an employer, the about-me line
@@ -652,8 +620,8 @@ run two searches.
 
 Say which targets justify a scarce InMail and which should take a free
 connection request; on a free account there is no InMail, so say so once rather
-than recommending one. If the connection cap is hit, say so and note that following
-costs nothing and lets the request go out warm when the cap resets.
+than recommending one. If LinkedIn says its weekly invitation limit is reached, say so and
+note that following costs nothing and lets the request go out warm the week after.
 
 End with the line `python3 tools/tips.py networking` prints, if it prints one (it decides when: the first time, then now and then). What they say back
 goes through CLAUDE.md, "Learning the person".

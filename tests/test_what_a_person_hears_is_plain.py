@@ -41,11 +41,9 @@ def test_every_question_and_promise_an_update_shows_is_plain():
     _plain(U.NO_REPLY, "NO_REPLY")
 
 
-def test_what_the_person_is_asked_about_their_own_checks_is_plain():
-    for name in ("ASK_TIDY", "TIDY_MEANS", "TIDY_YES", "TIDY_NO"):
-        _plain(getattr(sync_app, name), name)
-    for answer in sync_app.ASK_ANSWERS:
-        _plain(answer, "ASK_ANSWERS")
+def test_what_the_person_hears_about_their_own_checks_is_plain_and_asks_nothing():
+    _plain(sync_app.OWN_CHECKS_SAID, "OWN_CHECKS_SAID")
+    assert "?" not in sync_app.OWN_CHECKS_SAID
 
 
 def test_tips_and_the_campaign_offer_are_plain():

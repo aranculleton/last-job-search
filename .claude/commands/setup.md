@@ -329,8 +329,8 @@ characters, so the opener, the line about them and the ask together stay near 12
 LinkedIn profiles of the best few people a run finds, in their own signed-in browser, said
 plainly: finding people never needs it (search results and their own connections make the
 list in any chat); LinkedIn's terms forbid automated access, and automating a site can break
-its terms, so the risk is to their account; it reads only the best ten a run shortlists, at
-a person's pace, and clicks nothing; the app reads and drafts and they act; and the
+its terms, so the risk is to their account; it reads only the people a run will write to,
+one page at a time, stops at LinkedIn's first sign, and clicks nothing; the app reads and drafts and they act; and the
 alternative is pasting the one or two profiles that matter most),
 `claims.py`, `screening.py` (standard form
 answers, sponsorship answered exactly as their status allows), `10-triage-blockers.md`,

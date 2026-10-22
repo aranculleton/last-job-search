@@ -30,6 +30,16 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **Profile reads no longer wait.** The app sets no reading limit of its own any more: no
+  pages an hour or a day, no pause between pages, no break, no slow start after a sign-in
+  page, and no note of a page read "early". At one page every two minutes the waiting was
+  most of a networking run. Reads go one page after another, as fast as the browser loads
+  them, and stop only when LinkedIn itself shows a security check, a sign-out or an
+  unusual-activity notice. Any old limit written into your profile is taken out for you.
+  Profile upgrade: reading-limits-gone.
+- **No cap on connection requests of the app's own.** It held a week to 50 and a day to 25,
+  and printed "requests left" as if that were LinkedIn's number. LinkedIn says itself when
+  its weekly limit is reached; the app now counts what went and gives no number of its own.
 - **More of what reads badly is pointed out before a note is shown.** Telling someone what
   they do ("You recruit for ..."), reading back a detail off their profile, underselling
   yourself ("a long way from my background"), a vague close ("great to hear more"), "swap
@@ -88,6 +98,25 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A batch of notes all built the same way is caught, and closes are no longer pushed to one
+  sentence.** Twenty notes were saved that were all hello, the same line about you, one line
+  about them and "I'd love to hear ...", and nothing said they read as one template. Six or
+  more notes in one order are now held back until some are written another way, and notes
+  the app writes vary their order by person. A closing question was refused unless it was
+  your own ask word for word, which sent every close to the same sentence; any natural ask
+  is fine now, and the same close in many notes is what is caught.
+- **A note to someone at Visa is no longer refused as talking about a visa.** The employer's
+  own name was read as work authorization, so a note to a peer there could not name where
+  they work. The word still counts where it is the word ("my visa is sorted").
+- **A note greeting someone by their own first name is no longer refused as copied.** When
+  their first name was the surname of someone you had approved a note to, the greeting was
+  read as that other person's name. Every part of the reader's own name is theirs.
+- **After an update, your setup's own checks are kept in line for you.** A chat could say it
+  would "flag those for you to update yourself". Nothing about them is ever yours to do or to
+  answer any more: they are brought in line in the same go, and at most one plain line says so.
+- **A people search narrowed by the right company number keeps it.** Every card said
+  "JPMorganChase" and the employer was written "JPMorgan Chase", so the number was thrown
+  away as someone else's. A name written with or without its spaces is the same employer.
 - **The checks before saving no longer take an update halfway through.** One of the app's own
   checks ran the update command with nothing after it, which in your copy is a real update: it
   merged the newest release mid-run and could put files back to it, so the checks then failed

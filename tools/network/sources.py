@@ -181,7 +181,7 @@ KINDS = {
         (), False, "the plan names the register and its official API; never addresses"),
     "people_tab": Kind(
         "the employer's People tab, in their own browser", "everyone at the employer in their function",
-        "everyone, with a browser linked", "local", (), True, "at a person's pace, nothing clicked"),
+        "everyone, with a browser linked", "local", (), True, "one page at a time, nothing clicked"),
 }
 
 DEFAULT_PLAN = ("connections", "alumni_employer", "alumni_school", "posting", "posts",
@@ -534,8 +534,9 @@ def _cli_ladder(argv: list) -> int:
     for i, (rung, usable, why) in enumerate(got["rungs"], 1):
         print(f"  {i}. {'yes' if usable else 'no '} {rung.label}: {rung.yields} [{why}]")
     print(f"read: {got['read']}, "
-          + (f"at most {got['read_cap']} in the browser this run" if got["read_cap"]
-             else "no browser reads in this chat")
+          + ("no browser reads in this chat" if got["read_cap"] == 0
+             else f"at most {got['read_cap']} in the browser this run" if got["read_cap"]
+             else "in the browser, one page at a time, with no cap of the app's own")
           + (f"; a paste offered for the best {got['hand_top']} at most" if got["hand_top"] else ""))
     if got["say"]:
         print(f"tell them, once, under the list: {got['say']}")
@@ -704,8 +705,8 @@ def main(argv: list | None = None) -> int:
 # and 5, only enriches a short list of it. A run with no browser still delivers the
 # whole ranked list, says in one line what reading would add, and offers a paste
 # for at most reading.HAND_TOP people; it never asks for a screenshot of everyone.
-# Browser reads are as many as the requests left this week and a spare
-# (reading.shortlist_cap), never above the hourly and daily caps.
+# Browser reads have no cap of the app's own (reading.shortlist_cap): the people a run will
+# write to, one page at a time.
 Rung = namedtuple("Rung", "id label yields cannot needs")
 LADDER = (
     Rung("connections", "your own LinkedIn connections export",
@@ -734,11 +735,13 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
     """What this run can use from the ladder, for the tools this chat has.
 
     `tools` as reading.route() takes them (browser, chrome, chrome-off, enable).
-    Returns {"rungs": [(Rung, usable, why)], "read": route, "read_cap": n,
+    Returns {"rungs": [(Rung, usable, why)], "read": route, "read_cap": None for no cap of
+    the app's own, 0 where nothing is read in the browser,
     "hand_top": n, "say": the one line for the person, or ""}.
     """
     import reading
     r = reading.route(list(tools or ()), consent)
+    # None: no cap of the app's own on browser reads (reading.shortlist_cap); 0: none here.
     cap = reading.shortlist_cap()[0] if r["route"] in ("browser", "enable") else 0
     export = _has_export() if has_export is None else has_export
     declined = CONNECTIONS_EXPORT == "declined"
@@ -753,7 +756,7 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
                    else "not on file yet: the connections-export upgrade asks")
         elif rung.id == "browser_read":
             usable = reads
-            why = (f"{r['browser']}, the best {cap}, enough for this week's requests, paced"
+            why = (f"{r['browser']}, the people worth writing to, one page at a time"
                    if reads
                    else "no browser of yours in this chat" if reading.PROFILE_READS == "browser"
                    else f"PROFILE_READS is {reading.PROFILE_READS!r}")
@@ -1162,8 +1165,7 @@ def short_batch(found: int, wanted: int, tried: dict, have_connections: bool = F
                     "one file from LinkedIn, which takes anything from ten minutes to a day "
                     "to arrive, and I'll walk you through it")
     if browser:
-        more.append("each employer's People tab, read in your own browser at the same pace "
-                    "as profiles")
+        more.append("each employer's People tab, read in your own browser like a profile")
     more.append("names of anyone you know of there, and I'll read and write to them")
     head = (f"I found {named} people; {found} of the {wanted} this run could write to have "
             f"enough known about them for a note, and the other {named - found} need a look "

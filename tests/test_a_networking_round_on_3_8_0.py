@@ -184,38 +184,36 @@ def test_next_names_someone_read_but_not_in_the_book(book):
 
 # ------------------------------------------------------------ 14. a page already loaded
 
-def _loaded(when, gap=120):
+def _loaded(when, gap=0):
     pace.add_load("profile", when.isoformat(timespec="seconds"), gap, False, "earlier")
 
 
-def test_a_list_page_loaded_too_soon_is_read_and_the_next_pause_honours_the_gap(book, monkeypatch,
-                                                                                capsys):
+def test_a_list_page_right_after_another_is_read_with_nothing_held_back(book, monkeypatch,
+                                                                         capsys):
+    # No pause of the app's own since 2026-10-22: a page ten seconds after the last is read
+    # as any other, and nothing is logged about it.
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     now = datetime.datetime.now()
-    _loaded(now - datetime.timedelta(seconds=10), gap=120)
+    _loaded(now - datetime.timedelta(seconds=10))
     page = book.path / "people.txt"
     page.write_text("Juno Castellan • 2nd\nSenior Data Scientist at Larkspur\n"
                     "Manchester, England, United Kingdom\nConnect\n", encoding="utf-8")
     assert reading.main(["people", str(page), "--company", "Larkspur"]) == reading.EXIT["ok"]
     out = capsys.readouterr().out
     assert "Juno Castellan" in out and "not read." not in out
-    assert out.count("before your own pace allowed it") == 1 and "not a LinkedIn signal" in out
-    rec = reading._pages()[-1]
-    assert rec["next_gap"] >= 100 + reading.GAP_SECONDS[0]
-    assert len(pace.breaches()) == 1 and pace.friction() == []
-    # The friction command lists it apart from LinkedIn's signals.
-    assert reading.main(["friction"]) == reading.EXIT["ok"]
-    assert "your own pace: 1 page(s) loaded before it allowed" in capsys.readouterr().out
+    assert "pace" not in out and "the next page at" not in out
+    assert pace.friction() == [] and "breaches" not in pace.load()
 
 
-def test_a_page_read_on_time_logs_no_breach(book, monkeypatch, capsys):
+def test_a_list_page_loaded_after_a_stop_is_kept_and_stops_the_run(book, monkeypatch, capsys):
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
+    reading.stop("a security check appeared")
     page = book.path / "people.txt"
     page.write_text("Juno Castellan • 2nd\nSenior Data Scientist at Larkspur\nConnect\n",
                     encoding="utf-8")
-    assert reading.main(["people", str(page), "--company", "Larkspur"]) == reading.EXIT["ok"]
-    assert "before your own pace allowed it" not in capsys.readouterr().out
-    assert pace.breaches() == []
+    assert reading.main(["people", str(page), "--company", "Larkspur"]) == reading.EXIT["tomorrow"]
+    out = capsys.readouterr().out
+    assert "Juno Castellan" in out and "read nothing more today" in out
 
 
 # ------------------------------------------------------------ 15. InMail credits

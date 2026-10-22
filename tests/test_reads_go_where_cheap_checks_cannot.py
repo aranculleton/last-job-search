@@ -5,8 +5,9 @@ short-listed for reads, seven were read before the pacing ran the session out of
 and five of the seven were spent on facts a cheaper check could have caught: a request
 already Pending, a city elsewhere, a role outside the function. Around that: a verdict
 that said KEEP with nothing read, one exit code meaning three things, a top card read
-wrong on today's layout, and two real employees dropped by the result-title reader.
-Invented people and employers only.
+wrong on today's layout, and two real employees dropped by the result-title reader. Since
+2026-10-22 the app sets no reading limit of its own (no pause, cap or ramp): only LinkedIn's
+own signals stop a read. Invented people and employers only.
 """
 from __future__ import annotations
 
@@ -76,13 +77,14 @@ def _browsed(here, times, gap=60):
                                             "next_gap": gap}]})
 
 
-def test_a_read_too_soon_is_kept_never_refused_and_still_says_wait(here, monkeypatch, capsys):
-    """Was "a read refused for its pace says wait, not skip". A refused read lost a page
-    that was already open, and it had to be loaded again once the gate opened (2026-10-20):
-    it is kept now, the breach of the person's own pace logged once (never as a LinkedIn
-    signal), and the gate still says wait, longer by the pause the page skipped."""
+def test_a_read_right_after_another_is_saved_with_no_pause_and_nothing_logged(
+        here, monkeypatch, capsys):
+    """Was "a read too soon is kept, never refused, and still says wait". There is no pause
+    of the app's own now (2026-10-22): a page right after another is a read like any, nothing
+    is logged against a pace, and the next may load at once."""
     import pace
     import state
+    monkeypatch.setenv("LJS_LEDGER", str(here / "ledger"))
     monkeypatch.setattr(reading, "PROFILE_READS", "browser")
     row = {"contact_id": "kestrel_achterberg", "name": "Rosalind Achterberg",
            "company": "Kestrel Mutual", "location": "Manchester", "channel": "connection",
@@ -90,89 +92,66 @@ def test_a_read_too_soon_is_kept_never_refused_and_still_says_wait(here, monkeyp
     monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [row])
     monkeypatch.setattr(state, "load_threads", lambda *a, **k: [])
     now = datetime.datetime.now()
-    _browsed(here, [now - datetime.timedelta(seconds=5)], gap=120)
+    _browsed(here, [now - datetime.timedelta(seconds=1)], gap=0)
     reading.shortlist(["kestrel_achterberg"], now.date(), contacts=[row], sends_left=10)
     page = here / "p.txt"
     page.write_text(_card("Manchester, England, United Kingdom", "Contact info", "Kestrel Mutual"),
                     encoding="utf-8")
     code = reading.main(["read", "kestrel_achterberg", str(page), "--source", "browser"])
-    assert code == reading.EXIT["ok"] != reading.EXIT["wait"]
+    assert code == reading.EXIT["ok"]
     out = capsys.readouterr().out
-    assert "saved" in out and "kept, not refused" in out and "not a LinkedIn signal" in out
-    assert out.count("before your own pace allowed it") == 1
-    got = reading.load("kestrel_achterberg")
-    src = next(s for s in got["sources"] if s.get("kind") == "browser")
-    assert src["next_gap"] >= 100 + reading.GAP_SECONDS[0]        # the skipped pause, honoured
-    assert len(pace.breaches()) == 1 and pace.breaches()[0]["rule"] == "wait"
-    assert pace.friction() == []                                  # not a LinkedIn signal
-    assert reading.main(["gate"]) == reading.EXIT["wait"]
+    assert "saved" in out and "pace" not in out and "the next page at" not in out
+    assert "breaches" not in pace.load() and pace.friction() == []
+    assert reading.main(["gate"]) == reading.EXIT["ok"]
 
 
-def test_the_hour_and_the_day_have_their_own_codes(here):
+def test_a_full_hour_and_a_full_day_of_pages_still_go_and_a_stop_is_tomorrow(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
-    _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(reading.READS_PER_HOUR)])
+    _browsed(here, [now - datetime.timedelta(seconds=i + 1) for i in range(200)])
+    assert reading.gate_state(now, sends_left=None)["kind"] == "go"
+    assert reading.gate_state(now.replace(hour=23), sends_left=0)["kind"] == "go"
+    reading.stop("LinkedIn showed a check: Let's do a quick security check", now.date())
     g = reading.gate_state(now, sends_left=None)
-    assert g["kind"] == "later" and g["at"] > now
-    _browsed(here, [now.replace(hour=1) + datetime.timedelta(minutes=5 * i)
-                    for i in range(reading.READS_PER_DAY)])
-    assert reading.gate_state(now.replace(hour=23), sends_left=None)["kind"] == "tomorrow"
+    assert g["kind"] == "tomorrow" and reading.EXIT[g["kind"]] == 9
 
 
-def test_gate_wait_holds_until_the_gate_opens(here):
+def test_gate_wait_never_sleeps(here):
     now = [datetime.datetime(2026, 10, 19, 15, 0)]
-    _browsed(here, [now[0] - datetime.timedelta(seconds=10)], gap=40)
+    _browsed(here, [now[0] - datetime.timedelta(seconds=1)], gap=600)
     slept = []
-
-    def sleep(s):
-        slept.append(s)
-        now[0] += datetime.timedelta(seconds=s)
-
-    g = reading._wait_gate(300, sleep=sleep, clock=lambda: now[0])
-    assert g["kind"] == "go" and sum(slept) >= 29
-    # A wait longer than the timeout is never slept through: it says when instead.
-    _browsed(here, [now[0]], gap=600)
-    assert reading._wait_gate(30, sleep=sleep, clock=lambda: now[0])["kind"] == "wait"
+    g = reading._wait_gate(300, sleep=slept.append, clock=lambda: now[0])
+    assert g["kind"] == "go" and slept == []
+    reading.stop("LinkedIn showed a check: verify it's you", now[0].date())
+    assert reading._wait_gate(300, sleep=slept.append, clock=lambda: now[0])["kind"] == "tomorrow"
+    assert slept == []
 
 
-# ------------------------------------------------------------ 6. pacing
+# ------------------------------------------------------------ 6. no pace of the app's own
 
-def test_the_pacing_text_states_the_numbers_the_code_uses():
+def test_the_reading_text_says_there_is_no_pace_of_the_apps_own():
     import inspect
-    src = inspect.getsource(reading)
     import pace
-    assert ("never under 45 seconds or over 240" in src
-            and pace.value("gap_seconds", "careful") == (45, 240))
-    # The comment states careful's pace, the default before 2026-10-22, by its numbers.
-    assert "middle at GAP_MEDIAN (90 seconds)" in src and pace.value("gap_median", "careful") == 90
-    assert "varying 3 to 7" in src and pace.value("break_after", "careful") == (3, 7)
-    assert "5\n# to 12 minutes" in src or "5 to 12 minutes" in src.replace("\n# ", " ")
-    assert pace.value("break_minutes", "careful") == (5, 12)
-    assert "an even 25 to 75 second gap" in src         # what it replaced, said as history
+    src = inspect.getsource(reading)
+    assert "the app sets no limit of its own on reading" in src
+    assert "the app sets no limit of its own" in pace.__doc__
+    # The pace it once stated is not claimed any more.
+    for gone in ("never under 45 seconds", "GAP_MEDIAN", "BREAK_AFTER", "READS_PER_HOUR"):
+        assert gone not in src, gone
 
 
-def test_the_break_is_the_persons_to_set_and_is_recorded_as_a_break():
-    import random
-    assert reading._break_minutes((2, 4)) == (2.0, 4.0)
-    assert reading._break_minutes(3) == (3.0, 3.0)
-    assert reading._break_minutes("nonsense") == reading.BREAK_MINUTES_DEFAULT
-    assert reading._break_minutes((-1, 4)) == reading.BREAK_MINUTES_DEFAULT
-    t = datetime.datetime(2026, 10, 19, 9)
-    # A break the person set shorter than the longest ordinary gap still counts as one.
-    reads = [(t, 100, True)] + [(t, 60, False)] * 2
-    assert reading._is_break(reads) == 3
-    gap, brk = reading.pause(random.Random(1), reads=[(t, 60, False)] * 8)
-    assert brk and reading.BREAK_SECONDS[0] <= gap <= reading.BREAK_SECONDS[1]
+def test_a_one_page_read_records_no_pause(here, monkeypatch):
+    monkeypatch.setenv("LJS_LEDGER", str(here / "ledger"))
+    rec = reading.page_read("people", "https://example.org/p", datetime.datetime(2026, 10, 19, 9))
+    assert rec["next_gap"] == 0 and rec["break"] is False
 
 
 def test_the_short_list_adds_and_never_replaces(here):
-    import state
     placed = [{"contact_id": f"p{i}", "location": "Manchester"} for i in range(9)]
     got = reading.shortlist(["p0", "p1", "p2"], TODAY, contacts=placed, sends_left=2)
     assert got["ids"] == ["p0", "p1", "p2"]
+    # No cap of the app's own: the second call adds everyone it names, behind the first.
     got = reading.shortlist(["p3", "p4", "p5", "p6"], TODAY, contacts=placed, sends_left=2)
-    assert got["ids"][:3] == ["p0", "p1", "p2"] and len(got["ids"]) == 2 + reading.SKIP_SPARE
-    assert got["full"] == ["p5", "p6"]
-    del state
+    assert got["ids"] == ["p0", "p1", "p2", "p3", "p4", "p5", "p6"] and got["full"] == []
 
 
 def test_no_more_than_the_unplaced_cap_of_people_nothing_has_placed(here):
@@ -187,26 +166,20 @@ def test_no_more_than_the_unplaced_cap_of_people_nothing_has_placed(here):
     assert reading.placed("u2", contacts)
 
 
-def test_the_queue_names_the_limit_that_binds(here):
+def test_reads_left_says_there_is_no_limit_of_the_apps_own(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
-    # A clean day of reading before today puts the ramp at its top (pace.hourly_ceiling),
-    # so the hourly cap is what binds, as it did before the ramp existed.
-    _browsed(here, [now - datetime.timedelta(days=1, hours=3)]
-             + [now - datetime.timedelta(minutes=i + 1) for i in range(5)])
-    n, what = reading.reads_left(now, sends_left=None)
-    assert n == reading.READS_PER_HOUR - 5 and "an hour" in what
+    _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(5)])
+    assert reading.reads_left(now, sends_left=None) == (None, reading.NO_LIMITS)
 
 
-def test_a_first_day_reads_at_the_cap_and_only_a_signal_brings_the_ramp(here, monkeypatch):
+def test_a_signal_yesterday_brings_no_slow_start_today(here, monkeypatch):
     import pace
     monkeypatch.setenv("LJS_LEDGER", str(here / "ledger"))
     now = datetime.datetime(2026, 10, 19, 15, 0)
     _browsed(here, [now - datetime.timedelta(minutes=i + 1) for i in range(3)])
-    n, what = reading.reads_left(now, sends_left=None)
-    assert n == reading.READS_PER_HOUR - 3 and "the ramp" not in what
     pace.record_friction("check", "a security check", now - datetime.timedelta(days=1))
-    n, what = reading.reads_left(now, sends_left=None)
-    assert n == 2 and "the ramp" in what           # 5 an hour the day after a signal, 3 read
+    assert reading.reads_left(now, sends_left=None) == (None, reading.NO_LIMITS)
+    assert reading.gate_state(now)["kind"] == "go"
 
 
 # ------------------------------------------------------------ 7. the top card
@@ -367,12 +340,12 @@ Connect
     assert keep and "based in Boston" in why
 
 
-def test_a_one_page_read_paces_like_a_profile_and_spares_the_send_cap(here):
+def test_a_one_page_read_holds_nothing_back(here):
     now = datetime.datetime(2026, 10, 19, 15, 0)
-    rec = reading.page_read("invitations", "https://www.linkedin.com/mynetwork/", now)
-    assert reading.gate_state(now + datetime.timedelta(seconds=1), sends_left=0)["kind"] == "wait"
-    later = now + datetime.timedelta(seconds=rec["next_gap"] + 1)
-    assert reading.gate_state(later, sends_left=0, profile=False)["kind"] == "go"
+    reading.page_read("invitations", "https://www.linkedin.com/mynetwork/", now)
+    nxt = now + datetime.timedelta(seconds=1)
+    assert reading.gate_state(nxt, sends_left=0)["kind"] == "go"
+    assert reading.gate_state(nxt, sends_left=0, profile=False)["kind"] == "go"
     with pytest.raises(ValueError):
         reading.page_read("profile", "", now)
 
@@ -405,16 +378,17 @@ def test_a_batch_ending_on_one_sentence_is_too_alike():
     found = reading.alike(notes, ask="Would you have 15 minutes for a few questions sometime?",
                           about_me="", opener="hope you're well")
     kinds = {k for k, _, _ in found}
-    # A short request for a chat is always an allowed close (2026-10-22); a longer ask that
-    # is not the person's is still "not your ask".
-    assert "shared" in kinds and "not your ask" not in kinds
+    assert "shared" in kinds
+    # An ask is never held to the person's ASK word for word (2026-10-22: "not your ask" sent
+    # every close to the one sentence). The same close in every note is what is caught.
     long_ask = ("Would you be open to connecting and sharing a few thoughts on how your team "
                 "approaches forecasting?")
     notes = {f"c{i}": _note(f"Your talk number {i} on cold-chain forecasting stayed with me.",
                             ask=long_ask) for i in range(6)}
     found = reading.alike(notes, ask="Would you have 15 minutes for a few questions sometime?",
                           about_me="", opener="hope you're well")
-    assert "not your ask" in {k for k, _, _ in found}
+    assert any(k == "shared" and s == long_ask for k, s, _ in found)
+    assert "not your ask" not in {k for k, _, _ in found}
 
 
 def test_the_persons_own_lines_are_theirs_to_repeat_unless_they_vary_them():
@@ -451,6 +425,7 @@ def test_a_page_kept_after_a_stop_still_exits_as_a_stop(here, monkeypatch, capsy
                     encoding="utf-8")
     code = reading.main(["read", "kestrel_achterberg", str(page), "--source", "browser"])
     out = capsys.readouterr().out
-    assert "saved" in out and "kept, not refused" in out
+    assert "saved" in out and "It is kept" in out and "read nothing more today" in out
     assert code == reading.EXIT["tomorrow"]
-    assert reading.after_breach({"kind": "wait"}) == reading.after_breach(None) == reading.EXIT["ok"]
+    assert reading.after_breach(None) == reading.EXIT["ok"]
+    assert reading.after_breach({"kind": "tomorrow"}) == reading.EXIT["tomorrow"]

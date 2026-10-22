@@ -107,7 +107,7 @@ Just talk to it. For example:
 - **Paste a posting** (or a link) and it writes a tailored resume and cover letter, and checks
   them.
 - **"Who should I talk to at Acme?"** finds people worth contacting and drafts a first note,
-  inside LinkedIn's limits (50 connection requests a week). It reads someone's profile in
+  inside LinkedIn's own limits. It reads someone's profile in
   your own browser only if you agree to that, and starts with people you already know if you
   give it your LinkedIn connections export.
 - **"What do I owe?"** lists replies and follow-ups that are due.

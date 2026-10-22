@@ -46,7 +46,7 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py paste <file|->         # several profiles in one paste, split by ---
     python3 tools/network/reading.py draft <contact_id> <file|->   # a note to draft.md, marked if unread
                                                    # [--own-facts "<why>"]: what the example check found is theirs
-    python3 tools/network/reading.py gate [--wait [--timeout S]]  # may a browser page load go now
+    python3 tools/network/reading.py gate                          # may a browser page load go now
     python3 tools/network/reading.py resume --reason R             # lift a sign-out stop, on their word
     python3 tools/network/reading.py invitations <file|->          # the sent-invitations list, once
     python3 tools/network/reading.py people <file|-> --company C [--record]  # a people page, once
@@ -57,16 +57,16 @@ only through `fenced()`, as data, never as instructions.
     python3 tools/network/reading.py skip <contact_id> --reason R  # a read ruled them out: close it
     python3 tools/network/reading.py batch [<contact_id>...]       # are the queued notes too alike?
     python3 tools/network/reading.py extractor [--list]            # the read-only page snippet
-    python3 tools/network/reading.py next [--wait] [--mode card|deep]   # who to read next, once a page may load
+    python3 tools/network/reading.py next [--mode card|deep]      # who to read next
     python3 tools/network/reading.py shortlist [<id>...] [--remove <id>...]  # today's short list
     python3 tools/network/reading.py search-url <employer> [--place P] [--keywords K | --function]
                                                 [--learn ADDRESS | --company-id N]
                                                 # the employer's number from a profile read, if any
     python3 tools/network/reading.py queue --urls                  # the fast path: addresses to open and paste
-    python3 tools/network/reading.py limits                        # every limit, its value and why
-    python3 tools/network/reading.py friction [--kind K --words W] # the friction reads met, and the ramp
-    python3 tools/network/reading.py estimate [N]                  # how long reading N takes today
-    python3 tools/network/reading.py meanwhile                     # the notes to write while a page waits
+    python3 tools/network/reading.py limits                        # what stops a read (LinkedIn's signals)
+    python3 tools/network/reading.py friction [--kind K --words W] # the signals reads met
+    python3 tools/network/reading.py estimate [N]                  # how long reading N takes
+    python3 tools/network/reading.py meanwhile                     # the notes that can be written now
     python3 tools/network/reading.py drafts <file.json>            # a batch of notes, checked together
 
 Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
@@ -76,13 +76,13 @@ Exit codes, one meaning each, so `read; verdict` can be chained (EXIT):
     4  LinkedIn's sign-in page: wait for the person, nothing counted
     5  LinkedIn showed a check: browser reads stopped for today
     6  the page is neither a profile, a sign-in nor a check
-    7  wait: the pause after the last page, seconds (the time is printed)
-    8  later: the hourly cap, a time later today (printed)
-    9  tomorrow: the day's cap, the send-day cap, or stopped for today
+    7  (no longer used: the app sets no pause of its own)
+    8  (no longer used: the app sets no hourly cap of its own)
+    9  tomorrow: LinkedIn stopped today's reads (a check, a sign-out, an unusual-activity notice)
     10 not read yet: no page of theirs read, so KEEP cannot be said
     11 the batch of notes is too alike to send
     12 done: nobody left to read on today's short list (`next`)
-    13 new day: a read waiting in the background ran past midnight; today needs its own list
+    13 new day: a run went past midnight; today needs its own list
     14 scroll: the page's text has no Experience yet; scroll it to the very end, read it again
 """
 
@@ -94,7 +94,6 @@ import glob
 import json
 import os
 import re
-import subprocess
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -117,70 +116,17 @@ EXIT = {"ok": 0, "error": 1, "skip": 3, "signin": 4, "check": 5, "unknown": 6, "
 # person's own browser is automated access LinkedIn's terms forbid, so it waits
 # for their yes (the profile-reads upgrade asks).
 PROFILE_READS = str(getattr(_NET, "PROFILE_READS", "paste") or "paste").lower()
-# How a browser read behaves: like a person writing to a few people, never a loop.
-# It is the person's own signed-in account loading these pages, and a steady
-# machine rhythm or a burst is what automation checks look for. LinkedIn
-# publishes no thresholds and its terms forbid automated access at any pace, so
-# nothing here makes a browser read safe: these lower the risk and do not remove
-# it. A read is for someone the person will write to, so the day's reads stop at the
-# requests left this week (state.platform_budget) and SKIP_SPARE more, for the people
-# a read rules out; 80 a day and 30 an hour are the ceilings (pace.py says why).
-#
-# The pace now, and why. Between two pages: a gap drawn from a log-normal curve
-# with its middle at GAP_MEDIAN (90 seconds), never under 45 seconds or over 240,
-# so most gaps sit near a minute and a half and no two runs repeat. After a
-# varying 3 to 7 pages (BREAK_AFTER, drawn again each time), a longer break of 5
-# to 12 minutes (BREAK_SECONDS). On each page, 20 to 60 seconds scrolled through
-# at reading pace (DWELL_SECONDS), which is also what makes LinkedIn load the
-# sections it fills in late. The evidence is thin and stated as such: LinkedIn
-# publishes no rate, so these are a judgement of how long a person spends reading
-# a profile and writing a note, not a measured safe limit. What is measured is the
-# failure they replaced: an even 25 to 75 second gap with a break on exactly every
-# fifth read, which is a rhythm a machine has and a person does not. 3.3.0 also cut the
-# caps from 30 an hour and 80 a day to 8 and 15; they are 30 and 80 again since
-# 2026-10-20. These pauses (careful's) held an hour to about 17 in practice (simulated), so
-# since 2026-10-22 the default is fast's shorter ones, which reach the cap and no more.
-#
-# The person owns the trade-off: every limit below is a setting in profile/networking.py,
-# and one dial, PROFILE_READ_RISK, sets the pauses from a named preset ("fast" by default;
-# "normal"; "careful", which is the pace above exactly). tools/network/pace.py holds them in
-# one place, each with its default and why, and `reading.py limits` prints them. A setting
-# the person writes outranks every preset.
+# How a browser read behaves: one page at a time, as fast as the browser loads it. It is
+# the person's own signed-in account loading these pages; LinkedIn publishes no thresholds
+# and its terms forbid automated access at any pace, so nothing here makes a browser read
+# safe. Since 2026-10-22 the app sets no limit of its own on reading: no pages an hour or a
+# day, no pause between pages, no break, no slow start after a signal and no log of a page
+# loaded early. The maintainer's word: at one page every two minutes, the waiting was most of
+# a networking run. What stops a read is LinkedIn itself (pace.py): a security check, a
+# CAPTCHA, an unusual-activity notice, an HTTP 999 page or a sign-out stops the day at once.
 import pace  # noqa: E402
 
-READS_PER_HOUR = pace.value("reads_per_hour")
-READS_PER_DAY = pace.value("reads_per_day")
-PAGES_PER_HOUR = pace.value("pages_per_hour")
-PAGES_PER_DAY = pace.value("pages_per_day")
-LOADS_PER_HOUR = pace.loads_cap("hour")
-LOADS_PER_DAY = pace.loads_cap("day")
-SKIP_SPARE = pace.value("skip_spare")
-HOUR_MINUTES = 60                       # the hourly caps count loads in this rolling window
-GAP_SECONDS = pace.value("gap_seconds")  # between two pages: most near GAP_MEDIAN
-GAP_MEDIAN = pace.value("gap_median")
-BREAK_AFTER = pace.value("break_after")  # a longer break after somewhere in this many reads
-BREAK_MINUTES_DEFAULT = pace.LIMITS["break_minutes"][2]
-
-
-def _break_minutes(value) -> tuple:
-    """The person's PROFILE_READ_BREAK_MINUTES as (shortest, longest), or the default.
-    A single number is a fixed length; anything unreadable is the default."""
-    try:
-        lo, hi = (value, value) if isinstance(value, (int, float)) else tuple(value)[:2]
-        lo, hi = float(lo), float(hi)
-    except (TypeError, ValueError):
-        return BREAK_MINUTES_DEFAULT
-    if lo < 0 or hi < 0:
-        return BREAK_MINUTES_DEFAULT
-    return (min(lo, hi), max(lo, hi))
-
-
-BREAK_MINUTES = _break_minutes(pace.value("break_minutes"))
-BREAK_SECONDS = (int(BREAK_MINUTES[0] * 60), int(BREAK_MINUTES[1] * 60))
-DWELL_SECONDS = pace.value("dwell_seconds")            # a deep read: scrolled to the end
-CARD_DWELL_SECONDS = pace.value("card_dwell_seconds")  # a card read: top card and About only
 READ_MODES = ("card", "deep")
-PACE_SECONDS = GAP_SECONDS[0]           # the shortest gap ever allowed
 STOP_FILE = ("documents", "network", ".reads_stopped.json")
 # Reading enriches a short list; it never makes the list. A run ranks everyone it
 # found (tools/network/sources.py, the ladder), puts its best on the day's short list,
@@ -192,16 +138,11 @@ STOP_FILE = ("documents", "network", ".reads_stopped.json")
 # people: the sent-invitations list (who already has a request pending, for everyone
 # at once) and a people search narrowed to the employer (headline, place and degree for
 # a dozen people a load). Only then a profile read, of their own page, for the people the
-# person will write to, as its card when that decides it. The day's list is sized to the
-# requests left this week (and SKIP_SPARE for those a read rules out), never above
-# READS_PER_RUN, and at most UNVERIFIED_ON_SHORTLIST of it may be people nothing has
-# placed in the person's city yet. READS_PER_RUN was 10, then 5 in 3.7.0, when five of
-# seven profile reads in one session (2026-10-19) went on facts a cheaper check had
-# already shown (a request already pending, a city elsewhere, a role outside their
-# function). Those checks now run first, so since 2026-10-20 it is the day's cap.
-READS_PER_RUN = pace.value("reads_per_run")
-UNVERIFIED_ON_SHORTLIST = pace.value("unplaced")
-HAND_TOP = pace.value("paste_top")
+# person will write to, as its card when that decides it. At most UNVERIFIED_ON_SHORTLIST
+# of the day's list may be people nothing has placed in the person's city yet, and at most
+# PER_EMPLOYER people at one employer.
+UNVERIFIED_ON_SHORTLIST = pace.UNPLACED
+HAND_TOP = pace.PASTE_TOP
 SHORTLIST_FILE = ("documents", "network", ".shortlist.json")
 # The one-page reads (a list of many people, read once) and when each was read: they
 # pace like a profile and count against their own caps (PAGES_PER_*) and all loads
@@ -224,7 +165,7 @@ RUNTIME_FILES = (STOP_FILE, SHORTLIST_FILE, PAGES_FILE, SIGNIN_FILE)
 SIGNIN_URL = "https://www.linkedin.com/login"
 SIGNIN_POLL_SECONDS = 20                # how often the session looks at the pane's address
 SIGNIN_WAIT_MINUTES = 5                 # then it asks again, never gives up silently
-FRESH_DAYS = pace.value("fresh_days")
+FRESH_DAYS = pace.FRESH_DAYS
 # A post is something to answer for this long; after that it is history.
 POST_DAYS = 180
 EXCERPT = 300
@@ -1658,14 +1599,11 @@ def _browser_reads(pages: bool = True) -> list:
 def _load(src: dict):
     """(when, gap, a break?) from one recorded read, or None when it carries no time."""
     try:
-        gap = float(src.get("next_gap") or PACE_SECONDS)
+        gap = float(src.get("next_gap") or 0)
         when = datetime.datetime.fromisoformat(str(src.get("at")))
     except (TypeError, ValueError):
         return None
-    # A break was once told apart only by its length; one the person set shorter than
-    # the longest gap would have restarted the count. It is recorded now.
-    brk = bool(src["break"]) if "break" in src else gap > GAP_SECONDS[1]
-    return (when, gap, brk)
+    return (when, gap, bool(src.get("break")))
 
 
 def _pages() -> list:
@@ -1709,17 +1647,13 @@ def signal(kind: str, words: str = "", now: datetime.datetime | None = None) -> 
 
 
 def page_read(kind: str, url: str = "", now: datetime.datetime | None = None,
-              people: int = 0, rng=None, load_seconds: float | None = None,
-              owed: float = 0.0) -> dict:
-    """Record one read of a page that lists many people (PAGE_KINDS): when, which, how
-    many it named and the pause after it. Counts against the list-page and all-load caps,
-    never the send-day cap. `owed` is what a page loaded too soon skipped of its pause, added
-    to the next one (owed_seconds). Returns the record."""
+              people: int = 0, load_seconds: float | None = None) -> dict:
+    """Record one read of a page that lists many people (PAGE_KINDS): when, which and how
+    many it named. Returns the record."""
     if kind not in PAGE_KINDS:
         raise ValueError(f"a one-page read is one of {', '.join(PAGE_KINDS)}, not {kind!r}")
     now = now or datetime.datetime.now()
-    gap, brk = pause(rng)
-    gap += int(round(max(0.0, owed)))
+    gap, brk = 0, False
     rec = {"kind": kind, "url": str(url or ""), "at": now.isoformat(timespec="seconds"),
            "people": int(people), "next_gap": gap, "break": brk}
     if load_seconds is not None:
@@ -1736,65 +1670,64 @@ def page_read(kind: str, url: str = "", now: datetime.datetime | None = None,
     return rec
 
 
-# The break line the read-break upgrade wrote into every browser reader's profile at the
-# app's value then, (5, 12). Written there, it read as the person's own setting, outranking
-# every preset, so no later change to the app's pace could reach them (2026-10-22).
-FROZEN_BREAK = re.compile(r"^PROFILE_READ_BREAK_MINUTES\s*=\s*\(\s*5\s*,\s*12\s*\)\s*(?:#.*)?$")
-
-
-def frozen_break() -> tuple[str, int, int] | None:
-    """(networking.py, first line, last line) of the break line the read-break upgrade
-    wrote, with its comment above it, where nobody has touched it since: still the value it
-    wrote, its only change ever the upgrade's own commit, and no choice of the person's
-    recorded for it (learned.py); None otherwise, and their setting stands."""
+# The settings of the reading limits removed on 2026-10-22 (pace.RETIRED): read by nothing
+# since, so a profile still holding one says something the app no longer does. One was the
+# break an earlier upgrade wrote into every browser reader's profile; others a person wrote by
+# hand to escape the caps. Taken out, unless a reaction of theirs recorded it (learned.py).
+def retired_settings() -> list:
+    """[(name, first line, last line)] of each retired setting assigned at the top of
+    profile/networking.py that no recorded choice of the person's keeps, lines counted from 1."""
+    import ast
     if not person.exists("networking.py"):
-        return None
-    path = person.path("networking.py")
+        return []
     try:
-        with open(path, encoding="utf-8") as fh:
-            lines = fh.read().split("\n")
-    except OSError:
-        return None
-    at = [n for n, ln in enumerate(lines) if FROZEN_BREAK.match(ln)]
-    if len(at) != 1:
-        return None
+        with open(person.path("networking.py"), encoding="utf-8") as fh:
+            tree = ast.parse(fh.read())
+    except (OSError, SyntaxError, ValueError):
+        return []
     try:
         import learned
-        if any("PROFILE_READ_BREAK_MINUTES" in str(x) for x in learned.locked()):
-            return None
-    except Exception:          # no record to read: nothing says it was their choice
-        pass
-    folder = os.path.dirname(path)
-    try:
-        log = subprocess.run(["git", "-C", folder, "log", "--format=%s", "-G",
-                              "^PROFILE_READ_BREAK_MINUTES", "--", os.path.basename(path)],
-                             capture_output=True, text=True, timeout=20)
-    except (OSError, subprocess.SubprocessError):
-        return None
-    subjects = [x for x in log.stdout.splitlines() if x.strip()]
-    if log.returncode or len(subjects) != 1 or not subjects[0].startswith(
-            "Profile upgrade: read-break"):
-        return None
-    first = at[0]
-    while first > 0 and lines[first - 1].lstrip().startswith("#") and \
-            "break" in lines[first - 1].lower():
-        first -= 1
-    return path, first, at[0]
+        kept = " ".join(str(x) for x in learned.locked())
+    except Exception:          # no record to read: nothing says one was their choice
+        kept = ""
+    out = []
+    for node in tree.body:
+        targets = node.targets if isinstance(node, ast.Assign) else \
+            [node.target] if isinstance(node, ast.AnnAssign) else []
+        for tg in targets:
+            if isinstance(tg, ast.Name) and tg.id in pace.RETIRED and \
+                    not re.search(r"\b%s\b" % tg.id, kept):
+                out.append((tg.id, node.lineno, getattr(node, "end_lineno", node.lineno)))
+    return out
+
+
+def drop_retired() -> str:
+    """Take out what `retired_settings` finds; what was done."""
+    found = retired_settings()
+    if not found:
+        return "nothing to change: profile/networking.py holds no reading limit the app removed"
+    path = person.path("networking.py")
+    with open(path, encoding="utf-8") as fh:
+        lines = fh.read().split("\n")
+    for _name, first, last in sorted(found, key=lambda x: -x[1]):
+        # The comment written over it goes too, where it is that setting's alone: the lines
+        # straight above it, with nothing but a blank line, the end of the file or another
+        # comment after the setting. A comment heading settings that stay is kept.
+        after = lines[last].strip() if last < len(lines) else ""
+        if not after or after.startswith("#"):
+            while first > 1 and lines[first - 2].lstrip().startswith("#"):
+                first -= 1
+        del lines[first - 1:last]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(lines))
+    names = ", ".join(n for n, _f, _l in found)
+    return ("took out %s from profile/networking.py: the app sets no reading limit of its own "
+            "since 2026-10-22, and nothing reads them" % names)
 
 
 def free_break() -> str:
-    """Take out the break line `frozen_break` finds, and its comment; what was done."""
-    found = frozen_break()
-    if not found:
-        return "nothing to change: no break line in profile/networking.py is the app's old one"
-    path, first, last = found
-    with open(path, encoding="utf-8") as fh:
-        lines = fh.read().split("\n")
-    del lines[first:last + 1]
-    with open(path, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))
-    return ("took out PROFILE_READ_BREAK_MINUTES = (5, 12), which an earlier update wrote into "
-            "profile/networking.py: the break between bursts of reads is the app's pace again")
+    """The older name of `drop_retired`, kept for an instruction that still says it."""
+    return drop_retired()
 
 
 def move_runtime() -> list:
@@ -1889,7 +1822,7 @@ def _signal_kind(reason: str) -> str:
 
 def stop(reason: str, today: datetime.date | None = None) -> str:
     """Record that LinkedIn showed a warning, a security check, a CAPTCHA or a sign-in wall:
-    the day's reads stop, and the signal goes in the friction log, which holds the ramp back."""
+    the day's reads stop, and the signal goes in the friction log."""
     pace.record_friction(_signal_kind(reason), reason)
     return _write_stop(reason, today)
 
@@ -1902,7 +1835,7 @@ def stop(reason: str, today: datetime.date | None = None) -> str:
 # "signed out mid-run", stopped the whole day, and gave no way back but editing the ledger
 # by hand. A sign-in page minutes after a page loaded, or a second sign-out in one day,
 # is friction, and stops the day.
-EXPIRY_HOURS = pace.value("expiry_hours")
+EXPIRY_HOURS = pace.EXPIRY_HOURS
 SIGNOUT_KEEP_DAYS = 7
 
 
@@ -2029,8 +1962,8 @@ def _said_signout(got: dict) -> int:
 
 def resume(reason: str, now: datetime.datetime | None = None) -> dict:
     """Lift today's sign-out stop on the person's word, after a clean sign-in. The friction
-    entry stays, marked "person confirmed benign", and still counts for the ramp; a second
-    sign-out today stops the day with no resume. Returns the lifted stop."""
+    entry stays, marked "person confirmed benign"; a second sign-out today stops the day
+    with no resume. Returns the lifted stop."""
     now = now or datetime.datetime.now()
     reason = " ".join(str(reason or "").split())
     if not reason:
@@ -2049,32 +1982,13 @@ def resume(reason: str, now: datetime.datetime | None = None) -> dict:
     return rec
 
 
-def sends_left_week(today: datetime.date | None = None) -> int | None:
-    """Connection requests the person can still send this week, or None when unknown. A
-    day's reading prepares the week's requests, as 3.2.5 did: bound to the day's requests
-    alone, with 25 a day and 50 a week, a sitting could never prepare the week."""
-    try:
-        import state
-        b = state.platform_budget(state.load_contacts(), state.load_threads(),
-                                  today or datetime.date.today())
-        return int(b.get("connections_left"))
-    except Exception:  # noqa: BLE001  the cap is a ceiling; without the book it stands alone
-        return None
-
-
 def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1,
                profile: bool = True) -> dict:
-    """May a browser read go now? {"kind", "why", "at"}.
-
-    kind is "go"; "wait" (the pause after the last page: a short wait, `at` says when);
-    "later" (an hourly cap or the ramp: later today, at `at`); or "tomorrow" (stopped for
-    the day, a daily cap, or enough read for the requests left this week).
-    `profile` is False for a one-page read (PAGE_KINDS), which has caps of its own and
-    which the send-day cap does not hold: that cap is about the people written to, and a
-    list page writes to nobody. All loads together have caps as well, and the hourly one
-    is lower for a while after LinkedIn shows a signal (pace.hourly_ceiling). `sends_left`
-    is the requests left this week; -1 reads it from the contact book.
-    """
+    """May a browser read go now? {"kind", "why", "at"}: "go", or "tomorrow" when LinkedIn
+    has stopped the day's reads (a security check, a sign-out out of turn, an unusual-activity
+    notice, an HTTP 999 page, or a second page that came back nearly empty within the hour).
+    The app holds no read back of its own (pace.py): no pause, no cap and no ramp.
+    `sends_left` and `profile` are kept for callers that pass them; neither holds anything."""
     now = now or datetime.datetime.now()
     why = stopped(now.date())
     if why:
@@ -2082,73 +1996,17 @@ def gate_state(now: datetime.datetime | None = None, sends_left: int | None = -1
         return {"kind": "tomorrow", "at": None,
                 "why": f"browser reads are stopped for today: {why}. Tomorrow, or a paste"
                        + (f". {way_back}" if way_back else "")}
-    loads = _loads()
-    ledger = pace.load()
-    today = [x for x in loads if x["when"].date() == now.date()]
-    mine = [x for x in today if (x["kind"] == "profile") == profile]
-    kind_day, kind_name = ((READS_PER_DAY, "PROFILE_READS_PER_DAY") if profile
-                           else (PAGES_PER_DAY, "PROFILE_PAGES_PER_DAY"))
-    if len(mine) >= kind_day:
-        return {"kind": "tomorrow", "at": None,
-                "why": f"{kind_day} {'profiles' if profile else 'list pages'} read today "
-                       f"({kind_name}); the rest are read tomorrow"}
-    if len(today) >= LOADS_PER_DAY:
-        return {"kind": "tomorrow", "at": None,
-                "why": f"{LOADS_PER_DAY} pages loaded today (PROFILE_LOADS_PER_DAY); the rest "
-                       "are read tomorrow"}
-    if profile:
-        left = sends_left_week(now.date()) if sends_left == -1 else sends_left
-        people = unused([x for x in today if x["kind"] == "profile"])
-        if left is not None and len(people) >= left + SKIP_SPARE:
-            return {"kind": "tomorrow", "at": None,
-                    "why": f"{len(people)} profiles read today and not yet written to, enough "
-                           f"for the {left} request(s) left this week: a profile is read only "
-                           "for someone to write to. Send some, and reading goes on"}
-    window = now - datetime.timedelta(minutes=HOUR_MINUTES)
-    hour = [x for x in loads if x["when"] > window]
-    hour_mine = [x for x in hour if (x["kind"] == "profile") == profile]
-    kind_hour, kind_hname = ((READS_PER_HOUR, "PROFILE_READS_PER_HOUR") if profile
-                             else (PAGES_PER_HOUR, "PROFILE_PAGES_PER_HOUR"))
-    ceiling, why_ceiling = pace.hourly_ceiling(now.date(), [x["when"] for x in loads], ledger)
-    ceiling = min(ceiling, LOADS_PER_HOUR)
-    for got, cap, name in ((hour_mine, kind_hour, kind_hname), (hour, ceiling, why_ceiling)):
-        if len(got) >= cap:
-            resume = min(x["when"] for x in got) + datetime.timedelta(minutes=HOUR_MINUTES)
-            label = name if name.startswith("PROFILE_") else (
-                "PROFILE_LOADS_PER_HOUR" if name == "loads_per_hour" else name)
-            # Say which setting holds it and where it is changed: a wait that names no
-            # setting was waited out for 44 minutes while the person thought every cap was
-            # lifted.
-            setting = ("PROFILE_READ_RAMP" if "PROFILE_READ_RAMP" in label
-                       else label if label.startswith("PROFILE_") else "")
-            change = (f" To change it: {setting} in profile/networking.py." if setting else "")
-            return {"kind": "later", "at": resume,
-                    "why": f"{cap} pages in the last hour ({label}); the next after "
-                           f"{resume:%H:%M}.{change}"}
-    if loads:
-        last = loads[-1]
-        gap = last["gap"]
-        # A soft signal within the hour (a page that did not render, a slow load) doubles
-        # the pause before the next: a step back at the first sign, before any stop.
-        if pace.soft_recent(now, ledger):
-            gap *= 2
-        waited = (now - last["when"]).total_seconds()
-        if waited < gap:
-            at = last["when"] + datetime.timedelta(seconds=gap)
-            return {"kind": "wait", "at": at,
-                    "why": f"{waited:.0f}s since the last page; wait {gap - waited:.0f}s more"}
     return {"kind": "go", "at": None, "why": ""}
 
 
 def browser_gate(now: datetime.datetime | None = None, sends_left: int | None = -1,
                  profile: bool = True) -> str:
-    """"" when a browser read may go now, otherwise why not and when it may."""
+    """"" when a browser read may go now, otherwise why not."""
     return gate_state(now, sends_left, profile)["why"]
 
 
 def _book() -> list:
-    """The contact book, or [] when it cannot be read: the counts below then fall back to
-    every read today, as before."""
+    """The contact book, or [] when it cannot be read."""
     try:
         import state
         return state.load_contacts()
@@ -2157,11 +2015,7 @@ def _book() -> list:
 
 
 def unused(profiles: list, contacts=None) -> list:
-    """The profile reads today not yet used for a note that went: a read is for someone to
-    write to, so once they have been written to it no longer counts against the requests
-    still to go. Counting every read today said "18 read, enough for the 13 left" when ten
-    of the 18 had already been sent to, and stalled a run the person had lifted every cap
-    on (2026-10-20)."""
+    """The profile reads today not yet used for a note that went."""
     contacts = _book() if contacts is None else contacts
     sent = {str(c.get("contact_id") or "") for c in contacts or ()
             if str(c.get("first_contacted") or "").strip()
@@ -2169,74 +2023,23 @@ def unused(profiles: list, contacts=None) -> list:
     return [x for x in profiles if not x.get("id") or x["id"] not in sent]
 
 
-def _limits(now: datetime.datetime, sends_left: int | None = -1) -> list:
-    """[(profiles that may still be read under it, said plainly, its setting)] for every
-    limit on profile reads today; the setting is "" where none is the person's to change."""
-    loads = _loads()
-    hour_ago = now - datetime.timedelta(minutes=HOUR_MINUTES)
-    today = [x for x in loads if x["when"].date() == now.date()]
-    profiles = [x for x in today if x["kind"] == "profile"]
-    hour = [x for x in loads if x["when"] > hour_ago]
-    ceiling, why_ceiling = pace.hourly_ceiling(now.date(), [x["when"] for x in loads])
-    ceiling = min(ceiling, LOADS_PER_HOUR)
-    ramp = why_ceiling != "loads_per_hour"
-    limits = [(max(0, READS_PER_DAY - len(profiles)), f"{READS_PER_DAY} a day (PROFILE_READS_PER_DAY)",
-               "PROFILE_READS_PER_DAY"),
-              (max(0, READS_PER_HOUR - sum(1 for x in hour if x["kind"] == "profile")),
-               f"{READS_PER_HOUR} an hour (PROFILE_READS_PER_HOUR)", "PROFILE_READS_PER_HOUR"),
-              (max(0, LOADS_PER_DAY - len(today)), f"{LOADS_PER_DAY} pages a day in all "
-                                                    "(PROFILE_LOADS_PER_DAY)",
-               "PROFILE_LOADS_PER_DAY"),
-              (max(0, ceiling - len(hour)), f"{ceiling} pages an hour in all ("
-               + (why_ceiling if ramp else "PROFILE_LOADS_PER_HOUR") + ")",
-               "PROFILE_READ_RAMP" if ramp else "PROFILE_LOADS_PER_HOUR")]
-    left = sends_left_week(now.date()) if sends_left == -1 else sends_left
-    if left is not None:
-        limits.append((max(0, left + SKIP_SPARE - len(unused(profiles))),
-                       f"the {left} request(s) left this week, and {SKIP_SPARE} spare",
-                       "PROFILE_READ_SKIP_SPARE"))
-    return limits
+NO_LIMITS = ("no limit of the app's own: one page at a time, as fast as the browser loads it, "
+             "until LinkedIn shows a check, a sign-out or an unusual-activity notice")
 
 
 def reads_left(now: datetime.datetime | None = None, sends_left: int | None = -1) -> tuple:
-    """(profiles that may still be read today, the limit that binds, said plainly).
-
-    The queue once printed the daily cap alone ("80 left today") while an hourly cap of 8
-    was what held: the binding one is the smallest of the day, the hour, all loads, the
-    ramp and the requests left this week."""
-    n, what, _setting = min(_limits(now or datetime.datetime.now(), sends_left),
-                            key=lambda x: x[0])
-    return n, what
+    """(profiles that may still be read today, why): None (no limit) and NO_LIMITS, or 0
+    and why when LinkedIn has stopped the day."""
+    why = stopped((now or datetime.datetime.now()).date())
+    return (0, f"stopped for today: {why}") if why else (None, NO_LIMITS)
 
 
 def budget_line(now: datetime.datetime | None = None, sends_left: int | None = -1) -> str:
-    """One line before a round: the profile reads and list pages it can have today, the
-    limit that binds and the exact line in profile/networking.py that changes it. A person
-    learned which setting held them only from a wait in the middle of a run (2026-10-20)."""
-    now = now or datetime.datetime.now()
-    n, what, setting = min(_limits(now, sends_left), key=lambda x: x[0])
-    loads = _loads()
-    today = [x for x in loads if x["when"].date() == now.date()]
-    pages = max(0, min(PAGES_PER_DAY - sum(1 for x in today if x["kind"] in PAGE_KINDS),
-                       LOADS_PER_DAY - len(today)))
-    name = {v: k for k, v in pace.SETTING.items()}.get(setting, "")
-    current = pace.value(name) if name else ""
-    change = (f"to change it, set `{setting} = <a higher number>` in profile/networking.py "
-              f"(now {current}, {pace.source(name)})" if name else "")
-    if setting == "PROFILE_READ_SKIP_SPARE":
-        change = ("it moves as notes go: a read stops counting once its note is sent, so send "
-                  f"the ones drafted, or set `PROFILE_READ_SKIP_SPARE = <more>` in "
-                  f"profile/networking.py (now {SKIP_SPARE})")
-    stopped_why = stopped(now.date())
+    """One line before a round: whether reads can go today."""
+    stopped_why = stopped((now or datetime.datetime.now()).date())
     if stopped_why:
         return f"Reads today: none, they are stopped for today: {stopped_why}."
-    return (f"Reads today: up to {n} profile(s) and {pages} list page(s). What binds: {what}"
-            + (f"; {change}" if change else "") + ".")
-
-
-def _mean(pair) -> float:
-    lo, hi = (pair, pair) if isinstance(pair, (int, float)) else tuple(pair)[:2]
-    return (float(lo) + float(hi)) / 2
+    return f"Reads today: {NO_LIMITS}."
 
 
 def _say_minutes(seconds: float) -> str:
@@ -2246,52 +2049,30 @@ def _say_minutes(seconds: float) -> str:
     return f"about {m / 60.0:.1f} hours".replace(".0 hours", " hours")
 
 
+# A profile read at the browser's own speed: the page, its scroll, the extract and the read
+# into the file, with no wait of the app's own. A judgement, said as one.
+SECONDS_A_READ = 40
+
+
 def estimate(n: int, now: datetime.datetime | None = None, mode: str = "card",
              sends_left: int | None = -1) -> dict:
-    """How long reading `n` profiles takes today at the pace already set, said in plain words
-    before the reads start, so the person chooses between speed and tailored notes before
-    anything is drafted. Nothing here changes a pause or a cap: it adds up the ones there are
-    (a page's dwell, the pause between pages around GAP_MEDIAN, the longer break every
-    BREAK_AFTER pages, the hourly ceiling and the ramp, what is left today, and the wait
-    before the next page may load). A round of about twenty reads took 30 to 40 minutes
-    with nobody told until it was under way (2026-10-21).
-
-    {"today", "later", "seconds", "line"}: how many can be read today, how many wait, the
-    seconds for today's, and the line to say."""
+    """How long reading `n` profiles takes, said before the reads start. {"today", "later",
+    "seconds", "line"}."""
     now = now or datetime.datetime.now()
     n = max(0, int(n))
-    hourly = ("PROFILE_READS_PER_HOUR", "PROFILE_LOADS_PER_HOUR", "PROFILE_READ_RAMP")
-    day_limits = [x for x in _limits(now, sends_left) if x[2] not in hourly]
-    can, binds, _setting = min(day_limits, key=lambda x: x[0])
-    today_n = min(n, can)
-    later = n - today_n
-    dwell_ = _mean(CARD_DWELL_SECONDS if mode == "card" else DWELL_SECONDS)
-    gaps = max(today_n - 1, 0)
-    breaks = int(gaps / max(_mean(BREAK_AFTER), 1.0))
-    secs = today_n * dwell_ + gaps * GAP_MEDIAN + breaks * max(_mean(BREAK_SECONDS) - GAP_MEDIAN, 0)
-    ceiling, _why = pace.hourly_ceiling(now.date(), [x["when"] for x in _loads()])
-    per_hour = max(1, min(READS_PER_HOUR, ceiling, LOADS_PER_HOUR))
-    if today_n > per_hour:                 # the hourly cap holds the rest an hour on
-        secs = max(secs, (today_n - 1) // per_hour * 3600 + dwell_)
-    g = gate_state(now, sends_left)
-    if g.get("at") and g["kind"] in ("wait", "later") and today_n:
-        secs += max(0.0, (g["at"] - now).total_seconds())
+    why = stopped(now.date())
     if not n:
         line = "Reads: nobody is waiting to be read."
-    elif not today_n:
-        line = (f"Reading these {n} cannot start today ({binds}). Draft from their cards now, "
-                "each marked card-only, or wait for tomorrow's reads")
-    else:
-        each = max(1, int(round((dwell_ + GAP_MEDIAN) / 60.0)))
-        pace_ = (f"one page every {each} minute{'s' if each != 1 else ''} or so, a longer "
-                 f"break every few pages, at most {per_hour} an hour")
-        what = ("this one" if n == 1 else f"these {n}") if today_n == n \
-            else f"{today_n} of these {n}"
-        line = (f"Reading {what} takes {_say_minutes(secs)} today ({pace_})"
-                + (f"; the other {later} wait for tomorrow ({binds})" if later else "")
-                + ". Notes from their cards alone are ready now and say they are card-only; "
-                "the person chooses which before anything is drafted.")
-    return {"today": today_n, "later": later, "seconds": int(secs), "line": line}
+        return {"today": 0, "later": 0, "seconds": 0, "line": line}
+    if why:
+        return {"today": 0, "later": n, "seconds": 0,
+                "line": (f"Reading these {n} cannot start today (stopped: {why}). Draft from "
+                         "their cards now, each marked card-only, or read them tomorrow")}
+    secs = n * SECONDS_A_READ
+    what = "this one" if n == 1 else f"these {n}"
+    return {"today": n, "later": 0, "seconds": secs,
+            "line": (f"Reading {what} takes {_say_minutes(secs)}, at the browser's own speed "
+                     "with no waiting of the app's own; notes are written as each is read.")}
 
 
 def meanwhile(today: datetime.date | None = None, contacts=None) -> list:
@@ -2329,44 +2110,6 @@ def _meanwhile_lines(contacts=None) -> list:
     return (["meanwhile, while the next page waits:"]
             + [f"  {cid}: {what}" for cid, what in got[:8]]
             + ([f"  and {len(got) - 8} more"] if len(got) > 8 else []))
-
-
-def _is_break(reads) -> int:
-    """How many reads since the last long break, this one included."""
-    since_break = 0
-    for r in reversed(reads):
-        brk = r[2] if len(r) > 2 else r[1] > GAP_SECONDS[1]
-        if brk:                            # a break, never a long ordinary gap
-            break
-        since_break += 1
-    return since_break + 1
-
-
-def pause(rng=None, reads=None) -> tuple:
-    """(seconds to leave after this read, whether that is the long break)."""
-    import math
-    import random
-    rng = rng or random
-    reads = _browser_reads() if reads is None else reads
-    if _is_break(reads) >= rng.randint(*BREAK_AFTER):
-        return int(rng.uniform(*BREAK_SECONDS)), True
-    gap = rng.lognormvariate(math.log(GAP_MEDIAN), 0.45)
-    return int(min(max(gap, GAP_SECONDS[0]), GAP_SECONDS[1])), False
-
-
-def next_gap(rng=None, reads=None) -> int:
-    """The pause to leave after this read: varied, with a longer break that comes after
-    anywhere from 3 to 7 reads, never on a fixed count."""
-    return pause(rng, reads)[0]
-
-
-def dwell(rng=None, mode: str = "deep") -> int:
-    """Seconds to spend on a profile before its text is read. Deep: scrolled through to
-    the end at reading pace, which is also what loads the About, Experience and Education
-    sections LinkedIn only fills in as the page is scrolled. Card: the top card and About,
-    nothing scrolled, which decides most keep or skip."""
-    import random
-    return int((rng or random).uniform(*(CARD_DWELL_SECONDS if mode == "card" else DWELL_SECONDS)))
 
 
 def reads_today(today: datetime.date | None = None) -> int:
@@ -2437,16 +2180,9 @@ def _card_says_enough(contact_id: str, contacts, today: datetime.date) -> str:
 
 
 def shortlist_cap(sends_left: int | None = -1, today: datetime.date | None = None) -> tuple:
-    """(how many may be on today's list, why): the requests left this week and SKIP_SPARE
-    for those a read rules out, never above READS_PER_RUN."""
-    left = sends_left_week(today) if sends_left == -1 else sends_left
-    if left is None:
-        return READS_PER_RUN, f"PROFILE_READS_PER_RUN {READS_PER_RUN}"
-    need = left + SKIP_SPARE
-    if need >= READS_PER_RUN:
-        return READS_PER_RUN, (f"PROFILE_READS_PER_RUN {READS_PER_RUN}; {left} request(s) "
-                               "left this week")
-    return need, f"the {left} request(s) left this week, and {SKIP_SPARE} spare"
+    """(how many may be on today's list, why): no cap of the app's own (pace.py), so as many
+    as the run found worth writing to. Kept for callers that ask."""
+    return None, "no cap of the app's own"
 
 
 def placed(contact_id: str, contacts=None) -> bool:
@@ -2561,8 +2297,7 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
     the ones already read, and a list that can be replaced at will is no cap at all. But
     the people a list no longer needs leave it by themselves (`_gone`: read on an earlier
     day, or past a first note in the contact book), and `remove` takes one off by hand.
-    Only the people still to read today, and those read today, count toward the cap
-    (`shortlist_cap`, sized to the requests left this week), and at most
+    There is no cap of the app's own on its length (`shortlist_cap`), and at most
     UNVERIFIED_ON_SHORTLIST of them may be people nothing has placed in a city yet
     (`placed`): the rest of those wait for a one-page read or a public finding.
     """
@@ -2593,7 +2328,7 @@ def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
         if card_enough(load(i), who.get("company", "")):
             card.append(i)               # drafted from the card: no read spent on them
             continue
-        if len(have) >= cap:
+        if cap is not None and len(have) >= cap:
             full.append(i)
             continue
         full_ = employer_full_line(who.get("company", ""), contacts,
@@ -3386,19 +3121,6 @@ def _sentences(note: str) -> list:
     return [x.strip() for x in re.split(r"(?<=[.?!])\s+", body) if len(x.strip()) >= 12]
 
 
-# A short request for a chat or a call is always an allowed close, whatever ASK says:
-# "Would you have time for a quick chat next week?" was refused as "not your ask"
-# (2026-10-22). Short: a question of at most SHORT_ASK_WORDS words.
-SHORT_ASK_WORDS = 15
-_CHAT_OR_CALL = re.compile(r"\b(?:chat|call|coffee|catch[- ]up|conversation|talk)\b", re.I)
-
-
-def short_chat_ask(sentence: str) -> bool:
-    s = str(sentence or "").strip()
-    return (s.endswith("?") and len(s.split()) <= SHORT_ASK_WORDS
-            and bool(_CHAT_OR_CALL.search(s)))
-
-
 def _opening_slot(sents: list, openers) -> str:
     """The sentence a note opens on after the greeting. The person's opener ("hope you're
     well") is a phrase, taken off the front; what follows it is the slot."""
@@ -3438,6 +3160,11 @@ same too very much more most own new""".split())
 FRAME_MIN_WORDS = 4      # a frame with fewer fixed words is how any sentence starts
 OPENING_WORDS = 3
 OPENING_SLOT_MIN = 3     # most of a batch, and never fewer notes than this, open the same way
+# A batch of at least ORDER_MIN notes all in one sentence order ("me / them / ask") reads as
+# one template, and from ORDER_SHARE_FROM notes, ORDER_SHARE of it does.
+ORDER_MIN = 6
+ORDER_SHARE_FROM = 10
+ORDER_SHARE = 0.9
 
 
 def frame(sentence: str) -> tuple:
@@ -3577,18 +3304,21 @@ def alike(notes: dict, ask: str | None = None, about_me: str | None = None,
         if (len(ids) >= OPENING_SLOT_MIN and 2 * len(ids) > len(notes)
                 and any(_same(x, o) for o in own)):
             out.append(("same first sentence, your own words included", x, ids))
-    if ask:
-        asks = {}
-        for cid, sents in per.items():
-            last = sents[-1] if sents else ""
-            if short_chat_ask(last):
-                continue
-            if last.endswith("?") and not any(_same(last, x) for x in [ask] + bank) and re.search(
-                    r"\b(?:open to|quick (?:chat|call)|minutes|few questions|grab a coffee|"
-                    r"catch up|connect)\b", last, re.I):
-                asks.setdefault(last, []).append(cid)
-        for sent, ids in asks.items():
-            out.append(("not your ask", sent, ids))
+    # One sentence order across nearly the whole batch. Twenty notes were greeting, the same
+    # who-line, one line about them and the ask, and nothing here said so: each line was the
+    # person's own or different (2026-10-22). An ask is never held to the person's ASK word
+    # for word any more: "not your ask" pushed every close to the one sentence.
+    if len(notes) >= ORDER_MIN:
+        import compose
+        orders: dict = {}
+        for cid, t in notes.items():
+            o = compose.sentence_order(t)
+            if len(o) >= 3:
+                orders.setdefault(o, []).append(cid)
+        share = ORDER_SHARE if len(notes) >= ORDER_SHARE_FROM else 1.0
+        for o, ids in orders.items():
+            if len(ids) >= share * len(notes):
+                out.append(("same sentence order", " / ".join(o), sorted(ids)))
     # Built the same way: "identical in structure" was the person's word for a batch whose
     # sentences differed and whose shape did not.
     for a, b, shape in compose.alike(notes):
@@ -4325,38 +4055,19 @@ def _wait_gate(timeout: float, profile: bool = True, sleep=None, clock=None) -> 
         sleep(max(1.0, min(30.0, (g["at"] - now).total_seconds() + 1)))
 
 
-# ------------------------------------------------------------ a page loaded too soon
-
-def owed_seconds(g: dict, now: datetime.datetime) -> float:
-    """What a page loaded while the gate said wait still owed of its pause: the next pause
-    is that much longer. A cap (later, tomorrow) holds the next page by itself, since this
-    load counts towards it."""
-    if g.get("kind") == "wait" and g.get("at"):
-        return max(0.0, (g["at"] - now).total_seconds())
-    return 0.0
-
+# ------------------------------------------------------------ a page loaded after a stop
 
 def after_breach(breach: dict | None) -> int:
-    """The exit code once a page loaded too soon has been kept. A wait or an hourly cap is
-    the next page's business (`next --wait` holds it), so the read itself is ok; a stop for
-    the day (a check, a sign-out, a daily cap) still exits as a stop, so a session's loop
-    reads nothing more today. Kept with an ok, a stop was a page the loop went past."""
-    return EXIT["tomorrow"] if breach and breach.get("kind") == "tomorrow" else EXIT["ok"]
+    """The exit code for a page loaded after LinkedIn had stopped the day's reads: kept, and
+    a stop all the same, so a session's loop reads nothing more today."""
+    return EXIT["tomorrow"] if breach else EXIT["ok"]
 
 
 def keep_breach(g: dict, now: datetime.datetime, ident: str = "", owed: float = 0.0) -> str:
-    """Log, once, that a page went in before the person's own pace allowed it, and say so.
-    The page is kept, never refused: it was already open and its text taken, and refusing
-    it meant loading it a second time once the gate opened (2026-10-20). It is a breach of
-    the person's own pace, kept apart from LinkedIn's signals (pace.record_breach): it holds
-    no ramp back and stops nothing."""
-    pace.record_breach(g.get("kind", ""), g.get("why", ""), owed, ident, now)
-    return ("pace: this page was loaded before your own pace allowed it (%s: %s). It is kept, "
-            "not refused, because it was already open; the breach of your pace is logged once "
-            "(`reading.py friction` lists it), and it is not a LinkedIn signal. %s"
-            % (g.get("kind"), g.get("why"),
-               "The next page waits %ds longer, the pause this one skipped" % round(owed)
-               if owed else "The same limit holds the next page"))
+    """What to say of a page loaded after LinkedIn had stopped the day's reads. The page is
+    kept, never refused: it was already open, and refusing it meant loading it again."""
+    return ("reading: this page was loaded after browser reads had stopped for today (%s). It "
+            "is kept, because it was already open; read nothing more today." % g.get("why"))
 
 
 # ------------------------------------------------------------ a request already pending
@@ -4556,9 +4267,10 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
             print(f"  {what}: \"{_clip(detail, 100)}\" in {len(ids)}: {', '.join(ids[:8])}"
                   + (" ..." if len(ids) > 8 else ""))
         print("  write each from its own reading: its own first sentence after the greeting, "
-              "its own way of saying what you have done, and its own close; the person's own "
-              "opener, line about them and ask are theirs to repeat, but not as the first "
-              "sentence of most notes")
+              "its own way of saying what you have done, its own close, and not all in one "
+              "order (compose.first_note order=: the line about you second, after a question, "
+              "or first in a few, never most); the person's own opener, line about them and "
+              "ask are theirs to repeat, but not as the first sentence of most notes")
         return EXIT["alike"]
     if added_lines:
         state.save_contacts(contacts)
@@ -4656,9 +4368,9 @@ def main(argv: list | None = None) -> int:
     sl.add_argument("ids", nargs="*")
     sl.add_argument("--remove", nargs="+", action="extend", default=[], metavar="ID",
                     help="take people off today's list (repeat it, or give several)")
-    nx = sub.add_parser("next", help="the next person on today's list to read, once a page may "
-                                     "load (run with --wait in the background)")
-    nx.add_argument("--wait", action="store_true")
+    nx = sub.add_parser("next", help="the next person on today's list to read")
+    nx.add_argument("--wait", action="store_true",
+                    help="kept for older instructions; nothing is waited for")
     nx.add_argument("--timeout", type=float, default=900.0)
     nx.add_argument("--mode", choices=READ_MODES, default="card",
                     help="card: the top card and About, nothing scrolled; deep: scrolled to "
@@ -4675,10 +4387,12 @@ def main(argv: list | None = None) -> int:
                                      "page waits")
     sub.add_parser("move-runtime", help="move the reading files an older copy kept in "
                                         "documents/network into this computer's ledger")
-    sub.add_parser("free-break", help="take out the break line an earlier update wrote into "
-                                      "profile/networking.py, where nobody has changed it")
-    fr = sub.add_parser("friction", help="the friction reads met (what each was, and when), and "
-                                         "the ramp; or keep one")
+    sub.add_parser("free-break", help="the older name of retired-settings --apply")
+    rs = sub.add_parser("retired-settings", help="the reading limits the app removed, still "
+                                                 "written in profile/networking.py")
+    rs.add_argument("--apply", action="store_true", help="take them out")
+    fr = sub.add_parser("friction", help="the signals reads met (what each was, and when); or "
+                                         "keep one")
     fr.add_argument("--kind", choices=pace.HARD + pace.SOFT, default=None)
     fr.add_argument("--words", default="", help="what it showed, word for word")
     su = sub.add_parser("search-url", help="a people search narrowed to one employer (and a "
@@ -4706,12 +4420,12 @@ def main(argv: list | None = None) -> int:
     st = sub.add_parser("stop", help="LinkedIn showed a check or a warning: no browser reads today")
     st.add_argument("reason", nargs="?", default="")
     st.add_argument("--reason", dest="reason_flag", default="")
-    ga = sub.add_parser("gate", help="may a browser page load go now, and if not, when")
+    ga = sub.add_parser("gate", help="may a browser page load go now (no, only when LinkedIn "
+                                     "stopped the day's reads)")
     ga.add_argument("--wait", action="store_true",
-                    help="hold until it may (run it in the background), up to --timeout")
+                    help="kept for older instructions; nothing is waited for")
     ga.add_argument("--timeout", type=float, default=900.0)
-    ga.add_argument("--page", action="store_true",
-                    help="for a one-page read (invitations, people), which the send-day cap does not hold")
+    ga.add_argument("--page", action="store_true", help="for a one-page read (invitations, people)")
     ga.add_argument("--mode", choices=READ_MODES, default="deep")
     pg = sub.add_parser("page", help="what LinkedIn showed: a profile, its sign-in page, or a check")
     pg.add_argument("file", help="the page text, or - for stdin")
@@ -4771,14 +4485,26 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "free-break":
         print("reading: " + free_break())
         return EXIT["ok"]
+    if a.cmd == "retired-settings":
+        if a.apply:
+            print("reading: " + drop_retired())
+            return EXIT["ok"]
+        found = retired_settings()
+        print("reading: " + (", ".join(n for n, _f, _l in found) + " in profile/networking.py, "
+                             "read by nothing since 2026-10-22" if found
+                             else "none in profile/networking.py"))
+        return EXIT["ok"]
     if a.cmd == "move-runtime":
         moved = move_runtime()
         print(f"reading: {len(moved)} file(s) moved into this computer's ledger "
               f"({pace.ledger_dir()})" + (": " + ", ".join(moved) if moved else ""))
         return EXIT["ok"]
     if a.cmd == "limits":
-        for line in pace.report():
-            print(line)
+        print("Reading: no limit of the app's own (no pages an hour or a day, no pause between "
+              "pages, no break). One page at a time, as fast as the browser loads it. Reads "
+              "stop only when LinkedIn shows a security check, a CAPTCHA, an unusual-activity "
+              "notice, an HTTP 999 page or a sign-out, or two pages come back nearly empty "
+              "within the hour.")
         print(budget_line())
         print(f"The ledger: {pace.ledger_dir()}")
         return EXIT["ok"]
@@ -4801,25 +4527,14 @@ def main(argv: list | None = None) -> int:
             signal(a.kind, a.words)
             why = stopped()
             print(f"reading: kept ({a.kind})" + (f"; browser reads are stopped for today: {why}"
-                                                if why else "; the next pause is doubled"))
+                                                if why else ""))
             return EXIT["ok"]
         log = pace.friction()
-        loads = [x["when"] for x in _loads()]
-        n, why_ = pace.hourly_ceiling(datetime.date.today(), loads)
         print(f"friction: {len(log)} on file, each what a read met, never a warning from "
-              f"LinkedIn unless it says so; pages an hour allowed now: {n} ({why_})")
+              "LinkedIn unless it says so")
         for x in log[-12:]:
             print(f"  {x.get('at')}  {pace.said(x)}"
-                  + (" (never moves the ramp)" if x.get("kind") in pace.NOT_FOR_THE_RAMP else "")
                   + (f": {x.get('words')}" if x.get("words") else ""))
-        broke = pace.breaches()
-        if broke:
-            print(f"your own pace: {len(broke)} page(s) loaded before it allowed (nothing "
-                  "LinkedIn showed; they hold no ramp back)")
-            for x in broke[-12:]:
-                print(f"  {x.get('at')}  {x.get('rule')}: {x.get('words') or ''}"
-                      + (f" (the next pause was {x['owed_seconds']}s longer)"
-                         if x.get("owed_seconds") else ""))
         return EXIT["ok"]
     if a.cmd == "next":
         return _cli_next(a)
@@ -4897,17 +4612,14 @@ def main(argv: list | None = None) -> int:
     if a.cmd == "resume":
         rec = resume(a.reason)
         print(f"reading: today's stop is lifted on the person's word ({rec['lifted_because']}). "
-              "The signal stays in the friction log, marked as they said, and still holds the "
-              "ramp back. A second sign-out today stops the day with no resume.")
+              "The signal stays in the friction log, marked as they said. A second sign-out "
+              "today stops the day with no resume.")
         return EXIT["ok"]
     if a.cmd == "gate":
         now = datetime.datetime.now()
         g = _wait_gate(a.timeout, profile=not a.page) if a.wait else gate_state(now, profile=not a.page)
         if g["kind"] != "go":
             print(_gate_line(g, datetime.datetime.now()))
-            if g["kind"] in ("wait", "later") and not a.wait:
-                print("  to wait it out, run in the background: python3 tools/network/reading.py "
-                      "gate --wait (it exits when the next page may load)")
             return EXIT[g["kind"]]
         if not signed_in_today():
             print("go, after sign-in: open the page; if LinkedIn shows its sign-in page "
@@ -5081,14 +4793,14 @@ def main(argv: list | None = None) -> int:
                   + (" ..." if len(ids) > 8 else ""))
         if found:
             print("  too alike to send as a batch: rewrite each from its own reading (the "
-                  "background line chosen per person where the profile says so), the ask from "
-                  "ASK or the phrase bank (compose.phrase, by contact), and no two built the "
-                  "same way")
-            if any(what.startswith("same ") and what != "same shape" for what, _s, _i in found):
+                  "background line chosen per person where the profile says so), each close "
+                  "its own, no two built the same way, and not all in one order")
+            if any(what.startswith("same ") and what not in ("same shape", "same sentence order")
+                   for what, _s, _i in found):
                 import compose
                 print(f"  the InMails: {compose.ROUND_FIX}")
             return EXIT["alike"]
-        print("  no sentence repeats past the limit, and every ask is the person's own")
+        print("  no sentence repeats past the limit, and the batch is not all in one order")
         return EXIT["ok"]
     if a.cmd == "verdict":
         found = load(a.contact_id)
@@ -5192,20 +4904,17 @@ def main(argv: list | None = None) -> int:
             if kind == "signin":
                 return _said_signout(signout())
             if kind == "unknown" and not rendered(text, contact.get("name", "")):
-                # A page that stopped rendering is a soft signal: the next pause doubles, and
-                # a second within the hour ends the day's reads. It was still a page loaded,
-                # so it is counted, with its pause: uncounted, the doubled pause ran from the
-                # page before it and the gate said go at once (2026-10-21).
-                gap_, brk_ = pause()
-                gap_ += int(round(owed_seconds(breach, now))) if breach else 0
+                # A page that stopped rendering is a soft signal: a second within the hour
+                # ends the day's reads, LinkedIn not serving pages being how a limit shows
+                # before a check does. It was still a page loaded, so it is counted.
                 note_load("profile", datetime.datetime.now().isoformat(timespec="seconds"),
-                          gap_, brk_, a.contact_id, a.load_seconds)
+                          0, False, a.contact_id, a.load_seconds)
                 signal("not_rendering", "a page of %d characters, not a profile"
                        % len(" ".join(_clean_lines(text))))
                 why_ = stopped()
                 print("reading: the page did not render (nearly empty). Not a read; "
                       + (f"browser reads are stopped for today: {why_}" if why_ else
-                         "the next pause is doubled. If it happens again, the day stops"))
+                         "if it happens again within the hour, the day stops"))
                 return EXIT["check"] if why_ else EXIT["unknown"]
         if source == "browser" and not on_shortlist(a.contact_id):
             raise SystemExit(f"reading: {a.contact_id} is not on today's short list. A browser "
@@ -5241,20 +4950,15 @@ def main(argv: list | None = None) -> int:
             new["company_ids"] = company_ids
         slow_, breach_line = "", ""
         if source == "browser":
-            gap, brk = pause()
-            owed = owed_seconds(breach, now) if breach else 0.0
-            gap += int(round(owed))         # the next pause honours the one this page skipped
             at = datetime.datetime.now().isoformat(timespec="seconds")
             new["sources"][0]["at"] = at
-            new["sources"][0]["next_gap"] = gap
-            new["sources"][0]["break"] = brk
             new["sources"][0]["mode"] = a.mode
             if a.load_seconds is not None:
                 new["sources"][0]["load_seconds"] = a.load_seconds
             mark_signed_in()            # a profile in the pane means they are signed in
-            slow_ = note_load("profile", at, gap, brk, a.contact_id, a.load_seconds)
+            slow_ = note_load("profile", at, 0, False, a.contact_id, a.load_seconds)
             if breach:
-                breach_line = keep_breach(breach, now, a.contact_id, owed)
+                breach_line = keep_breach(breach, now, a.contact_id)
         reading = merge(old, new)
     print(f"reading: saved {os.path.relpath(save(a.contact_id, reading), person.state())}")
     _show(reading)
@@ -5275,16 +4979,9 @@ def main(argv: list | None = None) -> int:
         if source == "browser":
             if breach_line:
                 print(breach_line)
-            at = datetime.datetime.now() + datetime.timedelta(seconds=new["sources"][0]["next_gap"])
-            print(f"pace: the next page at {at:%H:%M:%S} at the earliest "
-                  f"({new['sources'][0]['next_gap']}s"
-                  + (", the longer break" if new["sources"][0]["break"] else "")
-                  + "); never two at once")
             if slow_:
-                why_ = stopped()
-                print("pace: that page loaded far slower than your recent ones, a soft signal: "
-                      + (f"browser reads are stopped for today: {why_}" if why_ else
-                         "the next pause is doubled"))
+                print("reading: that page loaded far slower than your recent ones; said, and "
+                      "nothing held back for it")
             return after_breach(breach)
     return EXIT["ok"]
 
@@ -5323,18 +5020,15 @@ def _go_line(mode: str = "deep") -> str:
     # On the current layout Experience and Education are on the page only once it has been
     # scrolled to the very bottom (2026-10-21): every read scrolls to the end first.
     if mode == "card":
-        return (f"go: open the page and spend {dwell(mode='card')}s on it, scrolling it slowly "
-                "to the very end (Experience and Education appear only then) and clicking "
-                "nothing, then read its text once (`read ... --mode card`); the top card, About "
-                "and Experience decide most keep or skip")
-    return (f"go: spend {dwell()}s on the page, scrolling it to the very end at reading pace "
-            "(nothing clicked), then read its text once")
+        return ("go: open the page, scroll it to the very end (Experience and Education appear "
+                "only then) and click nothing, then read its text once (`read ... --mode "
+                "card`); the top card, About and Experience decide most keep or skip")
+    return ("go: open the page, scroll it to the very end (nothing clicked), then read its "
+            "text once")
 
 
 def _cli_next(a) -> int:
-    """The next person on today's list, once a page may load. Run with --wait in the
-    background: the session carries on with the drafts already read meanwhile, and shows
-    each as its read completes, instead of polling a clock."""
+    """The next person on today's list, unless LinkedIn has stopped the day's reads."""
     import state
     contacts = state.load_contacts()
     nxt = next_up(contacts=contacts)
@@ -5348,9 +5042,8 @@ def _cli_next(a) -> int:
             print(f"new day: yesterday's list ended with {len(left)} not read "
                   f"({', '.join(left[:5])}). Today needs its own: run the day's check "
                   "(python3 tools/sync_app.py --if-stale --on \"<this session's model>\"), "
-                  f"then python3 tools/network/reading.py shortlist {' '.join(left[:READS_PER_RUN])}"
-                  " (it sizes today's list to the requests left this week), then "
-                  "reading.py next --wait again")
+                  f"then python3 tools/network/reading.py shortlist {' '.join(left)}, then "
+                  "reading.py next again")
             return EXIT["new_day"]
         done = [i for i in _shortlist_file(datetime.date.today()) if _read_on(i, today)]
         print(f"done: nothing left to read on today's list ({len(done)} read today"
@@ -5361,17 +5054,13 @@ def _cli_next(a) -> int:
     g = _wait_gate(a.timeout) if a.wait else gate_state()
     if g["kind"] != "go":
         print(_gate_line(g, datetime.datetime.now()))
-        if g["kind"] in ("wait", "later"):
-            for line in _meanwhile_lines(contacts):
-                print(line)
         return EXIT[g["kind"]]
     url = nxt.get("linkedin_url") or ""
     print(f"next: {nxt.get('name') or nxt['contact_id']} ({nxt.get('company') or '?'}) "
           f"[{nxt['contact_id']}] {url or '(no address on file: find their page first)'}")
     print(_go_line(a.mode))
     print(f"then: python3 tools/network/reading.py read {nxt['contact_id']} - --source browser "
-          f"--mode {a.mode}, show the person the draft it allows, and run `reading.py next "
-          "--wait` in the background again")
+          f"--mode {a.mode}, show the person the draft it allows, and `reading.py next` again")
     return EXIT["ok"]
 
 
@@ -5622,19 +5311,15 @@ def _cli_invitations(a) -> int:
         return _said_signout(signout())
     cards = invitations(text)
     total = invitations_total(text)
-    owed = owed_seconds(breach, now) if breach else 0.0
-    rec = page_read("invitations", a.url, now, people=len(cards), load_seconds=a.load_seconds,
-                    owed=owed)
+    page_read("invitations", a.url, now, people=len(cards), load_seconds=a.load_seconds)
     if breach:
-        print(keep_breach(breach, now, a.url or "invitations", owed))
+        print(keep_breach(breach, now, a.url or "invitations"))
     contacts = state.load_contacts()
     threads = state.load_threads()
     got = match_invitations(cards, contacts, threads=threads, total=total)
     print(f"invitations: {len(cards)} request(s) pending on the page"
           + (f", {len(cards)} of {total} loaded" if total is not None and total > len(cards) else "")
-          + (f"; it reaches back to requests sent about {reach_back(cards)}" if cards else "")
-          + f"; the next page at "
-          f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
+          + (f"; it reaches back to requests sent about {reach_back(cards)}" if cards else ""))
     done = 0
     for card, c in got["pending"]:
         line = (f"  sent outside the app: {c.get('name')} ({c.get('company')}), pending since "
@@ -5685,9 +5370,7 @@ def _cli_people_across(a, people, rec, now, contacts, threads, breach) -> int:
     unknown = next((g[2] for g in groups if not g[0]), [])
     print(f"people: {len(people)} on the page, a search by title across "
           f"{len(named)} employer(s)" + (f"; {len(unknown)} whose card names no employer"
-                                         if unknown else "")
-          + f"; the next page at {now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} "
-            "at the earliest")
+                                         if unknown else ""))
     changed = False
     for name, why, members in groups:
         if name and why:
@@ -5758,11 +5441,9 @@ def _cli_people(a) -> int:
         return _said_signout(signout())
     company = " ".join(str(a.company or "").split())
     people = people_page(text, company)
-    owed = owed_seconds(breach, now) if breach else 0.0
-    rec = page_read("people", a.url, now, people=len(people), load_seconds=a.load_seconds,
-                    owed=owed)
+    rec = page_read("people", a.url, now, people=len(people), load_seconds=a.load_seconds)
     if breach:
-        print(keep_breach(breach, now, a.url or company or "people search", owed))
+        print(keep_breach(breach, now, a.url or company or "people search"))
     contacts = state.load_contacts()
     threads = state.load_threads()
     if not company:
@@ -5770,9 +5451,7 @@ def _cli_people(a) -> int:
     # Counted apart: every card was counted as at the employer, people elsewhere too.
     count = {w: sum(1 for p in people if p.get("where") == w) for w in ("at", "elsewhere", "unknown")}
     print(f"people: {len(people)} on the page: {count['at']} at {a.company}, "
-          f"{count['elsewhere']} elsewhere, {count['unknown']} where the card does not say; "
-          f"the next page at "
-          f"{now + datetime.timedelta(seconds=rec['next_gap']):%H:%M:%S} at the earliest")
+          f"{count['elsewhere']} elsewhere, {count['unknown']} where the card does not say")
     said = confirm_company(a.company, count, a.url)
     if said:
         print(said)

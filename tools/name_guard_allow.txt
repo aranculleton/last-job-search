@@ -154,3 +154,4 @@ Lucja Wrobelska         # invented, the same test
 New Jersey              # a US state, tests/test_a_home_town_name_abroad_is_not_home.py
 Jersey City             # a US city, the same test
 Manchester Airport      # a place, the same test
+Pell Juno               # invented, tests/test_a_note_is_judged_against_the_right_people.py

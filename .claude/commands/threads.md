@@ -12,9 +12,9 @@ What is owed, what is due, what has gone cold.
 3. `state.owed(contacts, threads, today)` returns both kinds of debt: threads
    where they replied and we have not, and threads where we are past the
    follow-up window with no nudge sent.
-4. `state.platform_budget()` for the week's remaining capacity. Its 50 a week is the app's
-   planning cap, not LinkedIn's (`CONNECTIONS_PER_WEEK` in `profile/networking.py` changes it),
-   and the BUDGET line `state.py` prints says so.
+4. `state.platform_budget()` for the requests sent this week and the InMail credits left.
+   The app sets no cap on connection requests: LinkedIn says when its own limit is reached,
+   and no "N left" is ever said that LinkedIn did not give.
 5. `state.link_to_applications()` to show where a thread and an application at
    the same employer relate.
 6. `python3 tools/network/own_profile.py due`: it prints a line only when a look at their own

@@ -214,8 +214,8 @@ came out as one background line with a different name on it, which a person
 caught at once. So between finding and writing there is a read, and
 `tools/network/reading.py` holds it (`/network` step 5 says how):
 
-The rules, in short; `/network` step 5 has every step, and `tools/network/pace.py` every
-limit with its reason (`reading.py limits` prints them):
+The rules, in short; `/network` step 5 has every step, and `tools/network/pace.py` what
+stops a read (LinkedIn's own signals; the app sets no limit of its own):
 
 - **Their profile** comes from the person's own signed-in browser when `PROFILE_READS` is
   `"browser"` in `profile/networking.py`, otherwise from them (a paste, LinkedIn's Save to
@@ -225,13 +225,13 @@ limit with its reason (`reading.py limits` prints them):
 - **Fewer, better-spent reads.** Free sources make the list, one-page reads screen it, and a
   profile read goes only to the few the person will write to today; read, judge, next. A
   first note with nothing read is refused unless the person chose card-only. No change to
-  the funnel may add a page load or a click, or shorten the pauses below the dial's preset,
-  unless the person sets it in their profile.
+  the funnel may add a page load or a click. There is no pause, cap or slow start of the
+  app's own (2026-10-22): one page after another, as fast as the browser loads it.
 - **The browser read is the person's call.** LinkedIn's User Agreement forbids automated
   access, browser extensions included, at any pace, and the risk is to their own account, so
-  it is asked once, plainly (the `profile-reads` upgrade, and `/setup`), kept to what a person
-  reading by hand would do, and stopped at the first sign of friction. That lowers the risk;
-  it does not remove it. Never call this route safe.
+  it is asked once, plainly (the `profile-reads` upgrade, and `/setup`), read only and one
+  page at a time, and stopped at LinkedIn's first signal. Never call this route safe, and
+  never warn about it again once they have chosen it.
 - **Their public work** (a talk, an article, a podcast, code, a quote in the press, their
   posts as a search engine shows them), never a people-search or data-broker site.
 - A headline's "at <phrase>" is never the employer when the card or Experience names another
@@ -358,8 +358,11 @@ on Premium. That is the shape, and `first_note()` assembles it:
   the same way (`reading.py batch` reports "same shape"). What a batch is judged on is its
   frames, not one phrase: one sentence with the nouns swapped ("<years of X>, which I imagine
   <employer> values"), one opening after the greeting or one close across more than a third
-  of the batch, or two notes to people at one employer sharing a sentence, saves none of
-  them (`reading.py draft` and `drafts` check every save, exit 11). A phrase the person
+  of the batch, two notes to people at one employer sharing a sentence, or six or more notes
+  all in one sentence order ("same sentence order": twenty notes of who-line, one line about
+  them and the ask, 2026-10-22), saves none of them (`reading.py draft` and `drafts` check
+  every save, exit 11). `compose.first_note` varies its order by contact; `order=` chooses
+  one. No close is held to `ASK` word for word. A phrase the person
   reuses for strangers at different employers is theirs; the house style in one message is
   a stock phrase, and the person's own (`OWN_VOICE`, their `OPENER` and `ASK`) is allowed in
   every kind of message.
@@ -565,9 +568,9 @@ characters and a handful of personalised notes a month, Premium's is 300 with In
 credits. With no plan recorded the free limits apply, because a note short enough for free
 is short enough for Premium. When the month's notes are spent, the request goes with no
 note and the drafted note follows as a message once they accept (`platform_budget()` says
-so). The 50 requests a week (25 a day) are the app's planning cap, not LinkedIn's, which
-publishes no number: `CONNECTIONS_PER_WEEK` in `profile/networking.py` changes the week,
-and `state.py`'s BUDGET line says which applies.
+so). The app sets no cap on connection requests (2026-10-22): LinkedIn publishes no number
+and says itself when its weekly limit is reached, and `state.py`'s BUDGET line counts what
+went without printing a number LinkedIn never gave.
 
 **A message to someone already connected** (first degree) is `kind="dm"` in
 `compose.validate()`: no subject and no credit, LinkedIn's message limit
@@ -908,10 +911,9 @@ or described rather than quoted, cannot be sent, cannot be corrected and does no
 survive the session. This applies to messages for people already contacted as
 much as to new ones: the candidate sends from the chat, not from the CSV.
 
-**Respect the platform.** `state.platform_budget()` returns how many connection
-requests and InMail credits remain. Size the output to what can actually be sent.
-When the connection cap is hit, note that following someone costs nothing and lets
-the request go out warm when the cap resets.
+**Respect the platform.** `state.platform_budget()` returns the InMail credits left and
+the connection requests sent. When LinkedIn says its weekly invitation limit is reached,
+say so (`state.CAPPED_NOTE`) and keep the rest queued for the next week.
 
 ## Judgment
 
@@ -950,5 +952,5 @@ almost always one.
   `state.py message <id> ...` any other later message (`--texts <file.json>` for several);
   `--attached <file>` on either (and on `sent`) names a file that went with it, and
   `state.py attach <id> --date <day> --file <file>` names it on a message already logged
-- `reading.py estimate [N]` says how long N reads take today; `reading.py meanwhile` the notes
-  to write while a page waits; `reading.py drafts <file.json>` saves a batch checked together
+- `reading.py estimate [N]` says how long N reads take; `reading.py meanwhile` the notes
+  that can be written now; `reading.py drafts <file.json>` saves a batch checked together

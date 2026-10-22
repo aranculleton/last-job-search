@@ -90,9 +90,8 @@ def test_resume_needs_a_clean_sign_in_and_keeps_an_honest_log(tmp_path, monkeypa
     log = pace.friction()
     assert log[-1]["kind"] == "signed_out" and log[-1]["benign"].startswith(
         "person confirmed benign: I signed out on my phone")
-    # Still a signal for the ramp: a person's word lifts the day, not the caution.
-    assert pace.clean_days(now.date() + datetime.timedelta(days=1),
-                           [now - datetime.timedelta(days=1), now]) == 0
+    # The page that comes next is read at once: nothing of the app's own holds it back.
+    assert reading.browser_gate(now + datetime.timedelta(seconds=1)) == ""
 
 
 def test_a_second_sign_out_after_a_resume_stops_the_day_with_no_way_back(tmp_path, monkeypatch):
@@ -169,6 +168,6 @@ def test_resume_is_a_command_and_the_stop_says_so(tmp_path, monkeypatch, capsys)
     assert not reading.stopped()
 
 
-def test_the_expiry_window_is_a_setting_with_a_reason():
-    assert pace.value("expiry_hours") == 4
-    assert "PROFILE_SESSION_EXPIRY_HOURS" in " ".join(pace.report())
+def test_the_expiry_window_is_four_hours_and_the_persons_to_set():
+    assert pace.EXPIRY_HOURS == 4 == reading.EXPIRY_HOURS
+    assert pace._setting(6, 4) == 6 and pace._setting("x", 4) == 4 and pace._setting(0, 4) == 4
