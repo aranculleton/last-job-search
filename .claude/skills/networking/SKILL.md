@@ -910,8 +910,7 @@ much as to new ones: the candidate sends from the chat, not from the CSV.
 
 **Respect the platform.** `state.platform_budget()` returns the InMail credits left and
 the connection requests sent. When LinkedIn says its weekly invitation limit is reached,
-say so in its words, keep the rest queued for the next week, and note that following
-someone costs nothing and lets the request go out warm.
+say so (`state.CAPPED_NOTE`) and keep the rest queued for the next week.
 
 ## Judgment
 

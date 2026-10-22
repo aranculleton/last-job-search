@@ -122,6 +122,10 @@ NO_NOTES_LEFT = ("This month's personalised notes are used up: send the connecti
                  "without a note, and send the drafted note as a message once they accept.")
 NO_INMAIL = ("No InMail on a free account, except to an Open Profile (their profile shows a "
              "Message button). Use a connection request instead.")
+# What to say when LinkedIn itself says its weekly invitation limit is reached: the app sets
+# no cap of its own (2026-10-22), so this is only ever LinkedIn's.
+CAPPED_NOTE = ("LinkedIn says its weekly invitation limit is reached. Following someone costs "
+               "nothing and lets the request go out warm the week after; the rest stay queued.")
 
 
 # ---------------------------------------------------------------- dates

@@ -449,7 +449,7 @@ METHODS: dict[str, dict] = {
             (51, "2026-10-22", False, "no best hour to send and nothing held for one; a reader in another time zone gets it in their working day"),
             (52, "2026-10-22", False, "no reading limit and no connection cap of the app's own; reads stop only on LinkedIn's own signals; an employer written without spaces is that employer"),
         ),
-        "fingerprint": "e68a7cc9cefb754c",
+        "fingerprint": "929d69d219927dfd",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
