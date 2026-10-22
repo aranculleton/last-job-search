@@ -140,5 +140,5 @@ News
 - <at most three bullets, one line each, no links in the notification>
 (or: Quiet week)
 
-Full brief and drafts: <PR link>
+Full brief: <the brief's own page on GitHub, documents/briefs/<today>.md on master>
 ```

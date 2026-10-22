@@ -1661,7 +1661,7 @@ def block(rows: list[tuple[Upgrade, str]]) -> str:
         return ""
     alone = [(u, why) for u, why in rows if u.needs == "nobody"]
     yours = [(u, why) for u, why in rows if u.needs != "nobody"]
-    lines = [f"Improvements waiting for this repo ({len(rows)}):"]
+    lines = [f"Improvements waiting for your search ({len(rows)}):"]
     if alone:
         lines.append("  Claude applies these itself, in the background. Nothing for you to do:")
         for u, _why in alone:
@@ -1694,11 +1694,13 @@ def line(rows: list[tuple[Upgrade, str]] | None = None) -> str:
     yours = [u.id for u, _ in rows if u.needs != "nobody"]
     parts = []
     if alone:
-        parts.append(f"{len(alone)} Claude applies itself")
+        parts.append(f"{len(alone)} you apply yourself")
     if yours:
-        parts.append(f"{len(yours)} short question{'s' if len(yours) != 1 else ''} for you")
-    # The ids are for Claude (`--plan`): this line reaches the person.
-    return "Improvements waiting: " + "; ".join(parts) + " (python3 tools/profile_upgrades.py)."
+        parts.append(f"{len(yours)} short question{'s' if len(yours) != 1 else ''} for the person")
+    # For Claude: a round prints it in its log, and a chat passed the command on with it.
+    # What the person hears is CLAUDE.md step 5's, in plain words.
+    return ("Claude: improvements waiting: " + "; ".join(parts)
+            + " (python3 tools/profile_upgrades.py lists them; never say the command).")
 
 
 def plan(rows: list[tuple[Upgrade, str]] | None = None) -> list[dict]:

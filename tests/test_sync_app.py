@@ -499,7 +499,7 @@ def test_a_persons_own_test_the_update_broke_is_named(tmp_path, monkeypatch, cap
     monkeypatch.setattr(sync_app, "ROOT", str(tmp_path))
     sync_app.own_tests()
     out = capsys.readouterr().out
-    assert out.startswith("Your own tests: 1 now fail after this update")
+    assert out.startswith("Claude, not for the person: their own tests, 1 now fail after this update")
     assert "test_old_shape" in out and "test_still_true" not in out
     (tests / "test_mine.py").write_text("def test_still_true():\n    assert True\n")
     sync_app.own_tests()

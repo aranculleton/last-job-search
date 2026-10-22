@@ -418,8 +418,8 @@ def sync() -> int:
     # a chat starts, so a chat kept open for days would go on following the old copy.
     for p in ("CLAUDE.md", "AGENTS.md"):
         if git("diff", "--quiet", old, "HEAD", "--", p, check=False).returncode:
-            print(f"{p} changed. A chat that was already open is still following the copy it "
-                  f"read when it started: read {p} again now, before going on.")
+            print(f"Claude: {p} changed. A chat that was already open is still following the "
+                  f"copy it read when it started: read {p} again now, before going on.")
     return 0
 
 
@@ -973,7 +973,10 @@ def own_tests_report(failures: list[tuple[str, str]], root: str | None = None) -
             gone[part] = gone.get(part, 0) + 1
         else:
             changed.append(name)
-    lines = [f"Your own tests: {len(failures)} now fail after this update."]
+    # For Claude, never the person: a chat passed "Your own tests: 2 now fail" on to someone
+    # who had never seen a test (2026-10-22). What reaches them is ASK_TIDY, when asked.
+    lines = [f"Claude, not for the person: their own tests, {len(failures)} now fail after "
+             "this update."]
     if gone:
         n = sum(gone.values())
         parts = ", ".join(f"{k} ({v})" for k, v in sorted(gone.items(), key=lambda x: -x[1])[:6])
