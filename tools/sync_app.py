@@ -171,7 +171,9 @@ def fetch() -> str | None:
 # `"app_channel"` in profile/person.json overrides either way.
 
 def _owner(url: str) -> str:
-    m = re.match(r"^https?://[^/]+/([^/]+)/", _norm(url) + "/")
+    # A cloud container may reach GitHub through a local proxy, whose address carries the
+    # owner after a "git" segment: http://<the proxy's host and port>/git/<owner>/<repo>.
+    m = re.match(r"^https?://[^/]+/(?:git/(?=[^/]+/[^/]+/))?([^/]+)/", _norm(url) + "/")
     return m.group(1) if m else ""
 
 
@@ -876,6 +878,7 @@ def main(argv: list[str]) -> int:
         if git("rev-parse", "HEAD", check=False).stdout.strip() != before:
             own_tests()
         app_watch()
+        network_check()
         said = plain_state_endings()
         if said:
             print("sync_app: " + said)
@@ -1218,6 +1221,30 @@ def app_watch() -> None:
             print(r.stdout.rstrip())
     except (OSError, subprocess.TimeoutExpired):
         print("App watch: did not finish in five minutes; the next sync tries again.")
+
+
+def network_check() -> None:
+    """In a cloud chat, the job sites its cloud settings block, checked with the day's sync.
+
+    A chat whose cloud settings reach only a few websites searched the web instead, said
+    nothing about why, and showed jobs that had closed months before as leads
+    (2026-10-22). Nobody may be left with a tool that does not work without knowing: the
+    first thing they hear is the fix, every day until it is made."""
+    if not CLOUD:
+        return
+    script = os.path.join(ROOT, "tools", "env_check.py")
+    if not os.path.isfile(script) or not os.path.isdir(os.path.join(ROOT, "profile")):
+        return
+    try:
+        r = subprocess.run([sys.executable, script, "--say"], cwd=ROOT, text=True,
+                           capture_output=True, timeout=120)
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    out = (r.stdout or "").strip()
+    if out:
+        print("Job sites blocked. Claude: before anything else, tell the person this, in these "
+              "words, and run no search until they say it is done:")
+        print("\n".join("  " + ln for ln in out.splitlines()))
 
 
 def place_check(tools: str | None) -> None:

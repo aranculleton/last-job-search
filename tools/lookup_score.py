@@ -106,9 +106,10 @@ def _query_pairs(query: str) -> dict:
 
 def load_seen() -> dict:
     # UTF-8 by name, as it is written (ensure_ascii=False): on a computer whose default
-    # is cp1252 an accented employer name was misread, or the read failed.
-    with open(SEEN, encoding="utf-8") as fh:
-        return json.load(fh)["seen"]
+    # is cp1252 an accented employer name was misread, or the read failed. Read through
+    # the throttle's reader, which takes either shape of the file and a missing one.
+    from throttle import load_seen as read
+    return read(SEEN)["seen"]
 
 
 def find(key: str | None, company: str | None, title: str | None) -> tuple[str, dict] | None:

@@ -16,7 +16,9 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
    Read the exit code: 0 met the yield target, 2 missed it (report what the MISSED message
    says), 1 a stage broke (diagnose it and say so; never paper over it). A portal the
    health probe reports DOWN goes in the message's first line: a quiet board is not a
-   thin market.
+   thin market. When the round prints "Tell the person" (this run's cloud settings block
+   the job sites), those words open the message, and with no site reached there is no
+   shortlist and no web search in its place.
 2. Judge every employer the bar does not know yet, once each (`python3 tools/bar.py
    unjudged`, then `bar.py judge "<employer>" <verdict> "<why>"`): a "none" that says "not on
    your employer lists yet" has not failed the bar. Then, from the shortlist, drop anything

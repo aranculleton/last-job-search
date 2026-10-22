@@ -45,7 +45,10 @@ def test_a_cloud_chat_that_cannot_reach_job_sites_says_why_and_one_fix_in_steps(
     assert "can't reach the job sites (LinkedIn, freehire)" in lines[0]
     assert "Recommended, once:" in said
     assert re.search(r"^1\. .+\n2\. Set Network access to Full", said, re.M)
-    assert said.endswith("Until then I'll search the web, which finds fewer jobs.")
+    # No search runs in its place: a web search there turned up jobs closed for months,
+    # shown as leads (2026-10-22).
+    assert said.endswith("Say \"done\" once it's changed.")
+    assert "won't search" in said
     assert len(said.split()) <= 110
 
 

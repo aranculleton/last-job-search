@@ -523,8 +523,9 @@ METHODS: dict[str, dict] = {
             (22, "2026-10-22", False, "a province code between hyphens and a home town named like a state are home again"),
             (23, "2026-10-22", False, "the hand-run round moved to manual-round.md; the round's reply is shorter"),
             (24, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
+            (25, "2026-10-22", False, "no search runs while job sites are blocked; a web-search lead is shown only once its page proves it open"),
         ),
-        "fingerprint": "e22863a795919f82",
+        "fingerprint": "95a6bb54c9491de4",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

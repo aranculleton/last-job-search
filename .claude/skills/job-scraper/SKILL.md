@@ -257,7 +257,7 @@ If the user decides to apply to any job, the tracker row is written by **job-app
 1. **Never fabricate job postings.** Only present jobs from actual CLI search/detail output or WebSearch/WebFetch results.
 2. **Respect deduplication.** Always check seen_jobs.json AND job_search_tracker.csv before presenting.
 3. **Focus on configured geographic area.** Skip jobs that require relocation or are clearly outside commute range.
-4. **Only open positions.** Skip postings with expired deadlines or those marked as closed.
+4. **Only open positions.** Skip postings with expired deadlines or those marked as closed. A web-search lead is shown only once its own page proves it is open (`manual-round.md` Step 1c). When this chat's cloud settings block the job sites, no search runs and there is no table: the reply is the fix `python3 tools/env_check.py --say` prints.
 5. **Be efficient with detail fetches.** Don't run `detail` or WebFetch on every search hit - pre-filter by title/snippet, then fetch only promising matches.
 6. **Parallel searches.** Run portal CLI searches in parallel; use WebSearch only for gaps the CLIs don't cover.
 7. **No automated people lookups.** Referral contacts (`manual-round.md` Step 4.5) are LinkedIn search links only - never fetch or scrape LinkedIn people-search result pages programmatically.

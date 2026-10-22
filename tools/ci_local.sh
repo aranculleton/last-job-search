@@ -155,9 +155,17 @@ run "permissions, gitignore, manifests" "$PY" tools/security_guards.py
 # denylist, so their data reaching an app-owned file fails here, long before
 # anything could carry it to the app. Commit first: it reads HEAD.
 if [ -f profile/person.json ]; then
-  LEAK_OUT="$(mktemp -d)"
-  run "leak scan (app tree built from HEAD)" "$PY" tools/build_app.py "$LEAK_OUT/app"
-  rm -rf "$LEAK_OUT"
+  # Only the maintainer's repo builds the app, so only there can a person's data reach it.
+  # Anyone else's repo holds the released app's files unchanged, and the scan could only
+  # match their own ordinary words in them (a first name an example shares, an employer
+  # that is an English word) and block every merge (2026-10-22).
+  if "$PY" -c "import sys; sys.path.insert(0, 'tools'); import sync_app; sys.exit(0 if sync_app.maintainers() else 1)" 2>/dev/null; then
+    LEAK_OUT="$(mktemp -d)"
+    run "leak scan (app tree built from HEAD)" "$PY" tools/build_app.py "$LEAK_OUT/app"
+    rm -rf "$LEAK_OUT"
+  else
+    printf '  %-42s n/a   (only the maintainer'"'"'s repo builds the app)\n' "leak scan (app tree built from HEAD)"
+  fi
 else
   run "leak scan (what git would commit)" "$PY" tools/leak_scan.py . --git
   # A stranger from a real search is on no denylist: a full name the app has never

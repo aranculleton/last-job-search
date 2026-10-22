@@ -234,13 +234,12 @@ def holds(entry, rules_now: str | None = None, parts_now: dict | None = None) ->
 
 
 def _load(path=SEEN) -> dict:
+    from throttle import as_seen
     try:
         with open(path, encoding="utf-8") as fh:
-            data = json.load(fh)
+            return as_seen(json.load(fh))
     except FileNotFoundError:
-        data = {"seen": {}}
-    data.setdefault("seen", {})
-    return data
+        return {"seen": {}}
 
 
 def _save(data, path=SEEN) -> None:

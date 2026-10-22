@@ -488,15 +488,25 @@ def _contact_rows(path: str = CONTACTS) -> list[dict]:
         return []
 
 
+def as_seen(data) -> dict:
+    """The seen file in its one shape, {"seen": {url: entry}}. A copy written as the bare
+    map of entries, with no "seen" key (an older or hand-made one), is read as that map:
+    it crashed `lookup_score.py` with KeyError 'seen', and the throttle and `exclude.py`
+    read it as empty, so every posting it ruled out came back (2026-10-22)."""
+    if not isinstance(data, dict):
+        return {"seen": {}}
+    if isinstance(data.get("seen"), dict):
+        return data
+    if "seen" not in data and data and all(isinstance(v, dict) for v in data.values()):
+        return {"seen": data}
+    return dict(data, seen={})
+
+
 def load_seen(path: str = SEEN) -> dict:
     if not os.path.exists(path):
         return {"seen": {}}
     with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    if not isinstance(data, dict):
-        data = {"seen": {}}
-    data.setdefault("seen", {})
-    return data
+        return as_seen(json.load(fh))
 
 
 # The place of a ruling that recorded none: it holds for the title at that employer
