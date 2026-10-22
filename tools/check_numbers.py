@@ -512,7 +512,14 @@ def without_drafts(text: str) -> str:
 # A notice period or a start date is a fact about the person, so a letter that says "I
 # could start within four weeks" was flagged with nothing to say how to make it true: the
 # finding read like a figure to take out. Said beside the sentence, the fix is one line.
-_WHEN_FREE = re.compile(r"\b(?:start|starting|available|availability|notice|join|joining)\b", re.I)
+# A notice period or start date, said as one: "could start within four weeks", "available
+# to start in a month", "four weeks' notice". Never "within six weeks of joining", which is
+# an achievement figure and is grounded the way every other one is.
+_WHEN_FREE = re.compile(
+    r"\bnotice\b|\bstart\s+date\b"
+    r"|\b(?:could|can|able\s+to|ready\s+to)\s+(?:start|join|begin)\b"
+    r"|\b(?:start|starting|join|joining|begin)\s+(?:with)?in\b"
+    r"|\bavailable\s+(?:to\s+(?:start|join)\s+)?(?:in|within|from|after)\b", re.I)
 NOTICE_HINT = ("a notice period or start date is a fact about you: write it in "
                "01-candidate-profile.md (for example \"Notice period: four weeks\") and it is "
                "grounded")
