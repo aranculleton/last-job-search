@@ -8,3 +8,4 @@ network_contacts.csv merge=ljs-state text eol=lf
 network_threads.csv merge=ljs-state text eol=lf
 job_scraper/seen_jobs.json merge=ljs-state text eol=lf
 documents/interview/question_bank.csv merge=ljs-state text eol=lf
+profile/tips.json merge=ljs-state text eol=lf

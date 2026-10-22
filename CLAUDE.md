@@ -67,10 +67,11 @@ Every session in a person's repo starts with the same five steps, before anythin
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
-   changed: show the person what it listed and ask before going further.
+   changed: do what it printed yourself (commit the work it lists, carry across what it
+   names) and run it again. Never put it to the person: saving and updating are always yes.
 3. **No `profile/`?** Then nothing here can run yet. Start with `/setup`, before anything else.
-4. **If the sync brought changes**, say in one line what changed, from the CHANGELOG lines it
-   printed.
+4. **If the sync brought changes**, say in one plain line what changed for them, from the
+   lines it printed under "What changed": never a file, a command, a version or a git word.
 5. **Profile upgrades apply themselves; nobody has to ask.** The sync ends by listing what
    this repo still needs (`tools/profile_upgrades.py`): parts of the app that switched on
    after this person set up (their job boards researched and built, a setting written for
@@ -80,8 +81,8 @@ Every session in a person's repo starts with the same five steps, before anythin
      at once (Agent tool, `run_in_background: true`, `isolation: "worktree"`) running
      `/upgrade`, and go on with what the person asked. Their request never waits for it.
      When it reports, merge its branch into this session's work.
-   - **At the end of your reply**, one line per upgrade it applied: what changed and
-     `git revert <sha>` to undo it.
+   - **At the end of your reply**, one plain line per change it made for them, and nothing
+     about commits or commands: if they want one undone, undo it yourself (`git revert`).
    - **What needs the person** ("These need you", unconfirmed facts): ask at most three,
      at the end of the session, never at the start, **each as its short plain question
      first**, as the sync prints it. Detail comes only after a yes (its steps) or a "why?"
@@ -177,15 +178,17 @@ So, every session:
    Open the pull request, run `./tools/ci_local.sh --quick`, merge it. A branch left behind at the end of a
    session is work the next chat cannot see and will duplicate.
 3. **Never leave a merged branch around**, and never start new work on an old one.
-4. If the work genuinely is not finishable this session, say so in the last message and
-   name the branch, so the next chat is told where to look rather than left to find out.
+4. If the work genuinely is not finishable this session, push it, and say in one plain line
+   that it is not finished and the next chat carries on. The next chat finds it itself
+   (`git branch -r --no-merged origin/master`); the person is never given a branch name.
 
 **Two chats changing the same state file is not a conflict to resolve by hand.** The
 tracker, the contact book, the message log and `seen_jobs.json` merge row by row
 (`tools/merge_state.py`, which every sync wires into git): rows either side added are both
 kept, and notes both sides added are both kept. Where both sides changed the same field of
 the same row, the later change is kept by itself, and the merge says which and what the other
-side had: tell the person, whose word outranks it. Git stops only where neither change is
+side had: tell the person in plain words which answer was kept and what the other said, since
+their word outranks it. Git stops only where neither change is
 later. Before
 merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
@@ -537,6 +540,14 @@ they cannot act on is one they did not get. Everything said to them:
 - **Clear steps.** One action a line, numbered; for another company's screens, the steps
   `python3 tools/claude_surfaces.py steps <id>` prints.
 - **Short.** A few lines. Reasons, detail and alternatives come when they ask, never before.
+- **Git and GitHub are yours, done without asking and never explained.** Saving, taking
+  master and the app's updates, opening and merging a pull request, settling a merge and the
+  local CI are always yes: never ask, never describe them, and never show a command, an
+  option, a commit, a branch, a pull request, CI, master or a merge. Say the outcome in plain
+  words ("Saved.", "Updated to the newest version.") or nothing at all. Lines a tool prints
+  for you (`sync_app:`, `Claude:`, file paths, counts of commits) are never repeated. The one
+  exception is the maintainer's own repo (its GitHub owner is the app's, which
+  `sync_app.maintainers()` checks), and only when they ask.
 
 The tools' own messages are written this way (`tests/test_a_beginner_is_told_in_plain_words.py`
 keeps them so): pass them on as they are, never reworded into jargon.
@@ -588,10 +599,13 @@ send (`/apply`, `/network`, `/reply`, `/interview`, `/prep`, a shortlist, outrea
 runs `python3 tools/learned.py brief <area>` and follows every rule it lists over any
 default in the app.
 
-**Ask, lightly.** After output whose taste is theirs, end with one short line inviting
-change: a batch of messages, a draft, a shortlist, a set of questions. For example:
-"Anything about the tone, the people or the questions you'd have different? It sticks
-from now on." Once per kind of output per session, and never in place of the work.
+**Ask, lightly, and now and then a tip.** After work they will read or send (a shortlist,
+a draft, a batch of notes, an interview pack, a prep, a brief), end with the one line
+`python3 tools/tips.py <search|apply|networking|reply|interview|prep|brief>` prints, and
+nothing if it prints nothing. It decides when: the first time a kind of work is done, a line
+saying the first go may be off and how to say so; after that a short tip on using the app,
+at most one every two days. Never write one of your own, never more than one a reply, and
+never in place of the work. "No more tips" is `python3 tools/tips.py off`.
 
 **Updates and what they have taught it.** A sync's genuine fixes apply: they change
 code, not their settings. When an update would change a setting `learned.py locked`

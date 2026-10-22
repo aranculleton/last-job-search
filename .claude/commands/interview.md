@@ -172,7 +172,7 @@ python3 tools/interview_pack.py rework --company "<Company>" --role "<Role>" --s
 
 ## Step 5: Close the Loop
 
-Once per session for interview packs, one short line inviting change: "Anything about the questions, the depth or the tone you'd have different? It sticks from now on." What they say goes through CLAUDE.md, "Learning the person".
+End with the line `python3 tools/tips.py interview` prints, if it prints one (it decides when: the first time, then now and then). What they say back goes through CLAUDE.md, "Learning the person".
 
 Then end with:
 

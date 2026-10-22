@@ -184,9 +184,15 @@ def channel() -> str:
             return chosen
     except (OSError, ValueError, AttributeError):
         pass
+    return "master" if maintainers() else "stable"
+
+
+def maintainers() -> bool:
+    """Is this the app maintainer's own repo (its GitHub owner is the app's)? Only there
+    is the sync's git detail and the maintainer's own news worth printing."""
     origin = git("remote", "get-url", "origin", check=False)
     mine = _owner(origin.stdout) if origin.returncode == 0 else ""
-    return "master" if mine and mine == _owner(app_url()) else "stable"
+    return bool(mine) and mine == _owner(app_url())
 
 
 def newest_release() -> str | None:
@@ -303,18 +309,31 @@ def _changelog(old: str) -> list[str]:
             if ln.startswith("+") and not ln.startswith("+++") and ln[1:].strip()]
 
 
-def headlines(lines: list[str]) -> list[str]:
+def headlines(lines: list[str], maintainer: bool = True) -> list[str]:
     """One line per new CHANGELOG entry, its bold headline, so a sync that brings a whole
     release names every change rather than the first entry's opening lines. Lines that
     start no entry (a heading, a reworded line inside an old entry) are left out; with no
-    entry at all, the lines themselves."""
-    out = []
+    entry at all, the lines themselves. A headline that runs onto the next line is read
+    whole: one printed as "**A contact who shares a first name with the app's" (2026-10-22).
+
+    For anyone but the maintainer, an entry about the maintainer's own tools, or one headed
+    by a tool's name, is left out: the chat passes these lines on, and a person was told
+    about pull requests and a `--probe` option (2026-10-22)."""
+    entries: list[str] = []
     for ln in lines:
         s = ln.strip()
         if s.startswith("- "):
-            m = re.match(r"- \*\*(.+?)\*\*", s)
-            out.append(m.group(1).strip() if m else s[2:])
-    return out or lines
+            entries.append(s)
+        elif entries and ln[:1].isspace() and s and not s.startswith(("#", "- ")):
+            entries[-1] += " " + s
+    out = []
+    for e in entries:
+        m = re.match(r"- \*\*(.+?)\*\*", e)
+        head = " ".join((m.group(1) if m else e[2:]).split()).strip()
+        if not maintainer and (head.startswith("`") or "maintainer" in e[:240].lower()):
+            continue
+        out.append(head)
+    return out if entries else lines
 
 
 def sync() -> int:
@@ -383,13 +402,14 @@ def sync() -> int:
     if r.returncode != 0:
         return _abort("The commit failed: " + (r.stderr.strip() or r.stdout.strip()), [])
     print(f"sync_app: {title.split(': ', 1)[1]}.")
-    if behind:
+    mine = maintainers()
+    if behind and mine:
         print(git("diff", "--stat", "--stat-width=100", old, "HEAD").stdout.rstrip())
     for p in restored:
         print(f"  put back (edited here): {p}")
-    new = headlines(_changelog(old))
+    new = headlines(_changelog(old), maintainer=mine)
     if new:
-        print("What changed, from the app's CHANGELOG:")
+        print("What changed (for the person, in one plain line):")
         for ln in new[:20]:
             print(f"  - {ln}")
         if len(new) > 20:

@@ -20,7 +20,22 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **A short tip now and then, and a word the first time.** The first time you run a search,
+  write to people, apply, prepare an interview or a call, or read a brief, the reply ends with
+  one line saying the first go may be off and how to tell it what to change. After that, now
+  and then, one short tip on getting more out of it (never two days running, each tip once).
+  Say "no more tips" and there are none.
+
 ### Changed
+
+- **Saving and updating are never your job.** Your chats save their work, take the newest
+  version and settle any clash between two chats themselves, without asking and without
+  explaining how: you hear "Saved." or nothing. They no longer show you git commands, branch
+  names, merges or links to their own work, and what an update changed is said in one plain
+  line, leaving out the app maintainer's own news. On your computer, saving no longer stops
+  for the desktop app's approval each time once you have trusted the folder.
 
 - **Nothing asks for your email.** The question about reading your LinkedIn job alerts from
   Gmail is gone from setup and from the questions asked each month, and the job round no

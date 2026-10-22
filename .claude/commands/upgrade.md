@@ -92,7 +92,8 @@ Return, in this order and nothing else:
    the session gives a question's steps only after a yes and its reason only after "why?".
 4. The branch these commits are on, if it is not the session's own.
 
-The session merges the branch, gives the person the lines from 1 at the end of its reply,
+The session merges the branch, gives the person the plain part of each line from 1 (what it
+changed, never the commit or the command) at the end of its reply,
 and asks at most three of the questions from 3, each short and alone: no list of ids, no
 version numbers, no paragraph. A yes brings that question's steps (five at most, under the
 line saying when they were checked and the page to check them against, which is checked

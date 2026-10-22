@@ -11,7 +11,17 @@
       "Bash(python3 salary_lookup.py:*)",
       "Bash(python tools/verify_pdf.py:*)",
       "Bash(python3 tools/verify_pdf.py:*)",
-      "Bash(pdftotext:*)"
+      "Bash(pdftotext:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git fetch origin:*)",
+      "Bash(git merge origin/master:*)",
+      "Bash(git push -u origin HEAD)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr view:*)",
+      "Bash(python3 tools/sync_app.py:*)",
+      "Bash(./tools/ci_local.sh:*)"
     ]
   },
   "hooks": {

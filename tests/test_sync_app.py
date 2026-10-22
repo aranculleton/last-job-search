@@ -470,6 +470,23 @@ def test_a_release_names_every_change_not_its_first_lines():
     assert sync_app.headlines(["  only a reworded line"]) == ["  only a reworded line"]
 
 
+def test_what_changed_is_said_whole_and_only_what_is_theirs():
+    # A headline running onto a second line was printed cut, bold marks and all; and
+    # everyone was told the maintainer's news and a tool's options, which their chat passed
+    # on to them (2026-10-22).
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app
+    lines = ["- **A contact named like one of the app's examples no longer blocks",
+             "  merges** (the maintainer's own repo only). More text.",
+             "- **`ats_boards.py --probe` reads the boards side by side**, as a round does.",
+             "- **Nothing asks for your email.** The round is your alert."]
+    assert sync_app.headlines(lines) == [
+        "A contact named like one of the app's examples no longer blocks merges",
+        "`ats_boards.py --probe` reads the boards side by side",
+        "Nothing asks for your email."]
+    assert sync_app.headlines(lines, maintainer=False) == ["Nothing asks for your email."]
+
+
 def test_a_persons_own_test_the_update_broke_is_named(tmp_path, monkeypatch, capsys):
     # A person's copy of an old test asserted the old search shape for days after the app
     # changed it, and nothing said so until ci_local.sh failed on something else.

@@ -404,8 +404,10 @@ def test_a_session_applies_them_without_being_asked():
     step = claude[claude.index("5. **Profile upgrades"):claude.index("In the app itself")]
     for must in ("run_in_background: true", 'isolation: "worktree"', "/upgrade",
                  "never offer them a list or wait for a yes", "at most three",
-                 "git revert <sha>"):
+                 "undo it yourself"):
         assert must in step, must
+    # The person hears what changed, never a commit or a command (2026-10-22).
+    assert "git revert <sha>" not in step
     cmd = _read(".claude", "commands", "upgrade.md")
     for must in ("Never ask the person", "[CONFIRM:", "--check <id>", "Profile upgrade: <id>",
                  "git revert <sha>", "Never switch off a portal"):
