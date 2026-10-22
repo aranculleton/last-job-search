@@ -1030,17 +1030,25 @@ ELIGIBILITY = _per_reader(_ELIGIBILITY_SET,
                           {"recruiter": True, "decision_maker": False, "peer": False})
 
 
+# The channels a first message goes by; an approved "dm", "reply" or "nudge" is inside a
+# thread already.
+_FIRST_CHANNELS = ("connection", "inmail", "email", "intro")
+
+
 def eligible(reader: str) -> bool:
     """Whether a first message to this kind of reader states work authorization: the
-    profile's ELIGIBILITY where it names the reader; otherwise what most of the messages the
-    person approved for that reader did (learned.py approve), and ELIGIBILITY's default
-    where none were approved or they split evenly."""
+    profile's ELIGIBILITY where it names the reader; otherwise what most of the first
+    messages the person approved for that reader did (learned.py approve), and
+    ELIGIBILITY's default where none were approved or they split evenly. A reply inside a
+    thread is not counted: it never restates work authorization, so it says nothing about
+    a first message."""
     if isinstance(_ELIGIBILITY_SET, dict) and reader in _ELIGIBILITY_SET:
         return ELIGIBILITY.get(reader, False)
     try:
         import learned
         said = [bool(_WORK_AUTH_ANY.search(str(x.get("text") or "")))
-                for x in learned.approved() if x.get("reader") == reader]
+                for x in learned.approved()
+                if x.get("reader") == reader and x.get("channel") in _FIRST_CHANNELS]
     except Exception:  # noqa: BLE001  a note must never break on the learned file
         said = []
     yes, no = said.count(True), said.count(False)

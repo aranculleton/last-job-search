@@ -102,13 +102,24 @@ def test_eligibility_is_said_to_a_recruiter_to_a_decision_maker_once_approved_ne
     assert "sponsorship" not in to_head()
     assert compose.eligible("recruiter") and not compose.eligible("decision_maker")
     # Learned from the messages the person approves for that kind of reader.
-    said = {"reader": "decision_maker", "text": "Hi Juno. " + compose.work_auth_line("senior")}
+    said = {"reader": "decision_maker", "channel": "connection",
+            "text": "Hi Juno. " + compose.work_auth_line("senior")}
     monkeypatch.setattr(learned, "approved", lambda include_retired=False: [said])
     assert compose.work_auth_line("senior") in to_head()        # the senior register
-    left_out = {"reader": "decision_maker", "text": "Hi Bo, hope you're well."}
+    left_out = {"reader": "decision_maker", "channel": "connection",
+                "text": "Hi Bo, hope you're well."}
     monkeypatch.setattr(learned, "approved",
                         lambda include_retired=False: [said, left_out, left_out])
     assert "sponsorship" not in to_head()                        # most of them leave it out
+    # A reply inside a thread never restates it, so it counts for nothing: one approved
+    # thank-you to a recruiter turned their first notes off (2026-10-22).
+    # The profile here names a recruiter, so the setting is taken away for this one check.
+    thanks = {"reader": "recruiter", "channel": "dm", "text": "Thanks Bo, I appreciate it."}
+    monkeypatch.setattr(learned, "approved", lambda include_retired=False: [thanks])
+    kept = compose._ELIGIBILITY_SET
+    monkeypatch.setattr(compose, "_ELIGIBILITY_SET", None)
+    assert compose.eligible("recruiter")
+    monkeypatch.setattr(compose, "_ELIGIBILITY_SET", kept)
     # A reader the profile names keeps the profile's answer, whatever was approved.
     monkeypatch.setattr(compose, "_ELIGIBILITY_SET", {"decision_maker": True})
     monkeypatch.setitem(compose.ELIGIBILITY, "decision_maker", True)
