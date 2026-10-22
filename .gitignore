@@ -88,6 +88,9 @@ documents/postings/**
 # packs land in documents/applications/<company>_<role>/, covered above.
 # tools/security_guards.py pins this rule in REQUIRED_IGNORE_RULES.
 documents/interview/**
+# Copies of prep documents named for whose they are, made each time one is sent
+# (tools/shown.py): the kept file beside its process or contact is the record.
+documents/to_send/**
 !documents/**/.gitkeep
 
 # Personal job search tracking

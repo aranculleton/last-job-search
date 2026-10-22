@@ -526,9 +526,11 @@ a shortlist. Nobody should have to go looking in the repo. Text they will read o
 (messages, notes, questions, a pack) is pasted in full, ready to copy. A document (a
 PDF, a long file) is sent with the session's file-sending tool (SendUserFile or its
 equivalent) so it opens in one tap, with the part they need to judge it pasted beside
-it. The file path is the record, written underneath, and never the answer on its own:
-"I've put it in documents/..." is not done. The same goes for anything updated: show
-the new version, not where it went.
+it, under a name that says whose it is: a prep document is sent as the copy `python3
+tools/shown.py <file>` makes ("Acme Analyst interview prep.md", never "prep.md"), which
+the prep tools print as `send:`. The file path is the record, written underneath, and
+never the answer on its own: "I've put it in documents/..." is not done. The same goes
+for anything updated: show the new version, not where it went.
 
 ## Talking to the person: plain words, one recommendation, short
 

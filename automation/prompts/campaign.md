@@ -36,7 +36,8 @@ no: `campaign "<Employer>" --no`, and it is never offered again for this process
    (or its firm's own name for it), then a case, then technical, then a final. Rebuild the
    document for the next stage (`interview_pack.py pack "<Employer>" --stage "<stage>"
    --write`), keep every answer in it as the person will say it, run `interview_pack.py check
-   "<Employer>"`, and send the document with the file-sending tool after each change.
+   "<Employer>"`, and send the document with the file-sending tool after each change, as
+   the copy named for the employer (the `send:` line, or `python3 tools/shown.py`).
 5. **Drill one question at a time.** Ask it as the interviewer would, wait for the answer,
    then score it on the rubric (below) and give the one change that would score it higher.
    Record what needs work: `interview_pack.py rework ...`; a question they say was really

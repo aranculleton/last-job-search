@@ -88,6 +88,14 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A prep document arrives under whose it is.** Each employer's interview prep and each
+  contact's call prep was always its own file, but every one was sent as "interview_prep.md"
+  or "prep.md", so two employers' documents looked the same in the chat. What is sent is now
+  a copy named for the employer and role, or the person and where they work.
+- **An older prep for the round you are preparing is folded in, not counted as told.** Packs
+  for the same round under other names ("round_2", "round2_technical") were listed as
+  earlier rounds, so their stories counted as already told and nothing in them reached the
+  document. They are now offered to fold in, with the notes kept beside an application.
 - **A chat that can't reach the job sites says so first, and runs no search.** A cloud chat
   whose settings reach only a few websites searched the web instead and showed jobs that had
   closed months before as leads. Now every chat checks when it starts and tells you the one
