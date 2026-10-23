@@ -7,6 +7,13 @@ help page) and give it here, as the ZIP or as the files inside it. Nothing here 
 linkedin.com, and nothing is ever sent: the export is the one way the app sees what
 happened on LinkedIn itself.
 
+**Given an export, `take` it first**: it saves every file the app reads into
+documents/linkedin/ and imports the message history into the log, in one step. A chat that
+read messages.csv straight from the person's download (2026-10-21) wrote its follow-ups
+and left only Connections.csv saved and 86 messages in the log, so no later chat could see
+the rest of the conversations. The files are kept in the main folder on a computer, never
+in a chat's own folder, which is removed with everything in it when its work lands.
+
 Only the files named in FILES are ever opened; everything else in the archive stays
 shut. Their column names come from three independent parsers of the export, not from a
 file LinkedIn was seen to write, so every header is matched without regard to case or
@@ -25,6 +32,8 @@ What it gives:
 - **the invitations still waiting**: the ones sent and never accepted, older than
   PENDING_DAYS, oldest first, for the person to withdraw on LinkedIn themselves.
 
+    python3 tools/network/export.py take <zip|folder|csv>...        # given an export: this, first
+    python3 tools/network/export.py take --find                     # the newest one on this computer
     python3 tools/network/export.py files [<zip|folder>]          # what it holds, what is missing
     python3 tools/network/export.py save <zip|csv>... [--only connections|history|profile]
     python3 tools/network/export.py history [--from <zip|folder>] [--apply]
@@ -117,15 +126,27 @@ def _fold_header(name: str) -> str:
     return " ".join(str(name or "").replace("﻿", "").split()).casefold()
 
 
-def default_folder() -> str:
-    """documents/linkedin/ in this checkout, or in the main checkout when this is a
-    worktree without it: the export is never committed, so a worktree lacks it."""
+def home() -> str:
+    """Where the export is kept: documents/linkedin/ in the main checkout when this is a
+    worktree, else in this one. Git does not carry these files, and a chat's own folder is
+    removed when its work lands, taking anything saved in it."""
     here = person.state("documents", "linkedin")
-    if os.environ.get(person.STATE_ENV) or _holds_any(here):
+    # State moved elsewhere (LJS_STATE, or a test's own folder) is where it is kept.
+    if os.environ.get(person.STATE_ENV) or not os.path.realpath(here).startswith(
+            os.path.realpath(person.ROOT) + os.sep):
         return here
     main = person.main_checkout()
-    there = os.path.join(main, "documents", "linkedin") if main else ""
-    return there if there and _holds_any(there) else here
+    return os.path.join(main, "documents", "linkedin") if main else here
+
+
+def default_folder() -> str:
+    """Where the export is read from: home(), or this checkout's documents/linkedin/ where
+    an older copy saved it there instead."""
+    here = person.state("documents", "linkedin")
+    keep = home()
+    if keep == here or _holds_any(keep):
+        return keep
+    return here if _holds_any(here) else keep
 
 
 def _holds_any(folder: str) -> bool:
@@ -253,11 +274,12 @@ def describe(tables) -> list:
     return out
 
 
-def save(srcs, only: str = "all", dest: str | None = None) -> str:
+def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> str:
     """Copy the files `only` names from what the person gave into documents/linkedin/,
     opening nothing else, and return what to tell them. Each is checked for its header
-    first; one without it is not saved."""
-    dest = dest or person.state("documents", "linkedin")
+    first; one without it is not saved. `name_absent` (kinds) limits which files that were
+    not there are named: all of them by default."""
+    dest = dest or home()
     kinds = GROUPS[only]
     saved, missing, other = [], [], 0
     for src in srcs:
@@ -284,18 +306,97 @@ def save(srcs, only: str = "all", dest: str | None = None) -> str:
                 fh.write(text)
             saved.append(FILES[kind])
     absent = [FILES[k] for k in kinds if FILES[k] not in saved
-              and not any(m.startswith(FILES[k]) for m in missing)]
+              and not any(m.startswith(FILES[k]) for m in missing)
+              and (name_absent is None or k in name_absent)]
     if not saved:
         raise ValueError("nothing saved: none of " + ", ".join(FILES[k] for k in kinds)
                          + " was in what you gave")
     line = f"Saved {_and(saved)}."
     if other:
         line += (f" I read only {'that' if len(saved) == 1 else 'those'} from the archive; "
-                 f"the other {other} file{'s' if other != 1 else ''} in it "
-                 f"{'were' if other != 1 else 'was'} not opened.")
+                 + (f"the other {other} files in it were not opened." if other != 1
+                    else "the other file in it was not opened."))
     if missing or absent:
         line += " Not saved: " + _and(missing + [f"{a} (not in it)" for a in absent]) + "."
     return line
+
+
+# Where a person's download lands on their own computer. Only the top of each is looked
+# at, and only an archive or a folder that is LinkedIn's: one named for it, or one holding
+# its files.
+SEARCH_DIRS = ("Downloads", "Desktop", "Documents")
+
+
+def find_exports(base: str | None = None) -> list:
+    """LinkedIn downloads on this computer, newest first: a ZIP with "linkedin" in its name
+    that holds Connections.csv or messages.csv, or a folder holding either (with "linkedin"
+    in its name, or both files). Nothing in them is read; a cloud computer has none."""
+    base = base or os.path.expanduser("~")
+    out = []
+    for d in SEARCH_DIRS:
+        try:
+            entries = list(os.scandir(os.path.join(base, d)))
+        except OSError:
+            continue
+        for e in entries:
+            name = e.name.lower()
+            try:
+                if e.is_file() and name.endswith(".zip") and "linkedin" in name:
+                    with zipfile.ZipFile(e.path) as z:
+                        held = {os.path.basename(n).lower() for n in z.namelist()}
+                    if held & {"connections.csv", "messages.csv"}:
+                        out.append(e.path)
+                elif e.is_dir():
+                    held = {n.lower() for n in os.listdir(e.path)}
+                    has = held & {"connections.csv", "messages.csv"}
+                    if has and ("linkedin" in name or len(has) == 2):
+                        out.append(e.path)
+            except (OSError, zipfile.BadZipFile):
+                continue
+    return sorted(out, key=os.path.getmtime, reverse=True)
+
+
+def not_saved() -> list:
+    """The history files missing from where the export is kept, as plain lines; [] when both
+    are there. Connections.csv alone is what the connections import used to keep."""
+    folder = default_folder()
+    gone = [FILES[k] for k in ("messages", "invitations") if not read(k, folder)["where"]]
+    if not gone:
+        return []
+    what = _and(gone)
+    return [f"NOT SAVED: {what} {'is' if len(gone) == 1 else 'are'} not in documents/linkedin/, "
+            "so the history LinkedIn holds was never imported: chats see only the messages "
+            "logged here, and may write twice to someone already in a conversation.",
+            "  Given the person's LinkedIn download (the ZIP or its folder): python3 "
+            "tools/network/export.py take <it>; on their computer, take --find looks for it "
+            "first. Never read the files straight from the download."]
+
+
+def take(srcs, contacts_path: str | None = None, threads_path: str | None = None) -> list:
+    """Save the export and import its history, in one step: what a chat given an export
+    does before anything is written from it. Returns the lines to show."""
+    lines = [save(srcs, "all", name_absent=("connections", "messages", "invitations"))]
+    st = _state()
+    cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    contacts, threads = st.load_contacts(cp), st.load_threads(tp)
+    plan = plan_history(contacts, threads, home())
+    if plan["problem"]:
+        lines.append(f"No history imported: {plan['problem']}.")
+        return lines
+    n = apply_history(threads, plan, contacts)
+    if n:
+        st.save_threads(threads, tp)
+        st.save_contacts(contacts, cp)
+    j = plan["joined"]
+    people = j["profile address"] + j["name"]
+    wrote = [u for u in plan["unmatched"] if u["sent"]]
+    lines.append(f"Imported {n} message row{'s' if n != 1 else ''} into the message log, for "
+                 f"{people} {'person' if people == 1 else 'people'} in the contact book. "
+                 "Nothing was sent.")
+    if plan["unmatched"]:
+        lines.append(f"{len(plan['unmatched'])} people in the history are not in the contact "
+                     f"book ({len(wrote)} of them written to): `export.py history` lists them.")
+    return lines
 
 
 def _and(items) -> str:
@@ -351,6 +452,23 @@ def day(value) -> datetime.date | None:
                 except ValueError:
                     return None
     return None
+
+
+def clock(value) -> str:
+    """The time of day a dated export cell carries, "08:40", or "" when it has none."""
+    m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\b", str(value or ""))
+    return f"{int(m.group(1)):02d}:{m.group(2)}" if m else ""
+
+
+# The mark a repeat carries: the same words to or from one person on one day, sent at
+# another time. Without it two genuine messages were two identical rows, which RECONCILE
+# reads as one message logged twice (2026-10-23).
+_AT = " (sent at {})"
+
+
+def _sig(row) -> tuple:
+    return tuple(str(row.get(k) or "").strip()
+                 for k in ("date", "direction", "channel", "scenario", "summary", "full_text"))
 
 
 def month(value) -> tuple | None:
@@ -575,7 +693,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "redate": [], "joined": {"profile address": 0, "name": 0},
+    out = {"add": [], "fill": [], "redate": [], "mark": [],
+           "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
     if not (mine[0] or mine[1]):
@@ -583,7 +702,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                           "are yours cannot be told")
         return out
     if not (msgs["usable"] or invs["usable"]):
-        out["problem"] = "neither messages.csv nor Invitations.csv is there to read"
+        out["problem"] = ("neither messages.csv nor Invitations.csv could be read (not there, "
+                          "or without the columns it needs)")
         return out
     log = list(threads)
     joined_ids: dict = {}
@@ -607,7 +727,27 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
 
     claimed: set = set()
 
-    def add_message(cid, when, direction, text, subject, summary, attached=""):
+    marked: dict = {}                    # id(an existing row) -> the summary it will carry
+
+    def planned(r) -> tuple:
+        sig = _sig(r)
+        return sig[:4] + (marked.get(id(r), sig[4]),) + sig[5:]
+
+    def mark_repeat(row, rows, at):
+        """A row identical to another of this person's is marked with the time it was sent,
+        once. An existing row is marked when the plan is applied, never while it is made."""
+        summary = marked.get(id(row), str(row.get("summary") or ""))
+        if not at or "(sent at " in summary:
+            return
+        if any(r is not row and planned(r) == planned(row) for r in rows):
+            new = summary + _AT.format(at)
+            if any(a is row for a in out["add"]):
+                row["summary"] = new
+            else:
+                marked[id(row)] = new
+                out["mark"].append((row, new))
+
+    def add_message(cid, when, direction, text, subject, summary, attached="", at=""):
         rows = mine_for(cid)
         for r in rows:
             if st._direction(r) == direction and _near(st.as_date(r.get("date")), when,
@@ -627,6 +767,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                         and not st.is_acceptance(r) and not st.is_withdrawal(r)
                         and not st.is_call(r)):
                     claimed.add(id(r))
+                    mark_repeat(r, rows, at)
                     return
         if not text:
             # A message with no words (a resume sent alone) has no text to match on, and was
@@ -640,6 +781,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                         and not st.is_acceptance(r) and not st.is_withdrawal(r)
                         and not st.is_call(r)):
                     claimed.add(id(r))
+                    mark_repeat(r, rows, at)
                     return
         empty = [r for r in rows if st._direction(r) == direction
                  and _near(st.as_date(r.get("date")), when, MESSAGE_SLACK_DAYS)
@@ -654,6 +796,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                "full_text": text, "subject": subject}
         out["add"].append(row)
         log.append(row)
+        mark_repeat(row, rows + [row], at)
         if not text:
             claimed.add(id(row))
 
@@ -706,7 +849,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                            + EXPORT_NOTE + (f"; {note}" if note else "")
                            + (f": {_preview(text)}" if text else ""))
                 add_message(cid, when, direction, text, str(r.get("SUBJECT") or "").strip(),
-                            summary, attached=note)
+                            summary, attached=note, at=clock(r.get("DATE")))
 
     # Invitations: the person's requests, and requests to them from people in the book.
     if invs["usable"]:
@@ -815,6 +958,8 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
+    for row, summary in plan.get("mark") or ():
+        row["summary"] = summary
     redate = plan.get("redate") or []
     for row, day_ in redate:
         old = row.get("date")
@@ -829,7 +974,7 @@ def apply_history(threads, plan, contacts=None) -> int:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
                | {str(r.get("contact_id") or "") for r, _ in redate})
-    return len(plan["add"]) + len(plan["fill"]) + len(redate)
+    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
 
 
 def settle(contacts, threads, ids) -> list:
@@ -1008,8 +1153,9 @@ def withdrawn(contacts, threads, who, today, src=None, oldest: int = 0, reason: 
         sent = datetime.date.fromisoformat(i["sent"])
         cid = i["contact_id"]
         if not cid:
-            cid = st.unique_contact_id(i["name"] or st.profile_handle(i["url"]), "", contacts,
-                                       linkedin_url=i["url"])
+            # A name the export gives with no surname in it is no id: the profile address is.
+            named = i["name"] if st.surname(i["name"]) else st.profile_handle(i["url"])
+            cid = st.unique_contact_id(named or i["name"], "", contacts, linkedin_url=i["url"])
             st.add_row(contacts, cid, {
                 "name": i["name"], "linkedin_url": i["url"], "channel": "connection",
                 "status": "awaiting_reply", "first_contacted": i["sent"], "route": "cold",
@@ -1035,6 +1181,43 @@ def withdrawn(contacts, threads, who, today, src=None, oldest: int = 0, reason: 
 def _cli_files(a) -> int:
     for line in describe([read(k, a.src) for k in FILES]):
         print("  " + line)
+    if not a.src:
+        for line in not_saved():
+            print(line)
+    return 0
+
+
+def _keep(src) -> None:
+    """An export read from anywhere but where it is kept is saved there first, so the next
+    chat has it too."""
+    if not src or os.path.realpath(str(src)) == os.path.realpath(home()):
+        return
+    try:
+        print(save([src], "all"))
+    except (OSError, ValueError, zipfile.BadZipFile) as e:
+        print(f"export: not saved: {e}")
+
+
+def _cli_take(a) -> int:
+    srcs = list(a.srcs)
+    if a.find and not srcs:
+        srcs = find_exports()[:1]
+        if not srcs:
+            print("export: no LinkedIn download on this computer (in Downloads, Desktop or "
+                  "Documents). The steps for one: python3 tools/claude_surfaces.py steps "
+                  "linkedin-export-files")
+            return 3
+        print(f"Found {srcs[0]}")
+    if not srcs:
+        print("export: take needs the ZIP or its folder, or --find")
+        return 2
+    try:
+        lines = take(srcs, a.contacts, a.threads)
+    except (OSError, ValueError, zipfile.BadZipFile) as e:
+        print(f"export: {e}")
+        return 1
+    for line in lines:
+        print(line)
     return 0
 
 
@@ -1048,6 +1231,7 @@ def _cli_save(a) -> int:
 
 
 def _cli_history(a) -> int:
+    _keep(a.src)
     st = _state()
     contacts, threads = st.load_contacts(a.contacts), st.load_threads(a.threads)
     plan = plan_history(contacts, threads, a.src)
@@ -1071,6 +1255,11 @@ def _cli_history(a) -> int:
         n_ = len(plan["redate"])
         print(f"  {n_} request{'s' if n_ != 1 else ''} recorded from a Pending page, given the "
               "earlier day the export says it went")
+    if plan.get("mark"):
+        n_ = len(plan["mark"])
+        print(f"  {n_} repeat{'s' if n_ != 1 else ''} already logged (the same words to one "
+              "person twice in a day) given the time each was sent, so they are not read as "
+              "one message logged twice")
     if plan["groups"]:
         print(f"  {plan['groups']} group conversation{'s' if plan['groups'] != 1 else ''} left "
               "out: a message to several people is not one thread")
@@ -1105,6 +1294,7 @@ def _cli_history(a) -> int:
 
 
 def _cli_pending(a) -> int:
+    _keep(a.src)
     st = _state()
     contacts, threads = st.load_contacts(a.contacts), st.load_threads(a.threads)
     found = pending(contacts, threads, a.today, a.src, days=a.days)
@@ -1122,6 +1312,7 @@ def _cli_pending(a) -> int:
 
 
 def _cli_withdrawn(a) -> int:
+    _keep(a.src)
     st = _state()
     contacts, threads = st.load_contacts(a.contacts), st.load_threads(a.threads)
     if not a.who and not a.oldest:
@@ -1146,6 +1337,11 @@ def main(argv=None) -> int:
     st = _state()
     ap = argparse.ArgumentParser(prog="export.py", description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    t = sub.add_parser("take", help="save the export and import its history, in one step")
+    t.add_argument("srcs", nargs="*")
+    t.add_argument("--find", action="store_true")
+    t.add_argument("--contacts", default=st.CONTACTS_CSV)
+    t.add_argument("--threads", default=st.THREADS_CSV)
     f = sub.add_parser("files", help="what the export holds, and what is missing")
     f.add_argument("src", nargs="?", default=None)
     s = sub.add_parser("save", help="copy the named files into documents/linkedin/")
@@ -1169,7 +1365,7 @@ def main(argv=None) -> int:
             p.add_argument("--oldest", type=int, default=0)
             p.add_argument("--reason", default="")
     a = ap.parse_args(argv)
-    return {"files": _cli_files, "save": _cli_save, "history": _cli_history,
+    return {"take": _cli_take, "files": _cli_files, "save": _cli_save, "history": _cli_history,
             "pending": _cli_pending, "withdrawn": _cli_withdrawn}[a.cmd](a)
 
 

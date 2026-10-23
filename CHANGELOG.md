@@ -20,6 +20,27 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Your LinkedIn download is kept, and its messages read in, whenever you give it.** A chat
+  read your messages straight from the download to write follow-ups and kept none of them,
+  and setup kept only your connections from it, so later chats could not see your other
+  conversations. Now the whole download is saved and its messages and invitations go into
+  your message log in one step, and on your computer it is kept in your main folder, where a
+  chat's own folder cannot take it with it when it finishes. Where only your connections were
+  kept, your chat on your computer looks for the download itself, and asks you for it only if
+  it cannot find it. Profile upgrade: linkedin-history.
+- **The same file sent to someone twice in a day is two messages, not a mistake.** Reading
+  your LinkedIn messages in wrote two identical lines for it, and the app's own check then
+  called them one message logged twice. The second now says the time it was sent, and lines
+  an earlier version wrote that way are told apart the next time your messages are read in.
+  Someone LinkedIn lists with only a first name and some dots no longer stops it either.
+- **Saving your work on your computer no longer trips the desktop app's safety check.** A
+  chat ran its steps for saving as one long command, and the app's auto mode refused the whole
+  thing as a merge nobody had reviewed, although that step is pre-approved. Each step now runs
+  on its own, where the approval applies. If the check still holds one, you are asked to OK
+  that one step in a single reply, never to turn the safety checks off.
+
 ## [3.11.0] - 2026-10-22
 
 ### Added

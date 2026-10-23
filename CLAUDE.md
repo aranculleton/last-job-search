@@ -154,7 +154,9 @@ record it in `profile/`.
 ## Developer rules: changing the app itself
 
 **Before changing any app-owned file, read `MAINTAINING.md`, "Developer rules"**, whichever
-repo the session started in. In short: the change is made in the app, on a branch, and merged
+repo the session started in. In short: Claude's own documentation and similar projects on
+GitHub are looked at first, unasked, for every question, fix, feature and release; the
+change is made in the app, on a branch, and merged
 with CI green; the leak scan passes on the exact tree before anything is pushed, because the
 app is public and so are its branches and history; no example is a disguised person, and a
 real person a run turns up is described, never named, in code, commits or PR text
@@ -198,7 +200,9 @@ happens in the container, where the driver is set, and not on GitHub, where it i
 and **each local chat works in a folder of its own, made before any other work**
 (`python3 tools/sync_app.py --worktree <name>`): two chats in one folder switch branches
 under each other. RUNBOOK.md step 4 has the commands, how to tell a merge worked, and what
-to do when the desktop app refuses one.
+to do when the desktop app refuses one. **Each runs as a command of its own, the merge above
+all, never chained**: a chain with one part the app has not pre-approved sends the whole of
+it, merge included, to auto mode's own check, which refuses the merge.
 
 The one thing that is **not** negotiable in the other direction: do not push to master
 without CI green. It is the branch every other chat starts from, so a broken master
@@ -503,6 +507,9 @@ contacted. Load the skill before any outreach. What a session needs before it do
 - No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays on**:
   only the person switches it off, never a session.
 - Never claim anything not in `profile/01-candidate-profile.md`.
+- **A LinkedIn download the person gives is taken first**, before anything is written from it:
+  `python3 tools/network/export.py take <the ZIP or its folder>` saves it and imports its
+  message history in one step. Never read its files straight from where it was downloaded.
 - A resume sent to a contact is logged with its file (`state.py message <id> --attached <file>`).
   One made for them is staged with `stage_picks.py --for-contact <id>`, and RECONCILE says
   where the two disagree, because the chat that logs the ask and the chat that drafts the

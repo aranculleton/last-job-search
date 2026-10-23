@@ -512,6 +512,22 @@ def _connections_export() -> str:
             "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
 
 
+def _linkedin_history() -> str:
+    """Pending where the connections from LinkedIn's download were saved but not its
+    messages: the connections import kept Connections.csv alone until 2026-10-23, and a chat
+    then read the messages straight from the download and kept none of them."""
+    if _mod("networking") is None:
+        return ""
+    have = os.path.exists(person.local_state("documents", "linkedin", "Connections.csv"))
+    if not have or os.path.exists(person.local_state("documents", "linkedin", "messages.csv")):
+        return ""
+    if "linkedin-history" in asked():
+        u = by_id("linkedin-history")
+        return again("linkedin-history", u.ask_version, u.changed)
+    return ("your LinkedIn connections are on file but not your messages from the same "
+            "download (documents/linkedin/messages.csv), so no chat sees who you already talked to")
+
+
 def _own_profile_review() -> str:
     """Pending until the person's own LinkedIn profile has been looked over once, or while a
     no stands (asked again after REASK_DAYS). Later looks are tools/network/own_profile.py
@@ -1188,8 +1204,9 @@ REGISTRY: tuple[Upgrade, ...] = (
     Upgrade("connections-export", "2026-10-17",
             "every networking run starting from the people you already know",
             _connections_export, "save what they attach with `python3 tools/network/sources.py "
-            "import-connections <file>` (a ZIP is read for Connections.csv alone, and the "
-            "line it prints says so), or, if they would rather not, write "
+            "import-connections <file>` (the whole download, the ZIP or its folder, is saved "
+            "for the files the app reads and its message history imported, and the line it "
+            "prints says so), or, if they would rather not, write "
             "CONNECTIONS_EXPORT = \"declined\" in profile/networking.py and run `python3 "
             "tools/profile_upgrades.py --no connections-export`. While the file is on its way, "
             "after giving the steps, offer once, in its words, what `python3 "
@@ -1210,6 +1227,24 @@ REGISTRY: tuple[Upgrade, ...] = (
                                     + ["I only read it. Nothing is sent to anyone."]),
             why_ask="People you already know can be messaged directly, with no connection "
                     "request, and they reply far more often than strangers."),
+    Upgrade("linkedin-history", "2026-10-23",
+            "every chat seeing your past LinkedIn conversations, not only the ones written here",
+            _linkedin_history, "on their computer, first `python3 tools/network/export.py take "
+            "--find`: it looks for the download in Downloads, Desktop and Documents and, found, "
+            "saves it and imports the history, and nothing is asked. Only where it finds none, "
+            "ask; after a yes, `python3 tools/network/export.py take <what they attach>`. A no "
+            "is `python3 tools/profile_upgrades.py --no linkedin-history`", "question", "~2 min",
+            priority=2,
+            needs="you",
+            ask="You gave me your LinkedIn connections before, but not the messages in the same "
+                "download. Can I have that download again, so every chat sees who you've "
+                "already talked to? Yes, or not now?",
+            steps=lambda: "\n".join(["Attach the same LinkedIn download you gave me before, "
+                                     "the ZIP or the folder it opened into. I only read it; "
+                                     "nothing is sent to anyone. If it's gone:"]
+                                    + _surface_steps("linkedin-export-files")),
+            why_ask="Without your messages, a chat can't see who you've already talked to, and "
+                    "may write to someone twice."),
     Upgrade("own-profile-review", "2026-10-21",
             "your own LinkedIn profile looked over once for anything that would stop people "
             "replying: a wrong city, a job that does not match your resume, a certificate you "

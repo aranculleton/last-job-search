@@ -92,11 +92,17 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
    first to message, as a message (route `connection`), at no cost to the budget, before
    any search. Without the export, the `connections-export` upgrade asks for it, and asks
    again later after a no.
-   **Their own history, if they attach it** (messages.csv and Invitations.csv; the steps:
-   `python3 tools/claude_surfaces.py steps linkedin-export-files`): `python3
-   tools/network/export.py history --from <the zip>` says what it would add to the message log,
-   joined by profile address or a careful name match, and who is not in the contact book;
-   `--apply` writes it, and a second run adds nothing. Nothing is sent.
+   **Their LinkedIn download, whenever they give it** (the ZIP or the folder it opened into;
+   the steps for one: `python3 tools/claude_surfaces.py steps linkedin-export-files`): before
+   anything is written from it, `python3 tools/network/export.py take <it>`. It saves every
+   file the app reads into documents/linkedin/ (the main folder on a computer, never a chat's
+   own, which goes when its work lands) and imports the messages and invitations into the
+   message log, joined by profile address or a careful name match, and a second run adds
+   nothing. Never read messages.csv straight from their download: a chat that did kept none
+   of it, and no later chat saw the rest of the conversations (2026-10-21). `export.py
+   files` says when the history was never saved; `take --find` looks for the download on
+   their computer first. `export.py history` lists who in it is not in the contact book.
+   Nothing is sent.
    **Their own profile, now and then:** `python3 tools/network/own_profile.py due` prints one line
    only when a look is worth it, and nothing otherwise. Act on that line alone: ask its question
    once, at the end of the reply.

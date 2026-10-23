@@ -315,7 +315,10 @@ def person_name(name: str | None) -> str:
         if _post_nominals(extra, head, chunks[0]):
             continue
         tokens.extend(extra)
-    tokens = [t for t in tokens if _bare(t) not in _HONORIFICS]
+    # A word with no letter or digit in it is no part of a name: a first name and four dots
+    # is how LinkedIn's export writes some people, and the dots were taken for the surname,
+    # which slugged to nothing and stopped contact_id (2026-10-23).
+    tokens = [t for t in tokens if _bare(t) not in _HONORIFICS and any(ch.isalnum() for ch in t)]
     while len(tokens) > 2 and _bare(tokens[-1]) in _SUFFIXES:
         tokens.pop()
     return " ".join(tokens)

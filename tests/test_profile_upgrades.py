@@ -354,7 +354,12 @@ def test_only_what_truly_needs_the_person_waits_for_them():
                                                                  "voice-refresh",
                                                                  # Only they can give their own
                                                                  # profile (2026-10-21).
-                                                                 "own-profile-review"}
+                                                                 "own-profile-review",
+                                                                 # Only they hold their LinkedIn
+                                                                 # download, where the computer's
+                                                                 # own search finds none
+                                                                 # (2026-10-23).
+                                                                 "linkedin-history"}
     # Nothing asks for their email: anything like an alert reaches them inside Claude
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY

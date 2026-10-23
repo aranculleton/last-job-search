@@ -815,37 +815,32 @@ CONNECTIONS_MAX_BYTES = 20 * 1024 * 1024
 
 
 def import_connections(src: str, dest: str | None = None) -> str:
-    """Save LinkedIn's Connections.csv into documents/linkedin/, from the file itself or
-    from the archive it came in, and return what to tell the person.
+    """Save LinkedIn's Connections.csv into documents/linkedin/, from the file itself, or the
+    whole export from the archive or folder it came in, and return what to tell the person.
 
-    From a ZIP only Connections.csv is read: the archive also holds the person's
-    messages and much else the app never needs, so nothing else in it is opened or
-    kept. The file starts with a few lines of notes above its header, which
-    state.first_degree() finds; one with no connection under a "First Name" header is
+    Given the archive or its folder, the export is taken whole (`export.take`): every file
+    the app reads is saved and the message history imported into the log, in one step.
+    Reading Connections.csv alone from it left the person's messages unsaved, and a chat
+    read them straight from the download and kept none of it (2026-10-21). Nothing else in
+    the archive is opened. The file starts with a few lines of notes above its header,
+    which state.first_degree() finds; one with no connection under a "First Name" header is
     refused, and nothing is saved."""
     import zipfile
     import export
-    dest = dest or person.state("documents", "linkedin", "Connections.csv")
-    note = ""
-    if zipfile.is_zipfile(src):
-        with zipfile.ZipFile(src) as z:
-            names = z.namelist()
-            found = [n for n in names if os.path.basename(n).lower() == "connections.csv"]
-            if not found:
-                raise ValueError("there is no Connections.csv in that archive: it is probably "
-                                 "the shorter download, which leaves connections out")
-            if z.getinfo(found[0]).file_size > CONNECTIONS_MAX_BYTES:
-                raise ValueError("the Connections.csv in that archive is too large to be one")
-            data = z.read(found[0])
-        others = len(names) - 1
-        note = (" I read only Connections.csv from the archive" + (
-            f"; the other {others} file{'s' if others != 1 else ''} in it "
-            f"{'were' if others != 1 else 'was'} not opened." if others else "."))
-    else:
-        if os.path.getsize(src) > CONNECTIONS_MAX_BYTES:
-            raise ValueError("that file is too large to be LinkedIn's Connections.csv")
-        with open(src, "rb") as fh:
-            data = fh.read()
+    if zipfile.is_zipfile(src) or os.path.isdir(src):
+        if not export.read("connections", src)["where"]:
+            raise ValueError("there is no Connections.csv in that download: it is probably "
+                             "the shorter download, which leaves connections out")
+        lines = export.take([src])
+        count = sum(1 for r in export.read("connections", export.home())["rows"]
+                    if str(r.get("First Name") or "").strip()
+                    or str(r.get("Last Name") or "").strip())
+        return " ".join([f"Saved your {count} connections."] + lines)
+    dest = dest or os.path.join(export.home(), "Connections.csv")
+    if os.path.getsize(src) > CONNECTIONS_MAX_BYTES:
+        raise ValueError("that file is too large to be LinkedIn's Connections.csv")
+    with open(src, "rb") as fh:
+        data = fh.read()
     text = data.decode("utf-8-sig", errors="replace")
     # The one reader of every export file (tools/network/export.py), which state.first_degree
     # reads through too: a header in any case, below its notes.
@@ -858,7 +853,7 @@ def import_connections(src: str, dest: str | None = None) -> str:
     os.makedirs(os.path.dirname(dest), exist_ok=True)
     with open(dest, "w", encoding="utf-8", newline="") as fh:
         fh.write(text)
-    return f"Saved your {count} connections.{note}"
+    return f"Saved your {count} connections."
 
 
 def while_you_wait(tracker=None) -> str:

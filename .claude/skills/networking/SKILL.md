@@ -48,7 +48,7 @@ done correctly*.
 | `reading.py` | What was read about one person before writing: their page, their public work, what a note can rest on |
 | `prep.py` | Call prep documents, for a call that came out of a thread |
 | `profile_facts.py` | The candidate half of a prep document, read from the profile |
-| `export.py` | LinkedIn's data export, read: their connections, their message history into the log, the invitations still waiting |
+| `export.py` | LinkedIn's data export, read: their connections, their message history into the log, the invitations still waiting. Given a download, `take` it first: saved and imported in one step, never read straight from where it was downloaded |
 | `own_profile.py` | Their own LinkedIn profile, checked now and then for red flags only; `due` is silent until a look is worth it |
 
 **Never hand-write a message without running `compose.validate()` on it**, with the

@@ -8,7 +8,7 @@
     "date": "2026-10-15"
   },
   "drafts": {
-    "version": 45,
+    "version": 46,
     "date": "2026-10-17"
   },
   "expand": {
@@ -32,7 +32,7 @@
     "date": "2026-10-17"
   },
   "networking": {
-    "version": 54,
+    "version": 55,
     "date": "2026-10-17"
   },
   "prep-docs": {
@@ -60,7 +60,7 @@
     "date": "2026-10-15"
   },
   "voice": {
-    "version": 4,
+    "version": 5,
     "date": "2026-10-17"
   }
 }

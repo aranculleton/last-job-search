@@ -97,23 +97,31 @@ def home(tmp_path, monkeypatch):
     return tmp_path
 
 
-def test_from_the_whole_archive_only_connections_is_read(home, monkeypatch):
+def test_the_whole_archive_is_taken_and_nothing_else_in_it_opened(home, monkeypatch):
+    # Connections.csv alone was read from the archive, so the person's messages were never
+    # saved and a chat read them straight from the download (2026-10-21). The whole export
+    # the app reads is taken now; anything else in the archive stays shut.
     archive = home / "Basic_LinkedInDataExport.zip"
     with zipfile.ZipFile(archive, "w") as z:
         z.writestr("Connections.csv", CSV)
         z.writestr("messages.csv", "FROM,TO,CONTENT\nsomeone,me,a private message\n")
         z.writestr("Profile.csv", "First Name,Last Name\nMorgan,Ellis\n")
+        z.writestr("Ad_Targeting.csv", "Audience\n25-34\n")
     opened = []
     real = zipfile.ZipFile.read
     monkeypatch.setattr(zipfile.ZipFile, "read",
                         lambda self, name, *a: opened.append(name) or real(self, name, *a))
     said = sources.import_connections(str(archive))
-    assert opened == ["Connections.csv"]
-    assert said == ("Saved your 2 connections. I read only Connections.csv from the archive; "
-                    "the other 2 files in it were not opened.")
-    saved = home / "documents" / "linkedin" / "Connections.csv"
-    assert saved.read_text(encoding="utf-8") == CSV
-    assert [c["name"] for c in state.first_degree(str(saved))] == ["Shirin Example", "Corwin Haldane"]
+    assert set(opened) == {"Connections.csv", "messages.csv", "Profile.csv"}
+    assert said.startswith("Saved your 2 connections. Saved Connections.csv, messages.csv and "
+                           "Profile.csv. I read only those from the archive; the other file in "
+                           "it was not opened. Not saved: Invitations.csv (not in it).")
+    saved = home / "documents" / "linkedin"
+    assert (saved / "Connections.csv").read_text(encoding="utf-8") == CSV
+    assert sorted(p.name for p in saved.iterdir()) == ["Connections.csv", "Profile.csv",
+                                                       "messages.csv"]
+    assert [c["name"] for c in state.first_degree(str(saved / "Connections.csv"))] == \
+        ["Shirin Example", "Corwin Haldane"]
 
 
 def test_the_shorter_download_or_a_wrong_file_saves_nothing(home):
