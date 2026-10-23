@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.12.0] - 2026-10-23
+
 ### Added
 
 - **Nobody you have already written to is suggested again, on any channel.** Every list of
@@ -38,8 +40,8 @@ make sense to somebody whose repo just received it.
   written from their card alone is refused until their profile is read.
 - **Your own follow-up rule.** `FOLLOW_UP_DAYS` and `MAX_UNANSWERED` in
   profile/networking.py: the days of silence before a follow-up (calendar days, weekends
-  included), counted from your last
-  message or the day they accepted, and how many messages in a row may go unanswered.
+  included), counted from your last message or the day they accepted, and how many messages
+  in a row may go unanswered.
   Unset, nothing changes: six business days and one nudge. Where you have already said your
   rule in a chat, it is written into the setting for you. Each contact waiting on a reply
   gets the date on their row, so the brief brings it back on the day, and the row says which
@@ -58,14 +60,22 @@ make sense to somebody whose repo just received it.
 ### Changed
 
 - **The due list and the LinkedIn import are quicker, with the same answers.** The due list
-  read every logged message once per contact: on 1,300 contacts and 8,500 messages it took
-  3.3 seconds here (5 to 5.5 on a laptop) and now takes 0.9. Importing a download of 2,400
-  messages took 14 seconds and now takes 1.
+  read every logged message once per contact: on about 1,400 contacts and 8,600 messages it
+  took 3.3 seconds here (5 to 5.5 on a laptop) and now takes 1. Importing a download of
+  2,400 messages took 14 seconds and now takes 1.
 - **One LinkedIn address in any form is one person**, including the phone site's addresses
   and an accented letter written either way.
 
 ### Fixed
 
+- **Years of LinkedIn history no longer fill the due list.** The day a person's whole history
+  came in, their due list went from 24 overdue to 655: every old conversation where the
+  other person wrote last read as a reply owed, and a resume asked for in 2021 came first,
+  1,801 days late. Anything owed more than 45 days with nothing done is now counted in one
+  line instead of listed (the conversations view still shows each one, and a date you put
+  on one brings it back), and requests nobody accepted are one list to withdraw, not people
+  to write to. Recording them withdrawn all at once records only that list, never one you
+  put on hold.
 - **"Bachelor's or master's degree" is read as a bachelor's.** Preparing an application read
   it as a master's, required, with no way round it, whenever it was written with a curly
   apostrophe or not; the score already knew better, and now the screen and the posting's
@@ -82,11 +92,6 @@ make sense to somebody whose repo just received it.
 - **Facts about an employer that cannot be checked are looked up again.** A new session had
   the facts but not the pages they came from, so each was refused, and the pages were not
   read again because the facts were still recent. Now those pages are read again.
-- **One application to Google no longer stops every chat's checks** (the maintainer's own
-  copy only). Every employer applied to goes on the list of words the public app must never
-  carry, and the app's own text names Google, Microsoft, Apple, IBM and Oracle for their
-  products. Those five are allowed, whether they came from an application or a past job;
-  any other employer is still caught.
 - **Your LinkedIn download is kept, and its messages read in, whenever you give it.** A chat
   read your messages straight from the download to write follow-ups and kept none of them,
   and setup kept only your connections from it, so later chats could not see your other
@@ -105,14 +110,6 @@ make sense to somebody whose repo just received it.
   already kept, the app keeps the newer and says so, and a connections file with nobody in
   it is refused rather than saved over yours. A download your computer opened one folder
   deeper than usual is found when the app looks for it.
-- **Years of LinkedIn history no longer fill the due list.** The day a person's whole history
-  came in, their due list went from 24 overdue to 655: every old conversation where the
-  other person wrote last read as a reply owed, and a resume asked for in 2021 came first,
-  1,801 days late. Anything owed more than 45 days with nothing done is now counted in one
-  line instead of listed (the conversations view still shows each one, and a date you put
-  on one brings it back), and requests nobody accepted are one list to withdraw, not people
-  to write to. Recording them withdrawn all at once records only that list, never one you
-  put on hold.
 - **An away message's return date is read from the day it came.** "Back on 5 January",
   pasted on 28 December, was read as the January just gone when the reply advice was given.
 - **The due list and a page of people no longer offer anyone the check holds.** A first note
@@ -124,6 +121,11 @@ make sense to somebody whose repo just received it.
   thing as a merge nobody had reviewed, although that step is pre-approved. Each step now runs
   on its own, where the approval applies. If the check still holds one, you are asked to OK
   that one step in a single reply, never to turn the safety checks off.
+- **One application to Google no longer stops every chat's checks** (the maintainer's own
+  copy only). Every employer applied to goes on the list of words the public app must never
+  carry, and the app's own text names Google, Microsoft, Apple, IBM and Oracle for their
+  products. Those five are allowed, whether they came from an application or a past job;
+  any other employer is still caught.
 
 ## [3.11.0] - 2026-10-22
 
