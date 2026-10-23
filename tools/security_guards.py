@@ -67,6 +67,7 @@ ALLOWED_PERMISSIONS = {
     "Bash(gh pr create:*)",
     "Bash(gh pr merge:*)",
     "Bash(gh pr view:*)",
+    "Bash(git switch --detach origin/master)",
     "Bash(python3 tools/sync_app.py:*)",
     "Bash(./tools/ci_local.sh:*)",
 }

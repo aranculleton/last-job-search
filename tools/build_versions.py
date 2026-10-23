@@ -170,8 +170,9 @@ METHODS: dict[str, dict] = {
                                     "your own function's people, outreach in your words"),
             (3, "2026-10-17", False, "OPENALEX is turned on only for a field where people publish"),
             (4, "2026-10-17", False, "researches where the person's people are named (PEOPLE_SOURCES) and asks once for their connections export"),
+            (5, "2026-10-22", False, "the instructions say an export is taken first and the merge runs alone; wording only"),
         ),
-        "fingerprint": "9c3a92a6c1812e82",
+        "fingerprint": "0a577607eaf5640e",
     },
     "history": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
@@ -305,8 +306,9 @@ METHODS: dict[str, dict] = {
             (43, "2026-10-22", False, "the writing guide says work authorization goes to a recruiter by default, and to a decision-maker once the person's approved messages say it"),
             (44, "2026-10-22", False, "the runbook names what the networking state shows: requests sent and InMail credits left"),
             (45, "2026-10-22", False, "A first note to an employer called Visa, or to a reader whose first name is an approved example's surname, is no longer refused for it; checks only, nothing to redo"),
+            (46, "2026-10-22", False, "landing steps run each command alone, the merge never chained; wording only"),
         ),
-        "fingerprint": "61c3df2c2e71adb6",
+        "fingerprint": "cccb5cd959f8ed75",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -451,8 +453,9 @@ METHODS: dict[str, dict] = {
             (52, "2026-10-22", False, "no reading limit and no connection cap of the app's own; reads stop only on LinkedIn's own signals; an employer written without spaces is that employer"),
             (53, "2026-10-22", False, "An employer's own name is never read as work authorization, and the reader's own name never as borrowed from an example; checks only, nothing to redo"),
             (54, "2026-10-22", False, "first notes vary their sentence order by contact (order= to choose); no close is held to ASK word for word"),
+            (55, "2026-10-22", False, "a LinkedIn download is taken whole (saved and its history imported) by export.py take and the connections import, kept in the main folder; files says when the history was never saved; the linkedin-history upgrade brings it to a repo that kept only connections"),
         ),
-        "fingerprint": "99d81bc62132241a",
+        "fingerprint": "80e769d2a5cc619e",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

@@ -283,21 +283,39 @@ other and fight over git's index. Files git does not carry (the connections expo
 from the main folder. Then, from that folder, commit, and:
 
 ```bash
-git fetch origin master && git merge origin/master   # the row-by-row driver merges state files; the sync sets it here too
+git fetch origin master
+git merge origin/master        # the row-by-row driver merges state files; the sync sets it here too
 ./tools/ci_local.sh
 git push -u origin HEAD
 gh pr create --base master --fill
 gh pr merge <number> --merge
 gh pr view <number> --json state -q .state           # MERGED is the answer, not the exit code
-git fetch origin master && git switch --detach origin/master   # no local master to fall behind
+git fetch origin master
+git switch --detach origin/master   # no local master to fall behind
 ```
+
+**Run each line as a command of its own, the merge above all: never chained with `;`, `&&`
+or a pipe.** Every one of them is pre-approved in the app's `.claude/settings.json`, and
+Claude Code approves a command only when each part of it matches a rule, before auto mode's
+own check looks at it. A chain with one part that is not pre-approved (`git push ...; gh pr
+edit ...; gh pr merge 164 --merge`, 2026-10-23) goes to that check whole, and it refuses a
+merge as "Merge Without Review". The merge alone matches `Bash(gh pr merge:*)` and runs.
+To change a pull request's text, run `gh pr edit` on its own line before it, never in the
+same command.
 
 `gh pr merge` can exit non-zero after a merge that worked: it tries to fast-forward a local
 master that has fallen behind and prints "fatal: Not possible to fast-forward". Keep no
-local master, and read the state, not the exit code. In the Claude desktop app, a merge
-may still be held by the app's own approval box (the app's `.claude/settings.json`
-pre-approves these commands, which needs the folder trusted once): then say one plain line,
-"Click Allow to save this.", and nothing about merges; it never retries on its own.
+local master, and read the state, not the exit code. The rules apply once the folder is
+trusted (the desktop app asks once). Where a merge is still held:
+
+- **The approval box** (Manual or Accept edits mode): say one plain line, "Click Allow to
+  save this.", and nothing about merges.
+- **Auto mode refused it**: never switch to bypass permissions, and never ask the person to.
+  Auto mode takes the person's own message naming the action as their approval for that one
+  action, so ask once, in these words: "Your computer's safety check wants your OK to save
+  this. Reply: yes, merge pull request <number>." Then run the merge again, on its own.
+
+It never retries on its own beyond that.
 When the pull request has landed, `git worktree remove <the folder>`.
 
 ## 5. After the user applies
@@ -337,7 +355,7 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 |---|---|
 | `python3 tools/run_round.py --out rounds/rN [--expand]` | The whole free pipeline, portals to ranked shortlist. It checks the yield target and prints MET or MISSED with the counts. **Exit 0 met, exit 2 missed, exit 1 a stage actually broke** - a thin market and a broken pipeline are different answers. `--expand` re-runs wider up to the 3 rounds the rule allows. It **prunes itself**: `rounds/` is gitignored and its ~55MB of stage files are deleted, except `06_shortlist.json` cut to the top 60 with their bodies, which is what drafting is staged from; the same 60 rows, minus the posting bodies, are written to `documents/rounds/<round>.json` and **are** committed. `--keep-intermediates` retains the stage files for debugging a round that went wrong, and a round that **missed** keeps `00_scrape/dropped.json`, `01_dropped.json`, `03_screened_all.json` and `06_skipped.json` automatically, with the posting bodies stripped, because those are the files the MISSED message tells you to read. |
 | `python3 tools/network/prep.py --all` | Rewrites every contact's prep document. Without it a fix to `prep.py` reaches whichever one somebody runs next and no others. Each document's last line says which prep wrote it: `--stale-only` rewrites only the documents an older prep wrote or written before the contact's row or thread changed (and never writes one for a contact who has none), keeping answers already rewritten to be said, and `--dry-run` lists what would be written and writes nothing. `"<contact>" --check` exits 1 while an answer is raw profile wording or reads as written. |
-| `python3 tools/network/export.py` | LinkedIn's data export, read, only the files it names: `files <zip>` says what it holds and what is missing, `history --from <zip>` lists the messages and invitations it would add to network_threads.csv (joined by profile address, else a careful name match, else listed as not in the contact book) and `--apply` writes them, twice adding nothing; `pending` lists the invitations sent and never accepted for three weeks, oldest first, for the person to withdraw on LinkedIn, and `withdrawn <name>...` records the ones they did. Nothing is sent. |
+| `python3 tools/network/export.py` | LinkedIn's data export, read, only the files it names. **Given one, `take <zip|folder>` first** (`take --find` looks in Downloads, Desktop and Documents): it saves every file the app reads into documents/linkedin/, in the main folder on a computer, and imports the history into network_threads.csv in one step. `files` (no argument) says plainly when messages.csv or Invitations.csv was never saved; `files <zip>` says what a download holds and what is missing, `history --from <zip>` lists the messages and invitations it would add to network_threads.csv (joined by profile address, else a careful name match, else listed as not in the contact book) and `--apply` writes them, twice adding nothing; `pending` lists the invitations sent and never accepted for three weeks, oldest first, for the person to withdraw on LinkedIn, and `withdrawn <name>...` records the ones they did. Nothing is sent. |
 | `python3 tools/network/own_profile.py` | The person's own LinkedIn profile, now and then. `due` prints one line when a look is worth it (never looked over, a fact it compares has changed, or a run of unanswered first notes too long to be chance) and nothing otherwise, at most once in 30 days; `check` lists red flags only, each with its evidence and one fix; `brief` is what is left for the session's model to judge, well under two thousand tokens. Kept in documents/network/own_profile_review.json. |
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
 | `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. An interview booked in an application's `outcome.md` is due once it is a week away with no pack for that stage, and its thank-you for a week after it until one is on file. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |

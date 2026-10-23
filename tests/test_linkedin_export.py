@@ -143,7 +143,10 @@ def test_two_rows_with_one_name_are_never_guessed_between(tmp_path):
     assert plan["add"] == [] and [a["name"] for a in plan["ambiguous"]] == ["Juno Castellan"]
 
 
-def test_importing_twice_adds_nothing_and_the_log_then_says_who_is_owed(tmp_path, capsys):
+def test_importing_twice_adds_nothing_and_the_log_then_says_who_is_owed(tmp_path, capsys,
+                                                                         monkeypatch):
+    # Read from elsewhere, the export is saved where it is kept first: here, this test's own.
+    monkeypatch.setenv("LJS_STATE", str(tmp_path / "state"))
     _contacts, _threads, c, t = _book(tmp_path)
     args = ["history", "--apply", "--from", str(FIX), "--contacts", c, "--threads", t,
             "--today", TODAY.isoformat()]

@@ -411,8 +411,10 @@ market, so write each one for this person, never copy it:
   a senior person's with team pages, press and rosters; anyone's with their own connections.
 - **Their connections**: ask once, plainly, whether they will download their LinkedIn
   connections (the `connections-export` upgrade's question), so every run starts from
-  people they know. Save the file they attach to `documents/linkedin/Connections.csv`, or
-  write `CONNECTIONS_EXPORT = "declined"`.
+  people they know. Take what they attach with `python3 tools/network/sources.py
+  import-connections <it>`: the whole download (the ZIP or its folder) is saved and its
+  message history imported in one step, never read straight from where they downloaded it.
+  Or write `CONNECTIONS_EXPORT = "declined"`.
 <!-- /section -->
 
 <!-- section: boards -->
