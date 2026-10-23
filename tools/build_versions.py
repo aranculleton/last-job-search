@@ -308,8 +308,9 @@ METHODS: dict[str, dict] = {
             (45, "2026-10-22", False, "A first note to an employer called Visa, or to a reader whose first name is an approved example's surname, is no longer refused for it; checks only, nothing to redo"),
             (46, "2026-10-22", False, "landing steps run each command alone, the merge never chained; wording only"),
             (47, "2026-10-22", False, "an audit ruling matches its flag quoted whole or cut, the packet holds the draft object it returns, a verdict keeps what it leaves out, a lead's edit to the corrected draft is kept and checked again"),
+            (48, "2026-10-23", False, "applications are delivered one way: per role one file-sending call with resume and letter, captioned role, employer, pay, location and apply link, then one index table; paths as plain text, never markdown links. An audit ruling no longer settles a longer sentence edited after it, an edit to the outreach note is kept in the note, and a newer model correction is never overwritten by an older edit"),
         ),
-        "fingerprint": "47a2316a859a5151",
+        "fingerprint": "dc9a28b7fdb1a8a2",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -381,6 +382,7 @@ METHODS: dict[str, dict] = {
                   "tools/network/reply.py",
                   "tools/network/discovery.py", "tools/network/openalex.py", "tools/network/schema.py",
                   "tools/network/sources.py", "tools/network/why.py", "tools/network/export.py",
+                  "tools/network/surface.py",
                   ".claude/skills/networking/*", ".claude/commands/network.md",
                   ".claude/commands/reply.md"),
         "versions": (
@@ -456,8 +458,9 @@ METHODS: dict[str, dict] = {
             (53, "2026-10-22", False, "An employer's own name is never read as work authorization, and the reader's own name never as borrowed from an example; checks only, nothing to redo"),
             (54, "2026-10-22", False, "first notes vary their sentence order by contact (order= to choose); no close is held to ASK word for word"),
             (55, "2026-10-22", False, "a LinkedIn download is taken whole (saved and its history imported) by export.py take and the connections import, kept in the main folder; files says when the history was never saved; the linkedin-history upgrade brings it to a repo that kept only connections; a repeat imported the same day keeps the time it was sent, and a name with no surname gets an id"),
+            (56, "2026-10-23", False, "one check before anyone is shown (surface.py): the book by id, address or name at either employer, the whole thread on every channel, the bar, a hold; follow-ups by the person's own FOLLOW_UP_DAYS and MAX_UNANSWERED with the date on each contact; a fortnightly LinkedIn download and what changed since the last; the due list and the import read the log once"),
         ),
-        "fingerprint": "14776d7628bedd54",
+        "fingerprint": "79f3fa28e4c87456",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -504,8 +507,9 @@ METHODS: dict[str, dict] = {
             (29, "2026-10-22", False, "drafts and the queue check are held to the plan's length; a short request for a chat or call is always an allowed close; the sent list logs each note's words and says how far back it reached; a second-degree page with Follow and Message says Connect is under More"),
             (30, "2026-10-22", False, "reads and saves hold nothing back of the app's own; a page loaded after LinkedIn stopped the day is kept and stops the run"),
             (31, "2026-10-22", False, "a batch of six or more notes all in one sentence order is not saved, and reading.py batch says so; the queue is checked at the next save or batch, not redone; a removed reading limit's own comment goes with it"),
+            (32, "2026-10-23", False, "a card-only note to someone known only from a connection made long ago is refused until their profile is read"),
         ),
-        "fingerprint": "5855f635f44d60e2",
+        "fingerprint": "3bfc4dfcebf39199",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -547,8 +551,9 @@ METHODS: dict[str, dict] = {
             (25, "2026-10-22", False, "no search runs while job sites are blocked; a web-search lead is shown only once its page proves it open"),
             (26, "2026-10-22", False, "plain words to the person: no file, id, command or pull request link"),
             (27, "2026-10-22", False, "a graduate degree offered beside a bachelor's is no graduate bar, in the screen and the posting profile as in the score; curly apostrophes read like straight ones"),
+            (28, "2026-10-23", False, "a bachelor's named after the graduate degree, or written B.Sc., B.S. or B.A., is read as the other way in, and a PhD offered beside a master's either way round is a master's bar; flags and scores only, nothing to redo"),
         ),
-        "fingerprint": "a78c57cbc3ebb531",
+        "fingerprint": "4cce8a827670d8ff",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

@@ -379,7 +379,10 @@ def denylist() -> list[str]:
         add(handle.group(1))
     roles = person.module("roles")
     for r in roles.ROLES:
-        if not _generic_employer(r["employer"]):
+        # An employer the app's own prose names for its products is allowed here too, the
+        # same as in the tracker: a maintainer who worked there failed every check on it.
+        if not _generic_employer(r["employer"]) and not (
+                set(company_forms(r["employer"])) & ALLOWED_ORGANIZATIONS):
             add("=" + r["employer"])
     for s in _school(getattr(roles, "EDUCATION", "")):
         add(s)

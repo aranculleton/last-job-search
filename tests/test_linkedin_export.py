@@ -234,7 +234,7 @@ def test_the_same_attachment_twice_in_a_day_is_two_rows_reconcile_reads_as_two(t
     plan = E.plan_history(contacts, threads, str(src))
     E.apply_history(threads, plan, contacts)
     sent = [r for r in threads if r["date"] == "2026-10-02"]
-    assert len(sent) == 2 and sent[1]["summary"].endswith("(sent at 16:40)")
+    assert len(sent) == 2 and sent[1]["summary"].endswith("; sent at 16:40")
     assert not [p for p in state.reconcile(contacts, threads) if p.get("reason") == "duplicate_message"]
     # A re-run adds nothing and marks nothing.
     again = E.plan_history(contacts, threads, str(src))
@@ -246,7 +246,7 @@ def test_two_identical_rows_an_older_import_wrote_are_told_apart_on_a_re_run(tmp
     src = _repeats(tmp_path)
     plan = E.plan_history(contacts, threads, str(src))
     for r in plan["add"]:
-        r["summary"] = r["summary"].replace(" (sent at 16:40)", "")     # the older importer's
+        r["summary"] = r["summary"].replace("; sent at 16:40", "")     # the older importer's
     E.apply_history(threads, plan, contacts)
     assert [p for p in state.reconcile(contacts, threads) if p.get("reason") == "duplicate_message"]
     fix = E.plan_history(contacts, threads, str(src))
@@ -260,3 +260,11 @@ def test_a_name_with_no_surname_still_gets_an_id():
     assert state.person_name("Wren ....") == "Wren"
     assert state.contact_id("Wren ....", "") == "wren"
     assert state.contact_id("Wren ....", "Fernhill Freight") == "fernhill_freight_wren"
+
+
+def test_a_repeat_of_a_file_sent_with_no_name_is_not_read_as_its_file():
+    # "an attachment attached (sent at 16:40)" read the time as the attachment's file name.
+    row = {"summary": "From LinkedIn's export; an attachment attached (sent at 16:40)"}
+    assert state.attached(row) == []
+    row = {"summary": "From LinkedIn's export; an attachment attached; sent at 16:40"}
+    assert state.attached(row) == []

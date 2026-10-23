@@ -36,10 +36,13 @@ It is what makes the brief this person's rather than a template:
 ## 1. Owed
 
 1. From `open_actions.py --due`: replies owed first, then nudges, then first notes queued.
+   Requests to withdraw and what it sets aside (owed over 45 days with nothing done, most
+   often old LinkedIn history) are counts: say each in one line, and draft nothing for them.
 2. Read the most recent `documents/network/followup_pack_*.md`, reuse any draft still right
    for an item still due, and draft only what is new. Networking messages follow
    `.claude/skills/networking` (read the contact's whole thread in `network_threads.csv`
-   first) and every one must pass `compose.validate()`: one nudge only, 5 to 7 business days,
+   first) and every one must pass `compose.validate()` and keep the person's follow-up rule
+   (`schema.follow_up_rule()`; unset, one nudge only, 5 to 7 business days),
    stop after two nos, the candidate's exclusions (`profile/CLAUDE.md`), nothing to anyone at
    `awaiting_reply` before their window opens. Application follow-ups are a separate clock,
    two follow-ups 7 days apart: use the text, recipient and schedule the tool prints
@@ -72,6 +75,14 @@ It is what makes the brief this person's rather than a template:
   difference.
 - `python3 tools/network/own_profile.py due`: when, and only when, it prints a line, its
   question goes in as one of the three things below. It costs nothing when silent.
+- `python3 tools/network/export.py due`: when, and only when, it prints a line (their
+  LinkedIn download is a fortnight old, or older than their `EXPORT_EVERY_DAYS`), asking
+  for a new one is one of the three things below, with the steps `python3
+  tools/claude_surfaces.py steps linkedin-export-files` prints, checked against LinkedIn's
+  help page that day (CLAUDE.md, "A step on another company's site is checked before it is
+  given"). The chat it is given to runs `export.py take`, which says what changed since the
+  last one (new connections, requests accepted, replies, requests still waiting) and writes
+  each contact's follow-up date.
 
 ## 3. News that matters
 

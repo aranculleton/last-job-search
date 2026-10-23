@@ -195,7 +195,8 @@ def approved(tmp_path, monkeypatch):
     person._data.clear()
 
 
-def test_an_approved_note_gives_its_shape_and_none_of_its_facts(approved):
+def test_an_approved_note_gives_its_shape_and_none_of_its_facts(approved, judged):
+    judged("Fernhill Freight")   # nobody is shown at an employer nobody has judged
     import learned
     brief = learned.brief("messages", channel="connection", reader="peer")
     assert "never reuse a name, an employer or any fact" in brief

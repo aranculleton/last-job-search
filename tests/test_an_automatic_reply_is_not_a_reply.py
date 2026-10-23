@@ -107,3 +107,11 @@ def test_other_languages_are_recognised():
 def test_what_works_never_counts_it_as_the_message_that_drew_a_reply():
     cases = W.message_cases([CONTACT], [SENT, AWAY], "2026-11-01")
     assert [c["won"] for c in cases] == [False]
+
+
+def test_a_return_date_with_no_year_is_read_from_the_day_it_came():
+    # Pasted on 28 December, "back on 5 January" is the coming January, whatever today is.
+    note = ("Automatic reply: I am out of the office until 5 January with limited access to "
+            "email. I will reply when I am back.")
+    advice = reply.guidance(reply.classify(note, [SENT], "2026-12-28"))
+    assert "away until 2027-01-05" in advice["next_action"]

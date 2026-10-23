@@ -257,6 +257,11 @@ application from it.
 Then read every resume and letter in the batch by eye. Not the .tex, the PDF. LaTeX page-break decisions are not
 predictable from source, which is the whole reason this step exists.
 
+Deliver the batch the one way CLAUDE.md sets ("Every output is shown"): per role, one
+file-sending call with its resume and letter, captioned role, employer, pay, location and
+apply link; then one index table in the reply, role | apply link; paths as plain text
+underneath, never as markdown links, which do not open from the desktop app.
+
 ## 4. Record and persist
 
 `python3 tools/record_drafts.py "$SCRATCH/r1/drafts.json" "$SCRATCH/r1/apps_in.json" --round r1`
@@ -265,7 +270,8 @@ writes each `screening_answers.md`. Then:
 
 Then CLAUDE.md's persistence loop ("Persistence rule for a person's repo"), which adds each
 path that exists one at a time (a single `git add` naming a path that does not exist stages
-nothing at all), and `git commit && git push`.
+nothing at all), then `git commit -m "<what changed>"` and, as a command of its own,
+`git push -u origin HEAD`.
 
 Never `*.aux *.log *.out *.fls *.fdb_latexmk *.synctex.gz cv/*.txt`. Never edit
 `.gitignore`.
@@ -291,8 +297,10 @@ gh pr create --base master --fill
 gh pr merge <number> --merge
 gh pr view <number> --json state -q .state           # MERGED is the answer, not the exit code
 git fetch origin master
-git switch --detach origin/master   # no local master to fall behind
+git switch --detach origin/master
 ```
+
+The last line keeps no local master to fall behind.
 
 **Run each line as a command of its own, the merge above all: never chained with `;`, `&&`
 or a pipe.** Every one of them is pre-approved in the app's `.claude/settings.json`, and
@@ -337,7 +345,9 @@ When the pull request has landed, `git worktree remove <the folder>`.
   without a draft; put the recruiter or hiring manager in `contact_person` and the draft is
   addressed to them. A later row for the same role closes the earlier one.
 - This is the application clock, `tools/followups.py`. A networking contact's nudge is a
-  separate clock on purpose: 5 to 7 business days, and one only (the networking skill).
+  separate clock on purpose: 5 to 7 business days, and one only, unless the person's
+  `FOLLOW_UP_DAYS` and `MAX_UNANSWERED` in profile/networking.py say otherwise (the
+  networking skill); `state.py follow-ups --write` puts each date on its contact.
 - `DO NOT CHASE` in a row's notes holds its follow-ups, with the reason shown; `until
   YYYY-MM-DD` in the same note, or a later note saying `chase again`, lifts it. An
   interview or offer at the same employer, or a referral in flight there, holds them too.
@@ -358,7 +368,10 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `python3 tools/network/export.py` | LinkedIn's data export, read, only the files it names. **Given one, `take <zip|folder>` first** (`take --find` looks in Downloads, Desktop and Documents): it saves every file the app reads into documents/linkedin/, in the main folder on a computer, and imports the history into network_threads.csv in one step. `files` (no argument) says plainly when messages.csv or Invitations.csv was never saved; `files <zip>` says what a download holds and what is missing, `history --from <zip>` lists the messages and invitations it would add to network_threads.csv (joined by profile address, else a careful name match, else listed as not in the contact book) and `--apply` writes them, twice adding nothing; `pending` lists the invitations sent and never accepted for three weeks, oldest first, for the person to withdraw on LinkedIn, and `withdrawn <name>...` records the ones they did. Nothing is sent. |
 | `python3 tools/network/own_profile.py` | The person's own LinkedIn profile, now and then. `due` prints one line when a look is worth it (never looked over, a fact it compares has changed, or a run of unanswered first notes too long to be chance) and nothing otherwise, at most once in 30 days; `check` lists red flags only, each with its evidence and one fix; `brief` is what is left for the session's model to judge, well under two thousand tokens. Kept in documents/network/own_profile_review.json. |
 | `python3 tools/network/profile_facts.py` | The candidate half of a prep doc, read out of `01-candidate-profile.md` and `tools/bridges.py`. `prep.py` calls it automatically; run it directly to see what it extracts. |
-| `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. An interview booked in an application's `outcome.md` is due once it is a week away with no pack for that stage, and its thank-you for a week after it until one is on file. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
+| `python3 tools/network/surface.py` | The one check before anyone is shown as someone to write to: the contact book (by id, LinkedIn address in any form, or name at either employer), their whole thread on every channel, the bar, `do_not_target.json`, a hold. `"<name>" --company --url` for one person, `--file <people.json>` for a list a chat made, `--queue` for everyone waiting on a first note, `--id` for book rows. Prints SHOW or NOT with the reason. |
+| `python3 tools/network/state.py follow-ups [--write]` | Each conversation waiting on a reply, with the day its follow-up falls due by the person's rule (`FOLLOW_UP_DAYS`, `MAX_UNANSWERED`), or that no more go; `--write` puts it on the contact row, never over a next action the person wrote. |
+| `python3 tools/network/export.py due` | One line once the last LinkedIn download is a fortnight old (`EXPORT_EVERY_DAYS`), for the brief; nothing otherwise. |
+| `python3 tools/open_actions.py` | Everything owed, employers first, derived from the three state files: live applications, contacts owed a reply, and **follow-ups due** on applications that have gone quiet. `--company <name>` for one employer. **`--due`** prints only what is due today or overdue, both halves, most urgent first, with the counts on line one and the first five lines written to stand alone: it is what the daily routine pastes into a push notification. A contact whose `next_action` opens on HOLD or FREEZE is not due until the date after "until" arrives. Requests nobody accepted are one section to withdraw together, and anything owed more than 45 days with nothing done (`state.OLD_OWED_DAYS`, most often old LinkedIn history) is counted on line one, not listed; `state.py` still lists each, and a date of the person's own on the row keeps it live. An interview booked in an application's `outcome.md` is due once it is a week away with no pack for that stage, and its thank-you for a week after it until one is on file. This is the one view; `tools/followups.py` is the nudge half of it and still runs on its own when that is all you want. |
 | `python3 tools/what_works.py brief <messages\|documents\|search\|interviews>` | What has worked, counted from the state files with no model call: reply rates and the messages that drew replies, the applications that reached an interview with the resume and letter they used, the interview rate by fit band and route, and (`interviews`) how far applications get by the stages ticked in each `outcome.md`, with the questions the bank says keep coming up and the stories that landed. A difference is reported only when the groups are big enough and the gap is unlikely to be chance. `event --contact <id>` and `event --company <name>` are the one-line audit when a result arrives. |
 | `python3 tools/interview_pack.py pack "<company>"` | The one living prep document `/interview` builds for a hiring process, one screen first (what they are assessing and want to hear, likely questions with the story or answer for each, hooks, the money, what not to say), then your answers to write as said, what the employer's people and papers have been told (conflicts flagged), who you are meeting and the question for each, the format, and the detail, every fact sourced. `--stage`, `--date`, `--with`, `--format` (case, coding, behavioural, technical, presentation, screen), `--map <json>` and `--write` (beside the application, as `interview_prep.md`, keeping what the person wrote). `process "<company>" --contact <id> --role "<role>" [--posting <file or link>]` registers a process with no application (a referral or a recruiter's call) and writes its document in one command; `postings` gives every process folder that has none a `job_posting.md`. `motive "<question>" --answer "<their words>" [--suits ...] [--not-for ...]` keeps the person's own reasons in `profile/07-interview-prep.md` for every later employer. `check` exits 1 while an answer is unwritten or reads as written, a question waits on the person's own reasons, or research is still to do. `campaign --yes "<chat>"\|--no` records the one-time offer of a chat for that employer. `asked` adds a question an interview asked to `documents/interview/question_bank.csv`; `rework` adds an answer to work on, which a rebuild keeps. |
 | `python3 tools/profile_consistency.py` | The pay band, the walk-away floor, the notice period, the sponsorship position and the permit-disclosure rule, said the same way across the profile: names every other place that says one differently from its source (the rubric's salary table, the candidate profile's notice line, the summary's sponsorship sentence). Exit 1 when anything disagrees; the `profile-consistency` upgrade asks the person which is right. |

@@ -64,6 +64,15 @@ def test_fiction_ranges_and_placeholders_pass(tmp_path, monkeypatch):
     assert _scan(t, monkeypatch=monkeypatch) == []
 
 
+def test_an_example_handle_with_an_accented_letter_encoded_passes_and_a_real_one_does_not(
+        tmp_path, monkeypatch):
+    # "%C3%A9" is an é: an example handle may spell one so, and is still an example.
+    t = _tree(tmp_path, {"a.md": "linkedin.com/in/example-ren%C3%A9e-abc\n"})
+    assert _scan(t, monkeypatch=monkeypatch) == []
+    t = _tree(tmp_path / "b", {"a.md": "linkedin.com/in/" + "ren%C3%A9e-dupont-4b2a91\n"})
+    assert [f.split(": ", 1)[1] for f in _scan(t, monkeypatch=monkeypatch)] == ["LinkedIn profile"]
+
+
 def test_the_denylist_names_the_entry_never_the_token(tmp_path, monkeypatch):
     t = _tree(tmp_path, {"tools/x.py": "# shipped on the Zorblax resume\n"})
     found = _scan(t, "# a comment line\nZorblax\n", monkeypatch=monkeypatch)

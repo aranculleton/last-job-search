@@ -69,9 +69,12 @@ FICTION_PHONE = re.compile(r"^\+?44\s*\(?0?\)?\s*7700\s*900\s*\d{3}$|555[ .-]?01
                            r"12345678")
 
 LINKEDIN = re.compile(r"linkedin\.com/in/([A-Za-z0-9_%-]+)", re.I)
+# An example handle may carry an accented letter percent-encoded ("example-ren%C3%A9e"):
+# its two hex digits are the letter, not a real profile's number.
 PLACEHOLDER_HANDLE = re.compile(r"^(?:example|your|yourname|your-name|your-handle|yourprofile|"
-                                r"your-profile|handle|someone|name|person|example-[a-z-]+|"
-                                r"[a-z-]+-example)$", re.I)
+                                r"your-profile|handle|someone|name|person|"
+                                r"example-(?:[a-z-]|%[0-9a-f]{2})+|"
+                                r"(?:[a-z-]|%[0-9a-f]{2})+-example)$", re.I)
 
 # Binary files the app may carry: vendored fonts and TeX packages, and the two
 # compiled example documents, which hold only placeholders.

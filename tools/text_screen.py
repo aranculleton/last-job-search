@@ -660,8 +660,22 @@ NOT_A_DEGREE = re.compile(
 # Master's degree in" cost the full 9 in fit.py, and stage_picks read "Bachelor’s or
 # master’s degree" as a master's, required, with no equivalence route (2026-10-23). Tested
 # on the text before the degree word; one rule for the screen, the score and the profile.
-BACHELOR_OR = re.compile(r"\b(?:bachelor|b\.?sc|undergraduate)[^.;:]{0,60}?"
-                         r"(?:\bor|/)\s*(?:an?\s+)?$", re.I)
+# A bachelor's named beside a graduate degree as the other way in: "Bachelor's or Master's",
+# "B.Sc. or M.Sc.", "a Master's degree in Statistics, or a Bachelor's plus 3 years", "Master
+# of Science or Bachelor's". The sentence is already split, so a full stop inside it is
+# "B.Sc.", never the end; a semicolon or colon still ends the clause.
+_BACHELOR_WORD = (r"(?:bachelor|undergraduate|b\.?\s?sc\b\.?|b\.\s?s\.|b\.\s?a\.)")
+BACHELOR_OR = re.compile(r"\b" + _BACHELOR_WORD + r"[^;:]{0,140}?(?:\bor|/)\s*(?:an?\s+)?$",
+                         re.I)
+OR_BACHELOR = re.compile(r"^[^;:]{0,140}?(?:\bor\b|/)\s*(?:an?\s+)?" + _BACHELOR_WORD, re.I)
+
+
+def beside_a_bachelor(sentence: str, m) -> bool:
+    """Is the graduate degree `m` found in `sentence` offered as one of two ways in, with a
+    bachelor's the other, before it or after it? Then the bar is the bachelor's."""
+    return bool(BACHELOR_OR.search(sentence[:m.start()]) or OR_BACHELOR.search(sentence[m.end():]))
+
+
 ESCAPE = re.compile(r"or equivalent|or comparable|or relevant experience|equivalent experience|"
                     r"or an equivalent|equivalent practical|or related experience", re.I)
 # Preference in its own words. "asset" and "bonus" count only as "is an asset" or
@@ -1214,7 +1228,7 @@ def _states_a_degree(sentence: str) -> bool:
     Every degree word is read, the way tools/fit.py reads them: "master data" first
     does not hide "a Master's degree is required" later in the same sentence."""
     return any(not NOT_A_DEGREE.match(sentence, m.start())
-               and not BACHELOR_OR.search(sentence[:m.start()])
+               and not beside_a_bachelor(sentence, m)
                for m in DEGREE.finditer(sentence))
 
 

@@ -225,7 +225,9 @@ reads the post and not the poster: a manager in `<City>` writing "we are hiring 
 scientists in Austin" must not score tier 1 on the city they sit in, because the quote
 offered as proof is about Austin.
 
-Nobody already in the book is surfaced again. `already_contacted()` matches through
+Nobody already in the book is surfaced again: every list of people goes through one check,
+`surface.check()`, which finds them in the book, reads their whole thread on every channel and
+applies the bar. `already_contacted()` matches through
 `company_key`, and it folds accents before comparing, because LinkedIn can return one
 person as "Juno Castellan" in one snippet and "Juno Castellán" in the next. Without
 folding, the second harvest looks like a new person, and a second cold message goes to
@@ -257,7 +259,9 @@ rather than rewording it.
 
 Follow up after 5 to 7 business days, counted in business days because six calendar days
 from a Wednesday is the following Tuesday while six business days is the Thursday after
-that, and counting the calendar way reads as impatience. One nudge, not a series. After
+that, and counting the calendar way reads as impatience. One nudge, not a series. A person
+who keeps their own rule sets it (`FOLLOW_UP_DAYS`, `MAX_UNANSWERED` in profile/networking.py),
+and every clock reads it through `state.follow_up_on`. After
 two explicit declines the thread stops, counted from the messages rather than from a
 status, because the status is edited by hand and the messages are the evidence.
 

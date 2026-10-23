@@ -147,9 +147,10 @@ def _network(contacts, threads):
     second read of the file, so they are computed once, here.
     """
     live = {}
+    index = state.by_contact(threads)
     for c in contacts:
         cid = str(c.get("contact_id") or "").strip()
-        live[cid] = state.effective_status(c, state.threads_for(threads, cid))
+        live[cid] = state.effective_status(c, list(index.get(cid, ())))
     return (live, throttle.warm_routes(rows=contacts, live=live),
             throttle.referral_holds(rows=contacts, live=live))
 
@@ -490,16 +491,37 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "text": _stored_draft(c),
             "held": [h for h in (state.action_hold(o["next_action"], today),) if h],
             "quiet": False, "kind": o["kind"], "status": o["status"],
-            "contact_id": o["contact_id"]})
+            "contact_id": o["contact_id"], "old": bool(o.get("old")),
+            "since": o.get("since", "")})
+    # A first note queued for someone not written to yet goes through the one check every
+    # list of people does (tools/network/surface.py): written to on another channel, or at
+    # an employer the bar rules out, it is held with the reason, never "send now".
+    queued = [i for i in items if i["status"] == "not_contacted"]
+    if queued:
+        import surface
+        ctx = surface.context(contacts=contacts, threads=threads, today=today)
+        for i in queued:
+            got = surface.check(by_id.get(i["contact_id"]) or {"contact_id": i["contact_id"]},
+                                ctx, queued=True)
+            if not got["show"]:
+                i["held"].append(got["reason"])
     # A resume somebody asked for: on their row when they have one here, else a row of its
     # own, owed since the day they asked (or the date the person set on it).
+    # One asked for more than state.OLD_OWED_DAYS ago, with no date of the person's own on
+    # it and none made for them since, is history like any other thread that has ended: set
+    # aside, never "send it now" to someone who asked in 2021.
+    index = state.by_contact(threads) if threads else {}
     for r in state.resumes_owed(contacts, threads, tracker):
         line = state.resume_owed_line(r)
+        c = by_id.get(r["contact_id"], {})
+        days = [d for d in (r["asked"], r["made"], r.get("made_on", "")) if d]
+        old = (bool(days) and state.owed_too_long(max(days), today)
+               and not state.dated_by_person(c, index.get(r["contact_id"], ())))
         got = next((i for i in items if i.get("contact_id") == r["contact_id"]), None)
         if got is not None:
-            got["what"] = line
+            if not old:
+                got["what"], got["old"] = line, False
             continue
-        c = by_id.get(r["contact_id"], {})
         name = r["name"] or r["contact_id"]
         due = (state.as_date(c.get("next_action_due")) or state.as_date(r["asked"] or r["made"])
                or today)
@@ -513,7 +535,7 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "late": (today - due).days, "what": line, "to": "", "text": "",
             "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
-            "contact_id": r["contact_id"]})
+            "contact_id": r["contact_id"], "old": old})
     _, warm, holds = _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
@@ -574,7 +596,18 @@ def _digest(label, items, late=True, note=""):
 
 
 def render_due(items, today):
-    """The due list, summary first. The first five lines are written to stand alone."""
+    """The due list, summary first. The first five lines are written to stand alone.
+
+    Two kinds are counted rather than listed among what to write. A request nobody
+    accepted has nobody to write to: the job is withdrawing them, together, so they are one
+    section. Something owed more than `state.OLD_OWED_DAYS` with nothing done is a thread
+    that has ended (most often years of LinkedIn history brought in at once): counted on
+    the first line, and `state.py` still lists each one."""
+    old = [i for i in items if i.get("old")]
+    items = [i for i in items if not i.get("old")]
+    asks = sorted((i for i in items if i.get("kind") == "request_pending" and not i["held"]),
+                  key=lambda i: (-i["late"], i["name"].lower()))
+    items = [i for i in items if not (i.get("kind") == "request_pending" and not i["held"])]
     live = [i for i in items if not i["held"] and not i["quiet"]]
     over = sorted((i for i in live if i["late"] > 0), key=_urgency)
     now = sorted((i for i in live if i["late"] <= 0), key=_urgency)
@@ -593,10 +626,13 @@ def render_due(items, today):
     queued = sum(1 for i in over + now if i.get("status") == "not_contacted")
     no_one = sum(1 for i in apps if not i.get("ready") and i.get("kind") != "interview")
     head = [
-        "%s: %d overdue, %d due today, %d blocked by holds%s (%d replies owed, "
+        "%s: %d overdue, %d due today, %d blocked by holds%s%s%s (%d replies owed, "
         "%d first messages queued, %d application follow-ups with no recipient)"
         % (today, len(over), len(now), len(held),
-           ", %d gone quiet" % len(quiet) if quiet else "", replies, queued, no_one),
+           ", %d gone quiet" % len(quiet) if quiet else "",
+           ", %d requests to withdraw" % len(asks) if asks else "",
+           ", %d owed over %d days set aside" % (len(old), state.OLD_OWED_DAYS) if old else "",
+           replies, queued, no_one),
         _digest("Overdue, people", people),
         _digest("Overdue, applications", apps, note=", %d ready to send" % ready),
         _digest("Due today", now, late=False),
@@ -626,6 +662,19 @@ def render_due(items, today):
                 body.append("    " + i["to"])
             if i["text"]:
                 body.append("    text: " + i["text"])
+    if asks:
+        body += ["", "REQUESTS TO WITHDRAW (%d): nobody accepted in %d days, so there is nobody "
+                     "to write to. Withdraw on LinkedIn the ones you choose, then record those: "
+                     "python3 tools/network/state.py withdraw <contact_id>... (--all-due "
+                     "records every one listed here, and none held)"
+                     % (len(asks), state.REQUEST_WITHDRAW_DAYS)]
+        body += ["- %s, sent %s" % (i["who"], i.get("since") or "on a day not recorded")
+                 for i in asks]
+    if old:
+        body += ["", "SET ASIDE (%d): owed more than %d days with nothing done, so not listed "
+                     "here; python3 tools/network/state.py lists every one, and a date you put "
+                     "on one (state.py set <contact_id> --due <date>) brings it back"
+                     % (len(old), state.OLD_OWED_DAYS)]
     return "\n".join(head + body) + "\n"
 
 

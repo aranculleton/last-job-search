@@ -128,10 +128,11 @@ def test_a_skipped_candidate_not_in_the_book_is_written_closed(drafts, monkeypat
     assert state.already_contacted(contacts, name="Rhian Pellow", company="Kestrel Mutual")
 
 
-def test_why_ranks_only_people_a_note_may_go_to():
+def test_why_ranks_only_people_a_note_may_go_to(judged):
     import why
-    assert why.not_writable(_c("a_one", status="closed"), ()) == "closed"
-    assert why.not_writable(_c("a_two", status="awaiting_reply"), ()) == "awaiting_reply"
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
+    assert why.not_writable(_c("a_one", status="closed"), ()).startswith("closed")
+    assert why.not_writable(_c("a_two", status="awaiting_reply"), ()).startswith("awaiting_reply")
     assert why.not_writable(_c("a_three", next_action="HOLD until 2026-12-01: interview running"),
                             (), TODAY).startswith("on hold")
     assert why.not_writable(_c("a_four"), (), TODAY) == ""

@@ -686,6 +686,18 @@ def _dropped_rows() -> str:
             "them" % n) if n else ""
 
 
+def _follow_up_dates() -> str:
+    """Contacts waiting on a reply with no follow-up date on their row: the brief reads the
+    date from the row, so a thread imported from LinkedIn's download, or logged before the
+    dates were written, was never brought back (2026-10-23)."""
+    found = _probe("import datetime, state; c = state.load_contacts(); print(len("
+                   "state.write_follow_ups([dict(r) for r in c], state.load_threads(), "
+                   "datetime.date.today(), only_undated=True)))")
+    n = int(found) if found.isdigit() else 0
+    return ("%d contact(s) waiting on a reply have no follow-up date on their row" % n
+            if n else "")
+
+
 def _old_sweep_cursor() -> str:
     """3.7.0 kept the slow boards' resume point at documents/rounds/.sweep.json, beside the
     round summaries, and a person's own test that reads every documents/rounds/*.json as a
@@ -1454,6 +1466,19 @@ REGISTRY: tuple[Upgrade, ...] = (
             _frozen_break, "python3 tools/network/reading.py free-break", "instant",
             command=("python3", "tools/network/reading.py", "free-break"),
             paths=("profile/networking.py",), conditional=True, priority=3),
+    # Not instant: a person who has already said their own rule in words (two weeks, two
+    # messages) would get the app's six business days written on every row first.
+    Upgrade("follow-up-dates", "2026-10-23",
+            "every conversation waiting on a reply has its follow-up date on the contact, by "
+            "your rule, so the brief brings it back on the day",
+            _follow_up_dates, "first, where the person has said a follow-up rule of their own "
+            "(python3 tools/learned.py brief people, and profile/CLAUDE.md), write it into "
+            "profile/networking.py as FOLLOW_UP_DAYS (days of silence before a follow-up) and "
+            "MAX_UNANSWERED (messages in a row with no reply before stopping); invent nothing, "
+            "and with no rule said leave both unset, so the app's own stands. Then python3 "
+            "tools/network/state.py follow-ups --write, which dates every contact waiting on a "
+            "reply and leaves every date and note of the person's own as it is", "edit",
+            "~2 min", conditional=True, priority=2),
     Upgrade("reading-limits-gone", "2026-10-22",
             "profile reads with no waiting: the old reading limits taken out of your profile",
             _reading_limits_gone, "python3 tools/network/reading.py retired-settings --apply",
@@ -1578,6 +1603,12 @@ SAFE_DEFAULTS: dict[str, str] = {
     "networking.EMPLOYERS_FIRST": "\"warn\": a late employer is a warning with the reordering, "
                                   "never a refusal, as the message that drew a reply had it",
     "networking.SENIOR_NOTE_CHARS": "220, the brief note's length before it was a setting",
+    "networking.FOLLOW_UP_DAYS": "unset, a follow-up is due after six business days of "
+                                 "silence, as before it was a setting",
+    "networking.MAX_UNANSWERED": "unset, two messages in a row with no reply (the first and one "
+                                 "nudge), as before it was a setting",
+    "networking.EXPORT_EVERY_DAYS": "unset, the brief asks for a new LinkedIn download once the "
+                                    "last is 14 days old; 0 never asks",
     "networking.SUBJECT": "none: the InMail subject is built from roles.py, who you are",
     "networking.TEMPLATES": "none: the phrase bank, then the person's OPENER and ASK, as before",
     "networking.PROFILE_READ_UNPLACED": "10 people nothing has placed yet on a day's list",
@@ -1755,7 +1786,8 @@ def _changed() -> set[str]:
 # when the person says no other chat is open.
 OWNER_MINUTES = 20
 SYNC_SUBJECT = "^Sync from the app: "
-MERGE_MASTER = "git fetch origin master && git merge origin/master"
+# Two commands, each run on its own: a chain goes to the desktop app's safety check whole.
+MERGE_MASTER = "git fetch origin master, then git merge origin/master"
 
 
 def _marker() -> str:

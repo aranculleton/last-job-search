@@ -52,6 +52,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -300,7 +301,8 @@ def research_status(research: dict | None, company: str = "", country: str = "")
             out[k] = ("unchecked", "no page fetched by tools/company_research.py fetch holds "
                                    "it, and the research cache has no checked copy; fetch "
                                    "its page again: python3 tools/company_research.py fetch "
-                                   f"\"{company or '<employer>'}\" --urls {f.get('url') or '<its url>'}")
+                                   f"{shlex.quote(company or '<employer>')} --urls "
+                                   f"{shlex.quote(f.get('url') or '<its url>')}")
     return out
 
 
@@ -1050,7 +1052,8 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
     if v not in VERDICTS:
         raise SystemExit(f"verdict: \"verdict\" is one of {', '.join(VERDICTS)}")
     if v != "reject" and not isinstance(verdict.get("draft"), dict):
-        raise SystemExit("verdict: \"draft\" is the whole corrected draft, as one object")
+        raise SystemExit("verdict: \"draft\" is the corrected draft, as one object (a key "
+                         "left out keeps the drafter's value)")
     _final, d, _m = final_draft(round_dir, slug)
     if d is None:
         raise SystemExit(f"verdict: no draft_{slug}.json in {round_dir}")
@@ -1072,9 +1075,11 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
     return path
 
 
-# A sentence shown cut (a whole paragraph flagged, shown to its first 120 characters) is
-# the same sentence as the whole of it: a ruling quoting either settles the flag. Shorter
-# than this, a cut is too little of a sentence to say which one it is.
+# A sentence shown cut (a whole paragraph flagged, shown to its first SHOWN_CUT characters,
+# as flags were until 2026-10-23) is the same sentence as the whole of it: a ruling quoting
+# either settles the flag. Only that cut: a ruling on a shorter sentence never settles a
+# longer one that starts with it, which is what a lead's edit adding a claim looks like.
+SHOWN_CUT = 120
 RULED_PREFIX = 40
 
 
@@ -1083,7 +1088,8 @@ def _same_sentence(a: str, b: str) -> bool:
     if a == b:
         return True
     short, long_ = sorted((a, b), key=len)
-    return len(short) >= RULED_PREFIX and long_.startswith(short)
+    return (len(short) >= max(RULED_PREFIX, SHOWN_CUT - 3) and len(short) <= SHOWN_CUT
+            and long_.startswith(short))
 
 
 def _ruled(flag: dict, rulings: list[dict]) -> bool:
@@ -1173,12 +1179,33 @@ def _kept_edit(round_dir: str, slug: str, path: str, model) -> dict | None:
         return None
     if md5(old["draft"]) == old["written_md5"]:
         return None
-    edited = {k: v for k, v in old["draft"].items() if k != "outreach_body"} \
-        if "outreach_body" not in (model.get("draft") or {}) else dict(old["draft"])
-    model = dict(model, draft=edited)
-    with open(os.path.join(round_dir, f"model_audit_{slug}.json"), "w", encoding="utf-8") as fh:
-        fh.write(json_text(model, indent=1))
+    model_path = os.path.join(round_dir, f"model_audit_{slug}.json")
+    if (old.get("inputs") or {}).get("model") not in (None, md5(_read_json(model_path))):
+        # The model audited again after the edit: its newer correction stands, and the
+        # edit, made to the older one, is said rather than carried over it.
+        return {"field": "draft", "before": "as edited in audit_" + slug + ".json",
+                "after": "the model's newer correction",
+                "reason": "the edit was made to an older correction; set aside, not carried "
+                          "over the newer one: make it again if it still applies"}
+    edited = dict(old["draft"])
+    body, claims = None, []
+    if "outreach_body" not in (model.get("draft") or {}) and "outreach_body" in edited:
+        # The note's own file carries the body, stamped for the draft it was written for:
+        # an edited body goes back there, restamped, or it was dropped and logged as kept.
+        body = str(edited.pop("outreach_body") or "").strip()
+        rows = [c for c in edited.get("claim_map") or [] if isinstance(c, dict)]
+        claims = [c for c in rows if _field_key(c.get("field")) == "outreach_body"]
+        edited["claim_map"] = [c for c in rows if _field_key(c.get("field")) != "outreach_body"]
+    with open(model_path, "w", encoding="utf-8") as fh:
+        fh.write(json_text(dict(model, draft=edited), indent=1))
         fh.write("\n")
+    note = _note(round_dir, slug)
+    if body or note is not None:
+        # Restamped for the edited draft, whatever was edited: a note stamped for the
+        # version before the edit was left out of every later read.
+        write_note(round_dir, slug, {"outreach_body": body or note["outreach_body"],
+                                     "claim_map": claims if body else note.get("claim_map")
+                                     or []})
     return {"field": "draft", "before": "the corrected draft as audited",
             "after": "as edited in audit_" + slug + ".json",
             "reason": "edited after the audit; kept and checked again by code"}
@@ -1498,8 +1525,10 @@ def packet(round_dir: str, slug: str) -> str:
               f"One JSON object, saved with: {verdict_cmd} <<'JSON' ... JSON "
               "(it checks the shape, writes model_audit_" + slug + ".json, re-checks your "
               "corrected draft by code and prints what is still open): "
-              "{\"verdict\": \"pass\" | \"fixed\" | \"reject\", \"draft\": <the whole corrected "
-              "draft, its claim_map kept in step with every change>, \"changes\": [{\"field\", "
+              "{\"verdict\": \"pass\" | \"fixed\" | \"reject\", \"draft\": <the corrected "
+              "draft: the whole of it, or every key you change; a key you leave out keeps its "
+              "value above, so give one you remove as \"\" or []; its claim_map kept in step "
+              "with every change>, \"changes\": [{\"field\", "
               "\"before\", \"after\", \"reason\"}], \"residual_risks\": [what an interviewer "
               "could still probe], \"rulings\": [{\"sentence\", \"flag\", \"ruling\": "
               "\"supported\" | \"fixed\" | \"removed\", \"why\"}], \"audited_md5\": "

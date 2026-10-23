@@ -33,8 +33,10 @@ and the command that logs it with the file, `state.py message <id> --attached <f
 carried no note and nothing has been sent. Draft it with `compose.first_note()`; it is
 not a nudge.
 
-**Nudge due** then: past 5 to 7 business days, no nudge sent yet. One nudge
-only, ever. `compose.validate()` refuses check-in wording ("just checking in",
+**Nudge due** then: past 5 to 7 business days, no nudge sent yet, or the person's own
+rule where `profile/networking.py` sets `FOLLOW_UP_DAYS` and `MAX_UNANSWERED`
+(`schema.follow_up_rule()` says which is in force). One nudge only, unless their rule
+allows more. `compose.validate()` refuses check-in wording ("just checking in",
 "bumping this", "did you get a chance"): a nudge carries something new to answer.
 
 **Requests to withdraw** (`request_pending`): a connection request nobody accepted in

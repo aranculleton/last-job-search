@@ -230,7 +230,9 @@ def why_them(contact: dict, reading: dict | None = None, roles=None,
         reasons.append((-8, "found by name only: find them on LinkedIn before any request"))
     elif contact.get("profile_status") == "likely":
         reasons.append((-4, "profile found, but its title does not name the employer: check it"))
-    if contact.get("reverify"):
+    if contact.get("needs_read"):
+        reasons.append((-6, "connected long ago: their employer and title may have changed"))
+    elif contact.get("reverify"):
         reasons.append((-6, "named on an old page: check they still hold the role"))
 
     score = max(0, min(100, 30 + sum(p for p, _ in reasons)))
@@ -263,26 +265,23 @@ def ranked(contacts: list, today: dt.date | None = None, tracker=None, threads=N
     return sorted(out, key=lambda c: (c["why"]["skip"], -c["why"]["score"]))
 
 
-def not_writable(contact: dict, threads=(), today: dt.date | None = None) -> str:
-    """Why this contact must not be written to now, or "" when a first note may go.
+def not_writable(contact: dict, threads=(), today: dt.date | None = None, ctx=None) -> str:
+    """Why this contact must not be written to now, or "" when a first note may go: the one
+    check before anyone is shown (surface.py), in the queue's form, so the queue reads their
+    whole thread on every channel and the bar as every other list does.
 
     The default ranking listed people whose rows said closed, on hold, in conversation
     or awaiting a reply, among them a closed contact at an employer the person had
     ruled out (scoring 57) and people at an employer with a live interview, marked
     HOLD. Only someone nothing has gone to, with no hold and at an employer still in
-    the search, is worth ranking for a first note."""
-    import sources
-    import state
-    today = today or dt.date.today()
-    cid = str(contact.get("contact_id") or "").strip()
-    status = state.effective_status(contact, state.threads_for(list(threads), cid))
-    if status != "not_contacted":
-        return status
-    hold = state.action_hold(contact.get("next_action"), today)
-    if hold:
-        return f"on hold: {hold}"
-    out = sources.ruled_out(contact.get("company") or "")
-    return f"employer ruled out: {out}" if out else ""
+    the search, is worth ranking for a first note. `ctx` (surface.context) is built once
+    for a whole book."""
+    import surface
+    if ctx is None:
+        ctx = surface.context(contacts=[contact], threads=list(threads), connections=[],
+                              today=today)
+    got = surface.check(contact, ctx, queued=True)
+    return "" if got["show"] else got["reason"]
 
 
 def main(argv: list | None = None) -> int:
@@ -297,20 +296,22 @@ def main(argv: list | None = None) -> int:
     ids = {a for a in args if a != "--all"}
     contacts = [c for c in state.load_contacts() if not ids or c.get("contact_id") in ids]
     threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    import surface
+    ctx = surface.context(contacts=state.load_contacts(), threads=threads)
     left_out = 0
     if not (everyone or ids):
-        keep = [c for c in contacts if not not_writable(c, threads)]
+        keep = [c for c in contacts if not not_writable(c, ctx=ctx)]
         left_out, contacts = len(contacts) - len(keep), keep
     for c in ranked(contacts, threads=threads):
         w = c["why"]
         tag = ""
         if everyone or ids:
-            why_not = not_writable(c, threads)
+            why_not = not_writable(c, ctx=ctx)
             tag = f"  [not now: {why_not}]" if why_not else ""
         print(f"{w['score']:>3}  {c.get('name')} ({c.get('company')}): {w['line']}{tag}")
     if left_out:
         print(f"({left_out} others left out: written to, closed, on hold or at an employer "
-              "ruled out; --all lists them)")
+              "the bar rules out or nobody has judged; --all lists them)")
     return 0
 
 

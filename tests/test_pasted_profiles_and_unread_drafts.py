@@ -86,6 +86,13 @@ CONTACTS = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def _employers_judged(judged):
+    """Nobody is shown at an employer nobody has judged (tools/network/surface.py): the
+    queue these tests read holds people at these two invented employers."""
+    judged("Kestrel Mutual", "Fernhill Freight")
+
+
 @pytest.fixture
 def book(tmp_path, monkeypatch):
     monkeypatch.setattr(reading.person, "state", lambda *p: str(tmp_path.joinpath(*p)))

@@ -2397,16 +2397,20 @@ def queue(contacts: list, today: datetime.date | None = None) -> list:
     (compose.example_facts): saving refuses one now, but a note queued before that check
     sits there looking ready to send until it is rewritten."""
     import compose
+    import surface
     import why
     out = []
+    ctx = None
     for c in contacts:
         cid = c.get("contact_id", "")
         if (c.get("status") or "not_contacted") != "not_contacted" or not cid:
             continue
         if not os.path.isfile(draft_path(cid)):
             continue
-        # On hold, or at an employer the search has ruled out: never offered for a read.
-        if why.not_writable(c, (), today):
+        # Written to on any channel (their whole thread, not the row's status alone), on
+        # hold, or at an employer the bar rules out: never offered for a read.
+        ctx = ctx or surface.context(contacts=contacts, today=today)
+        if why.not_writable(c, ctx=ctx):
             continue
         got = load(cid)
         if card_only_draft(cid) and card_enough(got, c.get("company", "")):
@@ -2940,10 +2944,10 @@ def people_page(text: str, company: str) -> list:
 def by_employer(people: list) -> list:
     """[(employer, why it is ruled out or "", [people])] for a search by title that spans
     employers, the largest group first, and the people whose card names no employer last
-    under "". Each employer is checked the way the job search checks it (sources.ruled_out:
-    an excluded sector or employer, or do_not_target.json). "0 at ," was printed for a title
+    under "". Each employer is checked the way every list of people is (surface.employer_out:
+    the bar, do_not_target.json, a finding of no relevant team there). "0 at ," was printed for a title
     search across employers, as though it were one employer with no name (2026-10-21)."""
-    import sources
+    import surface
     from company_key import key as company_key
     groups: dict = {}
     for p in people:
@@ -2952,7 +2956,7 @@ def by_employer(people: list) -> list:
         name, members = groups.get(k, (emp, []))
         members.append(p)
         groups[k] = (name, members)
-    out = [(name, sources.ruled_out(name) if name else "", members)
+    out = [(name, surface.employer_out(name) if name else "", members)
            for k, (name, members) in groups.items() if k]
     out.sort(key=lambda g: (-len(g[2]), g[0].lower()))
     if "" in groups:
@@ -4152,6 +4156,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
     contacts = state.load_contacts()
     own_facts_why = own_facts_why or {}
     ready, added_lines, refused = {}, [], 0
+    ctx_ = None                          # the one check's context, built once if needed
     # Who else each note could be for: a greeting that only starts this reader's name is
     # read against the book and the batch (tone.wrong_greeting).
     batch_names = {cid: (load(cid) or {}).get("name", "") for cid in batch
@@ -4237,6 +4242,18 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
             print("reading: " + NO_READING_SAVE.format(who=row.get("name") or cid, cid=cid))
             refused += 1
             continue
+        if card_only and not has_read(got):
+            # A card-only note rests on what the list said, and from the connections file
+            # that is an employer and title that may be years old, with no place at all.
+            import surface
+            ctx_ = ctx_ or surface.context(contacts=contacts)
+            when = surface.old_connection(row, ctx_, cid)
+            if when:
+                print(f"reading: {cid}: not saved as card-only. "
+                      + surface.OLD_CONNECTION.format(day=when)
+                      + f" (python3 tools/network/reading.py read {cid} <file>).")
+                refused += 1
+                continue
         company = row.get("company", "") or got.get("company", "")
         others = [c for c in contacts if c.get("contact_id") != cid
                   and (c.get("status") or "not_contacted") == "not_contacted"
@@ -5365,6 +5382,8 @@ def _cli_people_across(a, people, rec, now, contacts, threads, breach) -> int:
     their card names, each employer checked against what the search has ruled out, and the
     ones whose card names none kept for a deep read to place."""
     import state
+    import surface
+    ctx = surface.context(contacts=contacts, threads=threads)
     groups = by_employer(people)
     named = [g for g in groups if g[0]]
     unknown = next((g[2] for g in groups if not g[0]), [])
@@ -5384,11 +5403,18 @@ def _cli_people_across(a, people, rec, now, contacts, threads, breach) -> int:
             keep, why_ = screen(p, name) if name else (True, "")
             rank, fit = title_fit(p.get("title", ""))
             keep = keep and rank > 0
+            if keep:                     # the one check before anyone is shown (surface.py)
+                got = surface.check(dict(p, company=name), ctx, queued=True)
+                if not got["show"]:
+                    keep, why_ = False, got["reason"]
             rows.append((not keep, -rank if keep else 0, n, p, keep, why_ or ("" if keep else fit),
                          fit if keep else ""))
         for _o, _r, _n, p, keep, why_, fit in sorted(rows, key=lambda r: r[:3]):
-            row = state.already_contacted(contacts, name=p["name"], company=name or None,
-                                          linkedin_url=p.get("linkedin_url"))
+            # Who they are in the book, read the way the check reads it (surface.in_book):
+            # a different address is a different person, whatever the name.
+            found, _how = surface.in_book(contacts, p["name"], name, p.get("linkedin_url"),
+                                          index=ctx["book"])
+            row = found[0] if found else None
             tag = (f"[{row['contact_id']}]" if row else "[not in the book]"
                    + (f" {p['linkedin_url']}" if p.get("linkedin_url") else ""))
             waiting = bool(row) and (row.get("status") or "not_contacted") in ("not_contacted",
@@ -5456,15 +5482,24 @@ def _cli_people(a) -> int:
     if said:
         print(said)
     # Best first: the cards worth a deep read, by how close the title is to their function.
+    import surface
+    ctx = surface.context(contacts=contacts, threads=threads)
     rows = []
+    checked_out = set()                  # held by the check: its reason, never a skip hint
     for n, p in enumerate(people):
         keep, why = screen(p, a.company)
         rank, fit = title_fit(p.get("title", ""))
+        if keep:                         # the one check before anyone is shown (surface.py)
+            got = surface.check(dict(p, company=a.company), ctx, queued=True)
+            if not got["show"]:
+                keep, why = False, got["reason"]
+                checked_out.add(id(p))
         rows.append((not keep, -rank if keep else 0, n, p, keep, why, fit if keep else ""))
     pending_new, changed = [], False
     for _out, _rank, _n, p, keep, why, fit in sorted(rows, key=lambda r: r[:3]):
-        row = state.already_contacted(contacts, name=p["name"], company=a.company,
-                                      linkedin_url=p.get("linkedin_url"))
+        found, _how = surface.in_book(contacts, p["name"], a.company, p.get("linkedin_url"),
+                                      index=ctx["book"])
+        row = found[0] if found else None
         tag = (f"[{row['contact_id']}]" if row else "[not in the book]"
                + (f" {p['linkedin_url']}" if p.get("linkedin_url") else ""))
         waiting = bool(row) and (row.get("status") or "not_contacted") in ("not_contacted", "dropped")
@@ -5489,7 +5524,7 @@ def _cli_people(a) -> int:
             changed = True
         elif p.get("reach") == "pending" and row is None:
             pending_new.append(p["name"])
-        elif waiting and not keep:
+        elif waiting and not keep and id(p) not in checked_out:
             print("    " + _skip_hint(row["contact_id"], why))
     if changed:
         state.save_threads(threads)

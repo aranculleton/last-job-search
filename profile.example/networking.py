@@ -13,6 +13,17 @@ import re
 # free account gets, and whether InMail is there at all (tools/network/schema.py).
 LINKEDIN_PLAN = "premium"
 
+# Their own follow-up rule (tools/network/schema.py), where they have one: the calendar
+# days of silence before a follow-up, counted from the last message or the day they accepted,
+# and how many messages in a row may go unanswered before the app suggests no more.
+# Unset, six business days and two (the first and one nudge). The date is written onto
+# each contact (`state.py follow-ups --write`), so the brief brings it back on the day.
+# FOLLOW_UP_DAYS = 14
+# MAX_UNANSWERED = 2
+# How old their LinkedIn download may get before the brief asks for a new one, in days
+# (tools/network/export.py); unset, 14, and 0 never asks.
+# EXPORT_EVERY_DAYS = 14
+
 # How a person's LinkedIn profile is read before a note is written to them
 # (tools/network/reading.py): "browser" in Morgan's own signed-in browser, which
 # LinkedIn's terms forbid as automated access and so needs their yes, or "paste",

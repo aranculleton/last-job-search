@@ -53,8 +53,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from text_screen import (BACHELOR_OR, DEGREE, ESCAPE, NOT_A_DEGREE, PREFERRED,  # noqa: E402
-                         entry_years, sentences)
+from text_screen import (DEGREE, ESCAPE, NOT_A_DEGREE, PREFERRED,  # noqa: E402
+                         beside_a_bachelor, entry_years, sentences)
 from prefilter import location_verdict  # noqa: E402
 from opportunity import SCALE as OPP_SCALE  # noqa: E402
 import person  # noqa: E402
@@ -293,7 +293,7 @@ GRAD_COST = 9
 # splitter cuts in two, as in "Master's degree in Mathematics, Statistics,
 # Operations Research, Engineering, or equivalent".
 GRAD_ESCAPE = ESCAPE          # text_screen's: one list of the ways a posting says "or equivalent"
-# Offered beside a bachelor's, it is a bar a BSc clears: text_screen.BACHELOR_OR.
+# Offered beside a bachelor's, it is a bar a BSc clears: text_screen.beside_a_bachelor.
 
 
 def _sentence_spans(text: str):
@@ -343,7 +343,7 @@ def _degree_ask(body: str):
                 continue
             a = at + m.start()
             if (GRAD_ESCAPE.search(body[max(0, a - 150):a + len(m.group(0)) + 150])
-                    or BACHELOR_OR.search(s[:m.start()])):
+                    or beside_a_bachelor(s, m)):
                 d = DEMAND_NONE
             else:
                 d = _demand(s)

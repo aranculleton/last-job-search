@@ -147,3 +147,11 @@ def test_a_repo_that_kept_only_the_connections_is_brought_its_history(tmp_path, 
     assert "take --find" in u.run and u.needs == "you"
     shutil.copy(FIX / "messages.csv", kept / "messages.csv")
     assert u.pending() == ""
+
+
+def test_a_download_opened_one_folder_deeper_is_found(tmp_path):
+    inner = tmp_path / "Downloads" / "Basic_LinkedInDataExport" / "Basic_LinkedInDataExport"
+    inner.mkdir(parents=True)
+    for n in ("Connections.csv", "messages.csv"):
+        shutil.copy(FIX / n, inner / n)
+    assert E.find_exports(str(tmp_path)) == [str(inner)]

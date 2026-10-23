@@ -48,7 +48,8 @@ def _harvest(results, company, **kw):
 
 # ------------------------------------------------------------ a name is not an employer
 
-def test_a_first_name_that_spells_a_one_word_employer_is_not_a_contact_there():
+def test_a_first_name_that_spells_a_one_word_employer_is_not_a_contact_there(judged):
+    judged("Wren")   # nobody is shown at an employer nobody has judged
     results = [
         {"title": "Wren Halloway - Data Consultant", "url": _url("wren-h")},
         {"title": "Wren Achterberg on LinkedIn: three lessons from a year of consulting",
@@ -118,7 +119,8 @@ def test_a_different_employer_that_shares_a_word_is_not_the_same(a, b):
     assert not discovery.same_employer(a, b)
 
 
-def test_people_at_the_employer_under_another_name_are_kept_and_filed_under_its_name():
+def test_people_at_the_employer_under_another_name_are_kept_and_filed_under_its_name(judged):
+    judged("Brannock Quillfeather", "Fernhill")   # nobody is shown at an employer nobody has judged
     results = [
         {"title": "Corwin Haldane - Partner @ Quillfeather, AI by Brannock", "url": _url("corwin")},
     ]
@@ -156,7 +158,8 @@ def test_a_connection_at_a_business_line_is_a_connection_at_the_employer():
 
 # ------------------------------------------------------------ "<function> @ <Employer>"
 
-def test_a_function_at_an_employer_is_a_job_there():
+def test_a_function_at_an_employer_is_a_job_there(judged):
+    judged("Larkspur Retail")   # nobody is shown at an employer nobody has judged
     got = discovery.parse_result_title("Bastian Merriweather - Data @ Larkspur Retail")
     assert (got["headline"], got["employer"]) == ("Data @ Larkspur Retail", "Larkspur Retail")
     run = _harvest([{"title": "Bastian Merriweather - Data @ Larkspur Retail",
@@ -196,7 +199,8 @@ def test_a_title_with_a_comma_is_a_place_only_when_it_names_one(title, company, 
     assert (got["headline"], got["employer"], got["location"]) == want
 
 
-def test_a_team_title_ranks_on_its_job_not_as_somebody_out_of_market():
+def test_a_team_title_ranks_on_its_job_not_as_somebody_out_of_market(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     results = [{"title": "Rosalind Achterberg - Data Science, Data & AI Strategy",
                 "url": _url("rosalind")},
                {"title": "Corwin Haldane - Kestrel Mutual, Data Governance Team",
