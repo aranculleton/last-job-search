@@ -61,7 +61,8 @@ def test_a_chat_with_a_browser_reads_the_best_few_and_one_without_offers_a_paste
     assert (got["say"] == "") == reads
 
 
-def test_search_results_become_people_with_evidence_and_a_profile_status_nothing_fetched():
+def test_search_results_become_people_with_evidence_and_a_profile_status_nothing_fetched(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     got = sources.harvest(RESULTS, "Kestrel Mutual", query="Kestrel Mutual Head of Data Manchester",
                           today=TODAY, connections=[], contacts=[])
     names = [p["name"] for p in got["keep"]]
@@ -132,7 +133,8 @@ def test_a_result_title_says_who_and_where(title, want):
     assert (got["name"], got["headline"], got["employer"], got["location"]) == want
 
 
-def test_their_connections_come_first_ranked_and_never_twice():
+def test_their_connections_come_first_ranked_and_never_twice(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     conns = [
         {"name": "Corwin Haldane", "company": "Kestrel Mutual Ltd", "title": "Head of Finance",
          "linkedin_url": "https://www.linkedin.com/in/example-corwin", "connected_on": "03 Jan 2024"},
@@ -154,7 +156,7 @@ def test_their_connections_come_first_ranked_and_never_twice():
     tamsin = next(p for p in run["keep"] if p["name"] == "Tamsin Oyelaran")
     assert tamsin["first_degree"] and tamsin["route"] == "connection"
     assert run["keep"][0]["name"] == "Tamsin Oyelaran"
-    assert any(p.get("name") == "Idris Corrie" and w == "already in your contact book"
+    assert any(p.get("name") == "Idris Corrie" and w.startswith("already in your contact book as c1")
                for p, w in run["dropped"])
 
 
@@ -239,7 +241,8 @@ REAL_SHAPES = [
 ]
 
 
-def test_a_real_runs_shapes_rank_the_known_leader_first_and_keep_nobody_wrong():
+def test_a_real_runs_shapes_rank_the_known_leader_first_and_keep_nobody_wrong(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     # A real run ranked a Chief Data Officer last, below eight people whose job nobody
     # knew and a former CEO; took a surname off; and kept a post about another company.
     got = sources.harvest(REAL_SHAPES, "Kestrel Mutual", query="Kestrel Mutual Head of Data Manchester",
@@ -276,7 +279,8 @@ def test_letters_after_a_name_come_off_and_a_short_surname_stays():
         assert not discovery.disqualify({**left, "title": still_here}, "Kestrel Mutual"), still_here
 
 
-def test_only_a_title_search_says_what_job_it_looked_for():
+def test_only_a_title_search_says_what_job_it_looked_for(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     # A posts search put its operators where the job goes ("( we're OR join my team ...)
     # site:linkedin.com/posts"), and a name check put the person's own name there.
     one = [{"title": "Fenella Quarrie - Kestrel Mutual", "url": "https://www.linkedin.com/in/example-fenella"}]
@@ -297,7 +301,8 @@ def _post_url(handle: str, day: datetime.date) -> str:
     return f"https://www.linkedin.com/posts/{handle}_data-team-activity-{ms << 22}-AbCd"
 
 
-def test_a_post_is_dated_so_an_old_one_no_longer_passes_for_someone_there_now():
+def test_a_post_is_dated_so_an_old_one_no_longer_passes_for_someone_there_now(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     # A 2023 post naming the employer was kept as "likely": its date was read and stored
     # where no check looked.
     results = [
@@ -314,7 +319,8 @@ def test_a_post_is_dated_so_an_old_one_no_longer_passes_for_someone_there_now():
     assert got["keep"][0]["signal_date"] == "2026-10-01"
 
 
-def test_a_name_check_keeps_only_that_person_with_the_job_the_page_gave_them():
+def test_a_name_check_keeps_only_that_person_with_the_job_the_page_gave_them(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     # Fed the results of a search for one speaker, harvest kept four other people the
     # same results named, credited to that search; and the speaker page's title was lost,
     # so an AVP ranked with the unknowns.

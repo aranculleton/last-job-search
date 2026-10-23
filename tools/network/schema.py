@@ -164,3 +164,29 @@ LIMITS["nudge_chars"] = min(LIMITS["nudge_chars"], LIMITS["connection_note_chars
 # reads as impatient and 5-7 business days is the correct window.
 FOLLOWUP_BUSINESS_DAYS = 6
 MAX_NUDGES = 1
+# The person's own rule outranks the app's (profile/networking.py, 2026-10-23):
+# FOLLOW_UP_DAYS calendar days of silence before a follow-up, counted from our last
+# message or from the day they accepted, and MAX_UNANSWERED messages in a row with no
+# reply before the app suggests no more. Unset, the app's six business days and one
+# nudge (two messages unanswered) stand. Other tools put the same two numbers in the
+# person's hands: a "stay in touch" interval in days, and a cap on follow-ups.
+def _days_setting(name: str) -> int:
+    # A whole number from profile/networking.py, or 0 (the app's own) when it is unset or
+    # not a number: a typo there never stops every networking tool.
+    value = getattr(_NETWORKING, name, 0)
+    try:
+        return max(int(value or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+FOLLOW_UP_DAYS = _days_setting("FOLLOW_UP_DAYS")
+MAX_UNANSWERED = _days_setting("MAX_UNANSWERED") or MAX_NUDGES + 1
+MAX_NUDGES = max(MAX_UNANSWERED - 1, 0)
+
+
+def follow_up_rule() -> str:
+    """The rule in force, in words: "14 days, at most 2 with no reply"."""
+    wait = (f"{FOLLOW_UP_DAYS} days" if FOLLOW_UP_DAYS
+            else f"{FOLLOWUP_BUSINESS_DAYS} business days")
+    return f"{wait}, at most {MAX_UNANSWERED} with no reply"

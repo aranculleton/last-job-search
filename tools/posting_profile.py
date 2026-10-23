@@ -436,9 +436,11 @@ def years(text: str) -> dict:
 
 
 _BACHELOR = re.compile(r"\b(?:bachelor['\u2019]?s?|b\.?sc|b\.?a\b|undergraduate degree|university degree|"
-                       r"(?:a |an )?(?:relevant |related )?degree in)\b", re.I)
+                       r"(?:a |an )?(?:relevant |related )?degree in)\b|\bb\.\s?[sa]\.", re.I)
 _PHD = re.compile(r"\bph\.?\s?d\b|\bdoctora\w*", re.I)
-_MASTER_OR = re.compile(r"\b(?:master|msc|m\.sc|mba)[^.;:]{0,40}?(?:\bor|/)\s*(?:an?\s+)?$", re.I)
+_MASTER_WORD = r"(?:master|msc|m\.\s?sc|m\.\s?s\.|mba)"
+_MASTER_OR = re.compile(r"\b" + _MASTER_WORD + r"[^;:]{0,140}?(?:\bor|/)\s*(?:an?\s+)?$", re.I)
+_OR_MASTER = re.compile(r"^[^;:]{0,140}?(?:\bor\b|/)\s*(?:an?\s+)?" + _MASTER_WORD, re.I)
 
 
 def degree(text: str) -> dict:
@@ -451,16 +453,18 @@ def degree(text: str) -> dict:
         # A graduate degree offered beside a bachelor's is no graduate bar: "Bachelor’s or
         # master’s degree" was read as a master's, required (2026-10-23).
         grads = [m for m in ts.DEGREE.finditer(s)
-                 if not ts.NOT_A_DEGREE.match(s, m.start())
-                 and not ts.BACHELOR_OR.search(s[:m.start()])]
-        # A PhD offered beside a master's ("a Master's or PhD") is a master's bar.
-        if any(_PHD.match(m.group(0)) and not _MASTER_OR.search(s[:m.start()]) for m in grads):
+                 if not ts.NOT_A_DEGREE.match(s, m.start()) and not ts.beside_a_bachelor(s, m)]
+        # A PhD offered beside a master's ("a Master's or PhD", "PhD or Master's") is a
+        # master's bar.
+        if any(_PHD.match(m.group(0)) and not _MASTER_OR.search(s[:m.start()])
+               and not _OR_MASTER.search(s[m.end():]) for m in grads):
             level = "a PhD"
         elif grads:
             level = "a master's degree"
         elif _BACHELOR.search(s):
-            level = "a bachelor's degree" if re.search(r"bachelor|b\.?sc|b\.?a\b|undergraduate",
-                                                        s, re.I) else "a degree"
+            level = ("a bachelor's degree"
+                     if re.search(r"bachelor|b\.?sc|b\.?a\b|\bb\.\s?[sa]\.|undergraduate", s, re.I)
+                     else "a degree")
         if not level or rank[level] < rank[best["level"]]:
             continue
         required = not ts.PREFERRED.search(s)

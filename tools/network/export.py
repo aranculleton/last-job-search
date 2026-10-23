@@ -30,11 +30,16 @@ What it gives:
   message the app already logged is not added again. Status stays derived from the log,
   so afterwards `state.py` shows who replied and who is owed a reply;
 - **the invitations still waiting**: the ones sent and never accepted, older than
-  PENDING_DAYS, oldest first, for the person to withdraw on LinkedIn themselves.
+  PENDING_DAYS, oldest first, for the person to withdraw on LinkedIn themselves;
+- **what changed since the last download**, said first by `take`: new connections,
+  requests accepted, replies, and requests still waiting. The day it was taken is kept
+  in documents/network/linkedin_export.json, and once it is EXPORT_EVERY_DAYS old
+  (fortnightly unless the person set otherwise) the brief asks for a new one (`due`).
 
     python3 tools/network/export.py take <zip|folder|csv>...        # given an export: this, first
     python3 tools/network/export.py take --find                     # the newest one on this computer
     python3 tools/network/export.py files [<zip|folder>]          # what it holds, what is missing
+    python3 tools/network/export.py due                           # the brief's fortnightly ask
     python3 tools/network/export.py save <zip|csv>... [--only connections|history|profile]
     python3 tools/network/export.py history [--from <zip|folder>] [--apply]
     python3 tools/network/export.py pending [--from <zip|folder>] [--days N] [--all]
@@ -281,7 +286,7 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
     not there are named: all of them by default."""
     dest = dest or home()
     kinds = GROUPS[only]
-    saved, missing, other = [], [], 0
+    saved, missing, other, newer = [], [], 0, []
     for src in srcs:
         how, path = _source(src)
         if how == "zip":
@@ -298,9 +303,20 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
             text, _where = _raw(kind, path)
             if not text:
                 continue
-            if not parse(text, kind)["found"]:
+            got = parse(text, kind)
+            if not got["found"]:
                 missing.append(f"{FILES[kind]} (no header this app recognises)")
                 continue
+            kept = os.path.join(dest, FILES[kind])
+            if kind in _DATED and os.path.isfile(kept):
+                # An older download given again never replaces a newer one kept: its people
+                # would look unconnected and its requests unanswered.
+                have = newest([dict(parse(_raw(kind, kept)[0], kind), kind=kind)]).get(kind, "")
+                given = newest([dict(got, kind=kind)]).get(kind, "")
+                if have and given and have > given:
+                    newer.append(f"{FILES[kind]} (the one kept here runs to {have}, this one "
+                                 f"to {given})")
+                    continue
             os.makedirs(dest, exist_ok=True)
             with open(os.path.join(dest, FILES[kind]), "w", encoding="utf-8", newline="") as fh:
                 fh.write(text)
@@ -308,6 +324,8 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
     absent = [FILES[k] for k in kinds if FILES[k] not in saved
               and not any(m.startswith(FILES[k]) for m in missing)
               and (name_absent is None or k in name_absent)]
+    if not saved and newer:
+        return "Nothing saved: the files kept here are newer: " + _and(newer) + "."
     if not saved:
         raise ValueError("nothing saved: none of " + ", ".join(FILES[k] for k in kinds)
                          + " was in what you gave")
@@ -318,6 +336,8 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
                     else "the other file in it was not opened."))
     if missing or absent:
         line += " Not saved: " + _and(missing + [f"{a} (not in it)" for a in absent]) + "."
+    if newer:
+        line += " Kept the newer copy of " + _and(newer) + "."
     return line
 
 
@@ -338,6 +358,14 @@ def find_exports(base: str | None = None) -> list:
             entries = list(os.scandir(os.path.join(base, d)))
         except OSError:
             continue
+        # A ZIP opened by the computer can land one folder deeper ("<name>/<name>/"): the
+        # folders just inside a LinkedIn-named folder are looked at too, nothing further.
+        for e in list(entries):
+            if e.is_dir() and "linkedin" in e.name.lower():
+                try:
+                    entries += [x for x in os.scandir(e.path) if x.is_dir()]
+                except OSError:
+                    pass
         for e in entries:
             name = e.name.lower()
             try:
@@ -372,21 +400,156 @@ def not_saved() -> list:
             "first. Never read the files straight from the download."]
 
 
+# ---------------------------------------------------------------- a new download, fortnightly
+
+# The download goes stale: who accepted, who replied and which requests still wait are
+# known only from a newer one. The brief asks for a new one once the last is this many
+# days old (the person's EXPORT_EVERY_DAYS in profile/networking.py, else 14; 0 never
+# asks). A record of when it was taken is kept beside the message log, which is
+# committed, because the download itself stays on the person's computer.
+_NET = person.module("networking") if person.exists("networking.py") else None
+try:
+    EXPORT_EVERY_DAYS = max(int(getattr(_NET, "EXPORT_EVERY_DAYS", 14) or 0), 0)
+except (TypeError, ValueError):                  # a typo there: the app's fortnight
+    EXPORT_EVERY_DAYS = 14
+STEPS = "python3 tools/claude_surfaces.py steps linkedin-export-files"
+# The column each file dates its rows by.
+_DATED = {"connections": "Connected On", "messages": "DATE", "invitations": "Sent At"}
+
+
+def record_path() -> str:
+    return person.state("documents", "network", "linkedin_export.json")
+
+
+def newest(tables) -> dict:
+    """{kind: the newest day a row of that file carries, ISO} for the tables given."""
+    out = {}
+    for t in tables:
+        col = _DATED.get(t.get("kind"))
+        days = [d for d in (day(r.get(col)) for r in t.get("rows") or ()) if d] if col else []
+        if days:
+            out[t["kind"]] = max(days).isoformat()
+    return out
+
+
+def last_taken(threads=None) -> tuple:
+    """(the day the last download was taken, how that is known), or (None, ""): the record
+    `take` writes; else the newest day in the files kept; else the newest message the log
+    has from a download."""
+    import json
+    try:
+        with open(record_path(), encoding="utf-8") as fh:
+            got = _state().as_date(json.load(fh).get("taken_on"))
+        if got:
+            return got, "recorded when it was taken"
+    except (OSError, ValueError, AttributeError):
+        pass
+    kept = newest(read(k, default_folder()) for k in _DATED)
+    if kept:
+        return datetime.date.fromisoformat(max(kept.values())), "the newest day in it"
+    st = _state()
+    if threads is None:
+        threads = st.load_threads() if os.path.exists(st.THREADS_CSV) else []
+    days = [st.as_date(r.get("date")) for r in threads
+            if EXPORT_NOTE.lower() in str(r.get("summary") or "").lower()]
+    days = [d for d in days if d]
+    return (max(days), "the newest message the log has from it") if days else (None, "")
+
+
+def due(today, threads=None) -> str:
+    """The brief's line once the last download is EXPORT_EVERY_DAYS old, else "". Nothing
+    when there has never been one: the connections-export upgrade asks for the first."""
+    st = _state()
+    today = st._need_date(today, "today")
+    taken, _how = last_taken(threads)
+    if not EXPORT_EVERY_DAYS or taken is None or (today - taken).days < EXPORT_EVERY_DAYS:
+        return ""
+    return (f"Your LinkedIn download is {(today - taken).days} days old (taken "
+            f"{taken.isoformat()}). A new one shows who accepted your requests, who replied "
+            "and which requests still wait: ask for it with the steps "
+            f"({STEPS}, checked that day), then python3 tools/network/export.py take <it>.")
+
+
+def _record(tables, today) -> None:
+    import json
+    path = record_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    got = {"taken_on": today.isoformat(), "newest": newest(tables),
+           "rows": {t["kind"]: len(t["rows"]) for t in tables if t.get("found")}}
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(got, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+
+
+def since_last(before, after, plan, contacts, threads, today) -> list:
+    """What changed since the last download, in a line or two: new connections, requests
+    accepted, replies, and requests still waiting past PENDING_DAYS. `before` is the
+    connections the app held before this one was saved (the rows, or None) with the
+    record's date; `after` this download's connections."""
+    st = _state()
+    old_rows, since = before
+
+    def ident(r):
+        return st.profile_handle(r.get("URL")) or name_key(
+            " ".join(x for x in (r.get("First Name"), r.get("Last Name")) if x))
+    if old_rows:
+        known = {ident(r) for r in old_rows} - {""}
+        new = list({ident(r): r for r in after if ident(r) and ident(r) not in known}.values())
+    elif since:
+        new = [r for r in after if (day(r.get("Connected On")) or datetime.date.min) > since]
+    else:
+        return []
+    # Only what happened since: a download also holds old conversations with people added
+    # to the book since the last one, and those are history, not news.
+    added = [r for r in (plan.get("add") or [] if plan else [])
+             if not since or (st.as_date(r.get("date")) or datetime.date.min) > since]
+    accepted = [r for r in added if st.is_acceptance(r)]
+    replies = [r for r in added if st._direction(r) == "in" and not st.is_acceptance(r)
+               and st._scenario(r) != "invitation_received"
+               and st.said_something(r) and not st.is_auto_reply(r)]
+    names = {str(c.get("contact_id") or ""): c.get("name") or c.get("contact_id")
+             for c in contacts}
+
+    def who(rows):
+        ids = list(dict.fromkeys(str(r.get("contact_id") or "") for r in rows))
+        shown = ", ".join(str(names.get(i) or i) for i in ids[:5])
+        return f" ({shown}{', ...' if len(ids) > 5 else ''})" if ids else ""
+    waiting = pending(contacts, threads, today)["items"]
+    when = (since.isoformat() if since else "the last one")
+    return [f"Since your last download ({when}): {len(new)} new connection"
+            f"{'s' if len(new) != 1 else ''}, {len({r.get('contact_id') for r in accepted})} "
+            f"accepted your request{who(accepted)}, {len({r.get('contact_id') for r in replies})} "
+            f"replied{who(replies)}, and {len(waiting)} request{'s' if len(waiting) != 1 else ''} "
+            f"sent over {PENDING_DAYS} days ago still wait"
+            + (" (export.py pending lists them)." if waiting else ".")]
+
+
 def take(srcs, contacts_path: str | None = None, threads_path: str | None = None) -> list:
     """Save the export and import its history, in one step: what a chat given an export
-    does before anything is written from it. Returns the lines to show."""
-    lines = [save(srcs, "all", name_absent=("connections", "messages", "invitations"))]
+    does before anything is written from it. Returns the lines to show: what changed since
+    the last download first, then what was saved and imported. Each contact waiting on a
+    reply gets its follow-up date (state.write_follow_ups), and the day it was taken is
+    recorded for the brief's fortnightly ask (`due`)."""
     st = _state()
+    today = datetime.date.today()
     cp, tp = contacts_path or st.CONTACTS_CSV, threads_path or st.THREADS_CSV
+    held = read("connections", default_folder())
+    taken, _how = last_taken(st.load_threads(tp) if os.path.exists(tp) else [])
+    before = (held["rows"] if held["usable"] else None, taken)
+    lines = [save(srcs, "all", name_absent=("connections", "messages", "invitations"))]
+    tables = [read(k, home()) for k in _DATED]
+    _record(tables, today)
     contacts, threads = st.load_contacts(cp), st.load_threads(tp)
     plan = plan_history(contacts, threads, home())
     if plan["problem"]:
         lines.append(f"No history imported: {plan['problem']}.")
         return lines
     n = apply_history(threads, plan, contacts)
-    if n:
+    dated = st.write_follow_ups(contacts, threads, today)
+    if n or dated:
         st.save_threads(threads, tp)
         st.save_contacts(contacts, cp)
+    lines[:0] = since_last(before, tables[0]["rows"], plan, contacts, threads, today)
     j = plan["joined"]
     people = j["profile address"] + j["name"]
     wrote = [u for u in plan["unmatched"] if u["sent"]]
@@ -396,6 +559,9 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
     if plan["unmatched"]:
         lines.append(f"{len(plan['unmatched'])} people in the history are not in the contact "
                      f"book ({len(wrote)} of them written to): `export.py history` lists them.")
+    if dated:
+        lines.append(f"Follow-up dates written on {len(dated)} contact"
+                     f"{'s' if len(dated) != 1 else ''} ({st.schema.follow_up_rule()}).")
     return lines
 
 
@@ -462,8 +628,10 @@ def clock(value) -> str:
 
 # The mark a repeat carries: the same words to or from one person on one day, sent at
 # another time. Without it two genuine messages were two identical rows, which RECONCILE
-# reads as one message logged twice (2026-10-23).
-_AT = " (sent at {})"
+# reads as one message logged twice (2026-10-23). Never in brackets: a summary ending "an
+# attachment attached" read the bracket as the attachment's file name.
+_AT = "; sent at {}"
+_AT_SEEN = re.compile(r"[;(] ?sent at \d{1,2}:\d{2}\)?$")
 
 
 def _sig(row) -> tuple:
@@ -515,26 +683,40 @@ def name_key(name) -> str:
     return st._match_name(bare) if len(bare.split()) >= 2 else ""
 
 
-def match_contact(contacts, name, url) -> tuple:
+def contact_index(contacts) -> dict:
+    """The book by profile address and by name, built once for a whole import: matching
+    each of 2,600 messages against 1,300 rows one by one took most of a 17-second import
+    (2026-10-23). The rows themselves, in the book's order."""
+    st = _state()
+    by_handle: dict = {}
+    by_name: dict = {}
+    for c in contacts:
+        h = st.profile_handle(c.get("linkedin_url"))
+        if h:
+            by_handle.setdefault(h, c)
+        k = name_key(c.get("name"))
+        if k:
+            by_name.setdefault(k, []).append((c, bool(h)))
+    return {"by_handle": by_handle, "by_name": by_name}
+
+
+def match_contact(contacts, name, url, index=None) -> tuple:
     """(contact row or None, how): "profile address", "name", "ambiguous" or "".
 
     The profile address first, through the one normaliser (`state.profile_handle`). Then
     the name, only when exactly one row carries it and that row's own address, if it
     has one, is this person's: two rows with the name are two people as far as this can
     tell, and a different address is a different person. A nickname or a near spelling
-    never joins."""
+    never joins. `index` (contact_index) answers the same for a whole import at once."""
     st = _state()
+    index = index or contact_index(contacts)
     h = st.profile_handle(url)
-    if h:
-        for c in contacts:
-            if st.profile_handle(c.get("linkedin_url")) == h:
-                return c, "profile address"
+    if h and h in index["by_handle"]:
+        return index["by_handle"][h], "profile address"
     key = name_key(name)
     if not key:
         return None, ""
-    same = [c for c in contacts if name_key(c.get("name")) == key]
-    if h:
-        same = [c for c in same if not st.profile_handle(c.get("linkedin_url"))]
+    same = [c for c, has in index["by_name"].get(key, ()) if not (h and has)]
     if len(same) == 1:
         return same[0], "name"
     return None, ("ambiguous" if same else "")
@@ -706,10 +888,18 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                           "or without the columns it needs)")
         return out
     log = list(threads)
+    by_cid: dict = {}
+    for r in log:
+        by_cid.setdefault(str(r.get("contact_id") or "").strip(), []).append(r)
+    index = contact_index(contacts)
     joined_ids: dict = {}
 
+    def logged(row):
+        log.append(row)
+        by_cid.setdefault(str(row.get("contact_id") or "").strip(), []).append(row)
+
     def join(name, url):
-        c, how = match_contact(contacts, name, url)
+        c, how = match_contact(contacts, name, url, index)
         if c is not None:
             cid = str(c.get("contact_id") or "").strip()
             if cid not in joined_ids:
@@ -723,7 +913,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         return None
 
     def mine_for(cid):
-        return [r for r in log if str(r.get("contact_id") or "").strip() == cid]
+        return list(by_cid.get(str(cid or "").strip(), ()))
 
     claimed: set = set()
 
@@ -737,7 +927,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         """A row identical to another of this person's is marked with the time it was sent,
         once. An existing row is marked when the plan is applied, never while it is made."""
         summary = marked.get(id(row), str(row.get("summary") or ""))
-        if not at or "(sent at " in summary:
+        if not at or _AT_SEEN.search(summary):
             return
         if any(r is not row and planned(r) == planned(row) for r in rows):
             new = summary + _AT.format(at)
@@ -795,7 +985,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                "channel": "message", "scenario": "", "summary": summary,
                "full_text": text, "subject": subject}
         out["add"].append(row)
-        log.append(row)
+        logged(row)
         mark_repeat(row, rows + [row], at)
         if not text:
             claimed.add(id(row))
@@ -890,7 +1080,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                                    else "Connection request, no note, ") + EXPORT_NOTE,
                        "full_text": note, "subject": ""}
                 out["add"].append(row)
-                log.append(row)
+                logged(row)
             elif way.startswith("in"):
                 contact = join(r.get("From"), r.get("inviterProfileUrl"))
                 if contact is None:
@@ -906,7 +1096,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                                    + ", " + EXPORT_NOTE),
                        "full_text": note, "subject": ""}
                 out["add"].append(row)
-                log.append(row)
+                logged(row)
 
     # Acceptances: a request in the log, and the person now a connection.
     if conns["usable"]:
@@ -915,7 +1105,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             when = day(r.get("Connected On"))
             if when is None:
                 continue
-            c, _how = match_contact(contacts, name, r.get("URL"))
+            c, _how = match_contact(contacts, name, r.get("URL"), index)
             if c is None:
                 continue
             cid = str(c.get("contact_id") or "").strip()
@@ -937,7 +1127,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                    "summary": "Accepted the connection request, " + EXPORT_NOTE,
                    "full_text": "", "subject": ""}
             out["add"].append(row)
-            log.append(row)
+            logged(row)
 
     touched = ({r["contact_id"] for r in out["add"]}
                | {r.get("contact_id") for r, _ in out["fill"] + out["redate"]})
@@ -1054,6 +1244,7 @@ def pending(contacts, threads, today, src=None, days: int | None = None) -> dict
                 linked_bare.add(k)
     owed_ids = {i["contact_id"] for i in st.owed(contacts, threads, today)
                 if i["kind"] == "request_pending"}
+    index, by_cid = contact_index(contacts), st.by_contact(threads)
     seen = set()
     for r in inv["rows"]:
         if not str(r.get("Direction") or "").strip().lower().startswith("out"):
@@ -1070,10 +1261,10 @@ def pending(contacts, threads, today, src=None, days: int | None = None) -> dict
         if key in seen:
             continue
         seen.add(key)
-        contact, _how = match_contact(contacts, name, url)
+        contact, _how = match_contact(contacts, name, url, index)
         cid = str(contact.get("contact_id") or "").strip() if contact else ""
         if contact is not None:
-            rows = [x for x in st.threads_for(threads, cid) if st._direction(x)]
+            rows = [x for x in by_cid.get(cid, ()) if st._direction(x)]
             after = [x for x in rows if (st.as_date(x.get("date")) or datetime.date.min) >= when]
             if any(st.is_withdrawal(x) or st.is_acceptance(x) or st.said_something(x)
                    for x in after):
@@ -1342,6 +1533,8 @@ def main(argv=None) -> int:
     t.add_argument("--find", action="store_true")
     t.add_argument("--contacts", default=st.CONTACTS_CSV)
     t.add_argument("--threads", default=st.THREADS_CSV)
+    d = sub.add_parser("due", help="one line once the last download is EXPORT_EVERY_DAYS old")
+    d.add_argument("--today", default=datetime.date.today().isoformat())
     f = sub.add_parser("files", help="what the export holds, and what is missing")
     f.add_argument("src", nargs="?", default=None)
     s = sub.add_parser("save", help="copy the named files into documents/linkedin/")
@@ -1366,7 +1559,14 @@ def main(argv=None) -> int:
             p.add_argument("--reason", default="")
     a = ap.parse_args(argv)
     return {"take": _cli_take, "files": _cli_files, "save": _cli_save, "history": _cli_history,
-            "pending": _cli_pending, "withdrawn": _cli_withdrawn}[a.cmd](a)
+            "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due}[a.cmd](a)
+
+
+def _cli_due(a) -> int:
+    line = due(a.today)
+    if line:
+        print(line)
+    return 0
 
 
 if __name__ == "__main__":

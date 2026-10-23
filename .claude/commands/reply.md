@@ -23,8 +23,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
    `referral_in_progress` is never stopped.
 
    **When the scenario is `gone_quiet`** (nothing pasted, and we spoke last), run
-   `reply.nudge_due(rows, today)` before drafting anything. If it is not due, or one
-   nudge has already gone out, draft nothing and say why: a second nudge costs more
+   `reply.nudge_due(rows, today)` before drafting anything. If it is not due, or the
+   nudges the person's follow-up rule allows have gone out (one, unless MAX_UNANSWERED in
+   profile/networking.py allows more), draft nothing and say why: one more costs more
    than it recovers. If it is due, the nudge is `compose.nudge()`, with a new reason
    to answer, and `reply.following_up_is_honest(rows, today)` says whether an apology
    for the gap is owed.
@@ -75,7 +76,8 @@ Usage: `/reply <contact name or company>`, then paste their message.
    `converted_to_application`). Then set `next_action` and `next_action_due` to what is owed
    now: the call and its date, the action owed outside the thread from step 4, or, once our
    message has gone and nothing else is owed, the nudge on
-   `state.add_business_days(<the day it went>, schema.FOLLOWUP_BUSINESS_DAYS)`. The morning
+   `state.follow_up_on(<the day it went>)` (the person's FOLLOW_UP_DAYS, else six business
+   days). The morning
    brief reads `next_action_due`, so a date written here is a reminder nobody has to set.
 
 7. **When this was their reply**, run `python3 tools/what_works.py event --contact <contact_id>`

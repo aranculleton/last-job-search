@@ -69,7 +69,8 @@ for _p in (_HERE, os.path.dirname(_HERE)):
 import dates  # noqa: E402
 import schema  # noqa: E402
 from company_key import key as company_key, fold as _ck_fold, row_key as _ck_row_key  # noqa: E402
-from throttle import FINAL as _THROTTLE_FINAL, UNSENT as _THROTTLE_UNSENT  # noqa: E402
+from throttle import (FINAL as _THROTTLE_FINAL, SILENCE_DAYS as _THROTTLE_SILENCE_DAYS,  # noqa: E402
+                      UNSENT as _THROTTLE_UNSENT)
 import person  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(_HERE))
@@ -349,15 +350,19 @@ def _slug(s: str | None) -> str:
 
 
 # A LinkedIn profile URL is the one identifier that survives a nickname, a
-# married name, a reversed "Halloway, Wren" and a change of employer.
-_PROFILE_HANDLE = re.compile(r"linkedin\.com/in/([^/?#\s]+)", re.I)
+# married name, a reversed "Halloway, Wren" and a change of employer. Any host
+# (www., ca., uk., none), the phone site's /m/in/ and /mwlite/in/, a trailing slash,
+# a query and either spelling of an accented letter (%C3%A9 or é, composed or not) all
+# give one handle: the forms other readers of these addresses accept too (2026-10-23).
+_PROFILE_HANDLE = re.compile(r"linkedin\.com/(?:(?:m|mwlite)/)?in/([^/?#\s]+)", re.I)
 
 
 def profile_handle(url: str | None) -> str:
     """The /in/<handle> of a LinkedIn profile URL, lowercased and decoded, or ""."""
+    import unicodedata
     from urllib.parse import unquote
     m = _PROFILE_HANDLE.search(str(url or ""))
-    return unquote(m.group(1)).strip().lower() if m else ""
+    return unicodedata.normalize("NFC", unquote(m.group(1))).strip().lower() if m else ""
 
 
 def _by_handle(rows, url):
@@ -805,6 +810,34 @@ OUTSIDE_SCENARIO = "request_outside"
 # A pending request is worth withdrawing after this long: LinkedIn caps how many
 # can be outstanding, and one nobody accepted in three weeks rarely is.
 REQUEST_WITHDRAW_DAYS = 21
+# Owed this long with nothing done, a thread has ended: the throttle's 45 days of silence,
+# where the reading queue also stops counting an unanswered note. A LinkedIn download
+# brings in years of conversations, and every one where the other side wrote last read as
+# a reply owed today: one person's due list went from 24 overdue to 655 the day their
+# history came in (2026-10-23), a five-year-old message at the top. Such an item is still
+# in `owed`, marked `old`, and /threads still lists it; the due list counts it in one line
+# instead. A date the person put on the row themselves keeps it live.
+OLD_OWED_DAYS = _THROTTLE_SILENCE_DAYS
+
+
+def owed_too_long(since, today) -> bool:
+    """Owed since `since` for more than OLD_OWED_DAYS: a thread that has ended."""
+    since, today = as_date(since), as_date(today)
+    return since is not None and today is not None and (today - since).days > OLD_OWED_DAYS
+
+
+def dated_by_person(contact, msgs=None) -> bool:
+    """A date the person put on the row themselves: a next_action_due beside words of their
+    own, beside no words at all (`state.py set <id> --due <date>`), or beside the app's own
+    follow-up wording but on a day the app would not have written on this thread (`_app_dates`,
+    from `msgs`; without them, the app's words are taken as the app's date)."""
+    due = as_date(contact.get("next_action_due"))
+    if due is None:
+        return False
+    action = (contact.get("next_action") or "").strip()
+    if not action or not _APP_ACTION.fullmatch(action):
+        return True
+    return msgs is not None and due.isoformat() not in _app_dates(msgs, action)
 
 
 def is_request(row) -> bool:
@@ -1029,7 +1062,19 @@ def auto_reply(text, subject="", sent_on=None) -> dict | None:
     "left" is a template saying they are no longer there; "away" an out-of-office;
     "automatic" any other message that says a machine sent it.
     """
-    body = str(text or "")
+    args = (str(text or ""), str(subject or ""), sent_on)
+    try:
+        # Without a send date the year comes from today, so that reading is never kept.
+        got = _auto_reply(*args) if sent_on is not None else _auto_reply.__wrapped__(*args)
+    except TypeError:                      # a sent_on that cannot be a cache key
+        got = _auto_reply.__wrapped__(*args)
+    return dict(got) if got else None
+
+
+@functools.lru_cache(maxsize=16384)
+def _auto_reply(body, subject, sent_on):
+    """auto_reply's reading, kept per message: one run reads the same message for the
+    status, the owed list and the resume list."""
     words = "%s\n%s" % (subject or "", body)
     left = _left(words)
     said = _AUTO_SAYS.search(words)
@@ -1132,6 +1177,23 @@ def threads_for(threads, contact_id_value) -> list[dict]:
     want = str(contact_id_value or "").strip()
     return _ordered([r for r in threads
                      if str(r.get("contact_id") or "").strip() == want])
+
+
+def by_contact(threads) -> dict[str, list[dict]]:
+    """Every contact's message rows, in the order they happened: `threads_for` for all of
+    them in one pass over the log. A loop over the book reads `by_contact(threads).get(cid,
+    [])` once instead of `threads_for` per contact, which read the whole log once a
+    contact: 3,900 passes over 8,500 messages, most of `open_actions.py --due`'s 5 seconds
+    on 1,300 contacts (2026-10-23). The same rows in the same order, as copies, so a caller
+    that changes its list changes nobody else's."""
+    grouped: dict[str, list] = {}
+    for r in threads or ():
+        grouped.setdefault(str(r.get("contact_id") or "").strip(), []).append(r)
+    return {cid: _ordered(rows) for cid, rows in grouped.items()}
+
+
+def _rows_of(index, cid) -> list[dict]:
+    return list(index.get(str(cid or "").strip(), ()))
 
 
 def _ordered(rows) -> list[dict]:
@@ -1281,12 +1343,13 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
                          "derived": derived, "reason": reason, "detail": detail})
 
     known = set()
+    index = by_contact(threads)
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         known.add(cid)
         name = contact.get("name", "")
         stored = str(contact.get("status") or "").strip()
-        rows = threads_for(threads, cid)
+        rows = _rows_of(index, cid)
         derived = derive_status(rows)
         if stored and stored not in schema.THREAD_STATUSES:
             flag(cid, name, stored, derived, "unknown_status",
@@ -1409,22 +1472,28 @@ def owed(contacts, threads, today) -> list[dict]:
     """What the user owes right now: every reply first, then nudges, each oldest first.
 
     Two kinds, and they are not the same job. A reply is owed the moment they
-    answer. A nudge is owed only after `schema.FOLLOWUP_BUSINESS_DAYS` business
-    days of silence and only while fewer than `schema.MAX_NUDGES` have gone out,
-    because a second nudge on an unanswered thread is the message that costs the
-    relationship rather than the one that saves it.
+    answer. A nudge is owed only once `follow_up_on` says (the person's own
+    FOLLOW_UP_DAYS, else `schema.FOLLOWUP_BUSINESS_DAYS` business days of silence) and
+    only while fewer than `schema.MAX_NUDGES` have gone out (their MAX_UNANSWERED less
+    the first message), because one nudge too many on an unanswered thread is the
+    message that costs the relationship rather than the one that saves it.
 
     Replies outrank nudges outright rather than being sorted against them on the
     day count, which `.claude/commands/threads.md` asks for and a single
     `business_days` sort does not give: those are two different clocks, and a
     six-day nudge was landing above somebody who answered this morning and is
     sitting there waiting.
+
+    Each item carries `old`: owed more than OLD_OWED_DAYS with nothing done and no date
+    of the person's own on the row, which the due list counts instead of listing.
     """
     today = _need_date(today, "today")
     items = []
+    own_dated = set()
+    index = by_contact(threads)
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
-        msgs = [r for r in threads_for(threads, cid) if _direction(r)]
+        msgs = [r for r in _rows_of(index, cid) if _direction(r)]
         status = effective_status(contact, msgs)
         base = {
             "contact_id": cid,
@@ -1445,6 +1514,8 @@ def owed(contacts, threads, today) -> list[dict]:
         action = (contact.get("next_action") or "").strip()
         overdue = (due is not None and action
                    and status not in schema.TERMINAL and due <= today)
+        if dated_by_person(contact, msgs):
+            own_dated.add(cid)                  # theirs, never set aside as old
         # The action rides on whichever row this contact produces, so a person
         # never appears twice. Listing one contact once as a reply and again as
         # an action puts duplicate rows on the list.
@@ -1542,21 +1613,12 @@ def owed(contacts, threads, today) -> list[dict]:
         # message, and an away message's return date holds the nudge until they are back.
         real = [r for r in msgs if not is_auto_reply(r)]
         last_out = real[-1] if real else None
-        sent = (as_date(last_out.get("date")) if last_out
-                else as_date(contact.get("first_contacted")))
-        if sent is None:
-            _action_row()
-            continue
-        nudges = max(_trailing_outbound(msgs) - 1, 0)
-        if nudges >= schema.MAX_NUDGES:
+        sent, due_on, nudges = follow_up_due(contact, msgs)
+        if sent is None or due_on is None:
             _action_row()
             continue
         waited = business_days_between(sent, today)
-        due_on = add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS)
-        back = away_until(msgs)
-        if back is not None:
-            due_on = max(due_on, add_business_days(back, AWAY_GRACE_BUSINESS_DAYS))
-        if waited < schema.FOLLOWUP_BUSINESS_DAYS or today < due_on:
+        if today < due_on:
             _action_row()
             continue
         items.append(dict(base,
@@ -1569,10 +1631,156 @@ def owed(contacts, threads, today) -> list[dict]:
     # Replies first, then anything the user put a date on, then nudges. A
     # self-imposed date outranks a nudge because the user chose it; it does not
     # outrank somebody sitting waiting for an answer.
+    # A request nobody accepted is never old: it still counts against LinkedIn's limit on
+    # pending invitations, and the oldest are the ones most worth withdrawing.
+    for i in items:
+        i["old"] = (i["kind"] != "request_pending" and i["contact_id"] not in own_dated
+                    and owed_too_long(i.get("due"), today))
     order = {"reply": 0, "action_due": 1, "first_message": 2, "nudge": 3, "request_pending": 4}
     items.sort(key=lambda i: (order.get(i["kind"], 9), -i["business_days"],
                               i["contact_id"]))
     return items
+
+
+def follow_up_on(sent) -> datetime.date:
+    """The day a follow-up falls due after a message on `sent` that drew no reply (or an
+    acceptance that day): the person's FOLLOW_UP_DAYS calendar days where profile/
+    networking.py sets them, else the app's FOLLOWUP_BUSINESS_DAYS business days. The one
+    clock `owed`, `reply.nudge_due` and every date written onto a contact read."""
+    sent = _need_date(sent, "sent")
+    if schema.FOLLOW_UP_DAYS:
+        return sent + datetime.timedelta(days=schema.FOLLOW_UP_DAYS)
+    return add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS)
+
+
+def follow_up_due(contact, msgs) -> tuple:
+    """(the day the clock runs from, the day a follow-up falls due or None, nudges sent)
+    for a thread waiting on them. The clock runs from our last message, or from their
+    acceptance when that is the last thing that happened, never from an automatic reply,
+    and an away message's return date holds it. None when the person's cap on unanswered
+    messages is reached (`schema.MAX_UNANSWERED`), or nothing has a date."""
+    real = [r for r in msgs if not is_auto_reply(r)]
+    sent = (as_date(real[-1].get("date")) if real
+            else as_date((contact or {}).get("first_contacted")))
+    nudges = max(_trailing_outbound(msgs) - 1, 0)
+    if sent is None or nudges >= schema.MAX_NUDGES:
+        return sent, None, nudges
+    due_on = follow_up_on(sent)
+    back = away_until(msgs)
+    if back is not None:
+        due_on = max(due_on, add_business_days(back, AWAY_GRACE_BUSINESS_DAYS))
+    return sent, due_on, nudges
+
+
+# What the app writes in next_action for a thread's follow-up; a row saying anything
+# else is the person's own, and nothing is ever written over it.
+FOLLOW_UP_ACTION = "Follow up if no reply ({n} of {cap} sent; your rule: {rule})"
+FOLLOW_UP_STOP = "No more follow-ups: {n} messages with no reply, your rule's limit ({rule})"
+CLOSE_IT = "If still silent by the date, close it: state.py set {cid} --status gone_cold"
+_APP_ACTION = re.compile(
+    r"one nudge if no reply"
+    r"|once they accept: .+\. withdraw the request if nobody accepts in \d+ days"
+    r"|nudged: nothing more unless they reply\. if still silent by the date, close it: "
+    r"state\.py set \S+ --status gone_cold"
+    r"|follow up if no reply \(\d+ of \d+ sent; your rule: [^)]*\)"
+    r"|no more follow-ups: \d+ messages with no reply, your rule's limit \([^)]*\)"
+    r"(?:\. if still silent by the date, close it: state\.py set \S+ --status gone_cold)?"
+    r"|\S+ sent \d{4}-\d{2}-\d{2} \([^)]*\): (?:one nudge if no reply|follow up if no reply "
+    r"\(\d+ of \d+ sent; your rule: [^)]*\)|no more follow-ups: .+)", re.I)
+
+
+def waiting_action(sent: int, contact_id: str = "") -> str:
+    """What a row waiting on a reply says after `sent` messages in a row with none back:
+    "One nudge if no reply" under the app's own rule, the person's rule where they set
+    one, and, once their limit is reached, that no more go and when to close it."""
+    rule = schema.follow_up_rule()
+    # The app's own words under its own rule; under the person's, the words name their
+    # rule, which is how a later run tells a date the app wrote from one they set.
+    own = not schema.FOLLOW_UP_DAYS and schema.MAX_UNANSWERED == 2
+    if sent >= schema.MAX_UNANSWERED:
+        close = CLOSE_IT.format(cid=contact_id or "<contact_id>")
+        if own and sent == 2:
+            return "Nudged: nothing more unless they reply. " + close
+        return FOLLOW_UP_STOP.format(n=sent, rule=rule) + ". " + close
+    if own and sent == 1:
+        return "One nudge if no reply"
+    return FOLLOW_UP_ACTION.format(n=sent, cap=schema.MAX_UNANSWERED, rule=rule)
+
+
+def follow_up_plan(contact, msgs) -> tuple | None:
+    """(next_action, next_action_due) for a thread waiting on them, by the person's rule:
+    the follow-up and its day, or, once their limit is reached, that no more go and the
+    day to close it. None when nothing in the thread has a date. The one answer every
+    message logged and `write_follow_ups` write onto the row."""
+    sent, due_on, nudges = follow_up_due(contact, msgs)
+    if sent is None:
+        return None
+    cid = str((contact or {}).get("contact_id") or "").strip()
+    return (waiting_action(nudges + 1, cid),
+            (due_on or follow_up_on(sent)).isoformat())
+
+
+_RULE_DAYS = re.compile(r"your rule(?:'s limit)?:? \(?(\d+) days\b", re.I)
+
+
+def _app_dates(msgs, action: str = "") -> set:
+    """Every day the app could have written as a follow-up date on this thread: under the
+    person's rule now, under the rule its own words name (a rule they have changed since),
+    or under its own six business days. A date among these is the app's, any other the
+    person's."""
+    out = set()
+    named = _RULE_DAYS.search(str(action or ""))
+    for r in msgs:
+        d = as_date(r.get("date"))
+        if d:
+            out |= {follow_up_on(d).isoformat(),
+                    add_business_days(d, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()}
+            if named:
+                out.add((d + datetime.timedelta(days=int(named.group(1)))).isoformat())
+    back = away_until(msgs)
+    if back is not None:
+        out.add(add_business_days(back, AWAY_GRACE_BUSINESS_DAYS).isoformat())
+    return out
+
+
+def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> list[str]:
+    """Write onto every contact waiting on a reply what follows by the person's rule
+    (`follow_up_plan`): the day a follow-up falls due, or, once their limit is reached,
+    that no more go and the day to close it. Returns a line for each row changed. The
+    brief and `open_actions.py --due` read the date from the row, so a follow-up is
+    remembered by the date itself. Only a row the app wrote is touched: one with no next
+    action, or the app's own words (`_APP_ACTION`, whole) with no date or a date the app
+    would have written (`_app_dates`). A date the person set, a hold or a note of their own
+    is theirs. A thread whose date would be more than OLD_OWED_DAYS past has ended, and is
+    left undated. `only_undated` touches only rows with no date at all. Running it twice
+    changes nothing the second time. The lists are changed in place; the caller saves."""
+    _need_date(today, "today")
+    index = by_contact(threads)
+    said = []
+    for contact in contacts:
+        cid = str(contact.get("contact_id") or "").strip()
+        action = str(contact.get("next_action") or "").strip()
+        due = str(contact.get("next_action_due") or "").strip()
+        if (action and not _APP_ACTION.fullmatch(action)) or (only_undated and due):
+            continue
+        msgs = [r for r in _rows_of(index, cid) if _direction(r)]
+        status = effective_status(contact, msgs)
+        if (not msgs or status in NO_NUDGE or status in schema.OWED_BY_US
+                or request_pending(msgs) is not None or accepted_never_messaged(msgs) is not None
+                or call_held(msgs[-1])):
+            continue
+        if due and due not in _app_dates(msgs, action):
+            continue
+        new = follow_up_plan(contact, msgs)
+        if new is None or (action, due) == new:
+            continue
+        if owed_too_long(new[1], today):
+            continue                  # a thread that ended long ago is not dated (OLD_OWED_DAYS)
+        contact["next_action"], contact["next_action_due"] = new
+        said.append(f"{contact.get('name') or cid} ({cid}): "
+                    + (f"follow up on {new[1]}" if not new[0].startswith(("Nudged", "No more"))
+                       else f"no more follow-ups; close it on {new[1]} if still silent"))
+    return said
 
 
 # ---------------------------------------------------------------- withdrawing a request
@@ -1634,8 +1842,12 @@ def _cli_withdraw(argv) -> int:
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     ids = list(a.contact_ids)
     if a.all_due:
+        # The requests the due list shows to withdraw: a hold the person put on one (an
+        # introduction they are waiting on) keeps it out, as it keeps it off that list.
+        notes = {str(c.get("contact_id") or "").strip(): c.get("next_action") for c in contacts}
         ids += [i["contact_id"] for i in owed(contacts, threads, a.today)
-                if i["kind"] == "request_pending" and i["contact_id"] not in ids]
+                if i["kind"] == "request_pending" and i["contact_id"] not in ids
+                and not action_hold(notes.get(i["contact_id"]), a.today)]
     if not ids:
         print("withdraw: name the contact ids, or --all-due for every request to withdraw")
         return 2
@@ -1757,11 +1969,14 @@ def sent(contacts, threads, contact_id, today, date=None, channel="connection", 
     contact["channel"] = channel
     contact["status"] = "awaiting_reply"
     if channel == "connection":
-        contact["next_action"] = ("Once they accept: one nudge if no reply. Withdraw the "
-                                  f"request if nobody accepts in {REQUEST_WITHDRAW_DAYS} days")
+        contact["next_action"] = (f"Once they accept: {waiting_action(1)[:1].lower()}"
+                                  f"{waiting_action(1)[1:]}. Withdraw the request if nobody "
+                                  f"accepts in {REQUEST_WITHDRAW_DAYS} days")
+        contact["next_action_due"] = follow_up_on(day).isoformat()
     else:
-        contact["next_action"] = "One nudge if no reply"
-    contact["next_action_due"] = add_business_days(day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+        plan = follow_up_plan(contact, [r for r in threads_for(threads, cid) if _direction(r)])
+        contact["next_action"], contact["next_action_due"] = plan or (
+            waiting_action(1, cid), follow_up_on(day).isoformat())
     _drop_draft(cid)
     return row
 
@@ -1867,10 +2082,12 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         contact["status"] = derive_status(threads_for(threads, cid))
     if not str(contact.get("first_contacted") or "").strip():
         contact["first_contacted"] = day.isoformat()
-    due = add_business_days(day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+    # What follows, by the person's rule: the next follow-up and its day, or that no more
+    # go and the day to close it (follow_up_plan), the same answer write_follow_ups gives.
+    plan = follow_up_plan(contact, [r for r in threads_for(threads, cid) if _direction(r)])
+    then, due = plan or (waiting_action(1, cid), follow_up_on(day).isoformat())
     if scenario == "nudge":
-        contact["next_action"] = ("Nudged: nothing more unless they reply. If still silent by "
-                                  f"the date, close it: state.py set {cid} --status gone_cold")
+        contact["next_action"] = then
     waiting = DERIVABLE | {"connected_no_reply"}
     done = (scenario != "nudge" and resume
             and (str(contact.get("status") or "") in waiting or _row_records_resume(contact)
@@ -1878,11 +2095,11 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     if done:
         # The resume was the thing owed: the row stops asking for it, and its date with it.
         contact["next_action"] = (f"{noun()[:1].upper() + noun()[1:]} sent {day.isoformat()} "
-                                  f"({attached}): one nudge if no reply")
+                                  f"({attached}): {then[:1].lower()}{then[1:]}")
     elif scenario != "nudge" and str(contact.get("status") or "") in waiting:
         # Connected and now written to: "once they accept" is over, so the request's
         # withdraw-in-21-days line no longer stands beside the nudge (2026-10-21).
-        contact["next_action"] = "One nudge if no reply"
+        contact["next_action"] = then
     contact["next_action_due"] = due if (done or str(contact.get("status") or "") in waiting) \
         else contact.get("next_action_due", "")
     _drop_draft(cid)
@@ -1973,8 +2190,7 @@ def resent(contacts, threads, contact_id, today, text="", date=None, subject="")
             contact["first_contacted"] = min(as_date(r.get("date")) or day
                                              for r in firsts).isoformat()
         if str(contact.get("status") or "") == "awaiting_reply":
-            contact["next_action_due"] = add_business_days(
-                day, schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+            contact["next_action_due"] = follow_up_on(day).isoformat()
     return {"row": row, "before": before}
 
 
@@ -2005,9 +2221,8 @@ def unsend(contacts, threads, contact_id, today) -> dict:
                                   "Reply: the note in their draft answers their message")
         contact["next_action_due"] = ""
     else:
-        contact["next_action_due"] = add_business_days(
-            as_date(left[-1].get("date")) or _need_date(today, "today"),
-            schema.FOLLOWUP_BUSINESS_DAYS).isoformat()
+        contact["next_action_due"] = follow_up_on(
+            as_date(left[-1].get("date")) or _need_date(today, "today")).isoformat()
     restored = ""
     if row.get("full_text"):
         words = row["full_text"]
@@ -2740,7 +2955,8 @@ def attached(row) -> list[str]:
     """The files a message row says went with it, from its marker. [] when none is named."""
     out = []
     for m in _ATTACHED.finditer(str((row or {}).get("summary") or "")):
-        out += [f.strip() for f in str(m.group(2) or "").split(",") if f.strip()]
+        out += [f.strip() for f in str(m.group(2) or "").split(",") if f.strip()
+                and not re.match(r"sent at \d{1,2}:\d{2}$", f.strip())]   # a repeat's time
     return out
 
 
@@ -2970,9 +3186,24 @@ def _resume_stem(path) -> str:
 
 def made_for_rows(tracker, contacts, contact_id) -> list[dict]:
     """The tracker rows with a resume made for this contact, newest first."""
-    rows = [r for r in tracker or () if str(r.get("cv_file") or "").strip()
-            and (made_for(r, contacts) or {}).get("contact_id") == contact_id]
-    return sorted(rows, key=lambda r: as_date(r.get("date")) or datetime.date.min, reverse=True)
+    return list(made_for_index(tracker, contacts).get(contact_id, ()))
+
+
+def made_for_index(tracker, contacts) -> dict[str, list[dict]]:
+    """`made_for_rows` for every contact at once: contact_id -> the tracker rows with a
+    resume made for them, newest first. Each row is matched to its contact once, where a
+    loop over the book calling `made_for_rows` matched every row once a contact (66,000
+    matches on 1,300 contacts, 2026-10-23)."""
+    out: dict[str, list] = {}
+    for r in tracker or ():
+        if not str(r.get("cv_file") or "").strip():
+            continue
+        cid = (made_for(r, contacts) or {}).get("contact_id")
+        if cid is not None:
+            out.setdefault(cid, []).append(r)
+    for rows in out.values():
+        rows.sort(key=lambda r: as_date(r.get("date")) or datetime.date.min, reverse=True)
+    return out
 
 
 def _pdf(path) -> str:
@@ -2991,12 +3222,13 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
     note), `recorded` whether the book already says it is owed (their row, or the
     tracker's row for the one made for them)."""
     out = []
+    index, made_index = by_contact(threads), made_for_index(tracker, contacts)
     for contact in contacts:
         cid = str(contact.get("contact_id") or "").strip()
         if str(contact.get("status") or "").strip() in ("closed", "gone_cold", "dropped"):
             continue
-        rows = threads_for(threads, cid)
-        made_rows = made_for_rows(tracker, contacts, cid)
+        rows = _rows_of(index, cid)
+        made_rows = list(made_index.get(cid, ()))
         sent_on = [as_date(r.get("date")) or datetime.date.min
                    for r in rows if says_resume_went(r)]
         base = {"contact_id": cid, "name": contact.get("name", ""),
@@ -3017,7 +3249,8 @@ def resumes_owed(contacts, threads, tracker=None) -> list[dict]:
             out.append(dict(base, asked=asked.isoformat() if asked else "",
                             words=words if len(words) <= 120 else words[:117].rstrip() + "...",
                             file=_pdf(made[0]["cv_file"]) if made else _owed_note_file(contact),
-                            recorded=_row_records_resume(contact)))
+                            recorded=_row_records_resume(contact),
+                            made_on=max((str(r.get("date") or "") for r in made), default="")))
             continue
         for r in made_rows:
             day = as_date(r.get("date"))
@@ -3678,6 +3911,27 @@ def budget_line(b: dict) -> str:
 # ---------------------------------------------------------------- CLI
 
 
+def _cli_follow_ups(argv) -> int:
+    """`state.py follow-ups [--write]`: the day each thread waiting on a reply is due a
+    follow-up, by the person's rule; --write puts it on their rows."""
+    ap = argparse.ArgumentParser(prog="state.py follow-ups",
+                                 description="Write each follow-up's due date onto its contact.")
+    ap.add_argument("--write", action="store_true", help="write the dates (default: show them)")
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(), load_threads()
+    said = write_follow_ups(contacts, threads, a.today)
+    print(f"follow-ups ({schema.follow_up_rule()}): {len(said)} row(s) "
+          + ("written" if a.write else "to write; --write writes them"))
+    for line in said[:40]:
+        print("  " + line)
+    if len(said) > 40:
+        print(f"  ... and {len(said) - 40} more")
+    if a.write and said:
+        save_contacts(contacts)
+    return 0
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
     if argv[:1] == ["withdraw"]:
@@ -3702,6 +3956,8 @@ def main(argv=None) -> int:
         return _cli_inmail_credits(argv[1:])
     if argv[:1] == ["set"]:
         return _cli_set(argv[1:])
+    if argv[:1] == ["follow-ups"]:
+        return _cli_follow_ups(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()
@@ -3731,6 +3987,8 @@ def main(argv=None) -> int:
                                     f"then record it: state.py withdraw {i['contact_id']}",
                  "first_message": "; accepted, nothing said yet: a first message, not a nudge",
                  }.get(i["kind"], "")
+              + (f"; owed over {OLD_OWED_DAYS} days, so the due list counts it rather than "
+                 "listing it (a date on the row brings it back)" if i.get("old") else "")
               + (f"; {resume_owed_line(owed_cv)}" if owed_cv else ""))
     for r in resumes.values():
         print(f"  [{noun()}] {resume_owed_line(r)}")

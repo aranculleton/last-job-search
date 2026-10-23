@@ -3,8 +3,8 @@
 stage_picks read "Bachelor’s or master’s degree" (a curly apostrophe, in a real posting for
 a senior data scientist) as "a master's degree, required, no equivalence route" (2026-10-23).
 The fit score already knew the rule; the profile of the posting and the screen did not, so
-the three disagreed. One rule now, text_screen.BACHELOR_OR, and curly apostrophes read like
-straight ones. The postings here are invented.
+the three disagreed. One rule now, text_screen.beside_a_bachelor, and curly apostrophes read
+like straight ones. The bachelor's may come first or last, dotted ("B.Sc.") or not. The postings here are invented.
 """
 from __future__ import annotations
 
@@ -30,7 +30,15 @@ def test_a_bachelors_or_a_masters_reads_as_a_bachelors_with_either_apostrophe():
     for s in ("Bachelor’s or master’s degree in statistics, economics or a "
               "related field.",
               "Bachelor's or Master's degree in Statistics or a related field is required.",
-              "A BSc/MSc in a quantitative field."):
+              "A BSc/MSc in a quantitative field.",
+              # From a review of the reader (2026-10-23): the other order, dotted forms, a
+              # long list of subjects between the two.
+              "B.Sc. or M.Sc. in computer science or a related field required.",
+              "B.S. or M.S. in statistics required.",
+              "Master of Science or Bachelor's degree in a quantitative field.",
+              "Master's degree in statistics, or Bachelor's degree plus 3 years of experience.",
+              "Bachelor's degree in economics, finance, mathematics, statistics or a closely "
+              "related quantitative discipline or Master's degree required."):
         got = posting_profile.degree(BODY + s)
         assert got["level"] == "a bachelor's degree", (s, got)
         assert not [f for f in _flags(s) if "graduate degree" in f], s
@@ -40,6 +48,9 @@ def test_a_bachelors_or_a_masters_reads_as_a_bachelors_with_either_apostrophe():
 def test_a_graduate_degree_asked_alone_is_still_a_graduate_bar():
     for s, level in (("Master’s degree in Statistics required.", "a master's degree"),
                      ("A Master's or PhD in a quantitative field is required.", "a master's degree"),
+                     ("PhD or Master's degree in statistics required.", "a master's degree"),
+                     ("Master's degree in computing, statistics or mathematics, or a PhD, is "
+                      "required.", "a master's degree"),
                      ("PhD in Physics required.", "a PhD")):
         got = posting_profile.degree(BODY + s)
         assert got["level"] == level and got["required"], (s, got)

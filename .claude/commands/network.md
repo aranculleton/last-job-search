@@ -37,19 +37,26 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
 ## Run it
 
 1. **Load state.** `state.load_contacts()`, `state.load_threads()`, the tracker,
-   and `company_research/`. Anyone already contacted is out:
-   `state.already_contacted(contacts, name, company, linkedin_url=...)` checks the
-   profile URL first, which finds the same person under a nickname or a new employer.
-   Without a URL, `state.possible_match(contacts, name, company)` names a row that may be
-   the same person (Bob for Robert, "R. Smith", a middle name, "Smith, Robert", a letter's
-   typo); `sources.harvest()` and `from_connections()` carry it as `maybe_in_book`. Show the
-   person that line and ask before adding a second row: never add or merge on a guess.
-   A company whose `company_research/<key>.json` `network_presence` record still
-   holds (`discovery.presence_ruled_out(company, today)`) is out until its review date.
-   An employer is out on the bar only when `tools/bar.py` says `excluded`. A `none` whose
-   reason says "not on your employer lists yet" is unjudged, not failing: judge its pay,
-   prestige and signal once (`bar.py judge "<employer>" <verdict> "<why>"`), then apply the
-   person's own rule about the bar.
+   and `company_research/`. **Nobody is shown as someone to write to without the one
+   check, `surface.check()`** (`python3 tools/network/surface.py "<name>" --company
+   "<employer>" --url <address>`, or `--file <people.json>` for a list this chat put
+   together, or `--queue`): every list the app makes already goes through it, and a list
+   made any other way goes through the command before it is shown. Never join files by
+   hand or by address alone: the connections file and the contact book write one address
+   in different forms, and about 120 people looked absent from the book when they were
+   in it (2026-10-23). It finds them in the book by contact id, profile address, or name
+   at the employer the book has or the connections file had; reads their whole thread on
+   every channel; and runs the bar (`tools/bar.py`: excluded, judged to clear none of pay,
+   prestige or signal, or not judged yet), `do_not_target.json`, a `network_presence`
+   finding still in force and a hold. Its "do not show" carries the reason. An employer
+   nobody has judged is judged once (`bar.py judge "<employer>" <verdict> "<why>"`), then
+   checked again. A name that may be someone already in the book (Bob for Robert, "R.
+   Smith", the same name at another employer) is shown with "ask first", carried as
+   `maybe_in_book`: show the person that line and ask before adding a second row; never
+   add or merge on a guess. Someone known only from a connection made over
+   `surface.EXPORT_STALE_DAYS` ago is shown with `needs_read`: the file's employer and
+   title may be years old and it has no location, so read their profile before a note,
+   and a card-only note to them is refused.
    **Who already has a request pending, for everyone at once**, where this chat reads in a
    browser (step 5's route is `browser` or `enable`): once a session, before any profile, read
    LinkedIn's sent-invitations list (`python3 tools/claude_surfaces.py show
@@ -102,6 +109,9 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
    of it, and no later chat saw the rest of the conversations (2026-10-21). `export.py
    files` says when the history was never saved; `take --find` looks for the download on
    their computer first. `export.py history` lists who in it is not in the contact book.
+   `take` says first what changed since the last download (new connections, requests
+   accepted, replies, requests still waiting) and writes each contact's follow-up date; the
+   brief asks for a new download once the last is a fortnight old (`export.py due`).
    Nothing is sent.
    **Their own profile, now and then:** `python3 tools/network/own_profile.py due` prints one line
    only when a look is worth it, and nothing otherwise. Act on that line alone: ask its question
@@ -151,7 +161,8 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
      elsewhere or in other functions. **One title search can feed every employer at once**:
      a search with no employer in it ("<title> <city>"), harvested with no `--company`
      (`sources.harvest_across`), groups the people by the employer each result names, leaves
-     out employers the search has ruled out (`sources.ruled_out`), and never files a result
+     out employers the one check rules out (`surface.employer_out`: the bar, do_not_target,
+     a finding of no relevant team), and never files a result
      that names no employer under one. A post's date comes from its own link, never from the
      search tool's page age, and a post over six months old makes nobody a candidate.
      `discovery.resolve_result(url, company)` turns a post permalink
@@ -230,7 +241,7 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
    A people search by title across employers, in the browser, is the same read with no
    `--company`: `reading.py search-url --keywords "<title>" --place "<city>"` builds it and
    `reading.py people <file>` groups the cards by the employer each names, checking each the
-   way `sources.ruled_out` does.
+   way `surface.employer_out` does.
 
    Measured over two employers in one city on 2026-10-18: the plain query shape
    `queries_for()` now writes ("<employer> <one title> <city>") found 14 people named at the
@@ -675,7 +686,8 @@ day are never logged twice. `state.py sent` does the three steps below at once:
    `next_action` (one nudge if no reply; for a connection request, a nudge once they accept,
    and withdraw it if nobody has accepted in `state.REQUEST_WITHDRAW_DAYS` days, recorded
    with `python3 tools/network/state.py withdraw <contact_id>` once they have), and
-   `next_action_due` `state.add_business_days(<the day it went>, schema.FOLLOWUP_BUSINESS_DAYS)`.
+   `next_action_due` `state.follow_up_on(<the day it went>)` (the person's FOLLOW_UP_DAYS, else six
+   business days).
    The morning brief reads that date, so the nudge needs no reminder of its own.
 3. **The draft file**, `documents/network/<contact_id>/draft.md`, is deleted: it was the
    unsent copy. Commit the two CSVs.

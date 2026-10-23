@@ -236,6 +236,31 @@ def test_the_comment_written_over_a_removed_limit_goes_with_it(profile):
     assert reading.free_break().startswith("nothing to change")
 
 
+def test_a_contact_waiting_with_no_follow_up_date_gets_one(profile):
+    # The example's one thread waiting on a reply carries its date already.
+    assert U.by_id("follow-up-dates").pending() == ""
+    # Its message moved to a week ago and its date taken off: dated by the calendar, the
+    # example's own September thread would one day have ended (state.OLD_OWED_DAYS).
+    st = os.environ[person.STATE_ENV]
+    book, log = (os.path.join(st, n) for n in ("network_contacts.csv", "network_threads.csv"))
+    week_ago = (dt.date.today() - dt.timedelta(days=7)).isoformat()
+    with open(book, encoding="utf-8") as fh:
+        text = fh.read()
+    with open(book, "w", encoding="utf-8") as fh:
+        fh.write(re.sub(r"One nudge if no reply,\d{4}-\d{2}-\d{2}", ",", text))
+    with open(log, encoding="utf-8") as fh:
+        text = fh.read()
+    with open(log, "w", encoding="utf-8") as fh:
+        fh.write(text.replace("fernhill_freight_halloway,2026-09-21,",
+                              "fernhill_freight_halloway,%s," % week_ago))
+    assert "1 contact(s) waiting on a reply have no follow-up date" in \
+        U.by_id("follow-up-dates").pending()
+    import subprocess
+    subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "state.py"),
+                    "follow-ups", "--write"], check=True, capture_output=True, env=os.environ)
+    assert U.by_id("follow-up-dates").pending() == ""
+
+
 def test_the_market_language_is_asked_only_outside_english_markets(profile):
     assert U.by_id("market-language").pending() == ""        # GB, English postings
     _set_country(profile, "DE")

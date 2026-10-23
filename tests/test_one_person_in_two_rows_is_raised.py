@@ -76,7 +76,8 @@ def test_three_rows_that_may_be_one_person_are_one_finding_to_check_by_hand():
     assert set(found[0]["contact_ids"]) == {"larkspur_retail_halloway", "a2", "a3"}
 
 
-def test_discovery_asks_before_adding_a_second_row():
+def test_discovery_asks_before_adding_a_second_row(judged):
+    judged("Larkspur Retail")   # nobody is shown at an employer nobody has judged
     conns = [{"name": "Bob Halloway", "company": "Larkspur Retail", "title": "Planning Lead",
               "linkedin_url": "", "connected_on": ""}]
     got = sources.from_connections("Larkspur Retail", connections=conns, contacts=BOOK)

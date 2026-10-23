@@ -66,5 +66,8 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
    with `tools/fit_to_page.py`, run `tools/verify_batch.sh` (it runs `check_claims` too) until
    clean, write outreach notes and kept drafts with `tools/outreach.py`, record the tracker
    rows with `tools/record_drafts.py`, and land everything per `_common.md` and CLAUDE.md's
-   persistence rule. Deliver a short "drafted N, all verified, here is what to check" message
-   the same way.
+   persistence rule. Deliver the applications the one way CLAUDE.md sets ("Every output is
+   shown", applications): per role, one file-sending call with its resume and letter,
+   captioned role, employer, pay, location and apply link; then one index table in the
+   reply, role | apply link; paths as plain text, never as markdown links. Lead with a short
+   "drafted N, all verified, here is what to check" line.

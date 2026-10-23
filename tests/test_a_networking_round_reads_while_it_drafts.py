@@ -326,7 +326,8 @@ def test_a_title_search_across_employers_is_grouped_by_employer_and_never_prints
     assert "where the card names no employer: 1" in out
 
 
-def test_one_title_search_in_results_feeds_every_employer_it_found(book, monkeypatch):
+def test_one_title_search_in_results_feeds_every_employer_it_found(book, monkeypatch, judged):
+    judged("Kestrel Mutual", "Fernhill Freight")   # nobody is shown at an employer nobody has judged
     import throttle
     from company_key import key
     monkeypatch.setattr(throttle, "load_do_not_target",
@@ -509,7 +510,8 @@ def test_a_first_note_with_nothing_read_is_refused_unless_it_is_card_only(book, 
     assert "CARD ONLY" in capsys.readouterr().out and reading.card_only_draft("kestrel_achterberg")
 
 
-def test_a_placeholder_note_waits_on_a_read_and_is_never_ready_to_send(book, capsys):
+def test_a_placeholder_note_waits_on_a_read_and_is_never_ready_to_send(book, capsys, judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     # The networking upgrade writes notes before anyone is read: saved only as placeholders,
     # under WAITS ON A READ, which validate() still refuses to send.
     book.put(_row("kestrel_achterberg", "Rosalind Achterberg", "Kestrel Mutual"))
@@ -544,13 +546,16 @@ def test_a_batch_of_drafts_too_alike_saves_none_of_them(book, capsys):
 
 
 def test_a_draft_is_held_to_the_same_company_limit_as_the_read_list(book, capsys):
+    # `draft` reads the calendar, so the two notes went a week before today: dated in
+    # October 2026 they stopped holding the employer (WAITING_DAYS) six weeks on.
+    today = datetime.date.today()
     waiting = [_row(f"kestrel_w{i}", n, "Kestrel Mutual", status="awaiting_reply",
-                    first_contacted="2026-10-15")
+                    first_contacted=(today - datetime.timedelta(days=8)).isoformat())
                for i, n in enumerate(["Ana Rook", "Bo Venn"])]
     book.put(*waiting, _row("kestrel_achterberg", "Rosalind Achterberg", "Kestrel Mutual"))
-    full = reading.employer_full_line("Kestrel Mutual", book.contacts(), today=TODAY)
+    full = reading.employer_full_line("Kestrel Mutual", book.contacts(), today=today)
     assert full.startswith("Kestrel Mutual has 2 waiting on a reply")
-    assert reading.shortlist(["kestrel_achterberg"], today=TODAY, contacts=book.contacts(),
+    assert reading.shortlist(["kestrel_achterberg"], today=today, contacts=book.contacts(),
                              sends_left=10)["employer_full"]["kestrel_achterberg"] == full
     f = book.path / "note.txt"
     f.write_text("Hi Rosalind, we both worked at Oakmere Foods. How is the team set up?",

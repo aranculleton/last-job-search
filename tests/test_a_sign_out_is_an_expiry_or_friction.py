@@ -13,6 +13,8 @@ import io
 import os
 import sys
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools", "network"))
 import pace  # noqa: E402
 import reading  # noqa: E402
@@ -26,6 +28,14 @@ Sign in
 New to LinkedIn? Join now
 """
 MORNING = datetime.datetime(2026, 10, 20, 8, 40)
+
+
+@pytest.fixture(autouse=True)
+def _ledger_keeps_these_dates(monkeypatch):
+    # The pace ledger drops what is older than KEEP_DAYS by the calendar, and the loads here
+    # are dated in October 2026: kept from then, so these tests pass whatever today is.
+    keep = (datetime.date.today() - datetime.date(2026, 10, 1)).days + pace.KEEP_DAYS
+    monkeypatch.setattr(pace, "KEEP_DAYS", max(pace.KEEP_DAYS, keep))
 
 
 def _state(tmp_path, monkeypatch):

@@ -642,7 +642,10 @@ no character limit and no InMail credit. That is a materially better position
 than the day before, and it deserves a materially better message than the nudge
 an ignored invitation would get.
 
-- **Wait the same 5 to 7 business days** from the acceptance, not from the send.
+- **Wait the same 5 to 7 business days** from the acceptance, not from the send, or the
+  person's own days where `profile/networking.py` sets `FOLLOW_UP_DAYS` (with
+  `MAX_UNANSWERED`, how many may go unanswered in a row). `state.follow_up_on` is the one
+  clock, and the date is written onto the contact (`state.py follow-ups --write`).
 - **Ask one specific question about their work, answerable in a line.** This is
   the whole content of a good nudge to someone who never engaged. News about the
   sender is not a reason to reply: an update about the sender's own situation is
@@ -698,7 +701,12 @@ message log cannot carry are stored on the contact row: `call_booked`,
 any other stored status, because a reply is owed whatever the row says
 (`state.effective_status()`).
 
-**Never surface someone already contacted.** If the user asks for a second contact
+**Never surface someone already contacted, and never by a check of your own.** Every
+person shown as someone to write to has passed `surface.check()` (`python3
+tools/network/surface.py`): the contact book by id, address or name at either employer,
+their whole thread on every channel, the bar, and a hold, with the reason when not. A
+chat that checked by hand skipped steps and surfaced people already written to on
+another channel and at employers the bar rules out (2026-10-23). If the user asks for a second contact
 at a company, pick a different person and change the angle so it does not read as
 a sweep. **Check how recently the first one went out.** A second approach at one
 employer the day after the first is a sweep whatever the angle; space it a week,

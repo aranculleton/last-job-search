@@ -664,9 +664,13 @@ def main(argv: list | None = None) -> int:
                   + (f" {p['linkedin_url']}" if p.get("linkedin_url") else ""))
         return 0
     if argv and argv[0] == "connections" and len(argv) > 1:
-        for p in from_connections(argv[1]):
+        held: list = []
+        for p in from_connections(argv[1], held=held):
             print(f"  {p['name']}: {p.get('title')} ({p.get('evidence')}) {p.get('linkedin_url')}"
-                  + (f"\n    ask first: {p['maybe_in_book']}" if p.get("maybe_in_book") else ""))
+                  + (f"\n    ask first: {p['maybe_in_book']}" if p.get("maybe_in_book") else "")
+                  + "".join(f"\n    {w}" for w in p.get("warn", ())))
+        for p, why in held:
+            print(f"  not shown, {p.get('name')}: {why}")
         return 0
     import state
     try:
@@ -775,37 +779,52 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
             "hand_top": 0 if reads else reading.HAND_TOP, "say": say}
 
 
-def from_connections(company: str, connections=None, contacts=None) -> list:
-    """Rung 1: the person's own connections at one employer, best first, none already
-    in the contact book. Nothing searched, nothing fetched, nobody contacted.
+def from_connections(company: str, connections=None, contacts=None, threads=None,
+                     held=None) -> list:
+    """Rung 1: the person's own connections at one employer, best first, each one
+    `surface.check` lets through: nobody in the contact book, nobody written to on any
+    channel, nobody at an employer the bar rules out. Nothing searched, nothing fetched,
+    nobody contacted. `held`, a list, collects (person, reason) for everyone left out.
 
     In their function first (discovery.FUNCTION_TITLE), then the hands-on titles that
-    reply most (discovery.reply_rank), then the most recently connected.
+    reply most (discovery.reply_rank), then the most recently connected. The file has no
+    location, so nobody here is placed; a connection made long ago carries the warning
+    that their employer and title may have changed since (`needs_read`).
     """
     import discovery
     import state
+    import surface
     conns = state.first_degree() if connections is None else connections
-    if contacts is None:
-        contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
+    ctx = surface.context(contacts=contacts, threads=threads, connections=conns)
     out = []
     for c in state.connections_at(conns, company):
-        if state.already_contacted(contacts, name=c.get("name"), company=c.get("company"),
-                                   linkedin_url=c.get("linkedin_url")):
+        # Checked at the employer asked about: the file may name it by a business line
+        # ("<Name> Ratings"), and its own name is kept as the other one they go by.
+        got = surface.check(dict(c, company=company, also_company=c.get("company")), ctx)
+        if not got["show"]:
+            if held is not None:
+                held.append((c, got["reason"]))
             continue
-        maybe = state.possible_match(contacts, c.get("name"), c.get("company"),
-                                     c.get("linkedin_url"))
-        if maybe:
-            c = {**c, "maybe_in_book": state.duplicate_line(maybe)}
+        asks = [w[len("ask first: "):] for w in got["warn"] if w.startswith("ask first: ")]
+        if asks:
+            c = {**c, "maybe_in_book": asks[0]}
+        old = got["needs_read"]
         out.append({**c, "found_via": "connections", "route": "connection",
                     "route_detail": "in your connections", "first_degree": True,
                     "channel": "message", "profile_status": "verified",
+                    "location_unverified": True,
+                    **({"reverify": True, "needs_read": True} if old else {}),
+                    "warn": [w for w in got["warn"] if not w.startswith("ask first: ")],
                     "evidence": "your connections export"
                                 + (f", connected {c['connected_on']}" if c.get("connected_on") else "")})
+
+    import export
 
     def key(p):
         in_function = bool(discovery.FUNCTION_TITLE.search(p.get("title") or ""))
         rank, _ = discovery.reply_rank({**p, "route": ""})
-        return (not in_function, rank, str(p.get("connected_on") or ""))
+        when = export.day(p.get("connected_on") or "")
+        return (not in_function, rank, -(when.toordinal() if when else 0))
     return sorted(out, key=key)
 
 
@@ -828,13 +847,19 @@ def import_connections(src: str, dest: str | None = None) -> str:
     import zipfile
     import export
     if zipfile.is_zipfile(src) or os.path.isdir(src):
-        if not export.read("connections", src)["where"]:
+        got = export.read("connections", src)
+        if not got["where"]:
             raise ValueError("there is no Connections.csv in that download: it is probably "
                              "the shorter download, which leaves connections out")
-        lines = export.take([src])
-        count = sum(1 for r in export.read("connections", export.home())["rows"]
-                    if str(r.get("First Name") or "").strip()
+        # Counted, and refused, from the download itself: an empty or header-less file was
+        # saved over the good one kept, or "saved" while the old one was counted.
+        count = sum(1 for r in got["rows"] if str(r.get("First Name") or "").strip()
                     or str(r.get("Last Name") or "").strip())
+        if not count:
+            raise ValueError("the Connections.csv in that download has no connections in it: "
+                             "no row under a \"First Name\" header, which is how LinkedIn "
+                             "writes it. Nothing was saved, and the copy kept here is as it was")
+        lines = export.take([src])
         return " ".join([f"Saved your {count} connections."] + lines)
     dest = dest or os.path.join(export.home(), "Connections.csv")
     if os.path.getsize(src) > CONNECTIONS_MAX_BYTES:
@@ -988,10 +1013,11 @@ def from_people_paste(text: str, company: str, degree: str = "", contacts=None) 
     ranked = [dict(p, evidence="your paste of LinkedIn's people search, 1st-degree")
               for p in from_connections(company, connections=first, contacts=contacts)]
     import discovery
+    import surface
+    ctx = surface.context(contacts=contacts)
     second = []
     for p in got:
-        if p["degree"] != "2nd" or state.already_contacted(
-                contacts, name=p["name"], company=company, linkedin_url=p["linkedin_url"]):
+        if p["degree"] != "2nd" or not surface.check(dict(p, company=company), ctx)["show"]:
             continue
         rank, _ = discovery.reply_rank({**p, "route": ""})
         second.append((not discovery.FUNCTION_TITLE.search(p["title"] or ""), rank, p))
@@ -1040,17 +1066,21 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
     if contacts is None:
         contacts = state.load_contacts() if os.path.exists(state.CONTACTS_CSV) else []
     conns = state.first_degree() if connections is None else connections
+    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
+    import surface
+    ctx = surface.context(contacts=contacts, threads=threads, connections=conns, today=today)
     keep, dropped = [], list(t["dropped"])
     for p in discovery.mark_first_degree(t["keep"], conns):
-        if state.already_contacted(contacts, name=p.get("name"), company=company,
-                                   linkedin_url=p.get("linkedin_url")):
-            dropped.append((p, "already in your contact book"))
+        # The one check (surface.py): the book, their whole thread, the bar, a hold.
+        got = surface.check(dict(p, company=company), ctx)
+        if not got["show"]:
+            dropped.append((p, got["reason"]))
             continue
         # A nickname, an initial or a typo of somebody already in the book: kept, never
         # dropped on a guess, and never added as a stranger either. The person is asked.
-        maybe = state.possible_match(contacts, p.get("name"), company, p.get("linkedin_url"))
-        if maybe:
-            p["maybe_in_book"] = state.duplicate_line(maybe)
+        asks = [w[len("ask first: "):] for w in got["warn"] if w.startswith("ask first: ")]
+        if asks:
+            p["maybe_in_book"] = asks[0]
         p.setdefault("route", "connection" if p.get("first_degree") else "cold")
         p.setdefault("company", company)
         if query and kind == "title_search" and not p.get("title"):
@@ -1069,7 +1099,6 @@ def harvest(results, company: str, kind: str = "title_search", query: str = "",
     if kind == "title_search" and query and not name and remember:
         record_yield(company, query, len(keep),
                      sum(1 for p in keep if not p.get("location_unverified")), today)
-    threads = state.load_threads() if os.path.exists(state.THREADS_CSV) else []
     book = state.book_at(contacts, threads, company) if company else {"in_book": 0, "never_messaged": 0}
     return {"keep": keep, "dropped": dropped,
             "counts": {"results": len(results or ()), "people": len(people), "kept": len(keep),
@@ -1081,9 +1110,9 @@ def harvest_across(results, kind: str = "title_search", query: str = "",
                    today: datetime.date | None = None, connections=None, contacts=None) -> dict:
     """One search by title across employers ("<title> <city>", no employer in it) feeding
     every employer it found: the results grouped by the employer each result's own title
-    names, each employer checked against what the job search has ruled out (`ruled_out`: an
-    excluded sector or employer, do_not_target.json), and each group harvested as a search
-    at that employer would be. A result that names no employer is never filed under one.
+    names, each employer checked the way every list of people is (`surface.employer_out`: the
+    bar, do_not_target.json, a finding of no relevant team there), and each group harvested
+    as a search at that employer would be. A result that names no employer is never filed under one.
 
     {"employers": [(employer, why ruled out or "", harvest run or None)], "unplaced":
     [people], "counts": {...}}, the employer with most people kept first. A title search
@@ -1105,9 +1134,10 @@ def harvest_across(results, kind: str = "title_search", query: str = "",
         name, rows = groups.get(company_key(emp), (emp, []))
         rows.append(r)
         groups[company_key(emp)] = (name, rows)
+    import surface
     out = []
     for _k, (emp, rows) in groups.items():
-        why = ruled_out(emp)
+        why = surface.employer_out(emp, today)
         if why:
             out.append((emp, why, None))
             continue

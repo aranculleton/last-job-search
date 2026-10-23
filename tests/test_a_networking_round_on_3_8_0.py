@@ -390,7 +390,8 @@ RESEARCH_PAGE = ("Juno Castellan • 2nd\nResearch Scientist at Larkspur\n"
                  "Cy Marlow • 2nd\nData Scientist at Larkspur\nConnect\n")
 
 
-def test_a_first_page_with_nobody_in_the_function_here_is_said_once(book, capsys):
+def test_a_first_page_with_nobody_in_the_function_here_is_said_once(book, capsys, judged):
+    judged("Larkspur")   # nobody is shown at an employer nobody has judged
     page = book.path / "people.txt"
     page.write_text(RESEARCH_PAGE, encoding="utf-8")
     assert reading.main(["people", str(page), "--company", "Larkspur"]) == 0
@@ -467,7 +468,8 @@ def test_their_time_is_said_and_the_persons_own_is_the_default():
     assert "their time is not known" in odd
 
 
-def test_every_hand_over_of_a_draft_says_the_time_there(book, capsys):
+def test_every_hand_over_of_a_draft_says_the_time_there(book, capsys, judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     book.put(_row("kestrel_achterberg", "Rosalind Achterberg", "Kestrel Mutual",
                   location="Toronto, Ontario, Canada", channel="connection"))
     note = book.path / "note.txt"

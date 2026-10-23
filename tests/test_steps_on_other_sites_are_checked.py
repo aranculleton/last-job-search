@@ -124,6 +124,19 @@ def test_the_whole_archive_is_taken_and_nothing_else_in_it_opened(home, monkeypa
         ["Shirin Example", "Corwin Haldane"]
 
 
+def test_an_empty_connections_file_in_a_download_never_replaces_a_good_one(home):
+    kept = home / "documents" / "linkedin"
+    kept.mkdir(parents=True, exist_ok=True)
+    (kept / "Connections.csv").write_text(CSV, encoding="utf-8")
+    empty = home / "empty.zip"
+    with zipfile.ZipFile(empty, "w") as z:
+        z.writestr("Connections.csv", "First Name,Last Name,URL,Email Address,Company,Position,"
+                                      "Connected On\n")
+    with pytest.raises(ValueError, match="no connections in it"):
+        sources.import_connections(str(empty))
+    assert (kept / "Connections.csv").read_text(encoding="utf-8") == CSV
+
+
 def test_the_shorter_download_or_a_wrong_file_saves_nothing(home):
     short = home / "short.zip"
     with zipfile.ZipFile(short, "w") as z:
@@ -168,7 +181,8 @@ Message
 """
 
 
-def test_one_employers_people_pasted_are_ranked_with_no_browser():
+def test_one_employers_people_pasted_are_ranked_with_no_browser(judged):
+    judged("Kestrel Mutual")   # nobody is shown at an employer nobody has judged
     people = sources.people_paste(PASTE, "Kestrel Mutual")
     assert [(p["name"], p["degree"], p["title"]) for p in people] == [
         ("Shirin Example", "1st", "Head of Demand Planning at Kestrel Mutual"),

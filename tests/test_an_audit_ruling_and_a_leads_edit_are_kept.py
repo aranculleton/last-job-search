@@ -80,3 +80,57 @@ def test_a_leads_edit_to_the_corrected_draft_survives_a_re_audit(tmp_path):
     # Audited once more with nothing edited, it changes nothing.
     stage_picks.audit(str(rd))
     assert json.loads(path.read_text(encoding="utf-8"))["draft"]["p4"] == edited
+
+
+def test_a_ruling_on_a_sentence_never_settles_a_longer_one_that_starts_with_it():
+    said = "I led the demand forecasting rebuild across the northern stores in 2024."
+    edited = said + " Before that I ran claims forecasting at a national insurer."
+    flag = {"flag": "unmapped", "field": "p3", "sentence": edited}
+    assert not draft_audit._ruled(flag, [{"sentence": said, "ruling": "supported"}])
+
+
+def _model_pass(rd, base):
+    (rd / f"model_audit_{SLUG}.json").write_text(json.dumps({
+        "verdict": "pass", "draft": copy.deepcopy(base), "changes": [], "residual_risks": [],
+        "rulings": [], "audited_md5": draft_audit.md5(base),
+        "rules_hash": draft_pack.rules_hash()}), encoding="utf-8")
+
+
+def test_an_edit_to_the_outreach_note_is_kept_in_the_note(tmp_path):
+    rd = make_round(tmp_path)
+    base = _base(rd)
+    _model_pass(rd, base)
+    draft_audit.write_note(str(rd), SLUG, {"outreach_body": "Hi, I applied for the planning "
+                                           "role and would value ten minutes.",
+                                           "claim_map": []})
+    stage_picks.audit(str(rd))
+    path = rd / f"audit_{SLUG}.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["draft"]["outreach_body"] = "Hi, I applied for the planning role this week."
+    path.write_text(json.dumps(record), encoding="utf-8")
+    stage_picks.audit(str(rd))
+    again = json.loads(path.read_text(encoding="utf-8"))
+    assert again["draft"]["outreach_body"] == "Hi, I applied for the planning role this week."
+    note = json.loads((rd / f"outreach_{SLUG}.json").read_text(encoding="utf-8"))
+    assert note["outreach_body"] == "Hi, I applied for the planning role this week."
+
+
+def test_a_newer_model_correction_is_not_written_over_by_an_older_edit(tmp_path):
+    rd = make_round(tmp_path)
+    base = _base(rd)
+    _model_pass(rd, base)
+    stage_picks.audit(str(rd))
+    path = rd / f"audit_{SLUG}.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["draft"]["p4"] = record["draft"]["p4"] + " "            # the lead's edit
+    path.write_text(json.dumps(record), encoding="utf-8")
+    newer = copy.deepcopy(base)
+    newer["p4"] = base["p4"].rstrip(".") + ", and I would be glad to talk."
+    draft_audit.write_verdict(str(rd), SLUG, {"verdict": "fixed", "draft": newer,
+                                              "audited_md5": draft_audit.md5(base),
+                                              "rules_hash": draft_pack.rules_hash()})
+    stage_picks.audit(str(rd))
+    model = json.loads((rd / f"model_audit_{SLUG}.json").read_text(encoding="utf-8"))
+    assert model["draft"]["p4"] == newer["p4"]
+    again = json.loads(path.read_text(encoding="utf-8"))
+    assert any("set aside" in str(c.get("reason")) for c in again["changes"])

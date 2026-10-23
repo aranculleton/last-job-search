@@ -562,7 +562,7 @@ List the files written:
 - `cv/<Prefix>_Resume_<ABBR><CV_EXT>`
 - `cover_letters/<Prefix>_Cover_Letter_<ABBR><COVER_EXT>`
 
-**Show them, never only point at them.** Send both PDFs into the conversation with the session's file-sending tool (SendUserFile or its equivalent) so they open in one tap, and paste into the reply what they need without opening anything: the cover letter's text, the outreach note ready to paste, and the two screening answers marked **(decide per application)**. The paths go underneath, for the record. "The files are in cv/" is never the whole answer.
+**Show them, never only point at them**, the one way CLAUDE.md sets ("Every output is shown", applications): per role, one call of the session's file-sending tool (SendUserFile or its equivalent) with its resume and cover letter together, captioned with the role, employer, pay (or "pay not stated"), location and apply link; then one index table in the reply, role | apply link, for a batch and a single application alike. Paste beside it what they need without opening anything: the cover letter's text, the outreach note ready to paste, and the two screening answers marked **(decide per application)**. The paths go underneath as plain text, for the record, never as markdown links (a relative link does not open from the desktop app). "The files are in cv/" is never the whole answer.
 
 End with the line `python3 tools/tips.py apply` prints, if it prints one (it decides when: the first time, then now and then). What they say back
 goes through CLAUDE.md, "Learning the person".

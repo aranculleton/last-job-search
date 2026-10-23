@@ -1108,6 +1108,8 @@ def classify(inbound_text, thread_history=(), today=None) -> dict:
             "email": ctx["email"],
             "scheduling_link": ctx["link"],
             "words": ctx["words"],
+            # The day it was read for, so guidance() reads "back on 5 January" against it.
+            "today": ctx["today"].isoformat() if ctx["today"] else "",
             # The message itself, so `guidance(classify(t))` has everything it
             # needs without the caller passing the text a second time. Any rule
             # in guidance that reads the message silently saw "" without it.
@@ -1189,7 +1191,9 @@ def guidance(scenario, their_message="", contact_id="") -> dict:
             "citizenship-gated roles should stop being surfaced.")
 
     if sc.name == "auto_reply":
-        next_action = auto_reply_action(text)
+        # The day classify() was given, so "back on 5 January" read on 28 December is the
+        # coming January; without it the year was the wall clock's, and the date a past one.
+        next_action = auto_reply_action(text, sent_on=read.get("today") or None)
 
     low, high = sc.sentences
     out = {"move": sc.move,
@@ -1377,7 +1381,7 @@ def following_up_is_honest(threads, today=None) -> tuple:
         started = max(after) if after else said
         waited = (state.business_days_between(started, today)
                   if (started and today) else 0)
-        if not today or waited < schema.FOLLOWUP_BUSINESS_DAYS:
+        if not today or not started or state.as_date(today) < state.follow_up_on(started):
             return False, ("they committed to something%s and the clock is theirs; chasing inside "
                            "it reads as not trusting them to do it"
                            % (" %d business days ago" % waited if today else ""))
@@ -1402,9 +1406,10 @@ def following_up_is_honest(threads, today=None) -> tuple:
 def nudge_due(threads, today, new_development="") -> dict:
     """Whether a nudge is due on this thread, and when it will be.
 
-    The window is 5 to 7 business days and the trigger is
-    `schema.FOLLOWUP_BUSINESS_DAYS`, shared with `state.owed` so /reply and
-    /threads cannot disagree about the same thread on the same morning. Calendar
+    The trigger is `state.follow_up_on`: the person's own FOLLOW_UP_DAYS where
+    profile/networking.py sets them, else `schema.FOLLOWUP_BUSINESS_DAYS` (a 5 to 7
+    business-day window), shared with `state.owed` so /reply and /threads cannot
+    disagree about the same thread on the same morning. Calendar
     days are what make a follow-up read as impatient: six of them from a Wednesday
     is the following Tuesday, and the person has had two working days to answer.
 
@@ -1449,7 +1454,7 @@ def nudge_due(threads, today, new_development="") -> dict:
     base["last_out"] = sent.isoformat() if sent else ""
     if sent is None:
         return dict(base, reason="the last outbound message has no usable date")
-    due_on = state.add_business_days(sent, schema.FOLLOWUP_BUSINESS_DAYS)
+    due_on = state.follow_up_on(sent)
     back = state.away_until(rows)
     if back is not None:
         due_on = max(due_on, state.add_business_days(back, state.AWAY_GRACE_BUSINESS_DAYS))
@@ -1458,8 +1463,9 @@ def nudge_due(threads, today, new_development="") -> dict:
     waited = state.business_days_between(sent, today)
     base["business_days"] = waited
     if nudges >= schema.MAX_NUDGES:
-        return dict(base, reason=("one nudge has already gone out; a second costs more than it "
-                                  "recovers. Let it go cold."))
+        return dict(base, reason=("%d messages have gone with no reply, the most your follow-up "
+                                  "rule allows (%s); another costs more than it recovers. Let "
+                                  "it go cold." % (nudges + 1, schema.follow_up_rule())))
     if back is not None and state.as_date(today) < due_on:
         return dict(base, reason=("an automatic reply says they are away until %s: the nudge "
                                   "waits until %s, when they have had time to see it"
@@ -1468,11 +1474,11 @@ def nudge_due(threads, today, new_development="") -> dict:
         return dict(base, due=True,
                     reason="new development (%s) is a legitimate reason to write inside the %s"
                            % (new_development, window))
-    if waited < schema.FOLLOWUP_BUSINESS_DAYS:
-        return dict(base, reason="%d business days since the last message; due %s (the %s)"
-                    % (waited, base["due_date"], window))
+    if state.as_date(today) < due_on:
+        return dict(base, reason="%d business days since the last message; due %s (%s)"
+                    % (waited, base["due_date"], schema.follow_up_rule()))
     return dict(base, due=True,
-                reason="%d business days of silence, past the %s" % (waited, window))
+                reason="%d business days of silence, past %s" % (waited, schema.follow_up_rule()))
 
 
 # ---------------------------------------------------------------- CLI

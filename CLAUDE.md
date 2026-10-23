@@ -193,7 +193,8 @@ the same row, the later change is kept by itself, and the merge says which and w
 side had: tell the person in plain words which answer was kept and what the other said, since
 their word outranks it. Git stops only where neither change is
 later. Before
-merging a pull request, `git fetch origin master && git merge origin/master`, so that merge
+merging a pull request, `git fetch origin master` and then `git merge origin/master`, each a
+command of its own, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
 **On the person's own computer** a chat has no GitHub tools and lands its work with `gh`,
@@ -490,6 +491,11 @@ step 5), who reads a message and what it may say (`compose.READER_TYPES`), `comp
 warm intros, the follow-up cadence, when to stop, and never surfacing someone already
 contacted. Load the skill before any outreach. What a session needs before it does:
 
+- **Nobody is shown as someone to write to without the one check**:
+  `python3 tools/network/surface.py` (`surface.check()`; `--file` for a list made any other
+  way). It reads the contact book, their whole thread on every channel and the bar, and
+  prints NOT with the reason for anyone not to show. Never join files or check people by hand.
+
 - **Outreach is for referrals, in three stages never compressed into one:** a first note that
   asks for a conversation (`compose.first_note()`), the conversation, then a referral ask for
   one linked role (`compose.referral_ask()`).
@@ -539,6 +545,21 @@ tools/shown.py <file>` makes ("Acme Analyst interview prep.md", never "prep.md")
 the prep tools print as `send:`. The file path is the record, written underneath, and
 never the answer on its own: "I've put it in documents/..." is not done. The same goes
 for anything updated: show the new version, not where it went.
+
+**Applications, one or a batch, are delivered one way** (2026-10-23):
+
+1. **Per role, one file-sending call** holding that role's resume and cover letter
+   together, captioned: role, employer, pay (or "pay not stated"), location, apply link.
+2. **Then one index table in the reply**: role | apply link, the full web address, one row
+   per role. Beside it, what they need to judge each one without opening anything (the
+   outreach note, the screening answers to decide).
+3. **No markdown link to a file in the repo**, in a table or anywhere: a relative link
+   such as `[resume](documents/...)` does not open from the desktop app. Claude's
+   desktop docs say a file's path written in the chat opens when clicked, so each path is
+   written underneath as plain text, as the record.
+
+Never one caption listing every file, never a table of file links, and never one
+message per role in place of the index.
 
 ## Talking to the person: plain words, one recommendation, short
 

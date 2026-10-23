@@ -15,7 +15,7 @@ This file is the reasoning behind each one.
 | **Calendar link** | Book a slot, then confirm in the thread so they know it is done. | One line. |
 | **Genuine mismatch** | Tell the *user* plainly, do not draft an optimistic message. A polite two-line exit preserves the relationship at zero cost. | Two lines. |
 | **Discouraging market commentary** | Do not let it reshape strategy. Note whether it is generally true but not specific to this user's position, and say so. | Brief, not defensive. |
-| **Quiet** | One nudge, after 5 to 7 business days. Never 24 to 48 hours. A genuine new development is a legitimate earlier reason and reads as initiative. | Two sentences. |
+| **Quiet** | One nudge, after 5 to 7 business days, unless the person's FOLLOW_UP_DAYS and MAX_UNANSWERED (profile/networking.py) say otherwise. Never 24 to 48 hours. A genuine new development is a legitimate earlier reason and reads as initiative. | Two sentences. |
 | **An automatic reply: an out-of-office, "no longer with the company"** | Not a reply, so draft nothing. Log it inbound with scenario `auto_reply`. The thread still waits on them, the employer is not a warm route, no reply is owed, and the one nudge waits until two working days after the return date it gives. "No longer with": close the contact and find who holds the role now. | None. |
 | **User at fault** | Apologise once, plainly. Own it, propose a concrete alternative. Do not grovel, do not over-explain, do not stack apologies. If it has been weeks, say so rather than pretending. | Three or four sentences. |
 

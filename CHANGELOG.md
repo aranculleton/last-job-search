@@ -20,24 +20,73 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Nobody you have already written to is suggested again, on any channel.** Every list of
+  people to write to now goes through one check: your connections at an employer, a search,
+  a pasted people search, a page read in your browser, the queue of first notes, and any
+  list a chat puts together itself (`tools/network/surface.py`). It finds them in your
+  contact book by their LinkedIn address in any of its forms, or by their name at the
+  employer your book or your connections file has, reads the whole conversation on every
+  channel, applies your employer bar and any hold, and says why anyone is left out. Before,
+  each step made its own check, and people already written to on another channel, and at
+  employers your bar rules out, got through. An employer nobody has judged against your bar
+  is judged once before its people are shown.
+- **Old connections are read before anyone writes to them.** Your connections file has no
+  location, and its employer and title may be out of date; someone known only from a
+  connection made more than six months ago is shown with that warning, and a note to them
+  written from their card alone is refused until their profile is read.
+- **Your own follow-up rule.** `FOLLOW_UP_DAYS` and `MAX_UNANSWERED` in
+  profile/networking.py: the days of silence before a follow-up (calendar days, weekends
+  included), counted from your last
+  message or the day they accepted, and how many messages in a row may go unanswered.
+  Unset, nothing changes: six business days and one nudge. Where you have already said your
+  rule in a chat, it is written into the setting for you. Each contact waiting on a reply
+  gets the date on their row, so the brief brings it back on the day, and the row says which
+  rule set it; at the limit it says so and keeps the day to close the conversation. A date
+  you set or words you wrote on a row are never changed. A setting that is not a number is
+  ignored rather than stopping the tools. Profile upgrade: follow-up-dates.
+- **A new LinkedIn download every fortnight.** The brief asks for one once the last is 14
+  days old (`EXPORT_EVERY_DAYS` in profile/networking.py to change it, 0 never asks), with
+  LinkedIn's steps checked that day. Taking it says first what changed since the last one:
+  new connections, requests accepted, replies, and requests still waiting.
+- **Applications are delivered one way.** For each role, one file card holding its resume
+  and cover letter, captioned with the role, employer, pay, location and apply link; then
+  one table of role and apply link. Never a link to a file in the repo, which does not open
+  from the desktop app; the path is written underneath as plain text.
+
+### Changed
+
+- **The due list and the LinkedIn import are quicker, with the same answers.** The due list
+  read every logged message once per contact: on 1,300 contacts and 8,500 messages it took
+  3.3 seconds here (5 to 5.5 on a laptop) and now takes 0.9. Importing a download of 2,400
+  messages took 14 seconds and now takes 1.
+- **One LinkedIn address in any form is one person**, including the phone site's addresses
+  and an accented letter written either way.
+
 ### Fixed
 
 - **"Bachelor's or master's degree" is read as a bachelor's.** Preparing an application read
   it as a master's, required, with no way round it, whenever it was written with a curly
   apostrophe or not; the score already knew better, and now the screen and the posting's
-  summary agree with it. "A master's or PhD" is read as a master's.
+  summary agree with it. So are "a master's in statistics, or a bachelor's plus three
+  years" and "B.Sc. or M.Sc.", and "a master's or PhD" and "PhD or master's" are read as a
+  master's.
 - **An application's last check no longer goes round in circles.** A note on a paragraph
   showed it cut short, and the check's answer quoting the whole paragraph never matched it;
   the check now gets the draft it hands back whole, and keeps the company and role it leaves
   out; and an edit made to the checked draft is kept the next time it is checked, not
-  written over.
+  written over. A ruling on a sentence no longer settles a longer one edited after it, an
+  edit to the outreach note is kept in the note, and a newer correction from the check is
+  never undone by an older edit.
 - **Facts about an employer that cannot be checked are looked up again.** A new session had
   the facts but not the pages they came from, so each was refused, and the pages were not
   read again because the facts were still recent. Now those pages are read again.
 - **One application to Google no longer stops every chat's checks** (the maintainer's own
   copy only). Every employer applied to goes on the list of words the public app must never
   carry, and the app's own text names Google, Microsoft, Apple, IBM and Oracle for their
-  products. Those five are allowed; any other employer is still caught.
+  products. Those five are allowed, whether they came from an application or a past job;
+  any other employer is still caught.
 - **Your LinkedIn download is kept, and its messages read in, whenever you give it.** A chat
   read your messages straight from the download to write follow-ups and kept none of them,
   and setup kept only your connections from it, so later chats could not see your other
@@ -50,7 +99,26 @@ make sense to somebody whose repo just received it.
   your LinkedIn messages in wrote two identical lines for it, and the app's own check then
   called them one message logged twice. The second now says the time it was sent, and lines
   an earlier version wrote that way are told apart the next time your messages are read in.
-  Someone LinkedIn lists with only a first name and some dots no longer stops it either.
+  Someone LinkedIn lists with only a first name and some dots no longer stops it either, and
+  the time is never read as the name of a file sent.
+- **An older LinkedIn download never replaces a newer one.** Given one older than the files
+  already kept, the app keeps the newer and says so, and a connections file with nobody in
+  it is refused rather than saved over yours. A download your computer opened one folder
+  deeper than usual is found when the app looks for it.
+- **Years of LinkedIn history no longer fill the due list.** The day a person's whole history
+  came in, their due list went from 24 overdue to 655: every old conversation where the
+  other person wrote last read as a reply owed, and a resume asked for in 2021 came first,
+  1,801 days late. Anything owed more than 45 days with nothing done is now counted in one
+  line instead of listed (the conversations view still shows each one, and a date you put
+  on one brings it back), and requests nobody accepted are one list to withdraw, not people
+  to write to. Recording them withdrawn all at once records only that list, never one you
+  put on hold.
+- **An away message's return date is read from the day it came.** "Back on 5 January",
+  pasted on 28 December, was read as the January just gone when the reply advice was given.
+- **The due list and a page of people no longer offer anyone the check holds.** A first note
+  waiting to go to someone at an employer your bar rules out, or with a hold on them, is
+  listed with the reason instead of as due, and a page of people read in your browser no
+  longer offers to close someone only because the check held them.
 - **Saving your work on your computer no longer trips the desktop app's safety check.** A
   chat ran its steps for saving as one long command, and the app's auto mode refused the whole
   thing as a merge nobody had reviewed, although that step is pre-approved. Each step now runs

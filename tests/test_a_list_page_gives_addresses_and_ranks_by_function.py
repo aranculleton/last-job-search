@@ -55,7 +55,8 @@ def test_every_card_keeps_the_persons_own_address_and_never_a_mutuals():
     assert by["Ana Rook"]["reach"] == "pending"
 
 
-def test_people_takes_the_extractors_output_and_prints_each_address(here, monkeypatch, capsys):
+def test_people_takes_the_extractors_output_and_prints_each_address(here, monkeypatch, capsys, judged):
+    judged("Larkspur")   # nobody is shown at an employer nobody has judged
     monkeypatch.setattr(sys, "stdin", io.StringIO(_raw()))
     assert reading.main(["people", "-", "--company", "Larkspur"]) == reading.EXIT["ok"]
     out = capsys.readouterr().out
@@ -148,3 +149,19 @@ def test_the_people_command_refuses_json_that_is_not_the_extractors(here, monkey
     monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps({"cards": "nope"})))
     with pytest.raises(SystemExit, match="list extractor"):
         reading.main(["people", "-", "--company", "Larkspur", "--json"])
+
+
+def test_someone_the_check_holds_is_never_offered_to_be_closed(here, monkeypatch, capsys):
+    # Waiting in the book at an employer nobody has judged: held with the reason, and the
+    # page never prints the hint that closes them for good (`reading.py skip`).
+    import state
+    row = {k: "" for k in state.schema.CONTACT_COLUMNS}
+    row.update(contact_id="larkspur_castellan", name="Juno Castellan", company="Larkspur",
+               linkedin_url="https://www.linkedin.com/in/example-juno", status="not_contacted")
+    monkeypatch.setattr(state, "load_contacts", lambda *a, **k: [row])
+    monkeypatch.setattr(sys, "stdin", io.StringIO(_raw()))
+    assert reading.main(["people", "-", "--company", "Larkspur"]) == reading.EXIT["ok"]
+    out = capsys.readouterr().out
+    line = next(x for x in out.splitlines() if "Juno Castellan" in x)
+    assert "not judged against your bar yet" in line
+    assert "reading.py skip larkspur_castellan" not in out

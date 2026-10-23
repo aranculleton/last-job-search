@@ -317,7 +317,9 @@ def test_the_first_look_is_offered_through_the_upgrades_and_a_look_settles_it(pr
     u = U.by_id(O.UID)
     assert u.needs == "you" and u.ask.endswith("?") and "own LinkedIn profile" in u.ask
     assert u.pending().startswith("your own LinkedIn profile has never been looked over")
-    U.record_no(O.UID, TODAY)
+    # pending() reads the calendar, so the no is as of today: one dated TODAY began to be
+    # asked again a month after this test was written.
+    U.record_no(O.UID, datetime.date.today())
     assert u.pending() == ""                        # a no holds, and is asked again later
     asked = json.loads((profile / "asked.json").read_text(encoding="utf-8"))
     asked.pop(O.UID)

@@ -48,7 +48,8 @@ _GETTER_DEF = re.compile(r"def (\w+)\(\s*(\w+)\s*,\s*(\w+)\s*\)\s*(?:->[^:]+)?:\
 # And one that takes the name alone and supplies its own default:
 # `def _w(name): v = str(getattr(_NET, name, "") or "")...`, called `_w("HOME_ADJECTIVE")`.
 # Unseen, a name read only that way was missing here, so the upgrade checks never saw it.
-_GETTER_ONE = re.compile(r"def (\w+)\(\s*(\w+)\s*\)\s*(?:->[^:]+)?:\s*\n"
+# The name may carry its type, `def _days_setting(name: str) -> int:`.
+_GETTER_ONE = re.compile(r"def (\w+)\(\s*(\w+)\s*(?::\s*\w+\s*)?\)\s*(?:->[^:]+)?:\s*\n"
                          r"(?:[ \t]+[^\n]*\n){0,2}?[ \t]+[^\n]*\bgetattr\(\s*(\w+)\s*,\s*\2\s*,")
 
 

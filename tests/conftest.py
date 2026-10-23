@@ -38,6 +38,26 @@ import pytest  # noqa: E402
 
 
 @pytest.fixture
+def judged(tmp_path, monkeypatch):
+    """`judged("Kestrel Mutual", ...)`: employers the example person has judged against
+    their bar (`bar.py judge`), kept in a file of the test's own. Nobody at an employer
+    nobody has judged is shown as someone to write to (tools/network/surface.py), so a test
+    of who is shown at an invented employer judges it first, as a run does."""
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import bar
+    monkeypatch.setattr(bar, "_judged_path", lambda: str(tmp_path / "employers_judged.json"))
+    bar._judged_cache.clear()
+
+    def judge(*companies, verdict="prestige"):
+        for company in companies:
+            bar.judge(company, verdict, "an invented employer the example person judged",
+                      today="2026-10-23")
+    yield judge
+    bar._judged_cache.clear()
+
+
+@pytest.fixture
 def boards_web():
     """openroles' network replaced with canned answers, for the employer-board readers,
     through tools/offline_boards.py: the seam a person's own tests use too. `routes`,

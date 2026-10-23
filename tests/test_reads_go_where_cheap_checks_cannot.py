@@ -277,8 +277,11 @@ def test_a_title_that_found_nobody_at_an_employer_is_not_searched_there_again(he
     titles = discovery.TITLE_SETS["hiring_authority"]
     first = discovery.queries_for("Kestrel Mutual")[0]
     assert titles[0] in first
-    sources.record_yield("Kestrel Mutual", first, kept=0, placed=0, today=TODAY)
-    assert titles[0] in sources.spent_titles("Kestrel Mutual", TODAY)
+    # Recorded as of today: `searches` reads the calendar, and a yield dated in October
+    # 2026 stopped counting once its window had passed.
+    today = datetime.date.today()
+    sources.record_yield("Kestrel Mutual", first, kept=0, placed=0, today=today)
+    assert titles[0] in sources.spent_titles("Kestrel Mutual", today)
     again = sources.searches("title_search", "Kestrel Mutual")
     assert titles[0] not in again[0] and titles[1] in again[0]
     # Another employer is untouched.
