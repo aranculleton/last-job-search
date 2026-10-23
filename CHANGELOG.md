@@ -22,6 +22,22 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **"Bachelor's or master's degree" is read as a bachelor's.** Preparing an application read
+  it as a master's, required, with no way round it, whenever it was written with a curly
+  apostrophe or not; the score already knew better, and now the screen and the posting's
+  summary agree with it. "A master's or PhD" is read as a master's.
+- **An application's last check no longer goes round in circles.** A note on a paragraph
+  showed it cut short, and the check's answer quoting the whole paragraph never matched it;
+  the check now gets the draft it hands back whole, and keeps the company and role it leaves
+  out; and an edit made to the checked draft is kept the next time it is checked, not
+  written over.
+- **Facts about an employer that cannot be checked are looked up again.** A new session had
+  the facts but not the pages they came from, so each was refused, and the pages were not
+  read again because the facts were still recent. Now those pages are read again.
+- **One application to Google no longer stops every chat's checks** (the maintainer's own
+  copy only). Every employer applied to goes on the list of words the public app must never
+  carry, and the app's own text names Google, Microsoft, Apple, IBM and Oracle for their
+  products. Those five are allowed; any other employer is still caught.
 - **Your LinkedIn download is kept, and its messages read in, whenever you give it.** A chat
   read your messages straight from the download to write follow-ups and kept none of them,
   and setup kept only your connections from it, so later chats could not see your other

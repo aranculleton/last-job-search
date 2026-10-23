@@ -307,8 +307,9 @@ METHODS: dict[str, dict] = {
             (44, "2026-10-22", False, "the runbook names what the networking state shows: requests sent and InMail credits left"),
             (45, "2026-10-22", False, "A first note to an employer called Visa, or to a reader whose first name is an approved example's surname, is no longer refused for it; checks only, nothing to redo"),
             (46, "2026-10-22", False, "landing steps run each command alone, the merge never chained; wording only"),
+            (47, "2026-10-22", False, "an audit ruling matches its flag quoted whole or cut, the packet holds the draft object it returns, a verdict keeps what it leaves out, a lead's edit to the corrected draft is kept and checked again"),
         ),
-        "fingerprint": "cccb5cd959f8ed75",
+        "fingerprint": "47a2316a859a5151",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -360,8 +361,9 @@ METHODS: dict[str, dict] = {
             (5, "2026-10-21", False, "Research fetches through company_research.py fetch: robots.txt first, crawl delay kept, a feed or sitemap behind a bot check, a note per host, 12 requests an employer a day, fresh facts never fetched again, quotes checked, saves that append"),
             (6, "2026-10-21", False, "Employer research follows robots.txt redirects, keeps the crawl delay from the first request, shares one daily budget across runs, refuses a quote under six words, and marks a search summary as not read"),
             (7, "2026-10-21", False, "A page file name survives a URL holding half an emoji; every other page keeps its name"),
+            (8, "2026-10-22", False, "a fresh cached fact no kept page can check has its page fetched again instead of being refused for 30 days"),
         ),
-        "fingerprint": "02bf93a37ab60da1",
+        "fingerprint": "e81307732b65f7c3",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
@@ -544,8 +546,9 @@ METHODS: dict[str, dict] = {
             (24, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (25, "2026-10-22", False, "no search runs while job sites are blocked; a web-search lead is shown only once its page proves it open"),
             (26, "2026-10-22", False, "plain words to the person: no file, id, command or pull request link"),
+            (27, "2026-10-22", False, "a graduate degree offered beside a bachelor's is no graduate bar, in the screen and the posting profile as in the score; curly apostrophes read like straight ones"),
         ),
-        "fingerprint": "2f33fcf09c843fa5",
+        "fingerprint": "a78c57cbc3ebb531",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",

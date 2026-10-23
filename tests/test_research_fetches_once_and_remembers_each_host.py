@@ -169,16 +169,34 @@ def test_the_budget_caps_requests_for_one_employer_across_runs(tmp_path):
     assert len(web.calls) == C.FETCH_BUDGET
 
 
-def test_a_fresh_cached_fact_is_never_fetched_again(tmp_path):
+def test_a_fresh_cached_fact_that_was_checked_is_never_fetched_again(tmp_path):
     fact = {"claim": "Second bakery site in Bolton", "url": "https://www.oakmere.example/about",
             "quote": "Oakmere Foods opened its second bakery site in Bolton in March 2026",
-            "date_seen": (TODAY - dt.timedelta(days=3)).isoformat()}
+            "date_seen": (TODAY - dt.timedelta(days=3)).isoformat(),
+            "quote_checked": (TODAY - dt.timedelta(days=3)).isoformat()}
     C.save("Oakmere Foods", {"facts": [fact]}, root=str(tmp_path), pages=str(tmp_path / "p"))
     web = Web({})
     rep = _fetch(web, tmp_path, "https://www.oakmere.example/about")
     assert web.calls == [] and rep["kept"][0]["claim"] == fact["claim"]
     old = dict(fact, date_seen=(TODAY - dt.timedelta(days=C.RESEARCH_FRESH_DAYS + 1)).isoformat())
     assert not C.fact_fresh(old, {}, TODAY) and C.fact_fresh(fact, {}, TODAY)
+
+
+def test_a_fresh_fact_no_kept_page_can_check_is_fetched_again(tmp_path):
+    # The facts are in the repo and the pages on the computer: a new session had fresh facts
+    # with no page, each refused as unchecked, and its page skipped as fresh for 30 days
+    # (2026-10-23).
+    fact = {"claim": "Second bakery site in Bolton", "url": "https://www.oakmere.example/about",
+            "quote": "Oakmere Foods opened its second bakery site in Bolton in March 2026",
+            "date_seen": (TODAY - dt.timedelta(days=3)).isoformat()}
+    C.save("Oakmere Foods", {"facts": [fact]}, root=str(tmp_path), pages=str(tmp_path / "p"))
+    web = Web({"https://www.oakmere.example/robots.txt": (200, {}, ALLOW),
+               "https://www.oakmere.example/about": (200, {}, ABOUT)})
+    rep = _fetch(web, tmp_path, "https://www.oakmere.example/about")
+    assert web.got("https://www.oakmere.example/about")
+    assert [u["url"] for u in rep["urls"] if u["state"] == "again"] == [
+        "https://www.oakmere.example/about"]
+    assert C.quote_problem(fact, str(tmp_path / "pages")) == ""      # checkable now
 
 
 def test_a_quote_is_checked_against_the_page_as_fetched(tmp_path):
