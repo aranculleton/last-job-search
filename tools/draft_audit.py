@@ -298,7 +298,9 @@ def research_status(research: dict | None, company: str = "", country: str = "")
             out[k] = ("checked", "")
         else:
             out[k] = ("unchecked", "no page fetched by tools/company_research.py fetch holds "
-                                   "it, and the research cache has no checked copy")
+                                   "it, and the research cache has no checked copy; fetch "
+                                   "its page again: python3 tools/company_research.py fetch "
+                                   f"\"{company or '<employer>'}\" --urls {f.get('url') or '<its url>'}")
     return out
 
 
@@ -895,7 +897,7 @@ def grounding_flags(d: dict, pick: dict, posting: str, research: dict | None,
             if len(shared) >= DO_NOT_CLAIM_WORDS:
                 out.append(_flag("do-not-claim", field, sentence, f"research says: {item}"))
     if rf and not p2_cites_research and str(d.get("p2") or "").strip():
-        out.append(_flag("p2-uncited", "p2", plain(d.get("p2"))[:120],
+        out.append(_flag("p2-uncited", "p2", plain(d.get("p2")),
                          "the researched paragraph cites no research fact"))
     for s in d.get("stretches") or []:
         if isinstance(s, dict) and str(s.get("sentence") or "").strip():
@@ -1052,6 +1054,13 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
     _final, d, _m = final_draft(round_dir, slug)
     if d is None:
         raise SystemExit(f"verdict: no draft_{slug}.json in {round_dir}")
+    if isinstance(verdict.get("draft"), dict):
+        # What the auditor leaves out is the drafter's: a corrected draft without the
+        # top-level company and role was refused, and auditors opened the draft file to
+        # copy them and tried again (2026-10-23).
+        verdict = dict(verdict, draft={**{k: v for k, v in d.items()
+                                          if k not in ("pack_hash", "research_hash")},
+                                       **verdict["draft"]})
     if str(verdict.get("audited_md5") or "") != md5(d):
         raise SystemExit("verdict: audited_md5 is not the md5 of the draft as it stands "
                          f"({md5(d)}): the draft changed, so print the packet again and audit "
@@ -1063,14 +1072,30 @@ def write_verdict(round_dir: str, slug: str, verdict: dict) -> str:
     return path
 
 
+# A sentence shown cut (a whole paragraph flagged, shown to its first 120 characters) is
+# the same sentence as the whole of it: a ruling quoting either settles the flag. Shorter
+# than this, a cut is too little of a sentence to say which one it is.
+RULED_PREFIX = 40
+
+
+def _same_sentence(a: str, b: str) -> bool:
+    a, b = _norm(a), _norm(b)
+    if a == b:
+        return True
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= RULED_PREFIX and long_.startswith(short)
+
+
 def _ruled(flag: dict, rulings: list[dict]) -> bool:
-    want = _norm(flag.get("sentence", ""))
+    """Whether a ruling settles this flag: the same sentence, whole or as the flag showed it
+    cut, and the same flag or none named. A p2-uncited flag showed p2 cut to 120 characters,
+    and a ruling quoting the whole paragraph never matched it (2026-10-23)."""
     for r in rulings or []:
         if not isinstance(r, dict):
             continue
         if str(r.get("ruling", "")).lower() not in ("supported", "kept", "accepted"):
             continue
-        if _norm(r.get("sentence", "")) == want and (
+        if _same_sentence(r.get("sentence", ""), flag.get("sentence", "")) and (
                 not r.get("flag") or str(r.get("flag")) == flag["flag"]):
             return True
     return False
@@ -1137,6 +1162,28 @@ def other_role(d: dict, pick: dict) -> str:
 _DRAFT_FLAGS = ("profile-changed", "no-pack")
 
 
+def _kept_edit(round_dir: str, slug: str, path: str, model) -> dict | None:
+    """A corrected draft edited in its audit record after it was written (by the lead, by
+    hand), carried into the model audit so the next audit checks it rather than writing
+    over it: a re-audit overwrote a lead's edit (2026-10-23). The change it records, or
+    None where nothing was edited."""
+    old = _read_json(path)
+    if not (isinstance(old, dict) and isinstance(old.get("draft"), dict)
+            and old.get("written_md5") and isinstance(model, dict)):
+        return None
+    if md5(old["draft"]) == old["written_md5"]:
+        return None
+    edited = {k: v for k, v in old["draft"].items() if k != "outreach_body"} \
+        if "outreach_body" not in (model.get("draft") or {}) else dict(old["draft"])
+    model = dict(model, draft=edited)
+    with open(os.path.join(round_dir, f"model_audit_{slug}.json"), "w", encoding="utf-8") as fh:
+        fh.write(json_text(model, indent=1))
+        fh.write("\n")
+    return {"field": "draft", "before": "the corrected draft as audited",
+            "after": "as edited in audit_" + slug + ".json",
+            "reason": "edited after the audit; kept and checked again by code"}
+
+
 def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
               facts=None) -> dict:
     """The audit record for one pick, written to audit_<slug>.json and returned.
@@ -1148,6 +1195,9 @@ def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
     slug = pick["slug"]
     path = os.path.join(round_dir, f"audit_{slug}.json")
     final, d, model = final_draft(round_dir, slug)
+    kept = _kept_edit(round_dir, slug, path, model)
+    if kept:
+        final, d, model = final_draft(round_dir, slug)
     if d is None:
         old = _read_json(path)
         if old is not None and not (isinstance(old, dict) and old.get("mechanical")):
@@ -1199,7 +1249,10 @@ def audit_one(round_dir: str, pick: dict, corpus=None, batch=(), evidence=None,
             if not mech["findings"] and not left:
                 verdict = mv
             mech["open_after_model"] = left
+    if kept:
+        changes = changes + [kept]
     record = {"verdict": verdict, "draft": final, "changes": changes, "residual_risks": risks,
+              "written_md5": md5(final),
               "voice_check": _summary_line(mech), "audited": f"draft md5 {drafter_md5}, rules "
               f"{mech['rules_hash']}", "drafter_md5": drafter_md5,
               "inputs": inputs(round_dir, slug), "mechanical": mech,
@@ -1386,6 +1439,10 @@ def packet(round_dir: str, slug: str) -> str:
         lines.append(f"outreach_body: {plain(d['outreach_body'])}")
     lines.append(f"addressed to (contact_person): {str(d.get('contact_person') or '').strip() or 'the hiring team'}"
                  f" | the research's named contact: {str(research.get('named_contact') or '').strip() or 'none'}")
+    lines += ["", "== THE DRAFT AS THE OBJECT YOU RETURN (in \"draft\": change only what you fix; "
+              "a key you leave out is kept as it is here) ==",
+              json_text({k: v for k, v in base.items() if k not in ("pack_hash", "research_hash")},
+                        indent=1)]
     lines += ["", "== EACH SENTENCE AND THE EVIDENCE IT CITES =="]
     for field, sentence in field_sentences(d):
         entry = match_claim(field, sentence, claim_map)

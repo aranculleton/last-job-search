@@ -231,3 +231,31 @@ def test_a_tool_family_entry_is_set_aside_and_nothing_else_in_the_file(tmp_path,
                                   "# Zorblax asked for this\n", encoding="utf-8")
     found = _scan(str(tmp_path), "Zorblax\n", monkeypatch=monkeypatch)
     assert found == ["tools/bridges.py:2: denylist entry 1"]
+
+
+def test_an_employer_the_app_names_for_its_products_is_not_a_leak_and_the_list_is_honest(
+        tmp_path, monkeypatch):
+    """One tracker row at Google put it on the denylist, and the app's own prose (Google's
+    Gemini CLI, Google Cloud, Google Sheets) failed every chat's checks (2026-10-23). An
+    employer the app names this way is allowed; any other one is still listed, and the
+    allowed list holds only names the app's own text really uses."""
+    import build_app
+    import person
+    sys.path.insert(0, ROOT)
+    from tests import repo_files
+    (tmp_path / "job_search_tracker.csv").write_text(
+        "company,role\nGoogle LLC,Data Scientist\nQuayside Foods,Analyst\n")
+    monkeypatch.setenv(person.STATE_ENV, str(tmp_path))
+    tokens = set(build_app.denylist())
+    assert "=Quayside Foods" in tokens
+    assert not {"=Google", "=Google LLC"} & tokens
+    text = ""
+    for rel in repo_files.tracked(root=ROOT):
+        if rel and not rel.startswith("tools/openroles/") and rel.endswith((".py", ".md", ".txt")):
+            try:
+                with open(os.path.join(ROOT, rel), encoding="utf-8") as fh:
+                    text += fh.read()
+            except (OSError, UnicodeDecodeError):
+                pass
+    for org in sorted(build_app.ALLOWED_ORGANIZATIONS):
+        assert org in text, f"{org} is allowed but the app's own text never names it"

@@ -638,7 +638,8 @@ def under_minimum_qualifications(text, sentence):
 # statistics" or "a graduate degree" that the screen flagged, and the screen read
 # none in "M.S. in statistics" or "a doctoral degree" that the score docked.
 DEGREE = re.compile(r"\b(?:master|msc|m\.sc\.?|m\.s\.?|mba|ph\.?\s?d\.?|doctora\w*"
-                    r"|(?:post-?)?graduate degree|advanced degree)(?:'?s)?(?![\w'])", re.I)
+                    r"|(?:post-?)?graduate degree|advanced degree)(?:['\u2019]?s)?(?![\w'\u2019])",
+                    re.I)
 # "Master" is a data-architecture word before it is a degree. A posting can
 # list "master data management" among its data skills and be flagged as
 # stating a graduate requirement. `mastering`, `master plan` and
@@ -649,12 +650,18 @@ DEGREE = re.compile(r"\b(?:master|msc|m\.sc\.?|m\.s\.?|mba|ph\.?\s?d\.?|doctora\
 # graduate degree. Nor the supply-chain terms: a "Master Production Schedule (MPS)",
 # a master scheduler, a Lean Six Sigma Master Black Belt.
 NOT_A_DEGREE = re.compile(
-    r"\bmaster'?s?\s+(?:data|plan|class|file|record|copy|agreement|service|key|list|"
+    r"\bmaster['\u2019]?s?\s+(?:data|plan|class|file|record|copy|agreement|service|key|list|"
     r"catalog\w*|schedule|scheduler|scheduling|production|black\s+belt|budget|brand|"
     r"template|node|branch)\b"
     r"|\bmaster(?:ing|ed|y)\b"
     r"|(?<=\bscrum\s)master\b"
     r"|\bmaster\s+(?:the|a|an|our|your|its|their|this|these|those|new)\b", re.I)
+# Offered beside a bachelor's, a graduate degree is a bar a BSc clears: "Bachelor's or
+# Master's degree in" cost the full 9 in fit.py, and stage_picks read "Bachelor’s or
+# master’s degree" as a master's, required, with no equivalence route (2026-10-23). Tested
+# on the text before the degree word; one rule for the screen, the score and the profile.
+BACHELOR_OR = re.compile(r"\b(?:bachelor|b\.?sc|undergraduate)[^.;:]{0,60}?"
+                         r"(?:\bor|/)\s*(?:an?\s+)?$", re.I)
 ESCAPE = re.compile(r"or equivalent|or comparable|or relevant experience|equivalent experience|"
                     r"or an equivalent|equivalent practical|or related experience", re.I)
 # Preference in its own words. "asset" and "bonus" count only as "is an asset" or
@@ -1206,7 +1213,9 @@ def _states_a_degree(sentence: str) -> bool:
 
     Every degree word is read, the way tools/fit.py reads them: "master data" first
     does not hide "a Master's degree is required" later in the same sentence."""
-    return any(not NOT_A_DEGREE.match(sentence, m.start()) for m in DEGREE.finditer(sentence))
+    return any(not NOT_A_DEGREE.match(sentence, m.start())
+               and not BACHELOR_OR.search(sentence[:m.start()])
+               for m in DEGREE.finditer(sentence))
 
 
 # Under this a body is a snippet, not a posting: what it states is read, and

@@ -1166,7 +1166,14 @@ def fetch(company, urls=(), site=None, country=None, role=None, posting=None, to
             continue
         roles = f.get("roles") or []
         (report["other_roles"] if role and roles and role not in roles else report["kept"]).append(f)
-    fresh_urls = {_norm_url(f.get("url")) for f in report["kept"] if f.get("url")}
+    # A fresh fact is not fetched again only while it can be checked: stamped
+    # `quote_checked` when it was saved, or on a page kept here. The pages are kept on the
+    # computer and the facts in the repo, so a new session had fresh facts with no page:
+    # each was refused as unchecked, and its page was skipped as fresh for 30 days
+    # (2026-10-23). Those pages are fetched again.
+    unchecked = {_norm_url(f.get("url")) for f in report["kept"] if f.get("url")
+                 and not f.get("quote_checked") and quote_problem(f, pages) == "no-page"}
+    fresh_urls = {_norm_url(f.get("url")) for f in report["kept"] if f.get("url")} - unchecked
 
     todo = list(dict.fromkeys(u.strip() for u in urls or () if str(u).strip()))
     if site:
@@ -1181,6 +1188,9 @@ def fetch(company, urls=(), site=None, country=None, role=None, posting=None, to
         if nu in fresh_urls:
             run.log.append(("kept", url, "its facts are fresh, so it was not fetched again"))
             continue
+        if nu in unchecked:
+            run.log.append(("again", url, "its facts are fresh but no page kept here holds "
+                                          "them to check, so it is fetched again"))
         note = run.notes.get(host) or {}
         why = skip_host(note, day)
         if why:

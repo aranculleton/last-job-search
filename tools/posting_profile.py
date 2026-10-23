@@ -435,9 +435,10 @@ def years(text: str) -> dict:
     return {"asks": low, "highest": high, "held": ts.YEARS_HELD, "quote": quote}
 
 
-_BACHELOR = re.compile(r"\b(?:bachelor'?s?|b\.?sc|b\.?a\b|undergraduate degree|university degree|"
+_BACHELOR = re.compile(r"\b(?:bachelor['\u2019]?s?|b\.?sc|b\.?a\b|undergraduate degree|university degree|"
                        r"(?:a |an )?(?:relevant |related )?degree in)\b", re.I)
 _PHD = re.compile(r"\bph\.?\s?d\b|\bdoctora\w*", re.I)
+_MASTER_OR = re.compile(r"\b(?:master|msc|m\.sc|mba)[^.;:]{0,40}?(?:\bor|/)\s*(?:an?\s+)?$", re.I)
 
 
 def degree(text: str) -> dict:
@@ -447,9 +448,15 @@ def degree(text: str) -> dict:
     rank = {"": 0, "a degree": 1, "a bachelor's degree": 1, "a master's degree": 2, "a PhD": 3}
     for s in _sentences(text):
         level = ""
-        if _PHD.search(s):
+        # A graduate degree offered beside a bachelor's is no graduate bar: "Bachelor’s or
+        # master’s degree" was read as a master's, required (2026-10-23).
+        grads = [m for m in ts.DEGREE.finditer(s)
+                 if not ts.NOT_A_DEGREE.match(s, m.start())
+                 and not ts.BACHELOR_OR.search(s[:m.start()])]
+        # A PhD offered beside a master's ("a Master's or PhD") is a master's bar.
+        if any(_PHD.match(m.group(0)) and not _MASTER_OR.search(s[:m.start()]) for m in grads):
             level = "a PhD"
-        elif ts.DEGREE.search(s) and not ts.NOT_A_DEGREE.search(s):
+        elif grads:
             level = "a master's degree"
         elif _BACHELOR.search(s):
             level = "a bachelor's degree" if re.search(r"bachelor|b\.?sc|b\.?a\b|undergraduate",

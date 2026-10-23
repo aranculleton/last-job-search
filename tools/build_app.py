@@ -57,6 +57,14 @@ ALLOWED_ORGANIZATIONS = {
     "eBay",
     # Software the app names as a skill a posting asks for.
     "Docker",
+    # Employers the app's own prose names for their products and tools, never as where
+    # anyone applied: Google (Gemini CLI, Antigravity, Scholar), Microsoft (a Power BI
+    # certificate), Apple (a Mac's own Python), IBM and Oracle (spelling and ATS
+    # examples). One tracker row at Google put its name on the denylist and failed every
+    # chat's checks on the app's own prose (2026-10-23). A name goes here only when the
+    # app's text outside tools/bridges.py, whose skill entries the scan already sets
+    # aside, uses it this way; a test checks each one is in the app's text.
+    "Google", "Microsoft", "Apple", "IBM", "Oracle",
 }
 
 # The first names the app's invented people are greeted by in its examples and tests
