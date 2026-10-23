@@ -454,6 +454,23 @@ def day(value) -> datetime.date | None:
     return None
 
 
+def clock(value) -> str:
+    """The time of day a dated export cell carries, "08:40", or "" when it has none."""
+    m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\b", str(value or ""))
+    return f"{int(m.group(1)):02d}:{m.group(2)}" if m else ""
+
+
+# The mark a repeat carries: the same words to or from one person on one day, sent at
+# another time. Without it two genuine messages were two identical rows, which RECONCILE
+# reads as one message logged twice (2026-10-23).
+_AT = " (sent at {})"
+
+
+def _sig(row) -> tuple:
+    return tuple(str(row.get(k) or "").strip()
+                 for k in ("date", "direction", "channel", "scenario", "summary", "full_text"))
+
+
 def month(value) -> tuple | None:
     """(year, month or None) from a position's or a certificate's date: "Mar 2023",
     "03/2023", "2023", or an ISO date. None when there is nothing usable."""
@@ -676,7 +693,8 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
         mine = (next((st.profile_handle(r.get("SENDER PROFILE URL")) for r in msgs["rows"]
                       if name_key(r.get("FROM")) == mine[1]
                       and st.profile_handle(r.get("SENDER PROFILE URL"))), ""), mine[1])
-    out = {"add": [], "fill": [], "redate": [], "joined": {"profile address": 0, "name": 0},
+    out = {"add": [], "fill": [], "redate": [], "mark": [],
+           "joined": {"profile address": 0, "name": 0},
            "unmatched": [], "ambiguous": [], "groups": 0, "drafts": 0, "tables": tables,
            "problem": ""}
     if not (mine[0] or mine[1]):
@@ -709,7 +727,27 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
 
     claimed: set = set()
 
-    def add_message(cid, when, direction, text, subject, summary, attached=""):
+    marked: dict = {}                    # id(an existing row) -> the summary it will carry
+
+    def planned(r) -> tuple:
+        sig = _sig(r)
+        return sig[:4] + (marked.get(id(r), sig[4]),) + sig[5:]
+
+    def mark_repeat(row, rows, at):
+        """A row identical to another of this person's is marked with the time it was sent,
+        once. An existing row is marked when the plan is applied, never while it is made."""
+        summary = marked.get(id(row), str(row.get("summary") or ""))
+        if not at or "(sent at " in summary:
+            return
+        if any(r is not row and planned(r) == planned(row) for r in rows):
+            new = summary + _AT.format(at)
+            if any(a is row for a in out["add"]):
+                row["summary"] = new
+            else:
+                marked[id(row)] = new
+                out["mark"].append((row, new))
+
+    def add_message(cid, when, direction, text, subject, summary, attached="", at=""):
         rows = mine_for(cid)
         for r in rows:
             if st._direction(r) == direction and _near(st.as_date(r.get("date")), when,
@@ -729,6 +767,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                         and not st.is_acceptance(r) and not st.is_withdrawal(r)
                         and not st.is_call(r)):
                     claimed.add(id(r))
+                    mark_repeat(r, rows, at)
                     return
         if not text:
             # A message with no words (a resume sent alone) has no text to match on, and was
@@ -742,6 +781,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                         and not st.is_acceptance(r) and not st.is_withdrawal(r)
                         and not st.is_call(r)):
                     claimed.add(id(r))
+                    mark_repeat(r, rows, at)
                     return
         empty = [r for r in rows if st._direction(r) == direction
                  and _near(st.as_date(r.get("date")), when, MESSAGE_SLACK_DAYS)
@@ -756,6 +796,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                "full_text": text, "subject": subject}
         out["add"].append(row)
         log.append(row)
+        mark_repeat(row, rows + [row], at)
         if not text:
             claimed.add(id(row))
 
@@ -808,7 +849,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
                            + EXPORT_NOTE + (f"; {note}" if note else "")
                            + (f": {_preview(text)}" if text else ""))
                 add_message(cid, when, direction, text, str(r.get("SUBJECT") or "").strip(),
-                            summary, attached=note)
+                            summary, attached=note, at=clock(r.get("DATE")))
 
     # Invitations: the person's requests, and requests to them from people in the book.
     if invs["usable"]:
@@ -917,6 +958,8 @@ def apply_history(threads, plan, contacts=None) -> int:
     behind put every imported thread in front of the person as a contradiction."""
     for row, text in plan["fill"]:
         row["full_text"] = text
+    for row, summary in plan.get("mark") or ():
+        row["summary"] = summary
     redate = plan.get("redate") or []
     for row, day_ in redate:
         old = row.get("date")
@@ -931,7 +974,7 @@ def apply_history(threads, plan, contacts=None) -> int:
         settle(contacts, threads, {r["contact_id"] for r in plan["add"]}
                | {str(r.get("contact_id") or "") for r, _ in plan["fill"]}
                | {str(r.get("contact_id") or "") for r, _ in redate})
-    return len(plan["add"]) + len(plan["fill"]) + len(redate)
+    return len(plan["add"]) + len(plan["fill"]) + len(redate) + len(plan.get("mark") or ())
 
 
 def settle(contacts, threads, ids) -> list:
@@ -1110,8 +1153,9 @@ def withdrawn(contacts, threads, who, today, src=None, oldest: int = 0, reason: 
         sent = datetime.date.fromisoformat(i["sent"])
         cid = i["contact_id"]
         if not cid:
-            cid = st.unique_contact_id(i["name"] or st.profile_handle(i["url"]), "", contacts,
-                                       linkedin_url=i["url"])
+            # A name the export gives with no surname in it is no id: the profile address is.
+            named = i["name"] if st.surname(i["name"]) else st.profile_handle(i["url"])
+            cid = st.unique_contact_id(named or i["name"], "", contacts, linkedin_url=i["url"])
             st.add_row(contacts, cid, {
                 "name": i["name"], "linkedin_url": i["url"], "channel": "connection",
                 "status": "awaiting_reply", "first_contacted": i["sent"], "route": "cold",
@@ -1211,6 +1255,11 @@ def _cli_history(a) -> int:
         n_ = len(plan["redate"])
         print(f"  {n_} request{'s' if n_ != 1 else ''} recorded from a Pending page, given the "
               "earlier day the export says it went")
+    if plan.get("mark"):
+        n_ = len(plan["mark"])
+        print(f"  {n_} repeat{'s' if n_ != 1 else ''} already logged (the same words to one "
+              "person twice in a day) given the time each was sent, so they are not read as "
+              "one message logged twice")
     if plan["groups"]:
         print(f"  {plan['groups']} group conversation{'s' if plan['groups'] != 1 else ''} left "
               "out: a message to several people is not one thread")

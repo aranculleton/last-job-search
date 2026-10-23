@@ -208,3 +208,55 @@ def test_the_state_view_lists_the_invitations_waiting(tmp_path, capsys, monkeypa
     out = capsys.readouterr().out
     assert "PENDING INVITATIONS" in out and "Quillon Varga: sent 2026-04-15" in out
     assert E.WITHDRAW_STEPS in out
+
+
+# ------------------------------------------------------------ repeats and nameless people
+
+def _repeats(tmp_path, times=("09:05:00", "16:40:00")):
+    """Morgan sends one person the same resume twice on one day, with no words."""
+    rows = ["CONVERSATION ID,FROM,SENDER PROFILE URL,TO,RECIPIENT PROFILE URLS,DATE,CONTENT,"
+            "ATTACHMENTS"]
+    for t in times:
+        rows.append(f"c9,Morgan Ellis,https://www.linkedin.com/in/morgan-ellis-example,"
+                    f"Juno Castellan,https://www.linkedin.com/in/example-juno-castellan,"
+                    f"2026-10-02 {t} UTC,,https://www.linkedin.com/dms/files/Morgan_Ellis_CV.pdf")
+    src = tmp_path / "export"
+    src.mkdir()
+    (src / "messages.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return src
+
+
+def test_the_same_attachment_twice_in_a_day_is_two_rows_reconcile_reads_as_two(tmp_path):
+    # Two genuine sends were two identical rows, and RECONCILE called them one message
+    # logged twice (2026-10-23). The second carries the time it was sent.
+    contacts, threads, _c, _t = _book(tmp_path)
+    src = _repeats(tmp_path)
+    plan = E.plan_history(contacts, threads, str(src))
+    E.apply_history(threads, plan, contacts)
+    sent = [r for r in threads if r["date"] == "2026-10-02"]
+    assert len(sent) == 2 and sent[1]["summary"].endswith("(sent at 16:40)")
+    assert not [p for p in state.reconcile(contacts, threads) if p.get("reason") == "duplicate_message"]
+    # A re-run adds nothing and marks nothing.
+    again = E.plan_history(contacts, threads, str(src))
+    assert again["add"] == [] and again["mark"] == []
+
+
+def test_two_identical_rows_an_older_import_wrote_are_told_apart_on_a_re_run(tmp_path):
+    contacts, threads, _c, _t = _book(tmp_path)
+    src = _repeats(tmp_path)
+    plan = E.plan_history(contacts, threads, str(src))
+    for r in plan["add"]:
+        r["summary"] = r["summary"].replace(" (sent at 16:40)", "")     # the older importer's
+    E.apply_history(threads, plan, contacts)
+    assert [p for p in state.reconcile(contacts, threads) if p.get("reason") == "duplicate_message"]
+    fix = E.plan_history(contacts, threads, str(src))
+    assert fix["add"] == [] and len(fix["mark"]) == 1
+    E.apply_history(threads, fix, contacts)
+    assert not [p for p in state.reconcile(contacts, threads) if p.get("reason") == "duplicate_message"]
+
+
+def test_a_name_with_no_surname_still_gets_an_id():
+    # A first name and four dots in an export stopped contact_id: the dots were the surname.
+    assert state.person_name("Wren ....") == "Wren"
+    assert state.contact_id("Wren ....", "") == "wren"
+    assert state.contact_id("Wren ....", "Fernhill Freight") == "fernhill_freight_wren"

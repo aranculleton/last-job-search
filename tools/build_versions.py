@@ -453,9 +453,9 @@ METHODS: dict[str, dict] = {
             (52, "2026-10-22", False, "no reading limit and no connection cap of the app's own; reads stop only on LinkedIn's own signals; an employer written without spaces is that employer"),
             (53, "2026-10-22", False, "An employer's own name is never read as work authorization, and the reader's own name never as borrowed from an example; checks only, nothing to redo"),
             (54, "2026-10-22", False, "first notes vary their sentence order by contact (order= to choose); no close is held to ASK word for word"),
-            (55, "2026-10-22", False, "a LinkedIn download is taken whole (saved and its history imported) by export.py take and the connections import, kept in the main folder; files says when the history was never saved; the linkedin-history upgrade brings it to a repo that kept only connections"),
+            (55, "2026-10-22", False, "a LinkedIn download is taken whole (saved and its history imported) by export.py take and the connections import, kept in the main folder; files says when the history was never saved; the linkedin-history upgrade brings it to a repo that kept only connections; a repeat imported the same day keeps the time it was sent, and a name with no surname gets an id"),
         ),
-        "fingerprint": "80e769d2a5cc619e",
+        "fingerprint": "14776d7628bedd54",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",

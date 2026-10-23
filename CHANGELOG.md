@@ -30,6 +30,11 @@ make sense to somebody whose repo just received it.
   chat's own folder cannot take it with it when it finishes. Where only your connections were
   kept, your chat on your computer looks for the download itself, and asks you for it only if
   it cannot find it. Profile upgrade: linkedin-history.
+- **The same file sent to someone twice in a day is two messages, not a mistake.** Reading
+  your LinkedIn messages in wrote two identical lines for it, and the app's own check then
+  called them one message logged twice. The second now says the time it was sent, and lines
+  an earlier version wrote that way are told apart the next time your messages are read in.
+  Someone LinkedIn lists with only a first name and some dots no longer stops it either.
 - **Saving your work on your computer no longer trips the desktop app's safety check.** A
   chat ran its steps for saving as one long command, and the app's auto mode refused the whole
   thing as a merge nobody had reviewed, although that step is pre-approved. Each step now runs
