@@ -113,10 +113,27 @@ class Upgrade:
 
 # ------------------------------------------------------------------ helpers
 
+# The registry entries the steps just built drew on, so the plan can give Claude their notes
+# (an entry old enough to re-check) apart from the lines the person reads.
+_DREW_ON: list[str] = []
+
+
 def _surface_steps(eid: str) -> list[str]:
-    """A path from the dated, sourced registry (tools/claude_surfaces.json)."""
+    """A path from the dated, sourced registry (tools/claude_surfaces.json): the person's
+    lines only; `plan()` gives Claude the entry's note, if it has one, as `check`."""
     import claude_surfaces
+    _DREW_ON.append(eid)
     return claude_surfaces.steps(eid)
+
+
+def _steps_and_notes(u) -> tuple[str, list[str]]:
+    """An upgrade's steps for the person, and Claude's notes on the entries they drew on."""
+    if not u.steps:
+        return "", []
+    import claude_surfaces
+    _DREW_ON.clear()
+    text = u.steps()
+    return text, claude_surfaces.notes(*_DREW_ON)
 
 
 def _mod(name: str):
@@ -1756,10 +1773,14 @@ def line(rows: list[tuple[Upgrade, str]] | None = None) -> str:
 def plan(rows: list[tuple[Upgrade, str]] | None = None) -> list[dict]:
     """The pending upgrades as /upgrade works through them, most urgent first."""
     rows = pending() if rows is None else rows
-    return [{"id": u.id, "priority": u.priority, "needs": u.needs, "ask": u.ask,
-             "steps": u.steps() if u.steps else "", "why_ask": u.why_ask,
-             "gives": u.gives, "why": why, "run": u.run, "cost": u.cost, "time": u.time}
-            for u, why in rows]
+    out = []
+    for u, why in rows:
+        steps, check = _steps_and_notes(u)
+        out.append({"id": u.id, "priority": u.priority, "needs": u.needs, "ask": u.ask,
+                    "steps": steps, "check": check, "why_ask": u.why_ask,
+                    "gives": u.gives, "why": why, "run": u.run, "cost": u.cost,
+                    "time": u.time})
+    return out
 
 
 # ------------------------------------------------------------------ instant

@@ -817,6 +817,16 @@ def blocked_say(refusing: dict[str, str]) -> str:
         return ""
 
 
+def blocked_notes() -> list[str]:
+    """The line for Claude beside `blocked_say`, never said to the person: the fix's steps
+    are old enough to re-check (env_check.blocked_notes). [] when they are fresh."""
+    try:
+        import env_check
+        return env_check.blocked_notes()
+    except Exception:  # noqa: BLE001  a note must never break a round
+        return []
+
+
 def canary_report(health: dict[str, tuple[bool, str]]) -> tuple[str, bool]:
     """A human line per portal, and whether every portal is usable."""
     lines, ok, silent = [], True, False
@@ -1289,6 +1299,8 @@ def main() -> int:
                 _say("Tell the person, in these words, once:", a.log)
                 for line in say.splitlines():
                     _say("  " + line, a.log)
+                for note in blocked_notes():              # yours, never said
+                    _say("Claude, not for them: " + note, a.log)
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()},
                        "not_searched": not_searched(health), "say": say},
                       open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)

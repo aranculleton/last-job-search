@@ -97,7 +97,8 @@ changed, never the commit or the command) at the end of its reply,
 and asks at most three of the questions from 3, each short and alone: no list of ids, no
 version numbers, no paragraph. A yes brings that question's steps (five at most, under the
 line saying when they were checked and the page to check them against, which is checked
-that day before they are given: CLAUDE.md, "A step on another company's site"); a
+that day before they are given: CLAUDE.md, "A step on another company's site"; an entry's
+`check` line in the plan is yours, never said); a
 "why?" brings its one-sentence reason; a no gets "No problem, I'll ask again in a month."
 and `python3 tools/profile_upgrades.py --no <id>`. Answers go into the profile where their
 markers were, committed like any other profile change.

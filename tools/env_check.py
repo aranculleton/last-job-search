@@ -141,6 +141,14 @@ def blocked_say(names) -> str:
            "changed."])
 
 
+def blocked_notes() -> list[str]:
+    """What Claude is told beside `blocked_say`, never the person: the steps' entry, once it
+    is old enough to re-check (claude_surfaces.notes). Printed to stderr, apart from the
+    words said word for word."""
+    import claude_surfaces
+    return claude_surfaces.notes("cloud-internet")
+
+
 def blocked_names() -> list[str]:
     """The job sites this chat's cloud settings refuse, probed now; [] off the cloud."""
     if not CLOUD:
@@ -283,6 +291,8 @@ def main(argv: list[str] | None = None) -> int:
         names = blocked_names()
         if names:
             print(blocked_say(names))
+            for note in blocked_notes():
+                print(note, file=sys.stderr)
         return 0
     bad = 0
     print("where: " + ("a cloud session" if CLOUD else "this computer"))
@@ -325,6 +335,8 @@ def main(argv: list[str] | None = None) -> int:
     if blocked:
         print("\nTell the person, in these words, once:")
         print(blocked_say(blocked))
+        for note in blocked_notes():
+            print(note, file=sys.stderr)
     return 1 if bad else 0
 
 

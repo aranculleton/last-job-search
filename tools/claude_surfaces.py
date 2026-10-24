@@ -79,16 +79,17 @@ def official(e: dict) -> str:
 def steps(eid: str, reg=None, today=None) -> list:
     """An entry's steps for a person who said yes, one action a line, headed by the day
     they were checked and the page to check them against: never shown before they asked.
-    Past `stale_after_days` a line for Claude follows: re-check the page before giving
-    them, or say they could not be checked today. Steps about LinkedIn's screens, passed
-    on unchecked, sent a person to an option LinkedIn no longer offered."""
+    Steps about LinkedIn's screens, passed on unchecked, sent a person to an option LinkedIn
+    no longer offered, so the page is checked that day before they are given.
+
+    The person's lines only. Past `stale_after_days` the line for Claude (`warning`, `notes`)
+    comes apart from them: inside them, every message that passes steps on word for word
+    carried it, a file path and all, and grew past its length the day the entry aged."""
     e = entry(eid, reg)
     page = official(e)
     head = (f"At the time of writing (checked {e['verified_on']}"
             + (f"; official page: {page}" if page else "") + "):")
-    out = [head] + [f"{i}. {s}" for i, s in enumerate(e.get("steps", ()), 1)]
-    late = warning(e, today, reg)
-    return out + ([late] if late else [])
+    return [head] + [f"{i}. {s}" for i, s in enumerate(e.get("steps", ()), 1)]
 
 
 def age(e: dict, today: datetime.date | None = None) -> int:
@@ -111,6 +112,13 @@ def warning(e: dict, today: datetime.date | None = None, reg: dict | None = None
     return (f"[claude_surfaces: {e['id']!r} was checked {e['verified_on']}, {n} days ago: "
             f"re-check {pages or 'its source'} before relying on it, then update "
             "tools/claude_surfaces.json]")
+
+
+def notes(*eids: str, today=None, reg=None) -> list:
+    """The lines for Claude, never the person, for the entries a message drew on: one per
+    entry past `stale_after_days`, none while they are fresh."""
+    return [w for w in (warning(entry(eid, reg), today, reg) for eid in dict.fromkeys(eids))
+            if w]
 
 
 def say(eid: str, name: str = "your copy", owner: str = "", today=None, reg=None,
@@ -311,6 +319,8 @@ def main(argv=None) -> int:
         return 0
     if cmd == "steps":
         print("\n".join(steps(rest[0])))
+        for w in notes(rest[0]):              # for Claude, as `say` gives it: never said
+            print(w, file=sys.stderr)
         return 0
     if cmd == "sync-docs":
         changed = sync_docs()
