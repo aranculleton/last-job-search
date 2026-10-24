@@ -20,6 +20,11 @@ profile (`tools/person.py`), and bullet text lives only in the profile's `bullet
 second copy of the bullets in this file once kept a clause that had already been removed
 from the library.
 
+`doc_style.py` beside it decides the colour: black, unless the person chose one for a kind
+of employer (`person.json` `documents.styles`) or a draft names one. It writes a few colour
+lines into both preambles and nothing else, so a styled document has every word where the
+black one has it.
+
 Everything below is about the other thing.
 
 ---

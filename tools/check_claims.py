@@ -188,8 +188,11 @@ def strip_latex(text: str) -> str:
     # Drop \begin{env} / \end{env} with the environment name, or a document full
     # of itemize blocks reports a phantom "itemize itemize" duplicated word.
     t = re.sub(r"\\(?:begin|end)\s*\{[^}]*\}", " ", t)
-    # Drop fontspec/geometry style option blocks, which are not prose.
+    # Drop fontspec/geometry style option blocks, which are not prose. A letter in a
+    # colour asks for its font again with fontspec's own key, "Color", which is not the
+    # person's spelling of anything (templates/doc_style.py).
     t = re.sub(r"\\fontspec\s*\[[^\]]*\]", " ", t)
+    t = re.sub(r"\\addfontfeatures?\s*\{[^}]*\}", " ", t)
     t = re.sub(r"\\(?:textbf|textit|emph|href|url|item|section|item)\b", " ", t)
     t = re.sub(r"\\[a-zA-Z@]+\*?(\[[^\]]*\])?", " ", t)
     # Separate LaTeX fields with a sentinel rather than a space: "University of

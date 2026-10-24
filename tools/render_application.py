@@ -408,6 +408,9 @@ def build(a):
     # the tracker's notes; record_drafts.py writes it there.
     d["req_id"] = str(a.get("req_id") or "").strip()
     d["consent"] = check_claims.consent_header(yes, no)
+    # Black unless the person chose a colour for this kind of employer, or this draft names
+    # one (templates/doc_style.py). Only colour: the same words on the same lines.
+    d["style"], d["style_why"] = gen.doc_style.choose(a)
     return d
 
 

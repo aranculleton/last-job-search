@@ -21,6 +21,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
 import docpaths  # noqa: E402
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import doc_style  # noqa: E402
 
 # Everything about the person comes from the profile: the name and contact
 # line, the document noun and headings, the paper, education, certifications
@@ -65,7 +67,7 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 \colorlet{{lastnamecolor}}{{color1}}
 \colorlet{{namecolor}}{{color1}}
 \renewcommand*{{\sectionstyle}}[1]{{{{\sectionfont\color{{color1}}#1}}}}
-
+{style}
 \usepackage[utf8]{{inputenc}}
 \usepackage{{needspace}}
 
@@ -155,7 +157,7 @@ LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[{letter_paper}]{{cover}}
 \usepackage{{fancyhdr}}
-
+{letter_style}
 \pagestyle{{fancy}}
 \fancyhf{{}}
 
@@ -272,8 +274,10 @@ def resume(a):
         "education": EDUCATION.format(edu=a.get("edu", EDU_STD), **me),
         "certifications": me["certifications"],
     }
+    # The style's colour lines, or nothing: a black resume is the template exactly.
+    style = doc_style.resume_block(a.get("style"), a.get("style_why", ""))
     body = (RESUME_HEAD.format(company=a["company"], role=a["role"],
-                               consent=a.get("consent", ""),
+                               consent=a.get("consent", ""), style=style,
                                fname=docpaths.resume_stem(a["abbr"]), **me)
             + "".join(sections[k] for k in section_order())
             + RESUME_END)
@@ -324,6 +328,8 @@ def letter(a):
     body = LETTER.format(company=a["company"], role=a["role"],
                          req=f" (requisition {req})" if req else "",
                          consent=a.get("consent", ""),
+                         letter_style=doc_style.letter_block(a.get("style"),
+                                                             a.get("style_why", "")),
                          letter_paper="" if paper == "letterpaper" else paper,
                          salutation=a.get("salutation", f"{a['company']}{suffix}"),
                          letter_date=a.get("letter_date") or _long_date(),

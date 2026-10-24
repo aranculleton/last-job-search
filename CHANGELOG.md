@@ -20,6 +20,13 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **A resume and its cover letter can take a colour chosen for a kind of employer** (a bank
+  in navy, a startup in teal) **or for one application.** Nothing changes unless you ask:
+  every document stays black, and a colour never moves a word, a line or the page. Ask
+  Claude for a colour and it writes the setting for you.
+
 ## [3.13.0] - 2026-10-24
 
 ### Added

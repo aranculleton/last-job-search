@@ -1604,6 +1604,9 @@ SAFE_DEFAULTS: dict[str, str] = {
                                       "nobody there has answered, as before it was a "
                                       "setting; reading.py more-at raises it for one "
                                       "employer on the person's word",
+    "person.json:documents.styles": "none, so every resume and letter is black, as before "
+                                    "the setting existed; a colour is the person's choice "
+                                    "per kind of employer (templates/doc_style.py)",
     # Read since before the first release through a one-argument getter (network/reply.py
     # _w) that tools/profile_names.py could not see; nothing about how it is read changed.
     "networking.HOME_ADJECTIVE": "unset, the nationality word in a reply's status and "

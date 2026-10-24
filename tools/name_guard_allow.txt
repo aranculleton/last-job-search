@@ -22,6 +22,10 @@ Acme Careers            # invented employer, tests/test_every_system_openroles_r
 Acme Labs               # invented employer, tests/test_setup_reads_any_person.py
 Brackmoor Retail        # invented employer, tests/test_the_code_audit_catches_every_known_defect.py
 Ellerwick Trust         # invented employer, tests/test_the_drafting_pack_is_built_once_by_code.py
+Harbourline Bank        # invented employer, tests/test_a_style_is_only_colour.py
+Brackenridge Advisory   # invented employer, tests/test_a_style_is_only_colour.py
+Copperleaf Pay          # invented employer, tests/test_a_style_is_only_colour.py
+Unlisted Widgets        # invented employer, tests/test_a_style_is_only_colour.py
 # Public holidays: tools/holidays.py names them; none is a person.
 Anzac Day                    # a public holiday, tools/holidays.py
 Boxing Day                   # a public holiday, tools/holidays.py

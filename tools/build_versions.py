@@ -310,8 +310,9 @@ METHODS: dict[str, dict] = {
             (47, "2026-10-22", False, "an audit ruling matches its flag quoted whole or cut, the packet holds the draft object it returns, a verdict keeps what it leaves out, a lead's edit to the corrected draft is kept and checked again"),
             (48, "2026-10-23", False, "applications are delivered one way: per role one file-sending call with resume and letter, captioned role, employer, pay, location and apply link, then one index table; paths as plain text, never markdown links. An audit ruling no longer settles a longer sentence edited after it, an edit to the outreach note is kept in the note, and a newer model correction is never overwritten by an older edit"),
             (49, "2026-10-24", False, "the posting profile reads a degree's other way in past a semicolon, as the score does; the run book saves with tools/save_state.py and tells nobody but the maintainer of a problem with the app; verify_batch reads whole bullets for repeats and its skills check runs under a Mac's sed; every resume's text is black (name, headings, rule, contact line, links, bullet marks), with nothing else moved; drafts made before keep theirs until re-rendered; voice_check counts the person's own wording in a message (their opener and close, a message they approved) as theirs, never a finding, and a letter is held to the house style as before; save_state.py stages a file of the person's that was taken away as removed; on moderncv 2.4 and later (a Mac's TeX) the name is drawn 9.5pt higher, its box unchanged, so a text extractor reads it apart from the city and nothing else moves"),
+            (50, "2026-10-24", False, "a resume and its letter can take a colour per kind of employer (person.json documents.styles, templates/doc_style.py), or one a draft names; black when nothing chooses one, so every draft renders exactly as before; a colour moves no word, and the claims check reads no font key as a word"),
         ),
-        "fingerprint": "ec6feeb39b78f14a",
+        "fingerprint": "1f5e7e23ec194400",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
