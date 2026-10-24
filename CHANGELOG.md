@@ -20,6 +20,8 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+## [3.13.0] - 2026-10-24
+
 ### Added
 
 - **Every resume's text is black.** The name, the section titles, the rule under the name,
