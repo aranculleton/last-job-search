@@ -304,7 +304,11 @@ _NOISE = re.compile(
     r"report this (?:post|profile)|edited|visible to anyone on or off linkedin|"
     r"view (?:full )?profile|open to|add profile section|enhance profile|resources)$|"
     r"^\d[\d,.]*\+?\s*(?:followers?|connections?|reactions?|comments?|reposts?|likes?)$|"
-    r"^page \d+ of \d+$|^\d[\d,.]*$|^[•·]$|^(?:he|she|they)/(?:him|her|them)$|"
+    # A browser's page text puts the count and its word on two lines ("500+", then
+    # "connections"): matched only together, "500+" was read as where they work and the
+    # contact skipped as having moved on (2026-10-24).
+    r"^(?:followers?|connections?)$|"
+    r"^page \d+ of \d+$|^\d[\d,.]*\+?$|^[•·]$|^(?:he|she|they)/(?:him|her|them)$|"
     r"^[•·]?\s*(?:1st|2nd|3rd\+?)(?:\s+degree connection)?$", re.I)
 _POST_HEAD = re.compile(r"\b(posted this|reposted this|shared this|commented on (?:this|a post))\b",
                         re.I)
@@ -482,9 +486,19 @@ def _top(pre: list, before_main: list, name: str = "") -> tuple[str, str, str]:
 
 
 def _card_employer(org: str) -> str:
-    """The current employer the top card names, never the school beside it."""
+    """The current employer the top card names, never the school beside it, and never a
+    count of their connections or followers."""
     first = _ORG_LINE.split(org or "")[0].strip()
-    return "" if not first or _SCHOOL.search(first) else first[:120]
+    return "" if not first or _SCHOOL.search(first) or is_count(first) else first[:120]
+
+
+# "500+", "1,234 followers", "500+ connections": what a card counts, never an employer.
+_COUNT = re.compile(r"^\d[\d,.]*\s*\+?\s*k?\+?(?:\s*(?:followers?|connections?))?$", re.I)
+
+
+def is_count(text: str) -> bool:
+    """Is this a count a profile card prints (connections, followers), not a name?"""
+    return bool(_COUNT.match(" ".join(str(text or "").split())))
 
 
 # A headline's past, never where they work: "ex-<Employer>", "formerly <Employer>".
@@ -1235,9 +1249,13 @@ def verdict(reading: dict, company: str = "") -> tuple[bool, str]:
     if reading.get("reach") == "pending":
         return False, "a connection request to them is already pending"
     current = reading.get("current", "")
+    if is_count(current):
+        current = ""          # a reading saved before counts were caught: "500+" is no employer
     # The employer under another of its names ("<Name> Ratings", "<Brand>, AI by
-    # <Parent>") is where they were found, not somewhere they moved to.
+    # <Parent>") or written short ("<Name>" for "<Name> Asset Management") is where they
+    # were found, not somewhere they moved to.
     if company and current and not discovery.same_employer(current, company) \
+            and not discovery.written_short(current, company) \
             and not _has(company, headline) and not _has(company, current):
         return False, f"has moved on: their current employer is {current}, not {company}"
     loc = reading.get("location", "")
@@ -1367,7 +1385,7 @@ def _words(text: str) -> set:
             if len(w) >= 3 and w not in _STOP and w not in _GENERIC}
 
 
-def grounded(common_ground: str, reading: dict | None) -> tuple[bool, str]:
+def grounded(common_ground: str, reading: dict | None, today=None) -> tuple[bool, str]:
     """Does the note's common ground rest on something actually read about them.
 
     True when it names history they share (an employer, school or city found on
@@ -1387,7 +1405,7 @@ def grounded(common_ground: str, reading: dict | None) -> tuple[bool, str]:
     # prove nothing: "your work at <Employer>" is the note a snippet already made.
     known = _words(reading.get("name", "")) | _words(reading.get("company", ""))
     mine = _words(cg) - known
-    today = datetime.date.today()
+    today = today or datetime.date.today()
     # A dated item older than POST_DAYS is history, as hooks() treats it: a 2018
     # appointment is evidence of who was appointed, not of what they do now.
     sources = [(i.get("kind", "item"), i.get("text", "")) for i in reading.get("items", [])
@@ -2203,10 +2221,27 @@ def placed(contact_id: str, contacts=None) -> bool:
     return bool(str(row.get("location") or "").strip())
 
 
+def _people_per_employer(v) -> int:
+    """networking.py PEOPLE_PER_EMPLOYER as a whole number of one or more; anything else is
+    the app's 2."""
+    if isinstance(v, bool):
+        return 2
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return 2
+    return n if n >= 1 else 2
+
+
 # At most this many people at one employer are written to while nobody there has answered:
 # the ones already waiting on a reply count, so a run cannot pile a fourth note on an
-# employer where three sit unanswered (2026-10-20), and neither can the day's list.
-PER_EMPLOYER = 2
+# employer where three sit unanswered (2026-10-20), and neither can the day's list. The
+# number is the person's (networking.py PEOPLE_PER_EMPLOYER), and an employer where they
+# want more is theirs to name (`more-at`, kept in profile/more_at.json with their words):
+# asked for more at four employers, a session could only show the notes in the chat, since
+# the short list and every draft refused them and nothing could say otherwise (2026-10-24).
+PER_EMPLOYER = _people_per_employer(getattr(_NET, "PEOPLE_PER_EMPLOYER", 2))
+MORE_AT_FILE = "more_at.json"
 WAITING = ("awaiting_reply", "connected_no_reply")
 # Only a note sent this recently holds the employer: the throttle's 45 days of silence. An
 # unanswered note from months ago is a thread that has ended, and counted for ever it would
@@ -2264,16 +2299,100 @@ def at_employer(company: str, contacts, also=(), today: datetime.date | None = N
     return waiting, there
 
 
+def _more_at_path() -> str:
+    try:
+        return person.path(MORE_AT_FILE)
+    except person.NoProfile:
+        return ""
+
+
+def more_at() -> dict:
+    """The employers where the person wants more people written to than PER_EMPLOYER:
+    {company_key: {"employer", "limit" (None: no number of the app's), "said", "date"}}."""
+    path = _more_at_path()
+    try:
+        with open(path, encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    from company_key import key as company_key
+    out = {}
+    for row in got if isinstance(got, list) else []:
+        k = company_key(str((row or {}).get("employer") or "")) if isinstance(row, dict) else ""
+        # Two rows for one employer (two chats, each writing it its own way): the later word
+        # stands, as merging the file keeps the later change.
+        if k and str(row.get("date") or "") >= str((out.get(k) or {}).get("date") or ""):
+            out[k] = row
+    return out
+
+
+def set_more_at(employer: str, said: str, up_to: int | None = None,
+                today: datetime.date | None = None, remove: bool = False) -> dict:
+    """Keep the person's word that more people may be written to at `employer`: up to
+    `up_to` while nobody there has answered, or with no number of the app's when they named
+    none. Their words are kept with it and said whenever it lets a note through. `remove`
+    takes it back to PER_EMPLOYER. Returns the row kept (or removed)."""
+    from company_key import key as company_key
+    k = company_key(employer)
+    if not k:
+        raise ValueError("name the employer, as the contact book has it")
+    if not remove and not " ".join(str(said or "").split()):
+        raise ValueError("--said needs the person's own words: it is their call, kept as theirs")
+    if up_to is not None and (isinstance(up_to, bool) or int(up_to) < 1):
+        raise ValueError("--up-to is a whole number of one or more")
+    path = _more_at_path()
+    if not path:
+        raise ValueError("no profile: nothing can be kept before /setup")
+    example = os.path.realpath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__)))), "profile.example"))
+    if os.path.realpath(path).startswith(example + os.sep):
+        raise ValueError("profile.example is the app's example person; nothing is kept there")
+    rows = [r for r in more_at().values() if company_key(r.get("employer", "")) != k]
+    row = {"employer": " ".join(employer.split()), "limit": up_to,
+           "said": " ".join(str(said or "").split()),
+           "date": (today or datetime.date.today()).isoformat()}
+    if not remove:
+        rows.append(row)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(sorted(rows, key=lambda r: r["employer"].lower()), fh, indent=2,
+                  ensure_ascii=False)
+        fh.write("\n")
+    return row
+
+
+def employer_limit(company: str) -> tuple[int | None, dict]:
+    """(how many people at this employer may be written to while nobody there has answered,
+    None for no number of the app's; the person's word for it, or {} for PER_EMPLOYER)."""
+    from company_key import key as company_key
+    k = company_key(company)
+    theirs = more_at().get(k) if k else None
+    if theirs:
+        limit = theirs.get("limit")
+        return (_people_per_employer(limit) if limit is not None else None), theirs
+    return PER_EMPLOYER, {}
+
+
+def more_at_hint(company: str) -> str:
+    """The one line that lets the person's word through, said wherever the limit holds."""
+    return (f"if they want more people at {company}, keep their word for it: python3 "
+            f"tools/network/reading.py more-at \"{company}\" --said \"<their words>\" "
+            "[--up-to <how many>]")
+
+
 def employer_full_line(company: str, contacts, also=(), today: datetime.date | None = None,
                        also_is: str = "with a note waiting to send") -> str:
-    """Why no one more may be written to at this employer, or "": at most PER_EMPLOYER while
-    nobody there has answered, counting the people already waiting on a reply
-    (`at_employer`) and `also` (today's list, or the notes already drafted for people
-    there). The one test of it, read by the short list and by every draft saved: six notes
-    at four employers that already had two cold notes waiting each were saved and shown as
-    ready to send, because only the read step held it (2026-10-21)."""
+    """Why no one more may be written to at this employer, or "": at most PER_EMPLOYER (or
+    the person's number there, `employer_limit`) while nobody there has answered, counting
+    the people already waiting on a reply (`at_employer`) and `also` (today's list, or the
+    notes already drafted for people there). The one test of it, read by the short list and
+    by every draft saved: six notes at four employers that already had two cold notes
+    waiting each were saved and shown as ready to send, because only the read step held it
+    (2026-10-21)."""
+    limit, theirs = employer_limit(company)
+    if limit is None:
+        return ""
     waiting, there = at_employer(company, contacts, also, today=today)
-    if len(waiting) + len(there) < PER_EMPLOYER:
+    if len(waiting) + len(there) < limit:
         return ""
     said = []
     if waiting:
@@ -2281,7 +2400,10 @@ def employer_full_line(company: str, contacts, also=(), today: datetime.date | N
                     + ", ".join(c.get("name") or c.get("contact_id") for c in waiting[:4]) + ")")
     if there:
         said.append(f"{len(there)} {also_is}")
-    return f"{company} has {' and '.join(said)}, against {PER_EMPLOYER} a company"
+    if theirs:
+        return (f"{company} has {' and '.join(said)}, against the {limit} you asked for there "
+                f"on {theirs.get('date', '')}")
+    return f"{company} has {' and '.join(said)}, against {limit} a company"
 
 
 def shortlist(ids, today: datetime.date | None = None, contacts=None, remove=(),
@@ -3468,6 +3590,158 @@ LIST_EXTRACTOR = r"""(() => {
 })()"""
 
 
+# ------------------------------------------------------------ is a message to them free?
+
+# Someone not connected to the person, whose card shows only Message, is written to free
+# (an Open Profile) or with an InMail credit, and the card looks the same either way. 14
+# InMails were drafted on that guess and 2 went through (2026-10-24): the answer shows only
+# once the message window is open. This snippet opens it from their top card, types
+# nothing, reads which answer the window gives, and closes it. The labels it looks for
+# are LinkedIn's screen names, kept dated and sourced in tools/claude_surfaces.json
+# (linkedin-open-profile) and put into the snippet when it is printed.
+MESSAGE_CHECK_ENTRY = "linkedin-open-profile"
+MESSAGE_ANSWERS = ("free", "credits", "connected", "no message button", "unknown")
+_MESSAGE_CHECK = r"""(async () => {
+  const L = __LABELS__;
+  const norm = t => (t || "").replace(/\s+/g, " ").trim();
+  const low = t => norm(t).toLowerCase();
+  const holds = (t, list) => list.some(x => low(t).includes(x.toLowerCase()));
+  const named = (el, list) => {
+    const t = low(el.innerText || el.textContent || "");
+    const a = low(el.getAttribute("aria-label") || "");
+    return list.some(x => { const y = x.toLowerCase();
+      return t === y || a === y || a.startsWith(y + " ") || t.startsWith(y + " "); });
+  };
+  const main = document.querySelector("main") || document.body;
+  const h1 = main.querySelector("h1") || document.querySelector("h1");
+  let card = h1 && (h1.closest("section") || h1.parentElement);
+  for (let i = 0; card && i < 6 && !card.querySelector("button, a[role=button]"); i++)
+    card = card.parentElement;
+  const out = {url: location.href, kind: "message_check", answer: "unknown", saw: [],
+               opened: false, closed: false};
+  const btn = [...(card || main).querySelectorAll("button, a")].find(el => named(el, L.button));
+  if (!btn) { out.answer = "no message button"; return JSON.stringify(out); }
+  const before = norm(document.body.innerText);
+  const had = new Set(document.querySelectorAll("button"));
+  btn.click();
+  out.opened = true;
+  for (let i = 0; i < 24 && out.answer === "unknown"; i++) {
+    await new Promise(r => setTimeout(r, 250));
+    const now = norm(document.body.innerText);
+    if (holds(now, L.free) && !holds(before, L.free)) out.answer = "free";
+    else if (holds(now, L.credits) && !holds(before, L.credits)) out.answer = "credits";
+  }
+  const fresh = [...document.querySelectorAll("button")].filter(b => !had.has(b));
+  const lines = norm(document.body.innerText).split(/(?<=[.!?])\s+/);
+  out.saw = lines.filter(x => holds(x, L.free.concat(L.credits))).slice(0, 3).map(x => x.slice(0, 160));
+  const close = fresh.find(b => named(b, L.close));
+  if (close) { close.click(); out.closed = true; }
+  else document.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+  return JSON.stringify(out);
+})()"""
+
+
+def message_check_extractor() -> str:
+    """The snippet, with the labels as the registry has them today."""
+    import claude_surfaces
+    labels = claude_surfaces.entry(MESSAGE_CHECK_ENTRY).get("labels") or {}
+    want = {k: [str(x) for x in labels.get(k, ())] for k in ("button", "free", "credits", "close")}
+    return _MESSAGE_CHECK.replace("__LABELS__", json.dumps(want, ensure_ascii=False))
+
+
+def message_answer(raw: str) -> str:
+    """What a message check found, from the snippet's JSON or a word the person or the
+    chat gives ("free", "credits", "needs credits", "connected")."""
+    text = str(raw or "").strip()
+    if text.startswith("{"):
+        try:
+            got = json.loads(text)
+        except ValueError:
+            return ""
+        text = str(got.get("answer") or "") if isinstance(got, dict) else ""
+    word = " ".join(text.lower().replace("_", " ").split())
+    word = {"needs credits": "credits", "credit": "credits", "inmail": "credits",
+            "open profile": "free", "free message": "free"}.get(word, word)
+    return word if word in MESSAGE_ANSWERS else ""
+
+
+def record_message_check(contact_id: str, raw: str, today: datetime.date | None = None,
+                         how: str = "browser") -> tuple[str, str]:
+    """Keep what their message window said on their reading, and put the channel it allows
+    on a contact nobody has written to yet: "free" an Open Profile message, "credits" an
+    InMail, "connected" a message. Returns (answer, the line said). The answer is kept in
+    the reading (documents/network/<id>/reading.json, `message_window`), so the queue, the
+    drafts and the next session all see it."""
+    answer = message_answer(raw)
+    if not answer:
+        raise ValueError(f"not a message check: say free, credits or connected, or give the "
+                         f"snippet's output ({', '.join(MESSAGE_ANSWERS)})")
+    today = today or datetime.date.today()
+    got = load(contact_id) or {}
+    got["message_window"] = {"answer": answer, "on": today.isoformat(), "how": how}
+    save(contact_id, got)
+    channel = {"free": "open_profile", "credits": "inmail", "connected": "message"}.get(answer)
+    said = {"free": "free: they have an Open Profile, so the note goes as a free message and "
+                    "spends no InMail credit",
+            "credits": "it needs an InMail credit",
+            "connected": "they are connected to you: an ordinary message",
+            "no message button": "their page shows no Message button: a connection request, "
+                                 "or nothing",
+            "unknown": "the window said neither: check by hand ("
+                       + _check_by_hand() + ")"}[answer]
+    if channel:
+        import state
+        contacts = state.load_contacts()
+        c = state.already_contacted(contacts, contact_id=contact_id)
+        if c is not None and str(c.get("status") or "not_contacted") in schema_never_sent() \
+                and str(c.get("channel") or "") != channel:
+            c["channel"] = channel
+            state.save_contacts(contacts)
+    return answer, said
+
+
+def _check_by_hand() -> str:
+    import claude_surfaces
+    return " ".join(claude_surfaces.steps(MESSAGE_CHECK_ENTRY)[1:])
+
+
+def message_window(reading: dict | None) -> str:
+    """What their message window said, as kept: free, credits, connected, or ""."""
+    return str(((reading or {}).get("message_window") or {}).get("answer") or "")
+
+
+def inmail_hold(contact_id: str, contacts, reading: dict | None,
+                today: datetime.date | None = None, queued=None) -> str:
+    """Why an InMail to them may not be drafted, or "". A note by Message to someone not
+    connected is drafted only for someone who will get it: free (an Open Profile) always;
+    with a credit only while the credits left this month cover it beside the InMails
+    already drafted; and not before their message window has been checked."""
+    import state
+    answer = message_window(reading)
+    if answer in ("free", "connected"):
+        return ""
+    if answer != "credits":
+        return ("whether a message to them is free or needs an InMail credit shows only in "
+                "their message window, so it is checked first: python3 tools/network/"
+                "reading.py extractor --message-check (run on their page), then python3 "
+                f"tools/network/reading.py message-check {contact_id} <what it returned>")
+    today = today or datetime.date.today()
+    try:
+        threads = state.load_threads()
+    except Exception:  # noqa: BLE001  no log yet: nothing spent
+        threads = []
+    left = int(state.platform_budget(contacts, threads, today.isoformat())["inmails_left"])
+    queued = queued if queued is not None else queued_notes(contacts)
+    waiting = sum(1 for c in contacts if c.get("contact_id") in queued
+                  and c.get("contact_id") != contact_id
+                  and str(c.get("channel") or "").strip().lower() == "inmail")
+    if waiting >= left:
+        return (f"it needs an InMail credit, and {left} are left this month with {waiting} "
+                "InMail(s) already drafted: not drafted. A connection request, or wait for "
+                "the credits to come back")
+    return ""
+
+
 def from_list_extract(raw: str) -> str:
     """The list extractor's JSON as the page text people_page() reads: each card's text,
     any button label its text lacks, and the person's address on a line of its own, which
@@ -4007,7 +4281,10 @@ def set_channel(contact_id: str, reading: dict, today: datetime.date | None = No
                               (today or datetime.date.today()).isoformat())
     return (f"channel: an InMail (only Message shows and you are not connected). Credits: "
             f"{b['inmails_left']} left this month ({b['inmails_source']}); one goes when it is "
-            "sent (state.py sent --channel inmail --subject \"...\")")
+            "sent (state.py sent --channel inmail --subject \"...\"). Whether it is free (an "
+            "Open Profile) shows only in their message window: check it before drafting, "
+            "python3 tools/network/reading.py extractor --message-check on their page, then "
+            f"python3 tools/network/reading.py message-check {contact_id} <what it returned>")
 
 
 def schema_never_sent() -> set:
@@ -4201,7 +4478,9 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
             continue
         # The length validate() holds a note to, by the channel it goes by: a 307-character
         # note was saved on a 300-character plan, and LinkedIn cuts it (2026-10-22).
-        kind = {"inmail": "inmail", "message": "dm", "dm": "dm"}.get(
+        # An Open Profile message is an InMail that spends no credit: the same window, the
+        # same length.
+        kind = {"inmail": "inmail", "open_profile": "inmail", "message": "dm", "dm": "dm"}.get(
             str(row.get("channel") or "").strip().lower(), "connection")
         long_ = compose.length_findings(note_body(note).strip(), kind)
         if long_:
@@ -4263,9 +4542,24 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
         if full_:
             print(f"reading: not saved. {full_}: no more notes there until someone answers. "
                   "Send the ones waiting, or set this one aside (python3 tools/network/state.py "
-                  f"drop {cid} --reason \"<why>\")")
+                  f"drop {cid} --reason \"<why>\"); {more_at_hint(company)}")
             refused += 1
             continue
+        theirs = employer_limit(company)[1] if company else {}
+        if theirs:
+            waiting_, there_ = at_employer(company, contacts, others)
+            if len(waiting_) + len(there_) >= PER_EMPLOYER:
+                print(f"reading: {cid}: more than {PER_EMPLOYER} at {company}, on your word "
+                      f"({theirs.get('date', '')}): \"{_clip(theirs.get('said', ''), 120)}\"")
+        # A note by Message to someone not connected goes only to someone who will get it:
+        # 14 InMails were drafted on a guess and 2 went through (2026-10-24).
+        if str(row.get("channel") or "").strip().lower() == "inmail":
+            hold = inmail_hold(cid, contacts, got,
+                               queued={**queued_notes(contacts), **{k: v[0] for k, v in ready.items()}})
+            if hold:
+                print(f"reading: {cid}: not saved: {hold}")
+                refused += 1
+                continue
         ready[cid] = (note_body(note).strip(), card_only, row, got)
     if not ready:
         return EXIT["error"]
@@ -4381,6 +4675,14 @@ def main(argv: list | None = None) -> int:
     qu.add_argument("--urls", action="store_true",
                     help="the fast path: only their profile addresses, to open by hand and "
                          "paste back in one go (no automation at all)")
+    ma = sub.add_parser("more-at", help="the person wants more people written to at one employer "
+                                        "than the limit: keep their word for it (no employer: "
+                                        "list the ones kept)")
+    ma.add_argument("employer", nargs="?", default="")
+    ma.add_argument("--said", default="", help="the person's own words, kept with it")
+    ma.add_argument("--up-to", type=int, default=None,
+                    help="how many there while nobody has answered; none: no number of the app's")
+    ma.add_argument("--remove", action="store_true", help="back to the limit for everyone")
     sl = sub.add_parser("shortlist", help="add to today's short list for deep reads, best first")
     sl.add_argument("ids", nargs="*")
     sl.add_argument("--remove", nargs="+", action="extend", default=[], metavar="ID",
@@ -4494,11 +4796,35 @@ def main(argv: list | None = None) -> int:
     ex.add_argument("--list", action="store_true",
                     help="for a people search or an employer's People tab: every card with "
                          "the person's address, headline, place, degree and buttons")
+    ex.add_argument("--message-check", action="store_true",
+                    help="on someone's page: open their message window, type nothing, say "
+                         "whether a message to them is free or needs an InMail credit, close it")
+    mc = sub.add_parser("message-check", help="keep what their message window said: free, "
+                                              "credits, or the --message-check snippet's output")
+    mc.add_argument("contact_id")
+    mc.add_argument("answer", help="free, credits, connected, the snippet's JSON, a file, or -")
+    mc.add_argument("--by-hand", action="store_true", help="the person looked, not the snippet")
     a = ap.parse_args(argv)
 
     if a.cmd == "extractor":
-        print(LIST_EXTRACTOR if a.list else EXTRACTOR_ACTIVITY if a.activity else EXTRACTOR)
+        print(message_check_extractor() if a.message_check else LIST_EXTRACTOR if a.list
+              else EXTRACTOR_ACTIVITY if a.activity else EXTRACTOR)
         return EXIT["ok"]
+    if a.cmd == "message-check":
+        raw = a.answer
+        if raw == "-":
+            raw = sys.stdin.read()
+        elif os.path.isfile(raw):
+            with open(raw, encoding="utf-8") as fh:
+                raw = fh.read()
+        try:
+            answer, said = record_message_check(a.contact_id, raw,
+                                                how="by hand" if a.by_hand else "browser")
+        except ValueError as e:
+            print(f"message-check: not kept: {e}")
+            return EXIT["error"]
+        print(f"message-check: {a.contact_id}: {said}")
+        return EXIT["ok"] if answer in ("free", "credits", "connected") else EXIT["check"]
     if a.cmd == "free-break":
         print("reading: " + free_break())
         return EXIT["ok"]
@@ -4682,6 +5008,38 @@ def main(argv: list | None = None) -> int:
         if r_["say"]:
             print(f"tell them, once: {r_['say']}")
         return EXIT["ok"]
+    if a.cmd == "more-at":
+        if not a.employer:
+            kept = sorted(more_at().values(), key=lambda r: r.get("employer", "").lower())
+            print(f"more-at: {PER_EMPLOYER} people an employer while nobody there has answered"
+                  + ("" if kept else "; no employer has a number of the person's own"))
+            for r in kept:
+                n = r.get("limit")
+                print(f"  {r.get('employer')}: {f'up to {n}' if n else 'no limit'} "
+                      f"({r.get('date')}: \"{r.get('said')}\")")
+            return EXIT["ok"]
+        try:
+            row = set_more_at(a.employer, a.said, a.up_to, remove=a.remove)
+        except ValueError as e:
+            print(f"more-at: not kept: {e}")
+            return EXIT["error"]
+        if a.remove:
+            print(f"more-at: {row['employer']} is back to {PER_EMPLOYER} people while nobody "
+                  "there has answered")
+            return EXIT["ok"]
+        try:
+            import learned
+            learned.record("people", row["said"],
+                           f"Up to {row['limit']} people at {row['employer']} while nobody there "
+                           "has answered" if row["limit"] else
+                           f"No limit of the app's on people written to at {row['employer']}",
+                           applied_to=[f"profile/{MORE_AT_FILE} {row['employer']}"])
+        except SystemExit:
+            pass                        # kept in the profile; the learned record is a copy
+        print(f"more-at: kept. {row['employer']}: "
+              + (f"up to {row['limit']} people" if row["limit"] else "no number of the app's")
+              + f" while nobody there has answered, on your word: \"{row['said']}\"")
+        return EXIT["ok"]
     if a.cmd == "shortlist":
         if not a.ids and not a.remove:
             got = shortlist([])
@@ -4704,8 +5062,10 @@ def main(argv: list | None = None) -> int:
                   "`reading.py add <id> ... --name \"<name>\" --company \"<employer>\"`, "
                   "then add them again")
         for i, why_ in got["employer_full"].items():
+            company_ = (_who(i, None) or {}).get("company", "")
             print(f"  not added: {i}, {why_}. Wait for a reply there, or take someone off "
-                  "today's list with --remove <id>")
+                  "today's list with --remove <id>"
+                  + (f"; {more_at_hint(company_)}" if company_ else ""))
         if got["unplaced"]:
             print(f"  not added, nothing places them in a city yet: {', '.join(got['unplaced'])}. "
                   f"At most {UNVERIFIED_ON_SHORTLIST} such a day; a one-page read (`reading.py "
@@ -4784,7 +5144,8 @@ def main(argv: list | None = None) -> int:
                                         for c in contacts})
         # A note saved before drafts were held to the plan's length is caught before it goes.
         import compose
-        kinds = {c.get("contact_id"): {"inmail": "inmail", "message": "dm"}.get(
+        kinds = {c.get("contact_id"): {"inmail": "inmail", "open_profile": "inmail",
+                                       "message": "dm"}.get(
             str(c.get("channel") or "").strip().lower(), "connection") for c in contacts}
         for cid, note in notes.items():
             long_ = compose.length_findings(note, kinds.get(cid, "connection"))
@@ -4799,7 +5160,8 @@ def main(argv: list | None = None) -> int:
                 by_co.setdefault(company_key(c["company"]), []).append(c)
         for _k, there in by_co.items():
             waiting, _t = at_employer(there[0]["company"], contacts)
-            if len(waiting) + len(there) > PER_EMPLOYER:
+            limit, _theirs = employer_limit(there[0]["company"])
+            if limit is not None and len(waiting) + len(there) > limit:
                 found.append(("over the company limit",
                               employer_full_line(there[0]["company"], contacts, there[1:]) or
                               f"{there[0]['company']}: {len(there)} notes waiting to send",
@@ -5438,9 +5800,12 @@ def _cli_people_across(a, people, rec, now, contacts, threads, breach) -> int:
     if changed:
         state.save_threads(threads)
         state.save_contacts(contacts)
+    limit, theirs = employer_limit(name)
     print("next: one search feeds every employer it found: shortlist the few you will write to "
           "today, best first (`reading.py shortlist`), at most "
-          f"{PER_EMPLOYER} an employer; the rest are drafted from what the page showed")
+          + (f"{PER_EMPLOYER} an employer" if not theirs else
+             f"{limit} at {name}, as you asked" if limit else f"any number at {name}, as you asked")
+          + "; the rest are drafted from what the page showed")
     return after_breach(breach)
 
 

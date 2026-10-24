@@ -1598,6 +1598,12 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    # The number written to at one employer while nobody there has answered; a setting
+    # since 2026-10-24, when the person wanted more at four employers.
+    "networking.PEOPLE_PER_EMPLOYER": "2, the people written to at one employer while "
+                                      "nobody there has answered, as before it was a "
+                                      "setting; reading.py more-at raises it for one "
+                                      "employer on the person's word",
     # Read since before the first release through a one-argument getter (network/reply.py
     # _w) that tools/profile_names.py could not see; nothing about how it is read changed.
     "networking.HOME_ADJECTIVE": "unset, the nationality word in a reply's status and "

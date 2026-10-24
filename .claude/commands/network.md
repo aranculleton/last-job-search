@@ -304,8 +304,9 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
    It refuses an id that names nobody (not in the contact book, nothing read about them):
    write each candidate's contact row at `not_contacted` first (step 7's row, written early),
    so the read, the draft and the send all find them. It takes at most
-   `reading.PER_EMPLOYER` (2) people an employer, and the people there already waiting on a
-   reply count against the two: it names them and adds nobody past it.
+   `reading.PER_EMPLOYER` (2, or the person's `PEOPLE_PER_EMPLOYER`) people an employer, and
+   the people there already waiting on a reply count against it: it names them and adds
+   nobody past it, unless the person said they want more there (`reading.py more-at`).
    Read straight away; never ask the person whether to wait for reads, because nothing is
    waited for. A recruiter whose card names them a
    recruiter at the employer and places them in the person's market needs no read
@@ -602,7 +603,9 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
    one opening or one close across the batch, or two notes at one employer sharing a sentence,
    saves none of them (exit 11); and a note at an employer already holding
    `reading.PER_EMPLOYER` people waiting on a reply or queued is refused, by the same test as
-   the short list.
+   the short list. An InMail is saved only once their message window has said free or
+   credits (`reading.py extractor --message-check`, then `reading.py message-check`), and one
+   that needs a credit only while the credits left cover it.
 
 ## Present
 

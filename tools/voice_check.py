@@ -503,6 +503,33 @@ def answer_findings(answer: str, question: str = "", seconds: int = 0) -> list[s
 ALLOWABLE = frozenset({"house-style"})
 
 
+def own_wording():
+    """The person's own words, as `hard(allow=)` takes them: OWN_VOICE, their opener, ask
+    and about-me line, their templates, and every message they approved as an example
+    (compose.own_words). None where there is no networking profile to read them from.
+
+    Without it the house style failed the person's own recipe whenever this file ran on its
+    own: "hope you're well" and "I'd love to", their opener and close, came back HARD on
+    follow-ups and InMails though validate() passed them, and 11 of one person's 14
+    approved examples failed (2026-10-24)."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
+        import compose
+        return compose.own_words()
+    except Exception:  # noqa: BLE001  no networking profile: nothing is anyone's own
+        return None
+
+
+def split_own(findings: list[dict], own) -> tuple[list[dict], list[dict]]:
+    """(the findings that stand, the house-style ones that are the person's own words)."""
+    if own is None:
+        return findings, []
+    keep, mine = [], []
+    for f in findings:
+        (mine if f["rule"] in ALLOWABLE and own.match(f["match"]) else keep).append(f)
+    return keep, mine
+
+
 def hard(text: str, allow: re.Pattern | None = None) -> list[dict]:
     """The hard findings in `text`: what a composer refuses a message on.
 
@@ -754,15 +781,22 @@ def main() -> int:
         return 1 if corpus(a.paths) else 0
 
     findings: list[dict] = []
+    # A message (--text, or any file but a LaTeX document) may carry the person's own
+    # words, which are theirs to send however often; a letter is still held to the house
+    # style, which is about letters recurring from one application to the next.
+    messages: list[dict] = []
     if a.text:
-        findings += check(a.text, source="--text")
+        messages += check(a.text, source="--text")
     for path in a.paths:
         try:
             with open(path, encoding="utf-8") as fh:
-                findings += check(fh.read(), source=os.path.basename(path))
+                got = check(fh.read(), source=os.path.basename(path))
         except OSError as e:
             print(f"voice_check: cannot read {path}: {e}", file=sys.stderr)
             return 2
+        (findings if path.lower().endswith(".tex") else messages).extend(got)
+    kept, mine = split_own(messages, own_wording() if messages else None)
+    findings += kept
     if a.json_in:
         try:
             with open(a.json_in, encoding="utf-8") as fh:
@@ -788,6 +822,9 @@ def main() -> int:
         return 2
 
     print(report(findings))
+    if mine:
+        print("voice_check: not counted, your own wording (your opener or close, or a message "
+              "you approved): " + ", ".join(sorted({repr(f["match"]) for f in mine})))
     hard = [f for f in findings if f["severity"] == "hard"]
     if hard or (findings and not a.soft_ok):
         return 1

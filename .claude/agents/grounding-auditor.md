@@ -33,7 +33,9 @@ the move was complete.
    - `python3 tools/check_numbers.py <resume.tex>`, and `--drafts <drafts.json>` for a
      letter (its summary, opening, bullets and close, numbers written as words included;
      the figures in p2 and the posting are allowed in the opening and the close only)
-   - `python3 tools/voice_check.py <file>` (or `--json <file.json>` for a draft object)
+   - `python3 tools/voice_check.py <file>` (or `--json <file.json>` for a draft object); in a
+     message, a phrase it lists as "not counted, your own wording" is the person's own
+     opener, close or approved wording, never a finding
    - for a networking message, `tools/network/compose.py`'s `validate()` with the right kind,
      the recipient's `name=` (a draft greeting anybody else is refused, and no recorded rule
      lifts that), and the reader (`title=` or `reader=`) when the text came from a file: a

@@ -139,8 +139,8 @@ def screen(r: dict) -> dict:
 
     deg = (r.get("degree_required") or "none").lower()
     if deg in ("masters", "phd"):
-        from text_screen import ESCAPE      # one list of the ways a posting says "or equivalent"
-        escape = bool(ESCAPE.search(quote))
+        from text_screen import DEGREE_ROUTE, ESCAPE   # the ways a posting says "or equivalent"
+        escape = bool(ESCAPE.search(quote) or DEGREE_ROUTE.search(quote))
         msg = f"stated {deg} required; a {_DEGREE_HELD} is held"
         flags.append(msg + (", but the posting offers an equivalent-experience route"
                             if escape else ""))

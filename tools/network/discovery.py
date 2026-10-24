@@ -918,6 +918,45 @@ def same_employer(a: str, b: str) -> bool:
     return any(_same_key(x, y) for x in _names_of(a) for y in _names_of(b))
 
 
+# Words many employers' names share. A short form made only of these ("Capital", "Bank",
+# "Asset Management") names no one employer, so it never joins one with a longer name.
+SHARED_NAME_WORDS = BUSINESS_LINE | _SCOPE_WORDS | frozenset({
+    "the", "and", "of", "for", "bank", "banks", "banking", "capital", "financial", "finance",
+    "group", "partners", "management", "asset", "assets", "investment", "investments",
+    "insurance", "credit", "realty", "holdings", "health", "energy", "first", "national",
+    "royal", "united", "new", "city", "tech", "systems", "software", "trust", "securities",
+    "wealth", "mutual", "union", "home", "media", "studios", "games", "networks", "foods",
+    "retail", "logistics", "freight", "ventures", "fund", "funds"})
+
+
+def written_short(a: str, b: str) -> bool:
+    """One employer written in full and once short: a headline's "at <Name>" or "<Name> -
+    <Line>" for the contact book's "<Name> Asset Management", "<Name> Realty", "<Name>
+    Credit Corporation". Every word of the shorter name's key is in the longer's, and at
+    least one of them is the name's own rather than a word many employers share
+    (SHARED_NAME_WORDS); or the shorter is the longer without its "of <place>". Read where the question is only whether someone has left the
+    employer they were found at (reading.verdict), which keeps a person when unsure: never
+    to join two employers' records, where same_employer stays strict. Five people were
+    skipped as having moved on in one session for a headline that wrote their employer
+    short (2026-10-24)."""
+    ka, kb = company_key(a), company_key(b)
+    if not ka or not kb or ka == kb:
+        return bool(ka) and ka == kb
+    if _company_key.SEPARATE.match(ka) or _company_key.SEPARATE.match(kb):
+        return False
+    short, long_ = sorted((ka.split(), kb.split()), key=len)
+    if len(short) == len(long_):
+        return False
+    own = [w for w in short if w not in SHARED_NAME_WORDS and not w.isdigit() and len(w) > 1]
+    if own and all(w in long_ for w in short):
+        return True
+    # Or the name with its "of <place>" left off: "National Bank" for "National Bank of
+    # Larkspur", whose every word is one many employers share. Two words at least, so "Bank"
+    # is never "Bank of Larkspur".
+    return (len(short) >= 2 and long_[:len(short)] == short
+            and long_[len(short)] == "of" and len(long_) - len(short) <= 3)
+
+
 # A brand line inside running text: "Quillfeather, AI by Brannock is hiring".
 _BRAND_IN_TEXT = re.compile(r"([A-Z][\w&.'\-]*(?:\s+[A-Z][\w&.'\-]*){0,3}),\s*(?:\S+\s+){0,3}?"
                             r"by\s+([A-Z][\w&.'\-]*(?:\s+[A-Z][\w&.'\-]*){0,3})")

@@ -268,10 +268,9 @@ underneath, never as markdown links, which do not open from the desktop app.
 adds a row per application at `status=drafted` (fit in `fit_rating`, never priority) and
 writes each `screening_answers.md`. Then:
 
-Then CLAUDE.md's persistence loop ("Persistence rule for a person's repo"), which adds each
-path that exists one at a time (a single `git add` naming a path that does not exist stages
-nothing at all), then `git commit -m "<what changed>"` and, as a command of its own,
-`git push -u origin HEAD`.
+Then `python3 tools/save_state.py` (CLAUDE.md, "Persistence rule for a person's repo"), which
+stages each path that exists and no build noise, in any shell, then `git commit -m "<what
+changed>"` and, as a command of its own, `git push -u origin HEAD`.
 
 Never `*.aux *.log *.out *.fls *.fdb_latexmk *.synctex.gz cv/*.txt`. Never edit
 `.gitignore`.
@@ -423,8 +422,9 @@ not a bug in the update.
    `tools/offline_boards.py`), keeping every assertion; the rest are retired.
 3. **It checks behaviour the update changed.** Read the CHANGELOG entry for the change and
    bring the test in line with it. If the new behaviour looks wrong for this person, bring the
-   test in line all the same and report it to the app (the way this repo's `profile/CLAUDE.md`
-   says, or an issue on the app): a failing test would hold the whole update back.
+   test in line all the same; in the maintainer's own repo, report it the way its
+   `profile/CLAUDE.md` says. Anyone else is never told: a failing test would hold the whole
+   update back, and the app's problems are the maintainer's, not theirs.
 4. **All of it is Claude's, in the same turn, with nothing asked.** Rewrite, retire and bring
    in line, run them again, and commit with the sync's work, naming each test in the commit so
    a revert brings any back. The person hears one plain line at most (`OWN_CHECKS_SAID` in

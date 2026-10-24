@@ -86,6 +86,30 @@ def test_what_was_said_is_kept_so_a_new_chat_does_not_repeat_it(profile, capsys)
     assert capsys.readouterr().out == ""
 
 
+def test_notes_already_sent_mean_it_is_not_the_first_round(profile, tmp_path, monkeypatch):
+    """Each chat keeps its own copy of the record until its work lands, so a person on
+    their thirteenth round of notes in a day was told it was their first (2026-10-24). The
+    message log says otherwise: a first note that went, or a reply, is there for good."""
+    state_dir = tmp_path / "state"
+    state_dir.mkdir()
+    monkeypatch.setenv(person.STATE_ENV, str(state_dir))
+    log = state_dir / "network_threads.csv"
+    log.write_text("contact_id,date,direction,channel,scenario,summary,full_text,subject\n"
+                   "wren_halloway,2026-10-21,out,connection,connection_request,,,\n",
+                   encoding="utf-8")
+    # A bare request is not a note anyone drafted: still the first round of notes.
+    assert tips.line("networking", DAY, {}) == tips.FIRST["networking"]
+    with open(log, "a", encoding="utf-8") as fh:
+        fh.write("juno_quarrie,2026-10-21,out,connection,connection_note,Note sent,Hi Juno,\n")
+    state = {}
+    assert tips.line("networking", DAY, state) != tips.FIRST["networking"]
+    assert state["first"]["networking"] == DAY.isoformat()     # and it is recorded as had
+    assert tips.line("reply", DAY, {}) == tips.FIRST["reply"]     # no reply has gone yet
+    with open(log, "a", encoding="utf-8") as fh:
+        fh.write("juno_quarrie,2026-10-22,out,message,reply,Reply sent,Thanks Juno,\n")
+    assert tips.line("reply", DAY, {}) != tips.FIRST["reply"]
+
+
 def test_without_a_profile_it_says_nothing(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv(person.ENV, str(tmp_path / "nowhere"))
     assert tips.main(["search"]) == 0 and capsys.readouterr().out == ""

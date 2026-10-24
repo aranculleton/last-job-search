@@ -135,8 +135,16 @@ away or works differently enough that they must learn it again. The number says 
 of change a release is, never how soon it came after the last one. Say the number and the
 reason in one line in the reply.
 
-**How**:
+**How**, all of it every time, with no one asking:
 
+0. **Look and audit first.** Claude Code's own documentation and two or three similar
+   projects on GitHub for anything the release touches (Developer rules). Then an
+   independent review of everything in `[Unreleased]`: a reviewer given the diff and the
+   context but not the conclusions, asked for real bugs with concrete inputs. Each finding
+   is checked, the real ones fixed with a test that fails without the fix, the rejected
+   ones named with the reason. Then a bug hunt over the parts the changes touch, not only
+   the lines, and the time-shift check (the suite with the clock moved 30, 90 and 400
+   days on). A full `./tools/ci_local.sh`, not `--quick`.
 1. Before the release PR merges, run the maintainer's own tests against it:
    `python3 tools/try_personal_tests.py <the maintainer's repo>`. It lays this tree over a
    copy of that repo, the way a sync would, and changes neither. A failure the release
@@ -159,6 +167,11 @@ reason in one line in the reply.
    `python3 tools/release.py newest` says whether the newest version is out. Only if the
    workflow fails: Releases, **Draft a new release**, tag `vX.Y.Z` on master, title
    `vX.Y.Z`, the output of `python3 tools/release.py notes` as the notes, **Publish**.
+4. **Check it reached people.** The release workflow and master's CI green on the merge,
+   the tag on the right commit, the published notes as `release.py notes` makes them, and
+   the rehearsal run once more against the published tag: a cloud chat and a computer chat
+   each take it and run the everyday commands. The maintainer hears the number, the reason,
+   what changed for them, what was checked with real numbers, and what was not tested.
 
 A broken release is fixed forward: a fix on master and a new patch release. Never move or
 delete a published tag, because repos that already took it would then hold history the

@@ -155,3 +155,9 @@ New Jersey              # a US state, tests/test_a_home_town_name_abroad_is_not_
 Jersey City             # a US city, the same test
 Manchester Airport      # a place, the same test
 Pell Juno               # invented, tests/test_a_note_is_judged_against_the_right_people.py
+Asset Management        # a kind of employer, not a name: discovery.SHARED_NAME_WORDS
+Northgate Asset Management  # invented employer, tests/test_a_contact_is_kept_at_the_employer_they_were_found_at.py
+Fernhill Realty         # invented employer, the same test
+Northgate Quant Partners    # invented employer, the same test
+Quantitative Analyst    # a job title, the same test
+Quant Research          # a job title, the same test

@@ -1307,14 +1307,27 @@ _OWN_VOICE = getattr(_NET, "OWN_VOICE", re.compile(r"(?!x)x"))
 
 class _OwnWords:
     """What is the person's own to say in any message they write: the phrases OWN_VOICE
-    names, and any stock phrase inside the lines they set themselves (OPENER, ASK,
-    ABOUT_ME, their TEMPLATES). The app's house style is a default, and the person's own
-    setting outranks it in every kind of message: "hope you're well" was their OPENER, put
-    into every first note by the composer, and refused in a nudge or a message to a
-    connection as a stock phrase (2026-10-21). `.match()` is what voice_check.hard() asks."""
+    names, any stock phrase inside the lines they set themselves (OPENER, ASK, ABOUT_ME,
+    their TEMPLATES), and any inside a message they approved as an example (learned.py
+    approve). The app's house style is a default, and the person's own setting outranks it
+    in every kind of message: "hope you're well" was their OPENER, put into every first note
+    by the composer, and refused in a nudge or a message to a connection as a stock phrase
+    (2026-10-21). `.match()` is what voice_check.hard() asks."""
 
     def __init__(self, *extra):
         self.extra = [x for x in extra if x is not None]
+        self._kept = None
+
+    def _approved(self) -> list:
+        # Read once per use: every message they approved, as the lines above are read.
+        if self._kept is None:
+            try:
+                import learned
+                self._kept = [" ".join(str(x.get("text") or "").split()).lower()
+                              .replace("\u2019", "'") for x in learned.approved()]
+            except Exception:  # noqa: BLE001  a check must never break on the learned file
+                self._kept = []
+        return self._kept
 
     @staticmethod
     def _lines() -> list:
@@ -1328,7 +1341,8 @@ class _OwnWords:
         if _OWN_VOICE.match(found) or any(x.match(found) for x in self.extra):
             return True
         said = " ".join(str(found or "").split()).lower().replace("\u2019", "'")
-        return bool(said) and any(said in line.replace("\u2019", "'") for line in self._lines())
+        return bool(said) and any(said in line.replace("\u2019", "'")
+                                  for line in self._lines() + self._approved())
 
 
 def own_words(*extra) -> _OwnWords:

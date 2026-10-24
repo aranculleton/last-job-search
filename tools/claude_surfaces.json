@@ -13,7 +13,8 @@
     "linked to their computer", "linked to your computer", "Cmd+Shift+B", "Ctrl+Shift+B",
     "globe icon", "Browser tools",
     "Get a copy of your data", "Download your data", "larger download", "Connections filter",
-    "Current company filter", "Manage invitations", "Sent tab", "Open folder", "Local group"
+    "Current company filter", "Manage invitations", "Sent tab", "Open folder", "Local group",
+    "Free message", "Get more InMail credits"
   ],
   "entries": [
     {
@@ -372,6 +373,34 @@
       "status": "documented",
       "verified_on": "2026-10-19",
       "verified_against": "LinkedIn's help page a550270 as a web search summarised it on 2026-10-19 (not fetched, so the quote is the summary's words, not the page's)",
+      "ui_sensitive": true
+    },
+    {
+      "id": "linkedin-open-profile",
+      "claim": "A LinkedIn member who is not connected to the person can be written to by message in two ways that look the same on their profile, a Message button either way: free, when they are a Premium member who turned on Open Profile, or as an InMail, which spends one of the person's InMail credits (a Premium account's monthly allotment). Which one it is shows only once the message window is open: a free one says Free message in the window, and one that needs a credit the person does not have offers Get more InMail credits instead. Nothing is typed and nothing is sent to see it. The labels are as the person saw them on 2026-10-24 (one free, four needing credits); LinkedIn's help pages, read through a web search because a session never fetches linkedin.com, say non-connections with Open Profile can be messaged free and InMail spends credits, but do not name the labels.",
+      "goal": "see whether a message to someone you are not connected to is free",
+      "how": "on LinkedIn, their profile, then Message: the window says Free message when it costs nothing, and offers Get more InMail credits when it needs a credit you do not have",
+      "steps": [
+        "On LinkedIn, open their profile and choose Message. Type nothing.",
+        "If the window says Free message, it costs nothing: they have an Open Profile.",
+        "If it offers Get more InMail credits, it needs an InMail credit.",
+        "Close the window without writing, and tell me which it was."
+      ],
+      "labels": {
+        "button": ["Message"],
+        "free": ["Free message"],
+        "credits": ["Get more InMail credits", "InMail credit"],
+        "close": ["Close your conversation", "Dismiss", "Close"]
+      },
+      "official_page": "https://www.linkedin.com/help/linkedin/answer/a544787",
+      "sources": [
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a554575", "quote": "you may be able to message non-connections if they are Premium members who've enabled Open Profile", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search"},
+        {"url": "https://www.linkedin.com/help/linkedin/answer/a544787", "quote": "Send an Open Profile message on LinkedIn", "fetch": false, "why_not_fetched": "a session never fetches linkedin.com, and its robots.txt disallows crawlers it does not name; read through a web search, which returned the page's title only"},
+        {"url": "observed:2026-10-24", "quote": "Free message in the compose header for one person; a Get more InMail credits upgrade window for four, each after Message and before anything was typed"}
+      ],
+      "status": "observed",
+      "verified_on": "2026-10-24",
+      "verified_against": "observed by the person on 2026-10-24 for five profiles; LinkedIn's help pages a554575 and a544787 as a web search summarised them that day (not fetched), which confirm that Open Profile messages are free and InMail spends credits but do not name either label",
       "ui_sensitive": true
     },
     {

@@ -12,6 +12,12 @@ Usage: `/reply <contact name or company>`, then paste their message.
    a confidence and the matched evidence. Show the user which scenario and why,
    because a misread scenario produces a confidently wrong reply.
 
+   **When their message needs no answer** ("I'll get back to you next week", "will let
+   you know"), draft nothing either: log it inbound (step 6), then `python3
+   tools/network/state.py no-reply <contact_id> --why "<what they said>"`, so no reply is
+   owed until they write again or the day to look again (their follow-up rule, or
+   `--look-again <date>`). A short thanks is the person's call, never a reply owed.
+
    **When the scenario is `auto_reply`** (an out-of-office, a "no longer with the
    company"), draft nothing. Log it inbound with scenario `auto_reply` (step 6) and tell
    the person what `reply.guidance()` gives as the next action: wait until they are back,
@@ -53,7 +59,9 @@ Usage: `/reply <contact name or company>`, then paste their message.
    message logged without its text can never become an example of what works. Ours is logged
    by command, with the words as sent: `python3 tools/network/state.py message <contact_id>
    --text-file <file>` (a nudge after silence: `state.py nudge <contact_id> --text-file
-   <file>`); `--texts <file.json>` takes several at once.
+   <file>`); `--texts <file.json>` takes several at once. A second message to them on a
+   day one already went is refused, with the one already logged shown: another chat may
+   have answered them first. `--also` logs it when both really went.
 
    **A resume they asked for** (`send_resume`, or a `referral_offered` that wants one) is
    one of two files, and `reply.guidance()` names both in `which_resume`, beside the next

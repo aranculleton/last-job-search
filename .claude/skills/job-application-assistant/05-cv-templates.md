@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.11
+framework_version: 2.1.12
 ---
 
 # Resume Templates and Tailoring Guide
@@ -8,7 +8,7 @@ framework_version: 2.1.11
 
 ## Template: LaTeX moderncv (Banking Style)
 
-All resumes use the moderncv LaTeX package with the "banking" style and "blue" color scheme.
+All resumes use the moderncv LaTeX package with the "banking" style and black text (the "black" color scheme).
 
 **Output file:** `cv/<Prefix>_Resume_<ABBR>.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json`
 **Compile with:** **lualatex** on MiKTeX/TeX Live. pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly.
@@ -121,9 +121,11 @@ Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. A
 ```latex
 \documentclass[11pt,a4paper,sans]{moderncv}
 \moderncvstyle{banking}
-\moderncvcolor{blue}
+\moderncvcolor{black}
 
-% Force the name and section headings to render in moderncv blue (color1).
+% Black is the default: the name, the section titles, the rule under the name, the
+% contact line and the bullet marks (2026-10-24). The lines below still point the name
+% and the headings at color1, so a colour scheme, where one is chosen, reaches them.
 % Default banking leaves them black: moderncvstylebanking.sty's \colorlet
 % copies (not aliases) the pre-scheme accent colour, so the name colours are
 % frozen before \moderncvcolor runs. Re-let them after. \namefont is the hook
@@ -143,9 +145,9 @@ Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. A
 % through \PassOptionsToPackage instead, which is what removes that clash.
 \AtEndPreamble{\hypersetup{
     colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,
-    urlcolor=blue,
+    linkcolor=black,
+    filecolor=black,
+    urlcolor=black,
     pdftitle={Morgan Ellis - CV},
     % Keep pdfpagemode=UseNone: this block runs after moderncv's own
     % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen
@@ -182,7 +184,7 @@ Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. A
 
 ### Color overrides
 
-The `\renewcommand*` on `\namefont` and the three `\colorlet` lines in the preamble are required on lualatex+MiKTeX. Without them the name and section headings render in black even though `\moderncvcolor{blue}` is set, which looks inconsistent with the rest of the blue accent scheme (links, bullet markers, contact icons). The cause: `moderncvstylebanking.sty` defines the name colours with `\colorlet`, which *copies* the accent colour as it is before the scheme is applied, so the name colours are frozen to the pre-scheme value; re-assigning them with `\colorlet` after `\moderncvcolor{blue}` (as the preamble does) re-pins them to `color1`. `\namefont` is the shared hook every name-style macro routes through, so the block is version-agnostic - including moderncv 2.3.1 from Debian/Ubuntu apt, which has no `\firstnamestyle`/`\lastnamestyle` at all. Both names render bold; if you prefer regular weight, change `\bfseries` to `\mdseries` in the `\namefont` line (the weight now lives there, so it applies to the whole name). Don't drop the overrides - on most modern installs the defaults render visibly wrong.
+Every resume's text is black by default (`\moderncvcolor{black}`, links black too), the person's request of 2026-10-24. The `\renewcommand*` on `\namefont` and the three `\colorlet` lines in the preamble stay: under a colour scheme the name and section headings would otherwise render in black while the scheme colours the links and bullet markers. The cause: `moderncvstylebanking.sty` defines the name colours with `\colorlet`, which *copies* the accent colour as it is before the scheme is applied, so the name colours are frozen to the pre-scheme value; re-assigning them with `\colorlet` after `\moderncvcolor{...}` (as the preamble does) re-pins them to `color1`. `\namefont` is the shared hook every name-style macro routes through, so the block is version-agnostic - including moderncv 2.3.1 from Debian/Ubuntu apt, which has no `\firstnamestyle`/`\lastnamestyle` at all. Both names render bold; if you prefer regular weight, change `\bfseries` to `\mdseries` in the `\namefont` line (the weight now lives there, so it applies to the whole name). Don't drop the overrides - on most modern installs the defaults render visibly wrong.
 
 ### Spacing inside itemize lists (important)
 

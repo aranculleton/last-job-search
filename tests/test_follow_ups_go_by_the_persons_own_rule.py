@@ -183,3 +183,27 @@ def test_a_setting_that_is_not_a_number_never_stops_the_tools(monkeypatch):
     monkeypatch.setattr(schema, "_NETWORKING", Net)
     assert schema._days_setting("FOLLOW_UP_DAYS") == 0
     assert schema._days_setting("MAX_UNANSWERED") == 0
+
+
+def test_the_apps_line_on_someone_who_has_written_since_comes_off(rule):
+    """A background upgrade wrote "no more follow-ups" from a copy of the log made before
+    the contact's reply asking for the resume (2026-10-24). Run again on the merged log,
+    the app's own line comes off, and their reply is owed like any other. A line the person
+    or a chat wrote is never touched."""
+    rule(days=14)
+    contacts = [_c()]
+    log = [_out("2026-10-01"), _out("2026-10-15", scenario="nudge")]
+    state.write_follow_ups(contacts, log, "2026-10-16")
+    assert contacts[0]["next_action"].startswith("No more follow-ups")
+    log.append({"contact_id": "kestrel_haldane", "date": "2026-10-16", "direction": "in",
+                "channel": "message", "scenario": "", "summary": "asked for the resume",
+                "full_text": "Thanks Corwin here, could you send your resume?"})
+    said = state.write_follow_ups(contacts, log, "2026-10-17")
+    assert said == ["Corwin Haldane (kestrel_haldane): the follow-up line is off: they have "
+                    "written since, so a reply is owed"]
+    assert (contacts[0]["next_action"], contacts[0]["next_action_due"]) == ("", "")
+    assert [k for _, k, _ in _kinds(contacts, log, "2026-10-17")] == ["reply"]
+    assert state.write_follow_ups(contacts, log, "2026-10-17") == []      # once only
+    own = [_c(next_action="Send the resume she asked for", next_action_due="2026-10-18")]
+    assert state.write_follow_ups(own, log, "2026-10-17") == []
+    assert own[0]["next_action"] == "Send the resume she asked for"

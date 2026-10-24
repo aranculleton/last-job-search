@@ -11,6 +11,7 @@ chose for the same draft.
 from __future__ import annotations
 
 import os
+import re
 import sys
 from unittest import mock
 
@@ -49,7 +50,7 @@ def test_the_shared_phrase_check_counts_as_verify_batch_did():
                "owned the service reporting"]
     assert set(AU.shared_runs(bullets)) == {"weekly demand forecasts across six depots"}
     with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
-        assert "from audit_letters import shared_runs" in fh.read()
+        assert re.search(r"from audit_letters import [^\n]*\bshared_runs\b", fh.read())
 
 
 def test_a_figure_is_one_word():

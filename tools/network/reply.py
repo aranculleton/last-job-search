@@ -382,19 +382,45 @@ _PASSED_ON = (r"\s+(?:it|them|your|you|him|her|my|along|over|through"
               r"|on\s+(?:your|my|the|his|her|their|our)\s+(?:[\w'-]+\s+)?" + _HANDED_ON +
               r"|on\s+(?:[\w'-]+\s+){0,2}[\w'-]+" + _TO_SOMEONE + r")\b")
 
+# "Connect" is an introduction only with somebody to be connected: "happy to connect you
+# with a recruiter". Bare, it is the reply to a connection request, the commonest message
+# LinkedIn carries: "Hi Juno, happy to connect!" and "I'd be happy to connect over a coffee
+# chat" both read as referral offers at 0.92, and the guidance said to accept an
+# introduction and send the resume unprompted (2026-10-24). "Pass" the same way, through
+# _PASSED_ON, as the second pattern already read it.
+_INTRO_VERBS = (r"intro\w*|connect\s+you\b|put you|pass(?=" + _PASSED_ON + r")|forward|refer")
+
 REFERRAL = _rx(
     (0.94, "told to name them as the referrer", REFERRAL_FIELD),
     (0.92, "offered an introduction",
-     r"\b(happy|glad|pleased|able)\s+to\s+(intro\w*|connect|put you|pass|forward|refer)\b"),
+     r"\b(happy|glad|pleased|able)\s+to\s+(" + _INTRO_VERBS + r")\b"),
     (0.92, "offered an introduction",
      r"\bI(?:'ll|’ll|'d|’d| will| can| could| would| should)\s+"
-     r"(intro\w*|connect|put you|pass(?=" + _PASSED_ON + r")|forward|flag|refer|loop|mention|drop)\b"),
+     r"(" + _INTRO_VERBS + r"|flag|loop|mention|drop)\b"),
     (0.86, "named someone to speak to", SPEAK_TO),
     (0.84, "knows someone",
      r"\b(I know (someone|a few people|some people|the)|know anyone|there'?s someone)\b"),
     (0.82, "named a colleague",
      r"\b(my|our|a)\s+(colleague|coworker|co-worker|former colleague|friend|contact)\b"),
 )
+
+# They offered the conversation itself: a call, a chat, a coffee. That is stage two of
+# what outreach is for, and it outranks a "not much overlap" or a "not hiring" in the same
+# message, which is why it sits above mismatch and rejection. A bare "happy to connect"
+# is not one: that is accepting the request (low_effort, or substance if they wrote more).
+# "Feel free to talk to HR" and "open to talk with talented people" send them elsewhere,
+# so a talk with somebody other than the person writing is not one.
+CHAT_OFFER = re.compile(
+    r"\b(?:happy|glad|keen|(?<!feel )free|available|open)\s+to\s+(?:"
+    r"(?:have|grab|do|set up)\s+a\s+(?:quick\s+|short\s+|virtual\s+)?(?:chat|call|coffee)"
+    r"|chat|talk|meet|speak|(?:hop|jump)\s+on\s+a\s+(?:quick\s+)?call"
+    r"|connect\s+(?:over|for|on)\s+(?:a\s+)?(?:quick\s+|short\s+|virtual\s+)?"
+    r"(?:coffee|call|chat|zoom|teams))\b"
+    r"(?!\s+(?:to|with)\s+(?:hr\b|our\b|the\b|an?\b|some(?:one|body)\b|any(?:one|body)\b"
+    r"|people\b|recruit|talent|them\b|him\b|her\b))"
+    r"|\blet'?s\s+(?:chat|talk|speak|meet|find a time|grab a (?:coffee|call|chat)|set up a (?:call|chat|time))\b"
+    r"|\bcoffee chat\b", re.I)
+
 
 # An eligibility no is the one rejection that is about the applicant rather
 # than the requisition. A test message such as "Thanks but we're only looking
@@ -655,6 +681,27 @@ def _match_referral(text, ctx):
     return _hits(text, REFERRAL)
 
 
+# "I'm not available to chat", "I won't be free to talk", "not keen to talk about roles":
+# the same words with a no in front of them, within a couple of words, are a decline.
+# "Not sure I'm free to talk this week" is a hedge, not a no.
+_NOT_BEFORE = re.compile(r"(?:\bnot|n['’]t|\bnever|\bno longer)\s+(?:[\w'’]+\s+){0,2}$", re.I)
+_HEDGE = re.compile(r"not\s+(?:sure|certain)\b", re.I)
+
+
+def offered_chat(text):
+    """The words in which they offered a chat, or None: CHAT_OFFER with no no before it."""
+    for m in CHAT_OFFER.finditer(text or ""):
+        no = _NOT_BEFORE.search(text[max(0, m.start() - 40):m.start()])
+        if not no or _HEDGE.match(no.group(0)):
+            return m.group(0)
+    return None
+
+
+def _match_chat_offer(text, ctx):
+    said = offered_chat(text)
+    return [(0.9, "offered a chat: %s" % _quote(said))] if said else []
+
+
 def _match_mismatch(text, ctx):
     return _hits(text, MISMATCH)
 
@@ -662,7 +709,7 @@ def _match_mismatch(text, ctx):
 def _match_rejection(text, ctx):
     # "Not hiring right now, but happy to chat" is a yes to the conversation:
     # read as a rejection, the guidance closed a door they had just opened.
-    if ACCEPTS.search(text):
+    if accepts(text):
         return []
     return _hits(text, REJECTION)
 
@@ -776,6 +823,8 @@ NO_LINK_ACTION = ("No booking link in the message: propose two specific times in
 #   send_resume       an ask or an address, even buried in four generous paragraphs
 #   referral_offered  outranks a no, because "we are not hiring but talk to Wren"
 #                     is a referral with a decline attached, not a decline
+#   chat_offered      a call or a coffee offered: a yes to the conversation, whatever
+#                     "not much overlap" or "not hiring" sits beside it
 #   mismatch          the person cannot help at all, which decides more than a no does
 #   rejection         a decision, so it outranks both the apology and the word count
 #   user_at_fault     an apology is the opener, never the whole move
@@ -859,6 +908,23 @@ SCENARIOS = {s.name: s for s in (
             "Do not ask more than one clarifying question.",
         ),
         matcher=_match_referral,
+    ),
+    Scenario(
+        name="chat_offered",
+        move=("Say yes in a line and settle a time: confirm the one they gave, or propose two "
+              "specific times in " + TIMEZONE + " rather than asking them to pick."),
+        sentences=(1, 3),
+        owes_action=True,
+        next_action=("Settle the time in the thread, and once it is agreed record the call: "
+                     "state.py set <contact> --status call_booked --next-action \"Call on "
+                     "<date>\" --due <date>."),
+        do_not=(
+            "Do not answer the substance at length; that is what the chat is for.",
+            f"Do not ask for a referral or send the {_NOUN} in this reply; the conversation "
+            "comes first.",
+            "Do not ask them to suggest a time from nothing; give two.",
+        ),
+        matcher=_match_chat_offer,
     ),
     Scenario(
         name="mismatch",
@@ -1256,12 +1322,19 @@ def _rows_for(contact, threads):
 # help or a slot in the same message. "We're not hiring right now but happy to
 # chat" counted as a decline, so two such messages on a booked call read as two
 # nos and /reply recommended closing it.
+# A chat offered counts too (`accepts`), read with its guard: "I'm not available to chat"
+# is a no.
 ACCEPTS = re.compile(
     r"\b(?:happy|glad|keen) to (?:chat|talk|meet|speak|have a call)\b"
     r"|\b(?:works|suits) (?:for )?(?:me|us)\b"
     r"|\b(?:mon|tues|wednes|thurs|fri|satur|sun)day\b[^.!?\n]{0,25}\b(?:works|suits|is (?:fine|good|free))\b"
     r"|\b\d{1,2}(?::\d{2})?\s?(?:am|pm)\b[^.!?\n]{0,20}\b(?:works|suits)\b"
     r"|\blet'?s (?:chat|talk|speak|meet|find a time|grab)\b", re.I)
+
+
+def accepts(text) -> bool:
+    """Did they say yes to the conversation: a time, a slot, or a chat offered."""
+    return bool(ACCEPTS.search(text or "") or offered_chat(text))
 
 
 def declines_in(threads) -> list:
@@ -1281,7 +1354,7 @@ def declines_in(threads) -> list:
         # GENEROUS is too wide to excuse a no: it holds "my team" and "let me
         # know", so "We are not hiring on my team right now" stopped counting
         # and the stop-after-two-nos rule never fired.
-        if ACCEPTS.search(text) or extract_scheduling_link(text) or extract_email(text):
+        if accepts(text) or extract_scheduling_link(text) or extract_email(text):
             continue
         # A no that points them on ("I can't help, but talk to Wren in planning") is read
         # as a referral, and counted as a no it ended the thread the referral opened.

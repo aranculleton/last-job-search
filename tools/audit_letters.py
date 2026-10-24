@@ -124,6 +124,38 @@ def shared_runs(texts, n=6):
     return {r: v for r, v in seen.items() if len(v) > 1}
 
 
+# A bullet's mark in a resume's text layer, with whatever space a reader puts after it.
+_MARK = re.compile(r"\n[ \t\u00a0]*\u2022[ \t\u00a0]*")
+
+
+def resume_bullets(text, start, end):
+    """The bullets of a resume's text layer between two headings, each one whole: its mark,
+    the line after a mark left alone on its own line, and its wrapped lines, as one text.
+    A reader on a Mac put each mark on a line of its own, and verify_batch.sh, reading line
+    by line, saw every bullet as empty and every resume as repeating one (2026-10-24)."""
+    body = str(text or "")
+    if start and start in body:
+        body = body.split(start, 1)[1]
+    if end and end in body:
+        body = body.split(end, 1)[0]
+    parts = _MARK.split("\n" + body)[1:]
+    return [b for b in (re.sub(r"\s+", " ", p).strip() for p in parts) if b]
+
+
+def duplicate_bullets(bullets, n=8):
+    """The bullets that open with the same `n` words as an earlier one: the same bullet put
+    on the page twice. Whole words, so two bullets that only start alike are not one."""
+    seen, out = set(), []
+    for b in bullets:
+        key = " ".join(_words(b).split()[:n])
+        if len(key.split()) < 4:
+            continue
+        if key in seen:
+            out.append(b)
+        seen.add(key)
+    return out
+
+
 def _words(text):
     """Lower-case words with the LaTeX and the punctuation gone, so a letter's
     "22% to 14%" meets a bullet's "22\\% to 14\\%". A figure stays one word:

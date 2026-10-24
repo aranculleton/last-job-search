@@ -676,8 +676,23 @@ def beside_a_bachelor(sentence: str, m) -> bool:
     return bool(BACHELOR_OR.search(sentence[:m.start()]) or OR_BACHELOR.search(sentence[m.end():]))
 
 
-ESCAPE = re.compile(r"or equivalent|or comparable|or relevant experience|equivalent experience|"
-                    r"or an equivalent|equivalent practical|or related experience", re.I)
+# Every way a posting says the degree is one way in of several. "a bachelor's degree in
+# engineering, statistics, mathematics, computer science, or physics, or through substantial
+# technical work, research, or projects" was read as a bachelor's, required, with no route
+# (2026-10-24): the other way was named, in other words than "or equivalent".
+ESCAPE = re.compile(
+    r"or equivalent|or comparable|or relevant experience|equivalent experience|"
+    r"or an equivalent|equivalent practical|or related experience"
+    r"|\bin lieu of (?:an?\s+|the\s+)?(?:\w+\s+)?degree\b|\bexperience in lieu\b", re.I)
+# The other way in, named in its own words, counts only inside the degree's own sentence and
+# after the degree: read anywhere near it, "3+ years of academic or industry experience" and
+# "Strong SQL, or hands-on experience with Spark" took a required master's away (2026-10-24).
+# The second form needs its comma, so "academic or industry experience" is never one.
+DEGREE_ROUTE = re.compile(
+    r"\bor (?:through|via|by way of) (?:[\w-]+,?\s+){0,4}?"
+    r"(?:work|experience|research|projects?|portfolio|training|bootcamps?)\b"
+    r"|,\s*or (?:practical|professional|hands-on|industry|work|demonstrable|demonstrated|proven) "
+    r"(?:[\w-]+\s+){0,2}?experience\b", re.I)
 # Preference in its own words. "asset" and "bonus" count only as "is an asset" or
 # "would be a bonus": anywhere in a sentence they read "the CFA is required for our
 # asset management team" and "a bonus-eligible role" as nice-to-haves, so a real
@@ -704,9 +719,12 @@ WANTS = re.compile(r"\b(?:requir\w*|qualificat\w*|must have|minimum|at least|you
 BOAST = re.compile(r"\b((?:we'?re|we are|we have|we'?ve)"
                    r"(?!\s+(?:looking\s+for|seeking|hiring|after|in\s+search))|"
                    r"our (team|company|firm|history|story)|"
-                   r"the team behind|serving (customers|clients)|in business|founded|"
+                   r"the team behind|serving (customers|clients)|in business (?:for|since|over)|"
+                   r"founded|"
                    r"is an? (leading|global|proud|canadian|trusted|top|growing|fast)|"
                    r"company with|firm with|provider|pioneer|since \d{4}|has been)\b", re.I)
+# "in business" is the firm's age ("in business since 1994"), never a field: "two years of
+# experience in business operations" lost its bar to it (2026-10-24).
 # A figure this far out is a boast unless the sentence is unmistakably a bar.
 STRONG_WANT = re.compile(r"\b(requir|must|minimum|at least|qualificat)\w*", re.I)
 
@@ -907,14 +925,31 @@ def years_bars(text: str) -> list[tuple[int, str]]:
     """
     found = []
     for s in sentences(text or ""):
-        if PREFERRED.search(s) or BOAST.search(s) or not WANTS.search(s):
+        if BOAST.search(s) or not WANTS.search(s):
             continue
         for m in YEARS.finditer(s):
             n = _num(m.group(1))
-            if n > 25 or (n > 12 and not STRONG_WANT.search(s)):
+            if n > 25 or (n > 12 and not STRONG_WANT.search(s)) or _preferred_bar(s, m):
                 continue
             found.append((n, s[:220]))
     return sorted(found, key=lambda x: x[0])
+
+
+def _preferred_bar(s: str, m) -> bool:
+    """Is the years figure at `m` a nice-to-have? Only a preference word that governs it
+    counts: in its clause before it ("Ideally 5+ years", "Preferred qualifications: 5+
+    years"), or in the phrase it opens, up to the first comma ("5+ years of experience
+    preferred"). Read over the whole sentence, "6+ years of experience in a highly analytical
+    role, preferably in tech; experience in a marketplace is a plus" lost its bar to the two
+    words about tech and marketplaces (2026-10-24)."""
+    before = s[:m.start()]
+    cut = max(before.rfind(";"), before.rfind(". "))
+    after = re.split(r"[,;]|\.\s", s[m.end():], maxsplit=1)[0]
+    # A preference after another figure is that figure's: "3+ years of experience (5+
+    # preferred)" asks for three.
+    later = PREFERRED.search(after)
+    return bool(PREFERRED.search(before[cut + 1:])
+                or (later and not re.search(r"\d", after[:later.start()])))
 
 
 def stated_years(text: str) -> tuple[int | None, str]:
@@ -1601,7 +1636,7 @@ def screen(job: dict) -> dict:
     for s in sentences(text) if getattr(_S, "DEGREE_FLAGS", True) else ():
         if not _states_a_degree(s) or PREFERRED.search(s):
             continue
-        if ESCAPE.search(s):
+        if ESCAPE.search(s) or DEGREE_ROUTE.search(s):
             flags.append("graduate degree named, but the same sentence offers an equivalence route")
         elif under_minimum_qualifications(text, s):
             # This was once a CUT, added after a posting listed "Advanced degree

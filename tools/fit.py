@@ -53,7 +53,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from text_screen import (DEGREE, ESCAPE, NOT_A_DEGREE, PREFERRED,  # noqa: E402
+from text_screen import (DEGREE, DEGREE_ROUTE, ESCAPE, NOT_A_DEGREE, PREFERRED,  # noqa: E402
                          beside_a_bachelor, entry_years, sentences)
 from prefilter import location_verdict  # noqa: E402
 from opportunity import SCALE as OPP_SCALE  # noqa: E402
@@ -343,7 +343,7 @@ def _degree_ask(body: str):
                 continue
             a = at + m.start()
             if (GRAD_ESCAPE.search(body[max(0, a - 150):a + len(m.group(0)) + 150])
-                    or beside_a_bachelor(s, m)):
+                    or DEGREE_ROUTE.search(s, m.end()) or beside_a_bachelor(s, m)):
                 d = DEMAND_NONE
             else:
                 d = _demand(s)

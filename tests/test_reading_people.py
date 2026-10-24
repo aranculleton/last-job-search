@@ -166,8 +166,9 @@ def test_a_common_ground_must_rest_on_what_was_read():
     assert reading.grounded("We both worked at Oakmere", r)[0]  # the name people use
     assert not reading.grounded("We both worked in logistics", r)[0]
     assert reading.grounded("We were both at Oakmere Foods, a few years apart", r)[0]
+    # Read on TODAY, judged on TODAY: a post two weeks old then is history a year on.
     assert reading.grounded("Your post on cutting cold-chain spoilage with weather "
-                            "feeds was a great read", r)[0]
+                            "feeds was a great read", r, today=TODAY)[0]
     ok, why = reading.grounded("Your work at Fernhill Freight looks really interesting", r)
     assert not ok and "matches nothing" in why  # their employer was known before reading
     assert not reading.grounded("Your post on quantum computing", r)[0]
