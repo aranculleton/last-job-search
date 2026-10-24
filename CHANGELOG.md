@@ -74,6 +74,11 @@ make sense to somebody whose repo just received it.
   through substantial technical work, research, or projects", "in lieu of a degree") in the
   degree's own sentence, and a years bar is no longer dropped because something else in its
   sentence was a plus.
+- **On a Mac, a resume's text no longer runs your name and city together as one word.** A
+  current TeX install, a Mac's included, draws the name in a way the template's spacing
+  never reached, and a text extractor read the name and the city as one word. The name is
+  drawn a little higher there, and nothing else on the page moves; resumes made in the
+  cloud are unchanged.
 - **The resume checks read the same on a Mac.** They printed sed errors there, and flagged
   every bullet as a repeat on resumes whose text puts each bullet mark on a line of its own.
 
