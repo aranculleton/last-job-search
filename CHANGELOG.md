@@ -20,7 +20,62 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Added
+
+- **Every resume's text is black.** The name, the section titles, the rule under the name,
+  the contact line, the links and the bullet marks were blue or grey. Nothing else moves:
+  on real resumes every word sits where it did, on the same pages, in the same fonts. A
+  resume drafted before keeps its colours until it is made again.
+- **A message that needs no answer can be marked so.** A "thanks, will do" or a "good luck"
+  no longer sits on the list as a reply you owe: `state.py no-reply <contact> --why "<what
+  it was>"` says nothing is owed, and can name a day to look again.
+- **A file can go on a message already logged.** `state.py attach <contact> <file>` puts it
+  on the newest message you sent them, so a resume sent after the message was logged is one
+  record, not two.
+- **How many people you write to at one employer is yours.** `PEOPLE_PER_EMPLOYER` in
+  profile/networking.py (two, as before, when unset), and one employer where you want more
+  is yours to name for that employer alone (`reading.py more-at "<Employer>"`).
+- **An InMail is written only for someone who will get it.** Whether a message to someone
+  you are not connected to is free or spends a credit shows only in their message window:
+  the reading step can open it, type nothing, note which it says and close it, and a draft
+  waits for that answer. The labels it looks for were seen on LinkedIn's screen and are not
+  yet on its help pages.
+- **Saving your work runs the same in any shell.** `python3 tools/save_state.py` stages the
+  files that are yours, a file of yours that was taken away (a sent draft) as gone, and never
+  the build files; the loop it replaces stopped with "no matches found" in the Mac's own
+  shell before it had saved anything.
+
 ### Fixed
+
+- **A second chat answering someone already answered is caught.** Logging a second message
+  to someone on a day one has already gone, with nothing from them in between, is refused
+  and shows the one already logged, unless a resume goes with it or it says `--also`. A
+  call, an accepted request or the note on a request is not a message here.
+- **Two chats saving what you taught the app at once no longer clash.** Your rules, the
+  examples you approved and the employers where you asked for more people now merge entry
+  by entry, as the tracker and the contact book already did.
+- **A follow-up date worked out from an older copy of your messages no longer replaces a
+  live next step.** Where one chat wrote what happens next with someone and another worked
+  out a reminder from an older copy, the step that was written is kept, and the reminder
+  comes off anyone who has written to you since.
+- **"Happy to connect" is no longer read as an offer to introduce you.** It is the reply to
+  a connection request, and the advice was to send your resume unasked. Being offered a
+  chat or a coffee is read as its own thing now: say yes and propose two times. "Not
+  available to chat" is still read as a no.
+- **Someone whose headline writes their employer's name short is no longer read as having
+  left it** ("at <Name>" for "<Name> Asset Management", "<Name> Bank" for "<Name> Bank of
+  <place>"), and a "500+" on its own line on a card is never taken for where somebody
+  works.
+- **Your own wording is never a finding.** Your opener, your close and the messages you
+  approved as examples were failed as stock phrases whenever the wording check ran on its
+  own. A letter is still held to the house style.
+- **The tip for a first round of notes is not shown once you have sent some.**
+- **A degree with another way in is read as optional, whatever words offer it** ("or
+  through substantial technical work, research, or projects", "in lieu of a degree") in the
+  degree's own sentence, and a years bar is no longer dropped because something else in its
+  sentence was a plus.
+- **The resume checks read the same on a Mac.** They printed sed errors there, and flagged
+  every bullet as a repeat on resumes whose text puts each bullet mark on a line of its own.
 
 - **Steps for another site's screens no longer carry a note meant for Claude.** Once the
   steps for a screen were two months old, a line for Claude asking it to re-check them, with

@@ -24,6 +24,7 @@ Areas: search, apply, networking, reply, interview, prep, brief, general.
 """
 from __future__ import annotations
 
+import csv
 import datetime as dt
 import json
 import os
@@ -117,6 +118,33 @@ def _day(s) -> dt.date | None:
         return None
 
 
+# Work the message log shows was done before, whatever tips.json says. Each chat keeps its
+# own copy of that file until its work lands, and a repo older than the file has none, so
+# a person on their thirteenth round of notes that day was told it was their first
+# (2026-10-24). A first note or a reply that went is in the log for good; what a round
+# drafts and has not sent yet is not, so the first round still hears the first line.
+DONE_BEFORE = {
+    # A first note that went, by the names the log has used for one. A bare request is
+    # not a note anyone drafted.
+    "networking": ("connection_note", "first_message", "first_note"),
+    "reply": ("reply",),
+}
+
+
+def done_before(area: str) -> bool:
+    """Has the person done this kind of work before, by the message log?"""
+    scenarios = DONE_BEFORE.get(area)
+    if not scenarios:
+        return False
+    try:
+        with open(person.state("network_threads.csv"), newline="", encoding="utf-8") as fh:
+            return any(str(r.get("direction") or "").strip() == "out"
+                       and str(r.get("scenario") or "").strip() in scenarios
+                       for r in csv.DictReader(fh))
+    except (OSError, csv.Error):
+        return False
+
+
 def line(area: str, today: dt.date | None = None, state: dict | None = None) -> str:
     """The line for this reply, or "", and `state` updated to say it was shown."""
     today = today or dt.date.today()
@@ -127,8 +155,9 @@ def line(area: str, today: dt.date | None = None, state: dict | None = None) -> 
     firsts = state.setdefault("first", {})
     if area not in firsts:
         firsts[area] = today.isoformat()
-        state["last"] = today.isoformat()
-        return FIRST[area]
+        if not done_before(area):
+            state["last"] = today.isoformat()
+            return FIRST[area]
     last = _day(state.get("last"))
     if last and (today - last).days < GAP_DAYS:
         return ""

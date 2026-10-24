@@ -36,7 +36,11 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 
 \documentclass[11pt,{paper},sans]{{moderncv}}
 \moderncvstyle{{banking}}
-\moderncvcolor{{blue}}
+%% Black: the name, the section titles, the rule under the name, the contact line and
+%% the bullet marks all take moderncv's black scheme (color1 and color2 both black).
+%% The person asked for black text (2026-10-24); colour is a choice per job type, never
+%% the default.
+\moderncvcolor{{black}}
 %% ATS: a name with no descenders sets the city one baselineskip below a 30pt
 %% name, and position-sorting extractors then read the name and the city as one
 %% word. A zero-width rule with depth forces the gap the extractor expects.
@@ -73,7 +77,7 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
   \par\noindent\hangindent=1.1em\hangafter=1\relax
   \textbf{{#1}}: #2\par\vspace{{1.5pt}}}}
 \AtEndPreamble{{\hypersetup{{
-    colorlinks=true, linkcolor=blue, filecolor=magenta, urlcolor=blue,
+    colorlinks=true, linkcolor=black, filecolor=black, urlcolor=black,
     pdftitle={{{name} - {noun_title}}}, pdfsubject={{{noun_title} of {name}}},
     pdfkeywords={{{pdf_keywords}}}, pdfpagemode=UseNone,
 }}}}

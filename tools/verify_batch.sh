@@ -101,20 +101,24 @@ PYX
   [ -z "$PINNED" ] || grep -qF -- "$PINNED" $VB/vb_r1.txt || p="$p NO_PINNED_SKILL"
   # Skills sits between Professional Experience and Education; the old range
   # to /^Professional/ never closed and matched "(2018-2022)" under Education.
-  sed -n "/^$H_SKILLS/,/^$H_EDUCATION/{/^$H_EDUCATION/d;p}" $VB/vb_r.txt | grep -q '[()]' && p="$p SKILLPARENS"
-  [ "$(grep -E '^ *•' $VB/vb_r.txt | sed 's/^ *• *//' | cut -c1-45 | sort | uniq -d | wc -l)" = 0 ] || p="$p DUPBULLET"
+  # The ";" before "}" is BSD sed's (a Mac's): without it every run there printed an error.
+  sed -n "/^$H_SKILLS/,/^$H_EDUCATION/{/^$H_EDUCATION/d;p;}" $VB/vb_r.txt | grep -q '[()]' && p="$p SKILLPARENS"
   [ -z "$BANNED_NOUNS" ] || ! grep -qiE "\\b($BANNED_NOUNS)\\b" $VB/vb_r.txt $VB/vb_c.txt || p="$p $BANNED_FLAG"
-  # Six words in a row shared by two bullets: audit_letters.shared_runs, which
-  # also reads each letter's bullets against the resume's.
-  shared=$(python3 - "$VB/vb_r.txt" "$H_EXPERIENCE" "$H_EDUCATION" "$ROOT/tools" <<'PYX'
-import re, sys
+  # Six words in a row shared by two bullets (audit_letters.shared_runs, which also reads
+  # each letter's bullets against the resume's), and a bullet on the page twice. Read in
+  # Python, whole bullets: line by line through sed and cut, a Mac's reader, which puts
+  # each mark on a line of its own, made every resume one with a repeated bullet.
+  got=$(python3 - "$VB/vb_r.txt" "$H_EXPERIENCE" "$H_EDUCATION" "$ROOT/tools" <<'PYX'
+import sys
 sys.path.insert(0, sys.argv[4])
-from audit_letters import shared_runs
-t=open(sys.argv[1]).read()
-bul=[re.sub(r"\s+"," ",b).strip() for b in re.split(r"\n\s*• ", "\n"+t.split(sys.argv[2],1)[1].split(sys.argv[3],1)[0])[1:]]
-print(len(shared_runs(bul)))
+from audit_letters import duplicate_bullets, resume_bullets, shared_runs
+bul = resume_bullets(open(sys.argv[1], encoding="utf-8", errors="replace").read(),
+                     sys.argv[2], sys.argv[3])
+print(len(shared_runs(bul)), len(duplicate_bullets(bul)))
 PYX
 )
+  shared=${got%% *}; dups=${got##* }
+  [ "$dups" = 0 ] || p="$p DUPBULLET"
   [ "$shared" = 0 ] || p="$p SHARED_PHRASE($shared)"
   cnt=$(awk "$AWK_ROLES" $VB/vb_r.txt)
   # A role the profile gives a verify_min must carry at least that many.

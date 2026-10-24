@@ -153,7 +153,9 @@ def test_an_old_connection_is_read_before_anyone_writes_to_them(judged):
     conns = [{"name": "Rhian Pellow", "company": "Kestrel Mutual", "title": "Data Analyst",
               "linkedin_url": "https://www.linkedin.com/in/example-rhian", "connected_on": "12 May 2022"},
              {"name": "Idris Corrie", "company": "Kestrel Mutual", "title": "Analytics Engineer",
-              "linkedin_url": "https://www.linkedin.com/in/example-idris", "connected_on": "01 Oct 2026"}]
+              "linkedin_url": "https://www.linkedin.com/in/example-idris",
+              # recent whenever this runs, so it never ages into an old connection
+              "connected_on": (datetime.date.today() - datetime.timedelta(days=23)).strftime("%d %b %Y")}]
     ctx = _ctx([], connections=conns)
     old = surface.check(conns[0], ctx)
     assert old["show"] and old["needs_read"]

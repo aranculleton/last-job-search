@@ -8,9 +8,11 @@
 
 \documentclass[11pt,a4paper,sans]{moderncv}
 \moderncvstyle{banking}
-\moderncvcolor{blue}
+\moderncvcolor{black}
 
-% Force the name and section headings to render in moderncv blue (color1).
+% Black is the default: the name, the section titles, the rule under the name, the
+% contact line and the bullet marks (2026-10-24). The lines below still point the name
+% and the headings at color1, so a colour scheme, where one is chosen, reaches them.
 % Default banking leaves them black: moderncvstylebanking.sty's \colorlet
 % copies (not aliases) the pre-scheme accent colour, so the name colours are
 % frozen before \moderncvcolor runs. Re-let them after. \namefont is the hook
@@ -30,9 +32,9 @@
 % through \PassOptionsToPackage instead, which is what removes that clash.
 \AtEndPreamble{\hypersetup{
     colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,
-    urlcolor=blue,
+    linkcolor=black,
+    filecolor=black,
+    urlcolor=black,
     pdftitle={[YOUR_NAME] - CV},
     % Keep pdfpagemode=UseNone: this block runs after moderncv's own
     % \AtEndPreamble (moderncv.cls sets pdfpagemode there), so a FullScreen

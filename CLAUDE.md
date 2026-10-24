@@ -80,7 +80,8 @@ Every session in a person's repo starts with the same five steps, before anythin
    - **What Claude can do alone** ("Claude applies these itself"): start a background agent
      at once (Agent tool, `run_in_background: true`, `isolation: "worktree"`) running
      `/upgrade`, and go on with what the person asked. Their request never waits for it.
-     When it reports, merge its branch into this session's work.
+     When it reports, merge its branch into this session's work, then run `python3
+     tools/network/state.py follow-ups --write`: it worked from an older copy of the messages.
    - **At the end of your reply**, one plain line per change it made for them, and nothing
      about commits or commands: if they want one undone, undo it yourself (`git revert`).
    - **What needs the person** ("These need you", unconfirmed facts): ask at most three,
@@ -116,8 +117,9 @@ contact book and threads, documents, research) is the person's; everything else 
 
 - **In a person's repo, never edit an app-owned file.** The next sync puts it back to the app's
   version and says so. A fix or a feature the app needs is made in the app (below) and arrives
-  here through the sync. If the person is not the app's maintainer, offer to write the idea up
-  as an issue on the app instead.
+  here through the sync. If the person is not the app's maintainer, never tell them the app
+  has a problem or ask them to report one: do what they asked the best honest way the app
+  allows, and say plainly only what could not be done for them.
 - **A person's own tests (`profile/tests`) use the app's public names only.** A name that
   starts with an underscore, and anything inside `tools/openroles/`, can change in any
   release; a job board is faked through `tools/offline_boards.py`. **When they fail after an
@@ -222,33 +224,24 @@ A person's repo is **private** and the search runs in ephemeral cloud sessions, 
 persists unless it is committed, and the state is committed there. (Upstream's "never commit
 the tracker" rule is for public forks. The app itself holds none of it, and its CI fails on a
 personal path.) **Do not edit `.gitignore`**: `tools/security_guards.py` enforces it in CI.
-Force-add the specific artefacts instead. At the end of any session that produced work:
+Force-add the specific artefacts instead. At the end of any session that produced work,
+`python3 tools/save_state.py` stages them (`--list` says what, and stages nothing). It is
+the rule as code, so it works in any shell: the loop it replaced stopped under zsh, the
+Mac's own shell, on the first pattern that matched nothing, before staging anything.
 
-```bash
-for p in profile networking; do      # not ignored: a plain add, so no cache file comes with it
-  [ -e "$p" ] && git add -- "$p"
-done
-for p in job_search_tracker.csv network_contacts.csv network_threads.csv \
-         job_scraper/seen_jobs.json job_scraper/do_not_target.json \
-         documents/cv documents/applications documents/network documents/rounds \
-         documents/interview cv/*_Resume_*.tex cv/*_Resume_*.pdf cv/*_CV_*.tex cv/*_CV_*.pdf \
-         cover_letters/*_Cover_Letter_*.tex cover_letters/*_Cover_Letter_*.pdf \
-         company_research/*.json upskill/*.md; do
-  [ -e "$p" ] && git add -f -- "$p"
-done
-```
-
-One path at a time, and only what exists: a `git add` naming a path that does not exist
-stages nothing at all, silently. `profile` and `networking` take a plain `git add`, never
-`-f`, which would force in the caches under `profile/tests/`; `profile/` holds what the person
-taught it and every setting changed. `company_research/*.json` is ignored but costs a fetch to
-rebuild. `documents/rounds/<round>.json`, each round's top 60 without the posting bodies, sits
-outside the ignored `rounds/` on purpose. `network_threads.csv` is the file that must never be
-lost: status is derived from it, and without it every contact reverts to `not_contacted`
-and the same people get messaged twice.
-**Never force-add build noise** (`*.aux`, `*.log`, `*.out`, `*.fls`, `*.fdb_latexmk`,
-`*.synctex.gz`, `cv/*.txt`, `__pycache__/`, `.pytest_cache/`), `salary_data.json` (licensed
-third-party data) or `gmail_sync/state.json`.
+What it stages: `profile` and `networking` with a plain `git add`, never `-f`, which would
+force in the caches under `profile/tests/`; and, forced in path by path because they are
+ignored, the tracker, `network_contacts.csv`, `network_threads.csv`,
+`job_scraper/seen_jobs.json` and `do_not_target.json`, `documents/cv`, `applications`,
+`network`, `rounds` and `interview`, each application's resume and letter in `cv/` and
+`cover_letters/`, `company_research/*.json` (it costs a fetch to rebuild) and
+`upskill/*.md`. `documents/rounds/<round>.json`, each round's top 60 without the posting
+bodies, sits outside the ignored `rounds/` on purpose. `network_threads.csv` is the file that
+must never be lost: status is derived from it, and without it every contact reverts to
+`not_contacted` and the same people get messaged twice. **Build noise is never staged**
+(`*.aux`, `*.log`, `*.out`, `*.fls`, `*.fdb_latexmk`, `*.synctex.gz`, `cv/*.txt`,
+`__pycache__/`, `.pytest_cache/`), nor `salary_data.json` (licensed third-party data) or
+`gmail_sync/state.json`.
 
 ## Environment notes for cloud sessions
 

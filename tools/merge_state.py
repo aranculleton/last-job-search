@@ -50,6 +50,22 @@ KEYS = {
 }
 # Free text that both sides may have added to: kept from both, never a conflict.
 NOTES = {"notes"}
+# Lists of records inside a JSON state file, merged item by item the way rows are: each
+# item is known by the fields that never change once it is written, so one side retiring
+# a rule and the other adding one keeps both. Without this a list both sides added to was
+# one value, and two chats recording a reaction on the same day stopped every merge of the
+# person's rules (three times on 2026-10-24, each kept by hand).
+LIST_KEYS = {
+    "learned.json": {
+        "entries": ("date", "area", "said", "rule"),
+        "approved": ("date", "said", "text"),
+        "skipped": ("date", "said", "why"),
+        "offers": ("setting", "version"),
+    },
+    # The employers where the person wants more people written to (reading.py more-at):
+    # a list at the top of the file, one row an employer.
+    "more_at.json": {"": ("employer",)},
+}
 
 
 # ------------------------------------------------------------------ fields
@@ -119,6 +135,47 @@ def _keyed(rows: list[dict], fields) -> dict:
     return out
 
 
+# The fields that say what follows on a contact row. The app writes them from the message
+# log (state.write_follow_ups), and a chat or the person writes them from what they know.
+FOLLOWS = ("status", "next_action", "next_action_due")
+
+
+def _app_words():
+    """The test for a next action in the app's own words (state._APP_ACTION), or None where
+    this checkout cannot read it: the merge then settles the field as before."""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        for p in (os.path.join(here, "network"), here):
+            if p not in sys.path:
+                sys.path.insert(0, p)
+        import state  # noqa: E402  the app's own words live there
+        return lambda v: bool(state._APP_ACTION.fullmatch(" ".join(str(v or "").split())))
+    except Exception:  # noqa: BLE001  an old or half-merged checkout: as before
+        return None
+
+
+def _own_side(b: dict | None, o: dict, t: dict) -> str:
+    """On a contact row both sides changed, the side whose next action was written by a chat
+    or the person, where the other side's is the app's own words: "ours", "theirs" or "".
+    The app's is worked out from the message log as that side saw it, and a background
+    upgrade's copy of the log was older than the chat's: its "no more follow-ups" won as the
+    later change over a reply the chat had just logged (2026-10-24). Its line can always be
+    worked out again; theirs cannot."""
+    b = b or {}
+    if not ({"next_action"} <= set(o) and o.get("next_action") != t.get("next_action")
+            and b.get("next_action") not in (o.get("next_action"), t.get("next_action"))):
+        return ""
+    app = _app_words()
+    if app is None:
+        return ""
+    mine, other = app(o.get("next_action")), app(t.get("next_action"))
+    if mine == other:
+        return ""
+    own = "theirs" if mine else "ours"
+    kept = t if own == "theirs" else o
+    return own if str(kept.get("next_action") or "").strip() else ""
+
+
 def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
               settled: list | None = None, ending: str | None = None) -> tuple[str, list[str]]:
     """`later(key, field, ours, theirs)` says which side changed a field last (see
@@ -155,8 +212,18 @@ def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
             return o
         if o == b:
             return t
-        row, clash, done = merge_fields(
-            b, o, t, (lambda f, ov, tv: later(k, f, ov, tv)) if later and fields else None)
+        decide = (lambda f, ov, tv: later(k, f, ov, tv)) if later and fields else None
+        own = _own_side(b, o, t) if name == "network_contacts.csv" else ""
+        if own:
+            first = decide
+
+            def decide(f, ov, tv, first=first):     # noqa: F811  what follows: their own
+                return own if f in FOLLOWS else (first(f, ov, tv) if first else "")
+        row, clash, done = merge_fields(b, o, t, decide)
+        if own:
+            done = [d.replace("the later change", "the next step a chat or the person wrote, "
+                              "over one the app worked out from an older copy of the "
+                              "messages") if d.split(":", 1)[0] in FOLLOWS else d for d in done]
         if settled is not None:
             settled.extend(f"{name}: {', '.join(k[0])}: both changed {d}" for d in done)
         if clash:
@@ -199,14 +266,61 @@ def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
 # ------------------------------------------------------------------ JSON
 
 
+def merge_list(base, ours: list, theirs: list, fields, path: str,
+               settled: list | None = None) -> tuple[list, list[str]]:
+    """A list of records both sides changed, item by item: ours in its order, then what
+    only theirs added. An item both kept is merged field by field; one a side removed
+    goes, unless the other side changed it, which is a conflict."""
+    def key(item):
+        if isinstance(item, dict):
+            return tuple(json.dumps(item.get(f), sort_keys=True) for f in fields)
+        return ("", json.dumps(item, sort_keys=True))
+
+    def index(items):
+        out: dict = {}
+        for it in items:
+            out.setdefault(key(it), it)
+        return out
+
+    b = index(base if isinstance(base, list) else [])
+    o, t = index(ours), index(theirs)
+    out, problems = [], []
+    for n, item in enumerate(ours, 1):
+        k = key(item)
+        label = f"{path} item {n}"
+        if k in t:
+            merged, more = merge_json(b.get(k), item, t[k], label, None, settled)
+            out.append(merged)
+            problems += more
+        elif k in b:
+            if item != b[k]:
+                problems.append(label + " (removed on one side, changed on the other)")
+                out.append(item)
+        else:
+            out.append(item)
+    for k, item in t.items():
+        if k in o:
+            continue
+        if k in b:
+            if item != b[k]:
+                problems.append(f"{path} item (removed on one side, changed on the other)")
+                out.append(item)
+        else:
+            out.append(item)
+    return out, problems
+
+
 def merge_json(base, ours, theirs, path: str = "", later=None,
-               settled: list | None = None) -> tuple[object, list[str]]:
-    """Dicts merge key by key, all the way down; anything else three ways, the later
-    change taking a value both sides changed where `later(path, ours, theirs)` knows it."""
+               settled: list | None = None, lists: dict | None = None) -> tuple[object, list[str]]:
+    """Dicts merge key by key, all the way down; a list `lists` names, item by item
+    (merge_list); anything else three ways, the later change taking a value both sides
+    changed where `later(path, ours, theirs)` knows it."""
     if ours == theirs or theirs == base:
         return ours, []
     if ours == base:
         return theirs, []
+    if lists and path in lists and isinstance(ours, list) and isinstance(theirs, list):
+        return merge_list(base, ours, theirs, lists[path], path, settled)
     if not (isinstance(ours, dict) and isinstance(theirs, dict)):
         # Only a single value is settled by the later change: a list both sides added to
         # would lose the other side's items, so it is left for a person as before.
@@ -239,7 +353,7 @@ def merge_json(base, ours, theirs, path: str = "", later=None,
         if k in NOTES and all(isinstance(v, str) for v in (ours[k], theirs[k])):
             out[k] = merge_note(base.get(k) or "", ours[k], theirs[k])
             continue
-        out[k], more = merge_json(base.get(k), ours[k], theirs[k], sub, later, settled)
+        out[k], more = merge_json(base.get(k), ours[k], theirs[k], sub, later, settled, lists)
         problems += more
     return out, problems
 
@@ -387,7 +501,8 @@ def merge(base: str, ours: str, theirs: str, path: str, later=None,
             o, t = json.loads(ours), json.loads(theirs)
         except ValueError as e:
             return ours, [f"{path}: not JSON on one side ({e})"]
-        merged, problems = merge_json(b, o, t, later=later, settled=settled)
+        merged, problems = merge_json(b, o, t, later=later, settled=settled,
+                                      lists=LIST_KEYS.get(name))
         return json.dumps(merged, indent=2, ensure_ascii=False) + "\n", problems
     return merge_csv(base, ours, theirs, name, later=later, settled=settled, ending=ending)
 

@@ -366,10 +366,13 @@ on Premium. That is the shape, and `first_note()` assembles it:
   reuses for strangers at different employers is theirs; the house style in one message is
   a stock phrase, and the person's own (`OWN_VOICE`, their `OPENER` and `ASK`) is allowed in
   every kind of message.
-- **The company limit holds at the draft too.** `reading.PER_EMPLOYER` (two) people at one
-  employer while nobody there has answered, counting those waiting on a reply and the notes
-  already queued: `reading.employer_full_line()` is the one test, read by the short list,
-  every draft saved and `reading.py batch`.
+- **The company limit holds at the draft too.** `reading.PER_EMPLOYER` people at one
+  employer (two, or the person's `PEOPLE_PER_EMPLOYER` in `profile/networking.py`) while
+  nobody there has answered, counting those waiting on a reply and the notes already queued:
+  `reading.employer_full_line()` is the one test, read by the short list, every draft saved
+  and `reading.py batch`. When the person wants more at one employer, keep their word for
+  it: `reading.py more-at "<Employer>" --said "<their words>" [--up-to <n>]` (kept in
+  `profile/more_at.json` and recorded as theirs); every refusal prints that line.
 - **About me** defaults to one modest line, `ABOUT_ME` in
   `profile/networking.py`, that also says the candidate is looking, as context
   rather than a demand, in the shape "I work in data science, ex-<Employer> and
@@ -560,7 +563,16 @@ paragraph order or a close two messages share, and `reading.py batch` (exit 11) 
 Credits are scarce; reserve them for tier 1 at top-priority companies, or people
 unreachable otherwise. A free LinkedIn account has none: InMail there goes only to an
 Open Profile (their profile shows a Message button), and everything else is a connection
-request.
+request. **The Message button looks the same for an Open Profile and for an InMail that
+spends a credit**: which one shows only in their message window
+(`claude_surfaces.py steps linkedin-open-profile`). So before an InMail is drafted, run
+`reading.py extractor --message-check` on their page (it opens the window, types nothing,
+closes it) and keep what it returned with `reading.py message-check <id> <output>` (or the
+person's word, `free` or `credits`, with `--by-hand`). A draft is saved only for someone
+who will get it: free goes as an Open Profile message (channel `open_profile`, no credit);
+one that needs a credit only while the credits left this month cover it beside the InMails
+already drafted; and none before the check. 14 InMails were drafted on a guess and 2 went
+through (2026-10-24).
 
 **The person's LinkedIn plan sets the limits.** `profile/networking.py` `LINKEDIN_PLAN`,
 "free" or "premium" (`tools/network/schema.py`): a free account's connection note is 200
@@ -959,6 +971,11 @@ almost always one.
 - `state.py nudge <id> --text-file <file>` logs a nudge that went, with its words;
   `state.py message <id> ...` any other later message (`--texts <file.json>` for several);
   `--attached <file>` on either (and on `sent`) names a file that went with it, and
-  `state.py attach <id> --date <day> --file <file>` names it on a message already logged
+  `state.py attach <id> <file>` names it on the newest message already logged to them
+  (`--date <day>` for an older one);
+  a second message to someone on a day one already went is refused unless `--also`
+- `state.py no-reply <id> --why "<what they said>"` when their last message needs no
+  answer ("I'll get back to you next week"): nothing owed until they write again or the
+  day to look again
 - `reading.py estimate [N]` says how long N reads take; `reading.py meanwhile` the notes
   that can be written now; `reading.py drafts <file.json>` saves a batch checked together

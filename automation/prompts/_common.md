@@ -38,7 +38,7 @@ employer or a contact.
 ## Landing work
 
 Commit only the files the task names, with `git add -f` where CLAUDE.md's persistence
-rule says to, and `profile/tips.json` when the message's tip line wrote it. Run `./tools/ci_local.sh --quick`; it must end green. Then
+rule says to (`python3 tools/save_state.py --list` says which those are), and `profile/tips.json` when the message's tip line wrote it. Run `./tools/ci_local.sh --quick`; it must end green. Then
 `git push -u origin <this run's branch>`, open a PR to master that states the ci_local
 result, and merge it. GitHub's checks show as skipped on this private repo by design (they
 cost billed minutes, and ci_local.sh runs the same checks); do not wait for them and do not

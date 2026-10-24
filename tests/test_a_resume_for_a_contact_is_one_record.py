@@ -417,6 +417,24 @@ def test_a_resume_sent_with_no_file_named_is_found_and_settled_once(repo, capsys
                        "--threads", str(repo / "network_threads.csv")]) == 1
 
 
+def test_the_file_is_named_on_the_newest_message_with_no_date_needed(repo, capsys):
+    """The file was found only after the message was logged, and attach needed the date it
+    went, so a chat put it in a note instead (2026-10-24). With no date, it is the newest
+    message of ours to them."""
+    threads = THREADS + [
+        {"contact_id": CID, "date": "2026-10-14", "direction": "out", "channel": "email",
+         "scenario": "", "summary": "An older note.", "full_text": "Hello again."},
+        {"contact_id": CID, "date": "2026-10-16", "direction": "out", "channel": "email",
+         "scenario": "", "summary": "CV sent as asked.", "full_text": ""}]
+    _repo(repo, threads=threads)
+    assert state.main(["attach", CID, CV, "--threads", str(repo / "network_threads.csv")]) == 0
+    out = capsys.readouterr().out
+    assert f"the message to {CID} on 2026-10-16 now says" in out and CV in out
+    assert _reasons(repo) == {}
+    assert state.main(["attach", CID, "--threads", str(repo / "network_threads.csv")]) == 1
+    assert "name the file that went" in capsys.readouterr().out
+
+
 def test_a_resume_the_tracker_says_went_with_nothing_in_the_thread(repo, capsys):
     _repo(repo, tracker=[_made_row(status="drafted")])
     assert (CID, "resume_not_logged") not in _reasons(repo)          # not sent yet: owed

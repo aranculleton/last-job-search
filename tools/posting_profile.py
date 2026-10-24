@@ -448,7 +448,8 @@ def degree(text: str) -> dict:
     import text_screen as ts
     best = {"level": "", "required": False, "equivalence": False, "quote": ""}
     rank = {"": 0, "a degree": 1, "a bachelor's degree": 1, "a master's degree": 2, "a PhD": 3}
-    for s in _sentences(text):
+    said = _sentences(text)
+    for i, s in enumerate(said):
         level = ""
         # A graduate degree offered beside a bachelor's is no graduate bar: "Bachelor’s or
         # master’s degree" was read as a master's, required (2026-10-23).
@@ -470,8 +471,14 @@ def degree(text: str) -> dict:
         required = not ts.PREFERRED.search(s)
         if rank[level] == rank[best["level"]] and best["required"] and not required:
             continue
+        # "In lieu" is read past the sentence: the splitter cuts at a semicolon, and "A
+        # university degree; strong experience in lieu of one" is a route. Nothing else is:
+        # "or related experience" in the next sentence is about the years asked there.
+        after = said[i + 1][:150] if i + 1 < len(said) else ""
         best = {"level": level, "required": required,
-                "equivalence": bool(ts.ESCAPE.search(s)), "quote": s[:220]}
+                "equivalence": bool(ts.ESCAPE.search(s) or ts.DEGREE_ROUTE.search(s)
+                                    or re.search(r"\bin lieu\b", after, re.I)),
+                "quote": s[:220]}
     return best
 
 

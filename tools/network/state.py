@@ -39,7 +39,8 @@ Usage:
     python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
     python3 tools/network/state.py text <contact_id> --date YYYY-MM-DD --text-file <file>
     python3 tools/network/state.py message <contact_id> --text-file <file> [--attached <file>]
-    python3 tools/network/state.py attach <contact_id> --date YYYY-MM-DD --file <file | unknown>
+    python3 tools/network/state.py attach <contact_id> <file | unknown> [--date YYYY-MM-DD]
+    python3 tools/network/state.py no-reply <contact_id> --why "<what they said>" [--look-again YYYY-MM-DD]
     python3 tools/network/state.py sent <contact_id>... (--text-file <file> | --draft | --no-note |
         --outside) [--channel inmail --subject "..."] [--date YYYY-MM-DD]
     python3 tools/network/state.py resent <contact_id> [--text-file <file>] [--date ...] [--subject ...]
@@ -1468,6 +1469,47 @@ LEAVE_ALONE = re.compile(r"\s*(?:nothing owed|no action|keep warm|background cha
                          r"(?:chase|nudge|follow up)|don'?t (?:chase|nudge|follow up))\b", re.I)
 
 
+def _written_since(action, msgs) -> bool:
+    """Have they written again since the day a "nothing owed" row was written? The row is
+    dated by its first date (`no_reply` writes it so); one with no date is read as before.
+    Without this, a row that said nothing was owed hid their next message too."""
+    m = re.search(r"\b(\d{4}-\d{2}-\d{2})\b", action or "")
+    marked = as_date(m.group(1)) if m else None
+    if marked is None:
+        return False
+    last_in = next((r for r in reversed(_ordered(msgs)) if said_something(r)), None)
+    when = as_date(last_in.get("date")) if last_in else None
+    return when is not None and when > marked
+
+
+def no_reply(contacts, threads, who, why, today, look_again=None) -> tuple[dict, str]:
+    """Their last message needs no answer ("I'll get back to you next week"): their row says
+    so, dated, and gives the day to look again, by the person's own follow-up rule unless
+    `look_again` says. The reply owed was never cleared, so the brief asked for one every
+    day (2026-10-24). Only until they write again: a later message from them is owed as
+    any other. Returns the row and the line to show; raises ValueError where nothing of
+    theirs is waiting."""
+    day = _need_date(today, "today")
+    row = already_contacted(contacts, contact_id=str(who or "").strip()) \
+        or already_contacted(contacts, name=who)
+    if not row:
+        raise ValueError(f"no contact matching {who!r}")
+    cid = str(row.get("contact_id") or "").strip()
+    msgs = [r for r in threads_for(threads, cid) if _direction(r)]
+    if not they_spoke_last(msgs):
+        raise ValueError(f"nothing from {row.get('name') or cid} is waiting for an answer: "
+                         "the last word on the thread is ours")
+    why = " ".join(str(why or "").split()).rstrip(".")
+    if not why:
+        raise ValueError("say why no answer is needed, in their words or yours (--why)")
+    back = _need_date(look_again, "look again") if look_again else follow_up_on(day)
+    row["next_action"] = (f"Nothing owed ({day.isoformat()}). {why[:1].upper() + why[1:]}. "
+                          f"Look again on {back.isoformat()}.")
+    row["next_action_due"] = back.isoformat()
+    return row, (f"{cid} ({row.get('name')}): no answer owed; looked at again on "
+                 f"{back.isoformat()}, or as soon as they write")
+
+
 def owed(contacts, threads, today) -> list[dict]:
     """What the user owes right now: every reply first, then nudges, each oldest first.
 
@@ -1522,7 +1564,8 @@ def owed(contacts, threads, today) -> list[dict]:
         base["next_action"] = action if overdue else ""
         base["next_action_due"] = due.isoformat() if overdue else ""
 
-        if status in schema.OWED_BY_US and NO_REPLY_OWED.match(action) and not overdue:
+        if (status in schema.OWED_BY_US and NO_REPLY_OWED.match(action) and not overdue
+                and not _written_since(action, msgs)):
             # The person's own row says no reply is owed, written after reading
             # their last message, such as "NOTHING OWED. Ball is in their court". The inbound-last rule listed such
             # contacts among the most overdue replies, which is the one list a
@@ -1765,6 +1808,15 @@ def write_follow_ups(contacts, threads, today, only_undated: bool = False) -> li
             continue
         msgs = [r for r in _rows_of(index, cid) if _direction(r)]
         status = effective_status(contact, msgs)
+        if (action and status in schema.OWED_BY_US and not only_undated
+                and (not due or due in _app_dates(msgs, action))):
+            # The app's own follow-up line on someone who has written since: worked out from
+            # a log that did not have their message yet (a background upgrade's older copy,
+            # 2026-10-24). It is taken off, and their reply is owed as any other.
+            contact["next_action"], contact["next_action_due"] = "", ""
+            said.append(f"{contact.get('name') or cid} ({cid}): the follow-up line is off: "
+                        "they have written since, so a reply is owed")
+            continue
         if (not msgs or status in NO_NUDGE or status in schema.OWED_BY_US
                 or request_pending(msgs) is not None or accepted_never_messaged(msgs) is not None
                 or call_held(msgs[-1])):
@@ -1989,7 +2041,7 @@ FOLLOW_UP_KINDS = ("nudge", "message")
 
 
 def followed_up(contacts, threads, contact_id, today, text="", date=None, channel="",
-                subject="", kind="message", attached="") -> dict:
+                subject="", kind="message", attached="", also=False) -> dict:
     """Record a later message to someone already written to: a nudge after silence
     (`kind="nudge"`), or any other message in the thread (`kind="message"`: a reply to them,
     a thank-you, the first words after they accepted a request that carried none). The
@@ -2002,6 +2054,10 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     ValueError for a contact not in the book, one nothing has been logged to yet (that is
     `sent`), a nudge where they spoke last (a reply is owed, not a nudge), a message with no
     words, and a true duplicate: the same words to the same person on the same day.
+    Also refused: a second message to them on a day one of ours already went since they
+    last wrote, in other words, unless `also` says both really went. Two chats answering
+    one message each logged a reply in their own words, and the second was relabelled a
+    chase (2026-10-24, twice). A resume going with it is its own step and is let through.
     Both lists change in place; the caller saves them.
 
     `attached` is a file that went with it (`resolve_attachment`). A resume sent while one
@@ -2033,6 +2089,24 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
     # Who spoke last, the one answer /reply reads too: "they ever replied" refused a due
     # nudge after our own answer to them, and set up a second one (2026-10-21).
     they_last = they_spoke_last(rows)
+    if not they_last and not also and not (attached and is_resume_file(attached)):
+        ordered = _ordered(rows)
+        last_word = max((i for i, r in enumerate(ordered) if said_something(r)), default=-1)
+        # Only a message counts: a call held, an acceptance or a connection request (its
+        # note included) is not an answer to them, and the first message after a request
+        # accepted the same day is the ordinary next step.
+        today_out = [r for r in ordered[last_word + 1:]
+                     if _is_message_out(r) and not is_request(r)
+                     and str(r.get("date") or "") == day.isoformat()]
+        if today_out:
+            there = " ".join(str(today_out[-1].get("full_text")
+                                 or today_out[-1].get("summary") or "").split())
+            there = there if len(there) <= 160 else there[:157].rstrip() + "..."
+            raise ValueError(
+                f"a message to {name} is already logged for {day.isoformat()}"
+                + (" since they last wrote" if last_word >= 0 else "")
+                + f": \"{there}\". Another chat may have answered them already: check "
+                "before anything else goes. If both really went, log this one with --also")
     spoke = [r for r in outs if not is_bare_request(r)]
     if kind == "nudge" and they_last:
         raise ValueError(f"{name} wrote last ({said[-1].get('date')}): a reply is owed, not a "
@@ -2585,6 +2659,9 @@ def _cli_followed_up(argv, kind) -> int:
     ap.add_argument("--attached", default="", metavar="FILE",
                     help="a file that went with it, as it sits in the repo (a resume: "
                          "cv/<name>.pdf or documents/cv/<name>.pdf)")
+    ap.add_argument("--also", action="store_true",
+                    help="it went as well as the message already logged to them that day: "
+                         "two different messages, both sent")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
@@ -2626,7 +2703,7 @@ def _cli_followed_up(argv, kind) -> int:
         try:
             got = followed_up(contacts, threads, cid, a.today, text=text, date=a.date or None,
                               channel=a.channel, subject=a.subject, kind=kind,
-                              attached=a.attached)
+                              attached=a.attached, also=a.also)
         except ValueError as e:
             print(f"  not recorded: {cid}: {e}")
             continue
@@ -2877,6 +2954,31 @@ def _cli_set(argv) -> int:
     save_contacts(contacts, a.contacts)
     print(f"{row.get('contact_id')} ({row.get('name')}, {row.get('company')}): "
           + "; ".join(said))
+    return 0
+
+
+def _cli_no_reply(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py no-reply",
+        description="Their last message needs no answer (they will come back to you): "
+                    "nothing is owed until they write again or the day to look again.")
+    ap.add_argument("contact", help="their contact_id, or their name")
+    ap.add_argument("--why", required=True, help="why not, e.g. what they said")
+    ap.add_argument("--look-again", dest="look_again", default="",
+                    help="YYYY-MM-DD (default: the person's own follow-up rule)")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    try:
+        _row, said = no_reply(contacts, threads, a.contact, a.why, a.today,
+                              a.look_again or None)
+    except ValueError as e:
+        print(f"no-reply: not changed: {e}")
+        return 1
+    save_contacts(contacts, a.contacts)
+    print(said)
     return 0
 
 
@@ -3485,8 +3587,19 @@ def _kept_outputs(root) -> set:
 def attach(threads, contact_id, date, path, root=None) -> dict:
     """Name the file that went with a message already logged: the one message of ours to
     them on that day that says a resume went and names none (or the only one that day).
-    `path` "unknown" says nobody kept it. The row is changed in place; the caller saves."""
+    With no `date`, the newest day one of ours went to them: the file is most often named
+    just after the message was logged, and needing its date sent a chat to a note instead
+    (2026-10-24). `path` "unknown" says nobody kept it. The row is changed in place; the
+    caller saves."""
     cid = str(contact_id or "").strip()
+    if not date:
+        days = [as_date(r.get("date")) for r in threads
+                if str(r.get("contact_id") or "").strip() == cid and _is_message_out(r)]
+        days = [d for d in days if d is not None]
+        if not days:
+            raise ValueError(f"no message to {cid} is logged: log the one that carried it, "
+                             f"with its words: {log_resume_command(cid, path)}")
+        date = max(days)
     day = _need_date(date, "date").isoformat()
     rows = [r for r in threads if str(r.get("contact_id") or "").strip() == cid
             and _is_message_out(r) and str(r.get("date") or "").strip() == day]
@@ -3524,19 +3637,25 @@ def _cli_attach(argv) -> int:
         prog="state.py attach",
         description="Name the file that went with a message already logged.")
     ap.add_argument("contact_id")
-    ap.add_argument("--date", required=True, help="the day it went, as logged")
-    ap.add_argument("--file", required=True,
+    ap.add_argument("file", nargs="?", default="",
                     help="the file as it sits in the repo, or unknown if nobody kept it")
+    ap.add_argument("--date", default="",
+                    help="the day it went, as logged (default: the newest message of ours to them)")
+    ap.add_argument("--file", dest="file_opt", default="", help="the same as the file above")
     ap.add_argument("--threads", default=THREADS_CSV)
     a = ap.parse_args(argv)
+    path = a.file or a.file_opt
+    if not path:
+        print("attach: not changed: name the file that went (or unknown if nobody kept it)")
+        return 1
     threads = load_threads(a.threads)
     try:
-        row = attach(threads, a.contact_id, a.date, a.file)
+        row = attach(threads, a.contact_id, a.date or None, path)
     except ValueError as e:
         print(f"attach: not changed: {e}")
         return 1
     save_threads(threads, a.threads)
-    print(f"attach: the message to {a.contact_id} on {a.date} now says: {row['summary']}")
+    print(f"attach: the message to {a.contact_id} on {row['date']} now says: {row['summary']}")
     return 0
 
 
@@ -3956,6 +4075,8 @@ def main(argv=None) -> int:
         return _cli_inmail_credits(argv[1:])
     if argv[:1] == ["set"]:
         return _cli_set(argv[1:])
+    if argv[:1] == ["no-reply"]:
+        return _cli_no_reply(argv[1:])
     if argv[:1] == ["follow-ups"]:
         return _cli_follow_ups(argv[1:])
     try:  # a chat that carried on into a new day has not checked the app since

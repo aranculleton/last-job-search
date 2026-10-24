@@ -4,6 +4,8 @@ Invented rows only (the example person's employers).
 """
 from __future__ import annotations
 
+import csv
+import io
 import json
 import shutil
 import os
@@ -683,3 +685,128 @@ def test_their_uncommitted_edits_are_never_folded_into_the_line_ending_commit(tm
         fh.write(b"contact_id,status\r\nc1,call_booked\r\n")           # their edit
     assert sync_app.plain_state_endings(repo) == ""
     assert b"call_booked" in open(path, "rb").read()
+
+
+def _rule(day, said, rule, status="active"):
+    return {"date": day, "area": "messages", "said": said, "rule": rule,
+            "applied_to": [], "never_say": [], "status": status}
+
+
+def test_the_persons_rules_both_chats_recorded_are_both_kept():
+    """Two chats each recording one of the person's reactions on the same day stopped the
+    merge of profile/learned.json, a list being one value: three times on 2026-10-24, each
+    kept by hand. Its records merge one by one, like rows."""
+    old = _rule("2026-10-20", "too formal", "Write as you would say it.")
+    base = {"entries": [old], "approved": [], "skipped": [], "offers": []}
+    ours = {**base, "entries": [dict(old, status="retired", retired_for="2026-10-24"),
+                                _rule("2026-10-24", "shorter", "Two sentences at most.")]}
+    theirs = {**base, "entries": [old, _rule("2026-10-24", "no exclamation marks",
+                                             "Never end on an exclamation mark.")],
+              "skipped": [{"date": "2026-10-24", "said": "fine", "why": "no reaction"}]}
+    text, problems = M.merge(json.dumps(base), json.dumps(ours), json.dumps(theirs),
+                             "profile/learned.json")
+    assert not problems
+    got = json.loads(text)
+    assert [e["said"] for e in got["entries"]] == ["too formal", "shorter", "no exclamation marks"]
+    assert got["entries"][0]["status"] == "retired"             # ours retired it; theirs left it
+    assert got["skipped"] == theirs["skipped"]
+
+
+def test_a_rule_retired_on_one_side_and_changed_on_the_other_is_still_a_conflict():
+    old = _rule("2026-10-20", "too formal", "Write as you would say it.")
+    base = {"entries": [old]}
+    ours = {"entries": [dict(old, status="retired")]}
+    theirs = {"entries": [dict(old, status="paused")]}
+    _text, problems = M.merge(json.dumps(base), json.dumps(ours), json.dumps(theirs),
+                              "profile/learned.json")
+    assert problems and "entries item 1" in problems[0]
+
+
+def test_git_merges_the_persons_rules_from_two_chats(tmp_path):
+    repo = str(tmp_path)
+    _git(repo, "init", "-q", "-b", "master")
+    for f in ("tools/merge_state.py", ".gitattributes"):
+        os.makedirs(os.path.dirname(os.path.join(repo, f)) or repo, exist_ok=True)
+        with open(os.path.join(ROOT, f)) as src, open(os.path.join(repo, f), "w") as dst:
+            dst.write(src.read())
+    os.makedirs(os.path.join(repo, "profile"))
+    rules = os.path.join(repo, "profile", "learned.json")
+
+    def write(entries):
+        with open(rules, "w") as fh:
+            json.dump({"entries": entries, "offers": []}, fh, indent=2)
+
+    old = _rule("2026-10-20", "too formal", "Write as you would say it.")
+    write([old])
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "base")
+    _git(repo, "checkout", "-qb", "other")
+    write([old, _rule("2026-10-24", "no exclamation marks", "Never end on one.")])
+    _git(repo, "commit", "-qam", "theirs")
+    _git(repo, "checkout", "-q", "master")
+    write([old, _rule("2026-10-24", "shorter", "Two sentences at most.")])
+    _git(repo, "commit", "-qam", "ours")
+    M.install(repo)
+    r = _git(repo, "merge", "-q", "--no-edit", "other")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert [e["said"] for e in json.load(open(rules))["entries"]] == [
+        "too formal", "shorter", "no exclamation marks"]
+
+
+def test_a_next_step_a_chat_wrote_outranks_the_apps_from_an_older_copy_of_the_log():
+    """2026-10-24: a chat logged a contact's reply asking for the resume and set the next
+    step; a background upgrade, working from a copy made before that reply, wrote the app's
+    "no more follow-ups" on the same row a minute later, and the merge kept it as the later
+    change. The app's line is worked out from the log and can be again; the chat's cannot."""
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import state
+    cid = "ana_rook"
+    cols = ["contact_id", "name", "status", "next_action", "next_action_due", "notes"]
+
+    def book(status, action, due, notes=""):
+        return (",".join(cols) + "\n" + ",".join(
+            '"%s"' % v.replace('"', '""') for v in (cid, "Ana Rook", status, action, due, notes))
+            + "\n")
+
+    base = book("awaiting_reply", "One nudge if no reply", "2026-10-20")
+    chat = book("in_conversation", "Email the resume she asked for, then book the call",
+                "2026-10-26", "2026-10-24: asked for the resume")
+    upgrade = book("awaiting_reply", state.waiting_action(2, cid), "2026-11-05")
+    assert state._APP_ACTION.fullmatch(state.waiting_action(2, cid))
+    settled = []
+    for ours, theirs, later in ((chat, upgrade, "theirs"), (upgrade, chat, "ours")):
+        text, problems = M.merge_csv(base, ours, theirs, "network_contacts.csv",
+                                     later=lambda k, f, o, t, w=later: w, settled=settled)
+        assert not problems
+        row = next(iter(csv.DictReader(io.StringIO(text))))
+        assert (row["status"], row["next_action"], row["next_action_due"]) == (
+            "in_conversation", "Email the resume she asked for, then book the call",
+            "2026-10-26")
+        assert row["notes"] == "2026-10-24: asked for the resume"
+    assert any("over one the app worked out from an older copy" in s for s in settled)
+
+
+def test_two_next_steps_of_the_apps_own_still_take_the_later():
+    sys.path.insert(0, os.path.join(ROOT, "tools", "network"))
+    import state
+    cid = "ana_rook"
+    head = "contact_id,name,status,next_action,next_action_due\n"
+    base = head + f"{cid},Ana Rook,awaiting_reply,Old words,2026-10-01\n"
+    ours = head + f"{cid},Ana Rook,awaiting_reply,One nudge if no reply,2026-10-20\n"
+    theirs = head + f'{cid},Ana Rook,awaiting_reply,"{state.waiting_action(2, cid)}",2026-11-05\n'
+    text, problems = M.merge_csv(base, ours, theirs, "network_contacts.csv",
+                                 later=lambda k, f, o, t: "theirs")
+    assert not problems and "2026-11-05" in text
+
+
+def test_the_employers_where_more_may_be_written_to_merge_by_employer():
+    base = [{"employer": "Quayside Foods", "limit": 4, "said": "more there", "date": "2026-10-20"}]
+    ours = base + [{"employer": "Larkspur Retail", "limit": 3, "said": "a few more",
+                    "date": "2026-10-24"}]
+    theirs = base + [{"employer": "Lanternfish", "limit": None, "said": "as many as it takes",
+                      "date": "2026-10-24"}]
+    text, problems = M.merge(json.dumps(base), json.dumps(ours), json.dumps(theirs),
+                             "profile/more_at.json")
+    assert not problems
+    assert [r["employer"] for r in json.loads(text)] == ["Quayside Foods", "Larkspur Retail",
+                                                          "Lanternfish"]
