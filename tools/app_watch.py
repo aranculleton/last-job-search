@@ -186,15 +186,14 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
     the maintainer's private repo, for the maintainer."""
     import build_app
     import leak_scan
-    denylist = build_app.denylist()
+    when = build_app.recorded()
+    denylist = list(when)
     digest = hashlib.sha1("\n".join(denylist).encode("utf-8")).hexdigest()[:16]
-    with tempfile.NamedTemporaryFile("w", suffix=".tokens", delete=False, encoding="utf-8") as fh:
-        fh.write("\n".join(denylist) + "\n")
-        tok_path = fh.name
-    try:
-        tokens = leak_scan.load_tokens(tok_path)
-    finally:
-        os.unlink(tok_path)
+    # Numbered straight from the list, one number an entry: written to a file and read
+    # back, an entry holding a line break (a quoted tracker cell) took two, and every
+    # finding after it was judged by its neighbour's date.
+    tokens = leak_scan.tokens_from(denylist
+                                   + os.environ.get("LJS_LEAK_TOKENS", "").splitlines())
     heads = fetch()
     if heads is None:
         return [], f"the app could not be reached at {app_url()}"
@@ -246,12 +245,17 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
         text = f"{p.get('title') or ''}\n{p.get('body') or ''}"
         findings += [f"pull request #{p.get('number')}: {f.split(': ', 1)[-1]}"
                      for f in _text_findings("pr", text, tokens)]
+    # An entry the app carried before this repo recorded it is the app's own word, not
+    # the person's: set aside the way the leak scan before a push sets it aside.
+    findings, aside = build_app.without_aside(findings, denylist, when, f"{REFS}master", ROOT)
     newest = max([str(p.get("updated_at") or "") for p in prs] + [since])
     _save({"tokens": digest, "blobs": sorted(seen), "tips": sorted(set(heads.values())),
            "prs_since": newest if not unread else since})
     summary = (f"{len(heads)} branch(es), {len(todo)} new file version(s), {commits} commit "
                f"message(s) and {len(prs)} pull request(s) checked against {len(denylist)} "
-               "entries from this repo" + (f"; {unread}" if unread else ""))
+               "entries from this repo" + (f"; {unread}" if unread else "")
+               + (f"; {len(aside)} set aside, carried by the app before this repo recorded "
+                  "them" if aside else ""))
     return findings, summary
 
 

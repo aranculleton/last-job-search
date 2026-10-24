@@ -115,6 +115,12 @@ def load_tokens(path: str | None) -> list[tuple[re.Pattern, int]]:
         with open(path, encoding="utf-8") as fh:
             lines += fh.read().splitlines()
     lines += os.environ.get("LJS_LEAK_TOKENS", "").splitlines()
+    return tokens_from(lines)
+
+
+def tokens_from(lines: list[str]) -> list[tuple[re.Pattern, int]]:
+    """The denylist's patterns from its lines, each numbered by its line: what a finding's
+    "denylist entry N" names."""
     out = []
     for n, raw in enumerate(lines, 1):
         t = raw.strip()
