@@ -27,6 +27,12 @@ make sense to somebody whose repo just received it.
   a file path in it, sat among the steps you are given: in the fix for job sites a cloud chat
   cannot reach, and in the steps after you say yes to one of the app's questions. Claude
   still gets that line, apart from your steps. It would first have happened in December.
+- **The maintainer's leak check no longer fails on a word the app already used.** Every
+  employer in the tracker goes on the list of names the public app must never carry, and
+  one whose name is an ordinary word in the app's own text failed every check until it was
+  added to a list by hand, one employer at a time. A name the app used before the tracker
+  recorded it is now set aside by itself, and the check says which; a name that reached
+  the app only afterwards still fails it. The daily look at the public app does the same.
 
 ## [3.12.0] - 2026-10-23
 

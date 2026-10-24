@@ -244,8 +244,8 @@ def test_a_tool_family_entry_is_set_aside_and_nothing_else_in_the_file(tmp_path,
 
 def test_an_employer_the_app_names_for_its_products_is_not_a_leak_and_the_list_is_honest(
         tmp_path, monkeypatch):
-    """One tracker row at Google put it on the denylist, and the app's own prose (Google's
-    Gemini CLI, Google Cloud, Google Sheets) failed every chat's checks (2026-10-23). An
+    """An employer the app names for its products (Google's Gemini CLI, Google Cloud,
+    Google Sheets) failed the checks of anyone whose tracker named it (2026-10-23). An
     employer the app names this way is allowed; any other one is still listed, and the
     allowed list holds only names the app's own text really uses."""
     import build_app

@@ -34,7 +34,7 @@ def _setup(tmp_path, monkeypatch, body="All fine here.\n"):
     _git(mine, "remote", "add", "origin", str(tmp_path / "example-owner" / "my-search"))
     monkeypatch.setenv("LJS_APP_URL", str(app))
     monkeypatch.setattr(app_watch, "ROOT", str(mine))
-    monkeypatch.setattr(build_app, "denylist", lambda: ["Zorblax Quux"])
+    monkeypatch.setattr(build_app, "recorded", lambda: {"Zorblax Quux": None})
     monkeypatch.setattr(app_watch, "_pull_requests", lambda since: ([], ""))
     return app, mine
 
@@ -99,6 +99,44 @@ def test_clean_says_so_once_and_the_next_look_reads_only_what_is_new(tmp_path, m
     _git(app, "commit", "-qm", "Thanks Zorblax Quux")
     assert app_watch.main([]) == 1
     assert "commit messages" in capsys.readouterr().out
+
+
+def test_a_word_the_app_had_before_it_was_recorded_is_not_a_leak(tmp_path, monkeypatch, capsys):
+    """An employer whose name is an ordinary word in the app ("Batch-Zorblax") is the
+    app's word when the app used it before this repo recorded the employer, and a leak
+    when the app took it up afterwards (2026-10-24)."""
+    import calendar
+    import time
+    for v in ("GIT_COMMITTER_DATE", "GIT_AUTHOR_DATE"):
+        monkeypatch.setenv(v, "2026-01-10T12:00:00Z")
+    _setup(tmp_path, monkeypatch, "Batch-Zorblax the postings.\n")
+    later = calendar.timegm(time.strptime("2026-02-01", "%Y-%m-%d"))
+    monkeypatch.setattr(build_app, "recorded", lambda: {"=Zorblax": float(later)})
+    assert app_watch.main([]) == 0
+    assert "1 set aside, carried by the app before this repo recorded them" in \
+        capsys.readouterr().out
+    earlier = calendar.timegm(time.strptime("2025-12-01", "%Y-%m-%d"))
+    monkeypatch.setattr(build_app, "recorded", lambda: {"=Zorblax": float(earlier)})
+    assert app_watch.main(["--all"]) == 1
+    assert capsys.readouterr().out.startswith("APP LEAK: 1 match(es) in the public app's files")
+
+
+def test_an_entry_holding_a_line_break_shifts_no_other_entry(tmp_path, monkeypatch, capsys):
+    """Written to a file and read back, a tracker cell with a line break took two numbers,
+    and the real leak after it was judged as its neighbour, an ordinary word the app had
+    always used, and dropped."""
+    import calendar
+    import time
+    for v in ("GIT_COMMITTER_DATE", "GIT_AUTHOR_DATE"):
+        monkeypatch.setenv(v, "2026-01-10T12:00:00Z")
+    _setup(tmp_path, monkeypatch, "Batch-Zorblax the postings.\nQuillhaven replied.\n")
+    feb = float(calendar.timegm(time.strptime("2026-02-01", "%Y-%m-%d")))
+    monkeypatch.setattr(build_app, "recorded", lambda: {
+        "=Northgate\nHoldings": feb, "=Zorblax": feb, "=Quillhaven": None})
+    assert app_watch.main(["--all"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("APP LEAK: 1 match(es) in the public app's files, all of them ")
+    assert "README.md:2: denylist entry 3 (Quillhaven)" in out and "Zorblax" not in out
 
 
 def test_a_pull_request_description_is_checked(tmp_path, monkeypatch):

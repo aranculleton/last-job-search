@@ -12,18 +12,24 @@
    tracker, and any extra lines in profile/leak_tokens.txt (people or facts
    that appear nowhere else, a partner's name for instance).
 3. Runs tools/leak_scan.py over the exported tree with that list. Exit 1 on
-   any finding. With --test, also runs the exported tree's own test suite
-   against its example person, the way the app's CI will.
+   any finding. An entry the app's master already carried before this repo
+   recorded it is set aside, and said so (set_aside()). With --test, also
+   runs the exported tree's own test suite against its example person, the
+   way the app's CI will.
 
-The denylist is written only where --tokens-out says (default: a temp file
-that is deleted). It is personal data: never commit it, never pass it to the
-app. The app's CI gets the same list from an encrypted Actions secret.
+The denylist is written only where --tokens-out says, without the entries set
+aside, and nowhere by default. It is personal data: never commit it, never
+pass it to the app. The app's CI gets the same list from an encrypted Actions
+secret.
 
 ALLOWED_ORGANIZATIONS are companies that may appear in the app even though
 the person applied to them, because the app names them as platforms or tools
 whatever the person did: an AI vendor whose model runs the app, the portals
 it searches, the hosting it uses, a cloud product a skill is named after.
-Each is a decision; keep the list short.
+The list is closed (2026-10-24). A tracker employer whose name the app's own
+text already used is set aside by set_aside(), with no name written down; the
+list stays only for the person's own employers, which carry no date to go by,
+and for a repo with no copy of the app's master.
 """
 
 from __future__ import annotations
@@ -60,8 +66,8 @@ ALLOWED_ORGANIZATIONS = {
     # Employers the app's own prose names for their products and tools, never as where
     # anyone applied: Google (Gemini CLI, Antigravity, Scholar), Microsoft (a Power BI
     # certificate), Apple (a Mac's own Python), IBM and Oracle (spelling and ATS
-    # examples). One tracker row at Google put its name on the denylist and failed every
-    # chat's checks on the app's own prose (2026-10-23). A name goes here only when the
+    # examples). Before set_aside() each failed the checks of anyone whose tracker named
+    # it, on the app's own prose (2026-10-23). A name goes here only when the
     # app's text outside tools/bridges.py, whose skill entries the scan already sets
     # aside, uses it this way; a test checks each one is in the app's text.
     "Google", "Microsoft", "Apple", "IBM", "Oracle",
@@ -134,54 +140,94 @@ def _csv_ever(path: str) -> list[dict]:
     A row taken out of the tracker (a draft never sent, scrubbed on 2026-10-15) still
     names a real employer and is still in this repo's history; a denylist built from
     today's file alone had forgotten it, and only an older copy kept by hand still
-    caught it. Read through one `git cat-file --batch`, so a long history costs one
-    process, not one per version, and each distinct row is kept once: a contact book's
-    history held 26,744 rows and 1,156 different ones.
+    caught it.
     """
+    return [row for row, _ in _csv_dated(path)]
+
+
+def _csv_dated(path: str) -> list[tuple[dict, float | None]]:
+    """_csv_ever's rows, each with when this repo first recorded it: the time of the
+    oldest commit that holds the row. Every doubt resolves to the earlier time, since a
+    date too late reads the app as it stood later than it should, after a leak perhaps:
+    a commit's author date where a cherry-pick or rebase reset its commit date; for a row
+    only the working copy has, the file's newest commit, which did not yet hold it; and
+    None, no date at all, for a row a shallow clone first shows at its oldest commit, or
+    one in a file with no history.
+
+    Read through one `git cat-file --batch`, so a long history costs one process, not
+    one per version, and each distinct row is kept once: a contact book's history held
+    26,744 rows and 1,156 different ones.
+    """
+    pending = float("inf")
     rows = _csv(path)
+    out: list[list] = []
+    index: dict = {}
+
+    def keep(got: list[dict], when: float | None) -> None:
+        for row in got:
+            key = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in row.items())
+            i = index.get(key)
+            if i is None:
+                index[key] = len(out)
+                out.append([row, when])
+            else:
+                out[i][1] = _earlier(when, out[i][1])
+
+    def dated(newest: float | None) -> list[tuple[dict, float | None]]:
+        return [(r, newest if w == pending else w) for r, w in out]
+
+    keep(rows, pending)
     folder = os.path.dirname(path) or "."
     top = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"],
                          capture_output=True, text=True)
     if top.returncode != 0:
-        return rows
+        return dated(None)
     root = top.stdout.strip()
     rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(os.sep, "/")
-    log = subprocess.run(["git", "-C", root, "log", "--format=%H", "--", rel],
+    log = subprocess.run(["git", "-C", root, "log", "--format=%H %at %ct", "--", rel],
                          capture_output=True, text=True)
-    revs = log.stdout.split() if log.returncode == 0 else []
+    revs = [(p[0], float(min(int(p[1]), int(p[2]))))
+            for p in (ln.split() for ln in log.stdout.splitlines()) if len(p) == 3] \
+        if log.returncode == 0 else []
     if not revs:
-        return rows
+        return dated(None)
+    cut = subprocess.run(["git", "-C", root, "rev-parse", "--git-path", "shallow"],
+                         capture_output=True, text=True).stdout.strip()
+    try:
+        with open(cut if os.path.isabs(cut) else os.path.join(root, cut), encoding="utf-8") as fh:
+            shallow = set(fh.read().split())
+    except OSError:
+        shallow = set()
     batch = subprocess.run(["git", "-C", root, "cat-file", "--batch"],
-                           input="".join(f"{r}:{rel}\n" for r in revs).encode(),
+                           input="".join(f"{r}:{rel}\n" for r, _ in revs).encode(),
                            capture_output=True)
-    out, data, at = [], batch.stdout, 0
-    seen: set = set()
-
-    def keep(got: list[dict]) -> None:
-        for row in got:
-            key = tuple((k, tuple(v) if isinstance(v, list) else v) for k, v in row.items())
-            if key not in seen:
-                seen.add(key)
-                out.append(row)
-
-    keep(rows)
+    data, at, k = batch.stdout, 0, -1
     # Read by position: cutting the rest of the batch off after each version copied it
-    # again every time, a fifth of a second on 19 MB.
+    # again every time, a fifth of a second on 19 MB. One header per version asked for,
+    # in the order asked, so the k-th header is the k-th commit's copy.
     while at < len(data):
         end = data.find(b"\n", at)
         if end < 0:
             break
         parts = data[at:end].split()
         at = end + 1
+        k += 1
         if len(parts) < 3 or parts[1] != b"blob":       # "<rev>:<path> missing", a deletion
             continue
         size = int(parts[2])
         blob, at = data[at:at + size], at + size + 1
         try:
-            keep(list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace")))))
+            keep(list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace")))),
+                 None if k >= len(revs) or revs[k][0] in shallow else revs[k][1])
         except csv.Error:
             continue
-    return out
+    # A row the newest copy did not hold was added after it, a shallow clone or not.
+    return dated(revs[0][1])
+
+
+def _earlier(a: float | None, b: float | None) -> float | None:
+    """The earlier of two record times; None, no date to go by, outranks any date."""
+    return None if a is None or b is None else min(a, b)
 
 
 def _school(education_tex: str) -> list[str]:
@@ -355,8 +401,32 @@ def phone_forms(written: str) -> list[str]:
 
 def denylist() -> list[str]:
     """One token per line, in leak_scan.py's format. "=" marks case-sensitive."""
-    out: list[str] = []
-    add = out.append
+    return list(recorded())
+
+
+def recorded() -> dict[str, float | None]:
+    """The denylist, each entry once and in order, with when this repo first recorded it.
+
+    The time is the earliest commit of the state file row it came from (_csv_dated()
+    says how a doubt is settled). None is an entry with no date to go by, and it is never
+    set aside: the person's own name and contact details, their employers and schools,
+    everyone a discovery run or a prep document named, and profile/leak_tokens.txt.
+    """
+    out: dict[str, float | None] = {}
+    for t, when in _entries():
+        t = (t or "").strip()
+        if not t:
+            continue
+        out[t] = _earlier(when, out[t]) if t in out else when
+    return out
+
+
+def _entries() -> list[tuple[str, float | None]]:
+    out: list[tuple[str, float | None]] = []
+
+    def add(t: str, when: float | None = None) -> None:
+        out.append((t, when))
+
     ident = person.get("identity")
     for k in ("name", "first", "last"):
         if ident.get(k) and len(ident[k]) > 2:
@@ -389,54 +459,167 @@ def denylist() -> list[str]:
         m = re.search(r" of ([A-Z]\w+)$", s)
         if m:
             add(m.group(1))
-    contacts = _csv_ever(person.state("network_contacts.csv"))
-    for row in contacts:
+    contacts = _csv_dated(person.state("network_contacts.csv"))
+    for row, when in contacts:
         name = (row.get("name") or "").strip()
         if len(name.split()) >= 2:
-            out.extend(name_forms(name))
+            for form in name_forms(name):
+                add(form, when)
             # A contact also appears by first name in an example message
             # ("Hi Sasha, ..."). The greeting form is precise; the bare first
             # name would fire on every other person who shares it. Every given
             # name gets one, because people go by a middle name too, except the
             # first names the app's own invented people use (INVENTED_FIRST_NAMES).
-            out.extend(_greetings(name))
+            for form in _greetings(name):
+                add(form, when)
         url = row.get("linkedin_url") or ""
         h = re.search(r"linkedin\.com/in/([^/?#]+)", url)
         if h:
-            add(h.group(1))
+            add(h.group(1), when)
         if row.get("email"):
-            add(row["email"].strip())
+            add(row["email"].strip(), when)
     # Threads name their person by contact_id, which is itself a name slug
     # ("firstname_lastname"); the contacts file holds the names.
-    ids = {(r.get("contact_id") or "").strip() for r in contacts}
-    ids |= {(r.get("contact_id") or "").strip() for r in _csv_ever(person.state("network_threads.csv"))}
-    out += sorted(i for i in ids if "_" in i)
-    for row in _csv_ever(person.state("job_search_tracker.csv")):
+    ids: dict[str, float | None] = {}
+    for row, when in contacts + _csv_dated(person.state("network_threads.csv")):
+        i = (row.get("contact_id") or "").strip()
+        if "_" in i:
+            ids[i] = _earlier(when, ids[i]) if i in ids else when
+    for i in sorted(ids):
+        add(i, ids[i])
+    for row, when in _csv_dated(person.state("job_search_tracker.csv")):
         company = (row.get("company") or "").strip()
         forms = company_forms(company) if company else []
         if forms and not set(forms) & ALLOWED_ORGANIZATIONS:
             for form in forms:
-                add("=" + form)
+                add("=" + form, when)
         cp = (row.get("contact_person") or "").strip()
         if len(cp.split()) >= 2:
-            out.extend(name_forms(cp))
+            for form in name_forms(cp):
+                add(form, when)
     # Everybody a discovery run or a prep doc ever named, not only the people who
     # became contacts: the people found and dropped are real too, and a comment
     # that cites "the run dropped <name>" carries them into the app.
     for name in _people():
         add(name)
-        out.extend(_greetings(name))
+        for form in _greetings(name):
+            add(form)
     extra = person.path("leak_tokens.txt")
     if os.path.isfile(extra):
         with open(extra, encoding="utf-8") as fh:
-            out += [line.rstrip("\n") for line in fh]
-    seen, uniq = set(), []
-    for t in out:
-        t = (t or "").strip()
-        if t and t not in seen:
-            seen.add(t)
-            uniq.append(t)
-    return uniq
+            for line in fh:
+                add(line.rstrip("\n"))
+    return out
+
+
+# The app as this repo takes it: the app's master, which the sync fetches here
+# (sync_app.MASTER).
+RELEASED = "refs/remotes/app/master"
+_FOUND = re.compile(r"denylist entry (\d+)")
+
+
+def set_aside(found, when: dict, ref: str = RELEASED, root: str = ROOT) -> dict[str, str]:
+    """{entry: app commit} for each entry in `found` that the app at `ref` already carried
+    before this repo first recorded it (`when`, from recorded()).
+
+    A tracker employer whose name is an ordinary word in the app's own text failed every
+    check, and the cure was to add each one by hand to ALLOWED_ORGANIZATIONS (2026-10-24).
+    A word the app used before the person ever wrote it down cannot have come from them,
+    so it cannot identify them. The app's copy is read as it stood before the entry was
+    recorded, never as it stands now: what reached the app after the person recorded it
+    may be the leak itself, and a list made from the app's current text would let a leak
+    excuse itself, the way a secret scanner's baseline can hide a live secret.
+    """
+    # The app's master in the order it grew, each commit at the later of its two dates.
+    # It is walked, never searched by date: one commit dated out of order (a rebase that
+    # kept author dates, a container with its clock wrong) would otherwise name a copy
+    # from after the leak as one from before it.
+    log = subprocess.run(["git", "-C", root, "log", "--first-parent", "--reverse",
+                          "--format=%H %at %ct", ref, "--"], capture_output=True, text=True)
+    chain = [(p[0], max(int(p[1]), int(p[2])))
+             for p in (ln.split() for ln in log.stdout.splitlines()) if len(p) == 3] \
+        if log.returncode == 0 else []
+    groups: dict[str, list[str]] = {}
+    for e in dict.fromkeys(found):
+        t = when.get(e)
+        if t is None:
+            continue
+        sha = ""
+        for c, ct in chain:
+            if ct >= t:
+                break
+            sha = c
+        if sha:
+            groups.setdefault(sha, []).append(e)
+    aside: dict[str, str] = {}
+    for sha, entries in groups.items():
+        for e in _carried(sha, entries, root):
+            aside[e] = sha[:12]
+    return aside
+
+
+def _carried(sha: str, entries: list[str], root: str = ROOT) -> list[str]:
+    """The entries the app's tree at this commit holds, matched the way leak_scan matches
+    them: only the files `git grep` finds a word of an entry in are read, so a look costs
+    a fraction of a second."""
+    import leak_scan
+    words = set()
+    for e in entries:
+        body = e[1:] if e.startswith("=") else e
+        for form in (body, leak_scan.plain(body)):
+            w = max(re.findall(r"\w+", form), key=len, default="")
+            if w:
+                words.add(w)
+    if not words:
+        return []
+    args = ["git", "-C", root, "grep", "-l", "-z", "-I", "-i", "-F"]
+    for w in sorted(words):
+        args += ["-e", w]
+    got = subprocess.run(args + [sha, "--"], capture_output=True)
+    paths = [p.decode("utf-8", "replace").split(":", 1)[1]
+             for p in got.stdout.split(b"\0") if b":" in p]
+    if not paths:
+        return []
+    with tempfile.TemporaryDirectory(prefix="app_then_") as d:
+        cat = subprocess.run(["git", "-C", root, "cat-file", "--batch"],
+                             input="".join(f"{sha}:{p}\n" for p in paths).encode(),
+                             capture_output=True).stdout
+        for p in paths:
+            head, _, cat = cat.partition(b"\n")
+            size = int(head.split()[2]) if len(head.split()) == 3 else 0
+            data, cat = cat[:size], cat[size + 1:]
+            full = os.path.join(d, p)
+            os.makedirs(os.path.dirname(full), exist_ok=True)
+            with open(full, "wb") as fh:
+                fh.write(data)
+        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None))
+    hit = {int(m.group(1)) for f in found for m in [_FOUND.search(f)] if m}
+    return [e for n, e in enumerate(entries, 1) if n in hit]
+
+
+def check(tree: str, when: dict, show: bool = False, ref: str = RELEASED,
+          root: str = ROOT) -> tuple[list[str], dict[str, str]]:
+    """leak_scan over `tree` with the denylist `when` holds: (findings, {entry: app commit}
+    for each entry set aside). A finding on a set-aside entry is not one."""
+    import leak_scan
+    entries = list(when)
+    findings = leak_scan.scan(tree, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
+                              show=show)
+    return without_aside(findings, entries, when, ref, root)
+
+
+def without_aside(findings: list[str], entries: list[str], when: dict, ref: str = RELEASED,
+                  root: str = ROOT) -> tuple[list[str], dict[str, str]]:
+    """(the findings left, {entry: app commit} set aside): `entries` is the list the scan
+    numbered its "denylist entry N" by, and `when` says when each was recorded."""
+    def entry(f: str) -> str:
+        m = _FOUND.search(f)
+        n = int(m.group(1)) if m else 0
+        return entries[n - 1] if 0 < n <= len(entries) else ""
+
+    found = {entry(f) for f in findings} - {""}
+    aside = set_aside(found, when, ref, root) if found else {}
+    return [f for f in findings if entry(f) not in aside], aside
 
 
 def main(argv: list[str]) -> int:
@@ -449,28 +632,28 @@ def main(argv: list[str]) -> int:
 
     removed = export(a.out_dir)
     print(f"build_app: exported HEAD to {a.out_dir}, removed {len(removed)} personal path(s)")
-    tokens = denylist()
-    keep = a.tokens_out
-    tmp = None
-    if not keep:
-        fd, tmp = tempfile.mkstemp(prefix="leak_tokens_")
-        os.close(fd)
-        keep = tmp
-    with open(keep, "w", encoding="utf-8") as fh:
-        fh.write("\n".join(tokens) + "\n")
-    try:
-        cmd = [sys.executable, os.path.join(ROOT, "tools", "leak_scan.py"), a.out_dir, "--tokens", keep]
-        if a.show:
-            cmd.append("--show")
-        env = dict(os.environ, LJS_LEAK_TOKENS="")
-        rc = subprocess.run(cmd, env=env).returncode
-    finally:
-        if tmp:
-            os.remove(tmp)
-    if rc != 0:
+    when = recorded()
+    findings, aside = check(a.out_dir, when, show=a.show, ref=RELEASED, root=ROOT)
+    for f in findings:
+        print(f)
+    print(f"leak_scan: {len(findings)} finding(s); {len(when)} denylist entries checked",
+          file=sys.stderr)
+    if aside:
+        print(f"build_app: set aside {len(aside)} entr{'y' if len(aside) == 1 else 'ies'} the "
+              "app already carried before this repo recorded them: "
+              + ", ".join(f"{e.lstrip('=')!r} (app {sha})" for e, sha in aside.items()))
+    elif any(_FOUND.search(f) for f in findings) and subprocess.run(
+            ["git", "-C", ROOT, "rev-parse", "--verify", "--quiet", RELEASED],
+            capture_output=True).returncode != 0:
+        print("build_app: no copy of the app's master here to compare with, so nothing was "
+              "set aside (python3 tools/sync_app.py fetches it)")
+    if a.tokens_out:
+        with open(a.tokens_out, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(t for t in when if t not in aside) + "\n")
+    if findings:
         print("build_app: LEAK SCAN FAILED. Nothing from this tree may be pushed.", file=sys.stderr)
         return 1
-    print(f"build_app: leak scan clean ({len(tokens)} denylist entries)")
+    print(f"build_app: leak scan clean ({len(when) - len(aside)} denylist entries)")
     if a.test:
         env = {k: v for k, v in os.environ.items() if k not in ("LJS_PROFILE", "LJS_STATE")}
         env["PYTHONDONTWRITEBYTECODE"] = "1"

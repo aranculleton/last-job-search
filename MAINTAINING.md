@@ -31,7 +31,10 @@ These apply whenever the change is to the app, whichever repo the session starte
   writes the denylist from their profile and the whole git history of their tracker, contact
   book and message log (a row taken out still names someone real); then `python3
   tools/leak_scan.py <app checkout> --tokens <dir>/tokens` scans the app checkout with it.
-  That local scan is the gate. After a change lands, the maintainer's own repo checks the
+  That local scan is the gate. An entry the app's master already carried before the
+  maintainer's repo first recorded it (an employer whose name is an ordinary word in the
+  app) is set aside by itself and named, never added to a list by hand; one that reached
+  the app afterwards still fails. After a change lands, the maintainer's own repo checks the
   public app by itself on every sync (`tools/app_watch.py`): each branch not yet merged, new
   commit messages and pull request text, against that same denylist, and a finding goes first
   in the reply. Nothing is maintained by hand: the `LEAK_TOKENS` secret the app's CI can read
