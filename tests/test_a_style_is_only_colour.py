@@ -202,6 +202,7 @@ def rendered(tmp_path_factory):
 
 @pytest.mark.parametrize("name", ACCENTS)
 def test_a_style_moves_no_word_and_adds_only_its_own_colour(rendered, name):
+    pytest.importorskip("pypdf")
     black_resume, black_letter = rendered["black"]
     resume, letter = rendered[name]
     assert _words(resume) == _words(black_resume) and _words(resume)
