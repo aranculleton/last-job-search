@@ -60,8 +60,8 @@ make sense to somebody whose repo just received it.
   comes off anyone who has written to you since.
 - **"Happy to connect" is no longer read as an offer to introduce you.** It is the reply to
   a connection request, and the advice was to send your resume unasked. Being offered a
-  chat or a coffee is read as its own thing now: say yes and propose two times. "Not
-  available to chat" is still read as a no.
+  chat or a coffee is read as its own thing now (a new reading, `chat_offered`): say
+  yes and propose two times. "Not available to chat" is still read as a no.
 - **Someone whose headline writes their employer's name short is no longer read as having
   left it** ("at <Name>" for "<Name> Asset Management", "<Name> Bank" for "<Name> Bank of
   <place>"), and a "500+" on its own line on a card is never taken for where somebody
