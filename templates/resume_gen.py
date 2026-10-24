@@ -45,6 +45,16 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 %% name, and position-sorting extractors then read the name and the city as one
 %% word. A zero-width rule with depth forces the gap the extractor expects.
 \renewcommand*{{\namestyle}}[1]{{{{\namefont#1\rule[-0.42em]{{0pt}}{{0pt}}}}}}
+%% moderncv 2.4 and later (a current TeX install, a Mac's included) print the name through
+%% \firstnamestyle and \lastnamestyle and never call \namestyle, so the rule above never
+%% runs there: under a name with no descenders the city sat close enough that pdftotext
+%% read the two as one word (2026-10-24). There the name is drawn 9.5pt higher instead,
+%% its box unchanged, which puts it where the rule puts it on 2.3 relative to the city,
+%% and nothing else on the page moves. 2.3 defines neither command and is untouched.
+\ifdefined\lastnamestyle
+\renewcommand*{{\firstnamestyle}}[1]{{\raisebox{{9.5pt}}[\height][\depth]{{{{\namefont\textcolor{{firstnamecolor}}{{#1}}}}}}}}
+\renewcommand*{{\lastnamestyle}}[1]{{\raisebox{{9.5pt}}[\height][\depth]{{{{\namefont\textcolor{{lastnamecolor}}{{#1}}}}}}}}
+\fi
 %% ATS: the default bullet is a FontAwesome circle whose metrics make layout
 %% extractors insert blank lines mid-bullet, splitting one bullet into two
 %% paragraphs. A text bullet from the body font does not.
