@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.12
+framework_version: 2.1.13
 ---
 
 # Resume Templates and Tailoring Guide
@@ -185,6 +185,12 @@ Expected output: `Output written on <Prefix>_Resume_<ABBR>.pdf (1 page, ...)`. A
 ### Color overrides
 
 Every resume's text is black by default (`\moderncvcolor{black}`, links black too), the person's request of 2026-10-24. The `\renewcommand*` on `\namefont` and the three `\colorlet` lines in the preamble stay: under a colour scheme the name and section headings would otherwise render in black while the scheme colours the links and bullet markers. The cause: `moderncvstylebanking.sty` defines the name colours with `\colorlet`, which *copies* the accent colour as it is before the scheme is applied, so the name colours are frozen to the pre-scheme value; re-assigning them with `\colorlet` after `\moderncvcolor{...}` (as the preamble does) re-pins them to `color1`. `\namefont` is the shared hook every name-style macro routes through, so the block is version-agnostic - including moderncv 2.3.1 from Debian/Ubuntu apt, which has no `\firstnamestyle`/`\lastnamestyle` at all. Both names render bold; if you prefer regular weight, change `\bfseries` to `\mdseries` in the `\namefont` line (the weight now lives there, so it applies to the whole name). Don't drop the overrides - on most modern installs the defaults render visibly wrong.
+
+### Styles: a colour per kind of employer
+
+Black is the default and the fallback. A person who wants colour chooses it per kind of employer in `person.json` `documents.styles`; a draft's own `style` key wins for one application. `templates/doc_style.py` holds the shape and the eight styles: black, navy, burgundy, forest, teal, plum, slate, and blue, the colour every resume had before 2026-10-24. The kind comes from the person's own employer lists in `employers.py`, never a guess: `startup` (on `YC_AND_BACKED`), `technology company` (`TECH_COMPANIES`), `software product` (`ADJACENT_COMPANIES`), or the word `NOT_TECH` gives the name (bank, insurer, professional services, ...). An employer named under `employers` in the setting beats its kind. `python3 templates/doc_style.py "<employer>"` says which style a name gets and why.
+
+A style is a colour and nothing else: on the resume the name, the section titles and rules and the bullet marks take it, on the letter the name and the bullet marks. Every word sits where it sits in black, so the same bullets fit and every check reads the same (`tests/test_a_style_is_only_colour.py`). Fonts and layouts were measured and turned down: each moved lines, and with them the bullets `fit_to_page.py` keeps. Every accent reads at a contrast of 4.5 or more on white and prints a dark grey in black and white. The colour lines are set for moderncv 2.3 (the cloud's) and 2.4 and later (a current Mac install) alike, which read colour differently. When the person asks for a colour, write the setting; never edit a `.tex`.
 
 ### Spacing inside itemize lists (important)
 
