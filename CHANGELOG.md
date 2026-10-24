@@ -135,11 +135,11 @@ make sense to somebody whose repo just received it.
   thing as a merge nobody had reviewed, although that step is pre-approved. Each step now runs
   on its own, where the approval applies. If the check still holds one, you are asked to OK
   that one step in a single reply, never to turn the safety checks off.
-- **One application to Google no longer stops every chat's checks** (the maintainer's own
-  copy only). Every employer applied to goes on the list of words the public app must never
-  carry, and the app's own text names Google, Microsoft, Apple, IBM and Oracle for their
-  products. Those five are allowed, whether they came from an application or a past job;
-  any other employer is still caught.
+- **An employer the app names for its products no longer stops every chat's checks** (the
+  maintainer's own copy only). Every employer applied to goes on the list of words the
+  public app must never carry, and the app's own text names Google, Microsoft, Apple, IBM
+  and Oracle for their products. Those five are allowed, whether they came from an
+  application or a past job; any other employer is still caught.
 
 ## [3.11.0] - 2026-10-22
 
