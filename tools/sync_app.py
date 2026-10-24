@@ -1240,6 +1240,9 @@ def network_check() -> None:
         print("Job sites blocked. Claude: before anything else, tell the person this, in these "
               "words, and run no search until they say it is done:")
         print("\n".join("  " + ln for ln in out.splitlines()))
+        for ln in (r.stderr or "").splitlines():
+            if ln.startswith("[claude_surfaces:"):      # the steps are old: yours, never said
+                print("Claude, not for them: " + ln)
 
 
 def place_check(tools: str | None) -> None:

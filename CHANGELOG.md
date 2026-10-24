@@ -20,6 +20,14 @@ make sense to somebody whose repo just received it.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Steps for another site's screens no longer carry a note meant for Claude.** Once the
+  steps for a screen were two months old, a line for Claude asking it to re-check them, with
+  a file path in it, sat among the steps you are given: in the fix for job sites a cloud chat
+  cannot reach, and in the steps after you say yes to one of the app's questions. Claude
+  still gets that line, apart from your steps. It would first have happened in December.
+
 ## [3.12.0] - 2026-10-23
 
 ### Added

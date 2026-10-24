@@ -48,9 +48,11 @@ def test_a_step_past_its_date_tells_claude_to_check_it_first():
     e = C.entry("linkedin-connections")
     late = datetime.date.fromisoformat(e["verified_on"]) + datetime.timedelta(
         days=int(REG["stale_after_days"]) + 1)
-    out = C.steps("linkedin-connections", today=late)
-    assert out[-1].startswith("[claude_surfaces: 'linkedin-connections' was checked")
-    assert "re-check https://www.linkedin.com/help/linkedin/answer/50191" in out[-1]
+    (note,) = C.notes("linkedin-connections", today=late)
+    assert note.startswith("[claude_surfaces: 'linkedin-connections' was checked")
+    assert "re-check https://www.linkedin.com/help/linkedin/answer/50191" in note
+    # Apart from the steps the person is given, which say nothing of it.
+    assert not any("claude_surfaces" in ln for ln in C.steps("linkedin-connections", today=late))
 
 
 def test_a_page_that_is_never_fetched_is_put_to_the_maintainer_by_hand():
