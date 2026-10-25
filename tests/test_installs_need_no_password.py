@@ -281,3 +281,18 @@ def test_the_venvs_packages_are_read_only_when_this_python_made_it(tmp_path):
         sys.path[:] = saved
     (v / "pyvenv.cfg").write_text("home = /usr/bin\nversion = 3.1.0\n")
     assert local_path.venv_site(str(tmp_path)) is None
+
+
+def test_the_windows_bootstrap_needs_no_administrator_and_runs_on_powershell_5():
+    with open(os.path.join(ROOT, "tools", "computer_setup.ps1"), encoding="utf-8") as fh:
+        src = fh.read()
+    code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
+    # Nothing that asks for an administrator, or a package manager the person lacks.
+    for word in ("winget", "choco", "scoop", "-Verb RunAs", "Machine')", "HKLM:"):
+        assert word not in code, word
+    # Windows PowerShell 5.1, the shell a fresh Windows has: no pwsh-only syntax.
+    for token in (" && ", " || ", " ?? ", "?."):
+        assert token not in code, token
+    # Everything into the person's own folders, and Claude Code told where Git Bash is.
+    assert "$env:LOCALAPPDATA" in code and "CLAUDE_CODE_GIT_BASH_PATH" in code
+    assert "Add-AppxPackage" in code and "'User')" in code
