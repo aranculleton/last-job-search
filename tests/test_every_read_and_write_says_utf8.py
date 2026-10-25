@@ -20,11 +20,9 @@ SUBPROCESS = {"run", "check_output", "Popen", "check_call", "call"}
 # one is fixed, so the list can only shrink, and it is emptied when the change lands.
 PENDING = {
     ("tools/audit_letters.py", "subprocess.run"): 1,
-    ("tools/company_research.py", "subprocess.run"): 1,
     ("tools/env_check.py", "subprocess.run"): 3,
     ("tools/fit_to_page.py", "subprocess.run"): 3,
     ("tools/hydrate.py", "open"): 2,
-    ("tools/network/state.py", "subprocess.run"): 1,
     ("tools/scrape_wide.py", "open"): 4,
 }
 

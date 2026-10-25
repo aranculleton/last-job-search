@@ -3523,7 +3523,8 @@ def _general_resume_dates(root: str) -> tuple:
         log = subprocess.run(["git", "-C", root, "log", "--reverse", "-M", "--diff-filter=ADR",
                               "--format=%x00%ad", "--date=short", "--name-status", "--",
                               RESUME_DIRS[1]],
-                             capture_output=True, text=True, timeout=20).stdout
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace", timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
         return ()
     arrived: dict = {}

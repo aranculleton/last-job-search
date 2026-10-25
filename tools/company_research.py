@@ -758,7 +758,8 @@ def curl(url: str, headers: dict) -> tuple[int, dict, str]:
             cmd += ["-H", "%s: %s" % (k, v)]
         cmd += ["--", url]
         try:
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=45)
+            r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                               timeout=45)
         except (OSError, subprocess.TimeoutExpired) as e:
             return 0, {}, type(e).__name__
         status = int((r.stdout or "0").strip()[-3:] or 0) if (r.stdout or "").strip() else 0
