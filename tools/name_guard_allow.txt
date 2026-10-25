@@ -178,3 +178,10 @@ Zoë Ångström-Núñez       # invented: the accented name tools/platform_check
 Riverside Cafe          # invented, the example line in tools/history_interview.py
 Café Brûlé              # invented, tests/test_a_person_without_a_resume_leaves_with_one.py
 Install Certificates     # python.org's own script for a Mac ("Install Certificates.command"), not a name
+# Fonts and the words of their licence: templates/doc_design.py and cover_letters/OpenFonts/fonts/*/OFL.txt.
+Liberation Serif        # a font, vendored under the SIL Open Font License
+Times New Roman's       # a font, named for the widths Liberation Serif shares
+Copyright Holder        # a defined term of the SIL Open Font License
+Modified Version        # a defined term of the SIL Open Font License
+Modified Versions       # the same term
+No Modified Version     # the same licence's wording

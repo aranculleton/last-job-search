@@ -163,7 +163,13 @@ otherwise. Also, from their market and level: `resume_pages` (1 unless their mar
 long career expects 2), `section_order` (a recent graduate often leads with education), and,
 for a letter in another language, `salutation_prefix` and `page_label`. Where they will work
 is recorded by `python3 tools/place.py auto` once this file exists, or from their answer
-with `python3 tools/place.py record computer|phone|both`.
+with `python3 tools/place.py record computer|phone|both`. **How the page looks**
+(`templates/doc_design.py`): write `documents.designs.kinds` from its `SUGGESTED_KINDS`,
+keeping only the kinds their employer lists use (`classic` for banks, insurers, professional
+services, law and the public sector; `modern` for technology companies, startups and software
+products). Leave `documents.design` unset unless they said how they like their documents to
+look, and then write only what they said (`doc_design.py set` or `adjust`). Never ask about
+fonts, sizes or margins; the page size comes from their country (`person.paper`).
 <!-- /section -->
 
 <!-- section: history -->

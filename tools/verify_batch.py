@@ -229,6 +229,13 @@ def main(argv=None) -> int:
                 p += " " + flag
             said.append(out)
         readers += re.findall(r"extractor: ([a-z]+)", "\n".join(said))
+        # The design's rules, read off each PDF: its page size, one page, no text too small,
+        # nothing at the page's edge where parsers drop headers and footers, one column
+        # (tools/design_check.py).
+        for pdf, flag in ((r_pdf, "DESIGN_RESUME"), (c_pdf, "DESIGN_LETTER")):
+            if pdf and _run([os.path.join(TOOLS, "design_check.py"), pdf, "--for", drafts,
+                             "--abbr", a])[0] != 0:
+                p += " " + flag
         if not (v["EMAIL"] in flat and v["PHONE"] in flat):
             p += " CONTACT"
         # The round trip: every line the draft put on the page (contacts, headings, the

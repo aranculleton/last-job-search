@@ -56,10 +56,11 @@ def test_with_no_style_set_every_document_is_black_and_the_template_is_untouched
     for style in (None, "", "black"):
         assert doc_style.resume_block(style) == "" and doc_style.letter_block(style) == ""
     import resume_gen
-    # The style's lines sit on a line of their own, after the template's colour lines, so
-    # an empty one leaves the blank line that was always there.
-    assert "\\sectionfont\\color{{color1}}#1}}}}\n{style}\n\\usepackage[utf8]" in resume_gen.RESUME_HEAD
-    assert "\\usepackage{{fancyhdr}}\n{letter_style}\n\\pagestyle{{fancy}}" in resume_gen.LETTER
+    # The style's lines sit on a line of their own, after the template's colour lines (and
+    # after a design's, templates/doc_design.py), so empty ones leave the blank line that was
+    # always there.
+    assert "\\sectionfont\\color{{color1}}#1}}}}\n{design}{style}\n\\usepackage[utf8]" in resume_gen.RESUME_HEAD
+    assert "\\usepackage{{fancyhdr}}\n{letter_design}{letter_style}\n\\pagestyle{{fancy}}" in resume_gen.LETTER
 
 
 def test_a_rendered_draft_with_no_style_carries_no_colour_lines(tmp_path, monkeypatch):

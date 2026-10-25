@@ -604,11 +604,22 @@ def _merge_two_chats(tmp: str, origin: str, env: dict) -> None:
     check("computer: two chats' new messages merge row by row", ok, out.strip(), took)
 
 
+def step_designs() -> None:
+    """Every font in both engines read back as an ATS would, then every design rendered,
+    fitted and checked on this computer's TeX (tools/design_check.py)."""
+    py = sys.executable
+    for args, label in ((["--fonts"], "every font in every engine"),
+                        (["--all"], "every design rendered, fitted and checked")):
+        code, out, took = run([py, os.path.join(TOOLS, "design_check.py"), *args],
+                              env=env_for(LJS_PROFILE=EXAMPLE))
+        check(f"designs: {label}", code == 0, out.strip(), took)
+
+
 STEPS = {"install": step_install, "python": step_python, "documents": step_documents,
-         "general": step_general,
+         "general": step_general, "designs": step_designs,
          "seed": step_seed, "round": step_round, "interview": step_interview,
          "networking": step_networking, "suite": step_suite, "computer": step_computer}
-ALL = ("install", "python", "documents", "general", "seed", "round", "interview",
+ALL = ("install", "python", "documents", "general", "designs", "seed", "round", "interview",
        "networking")
 
 

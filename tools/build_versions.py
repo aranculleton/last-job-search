@@ -164,9 +164,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", True, "Skills headings in your own words, page count and section order "
                                     "for your career, and a letter that greets in your language"),
             (3, "2026-10-18", False, "asks early where the person will mostly work and records it in profile/place.json"),
-            (4, "2026-10-25", False, "setup's documents section moved to setup-sections.md; the local conventions are researched in the background"),
+            (4, "2026-10-25", False, "setup's documents section moved to setup-sections.md; the local conventions are researched in the background; a new person's page design is chosen per kind of employer (classic or modern), never asked"),
         ),
-        "fingerprint": "269ed56b9b10ac3b",
+        "fingerprint": "00a8f39ae95c9352",
     },
     "voice": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -258,6 +258,7 @@ METHODS: dict[str, dict] = {
                   "tools/locale_rules.py",
                   "tools/audit_letters.py", "tools/verify_pdf.py", "tools/verify_batch.sh",
                   "tools/verify_batch.py", "tools/pdftext.py", "tools/general_resume.py",
+                  "tools/design_check.py",
                   "tools/untrusted.py", "tools/bridges.py",
                   ".claude/commands/apply.md", ".claude/commands/add-template.md",
                   ".claude/skills/job-application-assistant/03-writing-style.md",
@@ -325,9 +326,9 @@ METHODS: dict[str, dict] = {
             (48, "2026-10-23", False, "applications are delivered one way: per role one file-sending call with resume and letter, captioned role, employer, pay, location and apply link, then one index table; paths as plain text, never markdown links. An audit ruling no longer settles a longer sentence edited after it, an edit to the outreach note is kept in the note, and a newer model correction is never overwritten by an older edit"),
             (49, "2026-10-24", False, "the posting profile reads a degree's other way in past a semicolon, as the score does; the run book saves with tools/save_state.py and tells nobody but the maintainer of a problem with the app; verify_batch reads whole bullets for repeats and its skills check runs under a Mac's sed; every resume's text is black (name, headings, rule, contact line, links, bullet marks), with nothing else moved; drafts made before keep theirs until re-rendered; voice_check counts the person's own wording in a message (their opener and close, a message they approved) as theirs, never a finding, and a letter is held to the house style as before; save_state.py stages a file of the person's that was taken away as removed; on moderncv 2.4 and later (a Mac's TeX) the name is drawn 9.5pt higher, its box unchanged, so a text extractor reads it apart from the city and nothing else moves"),
             (50, "2026-10-24", False, "a resume and its letter can take a colour per kind of employer (person.json documents.styles, templates/doc_style.py), or one a draft names; black when nothing chooses one, so every draft renders exactly as before; a colour moves no word, and the claims check reads no font key as a word"),
-            (51, "2026-10-25", False, "PDFs are read with pypdf, Poppler only where present; verify_batch runs in Python with the same checks and exit codes; a LaTeX compile stops after 300 s and says so; compiles run where the files were written; an employer's accented letters stay in file names (existing names kept); every file is read and written as UTF-8; a general resume, for their main target role with no posting, is staged with `stage_picks.py general`, fitted, checked (no letter) and kept as their current resume, in their default colour or black"),
+            (51, "2026-10-25", False, "PDFs are read with pypdf, Poppler only where present; verify_batch runs in Python with the same checks and exit codes; a LaTeX compile stops after 300 s and says so; compiles run where the files were written; an employer's accented letters stay in file names (existing names kept); every file is read and written as UTF-8; a general resume, for their main target role with no posting, is staged with `stage_picks.py general`, fitted, checked (no letter) and kept as their current resume, in their default colour or black; a design per kind of employer, employer, person or draft sets the fonts, sizes, margins, page and alignment (person.json documents.design and designs, templates/doc_design.py), the template exactly when none is chosen, and verify_batch checks each PDF against the rules an ATS needs (tools/design_check.py)"),
         ),
-        "fingerprint": "d3e4f7deeeea54f1",
+        "fingerprint": "db414e47e2e6a9ff",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",

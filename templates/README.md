@@ -25,6 +25,12 @@ of employer (`person.json` `documents.styles`) or a draft names one. It writes a
 lines into both preambles and nothing else, so a styled document has every word where the
 black one has it.
 
+`doc_design.py` decides the layout: fonts, sizes, margins, spacing and where the name and
+dates sit. Every setting starts unset, and unset is the template's own text, so a person
+nobody chose a design for keeps the same page. A design is chosen per kind of employer, per
+employer, by the person or by one draft (`person.json` `documents.designs` and
+`documents.design`); `tools/design_check.py` checks what it renders.
+
 Everything below is about the other thing.
 
 ---

@@ -38,6 +38,8 @@ on:
       - "tools/fit_to_page.py"
       - "tools/audit_letters.py"
       - "tools/platform_check.py"
+      - "tools/design_check.py"
+      - "templates/doc_design.py"
       - "tools/computer_setup.ps1"
       - "tools/setup_state.py"
       - "tools/find_copy.py"
@@ -129,8 +131,8 @@ jobs:
           "$PERSON_PY" tools/env_check.py --https
           "$PERSON_PY" tools/platform_check.py python
 
-      - name: Documents, a general resume, a profile seed, a round, an interview pack, a networking day
-        run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents general seed round interview networking
+      - name: Documents, a general resume, every design, a profile seed, a round, an interview pack, a networking day
+        run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents general designs seed round interview networking
 
       - name: The test suite
         run: |
@@ -220,4 +222,4 @@ jobs:
           if python3 -c pass 2>/dev/null; then echo "python3 still runs"; fi
           python -c "import sys, locale; print(sys.stdout.encoding, locale.getpreferredencoding())"
           python tools/env_check.py --fix packages runtime latex
-          python tools/platform_check.py computer general seed
+          python tools/platform_check.py computer general designs seed

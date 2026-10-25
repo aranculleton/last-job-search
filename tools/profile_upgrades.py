@@ -1625,6 +1625,13 @@ SAFE_DEFAULTS: dict[str, str] = {
     "person.json:documents.styles": "none, so every resume and letter is black, as before "
                                     "the setting existed; a colour is the person's choice "
                                     "per kind of employer (templates/doc_style.py)",
+    "person.json:documents.design": "none, so every resume and letter keeps the template's "
+                                    "layout, as before designs existed; the person's own "
+                                    "fonts, sizes and margins when they choose "
+                                    "(templates/doc_design.py)",
+    "person.json:documents.designs": "none, so no kind of employer or employer takes a "
+                                     "design of its own until the person or /setup sets "
+                                     "one (templates/doc_design.py)",
     # Read since before the first release through a one-argument getter (network/reply.py
     # _w) that tools/profile_names.py could not see; nothing about how it is read changed.
     "networking.HOME_ADJECTIVE": "unset, the nationality word in a reply's status and "
