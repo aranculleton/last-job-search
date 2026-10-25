@@ -668,3 +668,28 @@ def test_the_setting_is_the_persons_never_the_apps():
         path = os.path.join(ROOT, rel)
         if os.path.exists(path):
             assert "app_updates" not in read(ROOT, rel), rel
+
+
+def test_a_merge_git_refuses_stops_and_keeps_their_unsaved_file(repos):
+    """The app adds a file where the person has one not saved yet (a portal built and not
+    committed, under a name the app later ships). Git refuses the merge; the sync used to
+    carry on regardless, put the app's file over theirs and commit a one-parent commit that
+    recorded no merge, so the next sync brought the same commit again."""
+    app, me = repos
+    assert run(me, app)[0] == 0
+    write(app, "tools/newthing.py", 'print("the app version")\n')
+    commit(app, "app adds newthing")
+    write(me, "tools/newthing.py", "MY OWN UNSAVED WORK\n")
+    before = head(me)
+    rc, out = run(me, app)
+    assert rc == 1, out
+    assert "stopped, nothing changed" in out
+    assert "tools/newthing.py" in out
+    assert read(me, "tools/newthing.py") == "MY OWN UNSAVED WORK\n"
+    assert head(me) == before
+    assert sh(me, "git", "status", "--porcelain") == "?? tools/newthing.py\n"
+    # Once it is moved out of the way, the update is a real merge.
+    os.remove(os.path.join(me, "tools", "newthing.py"))
+    rc, out = run(me, app)
+    assert rc == 0, out
+    assert len(sh(me, "git", "log", "-1", "--format=%P").split()) == 2

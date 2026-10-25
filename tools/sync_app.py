@@ -397,6 +397,24 @@ def _abort(why: str, paths: list[str]) -> int:
     return 1
 
 
+def _refused(r: subprocess.CompletedProcess) -> int:
+    """Git would not start the merge at all (no MERGE_HEAD): most often a file here that is
+    not saved yet sits where the update brings one. Carrying on put the app's file over
+    theirs and committed a plain commit that recorded no merge (2026-10-25). Nothing has
+    changed at this point, so the stop names their files and git's own reason."""
+    said = (r.stderr or "") + "\n" + (r.stdout or "")
+    paths = [ln.strip() for ln in said.splitlines() if ln.startswith("\t") and ln.strip()]
+    if paths:
+        print("sync_app: stopped, nothing changed. These files here are not saved yet, and "
+              "the update brings a file of the same name: save them under another name or "
+              "move them out of the way, then run this again:")
+        for p in paths[:30]:
+            print(f"  {p}")
+        return 1
+    print(f"sync_app: stopped, nothing changed. Git would not take the update: {_git_error(r)}")
+    return 1
+
+
 def _changelog(old: str) -> list[str]:
     diff = git("diff", old, "HEAD", "--", "CHANGELOG.md", check=False).stdout
     return [ln[1:] for ln in diff.splitlines()
@@ -463,7 +481,10 @@ def sync() -> int:
         args = ["merge", "--no-ff", "--no-commit"]
         if base is None:
             args.append("--allow-unrelated-histories")
-        git(*args, APP, check=False)
+        r = git(*args, APP, check=False)
+        if r.returncode and git("rev-parse", "-q", "--verify", "MERGE_HEAD",
+                                check=False).returncode:
+            return _refused(r)
         conflicted = git("diff", "--name-only", "--diff-filter=U").stdout.split()
         if any(is_personal(p) for p in conflicted):
             return _abort("A personal path conflicted:", [p for p in conflicted if is_personal(p)])
