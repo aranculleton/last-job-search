@@ -245,3 +245,19 @@ def test_tour_command_prints_and_records(profile, capsys):
     assert out.startswith(tips.TOUR_OPEN)
     got = json.loads((profile / tips.FILE).read_text())
     assert got["toured"] and set(got["tour_seen"]) == {k for k, _, _ in tips.TOUR}
+
+
+def test_nothing_is_kept_in_the_example_person(monkeypatch, capsys):
+    # The app's tests and a chat in the app read profile.example/: a tip shown there wrote
+    # profile.example/tips.json, which learned.py refuses for the same reason.
+    example = os.path.join(ROOT, "profile.example")
+    kept = os.path.join(example, tips.FILE)
+    assert not os.path.exists(kept)
+    monkeypatch.setenv(person.ENV, example)
+    try:
+        tips.main(["search"])
+        assert capsys.readouterr().out.strip()
+        assert not os.path.exists(kept)
+    finally:
+        if os.path.exists(kept):
+            os.remove(kept)
