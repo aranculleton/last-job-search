@@ -49,6 +49,7 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
         sys.path.insert(0, _p)
 
 import person                                         # noqa: E402
+import local_path  # noqa: E402
 from company_key import key as company_key            # noqa: E402
 
 ROOT = os.path.dirname(_HERE)
@@ -816,7 +817,7 @@ def claude_lines(b: dict) -> list[str]:
         b["since"], " ".join(b["skip_links"][:10]) or "none"))
     out.append("what counts: " + b["what_counts"])
     if b["pack"]:
-        out.append("wrote " + os.path.relpath(b["pack"], person.state()).replace(os.sep, "/"))
+        out.append("wrote " + local_path.rel(b["pack"], person.state()).replace(os.sep, "/"))
     return out
 
 

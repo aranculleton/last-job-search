@@ -51,6 +51,7 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
         sys.path.insert(0, _p)
 
 import person                                         # noqa: E402
+import local_path  # noqa: E402
 from company_key import key as company_key            # noqa: E402
 
 PACK_DIR = ("documents", "network")
@@ -741,7 +742,7 @@ def _main(argv=None) -> int:
                 print("  warning: " + w)
         if a.pack:
             path = add_to_pack(a.today, res, got, contacts)
-            print("pack: %s" % (os.path.relpath(path, person.state()) if path else "nothing to write"))
+            print("pack: %s" % (local_path.rel(path, person.state()) if path else "nothing to write"))
         return 0 if all(r["ok"] for r in res) else 1
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--contact", help="one contact, by id")
@@ -759,7 +760,7 @@ def _main(argv=None) -> int:
         got = [i for i in got if i.get("key") == want]
     if a.pack:
         path = write_pack(a.today, got, contacts)
-        print("pack: %s" % (os.path.relpath(path, person.state()) if path else "nothing to write"),
+        print("pack: %s" % (local_path.rel(path, person.state()) if path else "nothing to write"),
               file=sys.stderr)
     if a.json:
         print(json.dumps(_json_safe(got), indent=1, ensure_ascii=False))
