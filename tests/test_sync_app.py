@@ -5,6 +5,7 @@ person's repo made from it the way "Use this template" makes one (the app's
 files, a fresh history, then a profile and a tracker on top). LJS_APP_URL points
 the tool at the local app, so nothing touches the network.
 """
+import json
 import os
 import shutil
 import subprocess
@@ -430,6 +431,29 @@ def test_stable_takes_releases_and_never_goes_backwards(repos):
     assert rc == 0 and "newest v1.1.0" in out and read(me, "README.md") == "v2, not released\n"
 
 
+def test_a_first_sync_newer_than_the_newest_release_is_never_put_back(repos):
+    # A first sync takes master, newer than the release before it. The next sync follows
+    # releases, and measured against that older release every file changed since read as
+    # "edited here" and was put back: the person went back a version, told it was their edit.
+    app, me = repos
+    sh(app, "git", "tag", "v1.0.0")
+    write(app, "README.md", "v2, after the release\n")
+    commit(app, "after the release")
+    rc, out = run(me, app)
+    assert rc == 0 and "first sync" in out and read(me, "README.md") == "v2, after the release\n"
+    rc, out = run(me, app)
+    assert rc == 0 and "releases, newest v1.0.0" in out, out
+    assert "put back" not in out and "up to date" in out, out
+    assert read(me, "README.md") == "v2, after the release\n"
+    rc, out = run(me, app, "--check")
+    assert rc == 0 and "drift: 0 app-owned file(s)" in out, out
+    write(me, "tools/x.py", "a = 'edited here'\n")
+    commit(me, "an app file edited here")
+    rc, out = run(me, app)
+    assert rc == 0 and "put back (edited here): tools/x.py" in out, out
+    assert read(me, "tools/x.py") == "a = 1\n" and read(me, "README.md") == "v2, after the release\n"
+
+
 def test_master_for_the_maintainer_or_when_chosen(repos):
     app, me = repos
     assert run(me, app)[0] == 0
@@ -504,3 +528,143 @@ def test_a_persons_own_test_the_update_broke_is_named(tmp_path, monkeypatch, cap
     (tests / "test_mine.py").write_text("def test_still_true():\n    assert True\n")
     sync_app.own_tests()
     assert capsys.readouterr().out == ""
+
+
+# ------------------------------------------- updates that wait for the person's own word
+#
+# Updates arrive by themselves for everyone: every test above. A person who would rather
+# choose when sets "app_updates": "when_asked" in their own profile (the maintainer did, in
+# their own repos, 2026-10-25). Then a plain run and --if-stale only look, and --update
+# takes the update when they say so.
+
+def _when_asked(me, **more):
+    person = dict({"app_updates": "when_asked"}, **more)
+    write(me, "profile/person.json", json.dumps(person) + "\n")
+    commit(me, "updates wait for my word")
+
+
+def _release(app, entry, readme):
+    write(app, "README.md", readme)
+    write(app, "CHANGELOG.md", read(app, "CHANGELOG.md") + f"- **{entry}**\n  More words.\n")
+    commit(app, entry)
+
+
+def test_by_default_a_plain_run_and_if_stale_take_the_update(repos, tmp_path):
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    assert run(me, app)[0] == 0
+    _release(app, "Interview packs open with where the process stands", "v2\n")
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0 and read(me, "README.md") == "v2\n", out
+    assert "What changed" in out and "An update is waiting" not in out
+
+
+def test_when_asked_a_look_changes_nothing_and_says_a_waiting_version_once(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    _when_asked(me)
+    before = head(me)
+    _release(app, "Interview packs open with where the process stands", "v2\n")
+    rc, out = run(me, app)
+    assert rc == 0, out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
+    assert sh(me, "git", "status", "--porcelain").strip() == ""
+    line = ('An update is waiting: Interview packs open with where the process stands. '
+            'Say "update" when you want it.')
+    assert out.count(line) == 1, out
+    assert "What changed" not in out
+    # Never a command: the update is the person's word, and nothing printed asks for it.
+    assert "--update" not in out and "python3" not in out, out
+    rc, out = run(me, app, "--on", "a model", "--tools", "none")
+    assert rc == 0 and "An update is waiting" not in out, out
+    assert head(me) == before
+    # A newer version is a new line, once.
+    _release(app, "A reply to a recruiter names the role", "v3\n")
+    rc, out = run(me, app)
+    assert rc == 0 and out.count("An update is waiting") == 1, out
+    assert "Interview packs open with where the process stands, and 1 more change." in out
+    assert head(me) == before
+
+
+def test_when_asked_if_stale_looks_once_a_day_and_never_takes_the_update(repos, tmp_path):
+    app, me = repos
+    _with_local_origin(me, tmp_path)
+    assert run(me, app)[0] == 0
+    _when_asked(me)
+    sh(me, "git", "push", "-q", "origin", "master")
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    before = head(me)
+    _release(app, "Interview packs open with where the process stands", "v2\n")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0, out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
+    assert "An update is waiting" in out and _stamp(me) > "2000-01-01"
+    _release(app, "A reply to a recruiter names the role", "v3\n")
+    rc, out = run(me, app, "--if-stale")
+    assert rc == 0 and "already checked today" in out and "An update is waiting" not in out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
+
+
+def test_update_takes_it_with_what_changed_and_the_upgrades(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    _when_asked(me)
+    write(app, "tools/profile_upgrades.py", STUB)
+    _release(app, "Interview packs open with where the process stands", "v2\n")
+    rc, out = run(me, app)
+    assert rc == 0 and "An update is waiting" in out, out
+    # Upgrades come with the version that brings them, never before it is taken.
+    assert "Profile upgrades pending" not in out, out
+    rc, out = run(me, app, "--update")
+    assert rc == 0, out
+    assert read(me, "README.md") == "v2\n"
+    assert "What changed" in out and "Interview packs open with where the process stands" in out
+    assert "Profile upgrades pending (1)" in out, out
+    rc, out = run(me, app)
+    assert rc == 0 and "up to date" in out and "An update is waiting" not in out, out
+    # The version taken: its upgrades still apply themselves on every look.
+    assert "Profile upgrades pending (1)" in out, out
+
+
+def test_when_asked_a_look_reports_an_edited_app_file_and_puts_nothing_back(repos):
+    app, me = repos
+    assert run(me, app)[0] == 0
+    _when_asked(me)
+    write(me, "tools/x.py", "a = 'edited here'\n")
+    commit(me, "an app file edited here")
+    rc, out = run(me, app)
+    assert rc == 0 and "drift: 1 app-owned file(s) edited here" in out, out
+    assert read(me, "tools/x.py") == "a = 'edited here'\n"
+    rc, out = run(me, app, "--update")
+    assert rc == 0 and "put back (edited here): tools/x.py" in out, out
+
+
+def test_when_asked_on_the_apps_master_waits_for_their_word_too(repos):
+    # The maintainer's own repo follows master and asked for this; the same rule holds there.
+    app, me = repos
+    assert run(me, app)[0] == 0
+    _when_asked(me, app_channel="master")
+    before = head(me)
+    write(app, "README.md", "v2\n")
+    commit(app, "unreleased")
+    rc, out = run(me, app)
+    assert rc == 0 and "app's master" in out and "An update is waiting" in out, out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
+
+
+def test_when_asked_the_tools_remind_nobody_to_check(repos, tmp_path):
+    app, me = repos
+    _when_asked(me)
+    probe = [sys.executable, "-c",
+             "import sys; sys.path.insert(0, 'tools'); import sync_app; sync_app.nudge()"]
+    r = subprocess.run(probe, cwd=me, env=dict(ENV, LJS_APP_URL=app), text=True,
+                       capture_output=True)
+    assert r.stderr == ""
+
+
+def test_the_setting_is_the_persons_never_the_apps():
+    for rel in ("profile.example/person.json",):
+        path = os.path.join(ROOT, rel)
+        if os.path.exists(path):
+            assert "app_updates" not in read(ROOT, rel), rel

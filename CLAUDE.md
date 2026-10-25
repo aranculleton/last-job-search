@@ -69,7 +69,13 @@ Every session in a person's repo starts with the same five steps, before anythin
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
    changed: do what it printed yourself (commit the work it lists, carry across what it
-   names) and run it again. Never put it to the person: saving and updating are always yes.
+   names) and run it again. Never put it to the person: saving and updating are always yes
+   (updating waits only where they chose that). **Updates arrive by themselves**, unless the person asks to choose when ("only update when
+   I say", in any words): then write `"app_updates": "when_asked"` into `profile/person.json`
+   for them and commit it. From then on this step only looks and changes nothing of the app;
+   when a newer version is waiting it prints one line, once per version ("An update is
+   waiting: ..."), which goes at the end of the reply in its words, and when they say "update"
+   the same command with `--update` takes it. Never press them for it, and nothing waits on it.
 3. **No `profile/`?** First `python3 tools/place.py state`, before anything is asked: another
    chat may hold the profile on master or on a branch it has not landed (it brings it in and
    the search is set up), or still be writing it (say its one line and start nothing). Only

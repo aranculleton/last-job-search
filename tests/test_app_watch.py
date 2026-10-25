@@ -191,10 +191,20 @@ def test_a_page_that_cannot_be_read_moves_no_mark(monkeypatch):
     assert app_watch._pull_requests("") == ([], "pull request text not checked (OSError)")
 
 
-def test_the_sync_runs_it_after_every_successful_sync(sync_steps):
-    # Run the sync and read what it did, rather than search its source for the call.
+def test_the_sync_runs_it_after_every_successful_sync_and_look(sync_steps, monkeypatch):
+    # Run the sync and read what it did, rather than search its source for the call. Where
+    # updates wait for the person's word the day's run is a look, and it runs the watch
+    # too: the maintainer's names are checked every day whether or not an update is taken.
+    import sync_app
     rc, steps = sync_steps()
-    assert rc == 0
+    assert rc == 0 and "look" not in steps
+    assert steps.index("sync") < steps.index("_record_check") < steps.index("app_watch")
+    monkeypatch.setattr(sync_app, "updates", lambda: "when_asked")
+    rc, steps = sync_steps()
+    assert rc == 0 and "sync" not in steps
+    assert steps.index("look") < steps.index("_record_check") < steps.index("app_watch")
+    rc, steps = sync_steps("--update")
+    assert rc == 0 and "look" not in steps
     assert steps.index("sync") < steps.index("_record_check") < steps.index("app_watch")
     rc, steps = sync_steps(sync_rc=1)
     assert rc == 1 and "app_watch" not in steps and "_record_check" not in steps

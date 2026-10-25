@@ -23,7 +23,10 @@ employer or a contact.
    branch per run means there is never earlier work to overwrite.
 2. **Take the app's updates**: `python3 tools/sync_app.py --if-stale --on "<the model this run
    is on>"`. A person may not open a chat for days, so this run is what keeps their copy
-   current. Its model check and its place check are for a person's own chat: leave both out of the message. If it prints "Job sites blocked", those words open the message, every run until it is fixed. Exit 1 or 2: one line in the
+   current. Where their profile says updates wait for their word (`"app_updates": "when_asked"`),
+   the same command only looks: a line "An update is waiting" goes at the end of the message,
+   once, left out when the last message (the newest `documents/briefs/*.md`) already said it.
+   Its model check and its place check are for a person's own chat: leave both out of the message. If it prints "Job sites blocked", those words open the message, every run until it is fixed. Exit 1 or 2: one line in the
    message, and carry on with the run. If it lists upgrades Claude applies itself, run
    `/upgrade 20` now; at the end of the message, one plain line per change it made for
    them, never a commit or a command. Never put a question to the person mid-run: at

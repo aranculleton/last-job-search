@@ -123,6 +123,15 @@ overrides either way). So master can move several times a day while everyone els
 what has already run in the maintainer's copy. A first sync takes master, because a repo is
 made from a snapshot of it; after that, stable never goes backwards.
 
+**A release reaches everyone by itself**, with the day's sync, cheaply: the update is code,
+and the instant redos it brings run with it. A person who asked to choose when
+(`"app_updates": "when_asked"` in their own `profile/person.json`, never the app's or the
+example person's; the maintainer's own repos have it) is told once per version that it is
+waiting, in one line built from the release's first CHANGELOG headline, so that headline is
+written for them, and takes it when they say "update" (`sync_app.py --update`). A security
+fix reaches them the same way: offered, its headline saying plainly what it protects, and
+never forced.
+
 **When**: the maintainer says so, usually in the chat while working ("release it"). Never
 inside the hours their own scheduled tasks run. Until they say, changes wait in
 `[Unreleased]` on master, where only their own copy takes them.
