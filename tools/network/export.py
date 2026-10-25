@@ -172,6 +172,13 @@ def _source(src) -> tuple[str, str]:
     return "file", src
 
 
+def _entry_name(name: str) -> str:
+    """A ZIP entry's own file name. An archive made on Windows by PowerShell 5.1's
+    Compress-Archive writes its folders with backslashes ("Export\\Connections.csv"), which
+    no reader off Windows splits on: the export's files were never found in it."""
+    return str(name or "").replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+
+
 def _kind_of_file(path: str) -> str:
     base = os.path.basename(path).lower()
     return next((k for k, f in FILES.items() if f.lower() == base), "")
@@ -183,7 +190,7 @@ def _raw(kind: str, src=None) -> tuple[str, str]:
     want = FILES[kind].lower()
     if how == "zip":
         with zipfile.ZipFile(path) as z:
-            found = [n for n in z.namelist() if os.path.basename(n).lower() == want]
+            found = [n for n in z.namelist() if _entry_name(n).lower() == want]
             if not found:
                 return "", ""
             # The shortest path: the export's own file, not one nested in a folder of extras.
@@ -292,8 +299,8 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
         if how == "zip":
             with zipfile.ZipFile(path) as z:
                 want = {FILES[k].lower() for k in kinds}
-                other += sum(1 for n in z.namelist() if not n.endswith("/")
-                             and os.path.basename(n).lower() not in want)
+                other += sum(1 for n in z.namelist() if not n.endswith(("/", "\\"))
+                             and _entry_name(n).lower() not in want)
         elif how == "file" and _kind_of_file(path) not in kinds:
             missing.append(os.path.basename(path) + " (not a file this reads)")
             continue
@@ -345,17 +352,79 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
 # at, and only an archive or a folder that is LinkedIn's: one named for it, or one holding
 # its files.
 SEARCH_DIRS = ("Downloads", "Desktop", "Documents")
+# Windows keeps where each of those really is in the registry, and OneDrive moves Desktop
+# and Documents into its own folder (OneDrive/Desktop, "OneDrive - <Organisation>"/
+# Documents): a download saved to the Desktop on such a computer was never looked for.
+_SHELL_FOLDERS = {"Downloads": "{374DE290-123F-4565-9164-39C4925E467B}",
+                  "Desktop": "Desktop", "Documents": "Personal"}
 
 
-def find_exports(base: str | None = None) -> list:
+def _windows_folders() -> list:
+    """Where Windows says Downloads, Desktop and Documents are; [] anywhere else."""
+    if sys.platform != "win32":
+        return []
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows"
+                             r"\CurrentVersion\Explorer\User Shell Folders")
+    except (ImportError, OSError):
+        return []
+    out = []
+    with key:
+        for value in _SHELL_FOLDERS.values():
+            try:
+                raw, _kind = winreg.QueryValueEx(key, value)
+            except OSError:
+                continue
+            out.append(os.path.expandvars(str(raw)))
+    return out
+
+
+def search_folders(base: str | None = None) -> list:
+    """Every folder a download may have landed in, each once: Downloads, Desktop and
+    Documents in the home folder, the same in each OneDrive folder there, and on Windows
+    where the registry says they are."""
+    home_dir = base or os.path.expanduser("~")
+    found = [os.path.join(home_dir, d) for d in SEARCH_DIRS]
+    roots = []
+    if base is None:
+        roots += [os.environ.get(v, "") for v in ("OneDrive", "OneDriveConsumer",
+                                                  "OneDriveCommercial")]
+    try:
+        roots += [e.path for e in os.scandir(home_dir)
+                  if e.is_dir() and e.name.lower().startswith("onedrive")]
+    except OSError:
+        pass
+    for r in roots:
+        if r:
+            found += [os.path.join(r, d) for d in SEARCH_DIRS]
+    if base is None:
+        found += _windows_folders()
+    out, seen = [], set()
+    for f in found:
+        k = os.path.normcase(os.path.realpath(f))
+        if k not in seen:
+            seen.add(k)
+            out.append(f)
+    return out
+
+
+def find_exports(base: str | None = None, denied: list | None = None) -> list:
     """LinkedIn downloads on this computer, newest first: a ZIP with "linkedin" in its name
     that holds Connections.csv or messages.csv, or a folder holding either (with "linkedin"
-    in its name, or both files). Nothing in them is read; a cloud computer has none."""
-    base = base or os.path.expanduser("~")
+    in its name, or both files). Nothing in them is read; a cloud computer has none.
+
+    A folder the computer would not let this look in (a Mac asks before an app reads
+    Downloads, Desktop or Documents) is added to `denied` when given, so "none found" is
+    never said of a folder nobody could look in."""
     out = []
-    for d in SEARCH_DIRS:
+    for folder in search_folders(base):
         try:
-            entries = list(os.scandir(os.path.join(base, d)))
+            entries = list(os.scandir(folder))
+        except PermissionError:
+            if denied is not None:
+                denied.append(folder)
+            continue
         except OSError:
             continue
         # A ZIP opened by the computer can land one folder deeper ("<name>/<name>/"): the
@@ -371,7 +440,7 @@ def find_exports(base: str | None = None) -> list:
             try:
                 if e.is_file() and name.endswith(".zip") and "linkedin" in name:
                     with zipfile.ZipFile(e.path) as z:
-                        held = {os.path.basename(n).lower() for n in z.namelist()}
+                        held = {_entry_name(n).lower() for n in z.namelist()}
                     if held & {"connections.csv", "messages.csv"}:
                         out.append(e.path)
                 elif e.is_dir():
@@ -1392,7 +1461,14 @@ def _keep(src) -> None:
 def _cli_take(a) -> int:
     srcs = list(a.srcs)
     if a.find and not srcs:
-        srcs = find_exports()[:1]
+        denied: list = []
+        srcs = find_exports(denied=denied)[:1]
+        if not srcs and denied:
+            names = _and([os.path.basename(d.rstrip("\\/")) or d for d in denied])
+            print(f"export: this computer did not let me look in {names}, so I cannot say "
+                  "whether the LinkedIn download is there. Drag the ZIP into this chat, or "
+                  "tell me where it is.")
+            return 3
         if not srcs:
             print("export: no LinkedIn download on this computer (in Downloads, Desktop or "
                   "Documents). The steps for one: python3 tools/claude_surfaces.py steps "

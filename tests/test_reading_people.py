@@ -353,7 +353,16 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
     assert off["route"] == "hand" and not off["usable"] and "no Chrome window is connected" in off["say"]
     assert reading.route(["chrome-off", "browser"], "browser", LOCAL)["route"] == "browser"
     phone = reading.route([], "browser", CLOUD_PHONE)
-    assert phone["route"] == "hand" and "/remote-control" in phone["say"]
+    # A phone is told in a few words, with one thing to send it can actually send: no
+    # computer steps, no "select all", no Save to PDF (2026-10-25).
+    import place
+    assert phone["route"] == "hand" and len(phone["say"].split()) <= place.SHORT_WORDS
+    assert "screenshots of their profile from the LinkedIn app" in phone["say"]
+    assert "screenshots of their profile from the LinkedIn app" in phone["do"]
+    assert not any(w in phone["say"] for w in ("Save to PDF", "select all", "At the time of"))
+    web = reading.route([], "browser", {"CLAUDE_CODE_REMOTE": "true",
+                                        "CLAUDE_CODE_ENTRYPOINT": "remote_web"})
+    assert len(web["say"].split()) <= place.SHORT_WORDS and "Save to PDF" not in web["say"]
     desk = reading.route([], "browser", CLOUD_DESKTOP)
     # A cloud chat in the desktop app with no browser says finding works and offers the
     # move to two chats, never a paste: the person is at a computer. It makes no choice.

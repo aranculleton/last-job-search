@@ -1467,6 +1467,20 @@ def surface(env=None) -> str:
     return place.surface(env)
 
 
+def what_to_send(where: str) -> str:
+    """What the person can send of a profile from where this chat runs, in their words.
+
+    On a phone, screenshots from the LinkedIn app: a phone has no "select all" on a
+    profile and no Save to PDF. In a cloud chat the person may be on a phone or a computer,
+    so a paste or screenshots, nothing that needs a computer. On a computer, any of the
+    three. The one line /network, the ladder and the route all say."""
+    if where == "phone":
+        return "screenshots of their profile from the LinkedIn app"
+    if where == "local":
+        return "their profile pasted (select all, copy), its Save to PDF, or screenshots"
+    return "their profile pasted here, or screenshots of it"
+
+
 def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None = None) -> dict:
     """How this session reads a profile, chosen for the person, never asked of them.
 
@@ -1483,13 +1497,18 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
     consent = (consent or PROFILE_READS).lower()
     where = surface(env)
     signed_in = signed_in_today() if signed_in is None else signed_in
-    hand = ("screenshots of their profile from the LinkedIn app" if where == "phone"
-            else "their profile pasted (select all, copy), its Save to PDF, or screenshots")
+    hand = what_to_send(where)
     pane = ("the browser pane in the Claude desktop app" if where == "local"
             else "the browser pane in the Claude desktop app on your computer, while the app is open")
+    # The pane keeps its own sign-ins from one chat to the next (the built-in browser's
+    # skill: "sign-ins Claude completes persist for later"); Claude in Chrome uses the
+    # person's own Chrome, where they are signed in already or sign in as they always do.
     first = ("" if signed_in else
              " The first time, LinkedIn's sign-in opens there: sign in yourself, once; the "
-             "pane remembers it after that, until LinkedIn signs you out.")
+             "pane keeps it for later chats, until LinkedIn signs you out.")
+    first_chrome = ("" if signed_in else
+                    " It uses your own Chrome, so you are signed in to LinkedIn there as "
+                    "usual; if not, sign in there yourself.")
     if consent == "off":
         return {"route": "public", "browser": "", "usable": False, "do": "public work only",
                 "say": "", "signin": False}
@@ -1500,7 +1519,8 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                     "do": ("`reading.py signin` first when it says so, then read each profile "
                            "in " + label + ", nothing clicked"),
                     "say": (f"I'll read the LinkedIn profiles of the people worth writing to, "
-                            f"in {label}, one at a time, clicking nothing.{first}"),
+                            f"in {label}, one at a time, clicking nothing."
+                            + (first if "browser" in have else first_chrome)),
                     "signin": not signed_in}
         if "enable" in have:
             return {"route": "enable", "browser": pane, "usable": True,
@@ -1518,10 +1538,20 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
             # The same words the place check says once in a chat (tools/place.py): the
             # choice is offered, never made for them, and the setting is not changed.
             owner, name = place.repo()
-            # A read was asked for here, so this is the person asking how: the full steps.
-            told = place.check(where, "browser", [], True, (), owner, name, detail=True)
-            say = told[0] if told else (f"For the one or two who matter most, send {hand} and "
-                                        "I'll do the rest.")
+            # At a computer (a chat on it, or a cloud chat in its desktop app) a read was
+            # asked for here, so the full steps. Anywhere else (a phone, the web, which may
+            # be a phone too) the short words and one line of what to send: a phone was
+            # given a hundred words of computer steps and "paste the profile" beside a
+            # "do" line that asked for screenshots (2026-10-25).
+            detail = where in ("local", "desktop-cloud")
+            told = place.check(where, "browser", [], True, (), owner, name, detail=detail)
+            if told and detail:
+                say = told[0]
+            elif told:
+                say = (told[0].replace(place.SHORT_PASTE, "").strip()
+                       + f" Or send {hand}, for the one or two who matter most.")
+            else:
+                say = f"For the one or two who matter most, send {hand} and I'll do the rest."
         return {"route": "hand", "browser": "", "usable": False,
                 "do": f"make the whole list from search results and their connections "
                       f"(sources.ladder); offer {hand} for the best {HAND_TOP} only, never "
