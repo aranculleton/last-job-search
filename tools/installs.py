@@ -663,6 +663,55 @@ def install_python(want=None) -> str:
     return py
 
 
+# The folders a path in a batch file is written under by name, longest first where one
+# holds another, so that cmd.exe expands them itself.
+_BATCH_VARS = ("LOCALAPPDATA", "APPDATA", "USERPROFILE", "ProgramFiles(x86)", "ProgramFiles")
+
+
+def _batch_path(path: str, env=None, short=None) -> str:
+    """A path as a .cmd file can hold it. cmd.exe reads a batch file in the console's code
+    page (the OEM one, 437 or 850, until `chcp` changes it:
+    https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/chcp),
+    so a python.exe under C:\\Users\\María, written in UTF-8, came out as other letters and
+    `python3` failed in cmd and PowerShell. The part under the person's own folders is
+    written as the variable cmd expands for itself (%LOCALAPPDATA%), in full; a path still
+    holding a letter outside ASCII is given in its short form (GetShortPathNameW), which
+    is ASCII. Only Windows calls this; it reads the path the Windows way on any computer."""
+    import ntpath
+    env = os.environ if env is None else env
+    bases = sorted(((var, env.get(var) or "") for var in _BATCH_VARS), key=lambda b: -len(b[1]))
+    for var, base in bases:
+        base = base.rstrip("\\/")
+        if base and ntpath.normcase(path).startswith(ntpath.normcase(base) + "\\"):
+            path = f"%{var}%" + path[len(base):]
+            break
+    if path.isascii():
+        return path
+    shorter = (short or _short_path)(path)
+    return shorter if shorter and shorter.isascii() else path
+
+
+def _short_path(path: str) -> str:
+    try:
+        import ctypes
+        buf = ctypes.create_unicode_buffer(32768)
+        n = ctypes.windll.kernel32.GetShortPathNameW(path, buf, len(buf))
+        return buf.value if 0 < n < len(buf) else ""
+    except (AttributeError, OSError):
+        return ""
+
+
+def _batch_bytes(text: str) -> bytes:
+    """A batch file's text in the code page cmd.exe reads it in: ASCII when it is (as
+    _batch_path makes it), else the OEM code page, which Python names "oem" on Windows."""
+    if text.isascii():
+        return text.encode("ascii")
+    try:
+        return text.encode("oem", errors="replace")
+    except LookupError:          # not Windows: no "oem" codec here
+        return text.encode("utf-8")
+
+
 def fix_python() -> str:
     """On a Mac, and on a Linux whose Python is older than the floor, the current Python
     (install_python) and the repo's `.venv` made again with it. On Windows a `python3`
@@ -686,8 +735,8 @@ def fix_python() -> str:
             return "already here"
     shim = os.path.join(_programs(), "last-job-search", "bin")
     os.makedirs(shim, exist_ok=True)
-    with open(os.path.join(shim, "python3.cmd"), "w", encoding="utf-8") as fh:
-        fh.write(f'@"{sys.executable}" %*\r\n')
+    with open(os.path.join(shim, "python3.cmd"), "wb") as fh:
+        fh.write(_batch_bytes(f'@"{_batch_path(sys.executable)}" %*\r\n'))
     posix = "/" + real[0].lower() + real[2:].replace("\\", "/") if real[1:2] == ":" else real
     with open(os.path.join(shim, "python3"), "w", encoding="utf-8", newline="\n") as fh:
         fh.write(f'#!/bin/sh\nexec "{posix}" "$@"\n')

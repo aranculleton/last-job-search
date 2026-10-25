@@ -65,7 +65,12 @@ function Set-ClaudeEnv([string]$name, [string]$value) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $data = New-Object PSObject
     if (Test-Path $path) {
-        try { $data = Get-Content -Raw -Path $path | ConvertFrom-Json } catch { return $false }
+        # -Encoding UTF8: Windows PowerShell 5.1 reads a file with no byte-order mark in the
+        # computer's ANSI code page (learn.microsoft.com/powershell/module/microsoft.powershell.core/
+        # about/about_character_encoding), and Claude Code writes this one as UTF-8 with
+        # none, so a folder name with an accent in it came back as other
+        # letters and was written back that way for good.
+        try { $data = Get-Content -Raw -Encoding UTF8 -Path $path | ConvertFrom-Json } catch { return $false }
         if ($null -eq $data) { $data = New-Object PSObject }
     }
     if (-not ($data.PSObject.Properties.Name -contains 'env')) {
@@ -92,7 +97,12 @@ if ($git) {
         Get-File ('https://github.com/git-for-windows/git/releases/download/v' + $v + '.windows.1/' + $name) $exe
         $dest = Join-Path $Programs 'PortableGit'
         $bash = Join-Path $dest 'bin\bash.exe'
-        foreach ($try in @(@(('-o' + $dest), '-y'), @('-y', '-gm2', ('-InstallPath=' + $dest)))) {
+        # Each path in double quotes: Start-Process joins -ArgumentList with spaces and quotes
+        # nothing, and Microsoft's page says a value with a space must carry its own quotes
+        # (learn.microsoft.com/powershell/module/microsoft.powershell.management/start-process,
+        # -ArgumentList). A user folder with a space in it was given as two arguments
+        # and Git never unpacked.
+        foreach ($try in @(@(('-o"' + $dest + '"'), '-y'), @('-y', '-gm2', ('-InstallPath="' + $dest + '"')))) {
             Start-Process -FilePath $exe -ArgumentList $try -Wait -NoNewWindow
             for ($i = 0; $i -lt 60 -and -not (Test-Path (Join-Path $dest 'cmd\git.exe')); $i++) { Start-Sleep -Seconds 1 }
             if (Test-Path $bash) { break }
