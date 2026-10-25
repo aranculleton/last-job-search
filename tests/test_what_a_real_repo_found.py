@@ -185,3 +185,23 @@ def test_a_shortlist_that_will_not_parse_is_not_kept(tmp_path):
     (tmp_path / run_round.SHORTLIST).write_text("not json", encoding="utf-8")
     run_round.prune(str(tmp_path))
     assert not (tmp_path / run_round.SHORTLIST).exists()
+
+
+def test_a_shortlist_that_will_not_parse_is_closed_before_it_is_removed(tmp_path):
+    """The file was opened inside json.load and left open while the failure was handled,
+    so on Windows, which deletes no file that is open, the removal failed and the broken
+    shortlist was kept (the suite on Windows, 2026-10-25). Each file read is closed first:
+    on any computer, an unclosed file says so with a ResourceWarning when it is let go."""
+    import gc
+    import warnings
+    for name in (run_round.SHORTLIST, "01_dropped.json"):
+        (tmp_path / name).write_text("not json", encoding="utf-8")
+    with warnings.catch_warnings(record=True) as seen:
+        warnings.simplefilter("always")
+        run_round.trim(str(tmp_path / run_round.SHORTLIST))
+        run_round.slim(str(tmp_path / "01_dropped.json"))
+        run_round.write_summary(str(tmp_path / "01_dropped.json"), str(tmp_path / "o"), "r1")
+        run_round.count(str(tmp_path / "01_dropped.json"))
+        gc.collect()
+    assert [w for w in seen if issubclass(w.category, ResourceWarning)] == []
+    assert not (tmp_path / run_round.SHORTLIST).exists()
