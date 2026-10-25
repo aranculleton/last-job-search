@@ -126,10 +126,18 @@ function Find-Python {
         if (-not $cmd) { continue }
         $rest = @()
         if ($c.Count -gt 1) { $rest = $c[1..($c.Count - 1)] }
+        # A Python in a user folder whose name has an accent (where python.org's installer puts
+        # it by default) prints its path in the code page unless it writes UTF-8, and PowerShell
+        # reads a command's output in the console's code page: both are UTF-8 for this call.
+        $was = $null
+        try { $was = [Console]::OutputEncoding; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch { }
         try {
-            $out = & $cmd.Source @rest -c 'import sys; print(sys.version_info >= (3, 9)); print(sys.executable)' 2>$null
+            $out = & $cmd.Source @rest -X utf8 -c 'import sys; print(sys.version_info >= (3, 9)); print(sys.executable)' 2>$null
             if ($LASTEXITCODE -eq 0 -and $out -and ($out[0] -eq 'True')) { return $out[1] }
-        } catch { }
+        } catch {
+        } finally {
+            if ($was) { try { [Console]::OutputEncoding = $was } catch { } }
+        }
     }
     return $null
 }
