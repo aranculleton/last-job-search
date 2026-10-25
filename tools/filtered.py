@@ -188,8 +188,11 @@ def back(name: str, picks, why: str = "", round_dir: str | None = None,
     for e in chosen:
         note = (f"brought back {today}: filtered at the {e['stage']} ({e['reason']})"
                 + (f"; the person: {why}" if why else ""))
-        if e.get("url"):
-            exclude.lift(urls=[e["url"]], why=why or "brought back by the person", today=today,
+        # Lifted by its link, and as a relist: a posting dropped on another posting's
+        # ruling (the same title, employer and city) was dropped on it again next round.
+        if e.get("url") or (e.get("title") and e.get("company")):
+            exclude.lift(urls=[e["url"]] if e.get("url") else [], postings=[e],
+                         why=why or "brought back by the person", today=today,
                          **({"path": seen_path} if seen_path else {}))
         row = {k: e[k] for k in FIELDS if e.get(k)}
         row["brought_back"] = note

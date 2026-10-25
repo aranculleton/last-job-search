@@ -126,6 +126,26 @@ def test_a_sweep_waits_the_crawl_delay_between_requests(skills, monkeypatch):
     assert n == 3 and failed == ["exit 1: 503"] and len(rows) == 3
 
 
+def test_a_sweep_walks_a_search_until_it_runs_out(skills, monkeypatch):
+    """A paced board's search went on to every planned page after one came back empty,
+    each at the board's crawl-delay. Past it, a page is not asked, and the wait is not paid."""
+    asked = []
+
+    def contract(skill, q, loc, pg, jobage, remote=False):
+        asked.append((q, pg))
+        return ([{"url": f"https://board.example/{q}/{pg}"}] if pg == 1 or q == "deep"
+                else []), None
+    monkeypatch.setattr(scrape_wide, "contract", contract)
+    tasks = [("cityboard-search", q, "Townsville, QX", p) for p in (1, 2, 3, 4) for q in
+             ("short", "deep")]
+    waits, t = [], scrape_wide.Tally("cityboard", len(tasks))
+    rows, n, failed = scrape_wide.sweep("cityboard-search", tasks, 14, sleep=waits.append, tally=t)
+    assert asked == [("short", 1), ("deep", 1), ("short", 2), ("deep", 2), ("deep", 3),
+                     ("deep", 4)]
+    assert n == 6 and t.ended == 2 and len(waits) == 6 and not failed
+    assert "2 deeper page(s) not needed" in t.line()
+
+
 def test_a_sweep_counts_the_delay_from_each_request_start(skills, monkeypatch):
     # Waiting the whole delay after each request ended added the request's own time to
     # every gap: a board asking for 5 seconds got one request every 7.

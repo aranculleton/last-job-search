@@ -310,7 +310,8 @@ def load_shortlist(round_dir: str) -> list[dict]:
 
 def _hydrate(row: dict) -> dict:
     import hydrate
-    return hydrate.fetch(row)
+    # Through the same guard a round's bodies go through: what no reader sees is taken out.
+    return hydrate.guarded(hydrate.fetch(row))
 
 
 def posting_text(row: dict, round_dir: str, s: str, fetch=_hydrate) -> str:

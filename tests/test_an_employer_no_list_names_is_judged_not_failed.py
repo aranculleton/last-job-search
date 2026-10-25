@@ -97,3 +97,18 @@ def test_the_throttle_carries_the_judged_verdict_into_the_shortlist(judged_file)
     kept, skipped = throttle.throttle([row], {}, {}, {}, "2026-10-21")
     assert skipped == [] and kept[0]["bar"] == "prestige"
     assert kept[0]["bar_reason"] == "judged 2026-10-21: a global bank"
+
+
+def test_the_bar_and_the_sector_read_the_tech_list_alike(judged_file, monkeypatch):
+    """The sector read the person's tech list with both sides normalised; the bar matched
+    the list as written, so a hyphenated or capitalised entry never matched there and the
+    bar said 'not on your employer lists' of a listed employer."""
+    import sector
+    listed = {"acme-two", "Tidewell"}
+    monkeypatch.setattr(sector, "TECH_COMPANIES", listed)
+    monkeypatch.setattr(bar, "TECH_COMPANIES", listed, raising=False)   # its own copy, before
+    for name in ("Acme-Two Interactive", "Tidewell"):
+        assert sector.verdict(name)[0] == sector.V_TECH, name
+        v, why = bar.verdict(name)
+        assert v == bar.SIGNAL and why.startswith("established technology company"), (name, why)
+        assert bar.listed(name)

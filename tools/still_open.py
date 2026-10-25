@@ -115,16 +115,39 @@ def pace(url: str, sleep=time.sleep, clock=time.monotonic) -> None:
     _LAST[host] = clock()
 
 
+# A redirect is followed here, a hop at a time, and never by curl itself: `curl -L` went
+# wherever a link redirected, to a portal the person had switched off or a path a site's
+# robots.txt disallows, past the gates `blocked` had checked for the first address only.
+MAX_REDIRECTS = 5
+_TRAILER = "\nlast-job-search-curl %{http_code} %{redirect_url}"
+_ANSWER = re.compile(r"\nlast-job-search-curl (\d{3}) ?(\S*)\s*$")
+
+
 def fetch(url: str, timeout: int = 20) -> str:
-    """The page, or "" when it could not be had. The gates are the caller's: `blocked`."""
-    pace(url)
-    try:
-        out = subprocess.run(["curl", "-sSL", "--max-time", str(timeout), "-A", UA, "--", url],
-                             capture_output=True, text=True, timeout=timeout + 10,
-                             encoding="utf-8", errors="replace")
-    except (OSError, subprocess.TimeoutExpired):
-        return ""
-    return out.stdout if out.returncode == 0 else ""
+    """The page, or "" when it could not be had. The gates for `url` are the caller's
+    (`blocked`); a redirect is followed only where they allow the next address too."""
+    for _hop in range(MAX_REDIRECTS + 1):
+        pace(url)
+        try:
+            out = subprocess.run(["curl", "-sS", "--max-time", str(timeout), "-A", UA,
+                                  "-w", _TRAILER, "--", url],
+                                 capture_output=True, text=True, timeout=timeout + 10,
+                                 encoding="utf-8", errors="replace")
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+        if out.returncode != 0:
+            return ""
+        page = out.stdout or ""
+        m = _ANSWER.search(page)
+        if not m:
+            return page
+        page, code, then = page[:m.start()], m.group(1), m.group(2)
+        if not (code.startswith("3") and then):
+            return page
+        if blocked(then):
+            return ""
+        url = then
+    return ""
 
 
 def check(statuses: set[str], path: str = TRACKER) -> list[dict]:

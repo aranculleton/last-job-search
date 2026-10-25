@@ -472,6 +472,37 @@ def _log_request(path: str | None, line: str) -> None:
         pass
 
 
+class PageWalk:
+    """Which deeper pages of a search are worth asking for: none past a page that came back
+    empty, or with nothing on it the search's own earlier pages did not already have.
+
+    The skill's rule 12 is to walk a search's pages until one comes back empty or wholly
+    duplicated. The pages were a plan, every one sent whatever page one said: a search
+    with one posting on page one still sent pages two to five, to LinkedIn among others,
+    whose volume the skill asks to keep low and which counts toward the cap on a
+    person's own computer. A page is judged only once it has answered, so a deeper page
+    already in flight is still sent."""
+
+    def __init__(self):
+        self.ended: dict = {}
+        self.found: dict = {}
+        self.lock = threading.Lock()
+
+    def past_end(self, search, page) -> bool:
+        with self.lock:
+            return search in self.ended and page > self.ended[search]
+
+    def answered(self, search, page, rows) -> None:
+        from lookup_score import norm
+        rows = [r for r in rows or () if isinstance(r, dict)]
+        keys = {norm(r["url"]) or r["url"] for r in rows if r.get("url")}
+        with self.lock:
+            prior = self.found.setdefault(search, set())
+            if not rows or (keys and keys <= prior):
+                self.ended[search] = min(self.ended.get(search, page), page)
+            prior |= keys
+
+
 def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
           clock=time.monotonic, tally: "Tally | None" = None,
           on_rows=None, log=None, requests=None) -> tuple[list[dict], int, list[str]]:
@@ -498,13 +529,20 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         _say(plan, log)
     if tally is not None:
         tally.ends = start + SWEEP_BUDGET
-    for task in tasks:
+    walk, at, ended = PageWalk(), 0, 0
+    for at, task in enumerate(tasks):
         q, loc, pg = task[1:4]
         remote = len(task) > 4 and task[4]
+        search = (q, loc, bool(remote))
+        if walk.past_end(search, pg):
+            ended += 1                        # its search ran out on an earlier page
+            if tally is not None:
+                tally.ended = ended
+            continue
         if streak >= SWEEP_MAX_FAILS:
             why = f"{streak} failures in a row ({last})"
             failed.append(f"stopped after {streak} failures in a row; "
-                          f"{len(tasks) - sent} requests not sent ({last})")
+                          f"{len(tasks) - at} requests not sent ({last})")
             break
         if clock() - start > SWEEP_BUDGET:
             why = f"its {SWEEP_BUDGET // 60}-minute budget ran out"
@@ -524,6 +562,8 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
         if err:
             failed.append(err)
             last = cause(err)
+        else:
+            walk.answered(search, pg, got)
         rows += got
         new = None
         if on_rows and got:
@@ -538,7 +578,9 @@ def sweep(skill: str, tasks: list[tuple], jobage: int, sleep=time.sleep,
                 tally.failure(err)
             else:
                 tally.success()
-    rest = tasks[sent:]
+    else:
+        at = len(tasks)                       # every task gone through
+    rest = tasks[at:] if why else []
     if rest:
         _say(unsent_line(portals.short(skill), rest, len(tasks), why), log)
     if tally is not None:
@@ -599,6 +641,7 @@ class Tally:
         self.until = 0.0
         self.stopped = ""
         self.capped = 0
+        self.ended = 0                    # deeper pages not sent: their search had run out
         # Failed requests, counted as they land with their causes. `failed` also
         # carries the note a stopped portal leaves, which is not a request.
         self.errors = 0
@@ -638,6 +681,8 @@ class Tally:
             bits.append(f"{self.limited} rate-limited (429), {self.timeouts} timed out")
         if self.capped:
             bits.append(f"{self.capped} deeper page(s) left by the round's cap")
+        if self.ended:
+            bits.append(f"{self.ended} deeper page(s) not needed, their search had run out")
         if self.stopped:
             bits.append(f"stopped: {self.stopped}")
         elif self.finished:
@@ -685,7 +730,7 @@ def _say(line: str, log=None) -> None:
 
 def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int | None = None,
          clock=time.monotonic, sleep=time.sleep, tallies: dict | None = None,
-         on_rows=None, on_sent=None) -> tuple[list[dict], dict]:
+         on_rows=None, on_sent=None, page_of=None) -> tuple[list[dict], dict]:
     """Run [(portal, fn, args)] on `workers` threads until done or `budget` runs out.
 
     Each portal gets a Tally (in `tallies`, shared with the progress line). A 429
@@ -694,15 +739,22 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
     POOL_MAX_FAILS identical failures in a row of any kind stop it too. `cap`
     is the most requests a portal may send. `on_rows` sees each batch of rows as it
     lands, which is how a partial scrape survives a stage that is killed, and
-    `on_sent` each job that was answered without an error.
+    `on_sent` each job that was answered without an error. `page_of` gives a job's
+    (search, page), and a page past where its search ran out (PageWalk) is not sent.
     Returns (rows, tallies)."""
     tallies = {} if tallies is None else tallies
     start = clock()
     mine = list(dict.fromkeys(j[0] for j in jobs))
+    planned: dict[str, int] = {}
     for portal in mine:
-        n = sum(1 for j in jobs if j[0] == portal)
+        n = planned[portal] = sum(1 for j in jobs if j[0] == portal)
         t = tallies.setdefault(portal, Tally(portal, min(n, cap) if cap else n, workers, cap))
         t.queued, t.ends = n, start + budget
+    walk = PageWalk()
+
+    def past_end(job) -> bool:
+        where = page_of(job) if page_of else None
+        return bool(where) and walk.past_end(*where)
     # One queue a portal, each in the order given, every job numbered by its place in
     # that order. A single queue was walked from the front on every take, past every
     # job of a portal that had stopped or reached its cap, which grows with the square
@@ -713,15 +765,35 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
         queues[job[0]].append((n, job))
     rows, lock = [], threading.Lock()
 
+    def drop_ended(portal, heads_only=False):
+        """Take out the portal's queued pages that are past where their search ran out:
+        the next ones to send, or, once sending is over, every one, so what is reported
+        unsent is what was worth sending."""
+        q, t = queues[portal], tallies[portal]
+        keep = deque()
+        while q:
+            n, job = q.popleft()
+            if not past_end(job):
+                keep.append((n, job))
+                if heads_only:
+                    break
+                continue
+            t.queued -= 1
+            t.ended += 1
+            planned[portal] -= 1
+            t.total = min(planned[portal], t.cap) if t.cap else planned[portal]
+        q.extendleft(reversed(keep))
+
     def take():
         now = clock()
         if now - start >= budget:
             return "done", None
         waits, best = [], None
         for portal, q in queues.items():
+            t = tallies[portal]
+            drop_ended(portal, heads_only=True)
             if not q:
                 continue
-            t = tallies[portal]
             if t.stopped or (t.cap and t.sent + t.active >= t.cap):
                 continue
             if t.until > now:
@@ -772,6 +844,9 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
                 else:
                     t.streak = 0
                     t.success()
+                    where = page_of(job) if page_of else None
+                    if where:
+                        walk.answered(*where, got)
                     rows.extend(got or ())
                     if on_rows and got:
                         on_rows(list(got))
@@ -786,6 +861,8 @@ def pool(jobs: list[tuple], workers: int, budget: float = POOL_BUDGET, cap: int 
         th.start()
     for th in threads:
         th.join()
+    for portal in queues:
+        drop_ended(portal)
     for portal, t in tallies.items():
         left = len(queues.get(portal, ()))
         if not left or t.stopped:
@@ -1211,6 +1288,13 @@ def request_key(job: tuple) -> str:
     return json.dumps([kind, q, loc, pg, jobage])
 
 
+def search_page(job: tuple) -> tuple[str, int]:
+    """(the search a pool job's request belongs to, its page): `request_key` without the
+    page, so every page of one search is one search."""
+    kind, q, loc, pg, jobage = json.loads(request_key(job))
+    return json.dumps([kind, q, loc, jobage]), int(pg)
+
+
 def before(folder: str | None) -> tuple[list[dict], set[str]]:
     """(the postings, the requests answered) of the scrape in `folder`, the round before a
     widening; ([], set()) where there is none, and the round then sends everything."""
@@ -1515,7 +1599,7 @@ def main() -> int:
     employer_boards = boards.submit(read_boards)
     boards.shutdown(wait=False)
     _, pool_tallies = pool(jobs, workers, budget=a.budget, cap=cap, tallies=tallies,
-                           on_rows=landed, on_sent=answered_now)
+                           on_rows=landed, on_sent=answered_now, page_of=search_page)
     with open(os.path.join(a.out, SENT), "w", encoding="utf-8") as fh:
         json.dump(sorted(sent_now), fh)
     if jobs:
@@ -1528,7 +1612,9 @@ def main() -> int:
         except Exception as e:
             rows_, n, errs = [], 1, [f"{type(e).__name__}: {str(e)[:120]}"]
         sent[portal] = n
-        swept.update({k: n for k in mine if portals.short(k) == portal})
+        # Where the next round's tail starts: past every task gone through, a page not
+        # needed because its search had run out included.
+        swept.update({k: n + tallies[portal].ended for k in mine if portals.short(k) == portal})
         if errs:
             failed.setdefault(portal, []).extend(errs)
         landed(rows_)

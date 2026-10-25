@@ -177,6 +177,17 @@ def _read_board(employer: str, board_kind: str, token: str):
     return ats_boards.FETCH[board_kind](employer, token)
 
 
+def _board_named(url) -> tuple | None:
+    """(system, token lower-cased) of the employer board a link is on, as openroles reads
+    a board's address, or None for a link that names none."""
+    try:
+        from openroles.discover import parse
+        board = parse(str(url or ""))
+    except Exception:                                          # noqa: BLE001
+        return None
+    return (board.ats, str(board.token).lower()) if board else None
+
+
 class Checker:
     """Checks links against the employers' boards, each board read once."""
 
@@ -246,10 +257,13 @@ class Checker:
                        link_check=f"open on {employer}'s own board, checked {stamp}")
             return out
         from throttle import same_title
-        # Closed only where the posting was this board's own (a round read it there, or its
-        # link names the board) and the whole listing no longer has it.
-        if whole and (row.get("portal") == board_kind
-                      or (k == "board" and str(token).lower() in str(url).lower())):
+        # Closed only where the posting was this board's own (its link names the board, or
+        # a round read it from a board of this kind and the link names none) and the whole
+        # listing no longer has it. The token was looked for anywhere in the link, so a
+        # posting on a sibling board ("acmeuk" beside "acme") read as closed.
+        named = _board_named(url)
+        if whole and (named == (board_kind, str(token).lower()) if named
+                      else row.get("portal") == board_kind):
             out.update(link_status="closed",
                        link_check=f"closed: no longer on {employer}'s own board, checked {stamp}")
             return out

@@ -88,3 +88,16 @@ def _no_rescreen(monkeypatch):
     """These pin how a ruling holds. Whether a better screen re-judges it is
     tests/test_build_versions.py's, so the app's own re-run versions are held off."""
     monkeypatch.setenv("LJS_RESCREEN", "off")
+
+
+def test_a_seen_file_named_without_a_folder_is_written(tmp_path):
+    """`--seen seen.json`, a bare file name in the folder the screen runs in, crashed on
+    the first cut (os.makedirs of an empty folder name) and wrote no output at all."""
+    (tmp_path / "in.json").write_text(json.dumps([CUT, FLAGGED]))
+    r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "text_screen.py"), "in.json",
+                        "--out", "out.json", "--seen", "seen.json", "--today", "2026-10-14"],
+                       capture_output=True, text=True, cwd=tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert [j["title"] for j in json.loads((tmp_path / "out.json").read_text())] == [
+        "Inventory Analyst"]
+    assert len(json.loads((tmp_path / "seen.json").read_text())["seen"]) == 1

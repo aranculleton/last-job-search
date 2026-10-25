@@ -549,7 +549,8 @@ def _ruled_on(ruled_out, entries: dict, today: _dt.date | None):
 
 
 # How a past ruling's reason opens (throttle.ruled_out): "<status> in seen_jobs.json: ...".
-RULED_IN_SEEN = ("excluded in seen_jobs.json", "skipped in seen_jobs.json")
+RULED_IN_SEEN = ("excluded in seen_jobs.json", "skipped in seen_jobs.json",
+                 "expired in seen_jobs.json")
 
 
 def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,

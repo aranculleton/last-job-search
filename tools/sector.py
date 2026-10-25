@@ -89,6 +89,14 @@ def _in(c: str, names) -> str | None:
     return _names_in(c, {_norm(n) for n in names})
 
 
+def tech_name(company: str | None) -> str | None:
+    """The entry on the person's tech list (employers.py TECH_COMPANIES) this employer is,
+    as normalised, or None. The one reading of that list: tools/bar.py matched it without
+    normalising either side, so a hyphenated or capitalised entry never matched there."""
+    c = " %s " % _norm(str(company or "").split("|")[0])
+    return _in(c, TECH_COMPANIES) if c.strip() else None
+
+
 def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
     """(sector, reason). See the module docstring for what each verdict means."""
     first = str(company or "").split("|")[0]
@@ -97,7 +105,7 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
         return V_UNKNOWN, "no company name on the posting"
     if AGENCY.search(c) or _EXTRA_AGENCY.search(c):
         return V_OTHER, "staffing agency or body shop: the employer is undisclosed"
-    n = _in(c, TECH_COMPANIES)
+    n = tech_name(first)
     if n:
         return V_TECH, "technology company (%s)" % n
     n = _in(c, ADJACENT_COMPANIES)
@@ -121,7 +129,7 @@ def kind(company: str | None) -> str:
     c = " %s " % _norm(str(company or "").split("|")[0])
     if not c.strip():
         return ""
-    if _in(c, TECH_COMPANIES):
+    if tech_name(company):
         return "technology company"
     if _in(c, ADJACENT_COMPANIES):
         return "software product"

@@ -58,7 +58,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import company_key as _ck  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from opportunity import YC_AND_BACKED, _names_in, tier  # noqa: E402
-from sector import TECH_COMPANIES  # noqa: E402
+from sector import tech_name  # noqa: E402
 from text_screen import salary_range  # noqa: E402
 
 EXCLUDED, PAY, PRESTIGE, SIGNAL, NONE = "excluded", "pay", "prestige", "signal", "none"
@@ -244,7 +244,7 @@ def listed(company: str | None) -> bool:
         return True
     c = f" {k} "
     return bool(_names_in(c, FRONTIER) or _names_in(c, YC_AND_BACKED)
-                or _names_in(c, TECH_COMPANIES))
+                or tech_name(name) or tech_name(k))
 
 
 def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
@@ -286,7 +286,7 @@ def verdict(company: str | None, posting: str = "") -> tuple[str, str]:
         hit = _names_in(c, YC_AND_BACKED)
         if hit:
             return SIGNAL, f"YC or top-tier backed ({hit})"
-        hit = _names_in(c, TECH_COMPANIES)
+        hit = tech_name(name) or tech_name(k)
         if hit:
             return SIGNAL, f"established technology company ({hit})"
     if score < 0 or collided:

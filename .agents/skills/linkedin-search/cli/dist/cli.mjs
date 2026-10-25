@@ -160,6 +160,7 @@ function parseJobDetail(html, id) {
     date: null,
     url: `https://www.linkedin.com/jobs/view/${id}`,
     description,
+    descriptionHtml: descHtml ?? null,
     seniority: criteria["seniority level"] ?? null,
     employmentType: criteria["employment type"] ?? null,
     jobFunction: criteria["job function"] ?? null,

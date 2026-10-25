@@ -96,5 +96,53 @@ class AsksTheWayTheAppAsks(unittest.TestCase):
             so.portals.crawl_delay, so.portal_of = real
 
 
+class ARedirectIsCheckedToo(unittest.TestCase):
+    """`curl -L` followed a redirect wherever it went, past the gates checked for the first
+    address only: to a portal switched off, or a path robots.txt disallows."""
+
+    PAGES = {"https://careers.example.com/jobs/12": (302, "", "https://jobs.example.org/7"),
+             "https://jobs.example.org/7": (302, "", "https://www.linkedin.com/jobs/view/4100000123"),
+             "https://www.linkedin.com/jobs/view/4100000123": (200, "<html>LinkedIn" + PAD, ""),
+             "https://careers.example.com/jobs/13": (301, "", "https://careers.example.com/j/13"),
+             "https://careers.example.com/j/13": (200, "<html>" + PAD + "</html>", "")}
+
+    def setUp(self):
+        self.asked = []
+        self._real = (so.subprocess.run, so.robots_check.gate, so.portals.is_enabled)
+
+        def curl(cmd, **kw):
+            """Answers the way curl does: -L follows every redirect itself, and -w writes
+            its trailer after the page."""
+            url = cmd[-1]
+            follows = any(a.startswith("-") and not a.startswith("--") and "L" in a for a in cmd)
+            while True:
+                self.asked.append(url)
+                code, page, then = self.PAGES[url]
+                if follows and then:
+                    url = then
+                    continue
+                break
+            if "-w" in cmd:
+                page += (cmd[cmd.index("-w") + 1].replace("%{http_code}", str(code))
+                         .replace("%{redirect_url}", then))
+            return so.subprocess.CompletedProcess(cmd, 0, page, "")
+        so.subprocess.run = curl
+        so.robots_check.gate = lambda url: (0, "ALLOWED")
+        so.portals.is_enabled = lambda name: name != "linkedin-search"
+        so._LAST.clear()
+
+    def tearDown(self):
+        so.subprocess.run, so.robots_check.gate, so.portals.is_enabled = self._real
+
+    def test_a_redirect_to_a_portal_switched_off_is_not_followed(self):
+        self.assertEqual(so.fetch("https://careers.example.com/jobs/12"), "")
+        self.assertNotIn("https://www.linkedin.com/jobs/view/4100000123", self.asked)
+
+    def test_a_redirect_the_gates_allow_is_followed(self):
+        self.assertEqual(so.fetch("https://careers.example.com/jobs/13"), "<html>" + PAD + "</html>")
+        self.assertEqual(self.asked, ["https://careers.example.com/jobs/13",
+                                      "https://careers.example.com/j/13"])
+
+
 if __name__ == "__main__":
     unittest.main()

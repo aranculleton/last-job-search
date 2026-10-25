@@ -180,3 +180,36 @@ def test_a_widened_round_passes_the_scrape_it_was_handed_to_the_portals(tmp_path
     run_round.main()
     (scrape,) = [c for c in stages if os.path.basename(c[1]) == "scrape_wide.py"]
     assert scrape[scrape.index("--before") + 1] == str(tmp_path / "held")
+
+
+def _runs_out(calls):
+    """scrape_wide.run: "analyst" has one posting, on page one, and nothing after; "planner"
+    answers every page with the same posting, as a board past its last page does."""
+    def fake_run(cmd, timeout=90):
+        skill = Path(cmd[2]).parts[-4]
+        q = cmd[cmd.index("-q") + 1] if "-q" in cmd else ""
+        page = cmd[cmd.index("--page") + 1] if "--page" in cmd else "1"
+        calls.append((skill, q, page))
+        if q == "analyst" and page != "1":
+            return {"results": []}, None
+        n = f"{skill}-{q}"
+        return {"results": [{"id": n, "title": "Supply Chain Analyst", "company": "Oakmere Foods",
+                             "url": f"https://jobs.example/{n}",
+                             "location": "Manchester, England, United Kingdom",
+                             "date": "2026-10-18"}]}, None
+    return fake_run
+
+
+def test_a_search_stops_at_the_page_where_it_runs_out(portals_on, tmp_path, monkeypatch, capsys):
+    """Rule 12: a search walks its pages until one comes back empty or wholly duplicated. They
+    were planned instead, and pages two to five went after page one held one posting."""
+    calls = []
+    monkeypatch.setattr(scrape_wide, "run", _runs_out(calls))
+    monkeypatch.setattr(sys, "argv", ["scrape_wide.py", "--out", str(tmp_path / "r1"), "--pages",
+                                      "5", "--workers", "1", "--today", "2026-10-19",
+                                      "--skip-canary"])
+    scrape_wide.main()
+    for skill in ("linkedin-search", "freehire-search"):
+        for q in ("analyst", "planner"):
+            assert sorted(p for s, w, p in calls if (s, w) == (skill, q)) == ["1", "2"], (skill, q)
+    assert "6 deeper page(s) not needed, their search had run out" in capsys.readouterr().err
