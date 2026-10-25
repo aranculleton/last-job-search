@@ -57,6 +57,11 @@ from personal_paths import is_personal  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SETUP = ".claude/commands/setup.md"
+# How each part of /setup is done, section by section: setup.md is the order and the
+# questions, and holds no section of its own since it was cut to a flow Claude keeps after
+# compaction (2026-10-25). Both are read, in this order, for every setup method's text.
+SECTIONS = ".claude/skills/job-application-assistant/setup-sections.md"
+SETUP_FILES = (SETUP, SECTIONS)
 RECORD = "build_versions.json"
 FIRST_RELEASE = "2026-10-14"
 # Marked in setup.md for what no re-run would redo (empty state files).
@@ -642,6 +647,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "MAINTAINING.md": "documentation, read when needed",
     "SECURITY.md": "documentation, read when needed",
     "SETUP.md": "documentation, read when needed",
+    "HELP.md": "documentation, read when needed",
     "START_HERE.md": "documentation, read when needed",
     "CHANGELOG.md": "documentation, read when needed",
     "CHANGELOG-upstream.md": "documentation, read when needed",
@@ -730,11 +736,19 @@ _OPEN = re.compile(r"^<!-- section: ([a-z-]+) -->\s*$")
 _CLOSE = re.compile(r"^<!-- /section -->\s*$")
 
 
-def regions(path: str = SETUP) -> dict[str, list[str]]:
-    """{section: [the text of each marked region, in order]} from setup.md."""
+def regions(paths=SETUP_FILES) -> dict[str, list[str]]:
+    """{section: [the text of each marked region, in order]} from setup.md and
+    setup-sections.md (or the one file named)."""
+    out: dict[str, list[str]] = {}
+    for path in ([paths] if isinstance(paths, str) else paths):
+        if os.path.isfile(os.path.join(ROOT, path)):
+            _regions_of(path, out)
+    return out
+
+
+def _regions_of(path: str, out: dict[str, list[str]]) -> None:
     with open(os.path.join(ROOT, path), encoding="utf-8") as fh:
         lines = fh.read().splitlines()
-    out: dict[str, list[str]] = {}
     current, buf = None, []
     for n, line in enumerate(lines, 1):
         m = _OPEN.match(line)
@@ -753,7 +767,6 @@ def regions(path: str = SETUP) -> dict[str, list[str]]:
             buf.append(line)
     if current is not None:
         raise ValueError(f"{path}: section {current!r} never closes")
-    return out
 
 
 def _tracked() -> list[str] | None:
