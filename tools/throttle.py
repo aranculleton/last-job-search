@@ -566,6 +566,16 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         if not isinstance(e, dict):
             continue
         status = (e.get("status") or "").lower()
+        if status == "expired":
+            # /rank retires a posting whose stated deadline has passed (rank.md, its sweep),
+            # and nothing read it: a past-deadline posting came back on every round's
+            # shortlist. It holds by its own link only, because a posting can be re-issued,
+            # and one /rank could not fetch, with no deadline, is shown when a round finds it.
+            ended = as_date(e.get("deadline"), iso_only=True)
+            n = norm(e.get("url") or u)
+            if n and ended and ended < (now or dt.date.today()):
+                urls[n] = f"expired in seen_jobs.json: its deadline, {ended.isoformat()}, has passed"
+            continue
         if status not in ("excluded", "skipped"):
             continue
         reason = (e.get("exclusion_reason") or e.get("skip_reason") or e.get("reason") or "")
