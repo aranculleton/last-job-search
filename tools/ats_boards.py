@@ -257,6 +257,8 @@ def _wanted(location: str) -> bool:
     loc = (location or "").strip()
     if not loc:
         return False
+    if NO_PROFILE:                 # no places to judge against yet: every role counts
+        return True
     return bool(PLACES.search(loc) or _METRO_RX.search(loc)
                 or _places.HOME_COUNTRY_RX.search(loc.lower()) or BARE_REMOTE.match(loc))
 
@@ -359,8 +361,9 @@ def _labels(job) -> list[str]:
 
 def _worth(job) -> bool:
     """Is a posting's body worth a request: a title prefilter's gate passes, in a place
-    its gate does not fail. The free gates, asked before anything is spent."""
-    if title_verdict(job.title)[0] == "FAIL":
+    its gate does not fail. The free gates, asked before anything is spent. With no
+    profile yet nothing can be judged, so no body is worth a request."""
+    if NO_PROFILE or title_verdict(job.title)[0] == "FAIL":
         return False
     location, verdict = _choose(_labels(job), job.title, job.workplace == "remote")
     return bool(location) and verdict != "FAIL"
@@ -405,6 +408,19 @@ def _read(kind: str):
 
 # ---------------------------------------------------------------- careersite
 
+def _queries():
+    """The round's title variants (scrape_wide.QUERIES), or None with no profile yet.
+
+    scrape_wide reads the profile when it is imported, so --find for a Workday board or a
+    careers site crashed with no profile, the case NO_PROFILE above exists for. With no
+    titles to search by, a board is read whole and a careers site's pages are not
+    narrowed."""
+    if NO_PROFILE:
+        return None
+    from scrape_wide import QUERIES
+    return QUERIES
+
+
 # Job pages read from one careers site a round. Each is a request at the pace the site's
 # robots.txt asks, so a site that asks for ten seconds costs a few minutes at this cap,
 # and the next round moves on to the pages this one did not reach.
@@ -417,7 +433,7 @@ def careersite(employer: str, token: str, queries=None,
     engines. Pages whose address names a job none of the title variants asks for are not
     read, nor pages the search has already ruled out (`skip`, given the page's URL)."""
     if queries is None:
-        from scrape_wide import QUERIES as queries
+        queries = _queries()
     report: dict = {}
     ruled: list[str] = []
 
@@ -504,10 +520,12 @@ def workday(employer: str, token: str, queries=None,
     if not workday_board(token):
         return [], f"not a Workday token (want tenant.wdN/Site): {token!r}"
     if queries is None:
-        from scrape_wide import QUERIES as queries
+        queries = _queries()
     asked: set = set()
 
     def worth(job) -> bool:
+        if NO_PROFILE:              # nothing can be judged, so no body is worth a request
+            return False
         title_ok = title_verdict(job.title)[0] != "FAIL"
         if _wd.more_places(job):
             ok = title_ok
@@ -534,7 +552,7 @@ def workday(employer: str, token: str, queries=None,
             location, _ = _choose(_labels(job), job.title, job.workplace == "remote")
             if location:
                 rows.append(_row(employer, job, location, _desc(job)))
-        elif not _wd.more_places(job):
+        elif NO_PROFILE or not _wd.more_places(job):
             location, _ = _choose([job.location], job.title, job.workplace == "remote")
             if location:
                 rows.append(_row(employer, job, location, None))
