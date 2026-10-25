@@ -51,13 +51,13 @@ import csv_store  # noqa: E402
 import docpaths  # noqa: E402
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
-from throttle import FINAL, UNSENT, _same_title  # noqa: E402
+from throttle import CONFIRM_COLUMNS, FINAL, UNSENT, _same_title  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACKER = person.state("job_search_tracker.csv")
 HEADER = ["date", "company", "sector", "role", "role_type", "channel", "status",
           "contact_person", "fit_rating", "notes", "cv_file", "cover_letter_file",
-          "source", "deadline"]
+          "source", "deadline", *CONFIRM_COLUMNS]
 # A final status is throttle.FINAL, imported rather than copied: the copy that
 # lived here lacked `declined`, so a declined row read as open and a new draft
 # for the same role overwrote its outcome. The match is the throttle's too: one
@@ -240,7 +240,7 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             done.append(("added", new))
             continue
         # Never move an open row backwards: refresh the documents and the score,
-        # keep its status, and only move the date if nothing was ever sent.
+        # keep its status and its date.
         for col in ("cv_file", "cover_letter_file", "fit_rating", "source"):
             if new[col] and not (col == "source" and new[col].startswith("contact:")
                                  and (open_match.get("source") or "").strip()):
@@ -256,8 +256,8 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             if said not in (open_match.get("notes") or ""):
                 open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | "
                                        + said).strip(" |")
-        if (open_match.get("status") or "").strip().lower() == "drafted":
-            open_match["date"] = today
+        # The row keeps its `date`, the day it was made: it is part of the key two chats'
+        # copies of the tracker merge on (tools/merge_state.py).
         open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | redrafted").strip(" |")
         done.append(("updated", open_match))
     csv_store.write_rows(path, rows, HEADER)

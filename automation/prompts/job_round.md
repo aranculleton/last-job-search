@@ -57,7 +57,9 @@ Reply in <the chat to reply in, per _common.md> with the numbers to draft, for e
    <board>' and I will add it" (that is `/add-portal`, run when they ask, never here).
 
 5. **When the candidate replies with picks** (in this chat): record any "already applied"
-   answers in the tracker, then `./tools/setup_env.sh` (LaTeX this time), stage the picks
+   answers with `python3 tools/confirm.py applied ... --source chat` (`--new --company --role
+   --url --on <date>` for one the tracker never had) and show them the lines it prints, the
+   applications it covered; then `./tools/setup_env.sh` (LaTeX this time), stage the picks
    with `tools/stage_picks.py`. When it prints questions (a pick held for a fixed-term
    contract, pay for another place or an application already in, which role to draft when
    two share an employer, and skills a posting names that the profile does not hold), ask

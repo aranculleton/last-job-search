@@ -235,7 +235,8 @@ def superseded(rows: list[dict]) -> dict[int, dict]:
     already applied to.
     """
     order = sorted(range(len(rows)),
-                   key=lambda i: (_iso(rows[i].get("date")) or datetime.date.min, i))
+                   key=lambda i: (_iso(throttle.applied_on(rows[i]) or rows[i].get("date"))
+                                  or datetime.date.min, i))
     keys = {i: company_key(rows[i].get("company")) for i in order}
     out: dict[int, dict] = {}
     for n, i in enumerate(order):
@@ -383,7 +384,7 @@ def review(rows: list[dict], today: datetime.date, warm: dict | None = None,
     for r in rows:
         if _status(r) != "applied":
             continue
-        applied = _iso(r.get("date"))
+        applied = _iso(throttle.applied_on(r))
         if applied is None:
             continue
         k = company_key(r.get("company"))
@@ -542,13 +543,19 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
             and not not_chased(it["row"].get("notes"), today)]
     if not gone or not write:
         return gone
+    stamp = datetime.datetime.now().strftime("%H:%M")
     for it in gone:
         r = it["row"]
         why = _quiet_why(it, "no reply in %d days" % it["age"])
+        # The search's call, never the person's, and said so: confirmed_by "the search",
+        # and the day it went kept in applied_on, so `confirm.py applied` undoes it.
+        r["applied_on"] = throttle.applied_on(r) or it["date"]
         r["status"] = "no_response"
+        r["confirmed_by"], r["confirmed_at"] = "the search", "%s %s" % (today.isoformat(), stamp)
         note = CLOSED_NOTE % (today.isoformat(), why)
         r["notes"] = ((r.get("notes") or "").rstrip() + " | " + note).strip(" |")
-    csv_store.write_rows(path, rows, csv_store.header(path))
+    csv_store.write_rows(path, rows, list(dict.fromkeys(
+        csv_store.header(path) + list(throttle.CONFIRM_COLUMNS))))
     return gone
 
 
@@ -662,11 +669,16 @@ def main() -> int:
         return 0
     if a.close_quiet:
         gone = close_quiet(today=today, write=not a.dry_run)
-        verb = "would close" if a.dry_run else "closed"
-        print("%s %d gone quiet as no_response%s" % (
+        # Shown to the person as the search's call, with the way to keep one open: they
+        # know of a reply the tracker does not.
+        verb = "would close" if a.dry_run else "closing"
+        print("%s %d as no reply%s" % (
             verb, len(gone), ": " + "; ".join("%s (%s, applied %s)" % (
                 it["company"], it["role"] or "role not recorded", it["date"]) for it in gone)
             if gone else ""))
+        for it in gone:
+            print('  keep open: python3 tools/confirm.py applied "%s::%s"'
+                  % (it["company"], it["role"] or ""))
         return 0
     items = review(_rows(), today, warm=throttle.warm_routes(), holds=throttle.referral_holds())
     print("\n".join(render(items, today)).lstrip("\n"))

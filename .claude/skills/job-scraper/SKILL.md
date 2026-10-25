@@ -239,7 +239,10 @@ already-applied question ("The rules every search keeps", items 5 and 6, at the 
 skill). Ask once:
 > "Which of these should I take forward? And have you already applied to any of them?"
 
-A yes to the second is recorded as a tracker row at `applied` with the date they give. Each
+A yes to the second is recorded with `python3 tools/confirm.py applied` (`--new --company
+--role --url --on <date> --source chat` for one the tracker never had, or the row's name when
+it has it), never by editing the tracker, and the lines it prints, the applications it covered,
+are shown to them. Each
 pick goes to `/apply`, which reuses the round's score and asks nothing already answered here.
 
 Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path `manual-round.md` Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`; treat both as already-seen for dedup purposes.)

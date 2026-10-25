@@ -18,6 +18,7 @@ Read in parallel:
 1. **`job_search_tracker.csv`** - the primary source. Parse every row into a record with fields:
    `date`, `company`, `sector`, `role`, `role_type`, `channel`, `status`, `contact_person`, `fit_rating`, `notes`, `cv_file`, `cover_letter_file`, `source`, `deadline`
 
+   Rows a confirmation wrote (`tools/confirm.py`, `followups.py --close-quiet`) also carry `applied_on`, `confirmed_by` and `confirmed_at`, which join the end of the header the first time one is written; a row without them reads them as empty.
    Rows written before `deadline` existed have thirteen fields and no fourteenth value. Treat the missing field as empty - never drop the row, and never infer a deadline from its `date`.
 
 2. **`documents/applications/*/outcome.md`** - for each resolved application, read the outcome file to get the exact interview stages reached (the checkboxes) and any notes. Merge this into the matching tracker row by company+role fuzzy match (lowercase, ignore punctuation). If an archive exists for a row but there is no match, attach it as extra context anyway.
@@ -48,7 +49,7 @@ From the normalised data compute:
 - **Total applications**
 - **By status bucket:** count per bucket
 - **By sector and by channel, as rates with their n:** run `python3 tools/what_works.py rates --by sector` and `python3 tools/what_works.py rates --by channel` (JSON). Each group is `reached` of `decided`: the applications with a result, counted the way `what_works.py brief search` counts them, so the dashboard and the brief never disagree. A count per channel ("12 portal, 3 referral") says nothing about which one works; a rate does, with the number it rests on beside it. A group with `enough` false (under `min_group` decided) is shown with its n and the words "too few to compare", never ranked against the others. Say once how many applications are `waiting` (sent, no answer yet): they are in no rate.
-- **By year/season:** group by the `date` field (which may be a year like `2025` or a full date)
+- **By year/season:** group by the day the application went, `applied_on`, and by `date` on a row without it (a row from before that column, or a draft); either may be a year like `2025` or a full date
 - **Funnel rates:** what % progressed past resume screen (reached Interview or beyond). Compute stage-reached from history, not current status: an application counts as having reached a stage when its current status implies it **or** its merged `outcome.md` stage checkboxes (Step 1.2) show the stage was reached - a `rejected` row whose outcome file ticks an interview stage reached Interview, and a `hired` row reached every stage before Hired. Current status alone structurally undercounts every earlier stage: a finished search would read as though nobody ever interviewed.
 - **Rejection rate:** true rejections (`rejected`, `no_response`) ÷ applications with a final outcome. `offer_declined` (the candidate turned the offer down - a success) and `withdrawn` (candidate-initiated) are not rejections and stay out of the numerator; Interview and Offer rows are still unresolved, so they stay out of the denominator along with Active. The Rejected/Closed status *bucket* still groups all closed rows for the doughnut - the rate just must not reuse the bucket blindly.
 

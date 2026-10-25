@@ -346,7 +346,7 @@ def _last_word(row, files, stages, today):
         d = state.as_date(st["date"])
         if d and d <= today:
             seen.append((d, "the %s" % (st["label"] or "interview")))
-    d = state.as_date(row.get("date"))
+    d = state.as_date(throttle.applied_on(row) or row.get("date"))
     if d:
         seen.append((d, "the last update"))
     for entry in str(row.get("notes") or "").split("|"):

@@ -123,6 +123,31 @@ LOST = _spellings("rejected", "no_response")
 # which is why it produces a note on the surfaced row rather than silence.
 UNSENT = {"drafted", "draft", "in_progress", "in progress", "not_sent", "not sent"}
 
+# Who said an application went, and when (tools/confirm.py). `date` is the day the row
+# was made and is never rewritten: it is a third of the key the tracker's rows merge on
+# (tools/merge_state.py), and /outcome overwriting it with the day the application went
+# turned two chats' edits to one row into a merge conflict. `confirmed_by` is who said
+# so: the person on the page, the person in chat, the person unprompted ("person-said"),
+# or "the search" for a close it made on silence (followups.py --close-quiet).
+CONFIRM_COLUMNS = ("applied_on", "confirmed_by", "confirmed_at")
+CONFIRMED_BY = ("page", "chat", "person-said", "the search")
+
+
+def applied_on(row) -> str:
+    """The day an application went, as an ISO date string, or "" where nothing was sent.
+
+    `applied_on` where it is written. A row from before that column carries the day in
+    `date` once it left `drafted` (/outcome overwrote it), so that is read instead, and a
+    confirmed row with no `applied_on` (skipped, closed before sending) went nowhere."""
+    on = str(row.get("applied_on") or "").strip()
+    if on:
+        return on
+    status = str(row.get("status") or "").strip().lower()
+    if status in UNSENT or str(row.get("confirmed_by") or "").strip() or is_process(row):
+        return ""
+    return str(row.get("date") or "").strip()
+
+
 # A hiring process with no application in it (tools/interview_pack.py process): a referral
 # that led to a recruiter's call, where applying through the portal as well would put a
 # second, worse record of the same person in front of them. Its tracker row carries this
@@ -364,8 +389,9 @@ SILENCE_DAYS = 45
 
 
 def _row_age_days(row: dict, today: "dt.date | None" = None) -> int | None:
-    """Days since the tracker row's date, or None when it cannot be read."""
-    return days_since(row.get("date"), today, iso_only=True)
+    """Days since the application went (applied_on), or since the row's date where it
+    names none, or None when neither can be read."""
+    return days_since(applied_on(row) or row.get("date"), today, iso_only=True)
 
 
 def is_silent(row: dict, today: "dt.date | None" = None) -> bool:
@@ -1122,13 +1148,13 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             if quiet:
                 # The employer was suppressed and is not any more. Say so, or
                 # this reads as the throttle having forgotten an application.
-                oldest = min(quiet, key=lambda x: x.get("date") or "9999")
+                oldest = min(quiet, key=lambda x: applied_on(x) or x.get("date") or "9999")
                 r = {**r, "silent_application_note": (
                     "APPLIED HERE ALREADY and never heard back: %s, %s. That one "
                     "stopped suppressing this employer after %d days of silence, "
                     "so this role is worth considering. Check before sending, and "
                     "run /outcome to close the old row out."
-                    % (oldest.get("role") or "?", oldest.get("date") or "?",
+                    % (oldest.get("role") or "?", applied_on(oldest) or oldest.get("date") or "?",
                        SILENCE_DAYS))}
             draft = (drafted or {}).get(k)
             if draft:
