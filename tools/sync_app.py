@@ -122,8 +122,59 @@ def app_portals() -> list[str]:
     return []
 
 
+# How long one git command may take. A fetch on a slow connection takes a while, but one
+# that hangs (a sign-in window nobody sees, a network that never answers) must not hold the
+# chat for ever; ten minutes is far beyond any fetch this repo has made.
+GIT_TIMEOUT = 600
+NO_GIT = ("sync_app: git is not installed on this computer, so nothing was changed. "
+          "python3 tools/env_check.py says how to put it on.")
+
+
+def _git_env() -> dict:
+    """Git never stops to ask anyone anything: no password prompt in the terminal
+    (GIT_TERMINAL_PROMPT, https://git-scm.com/docs/git#Documentation/git.txt-GITTERMINALPROMPT)
+    and no sign-in window from Git Credential Manager, which Git for Windows ships
+    (GCM_INTERACTIVE, https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/environment.md).
+    A sync runs in the background of a chat, where a prompt is a hang."""
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GCM_INTERACTIVE"] = "never"
+    return env
+
+
+def run_git(root: str, *args: str, check: bool = False,
+            timeout: float = GIT_TIMEOUT) -> subprocess.CompletedProcess:
+    """git -C root <args>, its output read as UTF-8 whatever the computer's own encoding
+    (Windows reads cp1252 by default, and a CHANGELOG name with an accent stopped the sync
+    after its commit), never prompting, never hanging. Missing git ends the run with one
+    plain line from main(), not a traceback: here it is an ordinary failure (exit 127), so
+    the helpers other tools call (stale(), behind_sync()) never stop them; a timeout is one
+    too (exit 124)."""
+    cmd = ["git", "-C", root, *args]
+    try:
+        r = subprocess.run(cmd, text=True, capture_output=True, encoding="utf-8",
+                           errors="replace", env=_git_env(), timeout=timeout)
+    except OSError:
+        r = subprocess.CompletedProcess(cmd, 127, "", NO_GIT)
+    except subprocess.TimeoutExpired:
+        r = subprocess.CompletedProcess(cmd, 124, "", f"git {args[0] if args else ''} took "
+                                        f"longer than {int(timeout)} seconds and was stopped")
+    if check and r.returncode:
+        raise subprocess.CalledProcessError(r.returncode, cmd, r.stdout, r.stderr)
+    return r
+
+
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check)
+    return run_git(ROOT, *args, check=check)
+
+
+def _git_error(r: subprocess.CompletedProcess) -> str:
+    """git's own reason, in one line: its first "fatal:" or "error:" line, which says what
+    went wrong (the last line of a failed fetch is only "and the repository exists.")."""
+    lines = [ln.strip() for ln in (r.stderr or r.stdout or "").splitlines() if ln.strip()]
+    said = next((ln for ln in lines if ln.lower().startswith(("fatal:", "error:"))),
+                lines[-1] if lines else "no error text")
+    return said[:200]
 
 
 def _norm(url: str) -> str:
@@ -141,8 +192,7 @@ def app_url() -> str:
 
 
 def is_the_app(root: str | None = None) -> bool:
-    origin = subprocess.run(["git", "-C", root or ROOT, "remote", "get-url", "origin"],
-                            text=True, capture_output=True)
+    origin = run_git(root or ROOT, "remote", "get-url", "origin")
     return origin.returncode == 0 and _norm(origin.stdout) == _norm(app_url())
 
 
@@ -409,7 +459,10 @@ def sync() -> int:
         print(git("diff", "--stat", "--stat-width=100", old, "HEAD").stdout.rstrip())
     for p in restored:
         print(f"  put back (edited here): {p}")
-    new = headlines(_changelog(old), maintainer=mine)
+    # Nothing to tell someone who has not set up yet: their first sync's CHANGELOG is every
+    # change the app ever made, twenty headlines about things they never used.
+    new = (headlines(_changelog(old), maintainer=mine)
+           if os.path.isdir(os.path.join(ROOT, "profile")) else [])
     if new:
         print("What changed (for the person, in one plain line):")
         for ln in new[:20]:
@@ -431,8 +484,7 @@ STAMP = "ljs-last-sync"
 def _git_dirs(root: str) -> tuple[str, str] | None:
     """(this checkout's own git folder, the folder every worktree of the repo shares), both
     absolute; the same folder in the repo's main checkout. None outside git."""
-    r = subprocess.run(["git", "-C", root, "rev-parse", "--absolute-git-dir", "--git-common-dir"],
-                       text=True, capture_output=True)
+    r = run_git(root, "rev-parse", "--absolute-git-dir", "--git-common-dir")
     got = r.stdout.split("\n")
     if r.returncode or len(got) < 2 or not got[0].strip() or not got[1].strip():
         return None
@@ -476,12 +528,10 @@ def _record_check(root: str | None = None) -> None:
             # /upgrade worktree made from an older commit lists the wrong upgrades, and
             # `behind_sync()` says so instead.
             def g(*args):
-                return subprocess.run(["git", "-C", root, *args], text=True,
-                                      capture_output=True).stdout.strip()
+                return run_git(root, *args).stdout.strip()
             head = g("rev-parse", "HEAD")
             app = g("rev-parse", "--verify", "-q", APP + "^{commit}")
-            if app and subprocess.run(["git", "-C", root, "merge-base", "--is-ancestor", app,
-                                       "HEAD"], capture_output=True).returncode:
+            if app and run_git(root, "merge-base", "--is-ancestor", app, "HEAD").returncode:
                 app = ""
             if head:
                 with open(p + "-head", "w", encoding="utf-8") as fh:
@@ -499,7 +549,7 @@ def plain_state_endings(root: str | None = None) -> str:
     root = root or ROOT
 
     def g(*args):
-        return subprocess.run(["git", "-C", root, *args], text=True, capture_output=True)
+        return run_git(root, *args)
     paths = [ln.split(":")[0] for ln in g("check-attr", "eol", "--", *_STATE_FILES)
              .stdout.splitlines() if ln.rstrip().endswith(": eol: lf")]
     if not paths:
@@ -558,7 +608,7 @@ def behind_sync(root: str | None = None) -> str:
     root = root or ROOT
 
     def g(*args):
-        return subprocess.run(["git", "-C", root, *args], text=True, capture_output=True)
+        return run_git(root, *args)
     try:
         if is_the_app(root):
             return ""
@@ -657,8 +707,21 @@ def abandoned(before: str, now: str) -> str:
     return ""
 
 
+def _driver() -> None:
+    """The row-by-row merge for the state files, set before anything is merged. Config is
+    not committed, so a fresh clone or a resumed cloud computer had none until its first
+    full sync, and its first pull of master merged two chats' new rows as lines: a
+    conflict (found 2026-10-25)."""
+    try:
+        import merge_state
+        merge_state.install(ROOT)
+    except Exception:  # noqa: BLE001  without the driver git merges lines, as it always did
+        pass
+
+
 def pull_master() -> int:
     """A session's first step: bring in what other chats merged to master."""
+    _driver()
     before = git("rev-parse", "-q", "--verify", "refs/remotes/origin/master", check=False).stdout.strip()
     if git("fetch", "-q", "origin", "master", check=False).returncode:
         print("sync_app: master could not be fetched; carrying on with the app check.")
@@ -723,31 +786,65 @@ def branch_name(name: str, today: datetime.date | None = None) -> str:
     return out
 
 
+# Where a chat's own folder goes: inside this one, where Claude Code makes its own
+# worktrees. A folder beside the repo (../<repo>-<name>, until 2026-10-25) is outside the
+# project, and Claude Code puts a chat that `cd`s there back where it started ("Shell cwd
+# was reset", https://code.claude.com/docs/en/tools-reference#bash-tool-behavior), so
+# "work there" could not be done. Under .claude/worktrees/ a `cd` stays, EnterWorktree
+# enters without asking (https://code.claude.com/docs/en/worktrees), and .gitignore keeps
+# it out of the main folder's changes.
+WORKTREES = os.path.join(".claude", "worktrees")
+
+
+def _quoted(path: str) -> str:
+    """A path as a shell reads it: quoted when it has a space, a quote or a backslash
+    (a Windows path printed bare broke on "My Documents" and lost every backslash)."""
+    if re.fullmatch(r"[\w@%+=:,./-]+", path):
+        return path
+    return "'" + path.replace("'", "'\\''") + "'"
+
+
 def worktree(name: str) -> int:
-    """A folder of this chat's own: ../<repo>-<name>, on a new branch from origin/master.
+    """A folder of this chat's own: .claude/worktrees/<name>, on a new branch from master.
 
     Two chats on one computer shared one folder, with the other chat's branch checked
     out: a branch switch by one changes the other's files under it, and they fight over
     git's index. Each local chat works in its own worktree and removes it when its pull
-    request lands (`git worktree remove <folder>`). Files git does not carry (the
-    connections export) are read from the main folder (person.local_state)."""
-    if git("fetch", "-q", "origin", "master", check=False).returncode:
-        print("sync_app: master could not be fetched; no worktree made.")
-        return 1
+    request lands (`git worktree remove <folder>`, from the main folder). Files git does not
+    carry (the connections export) are read from the main folder (person.local_state).
+
+    When master cannot be fetched (no network, no sign-in yet) the folder is made from the
+    master this computer last fetched, saying so with git's own words, rather than not at
+    all: a second chat with no folder of its own is the thing this exists to prevent."""
+    _driver()
+    start = "origin/master"
+    r = git("fetch", "-q", "origin", "master", check=False)
+    if r.returncode:
+        why = _git_error(r)
+        if git("rev-parse", "-q", "--verify", "refs/remotes/origin/master",
+               check=False).returncode:
+            print(f"sync_app: master could not be fetched ({why}), and this computer has no "
+                  "copy of it yet, so no folder was made.")
+            return 1
+        print(f"sync_app: master could not be fetched ({why}); the folder starts from the "
+              "copy this computer fetched last, and the next sync brings it up to date.")
     slug = re.sub(r"[^a-z0-9]+", "-", str(name or "").lower()).strip("-") or "chat"
-    folder = os.path.join(os.path.dirname(ROOT), f"{os.path.basename(ROOT)}-{slug}")
+    parent = os.path.join(ROOT, WORKTREES)
+    folder = os.path.join(parent, slug)
     n = 1
     while os.path.exists(folder):
         n += 1
-        folder = os.path.join(os.path.dirname(ROOT), f"{os.path.basename(ROOT)}-{slug}-{n}")
+        folder = os.path.join(parent, f"{slug}-{n}")
     branch = branch_name(slug)
-    r = git("worktree", "add", "-q", "-b", branch, folder, "origin/master", check=False)
+    os.makedirs(parent, exist_ok=True)
+    r = git("worktree", "add", "-q", "-b", branch, folder, start, check=False)
     if r.returncode:
         print(f"sync_app: no worktree made: {(r.stderr or r.stdout).strip()[:200]}")
         return 1
-    print(f"sync_app: this chat's own folder is {folder}, on branch {branch}, from master. "
-          "Work there from now on (every command run in it); when its pull request lands: "
-          f"git worktree remove {folder}")
+    print(f"sync_app: this chat's own folder is {_quoted(folder)}, on branch {branch}, from "
+          "master. Work there from now on (cd into it: it is inside this folder, so the chat "
+          "stays there); when its pull request lands, from this main folder: "
+          f"git worktree remove {_quoted(folder)}")
     return 0
 
 
@@ -815,7 +912,7 @@ def main(argv: list[str]) -> int:
                       help="a session's first step: bring in master, and never merge a "
                            "rewritten one")
     mode.add_argument("--worktree", metavar="NAME",
-                      help="a folder of this chat's own, beside the repo, on a new branch from "
+                      help="a folder of this chat's own, inside this one, on a new branch from "
                            "master: for a second chat on the same computer")
     ap.add_argument("--on", default="", metavar="MODEL",
                     help="the model this session runs on: the day's work is checked against it")
@@ -823,6 +920,9 @@ def main(argv: list[str]) -> int:
                     help="the browser tools this chat has (browser, chrome, chrome-off, enable, "
                          "none): the place check says what to do, once in a chat")
     a = ap.parse_args(argv)
+    if run_git(ROOT, "--version").returncode == 127:
+        print(NO_GIT)
+        return 1
     if a.own_tests:
         failures = own_test_failures()
         text = own_tests_report(failures or [])
@@ -1107,7 +1207,7 @@ SYNC_SUBJECT = "Sync from the app"
 
 
 def _git_out(root: str, *args: str) -> str:
-    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    r = run_git(root, *args)
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
