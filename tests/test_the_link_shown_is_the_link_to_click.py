@@ -135,6 +135,19 @@ def test_a_boards_own_posting_no_longer_listed_is_closed():
     assert (got["link_status"], got["apply_url"]) == ("open", LISTING[0]["url"])
 
 
+def test_a_posting_on_a_sibling_board_is_never_called_closed():
+    """The board's token was looked for anywhere in the link, so a posting on "oakmereuk"
+    read as one "oakmere" no longer lists: a false closed, the expensive mistake."""
+    for portal in ("linkedin", "greenhouse"):
+        row = {"company": "Oakmere Foods", "title": "Planner", "portal": portal,
+               "url": "https://boards.greenhouse.io/oakmereuk/jobs/999"}
+        got = al.shown(row, now=NOW, read=_reader([]), boards=BOARD)
+        assert got["link_status"] == "unknown", portal
+    row = {"company": "Oakmere Foods", "title": "Planner", "portal": "linkedin",
+           "url": "https://job-boards.greenhouse.io/Oakmere/jobs/999"}
+    assert al.shown(row, now=NOW, read=_reader([]), boards=BOARD)["link_status"] == "closed"
+
+
 def test_a_listing_that_left_postings_out_never_says_closed():
     row = {"company": "Oakmere Foods", "title": "Planner", "portal": "greenhouse",
            "url": "https://boards.greenhouse.io/oakmere/jobs/999?gh_jid=999"}
