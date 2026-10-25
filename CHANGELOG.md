@@ -87,6 +87,9 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **On Windows, a user folder whose name has an accent no longer trips anything up**: a
+  Python installed there is found and its path read right, by the set-up and by the app, and
+  a Python settings file holding an unusual character no longer stops every command.
 - **Looking at your contact book or messages no longer creates them**: a missing file stays
   missing until the first save writes it, so a check for updates leaves no new files behind
   (`state.load_contacts`, `state.load_threads`).
