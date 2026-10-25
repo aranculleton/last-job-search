@@ -123,21 +123,29 @@ def test_a_computer_missing_python_gets_one_list_with_the_password_ones_marked()
     fixes = env_check.local_fixes("darwin", have=NONE, module=lambda m: False, py_ok=False,
                                   pypdf="missing", gh_signed_in=False)
     said = _say("local", "paste", [], fixes=fixes)
-    # Claude runs every one; nobody is sent to Terminal or PowerShell (2026-10-25).
+    # Claude runs every one; nobody is sent to Terminal or PowerShell (2026-10-25), and every
+    # install goes into the person's own folders: no Homebrew, no winget, no password
+    # (tools/installs.py). Apple's own window is the person's click.
     assert said.startswith("This computer is missing a few things. I install them myself")
     assert "Terminal" not in said and "PowerShell" not in said and "paste" not in said.lower()
-    assert ("  - Python 3.9 or newer: xcode-select --install  [a window may ask for your "
-            "computer's password]") in said
-    assert "  - pytest: pip3 install --user pytest\n" in said
-    assert "brew install --cask mactex-no-gui  [a window may ask" in said
+    assert ("Python 3.9 or newer", "xcode-select --install", "dialog") in fixes
+    assert ("  - Python 3.9 or newer: xcode-select --install  [a window asks to install "
+            "Apple's developer tools: choose Install]") in said
+    assert "  - the Python packages: python3 tools/env_check.py --fix packages\n" in said
+    assert "  - LaTeX, to make the PDFs: python3 tools/env_check.py --fix latex" in said
+    assert "brew" not in said and "winget" not in said
+    assert "password" not in said
     lines = [l for l in said.splitlines() if l.startswith("  - ")]
     assert len(lines) == len(fixes) and all(": " in l for l in lines)   # one command each
     # Every machine has its own commands, and only a computer is told to install anything.
     win = env_check.local_fixes("win32", have=NONE, module=lambda m: True, py_ok=False, pypdf="ok",
                                 gh_signed_in=False)
-    assert win[0] == ("Python 3.9 or newer", "winget install Python.Python.3.12", "")
-    assert ("GitHub sign-in for it", "gh auth login", "sign-in") in win
-    assert "  - GitHub sign-in for it: gh auth login  [a page opens in your browser" in said
+    assert win[0] == ("Python 3.9 or newer",
+                      "powershell -ExecutionPolicy Bypass -File tools/computer_setup.ps1", "")
+    assert not [f for f in win if "winget" in f[1] or f[2] == "password"]
+    assert ("GitHub sign-in for it", "gh auth login --web --git-protocol https", "sign-in") in win
+    assert ("  - GitHub sign-in for it: gh auth login --web --git-protocol https  [a page opens "
+            "in your browser to sign in to GitHub]") in said
     assert _say("web", "paste", [], fixes=fixes) == ""
     # Too old a Python to run any of this is told in one sentence by every tool.
     assert python_floor.message("3.8.10", "darwin").startswith("Python 3.9 or newer is needed")
@@ -229,14 +237,14 @@ def test_a_computer_missing_a_tool_hears_it_again_weekly_until_it_is_there(tmp_p
     monkeypatch.setattr(place, "repo", lambda: REPO)
     monkeypatch.setattr(place, "note_local", lambda today=None: False)
     monkeypatch.setattr(env_check, "local_fixes",
-                        lambda: [("LaTeX, to make the PDFs", "brew install --cask mactex-no-gui",
-                                  "password")])
+                        lambda: [("LaTeX, to make the PDFs",
+                                  "python3 tools/env_check.py --fix latex", "")])
     env = {"CLAUDECODE": "1", "CLAUDE_CODE_SESSION_ID": "local-EXAMPLE"}
     day = datetime.date(2026, 10, 19)
-    assert "mactex" in place.report([], once=True, env=env, today=day)
+    assert "--fix latex" in place.report([], once=True, env=env, today=day)
     assert place.report([], once=True, env=env, today=day + datetime.timedelta(days=3)) == ""
     later = day + datetime.timedelta(days=place.RETELL_DAYS)
-    assert "mactex" in place.report([], once=True, env=env, today=later)
+    assert "--fix latex" in place.report([], once=True, env=env, today=later)
 
 
 def test_a_person_with_a_chat_on_their_computer_is_never_asked_to_move():

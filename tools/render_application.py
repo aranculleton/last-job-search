@@ -313,7 +313,17 @@ def final_abbr(a):
         raise ValueError(f"a draft has no company, so its files cannot be named: "
                          f"role {a.get('role') or '(none)'!r}, abbr {a.get('abbr') or '(none)'!r}")
     abbr = a.get("abbr") or ""
-    return doc_name.suffix(company, abbr.split("_", 1)[1] if "_" in abbr else "")
+    token = abbr.split("_", 1)[1] if "_" in abbr else ""
+    name = doc_name.suffix(company, token)
+    # An application made before accents were folded keeps its name: its files and its
+    # tracker row carry it, and a new name would leave them behind.
+    old = doc_name.suffix(company, token, legacy=True)
+    if old != name and old and (
+            os.path.exists(doc_name.docpaths.resume_tex(old))
+            or any(doc_name._norm(r.get("company")) == doc_name._norm(company)
+                   for r in doc_name.owners(old, doc_name.tracker_rows()))):
+        return old
+    return name
 
 
 def build(a):
@@ -433,13 +443,14 @@ def check_batch(apps, rows=None):
                              "dropped from the letter. Fold it into those four.")
         name = final_abbr(a)
         doc_name.check_free(name, a["company"], a["role"], rows)
-        other = claimed.get(name)
+        # Case-folded, as doc_name.owners is: Acme and ACME are one file on a Mac or Windows.
+        other = claimed.get(name.casefold())
         if other and doc_name._norm(other["role"]) != doc_name._norm(a["role"]):
             raise FileExistsError(
                 f"{name} is claimed twice in this batch: {other['company']}, {other['role']!r} "
                 f"and {a['company']}, {a['role']!r}. Give one a role token "
                 "(tools/stage_picks.py picks them).")
-        claimed[name] = a
+        claimed[name.casefold()] = a
 
 
 if __name__ == "__main__":

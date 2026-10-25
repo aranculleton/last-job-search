@@ -1,0 +1,210 @@
+# Proof that the app works on a person's own computer with nothing extra installed
+# first: Linux, a Mac and Windows, each after taking away what a person would not have.
+#
+#   person            every OS: the install route Claude runs (`env_check.py --fix`, no
+#                     Homebrew, no winget, no sudo, no administrator), then from the example
+#                     person: a resume and letter in black and two colours fitted and
+#                     checked, a general resume with no posting for an accented name, their
+#                     own LinkedIn download read into a profile seed, an offline round
+#                     against its golden summary, an interview pack, a networking day, and
+#                     the test suite (tools/platform_check.py).
+#   windows-shell     Windows PowerShell 5.1 as the only shell, before Git exists: every
+#                     command COMPUTER.md gives for it (PortableGit and gh into the user's
+#                     own folders, Claude Code told where Git Bash is), and the python3
+#                     command where only python works.
+#   windows-chat      a computer chat on Windows under Git Bash, python3 taken off PATH as
+#                     the python.org installer leaves it, Windows' own code page: a copy
+#                     that is already set up asks nothing, then its ordinary day, the
+#                     general resume rendered from that copy's folder, and the seed read.
+#
+# Runs only on the public app (whose minutes are free) or by hand, on pull requests that
+# touch the install, the documents, the portals or this file, and weekly, so a change in
+# what TinyTeX, GitHub or Bun publish is seen before a person meets it. Actions are pinned
+# to commit SHAs, as in ci.yml; the token is read-only.
+
+name: Platforms
+
+on:
+  pull_request:
+    paths:
+      - "tools/installs.py"
+      - "tools/env_check.py"
+      - "tools/local_path.*"
+      - "tools/pdftext.py"
+      - "tools/verify_batch.*"
+      - "tools/fit_to_page.py"
+      - "tools/audit_letters.py"
+      - "tools/platform_check.py"
+      - "tools/computer_setup.ps1"
+      - "tools/setup_state.py"
+      - "tools/find_copy.py"
+      - "tools/setup_env.sh"
+      - "tools/portals.py"
+      - "tools/scrape_wide.py"
+      - "tools/hydrate.py"
+      - "tools/sync_app.py"
+      - "tools/merge_state.py"
+      - "tools/py.sh"
+      - "tools/render_application.py"
+      - "tools/doc_name.py"
+      - "tools/stage_picks.py"
+      - "tools/network/export.py"
+      - "tools/network/own_profile.py"
+      - "templates/**"
+      - "cv/*.cls"
+      - "cover_letters/*.cls"
+      - "texmf/**"
+      - "requirements.txt"
+      - "COMPUTER.md"
+      - ".gitattributes"
+      - ".claude/settings.json"
+      - ".github/workflows/platforms.yml"
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platforms-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  person:
+    name: person (${{ matrix.os }})
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Take away what a person would not have
+        run: |
+          case "$RUNNER_OS" in
+            macOS)
+              # Homebrew (and everything it installed: Poppler, gh, node) and any MacTeX.
+              keep=$(printf '%s' "$PATH" | tr ':' '\n' \
+                | grep -v -E '^/opt/homebrew|^/usr/local/(s?bin|opt|Cellar)|TeX|hostedtoolcache' \
+                | paste -sd: -)
+              PY=/usr/bin/python3 ;;
+            Linux)
+              # The runner image has no TeX and no Poppler; nothing after this uses sudo.
+              keep=$(printf '%s' "$PATH" | tr ':' '\n' | grep -v -E 'hostedtoolcache' | paste -sd: -)
+              PY=/usr/bin/python3 ;;
+            Windows)
+              # winget is never called (tests/test_installs_need_no_password.py); Python is
+              # the runner's own, as python.org installs it.
+              keep="$PATH"
+              PY=python ;;
+          esac
+          echo "PERSON_PATH=$keep" >> "$GITHUB_ENV"
+          echo "PERSON_PY=$PY" >> "$GITHUB_ENV"
+          PATH="$keep"
+          for t in lualatex xelatex pdftotext brew; do
+            printf '%-10s %s\n' "$t" "$(command -v $t || echo 'not here')"
+          done
+          "$PY" --version
+
+      - name: Install the way Claude does (env_check.py --fix)
+        run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py install
+
+      - name: Documents, a general resume, a profile seed, a round, an interview pack, a networking day
+        run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents general seed round interview networking
+
+      - name: The test suite
+        run: |
+          PATH="$PERSON_PATH"
+          "$PERSON_PY" -c "import sys; sys.path.insert(0, 'tools'); import local_path; print(local_path.venv_site())"
+          # The suite runs on the Python the packages went into: the repo's .venv, if
+          # env_check --fix made one (it does wherever the system Python lacked them).
+          PY=$("$PERSON_PY" -c "import sys; sys.path.insert(0, 'tools'); import installs; print(installs.venv_python())")
+          [ -x "$PY" ] || PY="$PERSON_PY"
+          "$PY" tools/platform_check.py suite
+
+  windows-shell:
+    name: windows (PowerShell 5.1, no Git yet)
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Git and gh into the user's own folders, with PowerShell alone
+        run: |
+          $PSVersionTable.PSVersion.ToString()
+          # No Git and no GitHub CLI anywhere this shell or its children look.
+          $env:Path = ($env:Path.Split(';') | Where-Object { $_ -and $_ -notmatch '\\Git\\|GitHub CLI|\\gh\\' }) -join ';'
+          if (Get-Command git -ErrorAction SilentlyContinue) { throw 'git is still on PATH' }
+          if (Get-Command gh -ErrorAction SilentlyContinue) { throw 'gh is still on PATH' }
+          # COMPUTER.md downloads this file from the app's master; the checkout's copy here.
+          Copy-Item tools\computer_setup.ps1 "$env:TEMP\computer_setup.ps1"
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\computer_setup.ps1"
+          if ($LASTEXITCODE -ne 0) { throw "computer_setup.ps1 exited $LASTEXITCODE" }
+
+      - name: What it installed works, and new shells and Claude Code find it
+        run: |
+          $bash = "$env:LOCALAPPDATA\Programs\PortableGit\bin\bash.exe"
+          & $bash -lc 'echo "bash runs"; uname -s; git --version'
+          if ($LASTEXITCODE -ne 0) { throw 'Git Bash did not run' }
+          & "$env:LOCALAPPDATA\Programs\gh\bin\gh.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw 'gh did not run' }
+          $user = [Environment]::GetEnvironmentVariable('Path', 'User')
+          if ($user -notmatch 'PortableGit\\cmd') { throw "Git is not on the user PATH: $user" }
+          if ($user -notmatch 'Programs\\gh\\bin') { throw "gh is not on the user PATH: $user" }
+          $settings = Get-Content -Raw "$env:USERPROFILE\.claude\settings.json" | ConvertFrom-Json
+          if ($settings.env.CLAUDE_CODE_GIT_BASH_PATH -ne $bash) { throw 'CLAUDE_CODE_GIT_BASH_PATH was not set' }
+          # COMPUTER.md 2b step 2: the app, cloned with the Git just installed.
+          & "$env:LOCALAPPDATA\Programs\PortableGit\cmd\git.exe" clone -q --depth 1 https://github.com/aranculleton/last-job-search "$env:LOCALAPPDATA\last-job-search-app"
+          if ($LASTEXITCODE -ne 0) { throw 'the app did not clone' }
+
+      - name: A python3 command where only python works
+        run: |
+          # The python.org installer gives python and py, no python3; take away any copy.
+          Get-Command python3 -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | ForEach-Object { Remove-Item $_.Source -Force }
+          python tools\env_check.py --fix python
+          if ($LASTEXITCODE -ne 0) { throw 'env_check --fix python failed' }
+          # A new shell, reading PATH the way a newly opened app does.
+          powershell -NoProfile -Command "`$env:Path = [Environment]::GetEnvironmentVariable('Path','User') + ';' + [Environment]::GetEnvironmentVariable('Path','Machine'); python3 -c 'import sys; print(sys.version)'; exit `$LASTEXITCODE"
+          if ($LASTEXITCODE -ne 0) { throw 'python3 does not run in a new shell' }
+
+      - name: With no Python at all, the Python install manager (Windows Server may refuse it)
+        continue-on-error: true
+        run: |
+          $env:Path = ($env:Path.Split(';') | Where-Object { $_ -and $_ -notmatch 'Python|hostedtoolcache' }) -join ';'
+          powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\computer_setup.ps1"
+          if ($LASTEXITCODE -ne 0) { throw "computer_setup.ps1 exited $LASTEXITCODE" }
+
+  windows-chat:
+    name: windows (a computer chat, Git Bash, cp1252)
+    if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
+    runs-on: windows-latest
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: A copy already set up, the chat's ordinary day, a general resume and a seed
+        run: |
+          chcp.com 1252 || true
+          unset PYTHONUTF8 PYTHONIOENCODING
+          # python3 off PATH, as the python.org installer leaves it (python and py only).
+          IFS=':'; for d in $PATH; do
+            if [ -e "$d/python3.exe" ] && [ -e "$d/python.exe" ]; then rm -f "$d/python3.exe"; fi
+          done; unset IFS
+          if python3 -c pass 2>/dev/null; then echo "python3 still runs"; fi
+          python -c "import sys, locale; print(sys.stdout.encoding, locale.getpreferredencoding())"
+          python tools/env_check.py --fix packages runtime latex
+          python tools/platform_check.py computer general seed

@@ -241,6 +241,40 @@ def cli(skill: str, env: str | None = None) -> str:
     return dist
 
 
+class NoRuntime(RuntimeError):
+    """Neither Node nor Bun is on this computer, so no portal's CLI can run."""
+
+
+NO_RUNTIME = ("the job searches need Node or Bun to run, and this computer has neither: "
+              "`python3 tools/env_check.py --fix` installs Bun (no password)")
+
+
+@functools.lru_cache(maxsize=None)
+def runtime() -> tuple:
+    """The command a portal's built CLI (`dist/cli.mjs`) runs under: Node, else Bun.
+
+    Every call ran `node`, which nothing installed: env_check and setup_env.sh looked for
+    Bun alone, so a computer with Bun and no Node had every probe fail with a
+    FileNotFoundError, read as "left to the scrape", and the round ended "thin market"
+    (exit 2) having searched nothing. The build is plain JavaScript for Node, and Bun runs
+    it as it is (`bun run dist/cli.mjs ...`), so either will do. Always two words, so the
+    CLI's path is the third word of every command whichever runs it. It raises NoRuntime,
+    with what to run, when there is neither; a caller says so rather than calling it a
+    thin market."""
+    try:
+        import local_path
+        local_path.extend()       # ~/.bun/bin, which a chat's shell on a Mac lacks
+    except Exception:             # noqa: BLE001  finding a runtime must not need it
+        pass
+    node = shutil.which("node")
+    if node:
+        return (node, "--no-warnings")
+    bun = shutil.which("bun")
+    if bun:
+        return (bun, "run")
+    raise NoRuntime(NO_RUNTIME)
+
+
 # ------------------------------------------------------------ running a portal's CLI
 #
 # The one runner for every call to a portal's CLI: a search (tools/scrape_wide.py) and a

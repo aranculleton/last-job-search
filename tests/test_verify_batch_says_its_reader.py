@@ -6,7 +6,8 @@ output thrown away, so a pass did not say that half of it had not been checked.
 """
 from pathlib import Path
 
-SCRIPT = (Path(__file__).resolve().parent.parent / "tools" / "verify_batch.sh").read_text()
+SCRIPT = (Path(__file__).resolve().parent.parent / "tools" / "verify_batch.py").read_text(
+    encoding="utf-8")
 
 
 def test_the_reader_is_kept_and_said():

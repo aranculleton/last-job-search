@@ -13,6 +13,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -120,7 +121,8 @@ f(Object.assign({today: 'd', round_dir: '/r', picks}, extra), agent, pipeline, (
 
 
 def run_workflow(gates, **extra):
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         pytest.skip("node is not installed")
     out = subprocess.run(["node", "-e", HARNESS, WORKFLOW, json.dumps(gates), json.dumps(extra)],
@@ -154,7 +156,8 @@ def test_without_a_pack_the_drafter_builds_it_itself():
 
 
 def test_the_drafter_returns_its_claim_map_and_the_checks_last_word():
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         pytest.skip("node is not installed")
     probe = ("const src = require('fs').readFileSync(process.argv[1], 'utf8')"

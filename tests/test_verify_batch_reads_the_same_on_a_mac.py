@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
 
@@ -49,12 +50,24 @@ def test_a_bullet_on_the_page_twice_is_found():
     assert A.duplicate_bullets(alike) == []
 
 
-def test_the_skills_check_is_written_the_way_both_seds_read_it():
+def test_the_skills_check_reads_the_same_on_every_computer():
+    # The check is Python now (tools/verify_batch.py), so no sed of a Mac's or of Linux's
+    # decides what it reads; the shell name is a shim that runs it.
+    import verify_batch as B
+    lines = ["Intro", "Skills", "SQL (advanced)", "Education", "BSc"]
+    assert B.sed_range(lines, "Skills", "Education", drop_end=True) == ["Skills",
+                                                                        "SQL (advanced)"]
+    # A range is closed by the next end line and opens again at the next start, as sed's.
+    assert B.sed_range(["Skills", "a", "Education", "b", "Skills", "c"], "Skills",
+                       "Education") == ["Skills", "a", "Education", "Skills", "c"]
     with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
-        script = fh.read()
-    assert "{/^$H_EDUCATION/d;p;}" in script and "{/^$H_EDUCATION/d;p}" not in script
-    assert "cut -c1-45" not in script
-    out = subprocess.run(["sed", "-n", "/^Skills/,/^Education/{/^Education/d;p;}"],
-                         input="Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
-                         capture_output=True, text=True)
-    assert out.returncode == 0 and out.stdout == "Skills\nSQL (advanced)\n"
+        shim = fh.read()
+    code = [ln for ln in shim.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    assert not [ln for ln in code if re.search(r"\b(sed|awk|pdftotext|pdfinfo)\b", ln)]
+    assert "verify_batch.py" in shim
+    if shutil.which("sed"):
+        out = subprocess.run(["sed", "-n", "/^Skills/,/^Education/{/^Education/d;p;}"],
+                             input="Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
+                             capture_output=True, text=True)
+        assert out.stdout.splitlines() == B.sed_range(lines, "Skills", "Education",
+                                                      drop_end=True)

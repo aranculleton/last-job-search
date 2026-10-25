@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Everything a fresh cloud container needs, in one idempotent command.
 #
-#     ./tools/setup_env.sh           LaTeX, Poppler, Bun and the Python side
+#     ./tools/setup_env.sh           LaTeX, Bun and the Python side, in a cloud container
 #     ./tools/setup_env.sh --python  the Python side only (seconds, no apt)
 #
 # ## Why this exists
@@ -43,31 +43,36 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # shellcheck source=tools/local_path.sh
 . tools/local_path.sh
 
-if [ "$PY_ONLY" = 0 ]; then
-  if have lualatex && have xelatex && have pdftotext; then
-    echo "setup_env: LaTeX and Poppler already present"
+# A cloud container (Claude's, or any other run as root with apt) is set up here. A
+# person's own computer is not: nothing here asks for a password, uses Homebrew or
+# winget, or runs sudo there. `python3 tools/env_check.py --fix` installs what it lacks
+# into the person's own folders instead (tools/installs.py), and this says so.
+CONTAINER=0
+if [ "${CLAUDE_CODE_REMOTE:-}" = "true" ] || { [ "$(id -u)" = 0 ] && have apt-get; }; then
+  CONTAINER=1
+fi
+if [ "$CONTAINER" = 0 ]; then
+  echo "setup_env: this is your own computer, so nothing is installed from here."
+  echo "setup_env: \`python3 tools/env_check.py --fix\` installs what is missing, into your own folders, with no password."
+fi
+
+if [ "$PY_ONLY" = 0 ] && [ "$CONTAINER" = 1 ]; then
+  if have lualatex && have xelatex; then
+    echo "setup_env: LaTeX already present"
   elif have apt-get; then
-    echo "setup_env: installing LaTeX and Poppler (a few minutes, once per container)"
-    SUDO=""
-    [ "$(id -u)" != 0 ] && have sudo && SUDO="sudo"
-    $SUDO apt-get update -qq >/dev/null 2>&1 || true
-    $SUDO apt-get install -y --no-install-recommends \
-      texlive-luatex texlive-latex-extra texlive-xetex \
-      texlive-fonts-recommended poppler-utils >/dev/null 2>&1 \
-      || echo "setup_env: apt-get install failed; see SETUP.md"
-  elif have brew; then
-    # macOS: Poppler is small and installs unattended; TeX is a one-time install of
-    # its own, too large to start without saying so.
-    have pdftotext || brew install poppler >/dev/null 2>&1 \
-      || echo "setup_env: brew install poppler failed; see SETUP.md"
-    if ! { have lualatex && have xelatex; }; then
-      echo "setup_env: TeX is not installed. Once, on this Mac:"
-      echo "  brew install --cask mactex-no-gui"
-      echo "  (nothing to add to your shell: the app finds /Library/TeX/texbin itself)"
+    echo "setup_env: installing LaTeX (a few minutes, once per container)"
+    apt-get update -qq >/dev/null 2>&1 || true
+    # poppler-utils stays in the set: pdftotext is the text check's second reader where
+    # pypdf cannot run, and the line pasted into a cloud environment's setup names it.
+    if ! out=$(apt-get install -y --no-install-recommends \
+        texlive-luatex texlive-latex-extra texlive-xetex \
+        texlive-fonts-recommended poppler-utils 2>&1); then
+      echo "setup_env: apt-get install failed:"
+      printf '%s\n' "$out" | tail -3 | sed 's/^/  /'
     fi
-  else
-    echo "setup_env: no apt-get or brew here; install TeX Live and Poppler by hand (SETUP.md)"
   fi
+fi
+if [ "$PY_ONLY" = 0 ]; then
   # texlive-fonts-extra is 1.7 GB and the resume used 1.5 MB of it, the two
   # icon packages moderncv loads. They are vendored in texmf/ instead
   # (texmf/README.md), and every compile the app runs sets TEXMFHOME to this
@@ -80,25 +85,15 @@ if [ "$PY_ONLY" = 0 ]; then
   if [ -e "$HOME/texmf" ] || [ -L "$HOME/texmf" ]; then
     echo "setup_env: ~/texmf exists and is left as it is; no compile the app runs reads it"
   fi
-  # Bun runs the job-board CLIs (.agents/skills/*/cli). Claude's cloud containers
-  # usually ship it; elsewhere both installs are per-user and ask for no password:
-  # Homebrew's tap on a Mac that has brew, otherwise the official script, into
-  # $BUN_INSTALL (~/.bun unless set), and adds that to the shell's profile where it can.
+  # Node or Bun runs the job-board CLIs (.agents/skills/*/cli, tools/portals.py
+  # runtime()). Claude's cloud containers ship both; where neither is here, Bun's own
+  # release, unpacked by Python (tools/installs.py): no unzip, no password.
   BUN_BIN="${BUN_INSTALL:-$HOME/.bun}/bin"
   [ -x "$BUN_BIN/bun" ] && export PATH="$BUN_BIN:$PATH"
-  if have bun; then
-    :
-  elif [ "$(uname -s)" = Darwin ] && have brew; then
+  if ! have node && ! have bun && [ "$CONTAINER" = 1 ]; then
     echo "setup_env: installing Bun"
-    brew install oven-sh/bun/bun >/dev/null 2>&1 \
-      || echo "setup_env: brew install oven-sh/bun/bun failed; see SETUP.md"
-  elif have curl; then
-    echo "setup_env: installing Bun"
-    curl -fsSL https://bun.sh/install | bash >/dev/null 2>&1 \
-      || echo "setup_env: the Bun installer failed; see SETUP.md"
+    python3 tools/installs.py runtime | sed 's/^/setup_env: /'
     export PATH="$BUN_BIN:$PATH"
-  else
-    echo "setup_env: no curl here; install Bun by hand (SETUP.md)"
   fi
 fi
 
@@ -107,24 +102,30 @@ fi
 # image PyYAML belongs to Debian ("Cannot uninstall PyYAML, RECORD file not
 # found"), which took openpyxl down with it. cffi is the one package upgraded
 # even when present, for the pyo3 panic described above.
-pip3 install --quiet --upgrade cffi >/dev/null 2>&1 || true
-for pair in pytest:pytest pypdf:pypdf yaml:pyyaml openpyxl:openpyxl; do
-  mod="${pair%%:*}"; pkg="${pair##*:}"
-  python3 -c "import $mod" >/dev/null 2>&1 && continue
-  echo "setup_env: installing $pkg"
-  pip3 install --quiet "$pkg" >/dev/null 2>&1 || echo "setup_env: pip could not install $pkg"
-done
-python3 -m ruff --version >/dev/null 2>&1 || pip3 install --quiet ruff >/dev/null 2>&1 || true
+if [ "$CONTAINER" = 1 ]; then
+  pip3 install --quiet --upgrade cffi >/dev/null 2>&1 || true
+  for pair in pytest:pytest pypdf:pypdf yaml:pyyaml openpyxl:openpyxl; do
+    mod="${pair%%:*}"; pkg="${pair##*:}"
+    python3 -c "import $mod" >/dev/null 2>&1 && continue
+    echo "setup_env: installing $pkg"
+    pip3 install --quiet "$pkg" >/dev/null 2>&1 || echo "setup_env: pip could not install $pkg"
+  done
+  python3 -m ruff --version >/dev/null 2>&1 || pip3 install --quiet ruff >/dev/null 2>&1 || true
+fi
 
 missing=""
 if [ "$PY_ONLY" = 0 ]; then
-  for t in lualatex xelatex pdftotext bun; do have "$t" || missing="$missing $t"; done
+  for t in lualatex xelatex; do have "$t" || missing="$missing $t"; done
+  have node || have bun || missing="$missing node-or-bun"
 fi
-python3 -c "import pytest, pypdf, yaml, openpyxl" >/dev/null 2>&1 || missing="$missing python-packages"
-python3 -m ruff --version >/dev/null 2>&1 || missing="$missing ruff"
+python3 -c "import sys; sys.path.insert(0, 'tools'); import local_path; local_path.use_venv(); import pytest, pypdf, yaml, openpyxl" >/dev/null 2>&1 || missing="$missing python-packages"
+if [ "$CONTAINER" = 1 ]; then
+  python3 -m ruff --version >/dev/null 2>&1 || missing="$missing ruff"
+fi
 
 if [ -n "$missing" ]; then
   echo "setup_env: still missing:$missing"
+  [ "$CONTAINER" = 0 ] && echo "setup_env: \`python3 tools/env_check.py --fix\` installs them"
   exit 1
 fi
 echo "setup_env: ready"

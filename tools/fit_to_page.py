@@ -32,6 +32,7 @@ import skills_block
 import bullet_library as LIB
 import untrusted
 import docpaths
+import pdftext
 import person
 
 # How many pages the resume fills: documents.resume_pages, default one. One page
@@ -77,16 +78,19 @@ RENDERED_PROSE = ("p1", "p2", "lead", "p4")
 
 
 def _pages(pdf):
-    out = subprocess.run(["pdfinfo", pdf], capture_output=True, text=True).stdout
-    m = re.search(r"Pages:\s+(\d+)", out)
-    return int(m.group(1)) if m else 9
+    """The page count, read with pypdf (tools/pdftext.py), so no system package is needed.
+    9 when the PDF cannot be read, which no caller mistakes for a fit: _compile raises
+    first when no PDF was made."""
+    n = pdftext.pages(pdf)
+    return 9 if n is None else n
 
 
 def _lines(pdf):
-    """Non-blank text lines, for the report only. One pdftotext run."""
-    p = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
-                       capture_output=True, text=True)
-    return len([l for l in p.stdout.splitlines() if l.strip()])
+    """Non-blank text lines, for the report only."""
+    try:
+        return len([l for l in pdftext.text(pdf).splitlines() if l.strip()])
+    except pdftext.Unreadable:
+        return 0
 
 
 def resume_pdf(abbr):
@@ -95,6 +99,12 @@ def resume_pdf(abbr):
 
 def letter_pdf(abbr):
     return docpaths.letter_pdf(abbr)
+
+
+# One LaTeX run takes seconds. Nothing stopped one that never ended: MiKTeX asks before
+# it installs a package it lacks, and with nobody to answer, the compile, the fit and the
+# chat waited for ever.
+COMPILE_TIMEOUT = 300
 
 
 class CompileFailed(RuntimeError):
@@ -133,8 +143,21 @@ def _compile(engine, tex, cwd, pdf, passes=1):
         pass
     last = None
     for _ in range(passes):
-        last = subprocess.run([engine, "-interaction=nonstopmode", tex],
-                              cwd=cwd, capture_output=True, env=tex_env())
+        try:
+            last = subprocess.run([engine, "-interaction=nonstopmode", tex],
+                                  cwd=cwd, capture_output=True, env=tex_env(),
+                                  stdin=subprocess.DEVNULL, timeout=COMPILE_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            raise CompileFailed(
+                f"{engine} was still running on {os.path.basename(tex)} after "
+                f"{COMPILE_TIMEOUT // 60} minutes, so it was stopped. A LaTeX that installs "
+                f"what it is missing as it goes (MiKTeX) can wait for a yes that never "
+                f"comes: `python3 tools/env_check.py --fix` turns that into a silent "
+                f"install. Then render again.") from None
+        except FileNotFoundError:
+            raise CompileFailed(
+                f"{engine} is not on this computer, so the documents cannot be made: "
+                f"`python3 tools/env_check.py --fix` installs LaTeX (no password).") from None
     out = (last.stdout or b"").decode("utf-8", "replace") if last else ""
     if not os.path.exists(pdf):
         tail = out.splitlines()
@@ -196,28 +219,20 @@ def missing_characters(log):
 
 
 def font_problems(pdf):
-    """Plain lines for each font in `pdf` that is not embedded or is a Type 3 (bitmap) font,
-    from Poppler's pdffonts; [] when every font is embedded, or pdffonts cannot run. A font
-    left out of the file is replaced by whatever the reader's machine has, and a parser may
-    read it wrongly; a Type 3 font prints blurred and many parsers read it as nothing."""
+    """Plain lines for each font in `pdf` that is not embedded or is a Type 3 (bitmap) font;
+    [] when every font is embedded, or the PDF cannot be read. A font left out of the file
+    is replaced by whatever the reader's machine has, and a parser may read it wrongly; a
+    Type 3 font prints blurred and many parsers read it as nothing. Read with pypdf
+    (tools/pdftext.py), the facts Poppler's pdffonts printed, so nothing extra is needed."""
     if not os.path.exists(pdf):
         return []
-    try:
-        got = subprocess.run(["pdffonts", pdf], capture_output=True, text=True)
-    except (FileNotFoundError, OSError):
-        return []
-    if got.returncode != 0:
-        return []
     out = []
-    for line in (got.stdout or "").splitlines()[2:]:
-        cols = line.split()
-        if len(cols) < 7:
-            continue
-        name, kind, emb = cols[0], " ".join(cols[1:-6]), cols[-5]
-        if emb.lower() == "no":
+    for f in pdftext.fonts(pdf) or []:
+        name = f["name"]
+        if not f["embedded"]:
             out.append(f"the font {name} is not embedded in {os.path.basename(pdf)}, so the "
                        f"reader's machine puts another in its place")
-        elif kind.startswith("Type 3"):
+        elif f["type"].startswith("Type3"):
             out.append(f"the font {name} in {os.path.basename(pdf)} is a Type 3 (bitmap) font, "
                        f"which prints blurred and many parsers read as nothing")
     return out
@@ -233,14 +248,15 @@ def compile_resume(abbr, passes=1):
     trimming therefore printed "1/2" on a one-page document, and shipped that
     way. So measurements stay at one pass and the final render asks for two.
     """
+    # Where the renderer wrote it: the checkout, or LJS_STATE's folder when that is set.
     return _compile("lualatex", docpaths.resume_stem(abbr) + ".tex",
-                    f"{ROOT}/cv", resume_pdf(abbr), passes)
+                    os.path.dirname(docpaths.resume_tex(abbr)), resume_pdf(abbr), passes)
 
 
 def compile_letter(abbr):
     """One xelatex pass; returns the page count."""
     return _compile("xelatex", docpaths.letter_stem(abbr) + ".tex",
-                    f"{ROOT}/cover_letters", letter_pdf(abbr))
+                    os.path.dirname(docpaths.letter_tex(abbr)), letter_pdf(abbr))
 
 
 def body_words(a):

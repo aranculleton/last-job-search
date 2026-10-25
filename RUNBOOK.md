@@ -5,10 +5,9 @@ spends them only on writing.
 
 ## 0. Fresh container, or a computer of your own
 
-`./tools/setup_env.sh` does all of this where it can, and is a no-op when it is done. By hand,
-in a cloud container (Debian or Ubuntu), the install is the one line in that script's header,
-the same line START_HERE.md has a person paste into the cloud environment's setup script:
-TeX and Poppler, then `cffi` before the Python packages. Then:
+In a cloud container, `./tools/setup_env.sh` does all of this and is a no-op when it is done:
+the one line in that script's header, the same line a person pastes into the cloud
+environment's setup script, is TeX, then `cffi` before the Python packages. Then:
 
 ```bash
 ./tools/ci_local.sh                 # in the app, before a change: every check CI runs, under two minutes
@@ -17,16 +16,15 @@ TeX and Poppler, then `cffi` before the Python packages. Then:
 A person's repo needs neither before work starts: the day's sync runs their own tests when an
 update arrives, and `./tools/ci_local.sh --quick` runs before a merge.
 
-On a Mac (Homebrew; the TeX install asks for the Mac's password once):
+On a computer of their own (a Mac, Windows or Linux), Claude runs one command and the person
+installs nothing first: no Homebrew, no winget, no password.
 
 ```bash
-brew install --cask mactex-no-gui   # nothing to add to the shell: the app finds /Library/TeX/texbin
-brew install poppler
-brew install oven-sh/bun/bun
-python3 -m pip install --user -r requirements.txt   # the Mac's own python3 (3.9) is enough
-./tools/ci_local.sh
+python3 tools/env_check.py --fix    # TinyTeX, Bun, gh and the Python packages, in their own folders
+python3 tools/env_check.py          # then: what is here, one line each
 ```
 
+A computer with nothing set up yet, not even this copy, starts from [COMPUTER.md](COMPUTER.md).
 Full detail, including why `cffi` comes first and which Python to use, is in [SETUP.md](SETUP.md).
 
 **`$SCRATCH` below is any folder outside the repo**: the session's scratchpad in a
@@ -388,7 +386,7 @@ tracker row, and 0 claim errors. All of it committed, and on master.
 | `python3 tools/network/openalex.py "<employer>"` | Researchers who put the employer on a recent paper, only when `profile/networking.py` sets `OPENALEX`. A cloud session needs `OPENALEX_API_KEY` (SETUP.md). |
 | `python3 tools/exclude.py` | Rulings in `seen_jobs.json`, each with what it rests on. `add <url> --reason "<why>" [--basis person] [--rests-on "<part>"]` rules a posting out (a reason that cites "blocker N" names its part by itself), `lift "<words in the reason>"` takes rulings off when the person changes their mind, `review` groups older rulings that record no basis, `stamp "<words>" --basis rules\|person` records what a group rests on, `parts` lists the parts of the rules a ruling can rest on, `lapsed` the rulings a rules change lapsed and `restamp "<words>" --rests-on "<part>"\|all` keeps the ones that still hold; `--url` narrows lift, stamp and restamp to named postings when reasons are word for word the same; and `rules` prints the rules fingerprint. |
 | `python3 tools/sync_app.py` | Takes the app's updates and never sends anything back. `--if-stale` pulls master and syncs once a day and is a no-op after that; `--on "<model>"` ends the day's sync with the model check (`tools/model_guide.py`); `--check` says how far behind, changing nothing. Exit 1 stopped with nothing changed, 2 the app could not be reached. |
-| `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, Poppler, pypdf, Bun and every job board's host, with what to do about anything missing. |
+| `python3 tools/env_check.py` | Whether this session can do the whole job, one line each: LaTeX, pypdf, Node or Bun, gh and every job board's host, with what to do about anything missing. `--fix` installs what a computer lacks into the person's own folders with no password (tools/installs.py); in a cloud chat it runs `setup_env.sh`. |
 | `python3 tools/network/state.py` | What is owed, the requests sent and InMail credits left, the tracker links, and **RECONCILE**: every place the contact book disagrees with the message log. An orphaned thread sits undetected unless something runs it. Findings that need a person are listed; relationships that simply predate the message log are counted, not repeated. `withdraw <contact_id>...` (or `--all-due`) records connection requests the person has withdrawn: a `request_withdrawn` row and the contact closed, so they are never surfaced again. `nudge <contact_id> --text-file <file>` logs a nudge that went, with its words, and `message <contact_id> ...` any other later message (`--texts <file.json>` for several); the BUDGET line counts the requests sent this week and today, with no cap of the app's own: LinkedIn says when its own limit is reached. |
 
 `tools/bridges.py` reads the honest-framing table (`profile/skills.py` BRIDGES): for each

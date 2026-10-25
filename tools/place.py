@@ -278,7 +278,8 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
         lines = ["This computer is missing a few things. I install them myself, one at a time; "
                  "a mark says what may come up on your screen while I do:"]
         mark = {"password": "  [a window may ask for your computer's password]",
-                "sign-in": "  [a page opens in your browser to sign in to GitHub]"}
+                "sign-in": "  [a page opens in your browser to sign in to GitHub]",
+                "dialog": "  [a window asks to install Apple's developer tools: choose Install]"}
         for what, cmd, whose in fixes:
             lines.append(f"  - {what}: {cmd}{mark.get(whose, '')}")
         out.append("\n".join(lines))

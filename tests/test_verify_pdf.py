@@ -98,7 +98,7 @@ class VerifyPdfTests(unittest.TestCase):
 class RunToolTests(unittest.TestCase):
     @patch("tools.verify_pdf.subprocess.run", side_effect=FileNotFoundError)
     def test_reports_missing_poppler_command(self, _mock_run):
-        with self.assertRaisesRegex(VerificationError, "pip install pypdf"):
+        with self.assertRaisesRegex(VerificationError, r"env_check\.py --fix. installs pypdf"):
             run_tool(["pdftotext", "example.pdf", "-"])
 
     @patch("tools.verify_pdf.subprocess.run")

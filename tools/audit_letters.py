@@ -5,7 +5,7 @@ closing are. Rendering checks read the compiled PDF text, which is what the
 reader sees. Each rule is one from 03-writing-style.md or
 06-cover-letter-templates.md that a letter in this repo has actually broken.
 """
-import re, subprocess, sys, os
+import re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
 from fit_to_page import body_words, load
@@ -248,14 +248,11 @@ def pdf_text(abbr):
     pdf = docpaths.letter_pdf(abbr)
     if not os.path.exists(pdf):
         raise FileNotFoundError(f"no compiled letter at {pdf}; render it before auditing")
+    import pdftext
     try:
-        out = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
-                             capture_output=True, text=True)
-    except FileNotFoundError as exc:
-        raise RuntimeError("pdftotext is not installed; see SETUP.md") from exc
-    if out.returncode != 0:
-        raise RuntimeError(f"pdftotext failed on {pdf}: {out.stderr.strip()[:200]}")
-    return out.stdout
+        return pdftext.text(pdf)
+    except pdftext.Unreadable as exc:
+        raise RuntimeError(str(exc)) from None
 
 
 # The opener 03-writing-style.md bans: a first sentence that announces the
