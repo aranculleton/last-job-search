@@ -75,3 +75,30 @@ def test_a_windows_checkout_keeps_scripts_lf_and_binaries_byte_for_byte(tmp_path
     (win / "run.sh").write_bytes(b"#!/usr/bin/env bash\r\nset -uo pipefail\r\necho ok\r\n")
     git(win, "add", "run.sh")
     assert git(win, "diff", "--cached", "--name-only").strip() == ""
+
+
+def test_a_windows_checkout_made_before_the_rule_is_given_lf_by_the_sync(tmp_path):
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app
+    src = tmp_path / "src"
+    src.mkdir()
+    git(src, "init", "-q", "-b", "master")
+    (src / "run.sh").write_bytes(b"#!/usr/bin/env bash\nset -uo pipefail\necho ok\n")
+    (src / "notes.md").write_bytes(b"one\ntwo\n")
+    git(src, "add", "-A")
+    git(src, "commit", "-q", "-m", "before the rule")
+    win = tmp_path / "win"
+    git(tmp_path, "-c", "core.autocrlf=true", "clone", "-q", str(src), str(win))
+    git(win, "config", "core.autocrlf", "true")
+    assert b"\r\n" in (win / "run.sh").read_bytes()          # what Windows checked out
+    shutil.copy(os.path.join(ROOT, ".gitattributes"), src / ".gitattributes")
+    git(src, "add", "-A")
+    git(src, "commit", "-q", "-m", "the rule")
+    git(win, "pull", "-q", "--no-rebase")
+    (win / "notes.md").write_bytes(b"one\r\ntwo\r\nmine\r\n")    # a change of its own
+    assert b"\r" in (win / "run.sh").read_bytes()            # the update left it CRLF
+    assert sync_app.lf_checkout(str(win)) == 1
+    assert b"\r" not in (win / "run.sh").read_bytes()
+    assert (win / "notes.md").read_bytes() == b"one\r\ntwo\r\nmine\r\n"
+    assert git(win, "status", "--porcelain").strip() == "M notes.md"

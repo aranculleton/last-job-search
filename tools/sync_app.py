@@ -572,6 +572,42 @@ def plain_state_endings(root: str | None = None) -> str:
             "them with another program no longer changes every line" % ", ".join(need))
 
 
+def lf_checkout(root: str | None = None) -> int:
+    """Rewrite, from the repo, every file this checkout still holds with CRLF where the repo
+    now asks for LF and the file has no change of its own. A Windows checkout made before
+    .gitattributes said `* text=auto eol=lf` keeps CRLF in every file the update did not
+    touch, and a CRLF shell script stops at its first line in bash; git calls them unchanged,
+    so nothing else ever rewrites them. Returns how many it rewrote. Never raises."""
+    root = root or ROOT
+    try:
+        out = run_git(root, "ls-files", "--eol", "-z").stdout
+        need = []
+        for rec in out.split("\0"):
+            meta, _, path = rec.partition("\t")
+            f = meta.split()
+            if path and len(f) >= 3 and f[0] == "i/lf" and f[1] in ("w/crlf", "w/mixed") \
+                    and "eol=lf" in meta:
+                need.append(path)
+        done = 0
+        for i in range(0, len(need), 100):
+            part = need[i:i + 100]
+            if run_git(root, "diff", "--quiet", "--", *part).returncode:
+                part = [p for p in part if not run_git(root, "diff", "--quiet", "--",
+                                                       p).returncode]
+            # Removed, then checked out: git skips writing a file it counts as up to date,
+            # and these all are (checkout-index -f too, tried 2026-10-25).
+            for path in part:
+                try:
+                    os.remove(os.path.join(root, path))
+                except OSError:
+                    pass
+            if part and not run_git(root, "checkout", "--", *part).returncode:
+                done += len(part)
+        return done
+    except Exception:  # noqa: BLE001  a tidy-up must never stop the sync it follows
+        return 0
+
+
 # The state files .gitattributes keeps with plain line endings.
 _STATE_FILES = ("job_search_tracker.csv", "network_contacts.csv", "network_threads.csv",
                 "job_scraper/seen_jobs.json", "documents/interview/question_bank.csv")
@@ -985,6 +1021,10 @@ def main(argv: list[str]) -> int:
         said = plain_state_endings()
         if said:
             print("sync_app: " + said)
+        n = lf_checkout()
+        if n:
+            print(f"sync_app: {n} file(s) on this computer given plain line endings, as the "
+                  "app now keeps them; nothing in them changed")
         upgrades("--after-sync")
         model_check(a.on)
         place_check(a.tools)
