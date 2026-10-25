@@ -17,7 +17,9 @@ log alone. The tracker was written with a plain DictWriter, which turned every
 
 from __future__ import annotations
 
+import codecs
 import csv
+import io
 import os
 import re
 import sys
@@ -84,11 +86,62 @@ def refuse_conflicts(path: str) -> None:
             "then run this again.")
 
 
+# A run of bytes only UTF-8 writes: a lead byte and its continuation bytes. A file holding
+# one is UTF-8 with a damaged byte somewhere, never Windows' own encoding, which writes
+# none of these pairs for ordinary text.
+_UTF8_RUN = re.compile(rb"[\xc2-\xf4][\x80-\xbf]+")
+
+
+def read_text(path: str) -> str:
+    """A state file's text, read the way it was saved.
+
+    The app saves UTF-8, and so does git. A spreadsheet often does not: Excel's "CSV UTF-8"
+    starts the file with a byte-order mark, which read as part of the first column's name
+    ("\\ufeffcontact_id"), so every row lost its id, every contact became an orphan and
+    the same people could be messaged twice; its plain "CSV" saves in Windows' own encoding
+    (cp1252), which stopped every tool with UnicodeDecodeError. The mark is dropped, and a
+    file in Windows' encoding is read that way and saved back as UTF-8 at once, keeping
+    every byte of its line endings, with one plain line to say so. Raises OSError when the
+    file cannot be read."""
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    if raw.startswith(codecs.BOM_UTF8):
+        raw = raw[len(codecs.BOM_UTF8):]
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    if _UTF8_RUN.search(raw):
+        # UTF-8 with a damaged byte: read as UTF-8, the one character shown as "?" in a
+        # diamond, and the file left as it is for a person to look at.
+        print(f"state: {os.path.basename(path)} has a damaged character in it; read around "
+              "it, and the file left as it was", file=sys.stderr)
+        return raw.decode("utf-8", errors="replace")
+    text = raw.decode("cp1252", errors="replace")
+    try:
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        print(f"state: {os.path.basename(path)} was saved by another program in Windows' "
+              "older text format; it is read that way and saved back in the app's own "
+              "(UTF-8), with nothing in it changed", file=sys.stderr)
+    except OSError:
+        pass
+    return text
+
+
+def dict_rows(path: str, refuse: bool = True) -> list[dict]:
+    """csv.DictReader over a state file read the way it was saved (read_text), refusing a
+    file git left with conflict markers unless `refuse` is False. Raises OSError when there
+    is no file."""
+    if refuse:
+        refuse_conflicts(path)
+    return [dict(r) for r in csv.DictReader(io.StringIO(read_text(path), newline=""))]
+
+
 def header(path: str) -> list[str]:
     """The file's header row, stripped, or [] when there is no file."""
     try:
-        with open(path, newline="", encoding="utf-8") as f:
-            return [h.strip() for h in next(csv.reader(f), [])]
+        return [h.strip() for h in next(csv.reader(io.StringIO(read_text(path), newline="")), [])]
     except OSError:
         return []
 
@@ -102,10 +155,9 @@ def write_rows(path: str, rows, columns) -> None:
     # Only columns already in the file's header count: a key a tool put on a
     # row in memory (a search snippet, a review flag) is not a column.
     try:
-        with open(path, newline="", encoding="utf-8") as f:
-            first = f.readline()
-            f.seek(0)
-            head = next(csv.reader(f), [])
+        text = read_text(path)
+        first = io.StringIO(text, newline="").readline()
+        head = next(csv.reader(io.StringIO(text, newline="")), [])
     except OSError:
         first, head = "", []
     fields = [k for k in dict.fromkeys(head) if k] or list(columns)
@@ -141,16 +193,15 @@ def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:
             write_rows(path, [], columns)
         return []
     refuse_conflicts(path)
-    with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.reader(f)
-        head = [h.strip() for h in next(reader, [])]
-        rows = []
-        for raw in reader:
-            if not any(cell.strip() for cell in raw):
-                continue
-            row = {c: "" for c in columns}
-            for i, name in enumerate(head):
-                if name:
-                    row[name] = raw[i] if i < len(raw) else ""
-            rows.append(row)
+    reader = csv.reader(io.StringIO(read_text(path), newline=""))
+    head = [h.strip() for h in next(reader, [])]
+    rows = []
+    for raw in reader:
+        if not any(cell.strip() for cell in raw):
+            continue
+        row = {c: "" for c in columns}
+        for i, name in enumerate(head):
+            if name:
+                row[name] = raw[i] if i < len(raw) else ""
+        rows.append(row)
     return rows

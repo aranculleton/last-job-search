@@ -47,7 +47,8 @@ LOCAL_HOME = {
 }
 
 def run_git(args: list[str]) -> tuple[int, str, str]:
-    res = subprocess.run(["git"] + args, cwd=str(ROOT), capture_output=True, text=True)
+    res = subprocess.run(["git"] + args, cwd=str(ROOT), capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
     return res.returncode, res.stdout, res.stderr
 
 def get_remote_url(remote_name: str) -> str:

@@ -332,7 +332,7 @@ def main() -> int:
     a = ap.parse_args()
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
 
-    data = json.load(open(a.infile))
+    data = json.load(open(a.infile, encoding="utf-8"))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
     out = sorted((score(j, today) for j in jobs),
                  key=lambda x: -x["opportunity"])
@@ -341,7 +341,7 @@ def main() -> int:
     # to --top silently shipped a 1-row file to the next stage, and nothing
     # errored: the run just produced an empty shortlist.
     if a.out:
-        json.dump(out, open(a.out, "w"), indent=1)
+        json.dump(out, open(a.out, "w", encoding="utf-8"), indent=1)
     for j in out[:a.top]:
         print(f"{j['opportunity']:>4}  {(j.get('company') or '')[:30]:30} "
               f"{(j.get('title') or '')[:52]}")

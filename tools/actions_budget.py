@@ -49,7 +49,8 @@ def _repo() -> str:
     import subprocess
     try:
         url = subprocess.run(["git", "remote", "get-url", "origin"],
-                             capture_output=True, text=True, check=True).stdout.strip()
+                             capture_output=True, text=True, check=True,
+                             encoding="utf-8", errors="replace").stdout.strip()
     except Exception:
         return ""
     url = url.removesuffix(".git")

@@ -258,11 +258,12 @@ def done_before(area: str) -> bool:
     scenarios = DONE_BEFORE.get(area)
     if not scenarios:
         return False
+    import csv_store
     try:
-        with open(person.state("network_threads.csv"), newline="", encoding="utf-8") as fh:
-            return any(str(r.get("direction") or "").strip() == "out"
-                       and str(r.get("scenario") or "").strip() in scenarios
-                       for r in csv.DictReader(fh))
+        return any(str(r.get("direction") or "").strip() == "out"
+                   and str(r.get("scenario") or "").strip() in scenarios
+                   for r in csv_store.dict_rows(person.state("network_threads.csv"),
+                                                refuse=False))
     except (OSError, csv.Error):
         return False
 

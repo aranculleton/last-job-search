@@ -288,10 +288,10 @@ if __name__ == "__main__":
 
 def _learn_from_state() -> None:
     import csv
+    import csv_store
     for f in ("job_search_tracker.csv", "network_contacts.csv"):
         try:
-            with open(person.state(f), newline="", encoding="utf-8") as fh:
-                learn(r.get("company") for r in csv.DictReader(fh))
+            learn(r.get("company") for r in csv_store.dict_rows(person.state(f), refuse=False))
         except (OSError, ValueError, csv.Error):
             pass
 

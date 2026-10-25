@@ -50,7 +50,7 @@ def _run(cmd, cwd, env=None, timeout=1800):
     t = time.time()
     try:
         r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
-                           timeout=timeout)
+                           timeout=timeout, encoding="utf-8", errors="replace")
         out, code = (r.stdout or "") + (r.stderr or ""), r.returncode
     except subprocess.TimeoutExpired as e:
         out = ((e.stdout or b"").decode("utf-8", "replace") if isinstance(e.stdout, bytes)
@@ -60,7 +60,8 @@ def _run(cmd, cwd, env=None, timeout=1800):
 
 
 def _git(*args, cwd):
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 class Rehearsal:
@@ -178,7 +179,26 @@ def start_commit(repo: str, ref: str, origin: str) -> tuple[str, str]:
         said = f"{ref} ({sha[:12]}) is on no branch of {repo}: copied by its commit"
     if _git("update-ref", "refs/heads/master", sha, cwd=origin).returncode:
         return "", f"{ref} ({sha[:12]}) could not be made the copy's master"
+    # A clone checks out the branch the copy's HEAD names, which a bare clone takes from the
+    # repo it copied: whatever branch that checkout was on, not --ref (2026-10-25, a
+    # rehearsal ran a scratch branch's tests). Master, which now holds --ref, it is.
+    if _git("symbolic-ref", "HEAD", "refs/heads/master", cwd=origin).returncode:
+        return "", f"the copy of {repo} could not be pointed at {ref} ({sha[:12]})"
     return sha, said
+
+
+def folder_said(out: str) -> str:
+    """The folder `sync_app.py --worktree` said it made, or "". It quotes a path with a
+    space, which a bare run of non-spaces cut at the space and read as no folder at all."""
+    import shlex
+    m = re.search(r"own folder is ('(?:[^']|'\\'')*'|\S+), on branch", out)
+    if not m:
+        return ""
+    try:
+        got = shlex.split(m.group(1))
+    except ValueError:
+        return ""
+    return got[0].rstrip(",") if got else ""
 
 
 def copy_app(here: str, app: str, sha: str) -> str:
@@ -215,7 +235,8 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
         for cmd, cwd in (() if failed else
                          ((["git", "tag", "-f", CANDIDATE_TAG, sha], app),
                           (["git", "clone", "-q", "--bare", "--no-local", repo, origin], tmp))):
-            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
             if r.returncode:
                 failed = f"{' '.join(cmd[:3])}: {(r.stderr or r.stdout).strip()[:300]}"
                 break
@@ -249,8 +270,7 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
         ok, out = reh.check("computer", "a folder of its own",
                             [py, "tools/sync_app.py", "--worktree", "rehearsal"], local,
                             envs["computer"])
-        m = re.search(r"own folder is (\S+), on branch", out)
-        wt = m.group(1).rstrip(",") if m else ""
+        wt = folder_said(out)
         if wt and os.path.isdir(wt):
             reh.check("computer", "take the update", [py, "tools/sync_app.py", "--on",
                                                       "rehearsal", "--tools", "none"],

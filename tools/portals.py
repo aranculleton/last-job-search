@@ -234,7 +234,7 @@ def cli(skill: str, env: str | None = None) -> str:
     os.makedirs(os.path.dirname(dist), exist_ok=True)
     build = subprocess.run(["bun", "build", src, "--target", "node",
                             "--outfile", dist],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     if build.returncode or not os.path.exists(dist):
         raise RuntimeError("bun build failed for %s:\n%s"
                            % (skill, (build.stderr or build.stdout)[:800]))
@@ -324,7 +324,8 @@ def run_cli(cmd: list[str], timeout: int = 90, empty=None) -> tuple[dict | None,
     try:
         with tempfile.TemporaryFile("w+", encoding="utf-8") as fh:
             p = subprocess.run(cmd, stdout=fh, stderr=subprocess.PIPE,
-                               text=True, timeout=timeout, env=env)
+                               text=True, timeout=timeout, env=env,
+                               encoding="utf-8", errors="replace")
             fh.seek(0)
             out = fh.read()
         said = refusal(p.stderr)

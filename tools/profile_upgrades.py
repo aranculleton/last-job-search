@@ -237,14 +237,23 @@ def _probe(code: str) -> str:
             return got
     prelude = "import sys; sys.path[:0] = %r\n" % (_probe_path(),)
     try:
-        r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=os.environ,
-                           capture_output=True, text=True, timeout=PROBE_SECONDS)
+        r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=_utf8_child(),
+                           capture_output=True, text=True, timeout=PROBE_SECONDS,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return r.stdout.strip() if r.returncode == 0 else ""
 
 
 PROBE_SECONDS = 120
+
+
+def _utf8_child() -> dict:
+    """The environment for a Python this reads the output of as UTF-8: told to write it.
+    On a Windows terminal in cp1252 (or PYTHONIOENCODING=cp1252) a probe printing "café –"
+    wrote cp1252, which read back as two stand-in characters, and the same probe answered
+    differently alone and inside a look."""
+    return dict(os.environ, PYTHONIOENCODING="utf-8")
 
 
 def _probe_path() -> list[str]:
@@ -297,7 +306,7 @@ def _one_interpreter():
 def _start_worker():
     try:
         proc = subprocess.Popen([sys.executable, "-c", _WORKER % (_probe_path(),)], cwd=ROOT,
-                                env=os.environ, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                env=_utf8_child(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, encoding="ascii",
                                 errors="replace")
     except OSError:
@@ -1793,7 +1802,8 @@ def plan(rows: list[tuple[Upgrade, str]] | None = None) -> list[dict]:
 # ------------------------------------------------------------------ instant
 
 def _git(*args: str, check: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check)
+    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check,
+                          encoding="utf-8", errors="replace")
 
 
 def _changed() -> set[str]:
@@ -1855,7 +1865,8 @@ def fetch_master() -> None:
 def _fetch(*spec: str) -> bool:
     try:
         return subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", *spec],
-                              capture_output=True, text=True, timeout=60).returncode == 0
+                              capture_output=True, text=True, timeout=60,
+                              encoding="utf-8", errors="replace").returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -1886,7 +1897,8 @@ def push_claim() -> str:
     try:
         r = subprocess.run(["git", "-C", ROOT, "push", "-q", "origin",
                             "%s:%s%s" % (sha, CLAIM_REFS, app)],
-                           capture_output=True, text=True, timeout=60, env=env)
+                           capture_output=True, text=True, timeout=60, env=env,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     if r.returncode == 0:
@@ -2092,16 +2104,25 @@ def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     for u, _why in rows:
         if u.cost != "instant" or not u.command:
             continue
-        r = subprocess.run(list(u.command), cwd=ROOT, text=True, capture_output=True, timeout=600)
+        # The Python running this one, not whatever `python3` names: on a Windows computer
+        # with python.org's Python `python3` is a Store stand-in that exits 49, and the
+        # upgrade said "not applied" on every sync (build_versions.redo does the same).
+        argv = [sys.executable if u.command[0] == "python3" else u.command[0], *u.command[1:]]
+        try:
+            rc = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=600,
+                                encoding="utf-8", errors="replace").returncode
+            failed = f"exit {rc}" if rc else ""
+        except (OSError, subprocess.TimeoutExpired) as e:
+            failed = f"it could not run: {type(e).__name__}"
         touched = sorted(_changed())
         stray = [p for p in touched
                  if not is_personal(p) or not any(fnmatch.fnmatch(p, g) for g in u.paths)]
-        if r.returncode != 0 or stray:
+        if failed or stray:
             _git("checkout", "--", ".")
             _git("clean", "-fdq", "--", *touched) if touched else None
             notes.append(f"{u.id}: not applied ("
-                         + (f"exit {r.returncode}" if r.returncode else
-                            f"it touched {', '.join(stray[:3])}, outside its own files") + ")")
+                         + (failed or f"it touched {', '.join(stray[:3])}, outside its own files")
+                         + ")")
             continue
         if touched:
             _git("add", "-f", "--", *touched)

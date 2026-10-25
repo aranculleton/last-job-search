@@ -263,7 +263,7 @@ def screening(draft: dict) -> str:
     slug = outreach.slug(draft["company"], draft["role"], draft["abbr"])
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "screening_answers.py"),
                           "--slug", slug, "--company", draft["company"], "--role", draft["role"]],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     return slug if out.returncode == 0 else f"{slug}: FAILED {out.stderr.strip()[-200:]}"
 
 

@@ -39,7 +39,8 @@ import sys
 
 def git(*args: str) -> str:
     return subprocess.run(
-        ["git", *args], capture_output=True, text=True, check=True
+        ["git", *args], capture_output=True, text=True, check=True,
+        encoding="utf-8", errors="replace"
     ).stdout
 
 
@@ -51,10 +52,12 @@ def rev_list(range_spec: str) -> list[str]:
 def patch_id(sha: str) -> str | None:
     """Stable patch-id for a commit, or None if it has no diff."""
     show = subprocess.run(
-        ["git", "show", sha], capture_output=True, text=True, check=True
+        ["git", "show", sha], capture_output=True, text=True, check=True,
+        encoding="utf-8", errors="replace"
     ).stdout
     r = subprocess.run(
-        ["git", "patch-id", "--stable"], input=show, capture_output=True, text=True
+        ["git", "patch-id", "--stable"], input=show, capture_output=True, text=True,
+        encoding="utf-8", errors="replace"
     )
     line = r.stdout.strip()
     return line.split()[0] if line else None

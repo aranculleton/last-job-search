@@ -282,8 +282,9 @@ session cannot see and will duplicate.
 `place.py` lists it, and `gh auth login`, which is the person's to run, when either is
 missing), each chat works in a folder of its own, made once and first, before any other work
 (the sync's first line says so while a chat is in the main folder):
-`python3 tools/sync_app.py --worktree <name>` (`../<repo>-<name>`, on a new, unique branch from
-master), and every command runs there. Two chats in one folder switch branches under each
+`python3 tools/sync_app.py --worktree <name>` (`.claude/worktrees/<name>` inside this folder,
+where Claude Code keeps its own, on a new, unique branch from master), and every command runs
+there: `cd` into it once, and since it is inside the project the chat stays there. Two chats in one folder switch branches under each
 other and fight over git's index. Files git does not carry (the connections export) are read
 from the main folder. Then, from that folder, commit, and:
 
@@ -323,7 +324,8 @@ trusted (the desktop app asks once). Where a merge is still held:
   this. Reply: yes, merge pull request <number>." Then run the merge again, on its own.
 
 It never retries on its own beyond that.
-When the pull request has landed, `git worktree remove <the folder>`.
+When the pull request has landed, `cd` back to the main folder and `git worktree remove <the
+folder>` from there (Windows will not remove a folder a chat is still working in).
 
 ## 5. After the user applies
 

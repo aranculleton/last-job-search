@@ -774,7 +774,7 @@ def _tracked() -> list[str] | None:
     glob over the disk also caught `__pycache__`, so the hash differed between machines."""
     try:
         r = subprocess.run(["git", "-C", ROOT, "ls-files"], text=True, capture_output=True,
-                           timeout=20)
+                           timeout=20, encoding="utf-8", errors="replace")
     except (OSError, subprocess.SubprocessError):
         return None
     return r.stdout.splitlines() if r.returncode == 0 else None
@@ -834,12 +834,14 @@ def _born() -> str:
         return ""
     try:
         shallow = subprocess.run(["git", "-C", ROOT, "rev-parse", "--is-shallow-repository"],
-                                 text=True, capture_output=True, timeout=20).stdout.strip()
+                                 text=True, capture_output=True, timeout=20,
+                                 encoding="utf-8", errors="replace").stdout.strip()
         if shallow != "false":
             return ""
         out = subprocess.run(["git", "-C", ROOT, "log", "--diff-filter=A", "--format=%ad",
                               "--date=short", "--", rel],
-                             text=True, capture_output=True, timeout=20).stdout.split()
+                             text=True, capture_output=True, timeout=20,
+                             encoding="utf-8", errors="replace").stdout.split()
     except (OSError, subprocess.SubprocessError):
         return ""
     return out[-1] if out else ""

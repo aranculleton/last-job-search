@@ -364,19 +364,41 @@ def merge_json(base, ours, theirs, path: str = "", later=None,
 # is relative and each worktree runs its own copy; a checkout too old to have this file
 # merges lines the way git always did.
 # merge_state exits 0 or 1 when it merged; anything else (an old Python, a crash,
-# no python3 at all) and git's own line merge runs instead, which marks every
+# no Python at all) and git's own line merge runs instead, which marks every
 # conflict in the file. The file is never left holding only this side's rows.
-DRIVER = ("if [ -f tools/merge_state.py ]; then python3 tools/merge_state.py %O %A %B %P; "
-          "rc=$?; if [ $rc -le 1 ]; then exit $rc; fi; fi; git merge-file %A %O %B")
+#
+# It runs the Python that installed it, by its full path: `python3` is not a command on
+# a Windows computer with python.org's Python (docs.python.org/3/using/windows.html), so
+# a driver that said python3 fell back to the line merge there on every merge, and two
+# chats' appended rows conflicted. Should that Python have gone since (removed, or a
+# virtual environment deleted), the shell says 126 or 127 and tools/py.sh finds another.
+# Git runs the driver in a shell (on Windows, the one Git Bash brings), so the path is
+# written with forward slashes and single-quoted.
+def _sh_quote(path: str) -> str:
+    return "'" + path.replace("\\", "/").replace("'", "'\\''") + "'"
+
+
+def driver(python: str = "") -> str:
+    exe = _sh_quote(python or sys.executable or "python3")
+    return ("if [ -f tools/merge_state.py ]; then "
+            f"{exe} tools/merge_state.py %O %A %B %P; rc=$?; "
+            "if [ $rc -ge 126 ] && [ -f tools/py.sh ]; then "
+            "sh tools/py.sh tools/merge_state.py %O %A %B %P; rc=$?; fi; "
+            "if [ $rc -le 1 ]; then exit $rc; fi; fi; "
+            "git merge-file -L ours -L base -L theirs %A %O %B")
+
+
+DRIVER = driver()
 
 
 def install(root: str) -> None:
     """Point this repo's git config at the driver. Config is not committed, so every
     container sets it again: two quick config writes, and never an error."""
     import subprocess
-    for k, v in (("name", "state files, row by row"), ("driver", DRIVER)):
+    for k, v in (("name", "state files, row by row"), ("driver", driver())):
         subprocess.run(["git", "-C", root, "config", f"merge.ljs-state.{k}", v],
-                       capture_output=True, text=True, check=False)
+                       capture_output=True, text=True, check=False,
+                       encoding="utf-8", errors="replace")
 
 
 # ------------------------------------------------------------------ which change was later
@@ -524,6 +546,13 @@ def main(argv: list[str]) -> int:
               f"{platform.python_version()} (python3 tools/env_check.py says how to install it)",
               file=sys.stderr)
         return COULD_NOT
+    # What it prints names people ("Łukasz"), and a cp1252 Windows terminal could not show
+    # them: the driver stopped mid-merge and git fell back to its line merge.
+    try:
+        import python_floor
+        python_floor.utf8_stdio()
+    except Exception:  # noqa: BLE001  git runs this alone; nothing else need be importable
+        pass
     if len(argv) != 4:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2

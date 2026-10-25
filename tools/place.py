@@ -146,7 +146,8 @@ def repo() -> tuple:
     """(owner, name) of the person's copy, from its origin; ("", folder) without one."""
     try:
         url = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, text=True,
-                             capture_output=True, timeout=10).stdout.strip()
+                             capture_output=True, timeout=10,
+                             encoding="utf-8", errors="replace").stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
         url = ""
     m = re.search(r"[/:]([^/:]+)/([^/]+?)(?:\.git)?/?$", url)
@@ -551,7 +552,8 @@ def signed_in_ever() -> bool:
 def _told_path() -> str:
     try:
         d = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=ROOT, text=True,
-                           capture_output=True, timeout=10).stdout.strip()
+                           capture_output=True, timeout=10,
+                           encoding="utf-8", errors="replace").stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
         d = ""
     d = d or ".git"

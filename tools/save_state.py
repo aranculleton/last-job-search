@@ -68,7 +68,8 @@ def paths(root: str = ROOT) -> tuple[list[str], list[str]]:
 
 
 def _git(root: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 def _under(rel: str) -> bool:
@@ -88,7 +89,19 @@ def gone(root: str = ROOT) -> list[str]:
     return [p for p in dict.fromkeys(r.stdout.split("\0")) if p and _under(p)]
 
 
+
+def _utf8_stdio() -> None:
+    """The terminal in UTF-8 whatever the computer's code page (python_floor.utf8_stdio): a
+    name with "Ł" in it stopped this on a cp1252 Windows terminal. Never raises."""
+    try:
+        import python_floor
+        python_floor.utf8_stdio()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main(argv: list[str] | None = None, root: str = ROOT) -> int:
+    _utf8_stdio()
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] in (["-h"], ["--help"]):
         print(__doc__.strip())

@@ -602,7 +602,7 @@ def main() -> int:
     ap.add_argument("--threads", default=None,
                     help="message log (default: the network_threads.csv beside --contacts)")
     a = ap.parse_args()
-    data = json.load(open(a.infile))
+    data = json.load(open(a.infile, encoding="utf-8"))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
 
     # A live conversation at the employer changes the odds more than any line in
@@ -680,7 +680,7 @@ def main() -> int:
     out.sort(key=lambda x: (-x["priority"], -x.get("priority_exact", 0),
                             -(x.get("fit") or 0), -(x.get("opportunity") or 0)))
     if a.out:
-        json.dump(out, open(a.out, "w"), indent=1)
+        json.dump(out, open(a.out, "w", encoding="utf-8"), indent=1)
     for j in out[:a.top]:
         print(f"  pri{j['priority']:>4} fit{j['fit']:>4} opp{str(j.get('opportunity')):>4}  "
               f"{(j.get('company') or '')[:28]:28} {(j.get('title') or '')[:46]}")

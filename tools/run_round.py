@@ -292,7 +292,7 @@ def round_order(path: str) -> tuple:
 def write_summary(shortlist_path, out_dir, name):
     """The compact shortlist, and where it was written."""
     try:
-        rows = json.load(open(shortlist_path))
+        rows = json.load(open(shortlist_path, encoding="utf-8"))
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -301,7 +301,7 @@ def write_summary(shortlist_path, out_dir, name):
            for r in rows[:KEEP_TOP]]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s.json" % name)
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return path
@@ -334,13 +334,13 @@ def slim(path):
     """Rewrite a stage file without the posting bodies. Returns bytes saved."""
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path))
+        rows = json.load(open(path, encoding="utf-8"))
     except Exception:
         return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
     out = [{k: v for k, v in r.items() if k != BODY_FIELD} if isinstance(r, dict) else r
            for r in rows]
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -362,7 +362,7 @@ def trim(path, top=KEEP_TOP):
     """
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path))
+        rows = json.load(open(path, encoding="utf-8"))
     except Exception:
         try:
             size = os.path.getsize(path)
@@ -371,7 +371,7 @@ def trim(path, top=KEEP_TOP):
         except OSError:
             return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(rows[:top], fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -451,7 +451,7 @@ def yield_of(path):
     A row with no fit, from before fit.py, is counted by its priority.
     """
     try:
-        rows = json.load(open(path))
+        rows = json.load(open(path, encoding="utf-8"))
     except Exception:
         return 0, 0
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -462,7 +462,7 @@ def yield_of(path):
 
 def count(path):
     try:
-        d = json.load(open(path))
+        d = json.load(open(path, encoding="utf-8"))
         return len(d) if isinstance(d, list) else len(d.get("jobs", d))
     except Exception:
         return "?"
@@ -517,13 +517,32 @@ def _boards_not_built() -> list[str]:
         return []
 
 
+class _Parser(argparse.ArgumentParser):
+    """A mistyped option exits 1, a stage broke, as every other failure here does. argparse's
+    own exit for it is 2, which this round keeps for "the yield target was missed": a typo
+    read as a thin market, and the round widened on nothing."""
+
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(1, f"{self.prog}: error: {message}\n")
+
+
+def round_dir(out: str) -> str:
+    """--out as this computer names a folder: separators of either kind, no trailing one.
+    `--out rounds\\r1\\` on Windows kept its trailing backslash, so the round's name came
+    out empty and its shortlist was saved as documents/rounds/.json."""
+    if os.sep == "/":
+        out = out.replace("\\", "/")
+    return os.path.normpath(out)
+
+
 def main():
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
         sync_app.nudge()
     except Exception:
         pass
-    ap = argparse.ArgumentParser()
+    ap = _Parser()
     ap.add_argument("--out", required=True, help="directory for this round's files")
     ap.add_argument("--pages", type=int, default=None,
                     help="default 5 in the cloud and 2 on a person's own computer "
@@ -565,6 +584,7 @@ def main():
                     help="keep the stage files instead of pruning them; they are "
                          "reproducible, so this is for debugging a round that went wrong")
     a = ap.parse_args()
+    a.out = round_dir(a.out)
     # A line this round cannot print in the console's own encoding is printed with a
     # stand-in character, never raised: an accented employer name ended the round.
     for stream in (sys.stdout, sys.stderr):
@@ -712,7 +732,7 @@ def main():
     # below returns, so every exit path leaves the same small footprint.
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
-                            os.path.basename(a.out.rstrip("/")))
+                            os.path.basename(os.path.abspath(a.out)))
     if summary:
         print(f"shortlist summary: {os.path.relpath(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
@@ -757,7 +777,7 @@ def main():
         # the round before's, they compounded, and the third round searched 6x.
         first = a.first_pages or a.pages
         pages = int(first * WIDENINGS[a.round - 1])
-        nxt = f"{a.out.rstrip('/')}_round{a.round + 1}"
+        nxt = f"{a.out}_round{a.round + 1}"
         print(f"\nexpanding: round {a.round + 1} of {MAX_ROUNDS}, "
               f"pages {a.pages} -> {pages}, "
               f"jobage held at {a.jobage} (the freshness rule never widens) -> {nxt}")

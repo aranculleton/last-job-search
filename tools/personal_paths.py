@@ -131,7 +131,8 @@ def changed(root: str = ROOT, base: str = "origin/master") -> list[str] | None:
     """Every path this checkout changed since it left `base`: committed, staged, unstaged
     and untracked (ignored files aside). None when `base` is not known here."""
     def git(*args):
-        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+        return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
     fork = git("merge-base", "HEAD", base)
     if fork.returncode:
         return None
