@@ -136,6 +136,9 @@ make sense to somebody whose repo just received it.
   Linux; a second chat open at the same time is the only one told to take its own folder;
   starting over works in the Mac's own shell.
 - The safety check refuses every setting that would run a command without asking.
+- **On Windows, two chats changing one row** now merge by which change came later, as
+  everywhere else, instead of leaving the row for you to settle.
+- Designs compile from a copy kept under a folder with a space in its name.
 
 ## [3.13.0] - 2026-10-24
 
