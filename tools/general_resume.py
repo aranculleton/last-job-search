@@ -220,8 +220,9 @@ def _verify(drafts_path: str) -> tuple[int, str]:
     py = os.path.join(HERE, "verify_batch.py")
     if os.path.exists(py):
         cmd = [sys.executable, py, drafts_path]
-    elif shutil.which("bash"):
-        cmd = ["bash", os.path.join(HERE, "verify_batch.sh"), drafts_path]
+    elif local_path.bash():
+        # A full path: a bare "bash" on Windows reaches WSL's launcher (local_path.bash).
+        cmd = [local_path.bash(), os.path.join(HERE, "verify_batch.sh"), drafts_path]
     else:
         return 3, "verify_batch: not run, as this computer has neither its Python port nor bash"
     r = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
