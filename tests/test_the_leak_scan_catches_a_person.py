@@ -192,13 +192,18 @@ def test_every_form_of_a_recorded_name_and_company_is_an_entry():
 
 def test_a_phone_number_is_an_entry_in_the_forms_it_is_written_anywhere():
     import build_app
-    assert build_app.phone_forms("+1 312 555 0142") == ["312", "555 0142", "5550142", "0142"]
+    # A North American number as a whole and as its seven-digit local part, never its area
+    # code or last four alone: "212" matched the app's own font files and a (#212) in its
+    # changelog, and a number ending in 2026 would match every date (2026-10-25).
+    assert build_app.phone_forms("+1 312 555 0142") == ["312 555 0142", "555 0142", "5550142"]
+    assert build_app.phone_forms("(212) 555-0168") == ["212 555 0168", "555 0168", "5550168"]
     au = "+61" + " 400 111 222"            # assembled, so this file passes the scan it tests
     assert build_app.phone_forms(au) == ["400 111 222", "0400 111 222"]
     assert build_app.phone_forms("0400 111 222") == ["0400 111 222"]
     assert build_app.phone_forms("020 7946 0011") == ["020 7946 0011"]
     # never a short group on its own: it would match everywhere
-    assert all(len(f.replace(" ", "")) >= 4 for f in build_app.phone_forms("+44 7700 900123"))
+    for number in ("+44 7700 900123", "+1 416 555 0126", "416-555-0126"):
+        assert all(len(f.replace(" ", "")) >= 7 for f in build_app.phone_forms(number)), number
 
 
 def test_git_mode_scans_what_would_be_committed_and_nothing_else(tmp_path, monkeypatch):
