@@ -27,8 +27,9 @@ def test_tracking_comes_off_and_the_job_stays():
     for seen, shown in (
         ("https://www.linkedin.com/jobs/view/data-analyst-4012345678/?refId=a1&trackingId=b2"
          "&trk=public_jobs_topcard", "https://www.linkedin.com/jobs/view/data-analyst-4012345678/"),
+        # gh_src is where the click came from, as utm_source is, not which job.
         ("https://boards.greenhouse.io/oakmere/jobs/123?gh_jid=123&gh_src=li&utm_source=x",
-         "https://boards.greenhouse.io/oakmere/jobs/123?gh_jid=123&gh_src=li"),
+         "https://boards.greenhouse.io/oakmere/jobs/123?gh_jid=123"),
         ("https://jobs.lever.co/oakmere/abc-123?lever-origin=applied&lever-source=LinkedIn",
          "https://jobs.lever.co/oakmere/abc-123"),
         ("https://careers.oakmere.example/job?id=77&utm_campaign=fall&ref=board",
@@ -43,6 +44,17 @@ def test_tracking_comes_off_and_the_job_stays():
         assert al.clean(seen) == shown, seen
         # The posting is the same posting to every stage that matches on its key.
         assert norm(al.clean(seen)) == norm(seen), seen
+
+
+def test_one_posting_has_one_key_wherever_the_click_came_from():
+    """Greenhouse's gh_src was kept as the job, so one posting was three keys to dedupe and
+    to the tracker check; and any board's /jobs/view/<number> read as that LinkedIn job."""
+    bare = "https://boards.greenhouse.io/oakmere/jobs/4000123"
+    assert norm(bare + "?gh_src=linkedin") == norm(bare + "?gh_src=indeed") == norm(bare)
+    assert norm("https://jobs.example-board.test/jobs/view/7654321") != "li:7654321"
+    for u in ("https://www.linkedin.com/jobs/view/7654321", "https://ca.linkedin.com/jobs/view/"
+              "data-analyst-at-oakmere-7654321/?trk=x", "linkedin.com/jobs/view/7654321", "7654321"):
+        assert norm(u) == "li:7654321", u
 
 
 def test_a_link_with_nothing_to_take_off_is_left_as_it_is():
