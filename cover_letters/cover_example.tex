@@ -30,26 +30,28 @@
 %     MAIN COVER LETTER CONTENT
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\currentdate{\today}
+\currentdate{[the date, written out: March 4, 2026]}
 \lettercontent{Dear [Hiring Manager / Team],}
 
-\lettercontent{[Opening paragraph: name the role and where you found it, state your strongest connection to it in one sentence, and preview why you are a fit. Keep it to two or three sentences.]}
+% The four blocks of 06-cover-letter-templates.md: the opening, the company paragraph, one
+% list of three bullets with its lead-in, and the close. The renderer
+% (tools/render_application.py) writes exactly these, and audit_letters.py fails an opening
+% that announces the role.
+\lettercontent{[Opening paragraph: the strongest match to the posting, about their problem and who you are, in two or three sentences. Never open on the role or where you saw it.]}
 
-\lettercontent{[Body paragraph: your most relevant experience, framed toward the tasks in the posting. Follow with three to five concrete bullets:]}
+\lettercontent{[Company paragraph: why this employer, from one verified fact about this team or business line, tied to what you have done.]}
+
+\lettercontent{[Lead-in sentence introducing the bullet list:]}
 
 {\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{Raleway-Medium}\fontsize{11pt}{13pt}\selectfont
 \begin{itemize}
-    \item {[Achievement 1]}: [concrete result with a number where possible]
-    \item {[Achievement 2]}: [skill or project mapped to a posting requirement]
-    \item {[Achievement 3]}: [evidence for a nice-to-have requirement]
+    \item {[Label 1]}: [one sentence, a concrete result with a number where there is one]
+    \item {[Label 2]}: [one sentence, a skill or project mapped to a stated requirement]
+    \item {[Label 3]}: [one sentence, evidence for a nice-to-have]
 \end{itemize}\par}
 \vspace{6pt}
 
-\lettercontent{[Connection paragraph: why this company specifically. Reference a verified specific: a product, a stated priority, a team. Never generic.]}
-
-\lettercontent{[Personal fit paragraph: behavioral strengths and what you bring to the team, two or three sentences.]}
-
-\lettercontent{I look forward to hearing from you.}
+\lettercontent{[Close: where you are and your right to work, then one sentence specific to this role.]}
 
 \begin{flushright}
 % Note: no trailing \\ inside \closing{} - cover.cls appends its own \\, and a

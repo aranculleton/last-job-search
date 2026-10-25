@@ -140,8 +140,7 @@ _LOOKS_HTML = re.compile(r"<\s*/?\s*(?:p|div|span|li|ul|ol|br|h[1-6]|section|tab
                          r"strong|em|b|i|u|a|font|small|body|html|article|header|footer)\b",
                          re.I)
 _COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
-_DROP_BLOCKS = re.compile(r"<(script|style|noscript|svg|template)\b[^>]*>.*?(?:</\1\s*>|\Z)",
-                          re.I | re.S)
+_BLOCK_OPEN = re.compile(r"<(script|style|noscript|svg|template)\b[^>]*>", re.I)
 _TAG = re.compile(r"<(/?)([a-zA-Z][\w:-]*)((?:[^>\"']|\"[^\"]*\"|'[^']*')*)>", re.S)
 _ATTR = re.compile(r"([^\s=/\"'>]+)(?:\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>\"']+)))?")
 _VOID = {"br", "img", "input", "meta", "link", "hr", "wbr", "source", "area", "base", "col",
@@ -175,9 +174,36 @@ def _is_hidden(raw_attrs: str) -> bool:
                 or (_COLLAPSED.search(style) and _CLIPPED.search(style)))
 
 
+def _drop_blocks(markup: str) -> tuple[str, int]:
+    """(the markup without its script, style, noscript, svg and template blocks, how many).
+
+    Each runs from its opening tag to its closing one or, left open, to the end, as a
+    browser reads it. An opening tag ends at a ">", so none is looked for past the last
+    one: a pattern that looked to the end of the text for every "<script" with no ">"
+    after it took seconds on one body (openroles' _swap_tags fixed the same shape)."""
+    cut = markup.rfind(">") + 1
+    out, at, n = [], 0, 0
+    while True:
+        m = _BLOCK_OPEN.search(markup, at, cut)
+        if m is None:
+            break
+        out.append(markup[at:m.start()])
+        n += 1
+        close = re.compile(r"</%s\s*>" % m.group(1), re.I).search(markup, m.end())
+        if close is None:
+            return "".join(out), n
+        at = close.end()
+    out.append(markup[at:])
+    return "".join(out), n
+
+
 def _hidden_spans(markup: str) -> list[tuple[int, int]]:
     """Where the hidden elements are: each from its opening tag to the end of its
-    closing one, or to the sibling that closes it, or to the end, as a browser reads it."""
+    closing one, or to the sibling that closes it, or to the end, as a browser reads it.
+
+    Tags are looked for only up to the last ">", for the reason `_drop_blocks` gives:
+    every "<a " with no ">" after it was read to the end of the text, 3.8 seconds on a
+    20,000-character body."""
     spans, stack = [], []
     hidden_at, began = None, 0
 
@@ -188,7 +214,7 @@ def _hidden_spans(markup: str) -> list[tuple[int, int]]:
             spans.append((began, end))
             hidden_at = None
 
-    for m in _TAG.finditer(markup):
+    for m in _TAG.finditer(markup, 0, markup.rfind(">") + 1):
         closing, name = m.group(1), m.group(2).lower()
         if closing:
             index = next((i for i in range(len(stack) - 1, -1, -1) if stack[i] == name), None)
@@ -209,29 +235,50 @@ def _hidden_spans(markup: str) -> list[tuple[int, int]]:
     return spans
 
 
+def strip_hidden(markup: str) -> tuple[str, dict]:
+    """(the markup without what a browser never shows, {what was taken out: how much}).
+
+    Comments, script and style blocks, and hidden elements; everything a reader sees is
+    left exactly as it was. The one rule for hidden markup, wherever a posting's markup
+    still exists: clean_body here, a LinkedIn detail page (`_fetch`) and an employer
+    board's body before openroles turns it into text (tools/ats_boards.py)."""
+    found: dict[str, int] = {}
+    out, n = _COMMENT.subn("", markup)
+    out, k = _drop_blocks(out)
+    if n + k:
+        found["comments and scripts"] = n + k
+    spans = _hidden_spans(out)
+    if spans:
+        found["hidden elements"] = len(spans)
+        for start, end in reversed(spans):
+            out = out[:start] + out[end:]
+    return out, found
+
+
+def said(found: dict) -> str:
+    """What was taken out of a body, as `posting_guard` says it."""
+    return "removed from the body: " + ", ".join(f"{n} {what}" for what, n in found.items())
+
+
 def clean_body(text: str | None) -> tuple[str | None, dict]:
     """(the body without what no reader sees, {what was taken out: how much}).
 
     Hidden elements, comments and script or style blocks where the body is markup;
     zero-width and bidi control characters, soft hyphens and the byte-order mark; and
     Unicode tag characters other than a whole England, Scotland or Wales flag. A body
-    with none of them is returned as it came."""
+    with none of them is returned as it came.
+
+    Most bodies arrive as text, not markup: the LinkedIn CLI and openroles flatten the
+    page first, keeping the words of every element, a hidden one's too. So hidden markup
+    is taken out where the markup still exists (`strip_hidden`, called by `_fetch` and
+    tools/ats_boards.py), and here only what a text body can still carry: invisible
+    characters, and the markup of a source that sends it as it is."""
     if not isinstance(text, str) or not text:
         return text, {}
     found: dict[str, int] = {}
     out = text
     if _LOOKS_HTML.search(out) or "<!--" in out:
-        n = 0
-        for rx in (_COMMENT, _DROP_BLOCKS):
-            out, k = rx.subn("", out)
-            n += k
-        if n:
-            found["comments and scripts"] = n
-        spans = _hidden_spans(out)
-        if spans:
-            found["hidden elements"] = len(spans)
-            for start, end in reversed(spans):
-                out = out[:start] + out[end:]
+        out, found = strip_hidden(out)
     if _INVISIBLE_ANY.search(out):
         pieces, last = [], 0
         for m in _TAG_FLAG.finditer(out):
@@ -258,21 +305,36 @@ def guarded(job: dict) -> dict:
     body, found = clean_body(job.get("desc"))
     if not found:
         return job
-    said = ", ".join(f"{n} {what}" for what, n in found.items())
-    return {**job, "desc": body, "posting_guard": f"removed from the body: {said}"}
+    note = said(found)
+    if job.get("posting_guard"):            # the source's markup was cleaned already
+        note = f"{job['posting_guard']}, {note.split(': ', 1)[1]}"
+    return {**job, "desc": body, "posting_guard": note}
 
 
-def fetch(job: dict, timeout: int = 60) -> dict:
+# The whole stage's time, for every fetch, not only a paced board's (PACE_BUDGET): LinkedIn's
+# and freehire's detail fetches had none, and the output was written only at the end. A
+# round under a storm of 429s ran into the stage's limit in run_round.py, was killed, and
+# lost every body it had fetched; the next round fetched them all again. Past this, a
+# posting is not fetched and says why, and the stage ends and writes what it has.
+# run_round.py passes the time its own limit leaves (--budget).
+BUDGET = 25 * 60
+
+
+def fetch(job: dict, timeout: int = 60, ends: float | None = None) -> dict:
     """Return the job with `desc` filled in where it was missing, or `hydrate_error` set.
 
     A posting from a person's portal may carry the board's search `snippet`.
     When the full body cannot be had, the snippet stands in for it, and
     `hydrate_error` still says why, so a thin body can be told from a short
-    posting.
+    posting. `ends` is the stage's deadline on the monotonic clock: past it, nothing
+    is fetched.
     """
     if (job.get("desc") or "").strip():
         return job
-    out = _fetch(job, timeout)
+    if ends is not None and time.monotonic() >= ends:
+        out = {**job, "hydrate_error": "not fetched: the stage's time ran out"}
+    else:
+        out = _fetch(job, timeout)
     if not (out.get("desc") or "").strip() and (job.get("snippet") or "").strip():
         out = {**out, "desc": job["snippet"][:BODY_CAP]}
     return out
@@ -321,6 +383,18 @@ def _fetch(job: dict, timeout: int) -> dict:
         body = d.get("description") or d.get("descriptionText") or ""
         if not body.strip():
             return {**job, "hydrate_error": "detail returned an empty description"}
+        # The page's own markup, where the CLI sends it (linkedin-search does). Its
+        # `description` is that markup with every tag dropped and every element's words
+        # kept, a hidden one's included, so a sentence styled display:none read as part
+        # of the job. What is hidden is found in the markup, and the text made again
+        # from what is left.
+        markup = d.get("descriptionHtml")
+        if isinstance(markup, str) and markup.strip():
+            shown, found = strip_hidden(markup)
+            if found:
+                from openroles.models import html_to_text
+                text = html_to_text(shown)
+                return {**job, "desc": text[:BODY_CAP], "posting_guard": said(found)}
         return {**job, "desc": body[:BODY_CAP]}
     except Exception as e:  # timeout, bad JSON, missing node: all recorded, none fatal
         return {**job, "hydrate_error": f"{type(e).__name__}: {str(e)[:160]}"}
@@ -369,7 +443,7 @@ PROGRESS_SECONDS = 60
 
 
 def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | None = None,
-                say=None) -> list[dict]:
+                say=None, budget: float | None = None) -> list[dict]:
     """Every posting through `fetch`, written in the order it arrived.
 
     They were written in the order the fetches finished, and the stages after this
@@ -386,8 +460,12 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
     starting a crawl-delay after the last one started (`pace`), as the scrape's sweep
     sends them: with as many workers as the shared pool, a fetch slower than the delay
     had the next request to the board sent while it was still running, and one worker
-    waiting the delay after each fetch ended added every fetch's time to every gap."""
+    waiting the delay after each fetch ended added every fetch's time to every gap.
+
+    `budget` is the seconds the whole stage may fetch for (BUDGET); a posting not reached
+    by then keeps its place unfetched, and says so."""
     workers = max(1, workers)
+    ends = None if budget is None else time.monotonic() + budget
     every = PROGRESS_SECONDS if progress_every is None else progress_every
     say = say or (lambda line: print(line, file=sys.stderr, flush=True))
     lanes: dict = {}
@@ -438,7 +516,7 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
         # The paced boards first, so their chains start at once.
         for lane in sorted(lanes, key=lambda k: (k is None, k or "")):
             for i in lanes[lane]:
-                fut = pools[lane].submit(fetch, jobs[i])
+                fut = pools[lane].submit(fetch, jobs[i], ends=ends)
                 fut.add_done_callback(functools.partial(finished, lane))
                 futs[i] = fut
         out: list[dict] = []
@@ -466,6 +544,8 @@ def main() -> int:
                     help="fail if the fraction with a description is below this")
     ap.add_argument("--cache", default=None,
                     help="an earlier round's hydrated file: its bodies are reused, not fetched")
+    ap.add_argument("--budget", type=float, default=BUDGET,
+                    help="seconds the stage may fetch for; past them a posting is not fetched")
     a = ap.parse_args()
 
     data = json.load(open(a.infile, encoding="utf-8"))
@@ -480,7 +560,7 @@ def main() -> int:
                 jobs[i] = {**j, "desc": body}
                 reused += 1
     before = sum(1 for j in jobs if (j.get("desc") or "").strip())
-    out = hydrate_all(jobs, a.workers)
+    out = hydrate_all(jobs, a.workers, budget=a.budget)
 
     after = sum(1 for j in out if (j.get("desc") or "").strip())
     errors = [j for j in out if j.get("hydrate_error")]
@@ -506,6 +586,11 @@ def main() -> int:
               f"{a.require:.0%}. Every posting without one reaches the model "
               f"blind and cannot be screened, knocked out or extracted.",
               file=sys.stderr)
+        if any(str(j.get("hydrate_error", "")).startswith("not fetched: the stage's time")
+               for j in errors):
+            print(f"The bodies it did fetch are kept in {a.out}: run again with it as the "
+                  "cache (run_round.py --hydrate-cache, hydrate.py --cache) and only the "
+                  "rest are fetched.", file=sys.stderr)
         return 1
     return 0
 

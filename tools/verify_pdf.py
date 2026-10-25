@@ -313,6 +313,10 @@ def tex_plain(text):
     s = re.sub(r"\\blockline\{([^{}]*)\}\{", r"\1: {", s)
     s = re.sub(r"\\href\{[^{}]*\}\{([^{}]*)\}", r"\1", s)
     s = re.sub(r"\\kern\s*-?[\d.]*\s*(?:pt|em|ex|mu)?", "", s)
+    # A backslash or a brace the text printed (tools/tex_escape.py) is held apart until
+    # every command and group is gone, so it never starts one or ends one.
+    s = re.sub(r"\\textbackslash(?![a-zA-Z])(?:\{\})?", "\x00", s)
+    s = s.replace("\\{", "\x01").replace("\\}", "\x02")
     for name, char in (("pounds", "\u00a3"), ("texteuro", "\u20ac"), ("euro", "\u20ac"),
                        ("textasciitilde", "~"), ("textasciicircum", "^"),
                        ("textbullet", "\u2022"), ("textendash", "-")):
@@ -320,7 +324,9 @@ def tex_plain(text):
     s = re.sub(r"\\([&%$#_{}])", r"\1", s)
     s = s.replace("\\\\", " ")
     s = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?", "", s)
-    return " ".join(s.replace("{", "").replace("}", "").replace("~", " ").split())
+    s = s.replace("{", "").replace("}", "").replace("~", " ").replace("\x00", "\\")
+    s = s.replace("\x01", "{").replace("\x02", "}")
+    return " ".join(s.split())
 
 
 def canon(text):

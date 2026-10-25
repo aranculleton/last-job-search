@@ -52,6 +52,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import tex_escape  # noqa: E402
 
 DEFAULT = "black"
 
@@ -150,6 +151,7 @@ def resume_block(style: str | None, why: str = "") -> str:
         return ""
     colour = ("\\definecolor{color1}{rgb}{%s}" % _BLUE_RGB if name == "blue"
               else "\\definecolor{color1}{HTML}{%s}" % hexcolour)
+    why = tex_escape.comment(why)
     out = (f"%% Style: {name}, {why or 'chosen for this application'}. Only colour changes: "
            "the name,\n%% the section titles and rules and the bullet marks take it, and every "
            "word sits where\n%% it sits in black. Set for moderncv 2.3 and for 2.4 and later "
@@ -177,6 +179,7 @@ def letter_block(style: str | None, why: str = "") -> str:
     hexcolour, _what = STYLES[name]
     if hexcolour is None:
         return ""
+    why = tex_escape.comment(why)
     return (f"%% Style: {name}, {why or 'chosen for this application'}: the name and the bullet "
             "marks take it,\n%% to match the resume. Nothing moves.\n"
             "\\definecolor{ljsaccent}{HTML}{%s}\n"

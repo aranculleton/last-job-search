@@ -354,6 +354,31 @@ def draft_flags(a, batch=()):
     return flags
 
 
+# What only the drafter's own notes say. A field's name is written in lower case ("in p2",
+# "p4:"), and "P1 incidents" is an incident's priority. The candidate in the third person is
+# their document ("their resume") or their years at one of their own employers: "their SQL
+# reports" and "their two years of growth" are the employer's, and failed the batch.
+_DRAFTER = re.compile(r"(?i:conceded|mid-paragraph|mid-letter|posting's stated|states no gaps|"
+                      r"drafter|framed by adjacency)|\bp[124]\b(?![-\w])")
+
+
+def drafter_text(t: str) -> str:
+    """The first words on a letter's page that only the drafter's notes say, or ""."""
+    m = _DRAFTER.search(t or "")
+    if m:
+        return m.group(0)
+    nouns = "|".join(re.escape(n) for n in {"resume", "CV", person.get("documents.noun", "")} if n)
+    m = re.search(r"\b" + _POSS + r"\b (?:" + nouns + r")\b", t or "", re.I)
+    if m:
+        return m.group(0)
+    for m in re.finditer(r"\b" + _POSS + r"\b (?:\w+ )?years? (?:at|with|in) (.{0,60})", t or "",
+                         re.I):
+        named = R.EMPLOYER_NAMED.match(m.group(1))
+        if named:
+            return (t or "")[m.start(0):m.start(1) + named.end()]
+    return ""
+
+
 def page_text_flags(a):
     """The flags only the compiled letter shows: drafter text on the page, the banned
     nouns and dashes, a doubled phrase, a legal suffix in the salutation."""
@@ -361,12 +386,9 @@ def page_text_flags(a):
     t = pdf_text(R.final_abbr(a))
     # The drafter's own notes must never reach the page. Letters have shipped
     # with "conceded in one sentence mid-letter in p2" in their closing.
-    meta = re.search(r"conceded|mid-paragraph|mid-letter|posting's stated|states no gaps|"
-                     r"\bin p[124]\b|\bp[124]\b|drafter|framed by adjacency|"
-                     r"\b" + _POSS + r"\b (?:SQL|resume|\w+ years)",
-                     t, re.I)
+    meta = drafter_text(t)
     if meta:
-        flags.append(f"DRAFTER TEXT ON PAGE: '{meta.group(0)}'")
+        flags.append(f"DRAFTER TEXT ON PAGE: '{meta}'")
     flags += page_flags(t)
     if re.search(r"\b(\w+(?: \w+){1,3}) \1\b", t):
         flags.append("doubled phrase in PDF")

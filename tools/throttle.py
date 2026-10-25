@@ -566,6 +566,16 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         if not isinstance(e, dict):
             continue
         status = (e.get("status") or "").lower()
+        if status == "expired":
+            # /rank retires a posting whose stated deadline has passed (rank.md, its sweep),
+            # and nothing read it: a past-deadline posting came back on every round's
+            # shortlist. It holds by its own link only, because a posting can be re-issued,
+            # and one /rank could not fetch, with no deadline, is shown when a round finds it.
+            ended = as_date(e.get("deadline"), iso_only=True)
+            n = norm(e.get("url") or u)
+            if n and ended and ended < (now or dt.date.today()):
+                urls[n] = f"expired in seen_jobs.json: its deadline, {ended.isoformat()}, has passed"
+            continue
         if status not in ("excluded", "skipped"):
             continue
         reason = (e.get("exclusion_reason") or e.get("skip_reason") or e.get("reason") or "")
@@ -613,12 +623,21 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         n = norm(e.get("url") or u)
         if n:
             urls[n] = why
-        t = title_key(e.get("title"))
-        k = key(e.get("company"))
+        pair = entry_pair(e)
         days = _days_seen(e)
-        if t and k and (own_call or not relist_since or not days or max(days) >= relist_since):
-            pairs[(t, k, city(e["location"]) if e.get("location") else ANYWHERE)] = why
+        if pair and (own_call or not relist_since or not days or max(days) >= relist_since):
+            pairs[pair] = why
     return urls, pairs
+
+
+def entry_pair(e: dict) -> tuple[str, str, str] | None:
+    """The (title, employer key, city) a ruling on this entry covers, ANYWHERE for an
+    entry with no location, or None for one with no title or employer. `ruled_pair` reads
+    a posting against it."""
+    t, k = title_key(e.get("title")), key(e.get("company"))
+    if not (t and k):
+        return None
+    return (t, k, city(e["location"]) if e.get("location") else ANYWHERE)
 
 
 def ruled_pair(pairs: dict, job: dict) -> str:
@@ -753,6 +772,28 @@ def first_seen(entries: dict, today: str = "", index: tuple | None = None):
         k, _ = _find(job, urls, pairs)
         days = _days_seen(entries[k]) if k is not None else []
         return min(days) if days else ""
+    return of
+
+
+def sightings(entries: dict, today: str = "", index: tuple | None = None):
+    """A function from a posting to (the day its own link was first seen, the day the
+    posting it relists was first seen), each "" where there is none.
+
+    `first_seen`'s two halves, by the same index: a relist is the same title (title_key),
+    employer and city seen within RELIST_WINDOW days under another link. Staging says
+    "looks like a repost" from the second; it read titles as they were written, so a
+    posting the round dated as a relist was "new to this search" when it was staged."""
+    urls, pairs = _seen_index(entries, today) if index is None else index
+
+    def first(k) -> str:
+        days = _days_seen(entries[k]) if k is not None else []
+        return min(days) if days else ""
+
+    def of(job: dict) -> tuple[str, str]:
+        n = norm(job.get("url") or "")
+        own = urls.get(n) if n else None
+        other = pairs.get(_posting_key(job.get("title"), job.get("company"), job.get("location")))
+        return first(own), ("" if other is None or other == own else first(other))
     return of
 
 
@@ -971,7 +1012,24 @@ def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
     An internal referral already in flight is the one case where applying makes
     things worse: the employer ends up with two records of the same candidate
     and the referral is the one that loses.
+
+    The hold is the status stored on the contact row, which the person (or whoever
+    learns it) writes and changes when the referral is done. The log's own reading
+    is not enough: when the referrer writes again ("I've passed your resume to the
+    hiring manager"), a reply is owed and the log reads `replied_needs_response`, and
+    the hold, the block on cold applications and the held application nudge were all
+    lifted by her update (networking audit, 2026-10-25). Both are true at once.
     """
+    if rows is None:
+        rows = _contact_rows(path)
+        if not rows:
+            return {}
+        live = _derived_statuses(rows, threads_beside(path))
+    live = dict(live or {})
+    for r in rows:
+        cid = _contact_id(r)
+        if cid and str(r.get("status") or "").strip() == REFERRAL_IN_PROGRESS:
+            live[cid] = REFERRAL_IN_PROGRESS
     out: dict[str, str] = {}
     for k, people in _contacts_by_employer(path, {REFERRAL_IN_PROGRESS}, rows, live).items():
         p = people[0]
@@ -1031,6 +1089,15 @@ def _as_score(value) -> float | None:
     return float(m.group(0)) if m else None
 
 
+def _fit_of(r: dict) -> float | None:
+    """A row's 0-100 fit, or its priority for a row that never went through fit.py."""
+    return _as_score(r.get("fit") if r.get("fit") is not None else r.get("priority"))
+
+
+def _said_score(x) -> str:
+    return "?" if x is None else f"{x:g}"
+
+
 def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
              pairs: dict[tuple, str], today: str,
              blocked: dict[str, str] | None = None,
@@ -1040,11 +1107,19 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
              holds: dict[str, str] | None = None,
              silent: dict[str, list[dict]] | None = None,
              closed: dict[str, list[dict]] | None = None) -> tuple[list[dict], list[dict]]:
-    """Split ranked rows into surfaced and skipped. Order by priority, highest first."""
+    """Split ranked rows into surfaced and skipped. Order by priority, highest first.
+
+    One role per employer keeps the one that fits the person best, its 0-100 `fit` (the
+    score the yield target and the company throttle's override read), and priority only
+    breaks a tie. It kept the higher priority, fit times opportunity, so a fit-82 role
+    was skipped as having "scored" lower than a fit-66 one with a fresher date, and a
+    round could miss its 75+ target with the 75+ role hidden behind it."""
     rows = sorted(rows, key=lambda r: -(r.get("priority") or 0))
     kept, skipped = [], []
     surfaced: dict[str, dict] = {}
-    for r in rows:
+    # Each row is decided best fit first, so the first surfaced at an employer is its best;
+    # the shortlist is put back in priority order at the end.
+    for at, r in sorted(enumerate(rows), key=lambda p: (-(_fit_of(p[1]) or 0), p[0])):
         k = key(r.get("company"))
         n = norm(r.get("url"))
         reason = None
@@ -1093,7 +1168,7 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             # times opportunity, uncapped), so a role at fit 86 cleared a sent 75
             # "by 22 points" when the honest margin was 11. Priority is only the
             # fallback for a row that never went through fit.py.
-            here = _as_score(r.get("fit") if r.get("fit") is not None else r.get("priority"))
+            here = _fit_of(r)
             # The override is for a MATERIALLY BETTER role, not a better score on
             # the role already sent. Re-scoring is routine: change the scorer and
             # yesterday's 79 is today's 94 with nothing about the job different.
@@ -1137,9 +1212,9 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
         if reason is None and k and k in surfaced:
             s = surfaced[k]
             reason = (f"same-employer duplicate: {s.get('title')} scored higher this run "
-                      f"({s.get('priority')} vs {r.get('priority')})")
+                      f"(fit {_said_score(_fit_of(s))} vs {_said_score(_fit_of(r))})")
         if reason:
-            skipped.append({**r, "skip_reason": reason, "skipped_date": today})
+            skipped.append((at, {**r, "skip_reason": reason, "skipped_date": today}))
         else:
             r = {**r, "bar": verdict, "bar_reason": verdict_why}
             if k:
@@ -1183,8 +1258,10 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
                          % "; ".join("%s%s" % (q["name"],
                                                " (%s)" % q["title"] if q.get("title") else "")
                                      for q in waiting[:3]))}
-            kept.append(r)
-    return kept, skipped
+            kept.append((at, r))
+    def in_order(pairs):
+        return [r for _, r in sorted(pairs, key=lambda p: p[0])]
+    return in_order(kept), in_order(skipped)
 
 
 # Statuses a round may move to "surfaced" or "skipped": what an earlier round or a

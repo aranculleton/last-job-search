@@ -37,9 +37,11 @@ LABELS = {
     "outreach": "outreach note",
     "job_posting": "posting",
 }
-# A requisition number is the employer's filing, not a name: "Data Scientist II (R_1506034)".
-# Only a bracket that is an id is dropped: "(Level 2)" and "(L3)" say which job it is, and
-# dropping every bracket with a digit in it sent two levels of one role under one name.
+# A bracketed id in a document's label. A role's requisition number is taken off by the one
+# rule for it, doc_name.role_core ("(Level 2)" and "(L3)" say which job it is, and stay);
+# this kept a third rule of its own for roles, and "Pricing Analyst (Job ID: 88231)" and
+# "Data Analyst - REQ-2026-0412" disagreed with the file names (2026-10-25). A label keeps a
+# date, which role_core would read as a number to drop.
 _REQ = re.compile(r"\s*[(\[]\s*(?:(?:req(?:uisition)?|job|jr|r|id|ref|no|number|posting)"
                   r"\b\.?[\s#:._-]*)?[a-z]{0,3}[\s#:._-]*\d[\d._-]{2,}[a-z]?\s*[)\]]", re.I)
 # What no file name on any computer may hold.
@@ -69,14 +71,15 @@ def _role_shown(company, role, rows) -> str:
     """The role as its name shows it: without its requisition number, unless another row
     at this employer has the same role under another number, when the number is what tells
     the two apart."""
-    plain = _REQ.sub("", role).strip()
+    import doc_name
+    plain = doc_name.role_core(role) or role
     if plain == role:
         return role
     import company_key
     k = company_key.key(company)
     twins = {(r.get("role") or "").strip() for r in rows
              if company_key.key(r.get("company") or "") == k
-             and _REQ.sub("", (r.get("role") or "")).strip().lower() == plain.lower()}
+             and doc_name.role_core(r.get("role") or "").lower() == plain.lower()}
     return role if len(twins) > 1 else plain
 
 
@@ -99,11 +102,9 @@ def _application(folder_name, root) -> tuple:
     tracker = os.path.join(root, "job_search_tracker.csv")
     if not os.path.exists(tracker):
         return "", ""
-    import csv
-
     import outreach
-    with open(tracker, newline="", encoding="utf-8") as fh:
-        rows = list(csv.DictReader(fh))
+    import csv_store                     # the mark a spreadsheet adds, and its encoding
+    rows = csv_store.dict_rows(tracker, refuse=False)
     for r in reversed(rows):
         company, role = (r.get("company") or "").strip(), (r.get("role") or "").strip()
         if company and os.path.basename(outreach.app_folder(company, role)) == folder_name:

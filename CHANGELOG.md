@@ -65,6 +65,11 @@ make sense to somebody whose repo just received it.
 - **Setup and checking cost less of your Claude usage**: setup researches with one helper
   instead of five, and the helpers that research employers and check every document start
   without the app's long instructions, which they never needed.
+- **Your brief costs far less to run**: code gathers it with one command and a small search
+  helper finds the news, so a run uses about a third of what it did, and nothing it promised
+  is dropped. The news now comes from search results, never pages opened.
+- **Follow-ups start from a draft the app made and checked**, so Claude only finishes what
+  code could not.
 - **Taking an update is quicker**: the app's own tests are not run again on your computer
   for an update its test machines already passed on Linux, a Mac and Windows. Your own
   checks still run every time.
@@ -73,6 +78,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A copy set up as the app's example person** no longer reports that person's name in
+  the app as a leak; the example is the app's own.
 - **A new computer could not save anything** when its git had no name set. Your copy now
   takes your GitHub name and GitHub's private address for it, for that copy alone.
 - **Job titles are clean**: badges such as "Easy Apply" and a second copy of the place are
@@ -85,6 +92,50 @@ make sense to somebody whose repo just received it.
   computer's temporary folder were on different drives.
 - **Text in any alphabet is read and written correctly on Windows**, in every file the app
   opens.
+- **Text a job page hides from readers is removed** before anything reads the posting.
+- **A job naming a language only as a market** ("Spanish-speaking markets") is no longer
+  thrown out, and the jobs thrown out that way come back.
+- **Where a search finds several roles at one employer**, it keeps the one that fits you
+  best.
+- **A job past its closing date** no longer comes back, and a job you bring back stays back,
+  even when it is a relisted copy.
+- **Searches stop asking for more pages once a page is empty**, so fewer requests go to job
+  sites, and a slow search keeps every description it fetched instead of losing them all.
+- Smaller search fixes: tracking in a link no longer makes one job look like several, a job
+  on a similar-named board is no longer called closed, a redirect to a site you switched off
+  is not followed, and finding an employer's job board works before setup is finished.
+- **A tracker or contact book saved from a spreadsheet** merges between chats with nothing
+  lost, keeps its accented names, and no longer stops the check for updates.
+- **A reply that mentions leave but answers you** counts as a reply, and a late reply to a
+  conversation that had gone quiet shows as owed.
+- **A referral in progress keeps holding cold applications** at that employer while the
+  person referring you writes.
+- **Messages from a LinkedIn download are dated on your own clock.**
+- **Referral asks go only to people who have replied**, and no longer end "if not?".
+- Smaller networking fixes: saving works in folders with brackets in their names,
+  unaccepted connection requests no longer show as overdue, columns you added by hand
+  survive saves, an interrupted save no longer cuts a file short, interviews booked with a
+  time reach the due list, and the networking view is faster on large contact books.
+- **Every value that reaches a resume or letter prints as written**: an email with an
+  underscore, a LinkedIn link with % in it, or an "&" in a heading no longer breaks the
+  document or drops a line. Drafts not yet sent are made again.
+- **Neither check on a draft can be skipped**: a draft goes out only after both have passed,
+  for that exact draft.
+- **A resume that compiled with an error is never called a clean fit**, two-page resumes and
+  letter-size paper pass the design check, and every contact line the resume prints is
+  checked.
+- **An employer named in another alphabet gets a file name of its own**, and the words of a
+  posting reach Claude only inside a fence.
+- Smaller document fixes: small numbers and year-shaped numbers are checked like any other,
+  Canadian spelling is checked for more words, the summary has one length (36 to 52 words)
+  everywhere, and a requisition number is taken off a role the same way wherever it is named.
+- **A refused update keeps your unsaved file**, the daily check follows your own day, and a
+  rewritten copy of your search offers a command that carries only your own work.
+- **On Windows**: Git installs under a user folder with a space in its name, accents
+  survive, Python and time zones work, and scripts run in Git Bash rather than a missing
+  Linux; a second chat open at the same time is the only one told to take its own folder;
+  starting over works in the Mac's own shell.
+- The safety check refuses every setting that would run a command without asking.
 
 ## [3.13.0] - 2026-10-24
 

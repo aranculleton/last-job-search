@@ -56,7 +56,7 @@ def test_without_require_the_fallback_still_reads(pdf):
         assert V.verify_pdf(pdf, require="pypdf")[0] == "pypdf"
 
 
-def _batch(tmp_path, monkeypatch, spacing_exit):
+def _batch(tmp_path, monkeypatch, spacing_exit, design_exit=None):
     """tools/verify_batch.py over one invented application whose text layer is clean, with
     the spacing check (verify_pdf.py --require pypdf) answering `spacing_exit` and every
     other tool clean. Returns (exit code, what it printed, the verify_pdf calls)."""
@@ -70,7 +70,7 @@ def _batch(tmp_path, monkeypatch, spacing_exit):
         os.makedirs(os.path.dirname(p), exist_ok=True)
         open(p, "wb").write(b"%PDF-1.4\n")
     v = docpaths.values()
-    page = "\n".join([v["EMAIL"] + " " + v["PHONE"], v["H_EXPERIENCE"]]
+    page = "\n".join(json.loads(v["CONTACT_LINES"]) + [v["H_EXPERIENCE"]]
                       + [line for n in json.loads(v["ROLE_NAMES"])
                          for line in (n, "• Built the weekly forecast", "• Ran the reporting")]
                       + [v["H_EDUCATION"]])
@@ -87,6 +87,13 @@ def _batch(tmp_path, monkeypatch, spacing_exit):
             return spacing_exit, "", ""
         if args[0].endswith("verify_pdf.py") and len(args) == 2:
             return 0, "extractor: pdftotext\n", ""
+        if args[0].endswith("design_check.py"):
+            # The design check reads positions with pypdf alone: where pypdf is missing it
+            # answers "not checked" too (3), as the real one does
+            # (tests/test_the_design_check_reads_each_document_as_it_was_set.py).
+            code = design_exit if design_exit is not None else (
+                3 if spacing_exit == V.EXIT_NO_READER else 0)
+            return code, "", ""
         return 0, "letters clean\n" if args[0].endswith("audit_letters.py") else "", ""
     monkeypatch.setattr(B, "_run3", run3)
     drafts = tmp_path / "drafts.json"
@@ -104,9 +111,16 @@ def test_the_batch_requires_pypdf_and_says_when_it_could_not(tmp_path, monkeypat
     # Both documents were asked for with pypdf required, then read the fallback way.
     assert sum(1 for c in calls if "--require" in c) == 2
     assert code == 3
-    assert "SPACING CHECK SKIPPED" in said
-    assert "BATCH: NOT ALL PASS, the spacing check was SKIPPED" in said
+    assert "SPACING CHECK SKIPPED" in said and "DESIGN CHECK SKIPPED" in said
+    assert ("BATCH: NOT ALL PASS, the spacing check and the design check were SKIPPED"
+            in said)
     assert "BATCH: ALL PASS" not in said
+    assert "DESIGN_RESUME" not in said and "DESIGN_LETTER" not in said
+    # The design check alone not run is not a pass either, and a design finding is one.
+    code, said, _ = _batch(tmp_path, monkeypatch, 0, design_exit=3)
+    assert code == 3 and "BATCH: NOT ALL PASS, the design check was SKIPPED" in said
+    code, said, _ = _batch(tmp_path, monkeypatch, 0, design_exit=1)
+    assert code == 1 and "DESIGN_RESUME DESIGN_LETTER" in said
     # With pypdf there, the same batch passes, and says so only then.
     code, said, _ = _batch(tmp_path, monkeypatch, 0)
     assert code == 0 and said.rstrip().endswith("BATCH: ALL PASS"), said

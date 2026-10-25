@@ -546,7 +546,9 @@ Only inside a live thread, after they have replied, spoken to the candidate or
 offered help. One role, named and linked, the posting URL on its own line, an
 explicit "would you be comfortable referring me for it?", and an easy no. Under
 90 words. Asked of a stranger it is the cold application stage 1 was rebuilt
-to stop sending.
+to stop sending, so it is refused in code: `thread=` is their contact_id (or their
+message rows), and nothing composes until a reply or a call of theirs is in it, or
+their row says they replied before the log began.
 
 If they have already offered to refer the candidate, in whatever words, the ask
 is answered: do what they said, then thank them.

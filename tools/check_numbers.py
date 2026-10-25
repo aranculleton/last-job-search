@@ -40,10 +40,13 @@ either side ("a team of 12") is matched by its size, as before.
 
 WHAT IS DELIBERATELY NOT A FINDING:
 
-  - dates and years, which are structure rather than claims
+  - dates and years, which are structure rather than claims (a year is read as written:
+    "2,000 suppliers" is a count, and so is "Ran 2050 experiments")
   - LaTeX residue: lengths in em, pt, ex, in, cm, and \\baselineskip factors
-  - small ordinals under `SMALL`, because "3 clients" style numbers are as
-    likely to be prose as a claim and the noise would drown the signal
+  - small counts under `SMALL`, because "3 clients" style numbers are as likely to be
+    prose as a claim and the noise would drown the signal; except where the profile
+    counts the same thing otherwise ("nine retail clients" against its three), which is
+    a finding (contradicted)
   - a company fact in a cover letter, which is verified separately against an
     independently located source and is not the candidate's own claim
   - in an interview or call prep (a .md file), an answer still marked as a draft the
@@ -327,16 +330,41 @@ _UNIT_AFTER = re.compile(r"(hours?|days?|weeks?|months?|years?|million|billion|t
 _MAGNITUDE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "million": 1e6,
               "b": 1e9, "bn": 1e9, "billion": 1e9}
 _UNIT_ALIAS = {"hrs": "hour", "hr": "hour", "percent": "%", "per cent": "%"}
-# A four-digit number in this range is a year, and a year is structure.
+# A four-digit number in this range is a year, and a year is structure. Read as written:
+# nobody writes a year with a thousands comma, and "2,000 suppliers" and "1,950 stores" were
+# never checked because the comma came off first.
 _YEAR = re.compile(r"^(19|20)\d{2}$")
+# The words a year follows ("in 2023", "the 2024 cohort", "FY2024"). A number in the year
+# range after anything else, and before a plural noun, counts that noun: "Ran 2050
+# experiments". With nothing before it, or no plural noun after it, it is still a year.
+_YEAR_BEFORE = frozenset(
+    "in since by from until till to during of through throughout before after the a an this "
+    "that early late mid fiscal fy year years class cohort spring summer autumn fall winter "
+    "january february march april may june july august september october november december "
+    "jan feb mar apr jun jul aug sep sept oct nov dec circa c and or".split())
+_PLURAL_AFTER = re.compile(r"\s*[a-z][a-z'-]*[a-z]s\b")
 
 
-def claim_key(value: str, unit: str) -> tuple[float, str] | None:
-    """(magnitude, unit) for one number, or None when it is not a claim."""
+def is_year(body: str, a: int, end: int, value: str) -> bool:
+    """Whether the number at body[a:end] is a year rather than a count."""
+    if "," in value or not _YEAR.match(value.strip()):
+        return False
+    if not _PLURAL_AFTER.match(body, end):
+        return True
+    prev = re.search(r"([A-Za-z]+)[^A-Za-z0-9]*$", body[:a])
+    return not prev or prev.group(1).lower() in _YEAR_BEFORE
+
+
+def claim_key(value: str, unit: str, year: bool | None = None) -> tuple[float, str] | None:
+    """(magnitude, unit) for one number, or None when it is not a claim. `year` is
+    is_year()'s answer where the caller knows the number's place in its sentence; without
+    it, a number in the year range written without a comma is a year."""
     unit = re.sub(r"\s+", " ", (unit or "").lower()).rstrip("s")
     unit = _UNIT_ALIAS.get(unit, unit)
     raw = value.replace(",", "")
-    if _YEAR.match(raw) and not unit:
+    if year is None:
+        year = "," not in value and bool(_YEAR.match(raw.strip()))
+    if year and not unit:
         return None
     try:
         n = float(raw)
@@ -353,10 +381,50 @@ def claims(text: str) -> set[tuple[float, str]]:
     """Every numeric claim in `text`, normalised."""
     body = _RESIDUE.sub(" ", plain(text or ""))
     out = set()
-    for _a, _b, value, unit, _shown in figures(body):
-        key = claim_key(value, unit)
+    for a, b, value, unit, _shown in figures(body):
+        key = claim_key(value, unit, is_year(body, a, b, value))
         if key is not None:
             out.add(key)
+    return out
+
+
+def small_counts(text: str) -> list:
+    """[(value, what it counts, as written)] for each count under SMALL with no unit that
+    names what it counts: "three retail clients". claims() leaves these out, because across
+    a whole document a bare small number is as often prose as a claim; beside the one fact
+    a sentence cites, or the profile's own count of the same thing, it is a claim."""
+    body = _RESIDUE.sub(" ", plain(text or ""))
+    out = []
+    for _a, end, value, unit, shown in figures(body):
+        if unit:
+            continue
+        try:
+            n = float(value.replace(",", ""))
+        except ValueError:
+            continue
+        # Prose, and the thing counted by its head noun ("clients" in "three retail
+        # clients"): a number LaTeX left before a heading, or a file name's "01-", is not a
+        # count, and "profile" in two unrelated phrases is not one thing counted twice.
+        words = [w for w in _noun_words(body, end) if w.lower() not in _PLAIN_ADJ]
+        if n >= SMALL or not words or not words[0][:1].islower() or shown.strip()[-1:] in "-,":
+            continue
+        head = _stem(words[-1])
+        if len(head) > 2:
+            out.append((n, frozenset({head}), shown.strip()))
+    return out
+
+
+def contradicted(text: str, evidence: str, counts=None) -> list:
+    """Each small count in `text` the evidence counts otherwise: "nine retail clients"
+    where the fact cited says "three retail clients". [(as written, the evidence's
+    values, its own value)]. A count the evidence does not count at all is not a
+    contradiction."""
+    have = small_counts(evidence) if counts is None else counts
+    out = []
+    for n, noun, shown in small_counts(text):
+        same = sorted({m for m, other, _w in have if other & noun})
+        if same and n not in same:
+            out.append((shown, same, n))
     return out
 
 
@@ -442,17 +510,22 @@ class Grounded(set):
     """The grounded claims, with `nouns`: {claim: [the noun each occurrence counts]}.
     A set like any other to a caller that only asks whether a claim is in it."""
 
-    def __init__(self, keys=(), nouns=None, said=None):
+    def __init__(self, keys=(), nouns=None, said=None, small=None):
         super().__init__(keys)
         self.nouns = {k: list(v) for k, v in (nouns or {}).items()}
         self.said = {k: list(v) for k, v in (said or {}).items()}
+        # The profile's small counts with what each counts, read against a document's own
+        # (contradicted()): "nine retail clients" where the profile has three.
+        self.small = list(small or ())
 
     def add_text(self, text: str, nouns: bool = True) -> None:
         """Every claim in `text`; with nouns=False, each matched by its size alone (the
         employer's own figures a letter may repeat, whatever it says they count)."""
         body = _RESIDUE.sub(" ", plain(text or ""))
-        for _a, end, value, unit, _shown in figures(body):
-            key = claim_key(value, unit)
+        if nouns:
+            self.small += small_counts(body)
+        for a, end, value, unit, _shown in figures(body):
+            key = claim_key(value, unit, is_year(body, a, end, value))
             if key is None:
                 continue
             self.add(key)
@@ -532,8 +605,14 @@ def check(text: str, source: str = "", allowed=None) -> list[dict]:
     allowed = allowed if allowed is not None else grounded()
     body = _RESIDUE.sub(" ", plain(text or ""))
     out = []
-    for _a, end, value, unit, shown in figures(body):
-        key = claim_key(value, unit)
+    if isinstance(allowed, Grounded) and allowed.small:
+        for shown, have, n in contradicted(body, "", allowed.small):
+            out.append({"source": source, "value": shown, "normalised": "%g" % n,
+                        "context": quote(text, shown) or quote(body, shown),
+                        "hint": "the profile counts the same thing as "
+                                + " or ".join("%g" % h for h in have) + ", never %g" % n})
+    for a, end, value, unit, shown in figures(body):
+        key = claim_key(value, unit, is_year(body, a, end, value))
         if key is None:
             continue
         noun = counted(body, end)
@@ -579,7 +658,7 @@ def check_draft(a: dict, allowed=None) -> list[dict]:
     letter bullets, which are the candidate's own evidence, only the profile's."""
     allowed = allowed if allowed is not None else grounded()
     if isinstance(allowed, Grounded):
-        ok = Grounded(allowed, allowed.nouns, allowed.said)
+        ok = Grounded(allowed, allowed.nouns, allowed.said, allowed.small)
         for k in ("p2", "posting"):
             ok.add_text(a.get(k) or "", nouns=False)
     else:

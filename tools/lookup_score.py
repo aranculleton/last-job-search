@@ -51,14 +51,18 @@ _TRACKING = re.compile(
     r"^(?:utm_\w+|gclid|fbclid|msclkid|mc_[ce]id|ref|referer|referrer|source|src|"
     r"trk|trackingId|origin|from|campaign|geoId|refId|lipi|licu|eBP|position|"
     r"pageNum|currentJobId|savedSearchId|distance|sortBy|f_\w+|"
-    r"lever-origin|lever-source|_gl|hl|lang|locale|s|t)$", re.I)
+    r"lever-origin|lever-source|gh_src|_gl|hl|lang|locale|s|t)$", re.I)
 
 # The job id an applicant tracking system puts in the query. Greenhouse-backed
 # career pages are the common case in this corpus and they are the reason this
 # exists: every Greenhouse job at an employer shares one path and differs only
-# in `gh_jid`.
-_ATS_ID_PARAM = ("gh_jid", "gh_src", "jobid", "job_id", "opportunityid",
+# in `gh_jid`. Greenhouse's `gh_src` is where the click came from, not which job:
+# kept as the job, one posting was three ("?gh_src=linkedin", "?gh_src=indeed", bare).
+_ATS_ID_PARAM = ("gh_jid", "jobid", "job_id", "opportunityid",
                  "requisitionid", "req_id", "posting_id", "id")
+# A LinkedIn job's address, the only one whose /jobs/view/<number> is a LinkedIn id: any
+# other board's was read as LinkedIn job <number>.
+_LINKEDIN_HOST = re.compile(r"^(?:https?://)?(?:[\w-]+\.)*linkedin\.com(?=[/:?#]|$)|^/", re.I)
 
 
 def norm(url: str | None) -> str | None:
@@ -78,7 +82,7 @@ def norm(url: str | None) -> str | None:
     u = url.strip()
     if re.fullmatch(r"\d{6,}", u):
         return "li:" + u
-    m = re.search(r"/jobs/view/(?:[^/?]*-)?(\d{6,})", u)
+    m = _LINKEDIN_HOST.match(u) and re.search(r"/jobs/view/(?:[^/?]*-)?(\d{6,})", u)
     if m:
         return "li:" + m.group(1)
     head, _, query = u.partition("?")

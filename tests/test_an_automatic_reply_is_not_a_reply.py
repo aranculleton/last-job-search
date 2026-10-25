@@ -115,3 +115,61 @@ def test_a_return_date_with_no_year_is_read_from_the_day_it_came():
             "email. I will reply when I am back.")
     advice = reply.guidance(reply.classify(note, [SENT], "2026-12-28"))
     assert "away until 2027-01-05" in advice["next_action"]
+
+
+# A person who answers while mentioning leave has replied (networking audit, 2026-10-25):
+# each of these was read as an out-of-office, so the reply was hidden and a nudge offered.
+ANSWERED_WHILE_AWAY = (
+    "Thanks Morgan, I'm on parental leave until January so not the best person to ask. Try "
+    "Bo Venn on the analytics team, she runs hiring there.",
+    "Hi Morgan, I'm out of the office until the 20th, but Bo Venn runs hiring for that team.",
+    "Hi Morgan, I'm away until Monday. Our team isn't hiring right now, sorry.",
+    "I'm on holiday until 2 November. Not interested, thanks.",
+    "I am on leave until 30 October. When I return I'll take a look at your profile.",
+    "I'm on maternity leave until spring, so I can't help with this one. Good luck!",
+    "I'm out of office until Thursday. Speak to Priya Shah in talent, she's the one hiring.",
+    "I'm away until 4 November, and we aren't recruiting for analysts this quarter.",
+)
+# And these are templates, whatever else they say: a redirect for urgent matters, a promise
+# to answer email on return, a greeting that names nobody.
+STILL_AUTOMATIC = (
+    OOO,
+    "Hello, I am currently on annual leave until 15 November and will have limited access to "
+    "email. If your matter is urgent, please contact Jane Smith on 0123 456. Otherwise I will "
+    "respond to your email on my return.",
+    "Hi, I'm on parental leave until March 2027. For anything urgent please reach out to "
+    "analytics-team@example.com. Thanks!",
+    "I'm away from my desk until Monday 3rd. I'll get back to you when I return.",
+    "Thanks for your message. I'm out of the office until 1 Nov, with no access to email.",
+    "Hello there, I am out of the office until Monday. For urgent queries please contact Bo "
+    "Venn, who is covering for me.",
+    "Hello Team, I am on annual leave until 2 December. I will reply on my return.",
+    "Thank you for your message. I'm currently on vacation until Nov 3 with intermittent "
+    "access to email.",
+)
+
+
+def test_an_answer_that_mentions_leave_is_a_reply_and_owed_one():
+    for text in ANSWERED_WHILE_AWAY:
+        assert state.auto_reply(text, sent_on="2026-10-12") is None, text
+        theirs = _row("2026-10-12", "in", text)
+        rows = [SENT, theirs]
+        assert state.said_something(theirs), text
+        assert state.derive_status(rows) == "replied_needs_response", text
+        assert [o["kind"] for o in state.owed([CONTACT], rows, "2026-10-21")] == ["reply"], text
+        assert reply.classify(text, [SENT], "2026-10-12")["scenario"] != "auto_reply", text
+
+
+def test_a_template_that_mentions_leave_is_still_automatic():
+    for text in STILL_AUTOMATIC:
+        got = state.auto_reply(text, sent_on="2026-10-12")
+        assert got is not None and got["kind"] == "away", text
+        assert state.derive_status([SENT, _row("2026-10-12", "in", text)]) == "awaiting_reply"
+
+
+def test_a_message_logged_as_a_persons_answer_is_never_an_automatic_reply():
+    offered = _row("2026-10-12", "in", OOO, scenario="referral_offered")
+    assert not state.is_auto_reply(offered) and state.said_something(offered)
+    assert state.derive_status([SENT, offered]) == "replied_needs_response"
+    assert state.is_auto_reply(_row("2026-10-12", "in", OOO, scenario="auto_reply"))
+    assert state.is_auto_reply(_row("2026-10-12", "in", OOO))

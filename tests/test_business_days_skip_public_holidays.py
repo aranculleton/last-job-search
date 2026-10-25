@@ -76,3 +76,15 @@ def test_without_a_profile_weekends_alone_count(monkeypatch):
     monkeypatch.setattr(H, "_settings", lambda: ("", "", ()))
     assert state.business_days_between(D(2026, 10, 9), D(2026, 10, 16)) == 5
     H.for_year.cache_clear()
+
+
+def test_a_day_kept_in_the_next_years_table_still_counts(monkeypatch):
+    # New Year's Day 2022 was a Saturday; the US keeps it on Friday 31 December 2021, in
+    # 2022's table. A range ending in December read only its own year and counted it as a
+    # working day (networking audit, 2026-10-25).
+    monkeypatch.setattr(H, "_settings", lambda: ("US", "", ()))
+    assert dt.date(2021, 12, 31) in H.for_year(2022)
+    assert state.business_days_between("2021-12-30", "2021-12-31") == 0
+    assert state.business_days_between("2021-12-29", "2022-01-03") == 2
+    assert state.add_business_days(dt.date(2021, 12, 30), 1) == dt.date(2022, 1, 3)
+    assert not hasattr(H, "is_holiday")

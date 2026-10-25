@@ -190,7 +190,7 @@ what each draft object must hold, whichever way it is written.
 
 For each chosen posting, write one draft object; the fields are in
 `tools/render_application.py` `build()`. In short: `abbr`, `company`, `role`, `summary`
-(40 to 48 words, identity first), `tools` (the stack the posting names that the profile
+(36 to 52 words, identity first), `tools` (the stack the posting names that the profile
 supports), `p1` / `p2` / `lead` / `p4` (200 to 250 body words between them), `cl_bullets`,
 and `posting` (the full text). `contact_person` (the recruiter or hiring manager the employer's
 own page names for this role, never a name from anywhere else) addresses the letter to them,

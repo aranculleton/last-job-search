@@ -181,3 +181,41 @@ def test_employer_boards_are_looked_for_before_the_profile_exists(tmp_path):
                          cwd=ROOT, capture_output=True, text=True, env=env)
     assert got.returncode == 0, got.stderr
     assert got.stdout.startswith("True\ngreenhouse/larkspur: 3 open (no profile yet")
+
+
+_FIND_NO_PROFILE = r'''
+import sys
+sys.path.insert(0, "tools")
+import ats_boards as a
+from offline_boards import offline
+with offline() as web:
+    wd = "acme.wd3.myworkdayjobs.com/wday/cxs/acme/External/jobs"
+    web.routes[wd] = {"total": 2, "facets": [], "jobPostings": [
+        {"title": "Supply Chain Analyst", "externalPath": "/job/Leeds/Supply-Chain-Analyst_R1",
+         "locationsText": "Leeds", "postedOn": "Posted Today"},
+        {"title": "Demand Planner", "externalPath": "/job/York/Demand-Planner_R2",
+         "locationsText": "2 Locations", "postedOn": "Posted Today"}]}
+    host = "careers.acme.example"
+    web.robots[host] = (200, "User-agent: *\nAllow: /\n")
+    web.routes[host + "/sitemap.xml"] = ("<urlset><url><loc>https://" + host + "/job/1/analyst"
+                                         "</loc></url></urlset>", None)
+    web.routes["/job/1/"] = ('<script type="application/ld+json">{"@type": "JobPosting", '
+                             '"title": "Analyst", "jobLocation": {"address": '
+                             '{"addressLocality": "Leeds"}}}</script>', None)
+    for target in ("https://acme.wd3.myworkdayjobs.com/External", "careersite:" + host):
+        print("\n".join(a._find_lines("Acme", a.find(target))))
+    print("bodies asked:", sum("/job/Leeds" in u or "/job/York" in u for u, _ in web.calls))
+'''
+
+
+def test_a_workday_board_or_a_careers_site_is_found_before_the_profile_exists(tmp_path):
+    """--find on a Workday board or a careers site read the round's title variants, which
+    read the profile, and crashed with no profile: the case the fallback above is for."""
+    env = dict(os.environ, LJS_PROFILE=str(tmp_path / "no-profile"))
+    got = subprocess.run([sys.executable, "-c", _FIND_NO_PROFILE], cwd=ROOT, capture_output=True,
+                         text=True, env=env)
+    assert got.returncode == 0, got.stderr
+    lines = got.stdout.splitlines()
+    assert "workday/acme.wd3/External: 2 open (no profile yet, so none judged in range)" in lines
+    assert any(x.startswith("careersite/") and ": 1 open (no profile yet" in x for x in lines)
+    assert "bodies asked: 0" in lines            # nothing can be judged, so no body is fetched

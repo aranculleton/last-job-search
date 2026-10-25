@@ -128,7 +128,8 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Company throttle.** A company with an open application in the tracker is suppressed: do not
   surface more roles there. The only override is a role scoring 10+ points higher than what was
   already sent, named explicitly. Where one run turns up several eligible roles at one employer,
-  surface only the highest scorer and record the rest as same-employer duplicates.
+  surface only the highest scorer, by its 0-100 fit (priority breaks a tie), and record the rest
+  as same-employer duplicates.
 - **Yield target: at least 5 postings scoring 60+, of which 2 score 75+.** A run that misses
   it expands the search and goes again, up to 3 rounds: more title variants, then the
   remaining priority categories, then wider PASS-set locations, then adjacent target sectors
@@ -245,7 +246,7 @@ it has it), never by editing the tracker, and the lines it prints, the applicati
 are shown to them. Each
 pick goes to `/apply`, which reuses the round's score and asks nothing already answered here.
 
-Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path `manual-round.md` Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`; treat both as already-seen for dedup purposes.)
+Do **not** suggest `/rank` after a normal run: the run already scored everything it presented (a round's scores are in `documents/rounds/<round>.json`; on the manual path `manual-round.md` Step 3 wrote them to `ranked`), so `/rank` would only score them again. `/rank` is for the two cases `/scrape` does not cover: re-scoring after a change to the candidate profile or `profile/12-scoring-brief.md` (`/rank --all`, which skips permanent exclusions), and scoring a backlog added outside the normal flow. (`/rank` sets the `ranked` and `expired` status values in `seen_jobs.json`. Treat both as already seen: a round shows a `ranked` posting again while it is live, and never one `expired` past its stated deadline, which holds by its own link only, since a posting re-issued under a new link is a new one.)
 
 ### Step 6: Update Tracker (Optional)
 
@@ -268,5 +269,5 @@ If the user decides to apply to any job, the tracker row is written by **job-app
 9. **Score everything you present, and rank by that score.** No posting reaches the user unscored, and the table is ordered by score. A list of unranked links is a failed run.
 10. **An under-target run expands before it reports.** `manual-round.md` Step 3.5's expansion ladder runs before the summary is written, up to 3 rounds (`run_round.py --expand` widens the pages itself and prints the other rungs, Step 3.5). Never pad a thin result with sub-60 postings, and never relax a gate or the location filter to make the yield target.
 11. **Flag distribution patterns, never accuse.** The mass-posting signal (`manual-round.md` Step 2.5) describes how a listing is being distributed, not a claim that the employer is a scam. Never name a company as fraudulent or untrustworthy - present the observation and let the user decide.
-12. **Paginate. Never cap.** A search walks `--page 1..N` until a page comes back empty or wholly duplicated, and covers every location the PASS set covers, not just the biggest city. `run_round.py` does both; `manual-round.md` Step 1b says how by hand.
+12. **Paginate. Never cap.** A search walks `--page 1..N` until a page comes back empty or wholly duplicated (nothing on it the search's own earlier pages did not have; `scrape_wide.py` PageWalk), and covers every location the PASS set covers, not just the biggest city. `run_round.py` does both; `manual-round.md` Step 1b says how by hand.
 13. **Full scoring is one posting per agent, never batched** (Tier 3, `manual-round.md` Step 3), whatever batch size `/rank` uses.

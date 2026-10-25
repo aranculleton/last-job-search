@@ -371,7 +371,8 @@ def test_a_phrase_they_said_never_to_use_is_refused_by_every_composer(monkeypatc
         compose.nudge("Ana Rook", said)
     with pytest.raises(compose.ReadsAsGenerated):
         compose.referral_ask("Ana Rook", f"thanks for the chat, {said}", "Planning Analyst",
-                             "https://example.com/job/1")
+                             "https://example.com/job/1",
+                             thread=[{"direction": "in", "channel": "message", "full_text": "Happy to help."}])
     with pytest.raises(compose.ReadsAsGenerated):
         compose.email("Ana Rook", "Our chat", "Thanks for the chat on Tuesday", said, "")
     with pytest.raises(compose.ReadsAsGenerated):

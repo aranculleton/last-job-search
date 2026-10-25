@@ -809,10 +809,49 @@ def _month_number(word: str) -> int | None:
     return None
 
 
+# The zone the person's day is read in. None is this computer's own, which is the person's
+# (person.cloud_day sets it in a cloud chat); a test names one, so it reads the same anywhere.
+HERE = None
+# A moment the export states the zone of: messages.csv writes "2024-03-15 14:22:01 UTC".
+_STAMP = re.compile(r"^(\d{4})-(\d{2})-(\d{2})[ T]([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?"
+                    r"(?:\.\d+)?\s*(UTC|GMT|Z|[+-]\d{2}:?\d{2})\b", re.I)
+
+
+def _local(value) -> datetime.datetime | None:
+    """A timestamp that states its zone, as the person's own clock reads it, or None.
+
+    The export dates messages in UTC; the app dates every message it logs in the person's
+    own day (person.cloud_day sets the zone in a cloud chat for exactly this). East of UTC
+    the two disagree for part of every day, and a reply sent at 10:10 in Sydney on the 15th
+    was logged on the 14th, before the message it answered on the 15th: the thread read as
+    waiting on them, the reply owed vanished and a nudge was offered (networking audit,
+    2026-10-25). Both are read in one zone: this computer's, which is the person's."""
+    m = _STAMP.match(" ".join(str(value or "").split()))
+    if not m:
+        return None
+    zone = m.group(7).upper()
+    if zone in ("UTC", "GMT", "Z"):
+        tz = datetime.timezone.utc
+    else:
+        digits = zone[1:].replace(":", "")
+        tz = datetime.timezone((-1 if zone[0] == "-" else 1) * datetime.timedelta(
+            hours=int(digits[:2]), minutes=int(digits[2:])))
+    try:
+        at = datetime.datetime(*(int(g) for g in m.groups()[:5]), int(m.group(6) or 0),
+                               tzinfo=tz)
+        return at.astimezone(HERE).replace(tzinfo=None)
+    except (ValueError, OverflowError, OSError):
+        return None
+
+
 def day(value) -> datetime.date | None:
-    """A day from any date the export writes: "2024-03-15 14:22:01 UTC" (messages),
-    "3/15/24, 2:22 PM" (invitations, month first as LinkedIn writes it, day first only
-    where the first number cannot be a month), "15 Mar 2024" (connections)."""
+    """A day from any date the export writes: "2024-03-15 14:22:01 UTC" (messages, read on
+    the person's own clock: `_local`), "3/15/24, 2:22 PM" (invitations, month first as
+    LinkedIn writes it, day first only where the first number cannot be a month), "15 Mar
+    2024" (connections)."""
+    at = _local(value)
+    if at is not None:
+        return at.date()
     text = " ".join(str(value or "").split())
     got = dates.as_date(text, iso_only=True)
     if got:
@@ -841,7 +880,11 @@ def day(value) -> datetime.date | None:
 
 
 def clock(value) -> str:
-    """The time of day a dated export cell carries, "08:40", or "" when it has none."""
+    """The time of day a dated export cell carries, "08:40", or "" when it has none: on the
+    person's own clock where the cell states its zone (`_local`)."""
+    at = _local(value)
+    if at is not None:
+        return at.strftime("%H:%M")
     m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)(?::[0-5]\d)?\b", str(value or ""))
     return f"{int(m.group(1)):02d}:{m.group(2)}" if m else ""
 
@@ -1237,7 +1280,7 @@ def plan_history(contacts, threads, src=None, mine=None) -> dict:
             name, url = next(iter(people.values()))
             contact = join(name, url)
             dated = sorted(((day(r.get("DATE")), r, d) for r, d in parsed),
-                           key=lambda x: x[0] or datetime.date.min)
+                           key=lambda x: (x[0] or datetime.date.min, clock(x[1].get("DATE"))))
             if contact is None:
                 sent = sum(1 for _, _, d in dated if d == "out")
                 last = dated[-1] if dated else (None, {}, "")
@@ -1399,8 +1442,11 @@ def settle(contacts, threads, ids) -> list:
         rows = st.threads_for(threads, cid)
         stored = str(c.get("status") or "").strip()
         derived = st.derive_status(rows)
-        if (not stored or stored in st.DERIVABLE) and derived != stored \
-                and derived != "not_contacted":
+        # A thread gone cold that they have now answered is open again, as state.received
+        # makes it for a reply logged by command.
+        if ((not stored or stored in st.DERIVABLE) and derived != stored
+                and derived != "not_contacted") or (
+                stored in st.REOPENED_BY_A_REPLY and st.reopened(c, rows, derived)):
             c["status"] = derived
             changed.append((cid, stored, derived))
         if not str(c.get("first_contacted") or "").strip():

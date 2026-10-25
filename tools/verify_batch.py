@@ -9,8 +9,8 @@ claims and letters.
     python3 tools/verify_batch.py rounds/r1/drafts.json
     tools/verify_batch.sh rounds/r1/drafts.json           # the same, by its old name
 
-Exit 0 all pass, 1 a finding, 3 nothing failed but the spacing check was
-skipped because pypdf is unavailable (which is not a pass).
+Exit 0 all pass, 1 a finding, 3 nothing failed but the spacing check or the design check
+was skipped because pypdf is unavailable (which is not a pass).
 
 Everything about the person (the filename prefix, the employers in resume
 order with their column codes and minimum bullets, the email and phone the
@@ -48,9 +48,10 @@ def sed_range(lines, start, end, drop_end=False):
     """The lines `sed -n "/^start/,/^end/p"` prints: from each line beginning with
     `start` to the next line beginning with `end`, inclusive (the end is looked for from
     the line after the start, as sed does), as often as a start comes round again.
-    `drop_end` leaves out the lines that begin with `end`, as `{/^end/d;p;}` did."""
+    `drop_end` leaves out the lines that begin with `end`, as `{/^end/d;p;}` did. No `end`
+    reads to the last line (the section is the page's last)."""
     s = re.compile("^" + re.escape(start))
-    e = re.compile("^" + re.escape(end))
+    e = re.compile("^" + re.escape(end)) if end else re.compile(r"(?!x)x")
     out, inside = [], False
     for line in lines:
         if not inside:
@@ -64,6 +65,18 @@ def sed_range(lines, start, end, drop_end=False):
         if e.search(line):
             inside = False
     return out
+
+
+def next_heading(want, heading):
+    """The heading of the section after `heading` on the page (documents.section_order), or
+    "" when it is the last. Every range here ran to Education, which a profile that puts
+    Education first has above Skills: the Skills range then ran to the foot of the page and
+    read a certification's "(2024)" as a parenthesis on the skills line."""
+    try:
+        i = [w.strip().lower() for w in want].index(heading.strip().lower())
+    except ValueError:
+        return ""
+    return want[i + 1] if i + 1 < len(want) else ""
 
 
 def role_order(lines, names, experience, education):
@@ -82,15 +95,18 @@ def role_order(lines, names, experience, education):
 
 def bullets_per_role(lines, names, education):
     """Bullets counted under each employer, "n/n/n" in profile order, as the awk program
-    did: a line opening with an employer starts its count, Education stops counting."""
-    rx = [re.compile("^" + re.escape(n)) for n in names]
-    edu = re.compile("^" + re.escape(education))
+    did: a line opening with an employer starts its count, `education` (the heading after
+    Experience) stops counting. The longest name a line opens with is its employer: with
+    "Acme" and "Acme Labs" both employers, every Acme Labs line was counted as Acme's."""
+    order = sorted(range(len(names)), key=lambda i: len(names[i]), reverse=True)
+    rx = [(i, re.compile("^" + re.escape(names[i]))) for i in order]
+    edu = re.compile("^" + re.escape(education)) if education else re.compile(r"(?!x)x")
     n: dict = {}
     e = ""
     for line in lines:
-        for i, r in enumerate(rx):
-            if r.search(line):
-                e = str(i)
+        hit = next((i for i, r in rx if r.search(line)), None)
+        if hit is not None:
+            e = str(hit)
         if edu.search(line):
             e = ""
         if BULLET.search(line):
@@ -106,7 +122,10 @@ def section_layout(tex_path, want):
     section order all passed."""
     try:
         with open(tex_path, encoding="utf-8", errors="replace") as fh:
-            secs = re.findall(r"\\section\{([^}]*)\}", fh.read())
+            # A heading's own escapes ("Skills \& Tools") are the words it prints.
+            from verify_pdf import tex_plain
+            secs = [tex_plain(x) for x in
+                    re.findall(r"\\section\{((?:[^{}\\]|\\.)*)\}", fh.read())]
     except OSError:
         return ""
     out = []
@@ -168,7 +187,7 @@ def main(argv=None) -> int:
     mins = [(int(i), int(m), short) for i, m, short in
             (x.split(":", 2) for x in v["ROLE_MINS"].split())]
 
-    fail = tb = n = skipped = 0
+    fail = tb = n = skipped = design_skipped = 0
     readers: list = []
     _say("%-9s %-4s %-4s %-14s %s" % ("ABBR", "pgs", "blt", v["ROLE_HEADER"], "flags"))
     for a in abbrs:
@@ -196,7 +215,8 @@ def main(argv=None) -> int:
             p += f" RESUME_{rp_s}p"
         if c_pdf and cp != 1:
             p += f" LETTER_{cp_s}p"
-        if role_order(r_lines, names, v["H_EXPERIENCE"], v["H_EDUCATION"]) != v["ROLE_ORDER"]:
+        after_exp = next_heading(want, v["H_EXPERIENCE"])
+        if role_order(r_lines, names, v["H_EXPERIENCE"], after_exp) != v["ROLE_ORDER"]:
             p += " CHRONO"
         if "Core Competencies" in rt_text:
             p += " COMPETENCIES"
@@ -233,11 +253,24 @@ def main(argv=None) -> int:
         # nothing at the page's edge where parsers drop headers and footers, one column
         # (tools/design_check.py).
         for pdf, flag in ((r_pdf, "DESIGN_RESUME"), (c_pdf, "DESIGN_LETTER")):
-            if pdf and _run([os.path.join(TOOLS, "design_check.py"), pdf, "--for", drafts,
-                             "--abbr", a])[0] != 0:
+            if not pdf:
+                continue
+            st = _run([os.path.join(TOOLS, "design_check.py"), pdf, "--for", drafts,
+                       "--abbr", a])[0]
+            if st == 3:
+                design_skipped = 1          # no pypdf: not checked, which is not a pass
+            elif st != 0:
                 p += " " + flag
-        if not (v["EMAIL"] in flat and v["PHONE"] in flat):
+        # Every contact line the resume prints, not the email and the phone alone: a bare
+        # "%" in a LinkedIn address commented out the LinkedIn line and the line after it,
+        # and only the round trip, if anything, said so.
+        lost = [c for c in json.loads(v["CONTACT_LINES"]) if c not in flat]
+        if lost:
             p += " CONTACT"
+        # The letter's header carries the email and the phone too.
+        if c_pdf and any(x and x not in " ".join(ct_text.split())
+                         for x in (v["EMAIL"], v["PHONE"])):
+            p += " CONTACT_LETTER"
         # The round trip: every line the draft put on the page (contacts, headings, the
         # summary, each role's heading line and bullets, each skills line, education,
         # certifications) must be in the text layer, in order. A swallowed % or a glyph
@@ -248,22 +281,23 @@ def main(argv=None) -> int:
             p += " ROUNDTRIP"
         if v["PINNED"] and v["PINNED"] not in flat:
             p += " NO_PINNED_SKILL"
-        # Skills sits between Professional Experience and Education.
+        # The Skills block, to the heading after it, carries no parenthesis.
         if any(re.search(r"[()]", line) for line in
-               sed_range(r_lines, v["H_SKILLS"], v["H_EDUCATION"], drop_end=True)):
+               sed_range(r_lines, v["H_SKILLS"], next_heading(want, v["H_SKILLS"]),
+                         drop_end=True)):
             p += " SKILLPARENS"
         if banned and (banned.search(rt_text) or banned.search(ct_text)):
             p += " " + v["BANNED_FLAG"]
         # Six words in a row shared by two bullets (audit_letters.shared_runs, which also
         # reads each letter's bullets against the resume's), and a bullet on the page
         # twice, read as whole bullets however a reader places the marks.
-        bul = resume_bullets(rt_text, v["H_EXPERIENCE"], v["H_EDUCATION"])
+        bul = resume_bullets(rt_text, v["H_EXPERIENCE"], after_exp)
         shared, dups = len(shared_runs(bul)), len(duplicate_bullets(bul))
         if dups:
             p += " DUPBULLET"
         if shared:
             p += f" SHARED_PHRASE({shared})"
-        cnt = bullets_per_role(r_lines, names, v["H_EDUCATION"])
+        cnt = bullets_per_role(r_lines, names, after_exp)
         # A role the profile gives a verify_min must carry at least that many.
         got = cnt.split("/")
         for i, m, short in mins:
@@ -273,6 +307,8 @@ def main(argv=None) -> int:
         tb += b
         n += 1
         _say("%-9s %s/%s  %-4s %-14s %s" % (a, rp_s, cp_s, b, cnt, p))
+        if lost:
+            _say("          contact lines not on the page: " + "; ".join(lost))
         if " ROUNDTRIP" in p:
             _say("\n".join("          " + line for line in rt.splitlines()))
         if p:
@@ -340,11 +376,19 @@ def main(argv=None) -> int:
         _say("pypdf is not available, so words run together were NOT checked on any document.")
         _say("python3 tools/env_check.py --fix installs it (or pip3 install --upgrade cffi if "
              "it is installed and panics); then run this again.")
+    if design_skipped:
+        _say("=== DESIGN CHECK SKIPPED ===")
+        _say("pypdf is not available, so the page size, the text sizes, the margins and the "
+             "single column were NOT checked on any document.")
+        _say("python3 tools/env_check.py --fix installs it; then run this again.")
     if fail:
         _say("BATCH: FAILURES ABOVE")
         return 1
-    if skipped:
-        _say("BATCH: NOT ALL PASS, the spacing check was SKIPPED")
+    if skipped or design_skipped:
+        what = [w for w, on in (("the spacing check", skipped),
+                                ("the design check", design_skipped)) if on]
+        _say("BATCH: NOT ALL PASS, " + " and ".join(what)
+             + (" was" if len(what) == 1 else " were") + " SKIPPED")
         return 3
     _say("BATCH: ALL PASS")
     return 0

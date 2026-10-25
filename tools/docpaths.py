@@ -139,6 +139,18 @@ def shell() -> str:
     return "\n".join(f"{k}={shlex.quote(str(x))}" for k, x in values().items())
 
 
+def contact_lines() -> list:
+    """Every contact detail the resume prints, as the page prints it: the place, the phone,
+    the email, the LinkedIn label and each documents.resume_extra line. verify_batch
+    checks the page for each, so a line LaTeX dropped is never lost in silence."""
+    ident = person.get("identity", {}) or {}
+    out = [ident.get(k) for k in ("location", "phone", "email")]
+    if ident.get("linkedin"):
+        out.append(ident.get("linkedin_label") or "LinkedIn")
+    out += list(person.get("documents.resume_extra", []) or [])
+    return [" ".join(str(x).split()) for x in out if str(x or "").strip()]
+
+
 def values() -> dict:
     """What tools/verify_batch.py needs from the profile, by name."""
     roles = person.module("roles").ROLES
@@ -157,8 +169,11 @@ def values() -> dict:
         ROLE_HEADER="/".join(r["short"] for r in roles),
         ROLE_NAMES=json.dumps([r["employer"] for r in roles]),
         ROLE_MINS=mins,
-        EMAIL=person.get("identity.email"),
-        PHONE=person.get("identity.phone"),
+        # Optional, as the renderer treats them: a profile with no phone was "cannot read
+        # the profile" here, so it could never be verified.
+        EMAIL=person.get("identity.email", "") or "",
+        PHONE=person.get("identity.phone", "") or "",
+        CONTACT_LINES=json.dumps(contact_lines(), ensure_ascii=False),
         PINNED=pinned[1] if pinned else "",
         # A profile with no certifications renders no Certifications section.
         SECTIONS=json.dumps([heads[k] for k in

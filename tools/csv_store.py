@@ -86,14 +86,52 @@ def refuse_conflicts(path: str) -> None:
             "then run this again.")
 
 
-# A run of bytes only UTF-8 writes: a lead byte and its continuation bytes. A file holding
-# one is UTF-8 with a damaged byte somewhere, never Windows' own encoding, which writes
-# none of these pairs for ordinary text.
-_UTF8_RUN = re.compile(rb"[\xc2-\xf4][\x80-\xbf]+")
+# How a state file's bytes were read (decode): as UTF-8, as Windows' own encoding, or as
+# UTF-8 with a character in it that is not readable, which is never written back.
+UTF8, CP1252, DAMAGED = "utf-8", "cp1252", "damaged"
+
+
+class Unreadable(Conflicted):
+    """A state file with a character in it that cannot be read for sure. It is read around
+    the character, and never saved over: the save would write the stand-in (a "?" in a
+    diamond) in place of a letter of somebody's name for good."""
+
+
+def decode(raw: bytes) -> tuple[str, str]:
+    """(text, how) for a state file's bytes, `how` one of UTF8, CP1252 or DAMAGED.
+
+    UTF-8 when it reads as UTF-8, the byte-order mark a spreadsheet adds dropped. Otherwise
+    the letters decide: a UTF-8 file with a damaged byte still has its other accented letters
+    whole, and a file in Windows' own encoding (cp1252) has almost none, because each of its
+    accented letters is one byte that UTF-8 cannot read. A letter followed by a curly quote
+    or a dash ("André’s", "Zoë–") is two such bytes that look like the start of a UTF-8
+    letter, and reading the whole file as damaged UTF-8 turned every accented name in it
+    into "?" in a diamond (networking audit, 2026-10-25). So it is cp1252 when the bytes
+    UTF-8 cannot read outnumber the letters it can, and cp1252 reads every one of them;
+    anything else is DAMAGED, read around the bad character."""
+    if raw.startswith(codecs.BOM_UTF8):
+        raw = raw[len(codecs.BOM_UTF8):]
+    try:
+        return raw.decode("utf-8"), UTF8
+    except UnicodeDecodeError:
+        pass
+    loose = raw.decode("utf-8", errors="replace")
+    bad = loose.count("\ufffd") - raw.count("\ufffd".encode("utf-8"))
+    good = sum(1 for ch in loose if ord(ch) > 0x7f) - bad
+    if bad > good:
+        try:
+            return raw.decode("cp1252"), CP1252
+        except UnicodeDecodeError:   # a byte cp1252 has no letter for: not that either
+            pass
+    return loose, DAMAGED
+
+
+def _damaged_line(text: str) -> int:
+    return text.count("\n", 0, max(text.find("\ufffd"), 0)) + 1
 
 
 def read_text(path: str) -> str:
-    """A state file's text, read the way it was saved.
+    """A state file's text, read the way it was saved (decode).
 
     The app saves UTF-8, and so does git. A spreadsheet often does not: Excel's "CSV UTF-8"
     starts the file with a byte-order mark, which read as part of the first column's name
@@ -101,31 +139,27 @@ def read_text(path: str) -> str:
     the same people could be messaged twice; its plain "CSV" saves in Windows' own encoding
     (cp1252), which stopped every tool with UnicodeDecodeError. The mark is dropped, and a
     file in Windows' encoding is read that way and saved back as UTF-8 at once, keeping
-    every byte of its line endings, with one plain line to say so. Raises OSError when the
-    file cannot be read."""
+    every byte of its line endings, with one plain line to say so. A file with a damaged
+    character is read around it and left as it is: write_rows refuses to save over it.
+    Raises OSError when the file cannot be read."""
     with open(path, "rb") as fh:
         raw = fh.read()
-    if raw.startswith(codecs.BOM_UTF8):
-        raw = raw[len(codecs.BOM_UTF8):]
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        pass
-    if _UTF8_RUN.search(raw):
-        # UTF-8 with a damaged byte: read as UTF-8, the one character shown as "?" in a
-        # diamond, and the file left as it is for a person to look at.
-        print(f"state: {os.path.basename(path)} has a damaged character in it; read around "
-              "it, and the file left as it was", file=sys.stderr)
-        return raw.decode("utf-8", errors="replace")
-    text = raw.decode("cp1252", errors="replace")
-    try:
-        with open(path, "w", encoding="utf-8", newline="") as fh:
-            fh.write(text)
-        print(f"state: {os.path.basename(path)} was saved by another program in Windows' "
-              "older text format; it is read that way and saved back in the app's own "
-              "(UTF-8), with nothing in it changed", file=sys.stderr)
-    except OSError:
-        pass
+    text, how = decode(raw)
+    if how == DAMAGED:
+        # The one character shown as "?" in a diamond, and the file left as it is for a
+        # person to look at.
+        print(f"state: {os.path.basename(path)} has a damaged character in it (line "
+              f"{_damaged_line(text)}); read around it, and the file left as it was",
+              file=sys.stderr)
+    elif how == CP1252:
+        try:
+            with open(path, "w", encoding="utf-8", newline="") as fh:
+                fh.write(text)
+            print(f"state: {os.path.basename(path)} was saved by another program in Windows' "
+                  "older text format; it is read that way and saved back in the app's own "
+                  "(UTF-8), with nothing in it changed", file=sys.stderr)
+        except OSError:
+            pass
     return text
 
 
@@ -155,11 +189,21 @@ def write_rows(path: str, rows, columns) -> None:
     # Only columns already in the file's header count: a key a tool put on a
     # row in memory (a search snippet, a review flag) is not a column.
     try:
-        text = read_text(path)
-        first = io.StringIO(text, newline="").readline()
-        head = next(csv.reader(io.StringIO(text, newline="")), [])
+        with open(path, "rb") as fh:
+            text, how = decode(fh.read())
     except OSError:
-        first, head = "", []
+        text, how = "", UTF8
+    if how == DAMAGED:
+        raise Unreadable(
+            f"{os.path.basename(path)} has a character on line {_damaged_line(text)} that is "
+            "not readable text (shown as a question mark in a diamond), so nothing was saved "
+            "to it: saving would put that mark in place of the letter for good. Open the file, "
+            "type the name on that line again, save it as UTF-8, then run this again.")
+    first = io.StringIO(text, newline="").readline()
+    # Each name as read_rows reads it: a column typed "Referral notes " was read under the
+    # trimmed name and written under the typed one, so the first save emptied it, and a
+    # schema column typed that way was added again at the end (networking audit, 2026-10-25).
+    head = [h.strip() for h in next(csv.reader(io.StringIO(text, newline="")), [])]
     fields = [k for k in dict.fromkeys(head) if k] or list(columns)
     # A column the file lacks joins it only once a row has something to put in it. Added
     # empty, it rewrote every row: saving one new contact was a 460-line change to a
@@ -172,12 +216,26 @@ def write_rows(path: str, rows, columns) -> None:
               "at the end; every row keeps its other fields where they were", file=sys.stderr)
     fields += added
     ending = "\r\n" if first.endswith("\r\n") else "\n"
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fields, restval="", extrasaction="ignore",
-                           lineterminator=ending)
-        w.writeheader()
-        for row in rows:
-            w.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in fields})
+    # Written beside it and put in its place in one step: written in place, a save stopped
+    # half way (a closed laptop, a chat ended) left half the message log, the one file that
+    # must never be lost (networking audit, 2026-10-25).
+    real = os.path.realpath(path)          # a linked file is written where it lives
+    folder, name = os.path.split(real)
+    part = os.path.join(folder, f".{name}.{os.getpid()}.saving")
+    try:
+        with open(part, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields, restval="", extrasaction="ignore",
+                               lineterminator=ending)
+            w.writeheader()
+            for row in rows:
+                w.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in fields})
+        os.replace(part, real)
+    except BaseException:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        raise
 
 
 def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:

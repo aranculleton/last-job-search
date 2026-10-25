@@ -229,6 +229,11 @@ def load() -> dict:
 
 
 def save(state: dict) -> None:
+    """Keep what was said, except in the app's example person: run there, as the app's tests
+    and a chat in the app do, it wrote profile.example/tips.json, which learned.py refuses
+    for the same reason (networking audit, 2026-10-25)."""
+    if person.in_example(_path()):
+        return
     with open(_path(), "w", encoding="utf-8") as fh:
         json.dump(state, fh, indent=2, sort_keys=True)
         fh.write("\n")

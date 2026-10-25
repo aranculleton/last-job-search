@@ -130,11 +130,13 @@ def letter_paths() -> list[str]:
         pre = person.get("identity.file_prefix")
     except Exception:
         return []
-    return sorted(glob.glob(person.state("cover_letters", f"{pre}_Cover_Letter_*.tex")))
+    return sorted(glob.glob(os.path.join(glob.escape(person.state("cover_letters")),
+                                    f"{glob.escape(pre)}_Cover_Letter_*.tex")))
 
 
 def note_paths() -> list[str]:
-    return sorted(glob.glob(person.state("documents", "applications", "*", "outreach.md")))
+    return sorted(glob.glob(os.path.join(glob.escape(person.state("documents", "applications")),
+                                    "*", "outreach.md")))
 
 
 def corpus_inputs() -> dict:
@@ -749,8 +751,8 @@ CONTRACT = """\
 One JSON object (tools/render_application.py build() renders it; tools/allocate.py
 chooses the resume bullets, so never write bullets or "jobs"):
 - company, role: as posted, without requisition noise.
-- summary: 40 to 48 words, identity first, in this posting's language. No number that is
-  not in the text of an id you cite.
+- summary: {summary_low} to {summary_high} words, identity first, in this posting's
+  language. No number that is not in the text of an id you cite.
 - tools: comma-separated stack the posting names AND section 3 lists as held. Never a
   not-held skill. The person's yes answers are added by the renderer: leave them out.
 - p1: the opening. The hook is about THEM (their problem, what the job is really for),
@@ -788,6 +790,10 @@ Keep the posting's words in sentences about them (cite POSTING) and the candidat
 sentences about the candidate: "I built claims forecasts" from a posting about claims is
 a domain the candidate has not worked in.
 """
+# The summary's budget is the audit's, the one copy (draft_audit.SUMMARY_WORDS).
+from draft_audit import SUMMARY_WORDS as _SUMMARY_WORDS  # noqa: E402
+CONTRACT = (CONTRACT.replace("{summary_low}", str(_SUMMARY_WORDS[0]))
+            .replace("{summary_high}", str(_SUMMARY_WORDS[1])))
 
 APP_RULES = (
     "Every candidate fact comes from section 3 and every employer fact from an F id. "
@@ -957,6 +963,15 @@ def _fenced_posting(pick: dict) -> str:
         return ""
 
 
+def named(pick: dict) -> str:
+    """The employer and the role, as the board wrote them, fenced: every prompt that names
+    a pick names it with this (draft-applications.js), never with the bare strings, which
+    a title written as an instruction reached unfenced."""
+    import untrusted
+    return untrusted.fence(f"employer: {pick.get('company') or ''}\nrole: {pick.get('role') or ''}",
+                           label="employer and role")
+
+
 def posting_brief(pick: dict) -> str:
     """The per-posting part the pack does not hold, apart from the research the workflow
     adds after it: the person's answers, the bridges, the posting itself."""
@@ -966,8 +981,10 @@ def posting_brief(pick: dict) -> str:
     body = untrusted.unfence(raw)
     yes = ", ".join(pick.get("skills_yes") or []) or "none"
     no = ", ".join(pick.get("skills_no") or []) or "none"
-    lines = [f"== POSTING: {pick.get('company')} | {pick.get('role')} | slug {pick.get('slug')} "
-             f"| abbr {pick.get('abbr')} ==",
+    # The employer and the title are the board's words: named inside a fence (named()), and
+    # the posting file below carries them in its own.
+    lines = [f"== POSTING: slug {pick.get('slug')} | abbr {pick.get('abbr')} ==",
+             named(pick).strip(),
              f"The person's answers about skills the profile does not list. Yes (each goes on "
              f"this resume's skills line; the summary or letter may name it where the posting "
              f"asks): {yes}. No (never named anywhere): {no}."]
@@ -1031,7 +1048,7 @@ def build(round_dir: str, today: str = "") -> dict:
     if os.path.exists(picks_path):
         with open(picks_path, encoding="utf-8") as fh:
             picks = json.load(fh)
-    staged = [dict(p, brief=posting_brief(p)) for p in picks]
+    staged = [dict(p, brief=posting_brief(p), named=named(p)) for p in picks]
     # What the drafter was given, kept under its hash: when the profile changes after a
     # draft, the model auditor is shown what changed rather than told that something did.
     with open(os.path.join(round_dir, f"rules_{meta['rules_hash']}.json"), "w",

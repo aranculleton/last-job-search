@@ -57,7 +57,7 @@ THEME_CUES = {
                      "significance", "incrementality", "holdout",
                      "packaging", "bundle", "plan mix", "upgrade path",
                      "price test", "willingness to pay", "test and learn",
-                     "optimi[sz]ation of pricing", "conversion rate"],
+                     "optimisation of pricing", "optimization of pricing", "conversion rate"],
  "retention":     ["retention", "churn", "lifetime value", "ltv", "cohort", "repeat"],
  "growth":        ["growth", "acquisition", "activation", "funnel", "conversion", "engagement"],
  "product":       ["product analytics", "product team", "user behaviour", "user behavior",
@@ -141,6 +141,8 @@ WHOLE_WORD = {"aws", "gcp", "aml", "sla", "api", "git", "etl", "elt", "ltv", "qa
 _B = person.module("bullets")
 THEME_CUES.update(getattr(_B, "THEME_CUES", {}))
 WHOLE_WORD |= set(getattr(_B, "CUE_WHOLE_WORD", ()))
+# Every cue is a literal phrase, matched as written: "optimi[sz]ation of pricing" was escaped
+# into a cue that matched nothing, so each spelling is its own cue.
 CUE_RE = {theme: [re.compile(r"(?<!\w)" + re.escape(c) + (r"(?!\w)" if c in WHOLE_WORD else ""))
                   for c in cues]
           for theme, cues in THEME_CUES.items()}
@@ -239,7 +241,7 @@ _WINS: dict = {"key": None, "wins": {}}
 def _wins_key():
     root = person.state()
     paths = [os.path.join(root, "job_search_tracker.csv")] + sorted(
-        glob.glob(os.path.join(root, "documents", "applications", "*", "draft.json")))
+        glob.glob(os.path.join(glob.escape(root), "documents", "applications", "*", "draft.json")))
     sig = []
     for p in paths:
         try:

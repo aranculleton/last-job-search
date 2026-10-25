@@ -728,7 +728,7 @@ def _sync_records(root: str) -> list[tuple[float, str, str]]:
         dirs = _git_dirs(root)
         if dirs:
             paths = [os.path.join(dirs[1], STAMP + "-head")] + glob.glob(
-                os.path.join(dirs[1], "worktrees", "*", STAMP + "-head"))
+                os.path.join(glob.escape(dirs[1]), "worktrees", "*", STAMP + "-head"))
     out = []
     for path in paths:
         try:

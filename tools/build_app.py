@@ -46,6 +46,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import csv_store  # noqa: E402  the mark a spreadsheet adds, and its encoding
 import person  # noqa: E402
 from personal_paths import is_personal  # noqa: E402
 
@@ -128,8 +129,7 @@ def export(out_dir: str) -> list[str]:
 
 def _csv(path: str) -> list[dict]:
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
+        return csv_store.dict_rows(path, refuse=False)
     except OSError:
         return []
 
@@ -218,7 +218,7 @@ def _csv_dated(path: str) -> list[tuple[dict, float | None]]:
         size = int(parts[2])
         blob, at = data[at:at + size], at + size + 1
         try:
-            keep(list(csv.DictReader(io.StringIO(blob.decode("utf-8", errors="replace")))),
+            keep(list(csv.DictReader(io.StringIO(csv_store.decode(blob)[0]))),
                  None if k >= len(revs) or revs[k][0] in shallow else revs[k][1])
         except csv.Error:
             continue

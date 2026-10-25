@@ -64,6 +64,9 @@ STAGE_BUDGET_SEC = {
     "hydrate.py": 30 * 60,
 }
 DEFAULT_STAGE_SEC = 10 * 60
+# What hydrate leaves of its stage limit for the fetches still running when its own budget
+# ends (each is cut off at 60 seconds) and for writing what it found.
+HYDRATE_MARGIN_SEC = 2 * 60
 
 
 def _stage_budget(cmd, deadline):
@@ -685,9 +688,13 @@ def main():
     if a.no_seen_read:
         prefilter += ["--keep-ruled-out"]
     run(prefilter, log, deadline)
-    # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest.
-    run([sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
-         "--workers", str(a.workers), "--require", a.require]
+    # Hydrate AFTER the free gates: one HTTP call per survivor, none for the rest. It is
+    # given the time its stage limit leaves, less a fetch's own time to finish, so it stops
+    # and writes what it fetched before the limit kills it with nothing written.
+    hydrate = [sys.executable, f"{T}/hydrate.py", f("01_prefiltered.json"), "--out", f(HYDRATED),
+               "--workers", str(a.workers), "--require", a.require]
+    room = _stage_budget(hydrate, deadline)
+    run(hydrate + ["--budget", str(room - min(HYDRATE_MARGIN_SEC, room // 2))]
         + (["--cache", a.hydrate_cache] if a.hydrate_cache else []), log, deadline)
     # The screen's cuts go to seen_jobs.json, so the next round drops them before
     # hydrate fetches them again.

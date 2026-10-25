@@ -217,9 +217,20 @@ class TheRealAgentsKeepTheirModels(unittest.TestCase):
         # The app's CLAUDE.md is about 13,000 tokens on every call a helper makes, and
         # neither needs it: each is self-contained, and profile/CLAUDE.md still loads with
         # the first profile file read (code.claude.com/docs/en/sub-agents, 2026-10-25).
-        for name in ("employer-researcher", "grounding-auditor"):
+        for name in ("employer-researcher", "grounding-auditor", "news-reader"):
             text = (REPO_ROOT / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
             self.assertIn("\nomitClaudeMd: true\n", text.split("\n---", 1)[0] + "\n", name)
+
+    def test_the_news_reader_runs_on_the_small_model_and_only_searches(self):
+        # The brief's news is searching and listing, nothing more, and it ran in the main
+        # chat on the strongest model with the publisher pages in its context (the cost
+        # audit, 2026-10-25). `haiku` is one of the aliases a subagent's model takes
+        # (code.claude.com/docs/en/sub-agents, 2026-10-25); WebSearch is its only tool, so
+        # it opens no page and writes nothing.
+        self.assertEqual(self.model_of("news-reader"), "haiku")
+        head = (REPO_ROOT / ".claude" / "agents" / "news-reader.md").read_text(
+            encoding="utf-8").split("\n---", 1)[0] + "\n"
+        self.assertIn("\ntools: WebSearch\n", head)
 
 if __name__ == "__main__":
     unittest.main()

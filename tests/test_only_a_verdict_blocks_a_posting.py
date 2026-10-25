@@ -17,6 +17,7 @@ absent from the employer's external site, so nobody outside could apply.
 from __future__ import annotations
 
 import pytest
+import json
 import os
 import sys
 
@@ -90,6 +91,29 @@ def test_a_real_verdict_still_blocks():
     assert _blocks(_seen("eligibility gate: citizenship stated as a condition",
                          status="excluded"))
     assert _blocks(_seen("posting closed"))
+
+
+def _expired(n, deadline):
+    return {URL % n: {"title": "Planner", "company": "Acme", "url": URL % n,
+                      "location": "Manchester", "first_seen": "2026-09-01", "status": "expired",
+                      **({"deadline": deadline} if deadline else {})}}
+
+
+def test_a_posting_past_its_deadline_stays_out_by_its_own_link(tmp_path):
+    """/rank marks a posting `expired` when its deadline passes, and the skill says to treat
+    it as already seen, but nothing read the status: it came back on every round."""
+    entries = {**_expired(1, "2026-10-01"), **_expired(2, "2026-11-30"), **_expired(3, ""),
+               **_expired(4, "ASAP")}
+    urls, pairs = throttle.ruled_out(entries, "2026-10-25")
+    assert list(urls.values()) == ["expired in seen_jobs.json: its deadline, 2026-10-01, has passed"]
+    assert throttle.norm(URL % 1) in urls and not pairs
+    seen = tmp_path / "seen.json"
+    seen.write_text(json.dumps({"seen": entries}), encoding="utf-8")
+    check = prefilter.already_ruled_out(str(seen), today=prefilter._dt.date(2026, 10, 25))
+    job = {"title": "Planner", "company": "Acme", "location": "Manchester"}
+    assert check({**job, "url": URL % 1}).startswith("expired in seen_jobs.json")
+    # Re-issued under a new link, it is a new posting, and one with no date to read is shown.
+    assert check({**job, "url": URL % 9}) == "" and check({**job, "url": URL % 3}) == ""
 
 
 # ------------------------------------------------------------------ internal Workday sites

@@ -53,7 +53,7 @@ def paths(root: str = ROOT) -> tuple[list[str], list[str]]:
     plain = [p for p in PLAIN if os.path.exists(os.path.join(root, p))]
     forced: list[str] = []
     for pat in FORCED:
-        for full in sorted(glob.glob(os.path.join(root, pat))):
+        for full in sorted(glob.glob(os.path.join(glob.escape(root), pat))):
             rel = os.path.relpath(full, root).replace(os.sep, "/")
             if os.path.isdir(full):
                 for dp, dirs, files in os.walk(full):
