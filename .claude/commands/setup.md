@@ -73,9 +73,11 @@ changed: record `learned.py offer` for it instead. Then
 
 In the background, at once, none waiting on another (Bash with `run_in_background`):
 
-- **Land the day's sync**: the first sync in a new copy brings the app in, and the local
-  check is slow until that is on master (CLAUDE.md, "Master is the trunk"). Open its pull
-  request, run `./tools/ci_local.sh --quick`, and merge it, all in the background.
+- **Take the first update and land it**: `python3 tools/sync_app.py --update`. In a new
+  copy it connects the copy to the app, and asking to be set up is asking for it; after
+  this one, the app updates only when they say so (CLAUDE.md, step 2). The local check is
+  slow until that is on master (CLAUDE.md, "Master is the trunk"). Open its pull request,
+  run `./tools/ci_local.sh --quick`, and merge it, all in the background.
 - **The tools**: in a cloud chat `./tools/setup_env.sh`; on their computer
   `python3 tools/env_check.py --fix`. Nothing is asked of them for either.
 - **Job sites**: in a cloud chat, `python3 tools/env_check.py --say` prints the words to pass

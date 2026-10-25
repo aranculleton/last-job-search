@@ -7,8 +7,8 @@ rank, stop at the shortlist, draft nothing until the candidate picks. `_common.m
 1. No LaTeX is needed for this step. Pick `rN` as the next round number after the highest
    file in `documents/rounds/`. `$SCRATCH` is a scratch directory outside the repo.
 
-   **The app's updates and the profile's upgrades came first**, in `_common.md` step 2
-   (`python3 tools/sync_app.py --if-stale --on "<the model this run is on>"`, then `/upgrade 20`): a job board an upgrade
+   **The look at the app and the profile's upgrades came first**, in `_common.md` step 2
+   (never an update; the upgrades are the version this repo has): a job board an upgrade
    builds is searched this round.
 
    Run: `python3 tools/run_round.py --out "$SCRATCH/rN" --jobage 7 --expand`. Never read or

@@ -24,7 +24,8 @@ no: `campaign "<Employer>" --no`, and it is never offered again for this process
 ## Every session in the campaign chat
 
 1. **Start like any session** (CLAUDE.md, "Start of every session"): master, then
-   `python3 tools/sync_app.py --if-stale --on "<this model>"`, in this chat's own folder.
+   `python3 tools/sync_app.py --if-stale --on "<this model>"`, in this chat's own folder: a
+   look at the app, never an update unless the person says so.
    `python3 tools/model_guide.py interview --on "<this model>"`: when it prints a line, it
    goes first in the reply.
 2. **Read the state; never ask for what is written down.** The process's document

@@ -51,35 +51,43 @@ Every session in a person's repo starts with the same five steps, before anythin
    own moves to the new master, and one with commits of its own stops, names them and gives
    the command that carries them across. Exit 1 means it stopped with nothing changed: do
    what it printed before anything else.
-2. **Take the app's updates**: `python3 tools/sync_app.py --on "<this session's model>"
+2. **Look at the app**: `python3 tools/sync_app.py --on "<this session's model>"
    --tools "<the browser tools this chat has: browser, chrome, enable, or none>"`. It
-   fetches the app and merges what is new (the newest release; the maintainer's own copy takes
-   master), never sends anything back, and ends with the day's model check: what this model
-   suits and what wants another, which goes first in the reply when the person's request is
-   one of the latter. Then the place check (`tools/place.py`), once a chat (weekly only while a computer lacks a tool): when this chat
+   fetches the app read-only, takes nothing from it and never sends anything back. **The
+   app updates only when the person says so.** When a newer version is waiting (the newest
+   release; the maintainer's own copy follows master), it prints one line for them, once
+   for that version: say it at the end of the reply, in its words, and nothing more about
+   it. When they say "update" (or ask for the new version in any words), run the same
+   command with `--update`: it merges it and prints what changed. Never take it otherwise,
+   never press them for it (a security fix is offered the same way), and never wait on it:
+   everything works on the version they have. The look ends with the day's model check:
+   what this model suits and what wants another, which goes first in the reply when the
+   person's request is one of the latter. Then the place check (`tools/place.py`), once a chat (weekly only while a computer lacks a tool): when this chat
    cannot do what the person set up (profiles read in their browser, from a chat with no
    browser of theirs; tools missing on their computer), it prints what to tell them, which
    goes at the end of the reply in its own words: two or three short sentences, and the
    dated steps only if they ask how (`place.py how`). It offers a choice and never makes it.
    The set-up it recommends to anyone with a computer is two chats: one on their computer
    for everything they do, networking included, and the brief in the cloud (`place.TWO_CHATS`).
-   In the maintainer's own repo the sync also checks the public app for their names
+   In the maintainer's own repo the look also checks the public app for their names
    (`tools/app_watch.py`): an `APP LEAK` line goes first in the reply, before anything else. The app is public, so nothing needs attaching; if it still cannot reach
    it (exit 2), attach it read-only with `add_repo` (owner and repo from the URL
    `https://github.com/aranculleton/last-job-search`, `access="read"`) and try once more, and if
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
    changed: do what it printed yourself (commit the work it lists, carry across what it
-   names) and run it again. Never put it to the person: saving and updating are always yes.
+   names) and run it again. Saving is always yes and never put to the person; updating is
+   theirs to say.
 3. **No `profile/`?** First `python3 tools/place.py state`, before anything is asked: another
    chat may hold the profile on master or on a branch it has not landed (it brings it in and
    the search is set up), or still be writing it (say its one line and start nothing). Only
    with none anywhere, start `/setup`. **A profile here is never set up again** (that is
    `/reset`): in a chat on their computer it is "Your search is already set up; this computer
    is ready for it too.", and nothing is asked, least of all a resume.
-4. **If the sync brought changes**, say in one plain line what changed for them, from the
+4. **After an update they asked for**, say in one plain line what changed for them, from the
    lines it printed under "What changed": never a file, a command, a version or a git word.
-5. **Profile upgrades apply themselves; nobody has to ask.** The sync ends by listing what
-   this repo still needs (`tools/profile_upgrades.py`): parts of the app that switched on
+5. **Profile upgrades apply themselves; nobody has to ask.** Every look and every update ends
+   by listing what this repo still needs (`tools/profile_upgrades.py`), for the version it
+   has (an update not taken brings none): parts of the app that switched on
    after this person set up (their job boards researched and built, a setting written for
    their field, a portal rebuilt), and facts in the profile still marked `[CONFIRM: ...]`.
    The person will not know which ones matter, so never offer them a list or wait for a yes:
@@ -108,10 +116,8 @@ Every session in a person's repo starts with the same five steps, before anythin
 chat going, so "the start of a session" may be days ago. Before each new piece of work (a
 search, an application, outreach, a reply, interview prep), run
 `python3 tools/sync_app.py --if-stale --on "<this session's model>" --tools "<...>"`. When today's check has
-not run, it does steps 1 and 2 (master, then the app) and the rest follows as above;
-otherwise it prints "already checked today" and changes nothing. `run_round.py` and `stage_picks.py` print a reminder
-when it was skipped, and that reminder is code, so it reaches a chat whose instructions
-were loaded before this rule existed.
+not run, it does steps 1 and 2 (master, then a look at the app, never an update) and the
+rest follows as above; otherwise it prints "already checked today" and changes nothing.
 
 In the app itself, step 2 is a no-op and step 3 does not apply: the app has no profile and
 must never get one.
@@ -121,9 +127,9 @@ must never get one.
 `tools/personal_paths.py` is the line. Everything it lists (the profile, the tracker, the
 contact book and threads, documents, research) is the person's; everything else is the app's.
 
-- **In a person's repo, never edit an app-owned file.** The next sync puts it back to the app's
+- **In a person's repo, never edit an app-owned file.** The next update puts it back to the app's
   version and says so. A fix or a feature the app needs is made in the app (below) and arrives
-  here through the sync. If the person is not the app's maintainer, never tell them the app
+  here with an update. If the person is not the app's maintainer, never tell them the app
   has a problem or ask them to report one: do what they asked the best honest way the app
   allows, and say plainly only what could not be done for them.
 - **A person's own tests (`profile/tests`) use the app's public names only.** A name that
@@ -182,7 +188,7 @@ branch, and builds it a second time.
 
 So, every session:
 
-1. **Start by pulling master and taking the app's updates** ("Start of every session"
+1. **Start by pulling master and looking at the app** ("Start of every session"
    above). Another chat may have merged since this container was built. Do this before
    writing anything, not before pushing.
 2. **Finish by getting the work onto master.** Not "pushed to the branch": on master.
@@ -263,15 +269,15 @@ must never be lost: status is derived from it, and without it every contact reve
   denial, not a bug: do not route around it. Tell the person what `python3 tools/env_check.py
   --say` prints, word for word (a round prints the same under "Tell the person"): one
   recommended fix in numbered steps, which reaches the running chat within about a minute.
-  The day's sync checks it and prints the same words first. Until it is fixed, run no search:
+  The day's look at the app checks it and prints the same words first. Until it is fixed, run no search:
   a web search in its place finds old, closed jobs. `/apply <pasted posting text>` still works.
 
 ## Automation: what runs without anyone asking
 
 **`automation/README.md` is the whole story; `profile/routines.json` is the registry**, and
 when the tasks run and where they report is the person's (the automation section of
-`profile/CLAUDE.md`). The default is one task, **a brief twice a week** that also takes the
-app's updates; a scheduled job round is optional and off by default, since "find me jobs"
+`profile/CLAUDE.md`). The default is one task, **a brief twice a week** that also says when
+an update is waiting; a scheduled job round is optional and off by default, since "find me jobs"
 runs one in any chat. Two set-ups work, and the README walks a person through either: **(a)**
 one chat per task, each task bound to its own chat, whose reply is the briefing; or **(b)**
 each task made as a routine with the repo ticked, every run a new chat. Each task's stored prompt is a stub
@@ -315,7 +321,7 @@ written into a state file, never another routine.
 
 ## Orchestration: workflows and model choice
 
-**Which model, and how hard it thinks.** The day's sync prints the check (step 2, `--on`).
+**Which model, and how hard it thinks.** The day's look at the app prints the check (step 2, `--on`).
 For one piece of work, `python3 tools/model_guide.py <command or kind of work> --on "<this
 session's model>"` prints nothing when the model fits; otherwise its one line goes first in
 the reply, and the work carries on. `--all` prints the whole table for anyone who asks.
@@ -587,9 +593,10 @@ they cannot act on is one they did not get. Everything said to them:
   `python3 tools/claude_surfaces.py steps <id>` prints.
 - **Short.** A few lines. Reasons, detail and alternatives come when they ask, never before.
 - **Git and GitHub are yours, done without asking and never explained.** Saving, taking
-  master and the app's updates, opening and merging a pull request, settling a merge and the
-  local CI are always yes: never ask, never describe them, and never show a command, an
-  option, a commit, a branch, a pull request, CI, master or a merge. Say the outcome in plain
+  master, opening and merging a pull request, settling a merge and the local CI are always
+  yes: never ask, never describe them, and never show a command, an option, a commit, a
+  branch, a pull request, CI, master or a merge. Taking the app's update is the one thing
+  that waits for their word (step 2); once they have said it, the doing is yours too. Say the outcome in plain
   words ("Saved.", "Updated to the newest version.") or nothing at all. Lines a tool prints
   for you (`sync_app:`, `Claude:`, file paths, counts of commits) are never repeated. The one
   exception is the maintainer's own repo (its GitHub owner is the app's, which
@@ -655,7 +662,7 @@ never in place of the work. "No more tips" is `python3 tools/tips.py off`. **Whe
 what it can do or how to use a part of it** ("show me around", "how do I..."), it is
 `python3 tools/tips.py tour` (or `tour <topic>`), passed on as it prints: short, never a manual.
 
-**Updates and what they have taught it.** A sync's genuine fixes apply: they change
+**Updates and what they have taught it.** An update's genuine fixes apply: they change
 code, not their settings. When an update would change a setting `learned.py locked`
 lists, `/upgrade` changes nothing. It records `learned.py offer` instead, and the
 person is asked once, with the session's other questions, whether to keep theirs or try

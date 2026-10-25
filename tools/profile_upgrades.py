@@ -34,7 +34,7 @@ its own and reports what it wrote and how to undo it. Only an upgrade that needs
 person's answer or consent (`needs="you"`, with its `ask`) is put to them, once, at the
 end. The twice-weekly shortlist does the same before its round.
 
-`tools/sync_app.py` runs `--after-sync` after every sync, "up to date"
+`tools/sync_app.py` runs `--after-sync` after every look and update, "up to date"
 included; `tools/run_round.py` prints `--line` with its MET or MISSED summary;
 CLAUDE.md "Start of every session" says what the session does with them.
 

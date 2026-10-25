@@ -461,13 +461,15 @@ def test_a_session_applies_them_without_being_asked():
         assert must in cmd, must
 
 
-def test_every_scheduled_run_takes_the_apps_updates_first():
-    """A person may not open a chat for days; the brief is what keeps their copy current."""
+def test_every_scheduled_run_looks_at_the_app_first_and_never_updates():
+    """A scheduled run looks at the app and applies the upgrades of the version this repo
+    has; the update itself waits for the person's word in their own chat."""
     common = _read("automation", "prompts", "_common.md")
     assert "python3 tools/sync_app.py --if-stale" in common and "/upgrade 20" in common
     assert common.index("sync_app.py --if-stale") < common.index("setup_env.sh")
+    assert "--update" not in common and "never takes an update" in common
     rnd = _read("automation", "prompts", "job_round.md")
-    assert "_common.md` step 2" in rnd and "/upgrade 20" in rnd
+    assert "_common.md` step 2" in rnd and "never an update" in rnd
 
 
 def test_the_brief_never_searches():
