@@ -123,21 +123,21 @@ def board_hosts() -> list[tuple[str, str]]:
 
 def blocked_say(names) -> str:
     """What the person is told when a cloud chat cannot reach job sites: what happened, the
-    one recommended fix as numbered steps from the registry, and what happens meanwhile.
+    one fix as numbered steps from the registry, and what happens meanwhile.
 
     It replaced "the network policy refused it (proxy 403); add the host under the cloud
     environment's Allowed domains", which a person new to all of it could not act on: they
     had never heard of an environment (2026-10-20). Full is recommended over a list of
-    sites because a list needs a new entry for each new employer's board."""
+    sites because a list needs a new entry for each new employer's board. Cut from 107 words
+    to under 60 (2026-10-25): it said "done" twice, said it would "search again" when nothing
+    had been searched, and explained the cloud before the fix."""
     import claude_surfaces
     names = [n for n in dict.fromkeys(names) if n]
     what = ", ".join(names[:3]) + (" and others" if len(names) > 3 else "")
     return "\n".join(
-        [f"This chat can't reach the job sites{' (' + what + ')' if what else ''}: it runs on "
-         "a computer in the cloud that only reaches a few websites until you allow more.",
-         "Recommended, once:"]
-        + claude_surfaces.steps("cloud-internet")
-        + ["Until then I won't search: it would only find old jobs. Say \"done\" once it's "
+        [f"This chat can't reach job sites yet{' (' + what + ')' if what else ''}. To let it, once:"]
+        + claude_surfaces.steps("cloud-internet")[1:]
+        + ["I won't search before then: it would only find old jobs. Say \"done\" once it's "
            "changed."])
 
 

@@ -21,15 +21,18 @@ import place  # noqa: E402
 import scrape_wide  # noqa: E402
 
 # Words a beginner cannot act on. "Edit cloud environment" is the button's own name, so it
-# is taken out before the check.
+# is taken out before the check. CONNECT is the proxy's word in capitals; "connect GitHub"
+# is the screen's own.
 JARGON = re.compile(r"\b(?:proxy|allow-?list(?:ed)?|egress|network polic\w*|domains?|hosts?|"
-                    r"CONNECT|403|407|repository|repo|worktree|branch|CLI|config\w*|YAML|"
+                    r"(?-i:CONNECT)|403|407|repository|repo|worktree|branch|CLI|config\w*|YAML|"
                     r"environment variables?|connect_rejected)\b", re.I)
-BUTTONS = ("Edit cloud environment", "Network access", "Setup script")
+BUTTONS = ("Edit cloud environment", "Network access", "Setup script", "Create a new repository",
+           "Create repository from template", "Only select repositories",
+           "Change repository visibility", "Make this repository private")
 
 
 def _plain(text: str) -> None:
-    said = text
+    said = " ".join(text.split())
     for b in BUTTONS:
         said = said.replace(b, "")
     said = re.sub(r"https?://\S+", "", said)
@@ -42,21 +45,22 @@ def test_a_cloud_chat_that_cannot_reach_job_sites_says_why_and_one_fix_in_steps(
     said = env_check.blocked_say(["LinkedIn", "freehire"])
     _plain(said)
     lines = said.splitlines()
-    assert "can't reach the job sites (LinkedIn, freehire)" in lines[0]
-    assert "Recommended, once:" in said
+    assert lines[0] == "This chat can't reach job sites yet (LinkedIn, freehire). To let it, once:"
     assert re.search(r"^1\. .+\n2\. Set Network access to Full", said, re.M)
     # No search runs in its place: a web search there turned up jobs closed for months,
     # shown as leads (2026-10-22).
     assert said.endswith("Say \"done\" once it's changed.")
     assert "won't search" in said
-    assert len(said.split()) <= 110
+    # 107 words said "done" twice and promised to "search again" before any search (2026-10-25).
+    assert said.count("done") == 1 and "search again" not in said
+    assert len(said.split()) <= 70
 
 
 def test_a_round_in_the_cloud_tells_the_person_the_fix_and_off_the_cloud_says_nothing(monkeypatch):
     monkeypatch.setattr(env_check, "blocked_names", lambda: ["LinkedIn"])
     monkeypatch.setattr(scrape_wide, "CLOUD", True)
     said = scrape_wide.blocked_say({"linkedin": "403 Forbidden"})
-    assert said.startswith("This chat can't reach the job sites (LinkedIn)")
+    assert said.startswith("This chat can't reach job sites yet (LinkedIn)")
     monkeypatch.setattr(scrape_wide, "CLOUD", False)
     assert scrape_wide.blocked_say({"linkedin": "403 Forbidden"}) == ""
     monkeypatch.setattr(scrape_wide, "CLOUD", True)
@@ -84,7 +88,8 @@ def test_every_message_the_place_check_says_unasked_is_plain():
 
 
 def test_the_steps_a_beginner_follows_are_numbered_and_plain():
-    for eid in ("cloud-internet", "cloud-setup-script", "clone-copy", "local-chat"):
+    for eid in ("cloud-internet", "cloud-setup-script", "make-copy", "connect-github",
+                "make-private", "local-chat", "routines-cloud"):
         steps = claude_surfaces.entry(eid)["steps"]
         assert 2 <= len(steps) <= 4, eid
         for s in steps:
@@ -92,15 +97,73 @@ def test_the_steps_a_beginner_follows_are_numbered_and_plain():
             assert len(s.split()) <= 30, (eid, s)
 
 
+def _read(rel):
+    return open(os.path.join(ROOT, rel), encoding="utf-8").read()
+
+
+def _prose(text):
+    """What a reader sees: comments, links' addresses and code spans left out."""
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    text = re.sub(r"\]\([^)]*\)", "]", text)
+    return re.sub(r"`[^`]*`", "", text)
+
+
 def test_start_here_recommends_one_fix_for_the_cloud_and_one_way_onto_a_computer():
-    text = open(os.path.join(ROOT, "START_HERE.md"), encoding="utf-8").read()
-    cloud = text.split("Go to [claude.ai/code]", 1)[1].split("## 4.", 1)[0]
-    local = text.split("## On your own computer", 1)[1].split("**On a phone, or in a browser,**")[0]
+    text = _read("START_HERE.md")
+    cloud = text.split("## 3. Say \"set me up\"", 1)[1].split("## On your computer", 1)[0]
+    local = text.split("## On your computer", 1)[1].split("## Then just talk to it", 1)[0]
     for part in (cloud, local):
         assert "recommended" in part.lower()
         for word in ("proxy", "egress", "allowlist", "Allowed domains", "worktree"):
             assert word not in part, word
-    assert "Network access to Full" in cloud and "Install GitHub Desktop" in local
+    assert "Network access to Full" in cloud and "COMPUTER.md" in local
+    assert "GitHub Desktop" not in text and "Terminal" not in text
+
+
+def test_the_pages_a_beginner_reads_first_are_short_and_plain():
+    """The README's start, START_HERE and HELP are the first things a person reads: 1,870
+    words, a repeated question and GitHub Desktop were in the way (2026-10-25)."""
+    readme = _read("README.md")
+    start = readme[readme.index("## Get started"):readme.index("## What you can say to it")]
+    assert len(_prose(start).split()) <= 100
+    for rel, cap in (("START_HERE.md", 600), ("HELP.md", 400)):
+        said = _prose(_read(rel))
+        assert len(said.split()) <= cap, (rel, len(said.split()))
+    for said in (start, _read("START_HERE.md"), _read("HELP.md")):
+        _plain(_prose(said).replace("repositories", "").replace("GitHub App", ""))
+        assert "claude.ai/connect-github" not in said and "fifteen minutes" not in said
+        assert "GitHub Desktop" not in said
+
+
+def test_what_setup_says_to_the_person_is_plain_and_short():
+    """The lines /setup gives the person in quotes, word for word."""
+    setup = _read(".claude/commands/setup.md")
+    quoted = ["\n".join(ln[2:] for ln in block.splitlines())
+              for block in re.findall(r"(?:^> .*\n?)+", setup, re.M)]
+    assert quoted
+    first = quoted[0]
+    assert len(first.split()) <= 60 and "documents/" not in first
+    assert "attach" in first.lower() and "paste" in first.lower()
+    for said in quoted:
+        _plain(said.replace("<employer>", "").replace("<country>", ""))
+    four = next(q for q in quoted if q.startswith("Thanks."))
+    assert len(re.findall(r"^\d\. ", four, re.M)) == 4
+    # The place question, asked only where the chat cannot tell, is one short question.
+    ask = f"{place.QUESTION} {place.TRADE_OFF} {place.RECOMMEND}"
+    _plain(ask)
+    assert ask.count("?") == 1 and len(ask.split()) <= 40
+
+
+def test_the_brief_is_made_with_nothing_for_the_person_to_type():
+    import routines
+    readme = _read("automation/README.md")
+    paste = re.search(r"> (Set up my brief in this chat\.)\n", readme)
+    assert paste and len(paste.group(1).split()) <= 8
+    said = routines.default("Europe/London")["say"]
+    _plain(said)
+    assert said.startswith("Your brief is set up: Mondays and Thursdays at 7:38")
+    for line in claude_surfaces.steps("routines-cloud"):
+        _plain(line)
 
 
 def test_every_upgrade_says_what_it_gives_and_asks_in_plain_words(monkeypatch):

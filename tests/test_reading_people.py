@@ -358,8 +358,8 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
     # A cloud chat in the desktop app with no browser says finding works and offers the
     # move to two chats, never a paste: the person is at a computer. It makes no choice.
     assert desk["say"].startswith("Finding people works in this chat.")
-    assert "Then start a chat on it.\nAt the time of writing (checked" in desk["say"]
-    assert "\n2. Open its Code tab, at the top." in desk["say"]
+    assert "To set up a chat on your computer:\n1. Install the Claude desktop app" in desk["say"]
+    assert "\n2. Open its Code tab." in desk["say"] and "GitHub Desktop" not in desk["say"]
     assert "Two chats work best" in desk["say"] and "one or two who matter most" not in desk["say"]
     assert not desk["usable"] and desk["route"] == "hand"
     paste = reading.route([], "paste", CLOUD_PHONE)
@@ -370,7 +370,7 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
         said = r["say"]
         assert not claude_surfaces.BANNED.search(said), claude_surfaces.BANNED.search(said)
         assert not any(w in said.lower() for w in ("cmd+", "ctrl+", "for each person", "everyone"))
-        assert said.count("At the time of writing:") == said.count("(official page: https://")
+        assert "At the time of writing" not in said and "official page" not in said
         assert "never everyone" in r["do"] or r["route"] != "hand"
 
 
