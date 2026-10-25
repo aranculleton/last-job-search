@@ -204,8 +204,13 @@ def venv_python(root: str | None = None) -> str:
 
 
 def _venv_cfg(root: str | None = None) -> dict:
+    """The .venv's pyvenv.cfg, read the way Python itself reads it: UTF-8, which is how
+    venv writes it, and a byte that is not UTF-8 kept as it is (surrogateescape) rather
+    than stopping every command (Lib/venv/__init__.py; Python/pathconfig.c in 3.9,
+    Modules/getpath.c from 3.11)."""
     try:
-        with open(os.path.join(root or ROOT, ".venv", "pyvenv.cfg"), encoding="utf-8") as fh:
+        with open(os.path.join(root or ROOT, ".venv", "pyvenv.cfg"), encoding="utf-8",
+                  errors="surrogateescape") as fh:
             return {k.strip(): v.strip() for k, v in
                     (line.split("=", 1) for line in fh if "=" in line)}
     except OSError:
@@ -332,12 +337,9 @@ def venv_site(root: str | None = None, version=None) -> str | None:
     version (a venv's packages are built for one version), else None."""
     venv = os.path.join(root or ROOT, ".venv")
     version = tuple(version or sys.version_info[:2])
-    try:
-        with open(os.path.join(venv, "pyvenv.cfg"), encoding="utf-8") as fh:
-            cfg = dict(line.split("=", 1) for line in fh if "=" in line)
-    except OSError:
+    cfg = _venv_cfg(root)
+    if not cfg:
         return None
-    cfg = {k.strip(): v.strip() for k, v in cfg.items()}
     made = cfg.get("version") or cfg.get("version_info", "")
     if tuple(int(x) for x in made.split(".")[:2] if x.isdigit()) != version:
         return None

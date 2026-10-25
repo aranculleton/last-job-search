@@ -33,7 +33,7 @@ def _repo(tmp_path, made="3.13", home_exists=True):
     """A repo with a .venv made by `made`, whose base Python's folder is there or not."""
     root = tmp_path / "repo"
     (root / "tools").mkdir(parents=True)
-    (root / "tools" / "a_tool.py").write_text("print('hi')\n")
+    (root / "tools" / "a_tool.py").write_text("print('hi')\n", encoding="utf-8")
     home = tmp_path / "base" / "bin"
     if home_exists:
         home.mkdir(parents=True)
@@ -41,8 +41,26 @@ def _repo(tmp_path, made="3.13", home_exists=True):
     exe = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     exe.parent.mkdir(parents=True)
     exe.write_text("")
-    (venv / "pyvenv.cfg").write_text(f"home = {home}\nversion = {made}.4\n")
+    # UTF-8, as venv itself writes it (Lib/venv/__init__.py): a folder named "Zoë" written
+    # in Windows' own code page instead is a file no Python ever makes.
+    (venv / "pyvenv.cfg").write_text(f"home = {home}\nversion = {made}.4\n", encoding="utf-8")
     return root, str(exe)
+
+
+def test_a_venv_config_with_a_byte_that_is_not_utf8_is_read_as_python_reads_it(tmp_path):
+    # Python reads pyvenv.cfg as UTF-8 and keeps a byte that is not (surrogateescape:
+    # Python/pathconfig.c in 3.9, Modules/getpath.c from 3.11), so a config written in a
+    # code page by some other tool is read, never a stop for every command.
+    root, exe = _repo(tmp_path)
+    cfg = os.path.join(str(root), ".venv", "pyvenv.cfg")
+    with open(cfg, "wb") as fh:
+        fh.write(b"home = " + os.fsencode(str(tmp_path / "base" / "bin")) +
+                 b"\nprompt = Zo\xeb's search\nversion = 3.13.4\n")
+    assert L.venv_version(str(root)) == (3, 13)
+    assert L.venv_runs(str(root))
+    assert L.venv_site(str(root), (3, 13)) is None          # no site-packages folder in it
+    script = str(root / "tools" / "a_tool.py")
+    assert L.rerun_args([script], None, {}, "/usr", (3, 9), str(root)) == [exe, script]
 
 
 def test_an_app_script_started_by_another_version_runs_again_under_the_venvs(tmp_path):
