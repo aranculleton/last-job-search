@@ -38,8 +38,19 @@ def test_the_newer_name_commands_draw_the_name_higher_and_keep_its_box():
         assert f"\\textcolor{{{{{which}color}}}}" in line and "\\namefont" in line, line
 
 
-@pytest.mark.skipif(not (shutil.which("lualatex") and shutil.which("pdftotext")),
-                    reason="lualatex or pdftotext is not installed here")
+def _poppler() -> bool:
+    """Poppler's pdftotext, whose -bbox and -layout the case was found with. Another one can
+    be first on PATH (Git for Windows carries a pdftotext of its own) and print no boxes."""
+    exe = shutil.which("pdftotext")
+    if not exe:
+        return False
+    r = subprocess.run([exe, "-v"], capture_output=True, text=True, encoding="utf-8",
+                       errors="replace")
+    return "poppler" in (r.stdout + r.stderr).lower()
+
+
+@pytest.mark.skipif(not (shutil.which("lualatex") and _poppler()),
+                    reason="lualatex or Poppler's pdftotext is not installed here")
 def test_a_name_with_no_descenders_is_its_own_line(tmp_path, monkeypatch):
     monkeypatch.setenv("LJS_STATE", str(tmp_path))
     import docpaths
@@ -61,13 +72,14 @@ def test_a_name_with_no_descenders_is_its_own_line(tmp_path, monkeypatch):
     # What every extractor's line grouping rests on: the name's boxes and the city's must
     # not overlap. Whether pdftotext then runs the two together also depends on the columns
     # of the lines below, so the overlap is the test, not one extractor's verdict.
-    box = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True).stdout
+    box = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True,
+                         encoding="utf-8").stdout
     words = re.findall(r'yMin="([\d.]+)" xMax="[\d.]+" yMax="([\d.]+)">([^<]*)<', box)
     assert [w[2] for w in words[:2]] == ["Idris", "Corrie"], words[:3]
     name_bottom = max(float(w[1]) for w in words[:2])
     city_top = float(words[2][0])
     assert name_bottom <= city_top, (words[:3], name_bottom, city_top)
-    text = subprocess.run(["pdftotext", "-layout", pdf, "-"], capture_output=True,
-                          text=True).stdout
+    text = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
+                          capture_output=True, text=True, encoding="utf-8").stdout
     lines = [" ".join(ln.split()) for ln in text.splitlines() if ln.strip()]
     assert lines[0] == "Idris Corrie", lines[:2]
