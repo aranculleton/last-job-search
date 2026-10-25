@@ -2332,6 +2332,18 @@ def received(contacts, threads, contact_id, today, text="", date=None, channel="
     return {"row": row, "said": said}
 
 
+def _words_from(path: str, prog: str):
+    """A message's words from the file named, or None with one plain line said: a missing
+    file ended `sent`, `text`, `nudge`, `message` and `resent` in a traceback (networking
+    audit, 2026-10-25), where `received` already said it plainly."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"{prog}: cannot read {path}: {getattr(e, 'strerror', None) or e}")
+        return None
+
+
 def _cli_received(argv) -> int:
     ap = argparse.ArgumentParser(
         prog="state.py received",
@@ -2348,11 +2360,8 @@ def _cli_received(argv) -> int:
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
-    try:
-        with open(a.text_file, encoding="utf-8") as fh:
-            text = fh.read()
-    except OSError as e:
-        print(f"received: cannot read {a.text_file}: {e.strerror or e}")
+    text = _words_from(a.text_file, "received")
+    if text is None:
         return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     try:
@@ -2711,8 +2720,9 @@ def _cli_text(argv) -> int:
     ap.add_argument("--threads", default="")
     a = ap.parse_args(argv)
     path = a.threads or person.state("network_threads.csv")
-    with open(a.text_file, encoding="utf-8") as fh:
-        text = fh.read()
+    text = _words_from(a.text_file, "text")
+    if text is None:
+        return 1
     threads = load_threads(path)
     try:
         fill_text(threads, a.contact_id, a.date, text)
@@ -2770,13 +2780,15 @@ def _cli_sent(argv) -> int:
         # went, with the words each carried.
         print(BATCH_SENT_CHECK)
         return 1
+    given = _words_from(a.text_file, "sent") if a.text_file else ""
+    if given is None:
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
     for cid in a.contact_ids:
         text, before, subject, placeholder = "", None, a.subject, False
         if a.text_file:
-            with open(a.text_file, encoding="utf-8") as fh:
-                text = fh.read()
+            text = given
             before = _draft_of(cid)
         elif a.draft:
             text = _draft_of(cid)
@@ -2869,8 +2881,17 @@ def _cli_followed_up(argv, kind) -> int:
     texts = {}
     if a.texts:
         import json
-        with open(a.texts, encoding="utf-8") as fh:
-            texts = {str(k): str(v) for k, v in (json.load(fh) or {}).items()}
+        raw = _words_from(a.texts, kind)
+        if raw is None:
+            return 1
+        try:
+            texts = {str(k): str(v) for k, v in (json.loads(raw) or {}).items()}
+        except (ValueError, AttributeError):
+            print(f"{kind}: {a.texts} is not a file of {{contact id: message}} pairs (JSON)")
+            return 1
+    given = _words_from(a.text_file, kind) if a.text_file else ""
+    if given is None:
+        return 1
     if not a.contact_ids:
         # --texts is how several are logged at once: its ids are the ones it names.
         a.contact_ids = list(texts)
@@ -2882,8 +2903,7 @@ def _cli_followed_up(argv, kind) -> int:
     for cid in a.contact_ids:
         before = None
         if a.text_file:
-            with open(a.text_file, encoding="utf-8") as fh:
-                text = fh.read()
+            text = given
             before = _draft_of(cid)
         elif cid in texts:
             text, before = texts[cid], _draft_of(cid)
@@ -2991,11 +3011,10 @@ def _cli_resent(argv) -> int:
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
+    text = _words_from(a.text_file, "resent") if a.text_file else ""
+    if text is None:
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
-    text = ""
-    if a.text_file:
-        with open(a.text_file, encoding="utf-8") as fh:
-            text = fh.read()
     try:
         got = resent(contacts, threads, a.contact_id, a.today, text=text, date=a.date or None,
                      subject=a.subject)
