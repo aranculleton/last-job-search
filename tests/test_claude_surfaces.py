@@ -38,17 +38,25 @@ def test_every_entry_says_what_it_rests_on_and_when_it_was_checked():
     assert int(REG["stale_after_days"]) == 60
 
 
-def test_a_path_is_a_destination_at_the_time_of_writing_with_its_official_page():
+def test_a_path_is_a_destination_and_its_date_and_page_are_claudes():
+    """"At the time of writing (checked ...; official page: ...)" headed every path a
+    beginner was given, six times on one page (2026-10-25). The person gets the goal and the
+    destination; the day and the page are Claude's, to check before passing it on."""
     for e in REG["entries"]:
-        for field in ("goal", "how"):
-            assert not C.BANNED.search(e.get(field, "")), (e["id"], field)
+        for field in ("goal", "how", "steps"):
+            text = " ".join(e.get(field) or ()) if field == "steps" else e.get(field, "")
+            assert not C.BANNED.search(text), (e["id"], field, C.BANNED.search(text))
         if e.get("how"):
             said = C.say(e["id"], name="my-job-search", owner="example-owner")
-            assert "At the time of writing: " in said and "(official page: https://" in said
+            assert "At the time of writing" not in said and "official page" not in said
+            assert C.official(e) not in said and e["verified_on"] not in said
             assert "{" not in said                                # every placeholder filled
             if e.get("goal"):
-                assert said.startswith(e["goal"][:1].upper() + e["goal"][1:])
-    assert C.say("local-chat", goal=False).startswith("At the time of writing:")
+                assert said.startswith(e["goal"][:1].upper() + e["goal"][1:] + ": ")
+        src = C.source(e["id"])
+        assert src.startswith(f"[claude_surfaces: {e['id']!r} checked {e['verified_on']}")
+        assert C.official(e) in src and "check it today" in src
+    assert C.say("local-chat", goal=False).startswith("In the Claude desktop app")
     # "Find" names a screen only when it sends someone looking, never in their own words.
     assert C.BANNED.search("find the setting") and not C.BANNED.search('say "find me people"')
 
@@ -165,18 +173,59 @@ def test_the_watch_runs_in_the_app_only_and_reports_without_changing_anything():
 
 def test_an_empty_block_is_filled_and_never_runs_into_the_next(tmp_path):
     doc = ("<!-- claude-surface: local-chat -->\n<!-- /claude-surface -->\n\nkept\n\n"
-           "<!-- claude-surface: clone-copy -->\nold words\n<!-- /claude-surface -->\n")
+           "<!-- claude-surface: make-copy -->\nold words\n<!-- /claude-surface -->\n")
     (tmp_path / "START_HERE.md").write_text(doc, encoding="utf-8")
     C.sync_docs(str(tmp_path))
     got = (tmp_path / "START_HERE.md").read_text(encoding="utf-8")
     assert "\nkept\n" in got and got.count("<!-- /claude-surface -->") == 2
-    assert C.block("local-chat") in got and C.block("clone-copy") in got
+    assert C.block("local-chat") in got and C.block("make-copy") in got
 
 
 def test_a_beginner_gets_numbered_steps_in_the_docs_and_in_the_chat():
-    for eid in ("cloud-internet", "clone-copy", "local-chat"):
+    for eid in ("cloud-internet", "make-copy", "connect-github", "local-chat"):
         lines = C.render(eid).split("\n")
-        assert lines[0].endswith("):") and "checked " in lines[0]
-        assert [ln.split(".")[0] for ln in lines[1:]] == [str(i) for i in range(1, len(lines))]
+        e = C.entry(eid)
+        # The day and the page sit in a comment nobody reading the page sees.
+        assert lines[0] == f"<!-- checked {e['verified_on']}; {C.official(e)} -->"
+        assert lines[1] == f"To {e['goal']}:"
+        steps = lines[2:-2]
+        assert [ln.split(".")[0] for ln in steps] == [str(i) for i in range(1, len(steps) + 1)]
+        assert lines[-2:] == ["", C.CLOSING_DOC]
     said = "\n".join(C.steps("cloud-internet"))
     assert "Network access to Full" in said and "within about a minute" in said
+    assert "checked" not in said and "http" not in said
+
+
+def test_every_entry_gives_something_to_do_when_asked_for_its_steps():
+    """`steps` on eight entries printed only a dated header and nothing to do (2026-10-25):
+    an entry with a path and no steps gives its path, and one with neither its claim."""
+    for e in REG["entries"]:
+        lines = C.steps(e["id"], name="my-job-search", owner="example-owner")
+        body = [ln for ln in lines if not ln.startswith("To ")]
+        assert body and all(ln.strip() for ln in body), e["id"]
+        if not e.get("steps") and e.get("how"):
+            assert lines[-1].startswith("1. "), e["id"]
+        if not e.get("steps") and not e.get("how"):
+            assert lines == [e["claim"]], e["id"]
+
+
+def test_the_steps_command_gives_claude_the_date_and_page_apart(capsys):
+    assert C.main(["steps", "connect-github"]) == 0
+    out, err = capsys.readouterr()
+    assert "checked" not in out and "official page" not in out
+    assert err.startswith("[claude_surfaces: 'connect-github' checked ")
+
+
+def test_a_private_copy_and_github_are_reached_without_github_desktop():
+    """GitHub Desktop was the first step on a computer and is not needed at all: a chat on
+    the computer makes the copy itself (COMPUTER.md), and a phone reaches everything else."""
+    ids = {e["id"] for e in REG["entries"]}
+    assert "clone-copy" not in ids
+    assert not any("GitHub Desktop" in str(e) for e in REG["entries"])
+    paste = C.steps("local-chat", name="my-job-search", owner="example-owner")[-1]
+    assert "github.com/example-owner/my-job-search" in paste and "COMPUTER.md" in paste
+    connect = "\n".join(C.steps("connect-github"))
+    assert "github.com/apps/claude/installations/new" in connect
+    assert "Only select repositories" in connect
+    copy = "\n".join(C.steps("make-copy"))
+    assert "Use this template" in copy and "Private" in copy and "phone" in copy

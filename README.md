@@ -19,21 +19,19 @@ charge of what goes out.
   - Another agent tool (ChatGPT Codex, Google's Gemini CLI, the Cursor editor)? The core
     works in any agent that can read files and run commands; [AGENTS.md](AGENTS.md) covers
     the Claude Code parts.
-- About fifteen minutes. No coding.
+- No coding, and nothing to install first. A phone is enough.
 
 ## Get started
 
-1. Click the green **Use this template** button, then **Create a new repository**. Tick
-   **Private**. Your copy will hold your work history and the names of people you talk to.
-   **Never fork it**: a fork of a public repository is public.
-2. Connect GitHub to Claude at [claude.ai/connect-github](https://claude.ai/connect-github),
-   and give it access to your new copy only.
-3. Open [claude.ai/code](https://claude.ai/code), choose your copy, and say **"set me up"**.
+1. Make your own private copy: on this page, **Use this template**, then **Create a new
+   repository**, with **Private** chosen. Never fork it: a fork is public.
+2. Open [claude.ai/code](https://claude.ai/code), connect GitHub when it asks, and install the
+   [Claude GitHub App](https://github.com/apps/claude/installations/new) on your copy only.
+3. Choose your copy and say **"set me up"**. Claude asks a few plain questions, does the
+   research and shows your first shortlist.
 
-Claude asks you plain questions about yourself and does the rest. If you have a computer,
-**two chats work best**: one on your computer for everything you do, networking included,
-and your brief in the cloud, which follows up for you even when your computer is off.
-[START_HERE.md](START_HERE.md) walks you through both.
+[START_HERE.md](START_HERE.md) has each step for a phone, a browser or a computer, and
+[HELP.md](HELP.md) what to do if something goes wrong.
 
 ## What you can say to it
 
@@ -62,8 +60,8 @@ email: new jobs and what is due reach you in Claude, in your brief and your job 
   note (which asks for a conversation, not a job), the replies and the referral ask. It tracks
   every thread and warns you before a cold application lands on top of a warm introduction.
 - **It reminds you.** When a follow-up is due, on an application or a conversation, it says so
-  and drafts the nudge. Say "set up my brief" and what you owe, what changed and the next
-  three things to do arrive in one message, twice a week.
+  and drafts the nudge. Setup ends by making your brief: what you owe, what changed and the
+  next three things to do, in one message, twice a week.
 - **It checks its own work.** Every resume is compiled, read back and checked the way an
   applicant tracking system reads it, and every claim against what you told it.
 - **It remembers.** Applications, conversations and what is due live in files in your copy,

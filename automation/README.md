@@ -17,9 +17,16 @@ broken.** The brief is sent on each of its days even when nothing is due, so sil
 means something failed.
 Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 
-## Set it up: pick one of two
+## Set it up
 
-Only two set-ups work reliably, and they trade the same thing: where the briefing arrives.
+**Setup makes the brief for you, and asks nothing.** At the end of `/setup` a cloud chat makes
+it: its own chat, **Job search: morning brief**, on your private repo; a task bound to that
+chat, Mondays and Thursdays at 7:38 your time; and one first brief a few minutes later, so you
+see it work (`python3 tools/routines.py brief` prints the calls). Say "move my brief" to change
+the days or the time. Anywhere it was not made, say "set up my brief" in any chat.
+
+Two set-ups work reliably, and they trade the same thing: where the briefing arrives. Setup
+makes (a).
 
 | | (a) One chat per briefing | (b) A routine, a new chat each run |
 |---|---|---|
@@ -38,27 +45,33 @@ so it arrives when your computer is off. Where the chat on your computer has the
 routines, Claude makes it itself, as (b); otherwise you make it, once:
 
 <!-- claude-surface: routines-cloud -->
-Make the brief in the cloud. At the time of writing: type /schedule in a chat on your
-computer and answer its questions; or open claude.ai/code/routines in a browser and choose
-New routine; in the desktop app's Code tab it is Routines, then New routine, then Cloud
-(official page: https://code.claude.com/docs/en/routines). Checked 2026-10-18.
+<!-- checked 2026-10-25; https://code.claude.com/docs/en/routines -->
+To make the brief in the cloud:
+1. Open claude.ai/code/routines and choose New task (in the desktop app's Code tab:
+   Scheduled, then New task).
+2. Name it Job search: morning brief, choose your copy, set it weekly at your time, paste
+   the prompt I give you, and save.
+3. Open it again, choose Custom, and paste the schedule I give you, so it runs on both days.
+
+Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
 
 A scheduled task that runs on your computer is never used for it:
 
 <!-- claude-surface: routines-local -->
+<!-- checked 2026-10-18; https://code.claude.com/docs/en/desktop-scheduled-tasks -->
 A desktop scheduled task made with Local runs on the computer, and only while the desktop
-app is running and the computer is awake, so it is never used for the brief. Checked
-2026-10-18.
+app is running and the computer is awake, so it is never used for the brief.
 <!-- /claude-surface -->
 
 Claude cannot start a cloud chat from its own shell on your computer, so it never tries:
 
 <!-- claude-surface: cli-cloud claim -->
+<!-- checked 2026-10-18; https://code.claude.com/docs/en/claude-code-on-the-web -->
 claude --cloud starts a cloud chat from a terminal. It needs the terminal version of Claude
 Code, installed apart from the desktop app and signed in to the same claude.ai account, and
 it refuses to run without an interactive terminal: Claude cannot run it from its own shell,
-only the person can, in theirs. Checked 2026-10-18.
+only the person can, in theirs.
 <!-- /claude-surface -->
 
 ### The prompt each task stores
@@ -80,8 +93,15 @@ Scheduled run: job round. Run `git fetch origin master`, then read `automation/p
 
 ### (a) One chat per briefing
 
-Say **"set up my brief"** in any chat in your repo. Where it can, Claude starts the brief's
-own chat with the paste in step 2, and you answer its two questions there. Otherwise:
+Say **"set up my brief"** in any cloud chat in your repo, or let `/setup` do it. Claude lists
+your scheduled tasks and runs `python3 tools/routines.py brief --triggers <each page>`, so a
+brief that already exists, under any name, is never made twice. With none, it makes the
+brief's own chat (`create_session` on your private repo, titled **Job search: morning brief**),
+a task bound to it (`create_trigger` with that chat's id, `CRON_TZ=<your zone> 38 7 * * 1,4`,
+the morning brief stub below as its prompt, no connectors), and a one-off first run a few
+minutes later bound to the same chat; then `routines.py record` writes `profile/routines.json`
+and it lands on master. You answer nothing: the days and the time are defaults, and the zone
+is the one your profile names. Where a chat cannot make chats itself:
 
 1. In a cloud chat (claude.ai/code in a browser, or the Claude app on your phone), start a
    **new chat with your private repo selected**. Name it after its task: **Job search: morning brief**.
@@ -89,14 +109,9 @@ own chat with the paste in step 2, and you answer its two questions there. Other
    long-lived chat small" below, and start the chat in it.)
 2. Paste this into it:
 
-   > Set up my brief in this chat. Ask me which two days and what time I want it and which
-   > city I am in, then create a scheduled task that fires into this chat, named Job search: morning
-   > brief, with the morning brief stub in `automation/README.md` as its prompt. Record it
-   > in `profile/routines.json` (`setup` `chat_per_briefing`, this chat's session id and
-   > title under `chat`, the trigger id), run `python3 tools/routines.py check` and
-   > `./tools/ci_local.sh --quick`, and land it on master through a PR.
+   > Set up my brief in this chat.
 
-   Claude asks two questions and writes the schedule itself; you never type one.
+   It makes the task bound to itself, with the defaults above, records it and lands it.
 3. Only if you want new postings searched on a schedule as well: start a second new chat
    with the repo selected, named **Job search: shortlist**, and paste the same with
    "shortlist" in place of "brief". Most people do not need it: "find me jobs" in any chat
@@ -109,16 +124,22 @@ own chat with the paste in step 2, and you answer its two questions there. Other
 1. Make a routine for each task:
 
    <!-- claude-surface: routines-cloud -->
-   Make the brief in the cloud. At the time of writing: type /schedule in a chat on your
-   computer and answer its questions; or open claude.ai/code/routines in a browser and
-   choose New routine; in the desktop app's Code tab it is Routines, then New routine, then
-   Cloud (official page: https://code.claude.com/docs/en/routines). Checked 2026-10-18.
+   <!-- checked 2026-10-25; https://code.claude.com/docs/en/routines -->
+   To make the brief in the cloud:
+   1. Open claude.ai/code/routines and choose New task (in the desktop app's Code tab:
+      Scheduled, then New task).
+   2. Name it Job search: morning brief, choose your copy, set it weekly at your time, paste
+      the prompt I give you, and save.
+   3. Open it again, choose Custom, and paste the schedule I give you, so it runs on both
+      days.
+
+   Screens change: if yours looks different, tell Claude what you see.
    <!-- /claude-surface -->
 2. **Name:** Job search: morning brief. **Repository:** tick your private repo.
    **Schedule:** weekly, on the first of your two days (Monday and Thursday suit most
-   searches), at your time; the screen offers set frequencies, so step 4 adds the second
-   day. **Prompt:** the morning brief stub above, exactly. Turn on notifications for it if
-   the app offers them.
+   searches), at your time; the screen offers set frequencies, so Custom adds the second
+   day afterwards. **Prompt:** the morning brief stub above, exactly. Turn on notifications
+   for it if the app offers them.
 3. Only if you want a scheduled search too: the same for **Job search: shortlist**, with its
    stub and its days.
 4. Ask any chat in your repo: "add my routines to `profile/routines.json`, with

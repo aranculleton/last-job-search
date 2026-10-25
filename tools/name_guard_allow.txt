@@ -165,3 +165,6 @@ Fernhill Realty         # invented employer, the same test
 Northgate Quant Partners    # invented employer, the same test
 Quantitative Analyst    # a job title, the same test
 Quant Research          # a job title, the same test
+Windows Subsystem      # a product: Microsoft's Windows Subsystem for Linux (WSL), quoted from the Chrome docs
+Microsoft Edge      # a product: Microsoft's browser, quoted from the Claude Code docs
+Launch Claude       # a phrase quoted from the desktop app's docs ("Launch Claude from ..."), not a name

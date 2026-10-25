@@ -77,7 +77,21 @@ from openroles import BoardError  # noqa: E402
 from openroles.models import systems as _systems  # noqa: E402
 from openroles.providers import READERS  # noqa: E402
 from openroles.providers import workday as _wd  # noqa: E402
-from prefilter import location_verdict, title_verdict  # noqa: E402
+try:
+    from prefilter import location_verdict, title_verdict  # noqa: E402
+    NO_PROFILE = False
+except person.NoProfile:
+    # /setup looks for each target employer's board (`--find`) while the profile is still
+    # being written, in parallel with the rest. With no profile there are no places or
+    # titles to judge against: every role counts, and --find says none was judged. It
+    # crashed with a NoProfile traceback before (2026-10-25).
+    NO_PROFILE = True
+
+    def location_verdict(location, title=""):  # noqa: D103
+        return ("PASS", "no profile yet")
+
+    def title_verdict(title):  # noqa: D103
+        return ("PASS", "no profile yet")
 
 UA = "last-job-search/1.0 (personal job search; contact via GitHub)"
 # Checked for every agent a rule could be written for: everyone, the token
@@ -654,7 +668,9 @@ def _find_lines(target: str, found: list[dict]) -> list[str]:
     and for a guess the evidence to check it against, with the entry held back."""
     lines = []
     for b in found:
-        head = f"{b['kind']}/{b['token']}: {b['open']} open, {b['in_range']} in range"
+        head = (f"{b['kind']}/{b['token']}: {b['open']} open"
+                + (" (no profile yet, so none judged in range)" if NO_PROFILE
+                   else f", {b['in_range']} in range"))
         lines.append(head + (f" [{b['why']}]" if b["why"] else ""))
         entry = f'"<Employer>": ("{b["kind"]}", "{b["token"]}"),'
         if b["how"] != "guessed":

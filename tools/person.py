@@ -55,7 +55,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = "LJS_PROFILE"
 DEFAULT = "profile"
 
-SETUP_HINT = "no profile: run /setup"
+# Another chat may hold the profile, or be writing it: look before starting again (2026-10-25).
+SETUP_HINT = ("no profile here: run `python3 tools/place.py state` first (another chat may hold "
+              "it or be writing it), and run /setup only if it finds none")
 
 
 class NoProfile(RuntimeError):
@@ -100,7 +102,7 @@ def file(key: str, default: str) -> str:
 def _need(name: str) -> str:
     f = path(name)
     if not os.path.isfile(f):
-        raise NoProfile(f"the profile has no {name} ({f}). {SETUP_HINT} or add it")
+        raise NoProfile(f"the profile has no {name} ({f}): run /setup for that part, or add it")
     return f
 
 

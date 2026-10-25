@@ -55,8 +55,8 @@ FIRST = {
                  "missing, and the next one fits you better.",
     "prep": "This is your first call prep. After the call, tell me how it went and what was "
             "missing, and the next one is better for it.",
-    "brief": "This is your first brief. Tell me what you'd want more or less of, and it "
-             "changes from tomorrow.",
+    "brief": "This is your first brief. Tell me what you'd want more or less of, and the "
+             "next one changes.",
     "general": "Anything I make for you can be changed: say what's off and it sticks.",
 }
 

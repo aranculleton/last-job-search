@@ -31,6 +31,9 @@ from tests import repo_files
 REPO = Path(__file__).resolve().parent.parent
 RESET = REPO / ".claude" / "commands" / "reset.md"
 SETUP = REPO / ".claude" / "commands" / "setup.md"
+# What /setup writes, file by file: setup.md is the order and the questions since it was cut
+# to a flow that survives compaction, and its sections say what each file holds (2026-10-25).
+SECTIONS = REPO / ".claude" / "skills" / "job-application-assistant" / "setup-sections.md"
 
 
 def tracked_document_subfolders():
@@ -83,8 +86,9 @@ def section(text: str, start: str, end: str) -> str:
 
 
 def setup_step3_targets():
-    """Every path /setup Step 3 writes: its `profile/...` targets and state files."""
-    step3 = section(SETUP.read_text(encoding="utf-8"), "## Step 3:", "## Step 4:")
+    """Every path /setup writes: its `profile/...` targets and state files."""
+    text = SECTIONS.read_text(encoding="utf-8")
+    step3 = text[text.index("## The profile's files"):]
     targets = set(re.findall(r"`(profile/[^`]+)`", step3))
     state = section(step3, "Write the state files", "---")
     targets |= set(re.findall(r"`([\w/]+\.(?:csv|json))`", state))

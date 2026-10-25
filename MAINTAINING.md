@@ -85,8 +85,9 @@ These apply whenever the change is to the app, whichever repo the session starte
   `verified_against` and `ui_sensitive`. Messages read it (`claude_surfaces.say`), a person's
   docs carry it in `<!-- claude-surface: <id> -->` blocks (`claude_surfaces.py sync-docs`
   rewrites them), and Claude's own instructions name the entry by id. A path is written as a
-  destination, "At the time of writing", with the official page beside it, and never tells
-  anyone to press, click, tap or find. `tests/test_claude_surfaces.py` fails on a vocabulary
+  destination or numbered steps, never tells anyone to press, click, tap or find, and keeps
+  the day it was checked and its official page for Claude (`claude_surfaces.source`, on
+  stderr from `steps` and `say`, and a comment in a doc's block), never the person. `tests/test_claude_surfaces.py` fails on a vocabulary
   phrase outside the registry. **The weekly watch** (`.github/workflows/claude-surfaces-watch.yml`,
   the app only) opens the "Claude surfaces to re-check" issue when a quote has left its page, an
   entry is older than 60 days, or a Claude Code release is newer than `checked_version`: re-read
