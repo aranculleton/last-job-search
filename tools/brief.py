@@ -408,8 +408,7 @@ def _gather(today: dt.date, write: bool) -> dict:
     last_text = _read(earlier[-1]) if earlier else ""
 
     # The day's upkeep first, so everything below reads the state it leaves.
-    closed = followups.close_quiet(today=today, write=write) if write else \
-        followups.close_quiet(today=today, write=False)
+    closed = followups.close_quiet(today=today, write=write)
     if closed and write:
         tracker = open_actions._tracker()
     preps = _preps(iso) if write else {"line": "", "rebuilt": 0, "research": []}
@@ -554,8 +553,8 @@ def _lead(counts, replies, nudges_due, sent_lately, warm, owned, today) -> str:
         st = next_stage(r, today)
         more = " (and %d more)" % (len(procs) - 1) if len(procs) > 1 else ""
         nxt = (": the %s is on %s" % (st.get("label") or "next stage", st["date"])) if st else ""
-        return "Your %s process%s is live%s%s. /interview %s prepares it." % (
-            company, "" if not more else "", more, nxt, company)
+        return "Your %s process is live%s%s. /interview %s prepares it." % (
+            company, more, nxt, company)
     if replies:
         i = replies[0]
         who = first_name(i.get("name", "").split(" (")[0])
@@ -591,8 +590,9 @@ def _owed_line(i: dict) -> dict:
     else:
         what = "follow-up %s" % ((i.get("what") or "").split(",")[0].replace("nudge ", "")) \
             + (" %s" % i["to"].replace("to: ", "to ").split(" (")[0] if i.get("to") else "")
-    status = {"ready": "draft ready", "check": "draft to check",
-              "write": "to write here" if d.get("who") == "here" else "needs you",
+    status = {"ready": "draft ready", "check": "draft ready, check it first",
+              "write": ("%s to write" % ("reply" if d.get("kind") == "reply" else "draft"))
+              if d.get("who") == "here" else "needs you",
               "none": ""}[d["status"]]
     return {"text": "%s: %s%s%s" % (i.get("name"), what, ", %dd" % late if late else "",
                                      "; " + status if status else ""),
@@ -708,6 +708,8 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
         add("outcome", "Heard back from anyone? /outcome records it.")
     add("search", "Say \"find me jobs\" for a fresh shortlist.")
     add("network", "Say /network to find people at an employer you want.")
+    add("targets", "Name an employer you would love to work at, and I'll look for its jobs and "
+        "its people.")
     return out
 
 

@@ -181,3 +181,37 @@ def test_every_template_followups_writes_passes_the_apps_own_gate():
     it = {"message": followups.NUDGE_2.format(name="Wren", role="Demand Planner", date="2026-10-10"),
           "to": {"name": "Wren"}, "company": "Quayside Foods"}
     assert followups.checked(it) == []
+
+
+# ------------------------------------------------------------------ first notes queued by /network
+
+def _queued(tmp_path, cid, text):
+    d = tmp_path / "documents" / "network" / cid
+    d.mkdir(parents=True)
+    (d / "draft.md").write_text(text, encoding="utf-8")
+
+
+def _first_note_item(cid):
+    return {"half": "contact", "kind": "action_due", "contact_id": cid, "status": "not_contacted",
+            "name": "Juno Halloway (Fernhill Freight)", "late": 1, "held": [], "quiet": False,
+            "old": False, "text": "", "what": "Send the first note", "key": "fernhill freight"}
+
+
+def test_a_first_note_waiting_on_a_read_is_the_persons_to_unlock(tmp_path, monkeypatch):
+    import reading
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))
+    _queued(tmp_path, "fernhill_halloway", reading.WAITS_ON_A_READ + ": nothing was read.\n\n"
+            "Hi Juno, I build demand forecasts in Manchester.\n")
+    d = _draft(_first_note_item("fernhill_halloway"), _contact("fernhill_halloway", status="not_contacted"),
+               rows=[], threads=[])
+    assert d["status"] == "write" and d["who"] == "you" and "read of their profile" in d["why"]
+
+
+def test_a_queued_note_with_nothing_read_is_refused_by_the_gate_and_kept(tmp_path, monkeypatch):
+    monkeypatch.setenv("LJS_STATE", str(tmp_path))
+    _queued(tmp_path, "fernhill_halloway", "Hi Juno, I build demand forecasts in Manchester. How "
+                                           "is the planning team at Fernhill set up?\n")
+    d = _draft(_first_note_item("fernhill_halloway"), _contact("fernhill_halloway", status="not_contacted"),
+               rows=[], threads=[])
+    assert d["kind"] == "connection" and d["source"] == "stored"
+    assert d["status"] == "write" and any(f.startswith("no_reading") for f in d["findings"])

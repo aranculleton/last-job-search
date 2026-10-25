@@ -74,12 +74,13 @@ def _compose():
 
 
 def gate(text: str, kind: str, name: str = "", title: str = "", company: str = "",
-         contact: str = "", their_message: str = "") -> tuple[list[str], list[str]]:
+         contact: str = "", their_message: str = "",
+         card_only: bool = False) -> tuple[list[str], list[str]]:
     """(findings, warnings) for a draft: compose.validate's findings, which stop it, and
     compose.advise's warnings, which go beside it for the rewrite."""
     compose = _compose()
     found = compose.validate(text, kind, name=name or None, title=title, contact=contact,
-                             their_message=their_message or None)
+                             their_message=their_message or None, card_only=card_only)
     warned = compose.advise(text, kind, name=name or None, title=title,
                             their=(company,) if company else (), company=company)
     return ([f"{v.rule}: {v.text}" for v in found],
@@ -297,6 +298,15 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
     msgs = threads_index.get(cid, ())
     their = _their_last(msgs)
     stored = (item.get("text") or "").strip()
+    card_only = False
+    if not stored and kind in ("connection", "inmail", "dm", "email"):
+        # A first note queued by /network (documents/network/<id>/draft.md): checked as it
+        # stands, and one still waiting on a read of their profile is the person's to unlock.
+        queued, card_only, waits = _queued_note(cid)
+        if waits:
+            return _new("write", kind=kind, who="you", source="stored",
+                        why="the note waits on a read of their profile (/network)")
+        stored = queued
     old = earlier.get(cid)
     # An earlier pack's draft answers the thread as it stood that day: once anything has
     # been logged since, it answers a conversation that has moved on.
@@ -307,7 +317,8 @@ def draft(item: dict, contacts_by_id: dict, threads_index: dict, tracker, earlie
                                               old.get("kind") == kind else "", "pack")):
         if text:
             got = _checked(text, kind, name=name, title=title, company=company, contact=cid,
-                           their_message=their, source=source)
+                           their_message=their, source=source,
+                           card_only=card_only and source == "stored")
             if got["status"] != "write":
                 return got
             refused = refused or got        # kept: a draft to rewrite on its findings
@@ -347,11 +358,25 @@ def _one_line(e) -> str:
     return " ".join(str(e).split())[:200]
 
 
+def _queued_note(cid: str) -> tuple[str, bool, bool]:
+    """(the note in documents/network/<id>/draft.md, whether it is card-only, whether it
+    still waits on a read), or ("", False, False) when none is queued."""
+    try:
+        import reading
+        with open(reading.draft_path(cid), encoding="utf-8") as fh:
+            raw = fh.read()
+        return (reading.note_body(raw).strip(), reading.card_only_draft(cid),
+                reading.waits_on_read(cid))
+    except (ImportError, OSError, ValueError):
+        return "", False, False
+
+
 def _checked(text, kind, name="", title="", company="", contact="", their_message="",
-             source="code") -> dict:
+             source="code", card_only=False) -> dict:
     try:
         findings, warnings = gate(text, kind, name=name, title=title, company=company,
-                                  contact=contact, their_message=their_message)
+                                  contact=contact, their_message=their_message,
+                                  card_only=card_only)
     except ValueError as e:                 # a reaction waiting, an unknown kind
         return _new("write", kind=kind, who="you", why=_one_line(e), source=source)
     if findings:

@@ -320,3 +320,13 @@ def test_the_start_keeps_the_syncs_output_and_gathers_in_a_fresh_process(tmp_pat
     assert calls[-1][1].endswith("brief.py") and calls[-1][2:] == ["--on", "a model", "--write"]
     got = brief.read_sync(dt.date.today(), log)
     assert got["update"].startswith("An update is waiting") and got["earlier"]
+
+
+def test_a_search_with_nothing_in_it_still_gets_a_brief_with_three_things(tmp_path):
+    state = str(tmp_path / "empty")
+    os.makedirs(state)
+    r = _run(state, "--today", TODAY)
+    assert r.returncode == 0, r.stderr
+    assert "Nothing owed" in r.stdout and "Nothing has gone out in 14 days" in r.stdout
+    three = r.stdout.split("Next three\n", 1)[1].split("\n\n", 1)[0].splitlines()
+    assert len(three) == 3
