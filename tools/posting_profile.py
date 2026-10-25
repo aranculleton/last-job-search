@@ -522,7 +522,9 @@ def seen(row: dict, today=None, seen_path=None) -> dict:
     """{first_seen, days, repost, ruled_out}: what seen_jobs.json knows of this posting."""
     import throttle
     from lookup_score import norm
-    today = today or dt.date.today()
+    # A caller may give the day as text ("2026-10-21"), as staging's own callers do.
+    today = (today if isinstance(today, dt.date) else as_date(today, iso_only=True)) \
+        or dt.date.today()
     try:
         entries = throttle.load_seen(seen_path or person.state("job_scraper", "seen_jobs.json"))["seen"]
     except (OSError, ValueError):

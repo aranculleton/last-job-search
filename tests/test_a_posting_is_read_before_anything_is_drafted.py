@@ -255,6 +255,7 @@ def test_a_relist_staged_is_dated_as_the_round_dated_it(tmp_path, monkeypatch):
     assert prefilter.seen_on(str(seen), TODAY)(row) == "2026-10-01"
     prof = PP.read(row, PERMANENT, rows=[], today=TODAY)
     assert prof["seen"]["first_seen"] == "2026-10-01" and prof["seen"]["repost"]
+    assert PP.seen(row, today=TODAY.isoformat()) == prof["seen"]    # the day as text, too
     # Past the relist window the same title is a new opening, to the round and to staging.
     late = dt.date(2026, 12, 1)
     assert prefilter.seen_on(str(seen), late)(row) == ""
