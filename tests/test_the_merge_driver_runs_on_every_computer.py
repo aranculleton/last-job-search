@@ -49,8 +49,10 @@ def _files(tmp_path):
 
 
 def _cmd(driver, base, ours, theirs):
-    return (driver.replace("%O", str(base)).replace("%A", str(ours))
-            .replace("%B", str(theirs)).replace("%P", "network_contacts.csv"))
+    # The files by their names in the folder it runs in, as git hands the driver its own
+    # (.merge_file_XXXXXX): a Windows path, its backslashes unquoted, is not one sh reads.
+    return (driver.replace("%O", base.name).replace("%A", ours.name)
+            .replace("%B", theirs.name).replace("%P", "network_contacts.csv"))
 
 
 def test_a_python_since_removed_is_replaced_by_the_one_py_sh_finds(tmp_path):

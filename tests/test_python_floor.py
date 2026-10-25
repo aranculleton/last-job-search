@@ -49,8 +49,10 @@ def test_the_merge_driver_never_leaves_one_sides_copy(tmp_path):
     base.write_text("id,status\na,sent\n")
     ours.write_text("id,status\na,replied\n")
     theirs.write_text("id,status\na,closed\n")
-    cmd = (merge_state.DRIVER.replace("%O", str(base)).replace("%A", str(ours))
-           .replace("%B", str(theirs)).replace("%P", "network_contacts.csv"))
+    # The files by their names in the folder it runs in, as git hands the driver its own
+    # (.merge_file_XXXXXX): a Windows path, its backslashes unquoted, is not one sh reads.
+    cmd = (merge_state.DRIVER.replace("%O", base.name).replace("%A", ours.name)
+           .replace("%B", theirs.name).replace("%P", "network_contacts.csv"))
     r = subprocess.run(["sh", "-c", cmd], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode != 0
     merged = ours.read_text()
