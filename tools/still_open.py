@@ -30,7 +30,6 @@ Read-only. It changes no file; `/outcome` or the tracker edit is the person's.
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import os
 import re
@@ -129,9 +128,7 @@ def fetch(url: str, timeout: int = 20) -> str:
 
 def check(statuses: set[str], path: str = TRACKER) -> list[dict]:
     import csv_store
-    csv_store.refuse_conflicts(path)
-    with open(path, newline="", encoding="utf-8") as fh:
-        rows = [r for r in csv.DictReader(fh) if (r.get("status") or "").strip() in statuses]
+    rows = [r for r in csv_store.dict_rows(path) if (r.get("status") or "").strip() in statuses]
     out = []
     for r in rows:
         url = (r.get("source") or "").strip()

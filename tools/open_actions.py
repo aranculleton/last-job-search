@@ -53,7 +53,6 @@ stage in the folder, and after it, while no thank-you note sits there.
 from __future__ import annotations
 
 import argparse
-import csv
 import datetime as dt
 import os
 import re
@@ -131,10 +130,8 @@ INTERVIEWING = followups.LIVE_PROCESS - {"offer"}
 
 def _tracker(path=TRACKER):
     import csv_store
-    csv_store.refuse_conflicts(path)
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return list(csv.DictReader(fh))
+        return csv_store.dict_rows(path)
     except OSError:
         return []
 

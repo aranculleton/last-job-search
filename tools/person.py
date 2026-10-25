@@ -55,6 +55,60 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = "LJS_PROFILE"
 DEFAULT = "profile"
 
+
+def home_zone_named(profile_dir: str) -> str:
+    """The IANA zone the profile names for the person's own time (networking.py TIMEZONE,
+    else routines.json "timezone"), or "". Read as text, without running the profile, since
+    it is wanted before anything else has loaded."""
+    import re
+    iana = re.compile(r"\b[A-Z][A-Za-z]+(?:/[A-Za-z0-9_+-]+)+\b")
+    try:
+        with open(os.path.join(profile_dir, "networking.py"), encoding="utf-8") as fh:
+            m = re.search(r"^TIMEZONE\s*=\s*[\"'](.*?)[\"']", fh.read(), re.M)
+        z = iana.search(m.group(1)) if m else None
+        if z:
+            return z.group(0)
+    except OSError:
+        pass
+    try:
+        with open(os.path.join(profile_dir, "routines.json"), encoding="utf-8") as fh:
+            z = iana.fullmatch(str(json.load(fh).get("timezone") or ""))
+        return z.group(0) if z else ""
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def cloud_day(env=None, profile_dir: str | None = None) -> str:
+    """In a cloud chat, the person's own day: TZ set to their home zone, so `date.today()`
+    is their date and not the cloud computer's. A cloud computer runs on UTC, and the brief
+    for a person in Sydney, due on their Monday morning, was dated and worked out as Sunday
+    (found 2026-10-25). Only in a cloud chat (CLAUDE_CODE_REMOTE), only where TZ is unset
+    (an explicit TZ wins), only for the person's own profile (the app's own tests point
+    LJS_PROFILE at the example person, whose zone is not the computer's), and only for a
+    zone this computer has data for. Returns the zone it set, or ""."""
+    env = os.environ if env is None else env
+    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() != "true" or env.get("TZ") \
+            or env.get(ENV):
+        return ""
+    import time
+    if not hasattr(time, "tzset"):
+        return ""
+    zone = home_zone_named(profile_dir or os.path.join(ROOT, DEFAULT))
+    if not zone:
+        return ""
+    try:
+        import zoneinfo
+        zoneinfo.ZoneInfo(zone)
+    except Exception:  # noqa: BLE001  no data for that zone here: the computer's day stands
+        return ""
+    env["TZ"] = zone
+    if env is os.environ:
+        time.tzset()
+    return zone
+
+
+cloud_day()
+
 SETUP_HINT = "no profile: run /setup"
 
 

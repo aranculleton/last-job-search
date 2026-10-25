@@ -885,12 +885,11 @@ def while_you_wait(tracker=None) -> str:
     """The quicker route to the people who matter most while the export is on its way,
     offered once with its steps: one employer's 1st-degree people, pasted, starting
     where an interview is running."""
-    import csv
     rows = tracker
     if rows is None:
+        import csv_store
         try:
-            with open(person.state("job_search_tracker.csv"), encoding="utf-8", newline="") as fh:
-                rows = list(csv.DictReader(fh))
+            rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
         except OSError:
             rows = []
     live = next((str(r.get("company") or "").strip() for r in reversed(rows)

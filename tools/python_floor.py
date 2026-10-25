@@ -40,11 +40,38 @@ def ok(info=None) -> bool:
     return tuple((info or sys.version_info)[:2]) >= FLOOR
 
 
+def utf8_stdio(streams=None) -> list[str]:
+    """Read and write the terminal in UTF-8, whatever this computer's own encoding is.
+
+    Windows' Python writes to a pipe in the computer's code page (cp1252 in English,
+    https://docs.python.org/3/library/sys.html#sys.stdout) unless UTF-8 mode is on, so a
+    contact called Łukasz, a reply ending in 👍 or a name in another alphabet stopped a tool
+    with UnicodeEncodeError halfway through what it was saying, and a pasted profile read
+    from stdin came in garbled. `.claude/settings.json` turns UTF-8 mode on for every chat
+    (PYTHONUTF8, https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUTF8); this is for
+    a tool run any other way. A character the terminal cannot show prints as "?" rather than
+    stopping it. Returns the names of the streams it changed."""
+    changed = []
+    for name in streams or ("stdin", "stdout", "stderr"):
+        s = getattr(sys, name, None)
+        enc = str(getattr(s, "encoding", "") or "").lower().replace("_", "-")
+        if enc in ("utf-8", "utf8") or not hasattr(s, "reconfigure"):
+            continue
+        try:
+            s.reconfigure(encoding="utf-8", errors="replace")
+            changed.append(name)
+        except (ValueError, OSError, AttributeError):  # a stream already read from, or closed
+            pass
+    return changed
+
+
 def require(code: int = 3) -> None:
-    """Stop with the one sentence on an older Python; nothing else has run yet."""
+    """Stop with the one sentence on an older Python; nothing else has run yet. Then the
+    terminal is read and written in UTF-8 (utf8_stdio)."""
     if not ok():
         print(message(), file=sys.stderr)
         raise SystemExit(code)
+    utf8_stdio()
 
 
 if __name__ == "__main__":

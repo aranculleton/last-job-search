@@ -942,10 +942,9 @@ def _clip(text, n) -> str:
 
 
 def _asked_about(limit=5) -> list:
-    import csv
+    import csv_store
     try:
-        with open(person.state("job_search_tracker.csv"), newline="", encoding="utf-8") as fh:
-            rows = list(csv.DictReader(fh))
+        rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
     except OSError:
         return []
     rows.sort(key=lambda r: str(r.get("date") or ""), reverse=True)

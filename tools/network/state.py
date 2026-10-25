@@ -52,7 +52,6 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
-import csv
 import datetime
 import functools
 import json
@@ -234,9 +233,10 @@ def save_threads(rows, path: str = THREADS_CSV) -> None:
 
 
 def load_tracker(path: str = TRACKER_CSV) -> list[dict]:
-    """The application tracker, read only. Nothing here ever writes it."""
-    with open(path, newline="", encoding="utf-8") as f:
-        return [dict(r) for r in csv.DictReader(f)]
+    """The application tracker, read only. Nothing here ever writes it (read the way a
+    spreadsheet saved it: csv_store.read_text)."""
+    import csv_store
+    return csv_store.dict_rows(path, refuse=False)
 
 
 # ---------------------------------------------------------------- identity

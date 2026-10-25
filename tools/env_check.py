@@ -80,9 +80,11 @@ def probe(url: str) -> tuple[str, str]:
     """(verdict, detail) for one URL, through whatever proxy the session uses."""
     if not shutil.which("curl"):
         return "unreachable", "curl is not installed"
-    p = subprocess.run(["curl", "-sS", "-o", "/dev/null", "--max-time", "8",
+    # os.devnull, not /dev/null: Windows' own curl.exe cannot open /dev/null, so every job
+    # site was reported unreachable there (it is "nul" on Windows).
+    p = subprocess.run(["curl", "-sS", "-o", os.devnull, "--max-time", "8",
                         "-w", "%{http_connect} %{http_code}", url],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     connect, _, code = (p.stdout.strip() + "  ").partition(" ")
     code = code.strip()
     verdict = classify(p.returncode, connect.strip(), code)
