@@ -574,14 +574,46 @@ def _stamp_path(root: str | None = None) -> str | None:
     return os.path.join(dirs[0], STAMP) if dirs else None
 
 
-def last_checked() -> str:
-    """The date (YYYY-MM-DD) of the last successful sync in this checkout, or "" if none."""
+def _stamp_line() -> str:
     p = _stamp_path()
     try:
         with open(p, encoding="utf-8") as fh:
             return fh.read().strip()
     except (OSError, TypeError):
         return ""
+
+
+def last_checked() -> str:
+    """The date (YYYY-MM-DD) of the last successful sync in this checkout, or "" if none."""
+    got = _stamp_line().split()
+    return got[0] if got else ""
+
+
+def _day_line(now: datetime.datetime | None = None) -> str:
+    """The day's check as written: the date, and the UTC offset of the clock it was read
+    from ("2026-10-26 +1100"). In a cloud chat person.py sets the person's own zone, so
+    profile_upgrades.py writes their date while sync_app's own process reads the cloud
+    computer's UTC one; stamped with its offset, the day is read back by the clock that
+    wrote it, whichever process asks (2026-10-25)."""
+    now = now or datetime.datetime.now().astimezone()
+    return now.strftime("%Y-%m-%d %z").strip()
+
+
+def _stale_day(line: str, now: datetime.datetime | None = None) -> bool:
+    """Is the day in `line` (as _day_line writes it) earlier than today, by the clock it was
+    written in? A date with no offset (an older copy wrote it) is read in this computer's
+    own day."""
+    got = line.split()
+    if not got:
+        return True
+    now = now or datetime.datetime.now().astimezone()
+    m = re.fullmatch(r"([+-])(\d\d)(\d\d)", got[1]) if len(got) > 1 else None
+    if m:
+        off = datetime.timedelta(hours=int(m.group(2)), minutes=int(m.group(3)))
+        today = now.astimezone(datetime.timezone(-off if m.group(1) == "-" else off)).date()
+    else:
+        today = now.astimezone().date() if now.tzinfo else now.date()
+    return got[0] < today.isoformat()
 
 
 def _record_check(root: str | None = None) -> None:
@@ -595,7 +627,7 @@ def _record_check(root: str | None = None) -> None:
     if p:
         try:
             with open(p, "w", encoding="utf-8") as fh:
-                fh.write(datetime.date.today().isoformat() + "\n")
+                fh.write(_day_line() + "\n")
             # The commit the sync left this checkout on, and the app commit it took: an
             # /upgrade worktree made from an older commit lists the wrong upgrades, and
             # `behind_sync()` says so instead.
@@ -739,7 +771,7 @@ def behind_sync(root: str | None = None) -> str:
 def stale() -> bool:
     """True in a person's repo whose check has not run today. Never raises."""
     try:
-        return not is_the_app() and last_checked() < datetime.date.today().isoformat()
+        return not is_the_app() and _stale_day(_stamp_line())
     except Exception:  # a reminder must never break the tool that asked for it
         return False
 
