@@ -156,7 +156,10 @@ def _holidays(first: datetime.date, last: datetime.date) -> set:
     (tools/holidays.py): a follow-up counted Thanksgiving as a business day."""
     try:
         import holidays
-        return {d for y in range(first.year, last.year + 1) for d in holidays.for_year(y)
+        # A year's table can hold a day of the year before: the US New Year's Day of a
+        # Saturday is kept on Friday 31 December, in the next year's table, so a range
+        # ending in December reads the next year too (networking audit, 2026-10-25).
+        return {d for y in range(first.year, last.year + 2) for d in holidays.for_year(y)
                 if first <= d <= last and d.weekday() not in WEEKEND}
     except Exception:  # no profile, or no rules for the country: weekends alone, as before
         return set()
