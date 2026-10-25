@@ -294,7 +294,7 @@ def links_sent(paths: list[str]) -> list[str]:
 def _git_dir() -> str:
     try:
         r = subprocess.run(["git", "rev-parse", "--absolute-git-dir"], cwd=ROOT, text=True,
-                           capture_output=True, timeout=10)
+                           capture_output=True, timeout=10, encoding="utf-8", errors="replace")
         if r.returncode == 0 and r.stdout.strip():
             return r.stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
@@ -374,7 +374,8 @@ def start(argv: list[str], model: str) -> int:
         if s.returncode:
             setup = ((s.stderr or s.stdout or "").strip().splitlines() or ["failed"])[-1][:200]
     earlier = subprocess.run(["git", "branch", "-r", "--no-merged", "origin/master", "--list",
-                              "origin/claude/ops-*"], cwd=ROOT, text=True, capture_output=True)
+                              "origin/claude/ops-*"], cwd=ROOT, text=True, capture_output=True,
+                             encoding="utf-8", errors="replace")
     branches = " ".join(b.strip() for b in (earlier.stdout or "").splitlines() if b.strip())
     with open(sync_log_path(), "w", encoding="utf-8") as fh:
         fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
@@ -728,7 +729,7 @@ def _tip(today) -> str:
 def _brief_url(iso: str) -> str:
     try:
         r = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, text=True,
-                           capture_output=True, timeout=10)
+                           capture_output=True, timeout=10, encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     m = re.search(r"github\.com[:/]([^/\s]+)/([^/\s]+?)(?:\.git)?/?$", (r.stdout or "").strip())

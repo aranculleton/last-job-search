@@ -218,7 +218,7 @@ def prompt_file(path: str, rev: str | None) -> str:
 
 def newest_v3() -> str:
     r = subprocess.run(["git", "tag", "--list", "v3.*", "--sort=-v:refname"], cwd=ROOT,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     tags = (r.stdout or "").split()
     return tags[0] if tags else "HEAD"
 
