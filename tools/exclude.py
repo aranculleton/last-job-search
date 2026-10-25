@@ -243,7 +243,11 @@ def _load(path=SEEN) -> dict:
 
 
 def _save(data, path=SEEN) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    # A bare file name ("seen.json") has no folder to make: os.makedirs("") raised, so
+    # `text_screen.py --seen seen.json` crashed on its first cut and wrote nothing.
+    folder = os.path.dirname(path)
+    if folder:
+        os.makedirs(folder, exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=INDENT, ensure_ascii=False)
