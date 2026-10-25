@@ -209,6 +209,110 @@ def _remote_mark(location, remote: bool):
     return location
 
 
+# What a board prints after a title on its card, which a reader of the card's text takes
+# as part of it: "Senior Analytics Engineer New Toronto, Ontario, Canada". Only a badge
+# no title ends in is here: "Applied" ("Research Scientist, Applied") and "Hot" are not,
+# and "New" is a badge only where nothing before it makes it a word of the title
+# ("Brand New", "What's New"). The texts are LinkedIn's and Indeed's card labels.
+_BADGE = re.compile(
+    r"(?:^|[\s,;:|·•(\[-]+)(?:"
+    r"new!?|promoted(?: by hirer)?|actively (?:hiring|recruiting|reviewing applicants)|"
+    r"easy apply|reposted(?: \d+ \w+ ago)?|be an early applicant|early applicant|"
+    r"be among the first \d+ applicants|urgently hiring|hiring urgently|urgent hire|"
+    r"featured|top applicant|with verification|just posted|"
+    r"(?:posted )?\d+ (?:minutes?|hours?|days?|weeks?|months?) ago|"
+    r"(?:over )?\d+ applicants|\d+ (?:school )?alumni works? here|"
+    r"\d+ connections? works? here|in your network|your profile matches this job|"
+    r"responses managed off linkedin"
+    r")[)\]]?\s*$", re.I)
+_NEW_IN_TITLE = re.compile(r"\b(?:brand|what'?s|what’s|something|anything)\s+new!?[)\]]?\s*$", re.I)
+# Words a location is written with beyond its own, so "Toronto, Ontario, Canada" after a
+# title is still the row's own place when the row says "Toronto, ON". Never "remote" or
+# "hybrid": a title that says so where its location does not is telling the gate something.
+_PLACE_FILLER = {"greater", "area", "metropolitan", "metro", "region", "canada", "ca", "usa",
+                 "us", "uk", "united", "states", "kingdom"}
+# A title cut so it ends on one of these was never ended by a place ("Teacher of Reading").
+_DANGLING = {"of", "for", "in", "at", "and", "&", "the", "to", "with", "on", "a", "an"}
+_SEPARATORS = " \t,;:|-–—·•/("
+
+
+def _words(s: str) -> list[str]:
+    return re.findall(r"[a-z0-9][a-z0-9'’.-]*", s.lower())
+
+
+def _strip_place(title: str, location: str) -> str:
+    """`title` without a trailing copy of the row's own `location`, or as it is."""
+    place = [w.strip(".") for w in _words(location)]
+    if not place:
+        return title
+    city = _words(location.split(",")[0].split("(")[0])
+    if not city:
+        return title
+    allowed = set(place) | _PLACE_FILLER
+    # "Toronto, ON" and "Toronto, Ontario" are one place: a code brings its name in, and
+    # a name its code (places.py's own tables).
+    from places import SUBDIVISION_PAIRS
+    for code, name in SUBDIVISION_PAIRS:
+        if code in place or all(w in place for w in name.split()):
+            allowed |= {code, *name.split()}
+    # The last place in the title where the city starts, as whole words.
+    lower = title.lower()
+    for m in reversed(list(re.finditer(r"(?<![\w])" + re.escape(" ".join(city)) + r"(?![\w])",
+                                       re.sub(r"\s+", " ", lower)))):
+        tail = re.sub(r"\s+", " ", lower)[m.start():]
+        if not all(w.strip(".") in allowed for w in _words(tail)):
+            return title
+        head = re.sub(r"\s+", " ", title)[:m.start()]
+        # "Greater Toronto Area": the filler before the city goes with it.
+        head = re.sub(r"(?:\bgreater|\bthe)\s*$", "", head, flags=re.I)
+        head = head.rstrip(_SEPARATORS + ")").rstrip()
+        if head.endswith("(") or not _words(head) or _words(head)[-1] in _DANGLING:
+            return title
+        return head
+    return title
+
+
+def clean_title(title, location="") -> str:
+    """A board's title with the badges and the repeat of the row's own place cut off.
+
+    Rows from a card read as text carry what the card shows after the title ("New",
+    "Promoted", "Actively hiring", the location again), and the title then failed every
+    match on it: a dedupe, the tracker's own role, a search of the employer's board.
+    Nothing that is a word of the title is cut ("Software Engineer, New Grad").
+    """
+    if not isinstance(title, str):
+        return title
+    t = re.sub(r"\s+", " ", title).strip()
+    loc = str(location or "")
+    for _ in range(6):
+        before = t
+        if loc:
+            t = _strip_place(t, loc)
+        m = _BADGE.search(t)
+        if m and not (m.group(0).strip(" ([").lower().startswith("new")
+                      and _NEW_IN_TITLE.search(t)):
+            head = t[:m.start()].rstrip(_SEPARATORS).rstrip()
+            if _words(head):
+                t = head
+        # A card that prints its title twice ("Data Analyst Data Analyst with verification").
+        words = t.split(" ")
+        half = len(words) // 2
+        if len(words) % 2 == 0 and half and words[:half] == words[half:]:
+            t = " ".join(words[:half])
+        if t == before:
+            break
+    return t
+
+
+def clean_row(row: dict) -> dict:
+    """The row with its title cleaned (clean_title); the board's own kept as `title_seen`."""
+    title = row.get("title")
+    clean = clean_title(title, row.get("location") or "")
+    if isinstance(title, str) and clean != title.strip():
+        row = {**row, "title": clean, "title_seen": row.get("title_seen") or title}
+    return row
+
+
 def linkedin(q: str, loc: str, page: int, jobage: int,
              remote: bool = False) -> tuple[list[dict], str | None]:
     cmd = [*portals.runtime(), LINKEDIN(), "search", "-q", q, "-l", loc,
@@ -1341,7 +1445,7 @@ def main() -> int:
                 url = r.get("url")
                 key = (_norm(url) or url) if url else None
                 if key and key not in seen:
-                    seen[key] = r
+                    seen[key] = clean_row(r)
                     new += 1
         return new
 
