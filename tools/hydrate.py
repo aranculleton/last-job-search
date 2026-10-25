@@ -311,17 +311,30 @@ def guarded(job: dict) -> dict:
     return {**job, "desc": body, "posting_guard": note}
 
 
-def fetch(job: dict, timeout: int = 60) -> dict:
+# The whole stage's time, for every fetch, not only a paced board's (PACE_BUDGET): LinkedIn's
+# and freehire's detail fetches had none, and the output was written only at the end. A
+# round under a storm of 429s ran into the stage's limit in run_round.py, was killed, and
+# lost every body it had fetched; the next round fetched them all again. Past this, a
+# posting is not fetched and says why, and the stage ends and writes what it has.
+# run_round.py passes the time its own limit leaves (--budget).
+BUDGET = 25 * 60
+
+
+def fetch(job: dict, timeout: int = 60, ends: float | None = None) -> dict:
     """Return the job with `desc` filled in where it was missing, or `hydrate_error` set.
 
     A posting from a person's portal may carry the board's search `snippet`.
     When the full body cannot be had, the snippet stands in for it, and
     `hydrate_error` still says why, so a thin body can be told from a short
-    posting.
+    posting. `ends` is the stage's deadline on the monotonic clock: past it, nothing
+    is fetched.
     """
     if (job.get("desc") or "").strip():
         return job
-    out = _fetch(job, timeout)
+    if ends is not None and time.monotonic() >= ends:
+        out = {**job, "hydrate_error": "not fetched: the stage's time ran out"}
+    else:
+        out = _fetch(job, timeout)
     if not (out.get("desc") or "").strip() and (job.get("snippet") or "").strip():
         out = {**out, "desc": job["snippet"][:BODY_CAP]}
     return out
@@ -430,7 +443,7 @@ PROGRESS_SECONDS = 60
 
 
 def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | None = None,
-                say=None) -> list[dict]:
+                say=None, budget: float | None = None) -> list[dict]:
     """Every posting through `fetch`, written in the order it arrived.
 
     They were written in the order the fetches finished, and the stages after this
@@ -447,8 +460,12 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
     starting a crawl-delay after the last one started (`pace`), as the scrape's sweep
     sends them: with as many workers as the shared pool, a fetch slower than the delay
     had the next request to the board sent while it was still running, and one worker
-    waiting the delay after each fetch ended added every fetch's time to every gap."""
+    waiting the delay after each fetch ended added every fetch's time to every gap.
+
+    `budget` is the seconds the whole stage may fetch for (BUDGET); a posting not reached
+    by then keeps its place unfetched, and says so."""
     workers = max(1, workers)
+    ends = None if budget is None else time.monotonic() + budget
     every = PROGRESS_SECONDS if progress_every is None else progress_every
     say = say or (lambda line: print(line, file=sys.stderr, flush=True))
     lanes: dict = {}
@@ -499,7 +516,7 @@ def hydrate_all(jobs: list[dict], workers: int = 10, progress_every: float | Non
         # The paced boards first, so their chains start at once.
         for lane in sorted(lanes, key=lambda k: (k is None, k or "")):
             for i in lanes[lane]:
-                fut = pools[lane].submit(fetch, jobs[i])
+                fut = pools[lane].submit(fetch, jobs[i], ends=ends)
                 fut.add_done_callback(functools.partial(finished, lane))
                 futs[i] = fut
         out: list[dict] = []
@@ -527,6 +544,8 @@ def main() -> int:
                     help="fail if the fraction with a description is below this")
     ap.add_argument("--cache", default=None,
                     help="an earlier round's hydrated file: its bodies are reused, not fetched")
+    ap.add_argument("--budget", type=float, default=BUDGET,
+                    help="seconds the stage may fetch for; past them a posting is not fetched")
     a = ap.parse_args()
 
     data = json.load(open(a.infile, encoding="utf-8"))
@@ -541,7 +560,7 @@ def main() -> int:
                 jobs[i] = {**j, "desc": body}
                 reused += 1
     before = sum(1 for j in jobs if (j.get("desc") or "").strip())
-    out = hydrate_all(jobs, a.workers)
+    out = hydrate_all(jobs, a.workers, budget=a.budget)
 
     after = sum(1 for j in out if (j.get("desc") or "").strip())
     errors = [j for j in out if j.get("hydrate_error")]
@@ -567,6 +586,11 @@ def main() -> int:
               f"{a.require:.0%}. Every posting without one reaches the model "
               f"blind and cannot be screened, knocked out or extracted.",
               file=sys.stderr)
+        if any(str(j.get("hydrate_error", "")).startswith("not fetched: the stage's time")
+               for j in errors):
+            print(f"The bodies it did fetch are kept in {a.out}: run again with it as the "
+                  "cache (run_round.py --hydrate-cache, hydrate.py --cache) and only the "
+                  "rest are fetched.", file=sys.stderr)
         return 1
     return 0
 
