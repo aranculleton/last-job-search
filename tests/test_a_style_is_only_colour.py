@@ -150,7 +150,10 @@ def test_the_claims_check_reads_no_font_key_as_a_word():
 
 
 def _words(pdf):
-    out = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True).stdout
+    # Poppler writes the boxes in UTF-8; read in the computer's code page an accented name
+    # stopped the test (a C locale here, cp1252 on Windows).
+    out = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True,
+                         encoding="utf-8").stdout
     return re.findall(r'<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">'
                       r"(.*?)</word>", out)
 

@@ -10,14 +10,17 @@
 #                     own LinkedIn download read into a profile seed, an offline round
 #                     against its golden summary, an interview pack, a networking day, and
 #                     the test suite (tools/platform_check.py).
-#   windows-shell     Windows PowerShell 5.1 as the only shell, before Git exists: every
-#                     command COMPUTER.md gives for it (PortableGit and gh into the user's
-#                     own folders, Claude Code told where Git Bash is), and the python3
-#                     command where only python works.
+#   windows-shell     Windows PowerShell 5.1 as the only shell, before Git exists, for a
+#                     person whose user folder has a space and an accent: every command
+#                     COMPUTER.md gives for it (PortableGit and gh into the user's own
+#                     folders, Claude Code told where Git Bash is, their own settings kept
+#                     as they were), the app's Python finding that Git Bash, and the
+#                     python3 command where only python works.
 #   windows-chat      a computer chat on Windows under Git Bash, python3 taken off PATH as
 #                     the python.org installer leaves it, Windows' own code page: a copy
-#                     that is already set up asks nothing, then its ordinary day, the
-#                     general resume rendered from that copy's folder, and the seed read.
+#                     that is already set up, cloned under a folder with a space and an
+#                     accent, asks nothing, then its ordinary day, the general resume
+#                     rendered from that copy's folder, and the seed read.
 #
 # Runs only on the public app (whose minutes are free) or by hand, on pull requests that
 # touch the install, the documents, the portals or this file, and weekly, so a change in
@@ -155,8 +158,18 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
+      # Every step but the last runs as a person whose user folder has a space and an
+      # accent in it ("Zoë Quillfeather", written [char]0x00EB so the step stays ASCII):
+      # Start-Process split such a folder into two arguments and Git never unpacked, and
+      # Windows PowerShell 5.1 read their own settings.json in the ANSI code page. Their
+      # settings already hold an accented folder, which must come through untouched.
       - name: Git and gh into the user's own folders, with PowerShell alone
         run: |
+          $me = Join-Path $env:RUNNER_TEMP ('Zo' + [char]0x00EB + ' Quillfeather')
+          $env:USERPROFILE = $me; $env:LOCALAPPDATA = Join-Path $me 'AppData\Local'
+          New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA, "$me\.claude" | Out-Null
+          $theirs = '{"permissions": {"additionalDirectories": ["C:\\Users\\Mar' + [char]0x00ED + 'a\\notes"]}}'
+          [IO.File]::WriteAllText("$me\.claude\settings.json", $theirs, ([Text.UTF8Encoding]::new($false)))
           $PSVersionTable.PSVersion.ToString()
           # No Git and no GitHub CLI anywhere this shell or its children look.
           $env:Path = ($env:Path.Split(';') | Where-Object { $_ -and $_ -notmatch '\\Git\\|GitHub CLI|\\gh\\' }) -join ';'
@@ -169,6 +182,8 @@ jobs:
 
       - name: What it installed works, and new shells and Claude Code find it
         run: |
+          $me = Join-Path $env:RUNNER_TEMP ('Zo' + [char]0x00EB + ' Quillfeather')
+          $env:USERPROFILE = $me; $env:LOCALAPPDATA = Join-Path $me 'AppData\Local'
           $bash = "$env:LOCALAPPDATA\Programs\PortableGit\bin\bash.exe"
           & $bash -lc 'echo "bash runs"; uname -s; git --version'
           if ($LASTEXITCODE -ne 0) { throw 'Git Bash did not run' }
@@ -177,17 +192,28 @@ jobs:
           $user = [Environment]::GetEnvironmentVariable('Path', 'User')
           if ($user -notmatch 'PortableGit\\cmd') { throw "Git is not on the user PATH: $user" }
           if ($user -notmatch 'Programs\\gh\\bin') { throw "gh is not on the user PATH: $user" }
-          $settings = Get-Content -Raw "$env:USERPROFILE\.claude\settings.json" | ConvertFrom-Json
+          $settings = Get-Content -Raw -Encoding UTF8 "$env:USERPROFILE\.claude\settings.json" | ConvertFrom-Json
           if ($settings.env.CLAUDE_CODE_GIT_BASH_PATH -ne $bash) { throw 'CLAUDE_CODE_GIT_BASH_PATH was not set' }
+          $kept = 'C:\Users\Mar' + [char]0x00ED + 'a\notes'
+          if ($settings.permissions.additionalDirectories[0] -ne $kept) { throw "their own setting was changed: $($settings.permissions.additionalDirectories[0])" }
+          # The app's own Python finds this Git Bash, never WSL's launcher in System32. The
+          # path is compared in Python: printed, its accent would cross two code pages.
+          python -c "import sys; sys.path.insert(0, 'tools'); import local_path; got = local_path.bash(); print(ascii(got)); sys.exit(got != sys.argv[1])" $bash
+          if ($LASTEXITCODE -ne 0) { throw 'local_path.bash() did not find the Git Bash just installed' }
           # COMPUTER.md 2b step 2: the app, cloned with the Git just installed.
           & "$env:LOCALAPPDATA\Programs\PortableGit\cmd\git.exe" clone -q --depth 1 https://github.com/aranculleton/last-job-search "$env:LOCALAPPDATA\last-job-search-app"
           if ($LASTEXITCODE -ne 0) { throw 'the app did not clone' }
 
       - name: A python3 command where only python works
         run: |
+          $me = Join-Path $env:RUNNER_TEMP ('Zo' + [char]0x00EB + ' Quillfeather')
+          $env:USERPROFILE = $me; $env:LOCALAPPDATA = Join-Path $me 'AppData\Local'
           # The python.org installer gives python and py, no python3; take away any copy.
           Get-Command python3 -All -ErrorAction SilentlyContinue | Where-Object { $_.Source -notmatch 'WindowsApps' } | ForEach-Object { Remove-Item $_.Source -Force }
-          python tools\env_check.py --fix python
+          # A Python inside the accented user folder, so the python3 command names a path
+          # with an accent in it, which cmd.exe reads in its own code page.
+          python -m venv "$env:LOCALAPPDATA\Programs\Python\Here"
+          & "$env:LOCALAPPDATA\Programs\Python\Here\Scripts\python.exe" tools\env_check.py --fix python
           if ($LASTEXITCODE -ne 0) { throw 'env_check --fix python failed' }
           # A new shell, reading PATH the way a newly opened app does.
           powershell -NoProfile -Command "`$env:Path = [Environment]::GetEnvironmentVariable('Path','User') + ';' + [Environment]::GetEnvironmentVariable('Path','Machine'); python3 -c 'import sys; print(sys.version)'; exit `$LASTEXITCODE"
@@ -222,11 +248,15 @@ jobs:
           if python3 -c pass 2>/dev/null; then echo "python3 still runs"; fi
           python -c "import sys, locale; print(sys.stdout.encoding, locale.getpreferredencoding())"
           python tools/env_check.py --fix packages runtime latex
-          python tools/platform_check.py computer general designs seed
+          # The copies it clones and the folders it works in sit under a space and an
+          # accent, as under a person's own user folder ("Zoë Quillfeather").
+          tmp="$RUNNER_TEMP/Zo$(printf '\303\253') Quillfeather"
+          mkdir -p "$tmp"
+          TMP="$tmp" TEMP="$tmp" python tools/platform_check.py computer general designs seed
 
       - name: The whole test suite on Windows, every failure listed
         if: always()
         run: |
           unset PYTHONUTF8 PYTHONIOENCODING
           py=$(python -c "import sys; sys.path.insert(0, 'tools'); import local_path; print(local_path.venv_python() if local_path.venv_runs() else sys.executable)")
-          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=no 2>&1 | grep -E "^(FAILED|ERROR)|passed|failed" | cut -c1-300
+          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=no 2>&1 | grep -a -E "^(FAILED|ERROR)|passed|failed" | cut -c1-300

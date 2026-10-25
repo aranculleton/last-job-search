@@ -71,6 +71,16 @@ def slug(company, role, abbr=""):
     s = f"{company} {role}".lower()
     s = re.sub(r"[^a-z0-9]+", "_", s).strip("_")[:80].strip("_")
     if not s:
+        # A company and a role with no ASCII letter between them (an employer named in
+        # Japanese, Greek or Cyrillic): spelled in Latin letters where a table can
+        # (doc_name.ascii_name), else named by the documents' own name, which is never
+        # empty (doc_name.suffix). None of these had a folder: slug() raised.
+        import doc_name
+        s = re.sub(r"[^a-z0-9]+", "_", doc_name.ascii_name(f"{company} {role}").lower())
+        s = s.strip("_")[:80].strip("_")
+        if not s and abbr:
+            return re.sub(r"[^a-z0-9]+", "", abbr.lower())
+    if not s:
         raise ValueError(
             "no folder name can be derived from company=%r role=%r: between them "
             "they hold no letter or digit. Ask for a company or role that does, "
@@ -99,16 +109,13 @@ def _abbr_on_file(company, role):
     return ""
 
 
-# A requisition number written into the role by the tracker or a board:
-# "Data Scientist II (R_1234567)", "Analyst [JR166447]", "Planner - REQ-20931".
-_REF = re.compile(r"\s*(?:[\(\[]\s*(?:req(?:uisition)?|job|ref|id)?\s*[#:]?\s*[A-Za-z]{0,4}[-_ ]?"
-                  r"\d{4,}[\w-]*\s*[\)\]]|[-\u2013|]\s*(?:req(?:uisition)?\s*[#:]?\s*)?"
-                  r"[A-Za-z]{0,4}[-_]?\d{4,}\w*)\s*$", re.I)
-
-
 def without_ref(role) -> str:
-    """The role with a trailing requisition number taken off, else unchanged."""
-    return _REF.sub("", str(role or "")).strip() or str(role or "")
+    """The role without the requisition number a tracker or a board wrote into it ("Data
+    Scientist II (R_1234567)", "Planner - REQ-20931"), else unchanged. The one rule for it,
+    doc_name.role_core: this kept its own, and "Data Analyst - REQ-2026-0412" came back
+    "Data Analyst - REQ-2026", so the folder named without the number was never found."""
+    import doc_name
+    return doc_name.role_core(role) or str(role or "")
 
 
 def app_folder(company, role, abbr=""):
@@ -127,7 +134,14 @@ def app_folder(company, role, abbr=""):
     """
     base = person.state("documents", "applications")
     abbr = abbr or _abbr_on_file(company, role)
-    stem = slug(company, role)
+    try:
+        stem = slug(company, role)
+    except ValueError:
+        # No ASCII letter in the company or the role: only the documents' own name names
+        # the folder (slug, above).
+        if not abbr:
+            raise
+        return os.path.join(base, slug(company, role, abbr))
     full = slug(company, role, abbr) if abbr else stem
     bare = without_ref(role)
     plain = slug(company, bare) if bare != role else stem

@@ -10,6 +10,7 @@ it. The people and employers here are invented or the plain examples above.
 from __future__ import annotations
 
 import os
+import re
 import sys
 
 import pytest
@@ -51,3 +52,62 @@ def test_two_names_that_differ_only_in_case_are_one_file(monkeypatch):
             {"company": "ACME", "role": "Engineer", "abbr": "ACME"}]
     with pytest.raises(FileExistsError, match="claimed twice"):
         R.check_batch(apps, rows=[])
+
+
+# --- a name with no Latin letter, and a role's accents (the drafting audit, 2026-10-25) ----
+
+NON_LATIN = ["架空商事", "Δοκιμή Ανάλυση", "Пример Данные", "架空物流"]
+
+
+def test_a_name_with_no_latin_letter_is_never_the_empty_name():
+    names = [doc_name.suffix(c) for c in NON_LATIN]
+    assert names[1:3] == ["DokimiAnalysi", "PrimerDannye"]       # spelled in Latin letters
+    assert all(re.fullmatch(r"[A-Za-z0-9]+", n) for n in names), names
+    assert len(set(names)) == len(names)                          # two employers, two files
+    assert doc_name.suffix(NON_LATIN[0]) == doc_name.suffix(NON_LATIN[0])   # and stable
+    assert doc_name.suffix(NON_LATIN[0], "データ").startswith(names[0])
+
+
+def test_the_profile_names_an_employer_no_table_can_spell(monkeypatch):
+    monkeypatch.setitem(doc_name.KNOWN, "架空商事", "Kakushoji")
+    assert doc_name.suffix("架空商事") == "Kakushoji"
+
+
+def test_a_second_such_employer_never_overwrites_the_first(tmp_path):
+    import stage_picks
+    first = doc_name.suffix(NON_LATIN[0])
+    rows = [{"company": NON_LATIN[0], "role": "データアナリスト", "status": "drafted",
+             "cv_file": f"cv/{doc_name.docpaths.resume_stem(first)}.tex"}]
+    second = stage_picks.choose_abbr(NON_LATIN[3], "データアナリスト", rows, str(tmp_path))
+    assert second and second != first
+    # One name for two employers is refused even for the same role, still unsent.
+    with pytest.raises(FileExistsError):
+        doc_name.check_free(first, NON_LATIN[3], "データアナリスト", rows)
+    doc_name.check_free(first, NON_LATIN[0], "データアナリスト", rows)   # its own redraft
+
+
+def test_such_an_application_has_a_folder(tmp_path, monkeypatch):
+    import outreach
+    abbr = doc_name.suffix(NON_LATIN[0])
+    assert outreach.slug(NON_LATIN[0], "データアナリスト", abbr) == abbr.lower()
+    assert outreach.slug(NON_LATIN[2], "Аналитик", "PrimerDannye") == \
+        "primer_dannye_analitik_primerdannye"
+    assert outreach.app_folder(NON_LATIN[0], "データアナリスト", abbr).endswith(abbr.lower())
+    with pytest.raises(ValueError):
+        outreach.slug(NON_LATIN[0], "データアナリスト")       # no name at all: still refused
+
+
+def test_a_roles_accents_are_folded_and_an_old_token_is_kept():
+    import stage_picks
+    toks = stage_picks.role_tokens("Économiste principal - Prévision")
+    assert toks[:3] == ["Prevision", "Economiste", "EconomistePrevision"]
+    assert doc_name.suffix("Acme", "Économie") == "Acme_Economie"
+    # A redraft finds the name its unsent draft was given under the old rule.
+    old = "Acme_PrVision"
+    assert "PrVision" in toks
+    rows = [{"company": "Acme", "role": "Data Analyst", "status": "applied",
+             "cv_file": f"cv/{doc_name.docpaths.resume_stem('Acme')}.tex"},
+            {"company": "Acme", "role": "Économiste principal - Prévision", "status": "drafted",
+             "cv_file": f"cv/{doc_name.docpaths.resume_stem(old)}.tex"}]
+    assert stage_picks.choose_abbr("Acme", "Économiste principal - Prévision", rows,
+                                   "/nonexistent") == old

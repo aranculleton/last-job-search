@@ -373,13 +373,16 @@ def _people() -> list[str]:
 def phone_forms(written: str) -> list[str]:
     """The entries a phone number needs, in the forms it gets written.
 
-    A North American number: the area code, the line number in its two usual
-    groupings and its last four digits, any of which finds the rest. Anywhere
+    A North American number: the whole number, and its seven-digit local part in
+    its two usual groupings, which finds it however the area code is written. Anywhere
     else: the number as grouped after the country code, and with the trunk 0 it
     is dialled with nationally. Matching ignores separators, so the grouped form
     also finds the digits run together. Short groups alone would match
     everywhere, so they are never entries: the first version took a North
-    American slice of an Australian mobile and blocked every "140" in the app.
+    American slice of an Australian mobile and blocked every "140" in the app, and
+    the area code and the last four digits stood as entries of their own until
+    2026-10-25 ("212" matched the app's own font files, and a number ending 2026
+    every date).
 
     No number is written out in this file. An example in an app file is in
     every person's repo, and the one written here once was a test person's own
@@ -393,7 +396,8 @@ def phone_forms(written: str) -> list[str]:
     nanp = (len(phone) == 11 and written.strip().startswith("+1")
             or len(phone) == 10 and not plus and phone[0] in "23456789")
     if nanp:
-        return [phone[-10:-7], phone[-7:-4] + " " + phone[-4:], phone[-7:], phone[-4:]]
+        return [f"{phone[-10:-7]} {phone[-7:-4]} {phone[-4:]}", phone[-7:-4] + " " + phone[-4:],
+                phone[-7:]]
     national = " ".join(groups)
     if len(national.replace(" ", "")) < 8:
         return []
@@ -594,7 +598,8 @@ def _carried(sha: str, entries: list[str], root: str = ROOT) -> list[str]:
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "wb") as fh:
                 fh.write(data)
-        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None))
+        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
+                               export=True)
     hit = {int(m.group(1)) for f in found for m in [_FOUND.search(f)] if m}
     return [e for n, e in enumerate(entries, 1) if n in hit]
 
@@ -605,8 +610,10 @@ def check(tree: str, when: dict, show: bool = False, ref: str = RELEASED,
     for each entry set aside). A finding on a set-aside entry is not one."""
     import leak_scan
     entries = list(when)
+    # The tree is an export of what is committed: a committed venv/ or node_modules/ is
+    # read too, as CI's --git scan reads it.
     findings = leak_scan.scan(tree, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
-                              show=show)
+                              show=show, export=True)
     return without_aside(findings, entries, when, ref, root)
 
 

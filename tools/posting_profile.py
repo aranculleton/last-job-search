@@ -639,7 +639,9 @@ _QUOTED = re.compile(r'\s*:?\s*["\u201c][^"\u201d]*(?:["\u201d]|$)')
 
 def lines(prof: dict, quotes: bool = True) -> list:
     """The profile as a person reads it, one short line a property. With quotes=False,
-    only what was derived (for above a staged pick's fence)."""
+    only what was derived (for above a staged pick's fence): no quote, no place and no
+    reason that repeats the board's own words, which a location written as an instruction
+    carried above the fence."""
     out = []
     t = prof["terms"]
     out.append("terms: " + _terms_text(t))
@@ -649,7 +651,8 @@ def lines(prof: dict, quotes: bool = True) -> list:
     elif p["where"] == "home":
         out.append("pay: %s" % _band(p))
     elif p["where"].startswith("elsewhere"):
-        out.append("pay: %s, stated for %s, not for your area" % (_band(p), p["where"][11:]))
+        out.append("pay: %s, stated for %s, not for your area"
+                   % (_band(p), p["where"][11:] if quotes else "another place"))
     else:
         out.append("pay: stated only in another currency (%s)" % p["currency"]
                    + (': "%s"' % p["quote"][:120] if quotes else ""))
@@ -665,11 +668,14 @@ def lines(prof: dict, quotes: bool = True) -> list:
         out.append("degree: none stated")
     w = prof["where"]
     gate = ""
-    if w["verdict"] == "FLAG":
+    if not quotes:
+        gate = " [the location check: %s]" % w["verdict"] if w["verdict"] else ""
+    elif w["verdict"] == "FLAG":
         gate = " [check: %s]" % _plain_why(w["why"])
     elif w["verdict"]:
         gate = " [%s: %s]" % (w["verdict"], _plain_why(w["why"]))
-    out.append("where: %s, %s%s%s" % (w["location"] or "no location given", w["mode"],
+    place = (w["location"] or "no location given") if quotes else "as the row says"
+    out.append("where: %s, %s%s%s" % (place, w["mode"],
                                       " (%d days a week in the office)" % w["days"] if w["days"] else "",
                                       gate))
     s = prof["seen"]

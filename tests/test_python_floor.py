@@ -49,8 +49,10 @@ def test_the_merge_driver_never_leaves_one_sides_copy(tmp_path):
     base.write_text("id,status\na,sent\n")
     ours.write_text("id,status\na,replied\n")
     theirs.write_text("id,status\na,closed\n")
-    cmd = (merge_state.DRIVER.replace("%O", str(base)).replace("%A", str(ours))
-           .replace("%B", str(theirs)).replace("%P", "network_contacts.csv"))
+    # The files by their names in the folder it runs in, as git hands the driver its own
+    # (.merge_file_XXXXXX): a Windows path, its backslashes unquoted, is not one sh reads.
+    cmd = (merge_state.DRIVER.replace("%O", base.name).replace("%A", ours.name)
+           .replace("%B", theirs.name).replace("%P", "network_contacts.csv"))
     r = subprocess.run(["sh", "-c", cmd], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode != 0
     merged = ours.read_text()
@@ -108,3 +110,26 @@ def test_a_pension_plans_name_and_its_short_name_are_one_employer():
     import company_key
     assert company_key.key("Fenwick Teachers' Pension Plan") == company_key.key("Fenwick Teachers'")
     assert company_key.key("Fenwick Teachers’ Pension Fund") == company_key.key("Fenwick Teachers'")
+
+
+def test_the_sentence_itself_reads_on_a_python_older_than_the_floor():
+    """SETUP.md sends a Linux whose Python is too old to `python3 tools/python_floor.py`
+    for the one command it needs. Its first line was `from __future__ import annotations`,
+    which Python 3.6 (RHEL 8's, Ubuntu 18.04's) refuses before running anything, so the
+    sentence was a SyntaxError (2026-10-25). Parsed here with 3.6's grammar, and no
+    annotation in it is evaluated."""
+    import ast
+    path = ROOT / "tools" / "python_floor.py"
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src, feature_version=(3, 6))
+    futures = [a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+               and n.module == "__future__" for a in n.names]
+    assert "annotations" not in futures
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            notes = [a.annotation for a in node.args.args + node.args.kwonlyargs] + [node.returns]
+            # A plain name (str, bool) reads on any Python; `str | None` or `list[str]`
+            # only on newer ones, so those are written as text.
+            assert all(n is None or isinstance(n, (ast.Constant, ast.Name)) for n in notes), \
+                node.name

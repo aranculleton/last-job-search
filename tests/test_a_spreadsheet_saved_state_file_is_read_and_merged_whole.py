@@ -34,7 +34,8 @@ APPS = "2026-09-01,Acme,Analyst,applied,\n2026-09-02,Brindle,Planner,applied,\n"
 
 def _rows(text, tmp_path):
     p = tmp_path / "merged.csv"
-    p.write_text(text, encoding="utf-8", newline="")
+    with open(p, "w", encoding="utf-8", newline="") as fh:   # write_text takes newline from 3.10
+        fh.write(text)
     return csv_store.read_rows(str(p))
 
 

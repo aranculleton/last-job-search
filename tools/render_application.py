@@ -12,6 +12,7 @@ import allocate
 import doc_name
 import person
 import company_key
+import tex_escape
 
 # Every bullet the profile supports, themed. The generator used to draw from
 # fourteen strings in the template, so a logistics resume and a retail
@@ -21,14 +22,15 @@ BULLETS = dict(LIBRARY.TEXT)
 for _a, _t in LIBRARY.RENDER_ALIASES.items():   # old ids, kept for old drafts
     BULLETS[_a] = LIBRARY.TEXT[_t]
 
-# Summary: three lines, not four. Everything past ~48 words on the fourth line
-# is a bullet some employer did not get.
-MAX_SUMMARY_WORDS = 52
-# A floor as well as a ceiling. cap_summary drops whole sentences to fit the
-# budget, so a 50-word summary whose first sentence is 16 words rendered as a
-# 16-word stub, and stubs shipped that way. Below this,
-# the next sentence is kept and trimmed at a clause boundary instead of dropped.
-MIN_SUMMARY_WORDS = 36
+# Summary: three lines, not four. Everything past the ceiling on the fourth line is a
+# bullet some employer did not get. A floor as well as a ceiling: cap_summary drops whole
+# sentences to fit the budget, so a 50-word summary whose first sentence is 16 words
+# rendered as a 16-word stub, and stubs shipped that way. Below the floor, the next
+# sentence is kept and trimmed at a clause boundary instead of dropped. One budget, read
+# from the audit's copy (draft_audit.SUMMARY_WORDS), so the audit, the pack and the page
+# agree.
+from draft_audit import SUMMARY_WORDS as _SUMMARY_WORDS  # noqa: E402
+MIN_SUMMARY_WORDS, MAX_SUMMARY_WORDS = _SUMMARY_WORDS
 # The profile's roles, most recent first. What the resume prints for each:
 # dates (spaced hyphen: "2025-Present" is one token to a whitespace tokenizer),
 # title, location, and the \needspace lines when not the default.
@@ -92,26 +94,24 @@ def dedupe(keys):
 
 
 def clean(s):
-    """Kill em/en dashes and repair LaTeX escapes the model may have missed.
+    """A drafted field as LaTeX: dashes killed, then every special character escaped.
 
     Idempotent: an already-escaped character is left alone, so the fit loop
     can call this on every pass. A dash between two digits is a range
     ("2018-2022") and becomes a hyphen; anywhere else it becomes a comma, which
-    is how the style guide replaces a dash in prose. A bare "$" is escaped
-    wherever it sits: "$ 10M" and "$M" opened math mode and broke the compile.
+    is how the style guide replaces a dash in prose. Everything LaTeX reads as
+    markup is escaped by tools/tex_escape.py, the one copy of that rule: a
+    backslash or a brace in a draft, or in the hiring manager's name the research
+    read off a posting, ran as LaTeX ("\\input{<a file>}" printed that file into
+    the letter), and a bare "$" opened math mode and broke the compile.
     """
     s = s or ""
     s = re.sub(r"(?<=\d)[–—](?=\d)", "-", s)
     s = DASH.sub(", ", s)
-    # ~ and ^ are LaTeX actives and were not escaped. A bare ~ is a
-    # non-breaking space, so a drafted "~5%" rendered as "5%" while a bullet two
-    # inches lower still said "~5%": one page, one figure, two different
-    # precision claims. ^ superscripts silently.
-    # Done before the %&$#_ pass so the inserted backslashes are not re-escaped.
-    s = re.sub(r"(?<!\\)~", r"\\textasciitilde{}", s)
-    s = re.sub(r"(?<!\\)\^", r"\\textasciicircum{}", s)
-    s = re.sub(r"(?<!\\)([%&$#_])", r"\\\1", s)
-    return s
+    # ~ and ^ are LaTeX actives: a bare ~ is a non-breaking space, so a drafted "~5%"
+    # rendered as "5%" while a bullet two inches lower still said "~5%". "--" is left to
+    # LaTeX, which prints it as the dash the page checks then catch.
+    return tex_escape.text(s, dashes=True)
 
 
 # One sentence splitter for the whole generator, so the summary cap, the
@@ -400,7 +400,7 @@ def build(a):
         # own pages is addressed by name (draft-applications.js says when);
         # otherwise the team, which every letter used to get.
         salutation=(clean(contact) if contact
-                    else clean(salutation(a["company"])) + _SALUTATION_SUFFIX),
+                    else clean(salutation(a["company"])) + tex_escape.text(_SALUTATION_SUFFIX)),
         # `concession` is the drafter's note about WHERE the concession sits
         # ("conceded in one sentence mid-letter in p2"). It was being prepended
         # to the closing paragraph and shipped in letters. It is metadata.

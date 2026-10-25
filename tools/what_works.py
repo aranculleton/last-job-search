@@ -358,7 +358,7 @@ def drafts(root: str | None = None) -> list[dict]:
             continue
         for d in data if isinstance(data, list) else [data]:
             if isinstance(d, dict):
-                out.append(dict(d, _path=os.path.relpath(path, root)))
+                out.append(dict(d, _path=os.path.relpath(path, root).replace(os.sep, "/")))
     return out
 
 

@@ -181,10 +181,22 @@ def _compile(engine, tex, cwd, pdf, passes=1):
             + f". It substituted defaults and still wrote {os.path.basename(pdf)}, "
             f"so the PDF is valid and wrong. Check the working directory: "
             f"the font paths in the template are relative to it.")
+    log = _log(cwd, tex)
+    # An error LaTeX recovered from still leaves a PDF: "! Missing $ inserted" printed an
+    # email address without its underscore, "! Paragraph ended before \extrainfo was
+    # complete" dropped two contact lines, and each fit reported clean. A clean compile has
+    # no "!" line at all, so any one is a document that does not say what was written.
+    errors = latex_errors(out + "\n" + log)
+    if errors:
+        raise CompileFailed(
+            f"{engine} reported {len(errors)} error(s) in {os.path.basename(tex)} and wrote a "
+            f"PDF anyway, so the page may not say what the draft says: "
+            + "; ".join(errors[:4])
+            + ". Write the value that line names another way, then render again.")
     # A character the font does not have is left out of the page with no error at all: an
     # accented surname or an employer's name loses a letter, a symbol vanishes from a
     # figure, and the PDF is one valid page. LaTeX says so only in its log.
-    lost = missing_characters(out + "\n" + _log(cwd, tex))
+    lost = missing_characters(out + "\n" + log)
     if lost:
         raise CompileFailed(
             f"{engine} could not print {len(lost)} character(s) in {os.path.basename(pdf)}, "
@@ -206,6 +218,17 @@ def _log(cwd, tex):
             return fh.read()
     except OSError:
         return ""
+
+
+def latex_errors(log):
+    """Each error line a compile printed ("! Missing $ inserted."), once, in order. A line
+    of the log that opens on "!" is TeX's own mark for an error, never for a warning."""
+    seen = []
+    for line in (log or "").splitlines():
+        line = line.strip()
+        if line.startswith("!") and line not in seen:
+            seen.append(line)
+    return seen
 
 
 def missing_characters(log):

@@ -137,6 +137,13 @@ def test_the_copy_holds_none_of_the_tools_comments_and_is_made_again(tmp_path, m
     with open(doc, "a", encoding="utf-8") as fh:
         fh.write("Added by hand.\n")
     assert "Added by hand." in (st / shown.copy(doc)).read_text(encoding="utf-8")
+    # The same document saved on Windows, its lines ending in CRLF: the same copy.
+    with open(doc, "rb") as fh:
+        raw = fh.read().replace(b"\r\n", b"\n")
+    with open(doc, "wb") as fh:
+        fh.write(raw.replace(b"\n", b"\r\n"))
+    with open(st / shown.copy(doc), "rb") as fh:
+        assert fh.read() == b"# Interview prep\n\nSay this.\n\n## Notes\nKeep.\nAdded by hand.\n"
 
 
 def test_a_passing_check_on_a_call_prep_makes_the_copy_again(tmp_path, monkeypatch):

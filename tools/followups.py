@@ -334,7 +334,8 @@ def recipient(row: dict, people=(), docs: str = DOCS,
             m = _SEND_ON.search(fh.read())
         return {"who": m.group("who").strip() if m else "the hiring manager or the recruiter",
                 "name": "", "how": "on " + m.group("channel").strip() if m else "",
-                "source": os.path.relpath(note, ROOT) if note.startswith(ROOT) else note}
+                "source": os.path.relpath(note, ROOT).replace(os.sep, "/") if note.startswith(ROOT)
+                else note}
     for p in people or ():
         if p.get("status") not in throttle.RESPONDED:
             continue

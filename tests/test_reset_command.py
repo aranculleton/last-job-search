@@ -142,3 +142,30 @@ class TestResetCoversWhatSetupWrites(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _state_block():
+    text = RESET.read_text(encoding="utf-8")
+    return text.split("### State reset", 1)[1].split("```bash", 1)[1].split("```", 1)[0]
+
+
+def test_the_state_reset_removes_the_research_under_zsh_too(tmp_path):
+    """zsh, the Mac's own shell, stops a command whose pattern matches nothing ("no matches
+    found") and runs none of it: `rm -f company_research/*.json upskill/*.md` removed no
+    research when there was no upskill plan (2026-10-25). Each folder is cleared on its
+    own now, with find, which no shell expands. Run here in sh and in zsh where there is
+    one, in a folder made for it."""
+    import shutil
+    import subprocess
+    block = "\n".join(ln for ln in _state_block().splitlines()
+                      if ln.startswith("find ") or ln.startswith("rm -f company_research"))
+    assert block, "the state reset clears company_research/ and upskill/"
+    for shell in [s for s in ("sh", "zsh") if shutil.which(s)]:
+        root = tmp_path / shell
+        for rel in ("company_research/acme.json", "company_research/.gitkeep",
+                    "upskill/.gitkeep"):
+            (root / rel).parent.mkdir(parents=True, exist_ok=True)
+            (root / rel).write_text("x", encoding="utf-8")
+        subprocess.run([shutil.which(shell), "-c", block], cwd=root, capture_output=True)
+        assert not (root / "company_research" / "acme.json").exists(), shell
+        assert (root / "company_research" / ".gitkeep").exists(), shell

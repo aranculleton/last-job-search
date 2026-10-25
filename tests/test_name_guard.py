@@ -131,3 +131,57 @@ def test_the_apps_ci_and_ci_local_run_both_guards():
                                   "tools/name_guard_allow.txt"])
 def test_vendored_files_and_the_allow_list_are_not_read_as_new_names(path):
     assert name_guard._skipped(path)
+
+
+def test_a_file_whose_path_git_quotes_is_read_too(tmp_path, monkeypatch):
+    """git writes a path with a letter outside ASCII as `+++ "b/notes/Zo\\303\\253 run.md"`,
+    and the guard took a path only from `+++ b/`, so every line of such a file was dropped
+    and a name in it passed, here and in CI's own check (found 2026-10-25)."""
+    git = _repo(tmp_path)
+    monkeypatch.setattr(name_guard, "ROOT", str(tmp_path))
+    (tmp_path / "notes" / "sub dir").mkdir(parents=True)
+    for rel in ("notes/Zoë run.md", "notes/sub dir/plain.md"):
+        (tmp_path / rel).write_text("Run found Brannoc Wexley at the bank.\n", encoding="utf-8")
+    git("add", "-A")
+    git("commit", "-q", "-m", "notes")
+    assert sorted(name_guard.check_diff("master~1")) == [
+        "notes/Zoë run.md:1: Brannoc Wexley", "notes/sub dir/plain.md:1: Brannoc Wexley"]
+    # The other characters git quotes (a quote mark, a tab), which Windows allows in no
+    # file name, are read the same way.
+    assert name_guard._diff_lines('+++ "b/a\\"q\\tz\\303\\253.md"\n@@ -0,0 +1 @@\n+x\n') == [
+        ('a"q\tzë.md', 1, "x")]
+
+
+@pytest.mark.parametrize("text, found", [
+    ("Thanks to Orla O'Fennick for the run.", ["Orla O'Fennick"]),
+    ("Thanks to Orla O’Fennick.", ["Orla O’Fennick"]),
+    ("per Dara D'Arcwell", ["Dara D'Arcwell"]),
+    ("Brannoc van Wexley said", ["Brannoc van Wexley"]),
+    ("then Ines de la Quarvo wrote", ["Ines de la Quarvo"]),
+    ("BRANNOC WEXLEY replied", ["BRANNOC WEXLEY"]),
+    ("Brannoc  Wexley (two spaces)", ["Brannoc  Wexley"]),
+    ("Brannoc Wexley (a no-break space)", ["Brannoc Wexley"]),
+    ("Brannoc Wexley replied", ["Brannoc Wexley"]),
+])
+def test_common_name_shapes_are_names(text, found):
+    """O' and D' surnames, a curly apostrophe, particles (van, de la), a name in capitals and
+    two spaces between the words all passed, although they are common in the UK, Ireland
+    and Canada the app serves (found 2026-10-25)."""
+    assert name_guard.names(text, KNOWN) == found
+
+
+@pytest.mark.parametrize("text", [
+    "CSV TSV HTTP are acronyms",
+    "DO NOT APPLY COLD at Kestrel",
+    "Chief Data Officer at Kestrel Mutual",
+    "Head of Data, then Morgan Ellis",
+    "I'm Head",
+    "Kestrel van",
+    "Morgan Ellis O'Kestrel",
+    "MY OWN UNSAVED WORK, not committed",
+    "Configured SAP ABAP for the Jobseeker API",
+])
+def test_known_words_in_those_shapes_are_not_names(text):
+    known = KNOWN | {"Do", "Not", "Apply", "Cold", "Kestrel", "My", "Own", "Work", "Configured", "SAP",
+                     "Jobseeker"}
+    assert name_guard.names(text, known) == []

@@ -668,3 +668,56 @@ def test_the_setting_is_the_persons_never_the_apps():
         path = os.path.join(ROOT, rel)
         if os.path.exists(path):
             assert "app_updates" not in read(ROOT, rel), rel
+
+
+def test_a_merge_git_refuses_stops_and_keeps_their_unsaved_file(repos):
+    """The app adds a file where the person has one not saved yet (a portal built and not
+    committed, under a name the app later ships). Git refuses the merge; the sync used to
+    carry on regardless, put the app's file over theirs and commit a one-parent commit that
+    recorded no merge, so the next sync brought the same commit again."""
+    app, me = repos
+    assert run(me, app)[0] == 0
+    write(app, "tools/newthing.py", 'print("the app version")\n')
+    commit(app, "app adds newthing")
+    write(me, "tools/newthing.py", "MY OWN UNSAVED WORK\n")
+    before = head(me)
+    rc, out = run(me, app)
+    assert rc == 1, out
+    assert "stopped, nothing changed" in out
+    assert "tools/newthing.py" in out
+    assert read(me, "tools/newthing.py") == "MY OWN UNSAVED WORK\n"
+    assert head(me) == before
+    assert sh(me, "git", "status", "--porcelain") == "?? tools/newthing.py\n"
+    # Once it is moved out of the way, the update is a real merge.
+    os.remove(os.path.join(me, "tools", "newthing.py"))
+    rc, out = run(me, app)
+    assert rc == 0, out
+    assert len(sh(me, "git", "log", "-1", "--format=%P").split()) == 2
+
+
+def test_the_days_check_is_kept_by_one_clock_whoever_writes_it():
+    """In a cloud chat person.py sets the person's own zone, so the stamp written last (by
+    profile_upgrades.py --after-sync) was their date, and sync_app's own --if-stale compared
+    it with the cloud computer's UTC date: east of UTC the next morning's check was skipped,
+    west of it every evening ran the whole sync again (found 2026-10-25). The stamp now
+    carries the offset it was written in, and is read back by that same clock."""
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import datetime as dt
+    import sync_app
+    sydney, toronto, utc = (dt.timezone(dt.timedelta(hours=h)) for h in (11, -4, 0))
+    # East: written at 05:05 on 26 Oct in Sydney (18:05 UTC on the 25th).
+    line = sync_app._day_line(dt.datetime(2026, 10, 26, 5, 5, tzinfo=sydney))
+    assert line.split()[0] == "2026-10-26"
+    # 09:00 on 27 Oct in Sydney is still 26 Oct in UTC: the person's new day, so it runs.
+    assert sync_app._stale_day(line, dt.datetime(2026, 10, 26, 22, 0, tzinfo=utc))
+    # Later the same Sydney day it does not.
+    assert not sync_app._stale_day(line, dt.datetime(2026, 10, 26, 6, 0, tzinfo=utc))
+    # West: written at 21:00 on 25 Oct in Toronto (01:00 UTC on the 26th); an hour later
+    # it is still their 25th, so nothing runs again.
+    line = sync_app._day_line(dt.datetime(2026, 10, 25, 21, 0, tzinfo=toronto))
+    assert not sync_app._stale_day(line, dt.datetime(2026, 10, 26, 2, 0, tzinfo=utc))
+    assert sync_app._stale_day(line, dt.datetime(2026, 10, 26, 13, 0, tzinfo=utc))
+    # A stamp from before this change (a date alone) is read in this computer's own day.
+    assert sync_app._stale_day("2000-01-01", None)
+    assert not sync_app._stale_day(dt.date.today().isoformat(), None)
+    assert sync_app._stale_day("", None)

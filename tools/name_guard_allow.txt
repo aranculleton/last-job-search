@@ -191,3 +191,17 @@ New Grad            # a job title ("Software Engineer, New Grad"), tools/scrape_
 Oakmere Foods's     # invented employer, tests/test_the_link_shown_is_the_link_to_click.py
 Federal Reserve         # an institution, a news query in tools/brief.py
 European Central Bank   # an institution, the same
+Ana O'Neil
+Brannoc Wexley
+Brannoc van Wexley
+Dara D'Arcwell
+Dokimi Analysi
+Jane O'Neill-Doe
+Ines de la Quarvo
+Orla O'Fennick
+Primer Dannye
+Société de Brévanne
+Université de Lumière
+Δοκιμή Ανάλυση
+Пример Данные
+Orla O’Fennick

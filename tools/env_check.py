@@ -312,7 +312,8 @@ def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
         out.append(("Git", "xcode-select --install" if mac else f"{FIX} git" if win
                     else linux_install("git", have), "dialog" if mac else "" if win
                     else "yours"))
-    if [m for m in ("pytest", "yaml") if not module(m)] or pypdf != "ok":
+    if [m for m in ("pytest", "yaml") + (("tzdata",) if win else ()) if not module(m)] \
+            or pypdf != "ok":
         out.append(("the Python packages", f"{FIX} packages", ""))
     if not (have("lualatex") and have("xelatex")):
         out.append(("LaTeX, to make the PDFs", f"{FIX} latex", ""))
@@ -381,7 +382,9 @@ def main(argv: list[str] | None = None) -> int:
          f"{sys.version_info[0]}.{sys.version_info[1]})", python_floor.ok(),
          "" if python_floor.ok() else python_floor.how_to_install())
     for module, package, why in (("pytest", "pytest", "the checks before a merge"),
-                                 ("yaml", "pyyaml", "the skills check")):
+                                 ("yaml", "pyyaml", "the skills check"),
+                                 *((("tzdata", "tzdata", "time zones, which Windows lacks"),)
+                                   if sys.platform == "win32" else ())):
         have = module_state(module)
         fix = (f"missing; pip3 install {package}" if CLOUD else "missing; " + _install(package))
         line(f"{package} ({why})", have, "" if have else fix)

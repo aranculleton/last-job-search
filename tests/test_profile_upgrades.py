@@ -936,3 +936,18 @@ def test_a_name_read_through_a_one_argument_getter_is_listed():
     names = profile_names.collect()["networking"]
     assert "tools/network/reply.py:69" in names["HOME_ADJECTIVE"]["where"]
     assert not names["HOME_ADJECTIVE"]["required"]
+
+
+def test_the_check_for_unconfirmed_facts_lists_every_one(profile, monkeypatch, capsys):
+    """/upgrade's step says `--check unconfirmed-facts` lists every [CONFIRM: ...] in the
+    profile; it printed the count, three of them and "..." (2026-10-25)."""
+    cp = profile / "01-candidate-profile.md"
+    asks = [f"the start date of role {n}" for n in range(1, 6)]
+    cp.write_text(cp.read_text(encoding="utf-8")
+                  + "".join(f"\n- Role {n}: [CONFIRM: {a}]" for n, a in enumerate(asks, 1)) + "\n",
+                  encoding="utf-8")
+    monkeypatch.setattr(U, "_personal_repo", lambda: False)
+    assert U.main(["--check", "unconfirmed-facts"]) == 1
+    out = capsys.readouterr().out
+    assert out.startswith("5 facts in your profile only you can confirm")
+    assert all(f"  - {a} (" in out for a in asks), out

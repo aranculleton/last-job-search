@@ -47,3 +47,21 @@ def test_no_new_relpath_that_can_cross_drives():
     extra = {f: n for f, n in found.items() if n > WALKS_INSIDE_ONE_ROOT.get(f, 0)}
     assert not extra, ("use local_path.rel for a path the app prints or records, or add the "
                        f"call here with why both paths share a drive: {extra}")
+
+
+def test_a_path_in_the_repo_is_named_with_forward_slashes_on_windows_too(monkeypatch):
+    """On Windows the app printed "company_research\\oakmere-foods.json" and a ledger kept
+    "documents\\network\\..." (the suite on Windows, 2026-10-25), where every other computer,
+    the docs and git name it with "/", which Windows reads the same. local_path.rel is the
+    one helper, read here the Windows way on any computer."""
+    import ntpath
+    import sys
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import local_path
+    monkeypatch.setattr(local_path.os, "path", ntpath)
+    monkeypatch.setattr(local_path.os, "sep", "\\")
+    assert local_path.rel("C:\\me\\copy\\company_research\\oakmere-foods.json",
+                          "C:\\me\\copy") == "company_research/oakmere-foods.json"
+    assert local_path.rel("C:\\me\\other\\x.md", "C:\\me\\copy") == "../other/x.md"
+    # Two drives have no path between them: the full path, as Windows writes it.
+    assert local_path.rel("D:\\rounds\\r1.json", "C:\\me\\copy") == "D:\\rounds\\r1.json"

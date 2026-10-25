@@ -19,10 +19,13 @@ python3 tools/screening_answers.py --slug <company>_<role>_<abbr> \
 
 That writes `screening_answers.md` into the application folder: work
 authorization, sponsorship, citizenship, notice period, salary band, location,
-languages, and how the role was found. Every one is parsed from
-`profile/01-candidate-profile.md`, `profile/CLAUDE.md` and the salary table in
-`profile/04-job-evaluation.md`, so a corrected fact propagates rather than being fixed
-in one place and stale in the other twelve.
+languages, and how the role was found. Three are read from the profile every time
+(`tools/screening_answers.py`): the notice period from `profile/01-candidate-profile.md`,
+the salary band from the table in `profile/04-job-evaluation.md`, and sponsorship from
+`profile/CLAUDE.md` and `01`. The rest are the answers written in `profile/screening.py`
+(`QUESTIONS`), which `/setup` wrote from the same facts: when one of those facts changes
+(work authorization, citizenship, location, languages), change its answer there in the
+same turn, or the sheet still says the old one.
 
 **The sponsorship answer is the one that decides whether the application is
 read.** Where the profile says no sponsorship is required, it is a plain

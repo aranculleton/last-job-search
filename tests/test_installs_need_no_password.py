@@ -56,6 +56,11 @@ def test_new_shells_find_what_it_installed_and_running_it_again_adds_nothing(hom
     text = rc.read_text()
     assert text.startswith("export EDITOR=vi\n") and text.count(I.RC_START) == 1
     assert "# path: $HOME/.local/bin" in text and "# path: $HOME/.bun/bin" in text
+    # A folder named the Windows way is written with "/", which a shell reads; with its
+    # backslashes, "$HOME\.bun\bin" read as "$HOME.bunbin" (the suite on Windows).
+    I.persist(["C:\\Tools\\bin"], home=str(home))
+    text = rc.read_text()
+    assert "\\" not in text and '*) PATH="C:/Tools/bin:$PATH"' in text
 
 
 def test_claude_codes_own_settings_gain_one_value_and_keep_the_rest(tmp_path):
@@ -296,3 +301,53 @@ def test_the_windows_bootstrap_needs_no_administrator_and_runs_on_powershell_5()
     # Everything into the person's own folders, and Claude Code told where Git Bash is.
     assert "$env:LOCALAPPDATA" in code and "CLAUDE_CODE_GIT_BASH_PATH" in code
     assert "Add-AppxPackage" in code and "'User')" in code
+
+
+def test_the_windows_bootstrap_quotes_its_paths_and_reads_settings_as_utf8():
+    """Two things only Windows shows (2026-10-25), held here in the script's text; the
+    Platforms workflow runs it under a user folder with a space and an accent. Start-Process
+    joins -ArgumentList with spaces and quotes nothing, so Git's unpacker got a user folder
+    with a space as two arguments; and Windows PowerShell 5.1 read the person's own
+    settings.json, UTF-8 with no byte-order mark, in the ANSI code page and wrote accented
+    text back as other letters. The script itself stays ASCII, which 5.1 reads right."""
+    with open(os.path.join(ROOT, "tools", "computer_setup.ps1"), encoding="utf-8") as fh:
+        src = fh.read()
+    code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
+    reads = [ln for ln in code.splitlines() if "Get-Content" in ln]
+    assert reads and all("-Encoding UTF8" in ln for ln in reads), reads
+    assert "('-o\"' + $dest + '\"')" in code and "('-InstallPath=\"' + $dest + '\"')" in code
+    assert not re.search(r"'-o' \+ \$dest|'-InstallPath=' \+ \$dest", code)
+    assert src.isascii()
+    flow = open(os.path.join(ROOT, ".github", "workflows", "platforms.yml"),
+                encoding="utf-8").read()
+    job = flow.split("  windows-shell:", 1)[1].split("\n  windows-chat:", 1)[0]
+    assert "[char]0x00EB" in job and "Get-Content -Raw -Encoding UTF8" in job
+
+
+def test_the_python3_command_reads_right_under_an_accented_user_folder(tmp_path, monkeypatch):
+    """python3.cmd was written in UTF-8 and cmd.exe reads a batch file in the console's
+    OEM code page, so under C:\\Users\\María the path to python.exe came out as other
+    letters and python3 failed in cmd and PowerShell (found 2026-10-25). The part under the
+    person's own folders is written as the variable cmd expands itself, and the file is
+    plain ASCII."""
+    user = "C:\\Users\\Mar\u00eda"
+    env = {"USERPROFILE": user, "LOCALAPPDATA": user + "\\AppData\\Local",
+           "APPDATA": user + "\\AppData\\Roaming"}
+    py = user + "\\AppData\\Local\\Programs\\Python\\Python313\\python.exe"
+    assert I._batch_path(py, env) == "%LOCALAPPDATA%\\Programs\\Python\\Python313\\python.exe"
+    assert I._batch_path(user + "\\py\\python.exe", env) == "%USERPROFILE%\\py\\python.exe"
+    # A folder outside them keeps its own name, in its short form when it has to.
+    assert I._batch_path("C:\\Python313\\python.exe", env) == "C:\\Python313\\python.exe"
+    assert I._batch_path("D:\\Pyth\u00f6n\\python.exe", env,
+                         short=lambda p: "D:\\PYTHN~1\\python.exe") == "D:\\PYTHN~1\\python.exe"
+    # The shim itself, as fix_python writes it.
+    monkeypatch.setattr(I, "WINDOWS", True)
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.setattr(I.shutil, "which", lambda name, *a, **k: None)
+    monkeypatch.setattr(I.sys, "executable", py)
+    monkeypatch.setattr(I, "_programs", lambda: str(tmp_path))
+    monkeypatch.setattr(I, "_persist_windows", lambda dirs, front=False: dirs)
+    assert I.fix_python().startswith("set up")
+    raw = (tmp_path / "last-job-search" / "bin" / "python3.cmd").read_bytes()
+    assert raw == b'@"%LOCALAPPDATA%\\Programs\\Python\\Python313\\python.exe" %*\r\n'

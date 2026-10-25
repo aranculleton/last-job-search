@@ -166,12 +166,20 @@ def test_uncommitted_work_stops_the_merge_and_says_so(tmp_path, monkeypatch, cap
     assert (me / "a.txt").read_text(encoding="utf-8") == "my edit"
 
 
-def test_a_chat_on_the_persons_computer_is_told_first_to_take_a_folder_of_its_own(
+def test_a_second_chat_on_the_persons_computer_is_told_to_take_a_folder_of_its_own(
         tmp_path, monkeypatch):
     _origin, me = _setup(tmp_path)
     monkeypatch.setattr(sync_app, "ROOT", str(me))
     monkeypatch.setattr(sync_app, "CLOUD", False)
-    assert "--worktree" in sync_app.own_folder()       # the main folder
+    # The first chat works in the copy itself, as CLAUDE.md says; it was told to move too
+    # (2026-10-25). A second chat while the first is working there is told.
+    assert sync_app.own_folder(now=1000.0, chat="first-chat") == ""
+    assert sync_app.own_folder(now=2000.0, chat="first-chat") == ""
+    assert "--worktree" in sync_app.own_folder(now=3000.0, chat="second-chat")
+    # Hours after the first chat's last sync, the main folder is nobody's.
+    later = 3000.0 + sync_app.MAIN_CHAT_HOURS * 3600
+    assert sync_app.own_folder(now=later, chat="second-chat") == ""
+    assert "--worktree" in sync_app.own_folder(now=later + 60, chat="first-chat")
     own = tmp_path / "me-two"
     g(me, "worktree", "add", "-q", "-b", "chat/two", str(own))
     monkeypatch.setattr(sync_app, "ROOT", str(own))
@@ -179,3 +187,50 @@ def test_a_chat_on_the_persons_computer_is_told_first_to_take_a_folder_of_its_ow
     monkeypatch.setattr(sync_app, "ROOT", str(me))
     monkeypatch.setattr(sync_app, "CLOUD", True)
     assert sync_app.own_folder() == ""                  # a cloud chat has a container of its own
+
+
+def _with_a_sync_on_the_branch(tmp_path, me):
+    """The day's sync ran on this chat's branch before the rewrite: an app commit, merged
+    the way sync_app merges it (a merge commit), sits beside the person's own work."""
+    app = tmp_path / "app"
+    app.mkdir()
+    g(app, "init", "-q", "-b", "master")
+    commit(app, "tools.txt", "the app's own change")
+    g(me, "remote", "add", "app", str(app))
+    g(me, "fetch", "-q", "app")
+    g(me, "-c", "user.name=t", "-c", "user.email=t@example.com", "merge", "-q", "--no-ff",
+      "--allow-unrelated-histories", "-m", f"{sync_app.SYNC_SUBJECT}: 1 new commit(s)",
+      "app/master")
+
+
+def test_the_command_given_after_a_rewrite_carries_only_their_own_commits(
+        tmp_path, monkeypatch, capsys):
+    """It listed the app's commits and the sync's merge as well, and `git cherry-pick`
+    stops on a merge ("is a merge but no -m option was given"), so the person's own commit
+    was never carried across (found 2026-10-25)."""
+    origin, me = _setup(tmp_path)
+    _with_a_sync_on_the_branch(tmp_path, me)
+    commit(me, "mine.txt", "work in progress")
+    mine = g(me, "rev-parse", "HEAD").stdout.strip()
+    monkeypatch.setattr(sync_app, "ROOT", str(me))
+    assert sync_app.pull_master() == 1
+    said = capsys.readouterr().out
+    assert "1 commit(s) of its own" in said
+    line = next(ln.strip() for ln in said.splitlines() if "cherry-pick" in ln)
+    picked = line.split("cherry-pick", 1)[1].split()
+    assert picked == [mine[:12]]
+    # The command as given works: each part run on its own, as a chat runs them.
+    for part in line.split("&&"):
+        g(me, "-c", "user.name=t", "-c", "user.email=t@example.com", *part.split()[1:])
+    assert (me / "mine.txt").read_text(encoding="utf-8") == "work in progress"
+    assert (me / "c.txt").exists()                     # on the new master
+
+
+def test_a_branch_whose_only_extra_is_a_sync_moves_to_the_new_master(
+        tmp_path, monkeypatch, capsys):
+    origin, me = _setup(tmp_path)
+    _with_a_sync_on_the_branch(tmp_path, me)
+    monkeypatch.setattr(sync_app, "ROOT", str(me))
+    assert sync_app.pull_master() == 0
+    assert "nothing was lost" in capsys.readouterr().out
+    assert g(me, "rev-parse", "HEAD").stdout == g(origin, "rev-parse", "HEAD").stdout

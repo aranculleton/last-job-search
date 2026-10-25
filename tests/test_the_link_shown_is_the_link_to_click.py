@@ -231,8 +231,11 @@ def test_a_staged_pick_carries_the_link_to_click(tmp_path):
     assert app["url_seen"] == row["url"]
     assert app["link_check"] == "not checked: LinkedIn is never fetched"
     head = open(p["file"], encoding="utf-8").read()
-    assert ("- apply link: https://www.linkedin.com/jobs/view/4012345678/ (not checked: "
-            "LinkedIn is never fetched)") in head
+    # In the shortlist row, fenced after the posting: nothing the board wrote sits above a
+    # fence (updated 2026-10-25, the drafting audit).
+    row_block = head[head.index("shortlist row"):]
+    assert ("apply link: https://www.linkedin.com/jobs/view/4012345678/ (not checked: "
+            "LinkedIn is never fetched)") in row_block
 
 
 def test_the_tracker_row_says_where_to_apply_and_whether_it_closed():

@@ -192,11 +192,31 @@ def _key(pat: re.Pattern) -> str:
     return max(words, key=len).lower()
 
 
-def _walk(tree: str):
+def _walk(tree: str, skip=SKIP_DIRS):
     for dp, dns, fns in os.walk(tree):
-        dns[:] = sorted(d for d in dns if d not in SKIP_DIRS)
+        dns[:] = sorted(d for d in dns if d not in skip)
         for fn in sorted(fns):
             yield os.path.join(dp, fn)
+
+
+def _files(tree: str, skip: bool = True):
+    """Every file a tree scan reads. A folder in SKIP_DIRS is what a working copy builds
+    for itself and git ignores; a committed file in one is pushed all the same. So in a
+    checkout git's own list of tracked files is read too, and a tree that is an export
+    (build_app, app_watch: nothing but committed files) skips nothing but .git. A
+    committed venv/notes.txt passed both, where CI's --git scan found it (2026-10-25)."""
+    seen = set()
+    for full in _walk(tree, SKIP_DIRS if skip else {".git"}):
+        seen.add(os.path.normcase(full))
+        yield full
+    if not (skip and os.path.exists(os.path.join(tree, ".git"))):
+        return
+    out = subprocess.run(["git", "-C", tree, "ls-files", "-z", "--cached"],
+                         capture_output=True).stdout
+    for rel in sorted(set(out.decode("utf-8", "replace").split("\0")) - {""}):
+        full = os.path.join(tree, rel)
+        if os.path.normcase(full) not in seen and os.path.isfile(full):
+            yield full
 
 
 def _committable(tree: str):
@@ -213,10 +233,14 @@ def _committable(tree: str):
             yield full
 
 
-def scan(tree: str, tokens, allow, show: bool = False, git: bool = False) -> list[str]:
+def scan(tree: str, tokens, allow, show: bool = False, git: bool = False,
+         export: bool = False) -> list[str]:
+    """Findings in `tree`: what git would commit (`git`), every file of an export
+    (`export`: nothing in it is a working copy's own), or a working tree's files and
+    everything it has committed."""
     findings: list[str] = []
     keyed = [(_key(pat), (pat, n)) for pat, n in tokens]
-    for full in (_committable(tree) if git else _walk(tree)):
+    for full in (_committable(tree) if git else _files(tree, skip=not export)):
         rel = os.path.relpath(full, tree).replace(os.sep, "/")
         if is_personal(rel):
             findings.append(f"{rel}: personal path (tools/personal_paths.py)")

@@ -397,6 +397,24 @@ def _abort(why: str, paths: list[str]) -> int:
     return 1
 
 
+def _refused(r: subprocess.CompletedProcess) -> int:
+    """Git would not start the merge at all (no MERGE_HEAD): most often a file here that is
+    not saved yet sits where the update brings one. Carrying on put the app's file over
+    theirs and committed a plain commit that recorded no merge (2026-10-25). Nothing has
+    changed at this point, so the stop names their files and git's own reason."""
+    said = (r.stderr or "") + "\n" + (r.stdout or "")
+    paths = [ln.strip() for ln in said.splitlines() if ln.startswith("\t") and ln.strip()]
+    if paths:
+        print("sync_app: stopped, nothing changed. These files here are not saved yet, and "
+              "the update brings a file of the same name: rename them or move them out of "
+              "this folder (the app's own file takes that name), then run this again:")
+        for p in paths[:30]:
+            print(f"  {p}")
+        return 1
+    print(f"sync_app: stopped, nothing changed. Git would not take the update: {_git_error(r)}")
+    return 1
+
+
 def _changelog(old: str) -> list[str]:
     diff = git("diff", old, "HEAD", "--", "CHANGELOG.md", check=False).stdout
     return [ln[1:] for ln in diff.splitlines()
@@ -463,7 +481,10 @@ def sync() -> int:
         args = ["merge", "--no-ff", "--no-commit"]
         if base is None:
             args.append("--allow-unrelated-histories")
-        git(*args, APP, check=False)
+        r = git(*args, APP, check=False)
+        if r.returncode and git("rev-parse", "-q", "--verify", "MERGE_HEAD",
+                                check=False).returncode:
+            return _refused(r)
         conflicted = git("diff", "--name-only", "--diff-filter=U").stdout.split()
         if any(is_personal(p) for p in conflicted):
             return _abort("A personal path conflicted:", [p for p in conflicted if is_personal(p)])
@@ -553,14 +574,46 @@ def _stamp_path(root: str | None = None) -> str | None:
     return os.path.join(dirs[0], STAMP) if dirs else None
 
 
-def last_checked() -> str:
-    """The date (YYYY-MM-DD) of the last successful sync in this checkout, or "" if none."""
+def _stamp_line() -> str:
     p = _stamp_path()
     try:
         with open(p, encoding="utf-8") as fh:
             return fh.read().strip()
     except (OSError, TypeError):
         return ""
+
+
+def last_checked() -> str:
+    """The date (YYYY-MM-DD) of the last successful sync in this checkout, or "" if none."""
+    got = _stamp_line().split()
+    return got[0] if got else ""
+
+
+def _day_line(now: datetime.datetime | None = None) -> str:
+    """The day's check as written: the date, and the UTC offset of the clock it was read
+    from ("2026-10-26 +1100"). In a cloud chat person.py sets the person's own zone, so
+    profile_upgrades.py writes their date while sync_app's own process reads the cloud
+    computer's UTC one; stamped with its offset, the day is read back by the clock that
+    wrote it, whichever process asks (2026-10-25)."""
+    now = now or datetime.datetime.now().astimezone()
+    return now.strftime("%Y-%m-%d %z").strip()
+
+
+def _stale_day(line: str, now: datetime.datetime | None = None) -> bool:
+    """Is the day in `line` (as _day_line writes it) earlier than today, by the clock it was
+    written in? A date with no offset (an older copy wrote it) is read in this computer's
+    own day."""
+    got = line.split()
+    if not got:
+        return True
+    now = now or datetime.datetime.now().astimezone()
+    m = re.fullmatch(r"([+-])(\d\d)(\d\d)", got[1]) if len(got) > 1 else None
+    if m:
+        off = datetime.timedelta(hours=int(m.group(2)), minutes=int(m.group(3)))
+        today = now.astimezone(datetime.timezone(-off if m.group(1) == "-" else off)).date()
+    else:
+        today = now.astimezone().date() if now.tzinfo else now.date()
+    return got[0] < today.isoformat()
 
 
 def _record_check(root: str | None = None) -> None:
@@ -574,7 +627,7 @@ def _record_check(root: str | None = None) -> None:
     if p:
         try:
             with open(p, "w", encoding="utf-8") as fh:
-                fh.write(datetime.date.today().isoformat() + "\n")
+                fh.write(_day_line() + "\n")
             # The commit the sync left this checkout on, and the app commit it took: an
             # /upgrade worktree made from an older commit lists the wrong upgrades, and
             # `behind_sync()` says so instead.
@@ -718,7 +771,7 @@ def behind_sync(root: str | None = None) -> str:
 def stale() -> bool:
     """True in a person's repo whose check has not run today. Never raises."""
     try:
-        return not is_the_app() and last_checked() < datetime.date.today().isoformat()
+        return not is_the_app() and _stale_day(_stamp_line())
     except Exception:  # a reminder must never break the tool that asked for it
         return False
 
@@ -829,14 +882,30 @@ def rewritten(old: str, new: str) -> bool:
         "merge-base", "--is-ancestor", old, new, check=False).returncode != 0
 
 
+def _own_commits(old: str) -> list[str]:
+    """The commits on this branch that are the person's own work, oldest first: not on the
+    old master or the new one, no merge (a sync's merge, or master's), and none of the app's
+    commits a sync brought in, whether or not this clone still has the app's refs. Listing
+    those too gave a `git cherry-pick` that stopped on the merge and carried nothing
+    (2026-10-25); the next sync brings the app's commits again anyway."""
+    app_side = []
+    merges = git("rev-list", "--merges", "HEAD", "--not", old, "origin/master",
+                 check=False).stdout.split()
+    for m in merges:
+        subject = git("log", "-1", "--format=%s", m, check=False).stdout.strip()
+        if subject.startswith(SYNC_SUBJECT):
+            app_side += git("rev-parse", f"{m}^@", check=False).stdout.split()[1:]
+    return git("rev-list", "--reverse", "--no-merges", "HEAD", "--not", old, "origin/master",
+               f"--remotes={REMOTE}", *app_side, check=False).stdout.split()
+
+
 def after_rewrite(old: str) -> int:
     """origin/master was rewritten. Merging it into a checkout made before conflicts on
     hundreds of files, and a person had to warn the session in their own prompt. A branch
     holding nothing beyond the old master moves to the new one; a branch with commits of its
     own is left alone, with those commits named and the way to carry them across."""
     branch = git("rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip()
-    mine = git("rev-list", "--reverse", "HEAD", "--not", old, "origin/master",
-               check=False).stdout.split()
+    mine = _own_commits(old)
     if not mine:
         moved = (git("checkout", "-q", "-B", branch, "origin/master", check=False)
                  if branch and branch != "HEAD"
@@ -958,13 +1027,26 @@ def pull_master() -> int:
     return 0
 
 
-def own_folder() -> str:
-    """The first thing a chat on the person's computer is told, while it is still in their
-    main folder: make one of its own. Two chats in one folder switch branches under each
-    other and fight over git's index, and the second one is usually opened before anyone
-    thinks of it, so this is said before any work starts rather than when it goes wrong.
-    "" in the cloud, where every chat has its own container, and in a folder already made
-    for a chat."""
+# Which chat works in the main folder on this computer, and when it last said so: kept in
+# that folder's own git directory, never committed.
+MAIN_CHAT = "ljs-main-chat"
+# How long a chat holds the main folder after its last sync there: a chat that carries on
+# for days syncs before each piece of work, and one closed hours ago holds nothing.
+MAIN_CHAT_HOURS = 6
+
+
+def this_chat() -> str:
+    return os.environ.get("CLAUDE_CODE_SESSION_ID") or ""
+
+
+def own_folder(now: float | None = None, chat: str | None = None) -> str:
+    """What a second chat on the person's computer is told, while it is still in their main
+    folder: make one of its own. Two chats in one folder switch branches under each other
+    and fight over git's index. The first chat works in the copy itself (CLAUDE.md, "On the
+    person's own computer"), and was told to move all the same (2026-10-25): so the chat
+    that syncs in the main folder holds it, and only another chat, while it does, is told.
+    "" in the cloud, where every chat has its own container, in a folder already made for a
+    chat, and for the chat that holds the main folder."""
     if CLOUD:
         return ""
     here = git("rev-parse", "--absolute-git-dir", check=False).stdout.strip()
@@ -975,10 +1057,28 @@ def own_folder() -> str:
         common = os.path.join(ROOT, common)
     if os.path.realpath(here) != os.path.realpath(common):
         return ""                                   # a worktree: this chat's own folder
-    return ("sync_app: this chat is in your main folder. Before any work, give it a folder of "
-            "its own: python3 tools/sync_app.py --worktree <a short name for this chat>, then "
-            "run every command there. Two chats in one folder switch branches under each "
-            "other.")
+    import time
+    now = time.time() if now is None else now
+    chat = this_chat() if chat is None else chat
+    path = os.path.join(here, MAIN_CHAT)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            held, when = (fh.read().split() + ["", "0"])[:2]
+        when = float(when)
+    except (OSError, ValueError):
+        held, when = "", 0.0
+    if held and held != chat and now - when < MAIN_CHAT_HOURS * 3600:
+        return ("sync_app: another chat is working in your main folder. Before any work, give "
+                "this one a folder of its own: python3 tools/sync_app.py --worktree <a short "
+                "name for this chat>, then run every command there. Two chats in one folder "
+                "switch branches under each other.")
+    if chat:
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(f"{chat} {now:.0f}\n")
+        except OSError:
+            pass
+    return ""
 
 
 def branch_name(name: str, today: datetime.date | None = None) -> str:
@@ -1386,7 +1486,7 @@ def own_test_risks(root: str | None = None) -> dict[str, list[str]]:
                         found.append(f"{alias[args[0].id]}.{args[1].value}")
             found += _source_reads(root, tree)
             if found:
-                out[os.path.relpath(path, root)] = sorted(set(found))
+                out[os.path.relpath(path, root).replace(os.sep, "/")] = sorted(set(found))
     return out
 
 

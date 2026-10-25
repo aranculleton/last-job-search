@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import tex_escape  # noqa: E402
 
 # What the candidate holds, from the profile's skills.py:
 #   NOT_HELD   name -> (how a posting spells it, why it is not held). Never
@@ -453,8 +454,8 @@ def _final(tools, context, posting="", company="", consented=()):
 
 
 # A skill the person said yes to is the posting's spelling, not an inventory item
-# written for LaTeX, so it is escaped on the way out.
-_TEX = {"&": r"\&", "%": r"\%", "#": r"\#", "_": r"\_", "$": r"\$"}
+# written for LaTeX, and a heading is the person's words: both are escaped on the way out,
+# by the one copy of that rule (tools/tex_escape.py). "BI & delivery" printed "BI delivery".
 
 
 def coverage(posting, page, consented=()):
@@ -523,8 +524,9 @@ def render(tools, context="", posting="", company="", consented=()):
     yes = set(_yes(consented))
 
     def tex(i):
-        return "".join(_TEX.get(ch, ch) for ch in i) if i in yes else i
-    return "\n".join("\\blockline{%s}{%s}" % (label, ", ".join(tex(i) for i in sel[cat]))
+        return tex_escape.text(i) if i in yes else i
+    return "\n".join("\\blockline{%s}{%s}" % (tex_escape.text(label),
+                                              ", ".join(tex(i) for i in sel[cat]))
                      for cat, label in _labels()
                      if len(sel.get(cat, [])) >= MIN_PER_CATEGORY.get(cat, 1))
 

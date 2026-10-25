@@ -53,6 +53,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import tex_escape  # noqa: E402
 import local_path  # noqa: E402
 
 DEFAULT = "standard"
@@ -364,7 +365,7 @@ def resume_parts(vals, ident, tex_dir, name=DEFAULT, why=""):
     head = "\\ljsheadfont" if v.get("heading_font") else ""
     if head:
         parts["name_font"] = head + parts["name_font"]
-    lines = [f"%% Design: {name}, {why or 'chosen for this application'} "
+    lines = [f"%% Design: {name}, {tex_escape.comment(why) or 'chosen for this application'} "
              "(templates/doc_design.py)."]
     if v.get("body_font"):
         lines.append("\\usepackage{fontspec}")

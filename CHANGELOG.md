@@ -116,6 +116,26 @@ make sense to somebody whose repo just received it.
   unaccepted connection requests no longer show as overdue, columns you added by hand
   survive saves, an interrupted save no longer cuts a file short, interviews booked with a
   time reach the due list, and the networking view is faster on large contact books.
+- **Every value that reaches a resume or letter prints as written**: an email with an
+  underscore, a LinkedIn link with % in it, or an "&" in a heading no longer breaks the
+  document or drops a line. Drafts not yet sent are made again.
+- **Neither check on a draft can be skipped**: a draft goes out only after both have passed,
+  for that exact draft.
+- **A resume that compiled with an error is never called a clean fit**, two-page resumes and
+  letter-size paper pass the design check, and every contact line the resume prints is
+  checked.
+- **An employer named in another alphabet gets a file name of its own**, and the words of a
+  posting reach Claude only inside a fence.
+- Smaller document fixes: small numbers and year-shaped numbers are checked like any other,
+  Canadian spelling is checked for more words, the summary has one length (36 to 52 words)
+  everywhere, and a requisition number is taken off a role the same way wherever it is named.
+- **A refused update keeps your unsaved file**, the daily check follows your own day, and a
+  rewritten copy of your search offers a command that carries only your own work.
+- **On Windows**: Git installs under a user folder with a space in its name, accents
+  survive, Python and time zones work, and scripts run in Git Bash rather than a missing
+  Linux; a second chat open at the same time is the only one told to take its own folder;
+  starting over works in the Mac's own shell.
+- The safety check refuses every setting that would run a command without asking.
 
 ## [3.13.0] - 2026-10-24
 

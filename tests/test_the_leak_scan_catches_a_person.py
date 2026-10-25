@@ -192,13 +192,18 @@ def test_every_form_of_a_recorded_name_and_company_is_an_entry():
 
 def test_a_phone_number_is_an_entry_in_the_forms_it_is_written_anywhere():
     import build_app
-    assert build_app.phone_forms("+1 312 555 0142") == ["312", "555 0142", "5550142", "0142"]
+    # A North American number as a whole and as its seven-digit local part, never its area
+    # code or last four alone: "212" matched the app's own font files and a (#212) in its
+    # changelog, and a number ending in 2026 would match every date (2026-10-25).
+    assert build_app.phone_forms("+1 312 555 0142") == ["312 555 0142", "555 0142", "5550142"]
+    assert build_app.phone_forms("(212) 555-0168") == ["212 555 0168", "555 0168", "5550168"]
     au = "+61" + " 400 111 222"            # assembled, so this file passes the scan it tests
     assert build_app.phone_forms(au) == ["400 111 222", "0400 111 222"]
     assert build_app.phone_forms("0400 111 222") == ["0400 111 222"]
     assert build_app.phone_forms("020 7946 0011") == ["020 7946 0011"]
     # never a short group on its own: it would match everywhere
-    assert all(len(f.replace(" ", "")) >= 4 for f in build_app.phone_forms("+44 7700 900123"))
+    for number in ("+44 7700 900123", "+1 416 555 0126", "416-555-0126"):
+        assert all(len(f.replace(" ", "")) >= 7 for f in build_app.phone_forms(number)), number
 
 
 def test_git_mode_scans_what_would_be_committed_and_nothing_else(tmp_path, monkeypatch):
@@ -321,3 +326,25 @@ def test_a_files_own_allowance_holds_in_its_commits_diff_and_nowhere_else(tmp_pa
                  f'+op = "{short}"\n', encoding="utf-8")
     found = leak_scan.scan_text([str(t)], leak_scan.tokens_from([short]))
     assert found == ["patches.txt:2: denylist entry 1", "patches.txt:8: denylist entry 1"]
+
+
+def test_a_committed_file_in_a_folder_a_working_copy_builds_is_scanned_too(tmp_path,
+                                                                            monkeypatch):
+    """The tree scan skips .venv, venv and node_modules, which a working copy makes for
+    itself. build_app exports what is committed and app_watch writes the app's files out,
+    then both scanned that way, so a committed venv/notes.txt holding a name passed them,
+    and the scan before a push, while CI's --git scan found it (2026-10-25)."""
+    import subprocess
+    monkeypatch.setenv("LJS_LEAK_TOKENS", "Quillon Varga")
+    files = {"venv/notes.txt": "Quillon Varga\n", ".venv/a.txt": "Quillon Varga\n",
+             "tools/node_modules/b.txt": "Quillon Varga\n", "README.md": "fine\n"}
+    export = _tree(tmp_path / "export", files)
+    tokens = leak_scan.load_tokens(None)
+    allow = leak_scan.load_allow(None)
+    assert len(leak_scan.scan(export, tokens, allow, export=True)) == 3
+    # A checkout: what it built for itself is still skipped, what it committed is read.
+    repo = _tree(tmp_path / "repo", files)
+    subprocess.run(["git", "-C", repo, "init", "-q"], check=True)
+    subprocess.run(["git", "-C", repo, "add", "-f", "venv/notes.txt", "README.md"], check=True)
+    got = leak_scan.scan(repo, tokens, allow)
+    assert [f.split(":")[0] for f in got] == ["venv/notes.txt"], got

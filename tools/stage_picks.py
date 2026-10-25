@@ -79,7 +79,9 @@ A pick is a 1-based rank in `06_shortlist.json`, or `Company::title words`.
 
 `stage` writes, under <round_dir>:
     picks/NN_<slug>.md   the posting, fenced by tools/untrusted.py, with the
-                         shortlist's scores and routing notes above the fence
+                         shortlist's scores and routing notes above the fence and
+                         the board's row (employer, title, place, links) fenced
+                         after it: nothing a board wrote is above a fence
     picks.json           [{file, company, role, slug, abbr, ask_first}]: the picks
                          nothing is waiting on. `consent` adds skills_yes and
                          skills_no; `tools/draft_pack.py build` turns it into
@@ -106,7 +108,8 @@ auditor's verdict, one changed since its audit (the draft, the model audit or th
 written again), one for another role, or one audited against a profile that has changed
 since. A pick with no audited draft is reported, never silently dropped; `--only` leaves
 out the roles the person dropped. An older audit file, from the agent auditor or holding
-the corrected draft alone, as a one-element list, is still read.
+a draft alone, has had neither audit of that draft and is refused, by `audit` and
+`assemble` alike, with what to do instead.
 
 When `stage` gives a slug to a different role than the round's earlier pick under it, the
 files that pick left (draft, research, audits, note, saved posting) are moved to
@@ -191,9 +194,20 @@ def role_tokens(role: str) -> list[str]:
     every time. Then the first of them numbered, so a filename is always found.
 
     A requisition code or a gender marker is never a name: "Senior Data Analyst -
-    REQ-2026-0412" was "REQ2026" and "Data Analyst (m/w/d)" was "MW"."""
+    REQ-2026-0412" was "REQ2026" and "Data Analyst (m/w/d)" was "MW". Accents are folded
+    and Greek and Cyrillic spelled in Latin letters (doc_name.ascii_name), as a company's
+    name is: "Prévision" was "PrVision". The tokens the old rule gave come last, so a
+    redraft finds the name its unsent draft already has (choose_abbr)."""
+    out = _tokens(doc_name.ascii_name(doc_name.role_core(role or "")))
+    first = out[0] if out else "Role"
+    out += [f"{first}{k}" for k in range(2, 10)]
+    out += [t for t in _tokens(doc_name.role_core(role or "")) if t not in out]
+    return out
+
+
+def _tokens(role: str) -> list[str]:
+    """The tokens role_tokens names a role by, from its ASCII letters."""
     out = []
-    role = doc_name.role_core(role or "")
     parts = [p for p in re.split(r"\s[-–—]\s|,|\(|\)", role or "") if p.strip()]
     for text in list(reversed(parts)) + [role or ""]:
         words = [w for w in re.findall(r"[A-Za-z0-9]+", text) if w.lower() not in _FILLER]
@@ -206,8 +220,6 @@ def role_tokens(role: str) -> list[str]:
         tok = "".join(w[:1].upper() + w[1:] for w in plain[:n])
         if tok and len(tok) <= 24 and tok not in out:
             out.append(tok)
-    first = out[0] if out else "Role"
-    out += [f"{first}{k}" for k in range(2, 10)]
     return out
 
 
@@ -255,13 +267,20 @@ def choose_abbr(company: str, role: str, rows: list[dict], root: str = ROOT,
     claimed = claimed if claimed is not None else set()
     base = doc_name.suffix(company, "")
     held = owners(base, rows)
-    same = doc_name.reusable(base, role, rows)
+    same = doc_name.reusable(base, role, rows, company)
     if base not in claimed and (not held or same) and (held or not file_taken(base, root)):
         return base
-    for tok in role_tokens(role):
+    tokens = role_tokens(role)
+    # The redraft of a redraft keeps the token name its unsent draft has, under whichever
+    # rule named it.
+    for tok in tokens:
         abbr = doc_name.suffix(company, tok)
-        # The redraft of a redraft keeps the token name its unsent draft has.
-        free = (doc_name.reusable(abbr, role, rows) if owners(abbr, rows)
+        if abbr not in claimed and owners(abbr, rows) and doc_name.reusable(abbr, role, rows,
+                                                                            company):
+            return abbr
+    for tok in tokens:
+        abbr = doc_name.suffix(company, tok)
+        free = (doc_name.reusable(abbr, role, rows, company) if owners(abbr, rows)
                 else not file_taken(abbr, root))
         if abbr not in claimed and free:
             return abbr
@@ -269,6 +288,14 @@ def choose_abbr(company: str, role: str, rows: list[dict], root: str = ROOT,
         f"stage: every file name for {company} | {role} is taken by another application "
         f"({base} and {base}_<role>). Rename one of the older files in cv/ and "
         "cover_letters/, and its tracker row, then stage again.")
+
+
+def _row_text(r: dict) -> str:
+    """The board's own words about a pick, one a line, for the row's fence."""
+    import apply_link
+    return "\n".join([f"employer: {r.get('company', '')}", f"title: {r.get('title', '')}",
+                      f"location: {r.get('location', '')}", f"posted: {r.get('date', '')}",
+                      f"url: {r.get('url', '')}", f"apply link: {apply_link.line(r)}"])
 
 
 def _find(shortlist: list[dict], pick: str) -> dict:
@@ -476,12 +503,11 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             hold = [q for q in hold if q["id"] != "referral"]
         path = os.path.join(round_dir, "picks", f"{n:02d}_{s}.md")
         head = [
-            f"# {r['company']} | {r['title']}", "",
+            # Nothing the board wrote sits above a fence: the employer, the title, the place,
+            # the date and the links are the shortlist row's, fenced after the posting. A
+            # title written as an instruction to the drafter was line 1 of every pick file.
+            f"# Pick {n}: {s}", "",
             f"- abbr: {abbr}",
-            f"- location: {r.get('location', '')}",
-            f"- posted: {r.get('date', '')}",
-            f"- url: {r.get('url', '')}",
-            f"- apply link: {apply_link.line(r)}",
             f"- portal: {r.get('portal', '')}",
             f"- fit {r.get('fit')}, opportunity {r.get('opportunity')}, priority {r.get('priority')}",
             f"- flags: {json.dumps(r.get('flags') or [])}",
@@ -502,7 +528,10 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             head.append(f"- research as: {cc}")
         head.append("")
         with open(path, "w", encoding="utf-8") as fh:
-            fh.write("\n".join(head) + "\n" + untrusted.fence(r.get("desc") or "") + "\n")
+            # The posting's fence first: every reader takes the first fenced block as the
+            # posting (untrusted.unfence).
+            fh.write("\n".join(head) + "\n" + untrusted.fence(r.get("desc") or "") + "\n"
+                     + untrusted.fence(_row_text(r), label="shortlist row") + "\n")
         staged.append({"file": path, "company": r["company"], "role": r["title"],
                        "slug": s, "abbr": abbr, "ask_first": [x["skill"] for x in asks],
                        "ask_beside": {x["skill"]: x["have"][:1] for x in asks if x["have"]},
@@ -770,35 +799,49 @@ def audit(round_dir: str, only=()) -> list[dict]:
 
 
 def _held_back(got, round_dir: str = "", slug: str = "") -> str:
-    """Why an audit record written by `audit` may not be rendered yet, or "".
+    """Why an audit record may not be rendered yet, or "" when it may.
 
-    Nothing is rendered for sending without both audits: the code audit and the model
-    auditor's reading of the packet, its verdict re-checked by code. A record from the
-    agent auditor, which read everything itself, has no `mechanical` part and is read as
-    before."""
-    if isinstance(got, dict) and got.get("verdict") == "stale":
+    Nothing is rendered for sending without both audits of this exact draft: the code
+    audit (`mechanical`) and the model auditor's reading of the packet (`model`, the
+    md5 of the draft it read), its verdict re-checked by code, nothing changed since. A
+    record with no code audit in it (the agent auditor's older shape, or a draft saved as
+    an audit) was rendered on its own say-so; it is refused, whatever it says."""
+    import draft_audit
+    import draft_pack
+    if not isinstance(got, dict):
+        return draft_audit.OLD_RECORD.format(slug=slug or "<slug>")
+    if got.get("verdict") == "stale":
         return f"{got.get('stale') or 'the draft is for another role'}: draft this pick again"
-    if not isinstance(got, dict) or not isinstance(got.get("mechanical"), dict):
-        return ""
-    mech = got["mechanical"]
-    if str(got.get("verdict") or "") == "needs_model":
+    mech = got.get("mechanical")
+    if not isinstance(mech, dict):
+        return draft_audit.OLD_RECORD.format(slug=slug or "<slug>")
+    verdict = str(got.get("verdict") or "")
+    if verdict == "needs_model":
         why = ", ".join(mech.get("reasons") or [])
         if not why:
             return "waiting on the model audit (the code checks are clean)"
         return f"waiting on the model auditor ({why})"
-    if not isinstance(got.get("model"), dict):
+    model = got.get("model")
+    if not isinstance(model, dict):
         return ("no model audit yet: every draft that will be sent is read by the model "
                 "auditor after the code audit")
-    import draft_audit
-    import draft_pack
-    if isinstance(got.get("draft"), dict) and mech.get("draft_md5") != draft_audit.md5(got["draft"]):
-        return "changed since it was audited: run stage_picks.py audit again"
-    if round_dir and slug and isinstance(got.get("inputs"), dict) and \
-            got["inputs"] != draft_audit.inputs(round_dir, slug):
+    again = "run stage_picks.py audit again"
+    if verdict not in ("pass", "fixed") or \
+            str(model.get("verdict") or "").lower() not in ("pass", "fixed"):
+        return (f"the audit says {verdict or 'nothing'!r} and the model auditor "
+                f"{str(model.get('verdict') or 'nothing')!r}, and only a pass from both is "
+                f"sent: {again}")
+    if mech.get("findings") or mech.get("open_after_model"):
+        return f"the code audit still has findings the model auditor did not settle: {again}"
+    if not got.get("drafter_md5") or model.get("audited_md5") != got.get("drafter_md5"):
+        return f"the model audit is of another version of this draft: {again}"
+    if not isinstance(got.get("draft"), dict) or mech.get("draft_md5") != draft_audit.md5(got["draft"]):
+        return f"changed since it was audited: {again}"
+    if round_dir and slug and got.get("inputs") != draft_audit.inputs(round_dir, slug):
         return ("changed since it was audited (the draft, the model audit or the note was "
-                "written again): run stage_picks.py audit again")
-    if mech.get("rules_hash") and mech["rules_hash"] != draft_pack.rules_hash():
-        return "the profile changed since it was audited: run stage_picks.py audit again"
+                f"written again): {again}")
+    if mech.get("rules_hash") != draft_pack.rules_hash():
+        return f"the profile changed since it was audited: {again}"
     return ""
 
 
@@ -827,8 +870,12 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
         try:
             with open(path, encoding="utf-8") as fh:
                 got = json.load(fh)
-        except (OSError, json.JSONDecodeError):
+        except OSError:
             missing.append(p["company"])
+            continue
+        except json.JSONDecodeError:
+            missing.append(f"{p['company']} (audit_{p['slug']}.json is not an audit record "
+                           "anything can read: run stage_picks.py audit again)")
             continue
         verdict, d, risks = _audited(got)
         # The audit is the last read before anything reaches an employer. A
@@ -841,14 +888,12 @@ def assemble(round_dir: str, only=()) -> tuple[list[dict], list[str], list[str]]
         if verdict == "stale":
             missing.append(f"{p['company']} ({_held_back(got)})")
             continue
-        if not isinstance(d, dict):
-            missing.append(p["company"])
-            continue
         held = _held_back(got, round_dir, p["slug"])
-        if not held and isinstance(got, dict) and isinstance(got.get("mechanical"), dict):
+        if not held and not isinstance(d, dict):
+            held = f"audit_{p['slug']}.json holds no draft: run stage_picks.py audit again"
+        if not held:
             # A record the audit wrote names the role it audited; one for another role is
-            # never assembled under this pick's name (an agent auditor's older record is
-            # read as before).
+            # never assembled under this pick's name.
             import draft_audit
             held = draft_audit.other_role(d, p)
         if held:
@@ -936,11 +981,9 @@ def _report_audit(results: list[dict]) -> None:
             why = ("code checks clean; waiting on the model audit" if not reasons
                    else "for the model auditor: " + reasons)
         elif r["verdict"] == "missing":
-            why = f"no draft_{r['slug']}.json"
+            why = r.get("why") or f"no draft_{r['slug']}.json"
         elif r["verdict"] == "stale":
             why = f"{r.get('why')}: draft this pick again"
-        elif r.get("old"):
-            why = "audited by the agent auditor"
         else:
             why = "both audits passed" if r["verdict"] in ("pass", "fixed") else ""
         print(f"{said.get(r['verdict'], r['verdict']):8} {r['slug']:<28} {why}")

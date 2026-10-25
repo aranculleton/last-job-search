@@ -4,7 +4,9 @@ A chat on the person's computer, opened after the cloud chat had built the profi
 the brief and was drafting, asked for their resume again (2026-10-25): the profile was on
 the cloud chat's branch, not yet on master, and nothing looked there. tools/setup_state.py
 looks on master and on every branch not yet merged, and only a copy with no profile
-anywhere is set up. The repos here are made in the test; the person is invented.
+anywhere is set up. It reads place.setup_state(), the rule /setup's own first step reads,
+so the two never tell one person two different things. The repos here are made in the
+test; the person is invented.
 """
 from __future__ import annotations
 
@@ -19,9 +21,18 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 
+import json  # noqa: E402
+
+import place  # noqa: E402
 import setup_state as S  # noqa: E402
 
-DONE = {f: "{}" for f in S.DONE_FILES}
+DONE = {"profile/person.json": "{}", "profile/01-candidate-profile.md": "# Morgan Ellis\n",
+        "profile/CLAUDE.md": "# Morgan Ellis\n"}
+
+
+def _mark(**setup):
+    """profile/place.json as /setup writes it (place.py started, place.py finished)."""
+    return {"profile/place.json": json.dumps({"setup": setup})}
 
 
 def _git(cwd, *args, env=None):
@@ -79,22 +90,47 @@ def test_a_profile_on_another_chats_branch_is_ready_and_nothing_is_asked(repos):
 
 def test_a_setup_under_way_elsewhere_is_left_to_finish(repos):
     _origin, clone, branch = repos
-    branch("claude/setup-now", {"profile/person.json": "{}", S.MARKER: ""}, days_ago=2)
+    today = time.strftime("%Y-%m-%d")
+    branch("claude/setup-now", {"profile/person.json": "{}",
+                                **_mark(started=today, chat="cloud-chat")})
     assert S.state(str(clone))[0] == "running"
-    assert "other chat" in S.SAY["running"] and S.EXIT["running"] == 3
+    assert S.SAY["running"] == place.STILL_GOING and S.EXIT["running"] == 3
 
 
-def test_a_part_profile_pushed_minutes_ago_is_running_and_one_left_for_days_is_carried_on():
-    assert S.judge({"profile/person.json"}, age_hours=0.5) == "running"
-    assert S.judge({"profile/person.json"}, age_hours=50) == "unfinished"
-    assert S.judge(set(S.DONE_FILES), age_hours=50) == "ready"
-    assert S.judge(set(S.DONE_FILES) | {S.MARKER}, age_hours=50) == "running"
-    assert S.judge({"README.md"}, age_hours=0) == "none"
+def test_a_setup_that_stopped_days_ago_is_carried_on(repos):
+    _origin, clone, branch = repos
+    branch("claude/setup-then", {"profile/person.json": "{}",
+                                 **_mark(started="2026-10-20", chat="cloud-chat")},
+           days_ago=2)
+    assert S.state(str(clone))[0] == "unfinished" and S.SAY["unfinished"] == place.STOPPED
+
+
+def test_it_and_setups_own_first_step_say_the_same_about_one_setup(repos, monkeypatch, capsys):
+    """A copy whose master holds the first profile and /setup's mark, started today by a
+    cloud chat: COMPUTER.md's check said "unfinished, I'll carry it on" while /setup's said
+    "still going in your other chat", and the marker it relied on was written by nothing
+    (found 2026-10-25)."""
+    _origin, clone, branch = repos
+    branch("master", {**DONE, **_mark(started=time.strftime("%Y-%m-%d"),
+                                      chat="cloud-chat")})
+    _git(clone, "pull", "-q", "origin", "master")
+    monkeypatch.setattr(S, "ROOT", str(clone))
+    monkeypatch.setattr(place, "ROOT", str(clone))
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "laptop-chat")
+    monkeypatch.delenv("CLAUDE_CODE_REMOTE_SESSION_ID", raising=False)
+    assert S.main(["--no-fetch"]) == 3
+    said = capsys.readouterr().out.splitlines()
+    assert said == ["running", place.STILL_GOING]
+    assert place.setup_state(fetch=False)["say"] == said[1]
+    # The chat that is setting up hears nothing, and carries on with /setup.
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "cloud-chat")
+    assert S.main(["--no-fetch"]) == 4
+    assert capsys.readouterr().out.splitlines() == ["unfinished"]
 
 
 def test_a_profile_here_or_on_master_is_ready(repos, tmp_path):
     _origin, clone, branch = repos
-    for rel in S.DONE_FILES:
+    for rel in DONE:
         p = clone / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("{}")

@@ -572,7 +572,7 @@ def step_computer() -> None:
     check("computer: saving stages the state", code == 0 and "Traceback" not in out,
           out.strip()[:300], took)
     _merge_two_chats(tmp, origin, cenv)
-    shell = shutil.which("bash")
+    shell = local_path.bash()      # Git Bash on Windows, never WSL's launcher
     if shell:
         code, out, took = run([shell, "tools/ci_local.sh", "--quick"], cwd=here, env=cenv,
                               timeout=3600)

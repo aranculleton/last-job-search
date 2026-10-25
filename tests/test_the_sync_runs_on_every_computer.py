@@ -51,24 +51,31 @@ def test_git_output_that_is_not_utf8_is_read_not_raised(tmp_path):
     assert r.returncode == 0 and "A fix" in r.stdout and "�" in r.stdout
 
 
+def _fake_git(tmp_path, monkeypatch, body):
+    """git as a Python script, started in its own process with exactly what run_git gives
+    it (arguments, environment, timeout). A file called git holding a shell script stood in
+    for it before, and Windows starts no such file: it ran the real git.exe, or none."""
+    script = tmp_path / "fake_git.py"
+    script.write_text(body, encoding="utf-8")
+    real = subprocess.run
+
+    def run(cmd, *args, **kw):
+        assert cmd[0] == "git", cmd
+        return real([sys.executable, str(script), *cmd[1:]], *args, **kw)
+    monkeypatch.setattr(sync_app.subprocess, "run", run)
+
+
 def test_git_never_stops_to_ask_anyone(tmp_path, monkeypatch):
-    b = tmp_path / "bin"
-    b.mkdir()
-    fake = b / "git"
-    fake.write_text('#!/bin/sh\necho "prompt=$GIT_TERMINAL_PROMPT gcm=$GCM_INTERACTIVE"\n')
-    fake.chmod(0o755)
-    monkeypatch.setenv("PATH", str(b))
+    _fake_git(tmp_path, monkeypatch, "import os\nprint('prompt=%s gcm=%s' % ("
+              "os.environ.get('GIT_TERMINAL_PROMPT'), os.environ.get('GCM_INTERACTIVE')))\n")
+    monkeypatch.delenv("GIT_TERMINAL_PROMPT", raising=False)
+    monkeypatch.setenv("GCM_INTERACTIVE", "always")
     r = sync_app.run_git(str(tmp_path), "fetch")
     assert r.stdout.strip() == "prompt=0 gcm=never"
 
 
 def test_a_git_that_hangs_is_stopped_and_is_an_ordinary_failure(tmp_path, monkeypatch):
-    b = tmp_path / "bin"
-    b.mkdir()
-    fake = b / "git"
-    fake.write_text("#!/bin/sh\nexec sleep 30\n")
-    fake.chmod(0o755)
-    monkeypatch.setenv("PATH", str(b) + os.pathsep + os.environ["PATH"])
+    _fake_git(tmp_path, monkeypatch, "import time\ntime.sleep(30)\n")
     r = sync_app.run_git(str(tmp_path), "fetch", timeout=0.5)
     assert r.returncode == 124 and "was stopped" in r.stderr
 

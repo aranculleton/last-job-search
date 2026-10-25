@@ -56,13 +56,17 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def rel(path: str, start: str | None = None) -> str:
-    """os.path.relpath, or the full path where there is none: on Windows two drives
-    (C: and D:) have no path between them and relpath raises. A round written to the
-    temporary folder on C: from a copy on D: crashed on its last line that way."""
+    """os.path.relpath, with "/" between its folders on every computer, or the full path
+    where there is none: on Windows two drives (C: and D:) have no path between them and
+    relpath raises. A round written to the temporary folder on C: from a copy on D: crashed
+    on its last line that way. The "/" is how the app names a file in its own folder,
+    in what it prints, in the state it keeps and to git, on Windows too, which reads it
+    the same; "company_research\\acme.json" was printed there (2026-10-25)."""
     try:
-        return os.path.relpath(path, start) if start is not None else os.path.relpath(path)
+        got = os.path.relpath(path, start) if start is not None else os.path.relpath(path)
     except ValueError:
         return os.path.abspath(path)
+    return got.replace(os.sep, "/")
 
 
 def _found(patterns) -> list:
@@ -105,6 +109,69 @@ def dirs(platform: str | None = None) -> tuple[list, list]:
         last += ["~/.local/bin"]
     first += ["/usr/local/texlive/20*/bin/*"]
     return _found(first), _found(last)
+
+
+def _settings_bash(home: str) -> str:
+    """CLAUDE_CODE_GIT_BASH_PATH from the person's own Claude Code settings, where
+    computer_setup.ps1 and installs.fix_git write it; a terminal's Python never has it in
+    its environment, only Claude Code's own commands do."""
+    import json
+    try:
+        with open(os.path.join(home, ".claude", "settings.json"), encoding="utf-8") as fh:
+            env = json.load(fh).get("env") or {}
+        return str(env.get("CLAUDE_CODE_GIT_BASH_PATH") or "")
+    except (OSError, ValueError, AttributeError):
+        return ""
+
+
+def bash(platform: str | None = None, env: dict | None = None, which=None,
+         home: str | None = None) -> str:
+    """The full path of the bash the app's own scripts run under, or "" where there is none.
+
+    On Windows that is Git Bash, found the way Claude Code finds it
+    (https://code.claude.com/docs/en/setup, "Install on native Windows"):
+    CLAUDE_CODE_GIT_BASH_PATH, then Git for Windows' own folders (C:\\Program Files\\Git
+    and the per-user and portable ones), then the bash beside the git on PATH. Never
+    C:\\Windows\\System32\\bash.exe, the launcher of the Windows Subsystem for Linux: a bare
+    "bash" reaches it first, since Windows looks in its own system folder before PATH
+    (https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw,
+    lpCommandLine; https://docs.python.org/3/library/subprocess.html#popen-constructor says
+    to pass a full path for that reason), and it runs no script on a computer with no
+    Linux installed ("Windows Subsystem for Linux has no installed distributions")."""
+    import shutil
+    platform = platform or sys.platform
+    env = os.environ if env is None else env
+    which = which or shutil.which
+    path = env.get("PATH")
+    if not platform.startswith("win"):
+        return which("bash", path=path) or ""
+    home = home or os.path.expanduser("~")
+
+    def get(name: str) -> str:
+        return env.get(name) or env.get(name.upper()) or ""
+    wanted = [get("CLAUDE_CODE_GIT_BASH_PATH"), _settings_bash(home)]
+    local = get("LOCALAPPDATA") or os.path.join(home, "AppData", "Local")
+    for base in (get("ProgramFiles"), get("ProgramW6432"), get("ProgramFiles(x86)"),
+                 r"C:\Program Files", os.path.join(local, "Programs")):
+        if base:
+            wanted.append(os.path.join(base, "Git", "bin", "bash.exe"))
+    wanted.append(os.path.join(local, "Programs", "PortableGit", "bin", "bash.exe"))
+    git = which("git", path=path)
+    if git:
+        top = os.path.dirname(os.path.dirname(os.path.abspath(git)))
+        if os.path.basename(top).lower() == "mingw64":
+            top = os.path.dirname(top)
+        wanted.append(os.path.join(top, "bin", "bash.exe"))
+    system = os.path.normcase(os.path.join(get("SystemRoot") or get("windir") or r"C:\Windows",
+                                           ""))
+    found = which("bash", path=path)
+    if found and "windowsapps" not in found.lower():
+        wanted.append(found)
+    for cand in wanted:
+        if cand and os.path.isfile(cand) and not os.path.normcase(
+                os.path.abspath(cand)).startswith(system):
+            return cand
+    return ""
 
 
 def extend(env: dict | None = None, platform: str | None = None) -> list:

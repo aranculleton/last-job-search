@@ -293,10 +293,18 @@ def round_order(path: str) -> tuple:
     return tuple(int(n) for n in re.findall(r"\d+", name)), written
 
 
+def _read_json(path):
+    """A file's JSON, the file closed before anything else happens, failure or not: left
+    open by a failed json.load, a broken shortlist could not be removed on Windows, which
+    deletes no file that is open (2026-10-25)."""
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def write_summary(shortlist_path, out_dir, name):
     """The compact shortlist, and where it was written."""
     try:
-        rows = json.load(open(shortlist_path, encoding="utf-8"))
+        rows = _read_json(shortlist_path)
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -338,7 +346,7 @@ def slim(path):
     """Rewrite a stage file without the posting bodies. Returns bytes saved."""
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path, encoding="utf-8"))
+        rows = _read_json(path)
     except Exception:
         return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -366,7 +374,7 @@ def trim(path, top=KEEP_TOP):
     """
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path, encoding="utf-8"))
+        rows = _read_json(path)
     except Exception:
         try:
             size = os.path.getsize(path)
@@ -455,7 +463,7 @@ def yield_of(path):
     A row with no fit, from before fit.py, is counted by its priority.
     """
     try:
-        rows = json.load(open(path, encoding="utf-8"))
+        rows = _read_json(path)
     except Exception:
         return 0, 0
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -466,7 +474,7 @@ def yield_of(path):
 
 def count(path):
     try:
-        d = json.load(open(path, encoding="utf-8"))
+        d = _read_json(path)
         return len(d) if isinstance(d, list) else len(d.get("jobs", d))
     except Exception:
         return "?"

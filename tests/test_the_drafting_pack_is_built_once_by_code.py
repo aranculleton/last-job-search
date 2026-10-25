@@ -142,3 +142,23 @@ def test_the_worked_example_is_cut_from_a_draft_that_passes_the_audit():
         assert c in full, c["sentence"]
     assert draft_pack.EXAMPLE["summary"] == FIXTURE["draft"]["summary"]
     assert draft_pack.EXAMPLE["p1"] == FIXTURE["draft"]["p1"]
+
+
+def test_the_pack_is_the_same_bytes_where_text_files_end_lines_in_crlf(tmp_path, monkeypatch):
+    """Windows writes a text file's "\\n" as "\\r\\n" unless told otherwise
+    (https://docs.python.org/3/library/functions.html#open, newline), and the pack, hashed
+    and handed on as its bytes, came out different there. Every write is made the Windows
+    way here, on any computer."""
+    import builtins
+
+    def windows_open(file, mode="r", *args, **kw):
+        if "b" not in mode and ("w" in mode or "a" in mode) and kw.get("newline") is None:
+            kw["newline"] = "\r\n"
+        return builtins.open(file, mode, *args, **kw)
+    monkeypatch.setattr(draft_pack, "open", windows_open, raising=False)
+    a = _round(tmp_path / "a")
+    draft_pack.build(str(a), today="2026-10-21")
+    pack = (a / "pack.md").read_bytes()
+    assert b"\r\n" not in pack
+    args = json.loads((a / "draft_args.json").read_text(encoding="utf-8"))
+    assert args["pack"].encode("utf-8") == pack

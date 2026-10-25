@@ -82,7 +82,18 @@ def pages(pdf) -> int | None:
             return None
     exe = shutil.which("pdfinfo")
     if not exe:
-        return None
+        # Git for Windows carries pdftotext and no pdfinfo, so a Windows computer where
+        # pypdf cannot run read every PDF's text and none of its pages (the suite on
+        # Windows, 2026-10-25). pdftotext ends each page with a form feed.
+        exe = shutil.which("pdftotext")
+        if not exe:
+            return None
+        got = subprocess.run([exe, "-layout", "-enc", "UTF-8", str(pdf), "-"],
+                             capture_output=True, text=True, encoding="utf-8",
+                             errors="replace")
+        if got.returncode != 0:
+            return None
+        return got.stdout.count("\f") or None
     out = subprocess.run([exe, str(pdf)], capture_output=True, text=True,
                          encoding="utf-8", errors="replace").stdout
     for line in out.splitlines():

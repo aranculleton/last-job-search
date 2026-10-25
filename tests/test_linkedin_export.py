@@ -61,6 +61,10 @@ def test_one_reader_finds_a_header_in_any_case_below_its_notes_and_names_what_is
                     "Line two.\"\n", encoding="utf-8")
     got = E.read("messages", str(msgs))
     assert len(got["rows"]) == 1 and got["rows"][0]["CONTENT"] == "Line one.\n\nLine two."
+    # The same file saved with CRLF, as Windows and a spreadsheet save it: the same words.
+    msgs.write_bytes(msgs.read_bytes().replace(b"\r\n", b"\n").replace(b"\n", b"\r\n"))
+    got = E.read("messages", str(msgs))
+    assert len(got["rows"]) == 1 and got["rows"][0]["CONTENT"] == "Line one.\n\nLine two."
     assert "ATTACHMENTS" in got["missing"] and got["usable"]
     # A file without a column it cannot do without, or not there at all, is named, not a crash.
     (tmp_path / "Invitations.csv").write_text("From,To\nMorgan Ellis,Juno Castellan\n",

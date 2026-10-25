@@ -5,7 +5,9 @@ every font on this computer's TeX.
 What an applicant tracking system and a printer both need, read off the PDF itself rather
 than off the .tex, so a font or a TeX install that behaves differently is caught:
 
-  - the page is the size the design asked for (Letter or A4), and one page
+  - the page is the size the design asked for (Letter or A4): the letter's own paper for a
+    letter (documents.letter_paper), and the resume within documents.resume_pages (one,
+    unless the profile says two), a letter one
   - nothing smaller than MIN_TEXT_PT, and the body (the size most words are in) at least
     MIN_BODY_PT
   - every word at least MIN_EDGE_MM from every edge of the page: text in the outer band is
@@ -21,7 +23,8 @@ than off the .tex, so a font or a TeX install that behaves differently is caught
 DESIGNS) in a scratch copy of the app, fits it, runs tools/verify_batch.sh and these rules on
 both documents, and exits 1 on any finding. CI runs it on Linux, macOS and Windows.
 
-Exit 0 all pass, 1 a finding, 2 usage.
+Exit 0 all pass, 1 a finding, 2 usage, 3 not checked because nothing here reads a PDF's
+positions (the Python package pypdf), which is never a pass.
 """
 from __future__ import annotations
 
@@ -43,6 +46,7 @@ MIN_BODY_PT = 9.8      # the size most words are in: guides ask 10pt at least (1
 MIN_EDGE_MM = 10.0     # every word this far from every edge
 PAGES = {"letter": (612.0, 792.0), "a4": (595.28, 841.89)}
 MM = 72 / 25.4
+EXIT_NO_READER = 3     # as tools/verify_pdf.py: the check could not run, which is not a pass
 
 
 def _mul(m, n):
@@ -139,13 +143,17 @@ def sizes(rs):
     return body, small
 
 
-def check(pdf, page=None, one_page=True):
-    """[finding] for one PDF: page size and count, sizes, edges, one column."""
+def check(pdf, page=None, pages=1):
+    """[finding] for one PDF: page size and count, sizes, edges, one column. `pages` is how
+    many pages it may fill: the profile's documents.resume_pages for a resume (a long
+    career's two), one for a letter."""
     from pypdf import PdfReader
     reader = PdfReader(pdf)
     found = []
-    if one_page and len(reader.pages) != 1:
-        found.append(f"PAGES {len(reader.pages)}: the design must keep one page")
+    pages = int(pages or 1)
+    if not 1 <= len(reader.pages) <= pages:
+        found.append(f"PAGES {len(reader.pages)}: the design must keep "
+                     + ("one page" if pages == 1 else f"{pages} pages or fewer"))
     w, h = (float(v) for v in reader.pages[0].mediabox[2:])
     if page:
         ew, eh = PAGES[page]
@@ -166,11 +174,14 @@ def check(pdf, page=None, one_page=True):
                          f"within {MIN_EDGE_MM:g}mm of the page's edge, where parsers drop "
                          "headers and footers")
             break
-    # One column: in reading order, each line is no higher than the lowest line read so far,
-    # give or take a line (a right-aligned date shares its title's line, a superscript sits
-    # a little above). A second column is read after the first has reached the foot.
-    low = None
-    for _p, _text, x, y, size in rs:
+    # One column: in reading order, each line is no higher than the lowest line read so far
+    # on its page, give or take a line (a right-aligned date shares its title's line, a
+    # superscript sits a little above). A second column is read after the first has reached
+    # the foot. A second page starts at the top again: its first line is not out of order.
+    low, at = None, None
+    for p, _text, x, y, size in rs:
+        if p != at:
+            low, at = None, p
         if low is not None and y > low + max(size, 10) * 1.5:
             found.append(f"COLUMNS: text at {x / MM:.0f}mm across, {(h - y) / MM:.0f}mm down is "
                          "read after text below it: a parser reads this page out of order")
@@ -326,16 +337,30 @@ def _market_page(app, env):
     return "letter" if "letter" in out.stdout else "a4"
 
 
-def page_for(drafts_path, abbr):
-    """"letter" or "a4": the page one draft in a batch asked for, from its design and market."""
+def page_for(drafts_path, abbr, kind="resume"):
+    """"letter" or "a4": the page one draft's resume or letter (`kind`) asked for, from its
+    design and market. The letter is read with the letter's own paper: a profile with
+    documents.letter_paper failed every letter against the resume's."""
     import doc_design
     with open(drafts_path, encoding="utf-8") as fh:
         drafts = json.load(fh)
     for a in drafts:
         if a.get("abbr") == abbr:
             vals, _name, _why = doc_design.choose(a)
-            return "letter" if doc_design.paper(vals) == "letterpaper" else "a4"
+            return "letter" if doc_design.paper(vals, kind) == "letterpaper" else "a4"
     return None
+
+
+def is_letter(pdf):
+    """A cover letter, by its folder or its name, as tools/check_claims.py tells one."""
+    return (os.path.basename(os.path.dirname(os.path.abspath(pdf))) == "cover_letters"
+            or "_Cover_Letter_" in os.path.basename(pdf))
+
+
+def resume_pages():
+    """How many pages the profile lets a resume fill (documents.resume_pages)."""
+    import person
+    return int(person.get("documents.resume_pages", 1) or 1)
 
 
 def main(argv):
@@ -348,11 +373,21 @@ def main(argv):
         out = argv[argv.index("--out") + 1] if "--out" in argv else None
         return all_designs(out)
     pdf = argv[0]
+    import pdftext
+    # The repo's .venv too (pdftext puts it on the path), where env_check.py --fix installs
+    # pypdf on a computer whose own Python refuses installs.
+    if not pdftext.pypdf_ok():
+        print(f"{os.path.basename(pdf)}: NOT CHECKED: the Python package pypdf, which reads "
+              "where each word sits on the page, is not installed here. `python3 "
+              "tools/env_check.py --fix` installs it; then run this again.")
+        return EXIT_NO_READER
+    letter = is_letter(pdf)
     page = argv[argv.index("--page") + 1] if "--page" in argv else None
     if "--for" in argv:
         # The page the draft's design asked for: verify_batch passes the batch and the name.
-        page = page_for(argv[argv.index("--for") + 1], argv[argv.index("--abbr") + 1])
-    found = check(pdf, page)
+        page = page_for(argv[argv.index("--for") + 1], argv[argv.index("--abbr") + 1],
+                        "letter" if letter else "resume")
+    found = check(pdf, page, pages=1 if letter else resume_pages())
     body, small = sizes(_texts(pdf))
     print(f"{os.path.basename(pdf)}: body {body}pt, smallest {small}pt"
           + ("" if found else "; all rules pass"))

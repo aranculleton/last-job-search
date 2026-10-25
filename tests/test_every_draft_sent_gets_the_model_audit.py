@@ -222,3 +222,59 @@ def test_the_person_can_skip_the_roles_they_drop():
     assert labels(got, "audit") == ["audit:a", "audit:b"]
     got = run_workflow({"A": "unreadable", "B": "clean"}, pack="P")
     assert labels(got, "audit") == ["audit:a", "audit:b"]
+
+
+# --- the audits cannot be skipped (the drafting audit, 2026-10-25) ---------------------------
+
+def test_a_draft_saved_as_its_own_audit_is_never_passed_or_assembled(tmp_path):
+    """A draft with an invented sentence written as audit_<slug>.json, with no
+    draft_<slug>.json, was reported `pass` by `audit` and assembled with neither audit."""
+    rd = make_round(tmp_path)
+    d = json.loads((rd / f"draft_{SLUG}.json").read_text(encoding="utf-8"))
+    d["p4"] += " Holds Kubernetes and Spark certifications and led a team of 40."
+    (rd / f"draft_{SLUG}.json").unlink()
+    for shape in (d, [d], {"verdict": "pass", "draft": d}):
+        (rd / f"audit_{SLUG}.json").write_text(json.dumps(shape), encoding="utf-8")
+        [r] = stage_picks.audit(str(rd))
+        assert r["verdict"] == "missing" and "no code audit and no model audit" in r["why"]
+        drafts, missing, rejected = stage_picks.assemble(str(rd))
+        assert drafts == [] and not rejected
+        assert "holds no code audit and no model audit" in missing[0], missing
+
+
+def _passed(tmp_path):
+    rd = make_round(tmp_path)
+    d = json.loads((rd / f"draft_{SLUG}.json").read_text(encoding="utf-8"))
+    _model(rd, "pass", d)
+    [r] = stage_picks.audit(str(rd))
+    assert r["verdict"] == "pass"
+    path = rd / f"audit_{SLUG}.json"
+    return rd, path, json.loads(path.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("edit,said", [
+    (lambda r: r.pop("mechanical"), "no code audit"),
+    (lambda r: r.update(mechanical="clean"), "no code audit"),
+    (lambda r: r.update(model=None), "no model audit yet"),
+    (lambda r: r["model"].update(verdict="reject"), "only a pass from both is sent"),
+    (lambda r: r.update(verdict="banana"), "only a pass from both is sent"),
+    (lambda r: r["model"].update(audited_md5="0" * 32), "another version of this draft"),
+    (lambda r: r.pop("drafter_md5"), "another version of this draft"),
+    (lambda r: r["draft"].update(p4="Another close."), "changed since it was audited"),
+    (lambda r: r.pop("inputs"), "changed since it was audited"),
+    (lambda r: r["mechanical"].pop("rules_hash"), "the profile changed"),
+    (lambda r: r["mechanical"].update(findings=[{"rule": "x"}]), "still has findings"),
+])
+def test_a_record_not_for_this_exact_draft_with_both_audits_is_refused(tmp_path, edit, said):
+    rd, path, record = _passed(tmp_path)
+    edit(record)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    drafts, missing, _ = stage_picks.assemble(str(rd))
+    assert drafts == [] and said in missing[0], missing
+
+
+def test_an_unreadable_record_says_so(tmp_path):
+    rd, path, _record = _passed(tmp_path)
+    path.write_text("{not json", encoding="utf-8")
+    drafts, missing, _ = stage_picks.assemble(str(rd))
+    assert drafts == [] and "is not an audit record anything can read" in missing[0]

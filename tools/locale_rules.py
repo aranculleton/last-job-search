@@ -145,38 +145,47 @@ _ANALYZE = r"\banalyz(?:e|ed|es|ing)\b"
 _BRITISH_ONLY = r"\b(?:whilst|amongst|programmes?)\b"
 
 # The forms each variety does not use. Canadian English keeps modelling,
-# behaviour, centre and colour, so it is checked only for the American forms of
-# those words; American English for the British ones; British and Australian
-# English for the American ones and for -ize.
+# behaviour, centre, colour, favour, labelling and travelled, so it is checked for the
+# American forms of those words (and spells -ize as American does); American English for
+# the British ones; British and Australian English for the American ones and for -ize.
+# Canadian was checked for behaviour, modelling and centre alone, and "color", "favor",
+# "labeling" and "traveled" passed.
 _AMERICAN_FORMS = r"behaviors?|behavioral|modeling|modelers?|centers?"
-_AMERICAN_FORMS_WIDE = _AMERICAN_FORMS + r"|colors?|favors?"
-_BRITISH_FORMS = r"behaviours?|behavioural|modelling|modellers?|centres?|colours?|favours?"
+# In lower case only: "Travelers" is an insurer's name, and a name keeps its spelling.
+_AMERICAN_SINGLE_L = r"modeled|(?-i:label(?:ed|ing|er|ers)|travel(?:ed|ing|er|ers))"
+_AMERICAN_FORMS_WIDE = (_AMERICAN_FORMS + r"|colors?|colored|favors?|favorites?|"
+                        + _AMERICAN_SINGLE_L)
+_BRITISH_FORMS = (r"behaviours?|behavioural|modelling|modellers?|modelled|centres?|colours?|"
+                  r"coloured|favours?|favourites?|(?-i:label(?:led|ling|ler|lers)|"
+                  r"travel(?:led|ling|ler|lers))")
 
 # spelling -> (the variety whose forms are flagged, pattern, why)
 VARIANT_WORDS = {
-    "canadian": ("american", r"\b(?:" + _AMERICAN_FORMS + r")\b",
-                 "Canadian English keeps modelling, behaviour and centre. Use American "
-                 "spelling only for a US posting, and then consistently throughout."),
+    "canadian": ("american", r"\b(?:" + _AMERICAN_FORMS_WIDE + r")\b",
+                 "Canadian English keeps modelling, behaviour, centre, colour, favour, "
+                 "labelling and travelled. Use American spelling only for a US posting, and "
+                 "then consistently throughout."),
     "american": ("british", r"\b(?:" + _BRITISH_FORMS + r")\b",
-                 "American English: behavior, modeling, center, color, favor, analyze."),
+                 "American English: behavior, modeling, center, color, favor, labeling, "
+                 "traveled, analyze."),
     "british": ("american",
                 r"\b(?:" + _AMERICAN_FORMS_WIDE + r")\b"
                 r"|\b(?:" + _ISE_STEMS + r")z(?:e|es|ed|ing|ation|ations)\b|" + _ANALYZE,
-                "British English: behaviour, modelling, centre, colour, favour, analyse, "
-                "and -ise (organise, prioritise)."),
+                "British English: behaviour, modelling, centre, colour, favour, labelling, "
+                "travelled, analyse, and -ise (organise, prioritise)."),
     "australian": ("american",
                    r"\b(?:" + _AMERICAN_FORMS_WIDE + r")\b"
                    r"|\b(?:" + _ISE_STEMS + r")z(?:e|es|ed|ing|ation|ations)\b|" + _ANALYZE,
                    "Australian English: behaviour, modelling, centre, colour, favour, "
-                   "analyse, and -ise (organise, prioritise)."),
+                   "labelling, travelled, analyse, and -ise (organise, prioritise)."),
 }
 
 # The varieties that spell the -ise family -ize, and what to say when a draft
 # does not.
 IZE_SPELLINGS = {
     "canadian": "Canadian English uses -ize/-ization, analyze, while, among and program. "
-                "(modelling, behaviour and centre keep their British forms and are not "
-                "matched here.)",
+                "(modelling, behaviour, centre, colour, favour, labelling and travelled keep "
+                "their British forms and are not matched here.)",
     "american": "American English uses -ize/-ization, analyze, while, among and program.",
 }
 

@@ -156,7 +156,7 @@ def _files_findings(files: dict[str, str], tokens) -> list[str]:
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "wb") as fh:
                 fh.write(data)
-        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True)
+        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True, export=True)
 
 
 def _text_findings(label: str, text: str, tokens) -> list[str]:
@@ -251,11 +251,21 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
     by_branch: dict[str, dict[str, str]] = {}
     for key, (blob, branch) in todo.items():
         by_branch.setdefault(branch, {})[key.split("\0", 1)[1]] = blob
+    # Which file version, commit or pull request each finding came from: those are read
+    # again on the next look. Marking them read with the rest reported a leak once, and
+    # every later sync said "clean" while it was still public (2026-10-25).
+    source: dict[str, str] = {}
     for branch, files in sorted(by_branch.items()):
-        findings += [f"branch {branch}: {f}" for f in _files_findings(files, tokens)]
-    seen |= {b for b, _ in todo.values()}
-    # Commit messages new since the last look, on any branch, scanned as one text.
+        for f in _files_findings(files, tokens):
+            findings.append(f"branch {branch}: {f}")
+            hit = next((b for path, b in files.items() if f.startswith(path + ":")), "")
+            source[findings[-1]] = "blob " + hit
+    # Commit messages new since the last look, on any branch, scanned as one text, and
+    # those that had a finding last time, while a branch still holds them.
     new = _git("rev-list", *heads.values(), "--not", *old_tips).stdout.split() if heads else []
+    held = [] if fresh else [c for c in state.get("held_commits") or [] if c not in new and any(
+        _git("merge-base", "--is-ancestor", c, h).returncode == 0 for h in heads.values())]
+    new += held
     commits = len(new)
     if new:
         log = _git("log", "--no-walk=unsorted", "--format=%H%x00%B%x01", *new).stdout
@@ -270,17 +280,28 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
         for f in _text_findings("messages", "\n".join(lines), tokens):
             n = int(f.split(":", 2)[1]) if f.split(":", 2)[1].isdigit() else 1
             findings.append(f"commit {owner[n - 1][:12]} message: {f.split(': ', 1)[-1]}")
+            source[findings[-1]] = "commit " + owner[n - 1]
     since = "" if fresh else str(state.get("prs_since") or "")
     prs, unread = _pull_requests(since)
     for p in prs:
         text = f"{p.get('title') or ''}\n{p.get('body') or ''}"
-        findings += [f"pull request #{p.get('number')}: {f.split(': ', 1)[-1]}"
-                     for f in _text_findings("pr", text, tokens)]
+        for f in _text_findings("pr", text, tokens):
+            findings.append(f"pull request #{p.get('number')}: {f.split(': ', 1)[-1]}")
+            source[findings[-1]] = "pr " + str(p.get("updated_at") or "")
     # An entry the app carried before this repo recorded it is the app's own word, not
     # the person's: set aside the way the leak scan before a push sets it aside.
     findings, aside = build_app.without_aside(findings, denylist, when, f"{REFS}master", ROOT)
+    still = {source.get(f, "") for f in findings}
+    seen |= {b for b, _ in todo.values() if "blob " + b not in still}
     newest = max([str(p.get("updated_at") or "") for p in prs] + [since])
+    # The pull request mark stops short of the oldest one with a finding, so it is read
+    # again; once edited clean, its new time moves the mark past it.
+    leaky = sorted(k[3:] for k in still if k.startswith("pr ") and k[3:])
+    if leaky:
+        newest = max([since] + [str(p.get("updated_at") or "") for p in prs
+                                if str(p.get("updated_at") or "") < leaky[0]])
     _save({"tokens": digest, "blobs": sorted(seen), "tips": sorted(set(heads.values())),
+           "held_commits": sorted(k[7:] for k in still if k.startswith("commit ")),
            "prs_since": newest if not unread else since})
     summary = (f"{len(heads)} branch(es), {len(todo)} new file version(s), {commits} commit "
                f"message(s) and {len(prs)} pull request(s) checked against {len(denylist)} "

@@ -15,8 +15,11 @@ sentence instead of a traceback halfway through a state file.
 
     python3 tools/python_floor.py           ok, or the sentence
     python3 tools/python_floor.py --which   the Python an app command runs under here
+
+This file is read by Pythons far older than the floor, which is its point: no
+`from __future__ import annotations` (3.7 and newer: on RHEL 8's and Ubuntu 18.04's
+Python 3.6 the sentence was a SyntaxError, 2026-10-25), and its annotations are text.
 """
-from __future__ import annotations
 
 import codecs
 import platform
@@ -32,7 +35,7 @@ CURRENT = (3, 13)
 UV_INSTALL = "curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh"
 
 
-def how_to_install(system: str | None = None) -> str:
+def how_to_install(system: "str | None" = None) -> str:
     """The one way to get a newer Python where this session runs."""
     system = system or sys.platform
     if system == "darwin":
@@ -56,7 +59,7 @@ def linux_route() -> str:
             f"\"$(~/.local/bin/uv python find {want})\" tools/env_check.py --fix")
 
 
-def message(version: str | None = None, system: str | None = None) -> str:
+def message(version: "str | None" = None, system: "str | None" = None) -> str:
     version = version or platform.python_version()
     return (f"Python {FLOOR[0]}.{FLOOR[1]} or newer is needed; this is {version}. "
             f"To install it, {how_to_install(system)}.")
@@ -83,7 +86,7 @@ _SAFE = "ljs-safe"
 codecs.register_error(_SAFE, _safe)
 
 
-def utf8_stdio(streams=None) -> list[str]:
+def utf8_stdio(streams=None) -> "list[str]":
     """Read and write the terminal in UTF-8, whatever this computer's own encoding is.
 
     Python on Windows writes to a pipe in the computer's code page (cp1252 in English,

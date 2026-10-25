@@ -186,7 +186,8 @@ git rm -q --cached --ignore-unmatch job_search_tracker.csv network_contacts.csv 
 rm -f job_search_tracker.csv network_contacts.csv network_threads.csv
 rm -f job_scraper/seen_jobs.json job_scraper/do_not_target.json
 git rm -q --ignore-unmatch 'company_research/*.json' 'upskill/*.md'
-rm -f company_research/*.json upskill/*.md
+find company_research -maxdepth 1 -type f -name '*.json' -delete 2>/dev/null
+find upskill -maxdepth 1 -type f -name '*.md' -delete 2>/dev/null
 git rm -r -q --ignore-unmatch networking/ handoff/ job_scraper/notion_sync.json
 rm -rf networking/ handoff/ gmail_sync/ rounds/
 rm -f job_scraper/notion_sync.json salary_data.json

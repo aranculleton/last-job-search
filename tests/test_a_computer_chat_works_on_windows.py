@@ -37,7 +37,18 @@ def win(tmp_path):
     b.mkdir(parents=True)
     (b / "python3").write_text(STORE_STUB)
     (b / "python3").chmod(0o755)
-    os.symlink(sys.executable, b / "python")
+    py = str(b / "python")
+    if sys.platform == "win32":
+        # On Windows itself the layout is real already, and a link to a virtual
+        # environment's python.exe starts nothing ("No pyvenv.cfg file": its launcher reads
+        # that file beside itself, https://docs.python.org/3/library/venv.html#how-venvs-work).
+        # `python` on PATH is the real one for sh, which the hooks run in, and the tests run
+        # it by its own path.
+        real = sys.executable.replace("\\", "/")
+        (b / "python").write_text(f'#!/bin/sh\nexec "{real}" "$@"\n', encoding="utf-8")
+        py = sys.executable
+    else:
+        os.symlink(sys.executable, b / "python")
     env = {k: v for k, v in os.environ.items()
            if k not in ("PYTHONUTF8", "PYTHONIOENCODING", "LANG", "LC_ALL", "LC_CTYPE",
                         "LJS_PROFILE", "LJS_STATE", "VIRTUAL_ENV",
@@ -52,7 +63,7 @@ def win(tmp_path):
                                encoding="utf-8").read())["env"]
     env.update({k: v for k, v in settings.items() if k != "PYTHONUTF8"})
     (tmp_path / "home").mkdir()
-    return env, str(b / "python")
+    return env, py
 
 
 def run(argv, cwd, env, stdin=None, timeout=180):

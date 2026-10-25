@@ -36,6 +36,10 @@ def _round(tmp_path, audits):
 
 
 def test_a_reject_is_reported_and_not_assembled(tmp_path):
+    # Updated 2026-10-25: "kestrel", a record with a verdict and no code audit in it, was
+    # assembled. A record of that shape has had neither audit and is refused (the drafting
+    # audit, finding 2); a record both audits passed is assembled in
+    # test_every_draft_sent_gets_the_model_audit.py.
     rd = _round(tmp_path, {
         "kestrel": {"verdict": "fixed", "draft": DRAFT, "changes": [], "residual_risks": []},
         "fernhill": {"verdict": "reject", "draft": dict(DRAFT, company="Fernhill"),
@@ -43,18 +47,22 @@ def test_a_reject_is_reported_and_not_assembled(tmp_path):
         "larkspur": None,
     })
     drafts, missing, rejected = stage_picks.assemble(rd)
-    assert [d["company"] for d in drafts] == ["Kestrel Mutual"]
-    assert drafts[0]["posting"] == "The posting body." and drafts[0]["abbr"] == "Kestrel"
-    assert missing == ["Larkspur"]
+    assert drafts == []
+    assert missing[0].startswith("Kestrel (audit_kestrel.json holds no code audit and no "
+                                 "model audit")
+    assert missing[1:] == ["Larkspur"]
     assert rejected == ["Fernhill | Operations Analyst: the posting needs a licence"]
     on_disk = json.loads((tmp_path / "drafts.json").read_text(encoding="utf-8"))
-    assert [d["company"] for d in on_disk] == ["Kestrel Mutual"]
+    assert on_disk == []
 
 
-def test_an_audit_file_holding_the_draft_alone_is_still_read(tmp_path):
+def test_an_audit_file_holding_the_draft_alone_is_refused(tmp_path):
+    # Was test_an_audit_file_holding_the_draft_alone_is_still_read: a draft saved as its
+    # own audit went to the renderer with no audit at all.
     rd = _round(tmp_path, {"kestrel": [DRAFT]})
     drafts, missing, rejected = stage_picks.assemble(rd)
-    assert len(drafts) == 1 and not missing and not rejected
+    assert drafts == [] and not rejected
+    assert "holds no code audit and no model audit" in missing[0]
 
 
 def test_the_audit_file_holds_the_verdict_with_the_draft(tmp_path):
@@ -104,8 +112,18 @@ def test_the_model_audit_is_the_grounding_auditor_and_keeps_all_its_checks(tmp_p
 
 def test_what_the_audit_left_open_rides_with_the_draft(tmp_path):
     # The interview pack reads what an interviewer could still probe from the kept draft;
-    # nothing kept it before.
-    rd = _round(tmp_path, {"kestrel": {"verdict": "pass", "draft": DRAFT, "changes": [],
-                                       "residual_risks": ["no direct pricing ownership"]}})
-    drafts, _, _ = stage_picks.assemble(rd)
+    # nothing kept it before. Updated 2026-10-25: through both audits, since a record with
+    # a verdict and no code audit is refused.
+    import draft_audit
+    import draft_pack
+    from test_one_drafting_call_per_posting import SLUG, make_round
+    rd = make_round(tmp_path)
+    d = json.loads((rd / f"draft_{SLUG}.json").read_text(encoding="utf-8"))
+    (rd / f"model_audit_{SLUG}.json").write_text(json.dumps({
+        "verdict": "pass", "draft": d, "changes": [],
+        "residual_risks": ["no direct pricing ownership"], "rulings": [],
+        "audited_md5": draft_audit.md5(d), "rules_hash": draft_pack.rules_hash()}),
+        encoding="utf-8")
+    stage_picks.audit(str(rd))
+    drafts, _, _ = stage_picks.assemble(str(rd))
     assert drafts[0]["residual_risks"] == ["no direct pricing ownership"]
