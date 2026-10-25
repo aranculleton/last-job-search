@@ -241,6 +241,15 @@ def for_year(year: int, country: str | None = None, region: str | None = None,
     return days
 
 
+# Kept for the people whose own tests call it (profile/tests): nothing in the app reads it,
+# and state.business_days_between is the count to use. A public name stays while a test may.
+def is_holiday(day: dt.date) -> bool:
+    """Is `day` one of this person's public holidays? The next year's table is read too, as
+    the business-day count reads it: the US keeps a Saturday New Year's Day on Friday 31
+    December, and that day sits in the next year's table."""
+    return day in for_year(day.year) or day in for_year(day.year + 1)
+
+
 def covered() -> bool:
     """Do this person's holidays come from somewhere: the rules or their own list?"""
     country, _region, extra = _settings()
