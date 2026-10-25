@@ -238,9 +238,9 @@ METHODS: dict[str, dict] = {
             (20, "2026-10-22", False, "the prep document is sent with the part to read, not pasted whole"),
             (21, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (22, "2026-10-22", False, "a prep document is sent as a copy named for whose it is; an older pack for the round the document covers is folded in, not counted as a round already told"),
-            (23, "2026-10-25", True, "the research a prep cites is named by its real file; a copy sent is named apart from every other (requisition numbers and levels kept, the label never cut), carries no tool comments, and is remade when a hand edit passes the check; a path printed across two Windows drives no longer stops it"),
+            (23, "2026-10-25", True, "the research a prep cites is named by its real file; a copy sent is named apart from every other (requisition numbers and levels kept, the label never cut), carries no tool comments, and is remade when a hand edit passes the check; a path printed across two Windows drives no longer stops it; a prep finds its application from one index of the tracker, so a brief rebuilding every prep is twice as fast"),
         ),
-        "fingerprint": "88770eaf539d3e98",
+        "fingerprint": "795fcfa50fadb02d",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",

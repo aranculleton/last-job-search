@@ -2326,11 +2326,24 @@ def find_application(contact, tracker_rows) -> dict:
     under an employer's legal name has to find the application filed under its
     initials.
     """
-    for link in state.link_to_applications([contact], tracker_rows or []):
+    rows = tracker_rows or []
+    # One index of the tracker by employer key, kept while the same rows are passed: a
+    # brief rebuilds every prep, and each one keyed every tracker row again (169 preps
+    # on a large state, most of the brief's time on Windows; 2026-10-25).
+    if _INDEX[0] is not rows or _INDEX[1] != len(rows):
+        index: dict[str, list] = {}
+        for r in rows:
+            index.setdefault(state.company_key(r.get("company")), []).append(r)
+        _INDEX[:] = [rows, len(rows), index]
+    near = _INDEX[2].get(state.row_company_key(contact), [])
+    for link in state.link_to_applications([contact], near):
         apps = link["open_applications"] or link["applications"]
         if apps:
             return apps[0]
     return {}
+
+
+_INDEX: list = [None, -1, {}]
 
 
 # ---------------------------------------------------------------- CLI

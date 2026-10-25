@@ -139,6 +139,8 @@ make sense to somebody whose repo just received it.
 - **On Windows, two chats changing one row** now merge by which change came later, as
   everywhere else, instead of leaving the row for you to settle.
 - Designs compile from a copy kept under a folder with a space in its name.
+- **The brief is twice as quick** on a large search: a call prep finds its application from
+  one look at the tracker, and an employer's name is worked out once.
 
 ## [3.13.0] - 2026-10-24
 

@@ -26,6 +26,7 @@ Usage:
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 
@@ -112,6 +113,9 @@ DUAL = re.compile(r"\s*[|/]\s*")
 DOMAIN = re.compile(r"(?<=[a-z0-9])\.(?:com|net|org|io|ai|co(?:\.uk)?|ca|de|fr|in)(?![a-z0-9])")
 
 
+# Pure, and called for every tracker row by every prep a brief rebuilds: 46,769 times on
+# one large invented state, most of a Windows brief's two seconds (2026-10-25).
+@functools.lru_cache(maxsize=65536)
 def _norm(s: str) -> str:
     s = PAREN.sub(" ", fold(s).strip().lower())
     s = DOMAIN.sub("", s)
