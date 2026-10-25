@@ -110,6 +110,8 @@ class Upgrade:
     # how) or once REASK_DAYS have passed, saying when they said no (`again()`).
     ask_version: int = 1
     changed: str = ""
+    # Every item, one a line, for `--check <id>`, where the pending line names only a few.
+    every: Callable[[], list] | None = None
 
 
 # ------------------------------------------------------------------ helpers
@@ -1136,7 +1138,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             "every fact in your profile confirmed by you, never guessed",
             _unconfirmed, "ask the person, at most three at the end of a session, and write "
             "each answer where its [CONFIRM] marker was", "question", "~1 min a fact",
-            priority=2, needs="you"),
+            priority=2, needs="you",
+            every=lambda: [f"{what} ({where})" for where, what in unconfirmed()]),
     Upgrade("required", "2026-10-15",
             "every setting the tools need and cannot default, written for you",
             _required, "/setup --section <the section that writes it>", "question", "~5 min",
@@ -2213,6 +2216,10 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         why = upgrade.pending()
         print(why or "done")
+        if why and upgrade.every:
+            # The pending line names a few; /upgrade asks about each (upgrade.md step 5).
+            for item in upgrade.every():
+                print(f"  - {item}")
         return 1 if why else 0
     if _personal_repo() and (a.after or a.plan):
         fetch_master()
