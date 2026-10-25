@@ -520,7 +520,8 @@ def from_paste(path: str, source: str = "paste") -> dict:
         raise ValueError("a pasted profile's source is paste or browser")
     if source == "browser":
         net = person.module("networking") if person.exists("networking.py") else None
-        if str(getattr(net, "PROFILE_READS", "") or "") != "browser":
+        import reading
+        if reading.reads_setting(net) != "browser":
             raise ValueError("their own page is read in their browser only where "
                              "profile/networking.py PROFILE_READS is \"browser\"; otherwise "
                              "they paste it")

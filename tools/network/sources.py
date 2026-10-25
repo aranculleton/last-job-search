@@ -773,8 +773,8 @@ def ladder(tools=(), consent: str | None = None, has_export: bool | None = None)
     say = "" if reads else (
         "These were found from search results" + (" and your connections" if export else "")
         + ", without reading anyone's profile. Reading a profile adds their current role, "
-        "shared history and recent posts; for the one or two who matter most, paste their "
-        "profile, its Save to PDF, or screenshots, and I'll write to them from it.")
+        "shared history and recent posts; for the one or two who matter most, send "
+        + reading.what_to_send(reading.surface()) + ", and I'll write to them from it.")
     return {"rungs": rungs, "read": r["route"], "read_cap": cap,
             "hand_top": 0 if reads else reading.HAND_TOP, "say": say}
 

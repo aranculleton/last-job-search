@@ -80,9 +80,11 @@ Ranked roughly by how bad it would be:
 - **Nothing is sent.** No command in this repo submits an application, sends a message or
   emails a person, and nothing is copied to any outside service. Every artifact stops at a
   file on disk and waits for a human.
-- **Secrets are not in the repo.** `salary_data.json` (licensed third-party data) and
-  `gmail_sync/state.json` (a sync cursor) stay uncommitted. No API keys are stored here;
-  the portal CLIs hit public endpoints.
+- **Secrets are not in the repo.** `salary_data.json` (licensed third-party data) stays
+  uncommitted. No API keys are stored here; the portal CLIs hit public endpoints.
+- **No mailbox and no connectors.** Nothing here reads or sends email or connects to any
+  outside account. The only accounts a session touches are the person's own GitHub copy and
+  Claude itself; a LinkedIn download is a file the person gives it.
 
 ### What these controls are not
 

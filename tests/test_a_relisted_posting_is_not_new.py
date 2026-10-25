@@ -4,8 +4,7 @@ The only date anything aged on was the portal's, and a portal relisting a postin
 gives it a new one: LinkedIn's card shows the relist date. So a posting first seen
 a month ago read as posted yesterday, passed the freshness rule and earned the
 freshness bonus. Nothing could know better, because a round wrote only its skips
-to seen_jobs.json and never the postings it surfaced, and a job alert's email
-date was stored as the posting's own date.
+to seen_jobs.json and never the postings it surfaced.
 """
 from __future__ import annotations
 
@@ -53,7 +52,6 @@ def test_freshness_is_earned_only_on_a_known_date_that_is_really_fresh():
     assert bonus(posting("u", first_seen=_ago(20))) == []           # a relist
     assert bonus(posting("u", date=(TODAY + dt.timedelta(days=3)).isoformat())) == []
     assert bonus(posting("u", date="")) == []
-    assert bonus(posting("u", date="", alert_date=_ago(1))) == []   # an alert is not a date
 
 
 def test_a_round_records_what_it_surfaced_and_a_relist_keeps_its_first_sighting(tmp_path):

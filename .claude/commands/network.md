@@ -357,20 +357,25 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
       data-broker site (`reading.BROKERS`; the tool refuses them), and never a fetch of
       linkedin.com from this session: its robots.txt disallows it and it answers HTTP 999.
    2. **Their profile, in the person's own browser, once**, only for the people still
-      likely after (1), best first, and only as many as the batch needs. Only when
-      `profile/networking.py` `PROFILE_READS` is `"browser"` and a browser tool is there:
+      likely after (1), best first, and only as many as the batch needs. Wherever a browser
+      tool is there, unless `profile/networking.py` `PROFILE_READS` is `"paste"` or `"off"`
+      (unset, it reads), with no question first:
       Claude in Chrome, or the Claude desktop app's built-in browser, which a cloud chat that
       has the `mcp__remote-devices__Claude_Browser__*` tools reaches too
       (`python3 tools/claude_surfaces.py show cloud-linked-browser`; load the browser's skill
       first). Decide by the tools this chat has, never by where it was started.
-      - **The first sign-in is a wait, never a stop.** The pane keeps its own sign-ins
-        across sessions, so this happens the first time and again only when LinkedIn signs
-        them out. When the first profile opens on LinkedIn's sign-in or join page (its
-        "authwall"), `reading.py read` says so, exits 4, and records nothing: it is not a
-        read, it counts against no cap and it writes no stop. Run `reading.py signin` and
-        do what it prints: open `https://www.linkedin.com/login` in the pane, say its one
-        sentence once, then every 20 seconds look only at the pane's address and title and
-        run `reading.py signin --url <address>` until it answers `signed-in`. LinkedIn
+      - **Signed in first.** On the first page of a reading session (a run's first, or the
+        `new-computer` step's), run `reading.py signin --page -` with its text (`--browser
+        chrome` in their own browser). Signed out, LinkedIn shows only part of a profile:
+        say the two lines it prints, as they are, and wait for done, then load the page and
+        check again. If they would rather not, `reading.py signin --not-today` and read on
+        signed out; each reading says partial, and is read again once they are signed in.
+        `reading.py read` checks every page the same way: never signed in today, it asks
+        (exit 4, nothing recorded); a sign-in page after they signed in today is the stop
+        below. For the authwall, `reading.py signin` prints the wait: open
+        `https://www.linkedin.com/login` in the pane, say the same two lines once, then every
+        20 seconds look only at the pane's address and title and run `reading.py signin
+        --url <address>` until it answers `signed-in`. LinkedIn
         asking them to confirm it is them while they sign in is part of signing in: keep
         waiting. After 5 minutes, ask once more: sign in now, or send a paste of each
         profile instead. Claude never types in the sign-in page, reads it, or sees, stores
@@ -437,8 +442,8 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
         Tell the person what it showed. Never try to get past one.
       - Never click anything on LinkedIn: no Connect, Message, Follow or Like, and never
         scroll into other people's profiles. It is the person's own account doing the
-        reading. Reads stop at LinkedIn's first signal. Never call this route safe, and never
-        warn the person about it unprompted: they chose it.
+        reading. Reads stop at LinkedIn's first signal. Never call this route safe, and add
+        no warning or disclaimer of your own about it, before or after a read.
       With the setting on and no browser tool in the session (a phone, the web), say once
       that profiles are read in the browser only when the session is linked to the desktop
       app on their computer, and ask for screenshots or a paste instead (4).

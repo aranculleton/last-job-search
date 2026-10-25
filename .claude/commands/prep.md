@@ -82,9 +82,10 @@ and the strongest honest framing for it.
 
 **Send the file** under the contact's name, as the copy `prep.py` prints on its `send:` line
 (`python3 tools/shown.py <the document>` after an edit by hand: every contact's file is
-called `prep.md`), with the session's file-sending tool (SendUserFile or its equivalent), and
-paste beside it the part to read before the call: the fit assessment and anything that changed
-(CLAUDE.md, "Every output is shown"). The file is the record; its path alone is never the
+called `prep.md`), with SendUserFile (`display: "render"`), and paste beside it the part to
+read before the call: the fit assessment and anything that changed (CLAUDE.md, "Every output
+is shown"). With no SendUserFile in the chat (usually one on the person's computer), paste that part and write the copy's full path on its own line: it
+opens when clicked in the desktop app. The file is the record; its path alone is never the
 answer.
 
 **It is rebuilt when anything it rests on moves.** A prep counts as stale when, since it was

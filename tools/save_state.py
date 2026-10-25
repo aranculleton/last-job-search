@@ -36,7 +36,8 @@ FORCED = (
     "company_research/*.json", "upskill/*.md",
 )
 # Never forced in: LaTeX's build files, text dumps of a resume, caches, licensed salary
-# data and the Gmail sync's cursor (CLAUDE.md, "Never force-add build noise").
+# data, and the mail cursor an older version of the app left in some repos (CLAUDE.md,
+# "Never force-add build noise").
 NOISE = ("*.aux", "*.log", "*.out", "*.fls", "*.fdb_latexmk", "*.synctex.gz", "cv/*.txt",
          "*/__pycache__/*", "__pycache__/*", "*.pyc", "*/.pytest_cache/*", ".pytest_cache/*",
          "salary_data.json", "*/salary_data.json", "gmail_sync/state.json", ".DS_Store",

@@ -685,8 +685,8 @@ def oldest_copies(rows: list, today: str = "") -> dict:
     published, so a role reposted yesterday after a month open reads as new there while
     its aggregator copy says a month. Every copy is as old as the oldest. Dates within
     RELIST_WINDOW days only, as for a relist: past it, the same title is more likely a
-    new opening. The date of a copy is its own (`date` or `posted_date`), the day this
-    search first saw it, or the day an alert sent it.
+    new opening. The date of a copy is its own (`date` or `posted_date`) or the day this
+    search first saw it.
     """
     now = as_date(today, iso_only=True) or dt.date.today()
     since = (now - dt.timedelta(days=RELIST_WINDOW)).isoformat()
@@ -697,7 +697,7 @@ def oldest_copies(rows: list, today: str = "") -> dict:
         k = _posting_key(job.get("title"), job.get("company"), job.get("location"))
         if not (k[0] and k[1]):
             continue
-        for field in ("date", "posted_date", "first_seen", "alert_date"):
+        for field in ("date", "posted_date", "first_seen"):
             d = as_date(job.get(field), iso_only=True)
             if d is None:
                 continue

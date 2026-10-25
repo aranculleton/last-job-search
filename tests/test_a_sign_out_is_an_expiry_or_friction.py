@@ -157,7 +157,10 @@ def test_a_read_and_the_signin_command_classify_it_and_never_suggest_a_stop(tmp_
     code = reading.main(["read", "ana_rook", "-", "--source", "browser", "--name", "Ana Rook",
                          "--company", "Kestrel Mutual"])
     out = capsys.readouterr().out
-    assert code == reading.EXIT["signin"] and "the session expired" in out and "Not a stop" in out
+    # Not signed in today: the person is asked to sign in, in its two lines, and nothing
+    # stops (a sign-in page after a sign-in today is the expiry-or-friction case).
+    assert code == reading.EXIT["signin"] and reading.SIGNED_OUT_LESS in out
+    assert "nothing counted" in out and not reading.stopped()
     reading.mark_signed_in()
     assert reading.main(["signin"]) in (reading.EXIT["ok"], reading.EXIT["signin"],
                                         reading.EXIT["check"])

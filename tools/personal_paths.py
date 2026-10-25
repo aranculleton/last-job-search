@@ -48,6 +48,7 @@ PERSONAL = (
     "networking/**",
     "upskill/*.md",
     "salary_data.json",
+    # Left by the mail sync an older version of the app had: still theirs.
     "gmail_sync/**",
     "rounds/**",
     # Rendered documents. Everything in the two document folders is the

@@ -25,9 +25,8 @@ LINKEDIN_PLAN = "premium"
 # EXPORT_EVERY_DAYS = 14
 
 # How a person's LinkedIn profile is read before a note is written to them
-# (tools/network/reading.py): "browser" in Morgan's own signed-in browser, which
-# LinkedIn's terms forbid as automated access and so needs their yes, or "paste",
-# where they copy the page when they open it to send the request.
+# (tools/network/reading.py): unset, "browser", in the browser a chat on their computer
+# has; "paste" where they copy the page themselves, which Morgan asked for.
 PROFILE_READS = "paste"
 # A browser read goes one page at a time, as fast as the browser loads it, with no limit
 # of the app's own (tools/network/pace.py); it stops when LinkedIn shows a check, a
