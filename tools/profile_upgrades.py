@@ -529,11 +529,20 @@ def _connections_export() -> str:
     if not os.environ.get("LJS_STATE") and os.path.exists(
             person.local_state("documents", "linkedin", "Connections.csv")):
         return ""                                   # in the main checkout, read from a worktree
+    if _download_on_its_way():
+        return ""
     if getattr(_mod("networking"), "CONNECTIONS_EXPORT", None) == "declined":
         u = by_id("connections-export")
         return again("connections-export", u.ask_version, u.changed)
     return ("every networking run starts from strangers, because the people you already know "
             "on LinkedIn are not on file (documents/linkedin/Connections.csv)")
+
+
+def _download_on_its_way() -> bool:
+    """A LinkedIn download asked for and not here yet (`export.py status` says "waiting"):
+    the person has done their part, so neither download question is asked meanwhile. The
+    chat taking it when it lands is export.py's, from the same record."""
+    return _probe("import export; print(export.status()['state'])") == "waiting"
 
 
 def _linkedin_history() -> str:
@@ -544,6 +553,8 @@ def _linkedin_history() -> str:
         return ""
     have = os.path.exists(person.local_state("documents", "linkedin", "Connections.csv"))
     if not have or os.path.exists(person.local_state("documents", "linkedin", "messages.csv")):
+        return ""
+    if _download_on_its_way():
         return ""
     if "linkedin-history" in asked():
         u = by_id("linkedin-history")

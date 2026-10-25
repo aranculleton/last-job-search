@@ -24,6 +24,8 @@ belongs to a different application.
     python3 tools/stage_picks.py consent <round_dir> <pick> --yes A B --no C [--draft | --skip]
     python3 tools/stage_picks.py audit <round_dir> [--only <slug> ...] [--json]
     python3 tools/stage_picks.py assemble <round_dir>
+    python3 tools/stage_picks.py general <dir> [--summary-file F] [--style S] [--role R]
+                                       # a resume for no posting, no letter (general_resume.py)
 
 **Every skill a posting names that the profile does not hold is asked about first.**
 `stage` prints one short question per pick (`bridges.unheld_asked`), and nothing is
@@ -1018,6 +1020,12 @@ def main() -> int:
     a.add_argument("round_dir")
     a.add_argument("--only", nargs="+", default=[],
                    help="the slugs to assemble: the roles that will be sent")
+    g = sub.add_parser("general", help="a resume for no posting in particular, kept in "
+                                        "documents/cv/ (tools/general_resume.py)")
+    g.add_argument("rest", nargs=argparse.REMAINDER)
+    if sys.argv[1:2] == ["general"]:
+        import general_resume
+        return general_resume.main(sys.argv[2:])
     args = ap.parse_args()
     if args.cmd == "audit":
         results = audit(args.round_dir, args.only)

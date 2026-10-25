@@ -38,6 +38,7 @@ charge of what goes out.
 | You say | You get |
 |---|---|
 | "Find me jobs" | A scored shortlist with links, then a question: which ones? |
+| "Build one with me", when you have no resume | A one-page resume made with you, one job at a time, checked |
 | A job posting, pasted or linked | A resume and cover letter written for that job, checked |
 | "Who should I talk to at Acme?" | People worth contacting there, found from any chat, ranked with the evidence for each, and a first note to send. Nothing is sent: you send it |
 | "What do I owe?" | Replies and follow-ups that are due |

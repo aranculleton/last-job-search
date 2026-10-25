@@ -3,6 +3,9 @@
 Tell Claude what you see, in your own words: it reads this app's own instructions and says
 what to change and where. The usual ones:
 
+**"I don't have a resume."** Say "build one with me": Claude asks about one job at a time and
+makes a one-page resume from your answers.
+
 **"This chat can't reach job sites."** A cloud chat starts with only a few websites allowed.
 
 <!-- claude-surface: cloud-internet -->

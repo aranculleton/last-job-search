@@ -155,7 +155,10 @@ def main(argv=None) -> int:
               "missing. `python3 tools/env_check.py --fix` installs it")
         return 1
     with open(drafts, encoding="utf-8") as fh:
-        abbrs = [a["abbr"] for a in json.load(fh)]
+        batch = json.load(fh)
+    abbrs = [a["abbr"] for a in batch]
+    # A general resume has no letter (tools/general_resume.py): its letter checks are skipped.
+    general = {a["abbr"] for a in batch if a.get("general")}
     names = [r["employer"] for r in roles]
     want = json.loads(v["SECTIONS"])
     pages_allowed = int(v["RESUME_PAGES"])
@@ -169,13 +172,15 @@ def main(argv=None) -> int:
     readers: list = []
     _say("%-9s %-4s %-4s %-14s %s" % ("ABBR", "pgs", "blt", v["ROLE_HEADER"], "flags"))
     for a in abbrs:
-        r_pdf, c_pdf = docpaths.resume_pdf(a), docpaths.letter_pdf(a)
-        if not (os.path.isfile(r_pdf) and os.path.isfile(c_pdf)):
+        r_pdf = docpaths.resume_pdf(a)
+        c_pdf = None if a in general else docpaths.letter_pdf(a)
+        if not (os.path.isfile(r_pdf) and (c_pdf is None or os.path.isfile(c_pdf))):
             _say(f"{a} MISSING PDF")
             fail = 1
             continue
         try:
-            rt_text, ct_text = pdftext.text(r_pdf), pdftext.text(c_pdf)
+            rt_text = pdftext.text(r_pdf)
+            ct_text = pdftext.text(c_pdf) if c_pdf else ""
         except pdftext.Unreadable as exc:
             _say(f"{a} UNREADABLE PDF ({exc})")
             fail = 1
@@ -183,12 +188,13 @@ def main(argv=None) -> int:
         r_lines = rt_text.splitlines()
         flat = re.sub(" +", " ", rt_text.replace("\n", " "))
         p = ""
-        rp, cp = pdftext.pages(r_pdf), pdftext.pages(c_pdf)
+        rp = pdftext.pages(r_pdf)
+        cp = pdftext.pages(c_pdf) if c_pdf else None
         rp_s = "" if rp is None else str(rp)
-        cp_s = "" if cp is None else str(cp)
+        cp_s = "-" if not c_pdf else ("" if cp is None else str(cp))
         if not (rp is not None and 1 <= rp <= pages_allowed):
             p += f" RESUME_{rp_s}p"
-        if cp != 1:
+        if c_pdf and cp != 1:
             p += f" LETTER_{cp_s}p"
         if role_order(r_lines, names, v["H_EXPERIENCE"], v["H_EDUCATION"]) != v["ROLE_ORDER"]:
             p += " CHRONO"
@@ -211,6 +217,8 @@ def main(argv=None) -> int:
         # on pdftotext, and the batch says the spacing check was SKIPPED.
         said = []
         for pdf, flag in ((r_pdf, "SPACING_RESUME"), (c_pdf, "SPACING_LETTER")):
+            if not pdf:
+                continue
             st, out = _run([os.path.join(TOOLS, "verify_pdf.py"), "--require", "pypdf", pdf])
             if st == 3:
                 skipped = 1
@@ -272,11 +280,12 @@ def main(argv=None) -> int:
     else:
         _say(f"text layer read with: {used or 'nothing'}")
     resumes = [docpaths.resume_tex(a) for a in abbrs]
-    letters = [docpaths.letter_tex(a) for a in abbrs]
+    letters = [docpaths.letter_tex(a) for a in abbrs if a not in general]
     _say("=== claims ===")
     # Its findings and its own exit status: a failing check once hid behind a pipe's.
     st, out = _run([os.path.join(TOOLS, "check_claims.py"),
-                    *[x for pair in zip(resumes, letters) for x in pair]])
+                    *[x for a in abbrs for x in ((docpaths.resume_tex(a),) if a in general
+                      else (docpaths.resume_tex(a), docpaths.letter_tex(a)))]])
     _say("\n".join([line for line in out.splitlines()
                     if re.search(r"^[0-9]+ error|ERROR", line)][:10]))
     if st != 0:
@@ -311,11 +320,14 @@ def main(argv=None) -> int:
         _say("\n".join(f"{a}: {line}" for line in out.splitlines()))
     _say("=== voice ===")
     # Soft findings are a smell and do not fail the batch; hard ones do.
-    st, out = _run([os.path.join(TOOLS, "voice_check.py"), "--soft-ok", *letters])
-    _say(out)
-    if st != 0:
-        _say("VOICE: FAILURES ABOVE")
-        fail = 1
+    if letters:
+        st, out = _run([os.path.join(TOOLS, "voice_check.py"), "--soft-ok", *letters])
+        _say(out)
+        if st != 0:
+            _say("VOICE: FAILURES ABOVE")
+            fail = 1
+    else:
+        _say("no letters: a general resume")
     if skipped:
         _say("=== SPACING CHECK SKIPPED ===")
         _say("pypdf is not available, so words run together were NOT checked on any document.")

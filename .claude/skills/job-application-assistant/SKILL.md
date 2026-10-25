@@ -4,9 +4,10 @@ description: >
   Assists with job applications: evaluating job postings, tailoring resumes, writing cover
   letters, verifying the compiled PDFs, and preparing for interviews. Triggers on keywords
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
-  career, application, apply, tailor, ATS, shortlist
+  career, application, apply, tailor, ATS, shortlist, build my resume, build one with me,
+  no resume, show me around, what can you do, how do I use this
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.9
+framework_version: 1.6.0
 ---
 
 # Job Application Assistant
@@ -34,6 +35,12 @@ When the user provides a job posting (URL or text), follow this workflow:
 - On the pipeline path, `/apply` Step 2 already records it (`tools/record_drafts.py`). The rest of this step is for a custom template, once both documents exist. A CV or cover letter drafted alone is not yet an application.
 - Follow **`/apply` Step 6b** (`.claude/commands/apply.md`) exactly: same header, same match-then-update rule, same `drafted` row, same posting archive, same prohibition on touching `job_scraper/seen_jobs.json`. It is stated there once so the two paths cannot drift. Four of its values are named in `/apply`'s own terms: `cv_file`/`cover_letter_file` are the paths written in Steps 2 and 3 here, `source` is the posting URL from Step 1, `deadline` is the application deadline from the posting text Step 1 keeps verbatim (empty when the posting states none - never guess one), and the posting text item 7 archives is the one Step 1 read.
 - This step exists here because `/scrape` Step 5 routes straight into this skill. Without it, that path writes two documents and records nothing.
+
+### No resume yet, or a fresh one
+- "Build one with me", "build my resume" or "I don't have a resume": the guided history in `setup-sections.md` (`history`), one job a message from `tools/history_interview.py`, then `python3 tools/stage_picks.py general <dir>`: a one-page resume for the roles they search for, no letter, rendered, checked and kept in `documents/cv/` as the one sent when nobody names a role. Shown the way every output is (CLAUDE.md), with the short copy it prints pasted beside it.
+
+### A tour
+- "Show me around", or a question about what the app can do or how to use something: `python3 tools/tips.py tour` (or `tour <topic>`), passed on as it prints.
 
 ### Step 4: Interview Preparation
 - Follow **`/interview`** (`.claude/commands/interview.md`) exactly, every step: the application's archive, the research, the person's learned rules and stories, the pack `tools/interview_pack.py` builds and saves beside the application, and the mock interview. It is stated there once so the two paths cannot drift, the same way Step 3b defers to `/apply` Step 6b.
