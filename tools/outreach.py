@@ -26,6 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
 import untrusted
 import docpaths
+import local_path  # noqa: E402
 import person
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "network"))
@@ -558,7 +559,7 @@ if __name__ == "__main__":
         # so there is one answer to "which folder is this application's".
         if len(sys.argv) not in (4, 5):
             raise SystemExit('usage: outreach.py --folder "<Company>" "<Role>" [ABBR]')
-        print(os.path.relpath(app_folder(*sys.argv[2:]), person.state()))
+        print(local_path.rel(app_folder(*sys.argv[2:]), person.state()))
         sys.exit(0)
     if sys.argv[1:2] == ["--check-note"]:
         # /apply writes its note by hand: the same checks the assembled note meets.
@@ -614,7 +615,7 @@ if __name__ == "__main__":
             words = 0
         had = os.path.exists(os.path.join(folder(a), "job_posting.md"))
         d = write(a, m, today)
-        print("wrote", os.path.relpath(d, ROOT), "|",
+        print("wrote", local_path.rel(d, ROOT), "|",
               (f"for {cid}: their thread, no cold note" if cid else f"{words} words")
               + (" | kept the archived job_posting.md" if had else ""))
     if refused:

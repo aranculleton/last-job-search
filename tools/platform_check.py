@@ -57,6 +57,11 @@ import local_path  # noqa: E402
 # shows it finds the venv's Python by itself (on a Mac, Apple's python3 and a current
 # Python in .venv).
 local_path.run_in_venv()
+# A venv made by this same version is not started again, only read: its packages (pytest
+# among them, for the example drafts the tests hold) go on this Python's path. Without it a
+# Linux runner's /usr/bin/python3, the venv's own version, failed the documents step on
+# "No module named 'pytest'" (2026-10-25).
+local_path.use_venv()
 PY = os.environ.pop(local_path.REEXEC, "") or sys.executable
 EXAMPLE = os.path.join(ROOT, "profile.example")
 RESULTS: list[tuple[str, bool, str]] = []

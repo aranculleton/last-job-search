@@ -29,6 +29,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 STAGES = ("research", "draft", "audit", "outreach")
 # What the workflow cannot record, and where it comes from instead.
@@ -120,7 +121,7 @@ def write(round_dir: str, result, usage=None) -> tuple[str, list[str], str]:
             with open(os.path.join(folder, "cost.json"), "w", encoding="utf-8") as fh:
                 json.dump(dict(r, slug=slug), fh, indent=1, ensure_ascii=False)
                 fh.write("\n")
-            kept.append(os.path.relpath(os.path.join(folder, "cost.json"), person.state()))
+            kept.append(local_path.rel(os.path.join(folder, "cost.json"), person.state()))
     return path, kept, line
 
 

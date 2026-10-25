@@ -360,7 +360,7 @@ def _commit_place(path: str) -> None:
     commit a file it had never touched (found by tools/rehearse_sync.py, 2026-10-21)."""
     import subprocess
     root = os.path.dirname(os.path.dirname(os.path.abspath(path)))
-    rel = os.path.relpath(path, root)
+    rel = local_path.rel(path, root)
     try:
         if subprocess.run(["git", "-C", root, "ls-files", "--error-unmatch", rel],
                           capture_output=True, timeout=30).returncode:
@@ -738,14 +738,14 @@ def main(argv=None) -> int:
         print(f"do: {got['do']}")
         return 0
     if a.cmd in ("started", "finished"):
-        print(f"place: setup {a.cmd}, in {os.path.relpath(mark_setup(a.cmd), ROOT)}")
+        print(f"place: setup {a.cmd}, in {local_path.rel(mark_setup(a.cmd), ROOT)}")
         return 0
     if a.cmd == "auto":
         got = auto_answer(surface())
         if not got:
             print(f"ask, once, at the end of setup: {QUESTION} {TRADE_OFF} {RECOMMEND}")
             return 0
-        print(f"place: recorded {got} in {os.path.relpath(record(got), ROOT)} (not asked: "
+        print(f"place: recorded {got} in {local_path.rel(record(got), ROOT)} (not asked: "
               "this chat can tell)")
         reads = default_profile_reads(surface())
         if reads:
@@ -753,7 +753,7 @@ def main(argv=None) -> int:
                   "asking nothing")
         return 0
     if a.cmd == "record":
-        print(f"place: recorded {a.answer} in {os.path.relpath(record(a.answer), ROOT)}")
+        print(f"place: recorded {a.answer} in {local_path.rel(record(a.answer), ROOT)}")
         print(next_step(a.answer, surface(), *repo()))
         return 0
     if a.cmd == "next":

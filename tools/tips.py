@@ -43,6 +43,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 FILE = "tips.json"
 AREAS = ("search", "apply", "networking", "reply", "interview", "prep", "brief", "general")
@@ -174,7 +175,7 @@ def _on_master() -> dict:
     """The copy another chat has already landed, so two chats open the same day (the
     cloud and the computer, or the brief's own) do not each give a tip. Read from the last
     fetch, no network; nothing when the file is not in the repo or git is missing."""
-    rel = os.path.relpath(_path(), ROOT)
+    rel = local_path.rel(_path(), ROOT)
     if rel.startswith(".."):
         return {}
     try:

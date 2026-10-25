@@ -170,3 +170,50 @@ def test_the_row_merge_still_merges_two_chats_rows_with_the_new_driver(tmp_path)
     assert r.returncode == 0, r.stdout + r.stderr
     text = (a / "network_threads.csv").read_text(encoding="utf-8")
     assert "note to di" in text and "note to ed" in text
+
+
+def _no_git_identity(tmp_path, monkeypatch):
+    """A new computer: no user.name or user.email anywhere, and no gh to ask."""
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME",
+              "GIT_COMMITTER_EMAIL", "EMAIL"):
+        monkeypatch.delenv(k, raising=False)
+    real = subprocess.run
+
+    def no_gh(cmd, *a, **k):
+        if cmd and cmd[0] == "gh":
+            raise FileNotFoundError("gh")
+        return real(cmd, *a, **k)
+    monkeypatch.setattr(subprocess, "run", no_gh)
+
+
+def test_a_copy_with_no_name_for_git_takes_its_github_owner(tmp_path, monkeypatch):
+    repo = tmp_path / "copy"
+    repo.mkdir()
+    g(repo, "init", "-q", "-b", "master")
+    g(repo, "remote", "add", "origin", "https://github.com/wren-allard/my-job-search.git")
+    _no_git_identity(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync_app, "ROOT", str(repo))
+    sync_app._identity()
+    got = lambda k: subprocess.run(["git", "config", k], cwd=repo, capture_output=True,  # noqa: E731
+                                   text=True).stdout.strip()
+    assert got("user.email") == "wren-allard@users.noreply.github.com"
+    assert got("user.name") == "wren-allard"
+    # Set in this copy alone, never for the whole computer.
+    assert not (tmp_path / "home" / ".gitconfig").exists()
+
+
+def test_a_name_git_already_has_is_left_alone(tmp_path, monkeypatch):
+    repo = tmp_path / "copy"
+    repo.mkdir()
+    g(repo, "init", "-q", "-b", "master")
+    g(repo, "config", "user.email", "wren@example.com")
+    _no_git_identity(tmp_path, monkeypatch)
+    monkeypatch.setattr(sync_app, "ROOT", str(repo))
+    sync_app._identity()
+    assert subprocess.run(["git", "config", "user.email"], cwd=repo, capture_output=True,
+                          text=True).stdout.strip() == "wren@example.com"

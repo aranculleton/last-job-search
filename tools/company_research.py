@@ -71,6 +71,7 @@ from urllib.parse import urljoin, urlsplit
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import local_path  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from dates import as_date  # noqa: E402
 from safe_name import cap_bytes, windows_safe  # noqa: E402
@@ -557,8 +558,8 @@ def describe(company, today=None, root=None, country=None) -> str:
     base = root or person.state()
     if not data:
         where = target(company, root, country)
-        return "%s: not cached (would be written to %s)" % (company, os.path.relpath(where, base))
-    rel = os.path.relpath(path(company, root, country), base)
+        return "%s: not cached (would be written to %s)" % (company, local_path.rel(where, base))
+    rel = local_path.rel(path(company, root, country), base)
     if age is None:
         return "%s: no fetched_date, so not fresh: re-confirm before using" % rel
     if fresh:
@@ -1164,7 +1165,7 @@ def fetch(company, urls=(), site=None, country=None, role=None, posting=None, to
     data, age, _fresh = load(company, day, root, cc or None)
     run = _Run(company, day, root, transport, sleep, pages, FETCH_BUDGET if budget is None else budget)
     report = {"company": str(company), "country": cc, "pages": pages_dir(pages),
-              "cache": os.path.relpath(target(company, root, cc or None), root or person.state()),
+              "cache": local_path.rel(target(company, root, cc or None), root or person.state()),
               "age_days": age, "kept": [], "other_roles": [], "candidates": [], "leads": [],
               "urls": [], "budget": run.budget, "used_before": run.used_before}
     for f in data.get("facts") or []:
@@ -1422,7 +1423,7 @@ def main(argv=None) -> int:
         except QuoteNotFound as e:
             print(str(e), file=sys.stderr)
             return 1
-        print(os.path.relpath(written, a.root or person.state()))
+        print(local_path.rel(written, a.root or person.state()))
         return 0
     print(describe(a.company, a.today, a.root, a.country))
     return 0

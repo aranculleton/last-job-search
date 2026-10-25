@@ -58,6 +58,7 @@ for _p in (_HERE, os.path.join(_HERE, "network")):
         sys.path.insert(0, _p)
 
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 # 2: rules_hash is the hash of what the pack states (rule_lines, fact_lines), not of the
 # files it reads; research lines mark a fact nobody read on a page.
@@ -101,7 +102,7 @@ def _sha(path: str) -> str | None:
 def _rel(path: str) -> str:
     for base in (person.state(), person.ROOT):
         try:
-            rel = os.path.relpath(path, base)
+            rel = local_path.rel(path, base)
         except ValueError:
             continue
         if not rel.startswith(".."):

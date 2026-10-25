@@ -55,6 +55,16 @@ HOME = os.path.expanduser("~")
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def rel(path: str, start: str | None = None) -> str:
+    """os.path.relpath, or the full path where there is none: on Windows two drives
+    (C: and D:) have no path between them and relpath raises. A round written to the
+    temporary folder on C: from a copy on D: crashed on its last line that way."""
+    try:
+        return os.path.relpath(path, start) if start is not None else os.path.relpath(path)
+    except ValueError:
+        return os.path.abspath(path)
+
+
 def _found(patterns) -> list:
     out = []
     for p in patterns:

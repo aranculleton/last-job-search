@@ -66,6 +66,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
         sys.path.insert(0, _p)
 
 import person as _person  # noqa: E402
+import local_path  # noqa: E402
 
 # Run with no profile (the app itself, or before /setup), the imports below read it and the
 # command crashed with a traceback, `--help` included. It says so plainly instead.
@@ -110,16 +111,16 @@ RESEARCH_FRESH_DAYS = research_cache.RESEARCH_FRESH_DAYS
 # Where a fact is allowed to say it came from when the caller does not name a
 # more specific source. These are files in the repo, so "source: X" stays
 # checkable rather than becoming a shrug.
-PROFILE_SOURCE = os.path.relpath(
+PROFILE_SOURCE = local_path.rel(
     person.file("candidate_profile", "01-candidate-profile.md"), ROOT).replace(os.sep, "/")
 CONTACTS_SOURCE = "network_contacts.csv"
 THREADS_SOURCE = "network_threads.csv"
 TRACKER_SOURCE = "job_search_tracker.csv"
 # Where the work-authorization line each reader hears is kept (networking.py WORK_AUTH).
-NETWORKING_SOURCE = "%s WORK_AUTH" % os.path.relpath(
+NETWORKING_SOURCE = "%s WORK_AUTH" % local_path.rel(
     person.path("networking.py"), ROOT).replace(os.sep, "/")
 # Where the phrases the person has said never to use are kept (tools/learned.py).
-LEARNED_SOURCE = os.path.relpath(person.path(learned.FILE), ROOT).replace(os.sep, "/")
+LEARNED_SOURCE = local_path.rel(person.path(learned.FILE), ROOT).replace(os.sep, "/")
 
 # The phrase the document uses for anything nobody looked up. One phrase, used
 # everywhere, so the user learns to read past it instead of mistaking a blank
@@ -1715,7 +1716,7 @@ def _process_lines(contact, application) -> list:
         return []
     living = _pack().LIVING
     folder = outreach.app_folder(_text(application.get("company")), _text(application.get("role")))
-    path = os.path.relpath(os.path.join(folder, living), STATE_ROOT).replace(os.sep, "/")
+    path = local_path.rel(os.path.join(folder, living), STATE_ROOT).replace(os.sep, "/")
     out = []
     # The hiring side only: a peer's coffee chat at the same employer, or the referrer who
     # started the process, is still a networking call.
@@ -2296,7 +2297,7 @@ def load_research(company, root=STATE_ROOT) -> dict:
     if data:
         found = research_cache.path(company, root=root)
         if found:
-            data = dict(data, _cache_file=os.path.relpath(found, root).replace(os.sep, "/"))
+            data = dict(data, _cache_file=local_path.rel(found, root).replace(os.sep, "/"))
     return data
 
 
@@ -2314,7 +2315,7 @@ def search_context(contact, application, root=STATE_ROOT) -> tuple:
     if not company:
         return (), None
     roles = why.open_roles(company, os.path.join(root, "documents", "rounds"))
-    return [dict(r, source=os.path.relpath(r["_path"], root).replace(os.sep, "/"))
+    return [dict(r, source=local_path.rel(r["_path"], root).replace(os.sep, "/"))
             for r in roles if r.get("_path")], None
 
 
@@ -2439,7 +2440,7 @@ def main(argv=None) -> int:
                 if what == "written":
                     would += 1
                     print("would %s %s" % ("rewrite" if existed else "write",
-                                           os.path.relpath(path, a.root)))
+                                           local_path.rel(path, a.root)))
                 else:
                     same += 1
             print("%d prep documents would be written (prep v%d)%s; nothing written"
@@ -2473,7 +2474,7 @@ def main(argv=None) -> int:
             with open(path, encoding="utf-8") as fh:
                 found = check_answers(fh.read(), _text(row.get("company")))
         except OSError:
-            print("prep: no %s yet: write it first" % os.path.relpath(path, a.root),
+            print("prep: no %s yet: write it first" % local_path.rel(path, a.root),
                   file=sys.stderr)
             return 1
         for q, why_ in found:
@@ -2493,21 +2494,21 @@ def main(argv=None) -> int:
                 print("send: %s (this copy, never the file above: its name says whose it is)"
                       % shown.copy(path, a.root))
             except Exception as exc:  # noqa: BLE001  the check passed; only its copy failed
-                print("send: no named copy (%s); send %s" % (exc, os.path.relpath(path, a.root)))
+                print("send: no named copy (%s); send %s" % (exc, local_path.rel(path, a.root)))
         return 1 if held else 0
     if a.dry_run:
-        print("would write %s; nothing written" % os.path.relpath(prep_path(row, a.root), a.root))
+        print("would write %s; nothing written" % local_path.rel(prep_path(row, a.root), a.root))
         return 0
     tracker = state.load_tracker(a.tracker) if os.path.exists(a.tracker) else []
     written = _write_one(row, tracker, a)
-    print(os.path.relpath(written, a.root))
+    print(local_path.rel(written, a.root))
     # The copy to send, named for whose it is: every contact's file is called prep.md.
     try:
         import shown
         print("send: %s (this copy, never the file above: its name says whose it is)"
               % shown.copy(written, a.root))
     except Exception as exc:  # noqa: BLE001  the document is written; only its copy failed
-        print("send: no named copy (%s); send %s" % (exc, os.path.relpath(written, a.root)))
+        print("send: no named copy (%s); send %s" % (exc, local_path.rel(written, a.root)))
     need = research_needed(row, load_research(row.get("company"), a.root), a.today)
     if need:
         print(need)

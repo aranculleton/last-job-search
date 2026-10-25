@@ -23,6 +23,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path[:0] = [HERE, os.path.join(HERE, "network")]
 
 import person  # noqa: E402
+import local_path  # noqa: E402
 from safe_name import cap_bytes, windows_safe  # noqa: E402
 
 OUT = ("documents", "to_send")
@@ -144,7 +145,7 @@ def name_for(path, root=None) -> str:
     """The name the person sees for this document, without its extension. `root` is the
     person's files (person.state() unless a tool was given another)."""
     root = os.path.abspath(root or person.state())
-    rel = os.path.relpath(os.path.abspath(path), root).replace(os.sep, "/")
+    rel = local_path.rel(os.path.abspath(path), root).replace(os.sep, "/")
     parts = rel.split("/")
     stem = os.path.splitext(parts[-1])[0]
     label = _label(stem)
@@ -196,7 +197,7 @@ def copy(path, root=None) -> str:
             fh.write(for_the_person(text))
     else:
         shutil.copyfile(path, dest)
-    return os.path.relpath(dest, root).replace(os.sep, "/")
+    return local_path.rel(dest, root).replace(os.sep, "/")
 
 
 def main(argv=None) -> int:

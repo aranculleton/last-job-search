@@ -45,6 +45,7 @@ for _p in (HERE, os.path.join(HERE, "network"), os.path.join(ROOT, "templates"))
         sys.path.insert(0, _p)
 
 import docpaths  # noqa: E402
+import local_path  # noqa: E402
 import person  # noqa: E402
 
 COMPANY = "General"       # the draft's employer: names its files <Prefix>_<Noun>_General
@@ -289,8 +290,8 @@ def main(argv=None) -> int:
         print("general: a check failed, so nothing was kept; the checks:\n" + got["verify_out"])
         return 1
     if got["kept"]:
-        print(f"kept: {os.path.relpath(got['pdf'], person.state())}")
-        print(f"text: {os.path.relpath(got['txt'], person.state())}")
+        print(f"kept: {local_path.rel(got['pdf'], person.state())}")
+        print(f"text: {local_path.rel(got['txt'], person.state())}")
         print("send: the PDF with SendUserFile, and paste this short copy beside it:")
         print(plain_text(d, short=True))
     return 0

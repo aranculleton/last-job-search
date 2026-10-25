@@ -36,6 +36,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, "tools"), os.path.join(ROOT, "templates")]
+import local_path  # noqa: E402
 
 MIN_TEXT_PT = 8.5      # a footnote's size; the contact line and the dates may sit near it
 MIN_BODY_PT = 9.8      # the size most words are in: guides ask 10pt at least (11pt type set \small)
@@ -250,7 +251,7 @@ FIXTURE = os.path.join(ROOT, "tests", "fixtures", "design_draft.json")
 def _copy_app(dest):
     """The app's files, without git's, the build's or anyone's documents."""
     def ignore(d, names):
-        rel = os.path.relpath(d, ROOT)
+        rel = local_path.rel(d, ROOT)
         skip = {".git", "__pycache__", ".pytest_cache", "node_modules", "rounds", ".venv"}
         out = [n for n in names if n in skip]
         if rel in ("cv", "cover_letters"):

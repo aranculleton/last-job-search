@@ -53,6 +53,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 DEFAULT = "standard"
 # The template's resume has always been set with LuaLaTeX and keeps it; a design is set with
@@ -300,7 +301,7 @@ def _font_path(folder, tex_dir):
     forward slashes, which every TeX on every computer reads, and never with a space in it."""
     target = os.path.join(ROOT, FONT_DIR, folder)
     try:
-        rel = os.path.relpath(target, tex_dir)
+        rel = local_path.rel(target, tex_dir)
     except ValueError:      # another drive on Windows: no relative path exists
         rel = target
     rel = rel.replace("\\", "/").rstrip("/") + "/"

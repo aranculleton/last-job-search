@@ -1,6 +1,5 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
     "PYTHONUTF8": "1",
     "GIT_TERMINAL_PROMPT": "0",
     "GCM_INTERACTIVE": "never"

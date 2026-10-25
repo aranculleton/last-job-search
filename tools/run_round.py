@@ -40,6 +40,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 T = os.path.join(ROOT, "tools")
 sys.path.insert(0, T)
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 STAGES = ("01_prefiltered", "02_hydrated", "03_screened", "04_opportunity",
           "05_ranked", "06_shortlist")
@@ -734,7 +735,7 @@ def main():
                             a.summary_dir or person.state(SUMMARY_DIR),
                             os.path.basename(os.path.abspath(a.out)))
     if summary:
-        print(f"shortlist summary: {os.path.relpath(summary, ROOT)} "
+        print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
     # Read before the prune below deletes 00_scrape/, or a portal that went
     # quiet is never reported and the MISSED message blames the market.

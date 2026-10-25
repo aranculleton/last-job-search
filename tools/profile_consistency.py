@@ -34,6 +34,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 # A money amount: 110,000 or 110000 or 110k, with or without a currency in front.
 _CUR = r"(?:[A-Z]{2,3}\s?\$?|[$£€]|[A-Z]{1,2}\$)?\s?"
@@ -100,7 +101,7 @@ def _files() -> list[str]:
 
 
 def _rel(path: str) -> str:
-    return "profile/" + os.path.relpath(path, person.path()).replace(os.sep, "/")
+    return "profile/" + local_path.rel(path, person.path()).replace(os.sep, "/")
 
 
 _QUOTED = re.compile(r"\"[^\"]{0,300}\"|\u201c[^\u201d]{0,300}\u201d")

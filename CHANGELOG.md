@@ -22,10 +22,47 @@ make sense to somebody whose repo just received it.
 
 ### Added
 
+- **No resume? Build one with Claude.** Say "build one with me" and a short interview, one
+  job at a time and small enough for a phone, writes your history, starting from your
+  LinkedIn download where there is one. You leave setup with a one-page resume, and nothing
+  in it is a result you did not give.
+- **A design for your documents per kind of employer**: the fonts, sizes, margins and
+  alignment. Classic for banks, insurers, law, consulting and the public sector; modern for
+  technology companies and startups. A new search gets them; an existing one looks exactly
+  as it did until you ask. Every design is checked to read cleanly in an applicant
+  tracking system before you see it.
+- **"Show me around"**: a short tour of what you can ask for, offered once at the end of
+  setup and whenever you ask.
+- **A chat on your own computer works on Windows, Mac and Linux**, set up with no password
+  and nothing installed first. A Mac gets a current Python of its own, and Apple's is left
+  alone.
 - **A resume and its cover letter can take a colour chosen for a kind of employer** (a bank
   in navy, a startup in teal) **or for one application.** Nothing changes unless you ask:
   every document stays black, and a colour never moves a word, a line or the page. Ask
   Claude for a colour and it writes the setting for you.
+
+### Changed
+
+- **Setup is shorter**: two short messages and four questions. The research runs in the
+  background, your first shortlist arrives as the proof it works, and your brief is set up
+  at the end without a question.
+- **A search already set up is never set up again.** A chat that finds it, even while
+  another chat is still saving it, carries on from it and never asks for your resume.
+- **A chat on your computer signs you in to LinkedIn when it needs to**, says once that
+  signed in shows more of each person, and asks for your LinkedIn download by itself, with
+  no warnings in the way.
+- **Fewer first-time lines**: two a day at most, and a tip seen in one chat is not repeated
+  in another.
+- **No email, and no other connections**: the app never reads your inbox.
+
+### Fixed
+
+- **A new computer could not save anything** when its git had no name set. Your copy now
+  takes your GitHub name and GitHub's private address for it, for that copy alone.
+- **On Windows, a job search stopped on its last line** when your job search folder and the
+  computer's temporary folder were on different drives.
+- **Text in any alphabet is read and written correctly on Windows**, in every file the app
+  opens.
 
 ## [3.13.0] - 2026-10-24
 

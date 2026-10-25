@@ -55,6 +55,7 @@ for _p in (os.path.join(_HERE, "network"), _HERE):
         sys.path.insert(0, _p)
 
 import person as _person  # noqa: E402
+import local_path  # noqa: E402
 
 # Run with no profile (the app itself, or before /setup), the imports below read it and the
 # command crashed with a traceback, `--help` included. It says so plainly instead.
@@ -159,12 +160,12 @@ def _text(value) -> str:
 
 def _rel(path) -> str:
     """A path in the person's state (documents/...), as the pack names it."""
-    return os.path.relpath(path, person.state()).replace(os.sep, "/")
+    return local_path.rel(path, person.state()).replace(os.sep, "/")
 
 
 def _repo_rel(path) -> str:
     """A path in the repo (profile/..., .claude/...), as prep.PROFILE_SOURCE names one."""
-    return os.path.relpath(path, ROOT).replace(os.sep, "/")
+    return local_path.rel(path, ROOT).replace(os.sep, "/")
 
 
 def _read(path) -> str:

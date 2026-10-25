@@ -104,6 +104,7 @@ for _p in (_HERE, os.path.dirname(_HERE)):
         sys.path.insert(0, _p)
 
 import dates  # noqa: E402
+import local_path  # noqa: E402
 import person  # noqa: E402
 import untrusted  # noqa: E402
 from company_key import fold  # noqa: E402
@@ -4792,7 +4793,7 @@ def save_drafts(batch: dict, own_facts_why: dict | None = None) -> int:
         elif not has_read(got):
             how = (f"; nothing read about {row.get('name') or cid} yet, so it opens on "
                    f"{WAITS_ON_A_READ} and reading.py queue lists it")
-        print(f"reading: saved {os.path.relpath(p, person.state())}{how}")
+        print(f"reading: saved {local_path.rel(p, person.state())}{how}")
         # Built like another message waiting this round: said now, while it is being written.
         for what, detail, ids in compose.round_alike(queued):
             if cid in ids:
@@ -5152,7 +5153,7 @@ def main(argv: list | None = None) -> int:
         if not reason:
             raise SystemExit("reading: stop needs what LinkedIn showed, as `stop \"<words>\"` "
                              "or `stop --reason \"<words>\"`")
-        print(f"reading: browser reads stopped for today ({os.path.relpath(stop(reason), person.state())})")
+        print(f"reading: browser reads stopped for today ({local_path.rel(stop(reason), person.state())})")
         if _way_back():
             print(f"  {_way_back()}")
         return EXIT["ok"]
@@ -5596,7 +5597,7 @@ def main(argv: list | None = None) -> int:
             if breach:
                 breach_line = keep_breach(breach, now, a.contact_id)
         reading = merge(old, new)
-    print(f"reading: saved {os.path.relpath(save(a.contact_id, reading), person.state())}")
+    print(f"reading: saved {local_path.rel(save(a.contact_id, reading), person.state())}")
     _show(reading)
     if a.cmd == "read":
         keep, why = verdict(reading, contact.get("company", ""))

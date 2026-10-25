@@ -753,6 +753,38 @@ def _driver() -> None:
         merge_state.install(ROOT)
     except Exception:  # noqa: BLE001  without the driver git merges lines, as it always did
         pass
+    _identity()
+
+
+def _identity() -> None:
+    """A name for this copy's own commits where git has none. A new computer's git has no
+    user.name or user.email until someone sets them, and every commit and merge then fails
+    ("Author identity unknown"): the sync read that as "master does not merge cleanly".
+    Set in this copy alone, never for the whole computer: their GitHub name and GitHub's
+    private address for it (`<id>+<login>@users.noreply.github.com`, docs.github.com,
+    "Setting your commit email address"), from gh when it is signed in, else the owner in
+    the copy's GitHub address."""
+    if git("config", "user.email", check=False).stdout.strip():
+        return
+    name = email = ""
+    try:
+        r = subprocess.run(["gh", "api", "user", "--jq", '[.id, .login, .name // ""] | @tsv'],
+                           cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=15, stdin=subprocess.DEVNULL)
+        parts = r.stdout.strip().split("\t") if r.returncode == 0 else []
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1]:
+            email = f"{parts[0]}+{parts[1]}@users.noreply.github.com"
+            name = (parts[2] if len(parts) > 2 else "").strip() or parts[1]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    if not email:
+        url = git("remote", "get-url", "origin", check=False).stdout.strip()
+        m = re.search(r"github\.com[:/]+([A-Za-z0-9-]+)/", url)
+        owner = m.group(1) if m else "job-search"
+        name, email = owner, f"{owner}@users.noreply.github.com"
+    if not git("config", "user.name", check=False).stdout.strip():
+        git("config", "user.name", name, check=False)
+    git("config", "user.email", email, check=False)
 
 
 def pull_master() -> int:

@@ -71,6 +71,7 @@ from typing import Callable
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
+import local_path  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 COSTS = ("instant", "edit", "question", "research")
@@ -1031,7 +1032,7 @@ def unconfirmed() -> list[tuple[str, str]]:
                     text = fh.read()
             except (OSError, UnicodeDecodeError):
                 continue
-            rel = os.path.relpath(path, os.path.dirname(root))
+            rel = local_path.rel(path, os.path.dirname(root))
             out += [(rel, (m.group(1) or "").strip() or "a fact marked unconfirmed")
                     for m in CONFIRM.finditer(text)]
     return out
@@ -2178,7 +2179,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0                                    # the app, or a repo before /setup
     if a.no:
         p = record_no(a.no)
-        print(f"profile_upgrades: their no to {a.no} kept in {os.path.relpath(p, ROOT)}; asked "
+        print(f"profile_upgrades: their no to {a.no} kept in {local_path.rel(p, ROOT)}; asked "
               f"again when the question changes or after {REASK_DAYS} days. Say only: "
               f"\"{NO_REPLY}\"")
         return 0
