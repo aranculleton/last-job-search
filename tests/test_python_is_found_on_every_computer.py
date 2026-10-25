@@ -34,7 +34,7 @@ SH = shutil.which("sh")
 
 def _bin(tmp_path, name="bin"):
     """A PATH folder holding the few commands py.sh itself needs, and nothing else. On
-    Windows they stay in Git's own folder, which _path puts after it: Git Bash's commands
+    Windows they stay in Git's own folder, which _path puts after it: the commands of Git Bash
     do not start from a link elsewhere, and that folder holds no Python."""
     b = tmp_path / name
     b.mkdir()
