@@ -229,4 +229,4 @@ jobs:
         run: |
           unset PYTHONUTF8 PYTHONIOENCODING
           py=$(python -c "import sys; sys.path.insert(0, 'tools'); import local_path; print(local_path.venv_python() if local_path.venv_runs() else sys.executable)")
-          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=line 2>&1 | tail -n 400
+          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=no 2>&1 | grep -E "^(FAILED|ERROR)|passed|failed" | cut -c1-300
