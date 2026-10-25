@@ -292,7 +292,7 @@ def round_order(path: str) -> tuple:
 def write_summary(shortlist_path, out_dir, name):
     """The compact shortlist, and where it was written."""
     try:
-        rows = json.load(open(shortlist_path))
+        rows = json.load(open(shortlist_path, encoding="utf-8"))
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -301,7 +301,7 @@ def write_summary(shortlist_path, out_dir, name):
            for r in rows[:KEEP_TOP]]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s.json" % name)
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return path
@@ -334,13 +334,13 @@ def slim(path):
     """Rewrite a stage file without the posting bodies. Returns bytes saved."""
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path))
+        rows = json.load(open(path, encoding="utf-8"))
     except Exception:
         return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
     out = [{k: v for k, v in r.items() if k != BODY_FIELD} if isinstance(r, dict) else r
            for r in rows]
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -362,7 +362,7 @@ def trim(path, top=KEEP_TOP):
     """
     try:
         before = os.path.getsize(path)
-        rows = json.load(open(path))
+        rows = json.load(open(path, encoding="utf-8"))
     except Exception:
         try:
             size = os.path.getsize(path)
@@ -371,7 +371,7 @@ def trim(path, top=KEEP_TOP):
         except OSError:
             return 0
     rows = rows if isinstance(rows, list) else list(rows.values())
-    with open(path, "w") as fh:
+    with open(path, "w", encoding="utf-8") as fh:
         json.dump(rows[:top], fh, indent=1)
         fh.write("\n")
     return max(0, before - os.path.getsize(path))
@@ -451,7 +451,7 @@ def yield_of(path):
     A row with no fit, from before fit.py, is counted by its priority.
     """
     try:
-        rows = json.load(open(path))
+        rows = json.load(open(path, encoding="utf-8"))
     except Exception:
         return 0, 0
     rows = rows if isinstance(rows, list) else list(rows.values())
@@ -462,7 +462,7 @@ def yield_of(path):
 
 def count(path):
     try:
-        d = json.load(open(path))
+        d = json.load(open(path, encoding="utf-8"))
         return len(d) if isinstance(d, list) else len(d.get("jobs", d))
     except Exception:
         return "?"

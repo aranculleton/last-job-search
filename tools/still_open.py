@@ -120,7 +120,8 @@ def fetch(url: str, timeout: int = 20) -> str:
     pace(url)
     try:
         out = subprocess.run(["curl", "-sSL", "--max-time", str(timeout), "-A", UA, "--", url],
-                             capture_output=True, text=True, timeout=timeout + 10)
+                             capture_output=True, text=True, timeout=timeout + 10,
+                             encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return out.stdout if out.returncode == 0 else ""

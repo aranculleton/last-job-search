@@ -188,7 +188,7 @@ def main() -> int:
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
-    recs = json.load(open(a.infile))
+    recs = json.load(open(a.infile, encoding="utf-8"))
     if isinstance(recs, dict):
         recs = list(recs.values())
     out = [screen(r) for r in recs]

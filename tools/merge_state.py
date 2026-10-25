@@ -397,7 +397,8 @@ def install(root: str) -> None:
     import subprocess
     for k, v in (("name", "state files, row by row"), ("driver", driver())):
         subprocess.run(["git", "-C", root, "config", f"merge.ljs-state.{k}", v],
-                       capture_output=True, text=True, check=False)
+                       capture_output=True, text=True, check=False,
+                       encoding="utf-8", errors="replace")
 
 
 # ------------------------------------------------------------------ which change was later

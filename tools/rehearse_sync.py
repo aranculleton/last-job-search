@@ -50,7 +50,7 @@ def _run(cmd, cwd, env=None, timeout=1800):
     t = time.time()
     try:
         r = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True,
-                           timeout=timeout)
+                           timeout=timeout, encoding="utf-8", errors="replace")
         out, code = (r.stdout or "") + (r.stderr or ""), r.returncode
     except subprocess.TimeoutExpired as e:
         out = ((e.stdout or b"").decode("utf-8", "replace") if isinstance(e.stdout, bytes)
@@ -60,7 +60,8 @@ def _run(cmd, cwd, env=None, timeout=1800):
 
 
 def _git(*args, cwd):
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 class Rehearsal:
@@ -234,7 +235,8 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
         for cmd, cwd in (() if failed else
                          ((["git", "tag", "-f", CANDIDATE_TAG, sha], app),
                           (["git", "clone", "-q", "--bare", "--no-local", repo, origin], tmp))):
-            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+            r = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
             if r.returncode:
                 failed = f"{' '.join(cmd[:3])}: {(r.stderr or r.stdout).strip()[:300]}"
                 break

@@ -179,20 +179,21 @@ def _csv_dated(path: str) -> list[tuple[dict, float | None]]:
     keep(rows, pending)
     folder = os.path.dirname(path) or "."
     top = subprocess.run(["git", "-C", folder, "rev-parse", "--show-toplevel"],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     if top.returncode != 0:
         return dated(None)
     root = top.stdout.strip()
     rel = os.path.relpath(os.path.realpath(path), os.path.realpath(root)).replace(os.sep, "/")
     log = subprocess.run(["git", "-C", root, "log", "--format=%H %at %ct", "--", rel],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     revs = [(p[0], float(min(int(p[1]), int(p[2]))))
             for p in (ln.split() for ln in log.stdout.splitlines()) if len(p) == 3] \
         if log.returncode == 0 else []
     if not revs:
         return dated(None)
     cut = subprocess.run(["git", "-C", root, "rev-parse", "--git-path", "shallow"],
-                         capture_output=True, text=True).stdout.strip()
+                         capture_output=True, text=True,
+                         encoding="utf-8", errors="replace").stdout.strip()
     try:
         with open(cut if os.path.isabs(cut) else os.path.join(root, cut), encoding="utf-8") as fh:
             shallow = set(fh.read().split())
@@ -535,7 +536,8 @@ def set_aside(found, when: dict, ref: str = RELEASED, root: str = ROOT) -> dict[
     # kept author dates, a container with its clock wrong) would otherwise name a copy
     # from after the leak as one from before it.
     log = subprocess.run(["git", "-C", root, "log", "--first-parent", "--reverse",
-                          "--format=%H %at %ct", ref, "--"], capture_output=True, text=True)
+                          "--format=%H %at %ct", ref, "--"], capture_output=True, text=True,
+                         encoding="utf-8", errors="replace")
     chain = [(p[0], max(int(p[1]), int(p[2])))
              for p in (ln.split() for ln in log.stdout.splitlines()) if len(p) == 3] \
         if log.returncode == 0 else []

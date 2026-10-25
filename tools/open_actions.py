@@ -722,7 +722,7 @@ def main():
 
     if a.markdown:
         os.makedirs(os.path.dirname(OUT_MD), exist_ok=True)
-        with open(OUT_MD, "w") as fh:
+        with open(OUT_MD, "w", encoding="utf-8") as fh:
             fh.write(header + body)
         print("wrote %s (%d employers)" % (OUT_MD, body.count("\n## ") + body.startswith("## ")))
     else:

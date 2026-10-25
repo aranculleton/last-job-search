@@ -489,7 +489,7 @@ def write(a, meta, today):
         return d
     known = _known_contacts(a["company"])
     replied = [p for p in known if p.get("status") not in SENT_NO_REPLY]
-    with open(os.path.join(d, "outreach.md"), "w") as f:
+    with open(os.path.join(d, "outreach.md"), "w", encoding="utf-8") as f:
         f.write(f"# Outreach note - {a['company']}, {a['role']}\n\n")
         if replied:
             # Without this the note says "message the hiring manager" at an
@@ -587,7 +587,7 @@ if __name__ == "__main__":
     drafts, _ = fit_to_page.load(sys.argv[1])
     meta = {}
     if len(sys.argv) > 2:
-        raw = json.load(open(sys.argv[2]))
+        raw = json.load(open(sys.argv[2], encoding="utf-8"))
         for m in (raw if isinstance(raw, list) else raw.values()):
             if not m.get("abbr"):
                 raise SystemExit(f"{sys.argv[2]}: the row for {m.get('company') or '(no company)'} "

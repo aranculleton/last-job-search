@@ -67,7 +67,8 @@ def paths(root: str = ROOT) -> tuple[list[str], list[str]]:
 
 
 def _git(root: str, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 def _under(rel: str) -> bool:

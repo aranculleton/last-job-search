@@ -238,7 +238,8 @@ def _probe(code: str) -> str:
     prelude = "import sys; sys.path[:0] = %r\n" % (_probe_path(),)
     try:
         r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=os.environ,
-                           capture_output=True, text=True, timeout=PROBE_SECONDS)
+                           capture_output=True, text=True, timeout=PROBE_SECONDS,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     return r.stdout.strip() if r.returncode == 0 else ""
@@ -1795,7 +1796,8 @@ def plan(rows: list[tuple[Upgrade, str]] | None = None) -> list[dict]:
 # ------------------------------------------------------------------ instant
 
 def _git(*args: str, check: bool = False) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check)
+    return subprocess.run(["git", "-C", ROOT, *args], text=True, capture_output=True, check=check,
+                          encoding="utf-8", errors="replace")
 
 
 def _changed() -> set[str]:
@@ -1857,7 +1859,8 @@ def fetch_master() -> None:
 def _fetch(*spec: str) -> bool:
     try:
         return subprocess.run(["git", "-C", ROOT, "fetch", "-q", "origin", *spec],
-                              capture_output=True, text=True, timeout=60).returncode == 0
+                              capture_output=True, text=True, timeout=60,
+                              encoding="utf-8", errors="replace").returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -1888,7 +1891,8 @@ def push_claim() -> str:
     try:
         r = subprocess.run(["git", "-C", ROOT, "push", "-q", "origin",
                             "%s:%s%s" % (sha, CLAIM_REFS, app)],
-                           capture_output=True, text=True, timeout=60, env=env)
+                           capture_output=True, text=True, timeout=60, env=env,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return ""
     if r.returncode == 0:

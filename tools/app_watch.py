@@ -47,7 +47,7 @@ UA = {"User-Agent": "last-job-search-app-watch/1 (+https://github.com/arancullet
 
 def _git(*args: str, input: str | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", ROOT, *args], capture_output=True, text=True,
-                          input=input)
+                          input=input, encoding="utf-8", errors="replace")
 
 
 def app_url() -> str:

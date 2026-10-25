@@ -1075,7 +1075,8 @@ def own_test_failures(root: str | None = None) -> list[tuple[str, str]] | None:
             r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
                                 "--tb=no", f"--junitxml={report}", tests], cwd=root, text=True,
                                capture_output=True, timeout=300,
-                               env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+                               env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+                               encoding="utf-8", errors="replace")
         except (OSError, subprocess.TimeoutExpired):
             return None
         if r.returncode != 1 or not os.path.isfile(report):   # 0 clean; 5 none collected
@@ -1351,7 +1352,7 @@ def app_watch() -> None:
         return
     try:
         r = subprocess.run([sys.executable, script], cwd=ROOT, text=True,
-                           capture_output=True, timeout=300)
+                           capture_output=True, timeout=300, encoding="utf-8", errors="replace")
         if (r.stdout or "").strip():
             print(r.stdout.rstrip())
     except (OSError, subprocess.TimeoutExpired):
@@ -1372,7 +1373,7 @@ def network_check() -> None:
         return
     try:
         r = subprocess.run([sys.executable, script, "--say"], cwd=ROOT, text=True,
-                           capture_output=True, timeout=120)
+                           capture_output=True, timeout=120, encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return
     out = (r.stdout or "").strip()
@@ -1399,7 +1400,8 @@ def place_check(tools: str | None) -> None:
     if tools is not None:
         argv += ["--tools", tools]
     try:
-        r = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=60)
+        r = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=60,
+                           encoding="utf-8", errors="replace")
         out = (r.stdout or "").strip()
         if out and not out.startswith("place: this chat is the right place"):
             print(out)
@@ -1423,7 +1425,7 @@ def model_check(on: str) -> None:
         return
     try:
         r = subprocess.run([sys.executable, script, "--on", on], cwd=ROOT, text=True,
-                           capture_output=True, timeout=60)
+                           capture_output=True, timeout=60, encoding="utf-8", errors="replace")
         if (r.stdout or "").strip():
             print(r.stdout.rstrip())
     except (OSError, subprocess.TimeoutExpired):
@@ -1444,7 +1446,8 @@ def upgrades(mode: str) -> None:
         return
     try:
         r = subprocess.run([sys.executable, script] + ([] if mode == "--list" else [mode]),
-                           cwd=ROOT, text=True, capture_output=True, timeout=600)
+                           cwd=ROOT, text=True, capture_output=True, timeout=600,
+                           encoding="utf-8", errors="replace")
         out = (r.stdout or "").rstrip()
         if out:
             print(out)

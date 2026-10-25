@@ -935,7 +935,7 @@ def _reactions_path() -> str | None:
     try:
         r = subprocess.run(["git", "-C", os.path.dirname(os.path.dirname(os.path.abspath(
             __file__))), "rev-parse", "--absolute-git-dir"], capture_output=True, text=True,
-            timeout=10)
+            timeout=10, encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return None
     gd = r.stdout.strip()

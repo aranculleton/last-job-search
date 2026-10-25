@@ -282,7 +282,7 @@ def resume(a):
             + "".join(sections[k] for k in section_order())
             + RESUME_END)
     p = docpaths.resume_tex(a["abbr"])
-    open(p, "w").write(body)
+    open(p, "w", encoding="utf-8").write(body)
     return p
 
 
@@ -340,5 +340,5 @@ def letter(a):
                          p1=a["p1"], p2=a["p2"], lead=a["lead"], bullets=bl, p4=a["p4"],
                          **_identity())
     p = docpaths.letter_tex(a["abbr"])
-    open(p, "w").write(body)
+    open(p, "w", encoding="utf-8").write(body)
     return p

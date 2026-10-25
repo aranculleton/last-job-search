@@ -228,7 +228,8 @@ def main_checkout() -> str | None:
     import subprocess
     try:
         r = subprocess.run(["git", "rev-parse", "--git-dir", "--git-common-dir"], cwd=ROOT,
-                           capture_output=True, text=True, timeout=10)
+                           capture_output=True, text=True, timeout=10,
+                           encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
         return None
     got = r.stdout.split() if r.returncode == 0 else []

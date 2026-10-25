@@ -636,7 +636,7 @@ def already_ruled_out(seen_path: str, keep_ruled_out: bool = False,
 
 def load_jobs(path: str) -> tuple[list, bool]:
     """Every stage reads a list or an id-keyed dict; returns (rows, was_dict)."""
-    data = json.load(open(path))
+    data = json.load(open(path, encoding="utf-8"))
     if isinstance(data, dict):
         if "seen" in data and isinstance(data["seen"], dict):
             data = data["seen"]
@@ -724,9 +724,9 @@ def main() -> int:
                 for i, r in enumerate(items)}
 
     if a.out:
-        json.dump(shape(kept), open(a.out, "w"), indent=1)
+        json.dump(shape(kept), open(a.out, "w", encoding="utf-8"), indent=1)
     if a.dropped:
-        json.dump(shape(dropped), open(a.dropped, "w"), indent=1)
+        json.dump(shape(dropped), open(a.dropped, "w", encoding="utf-8"), indent=1)
     return 0
 
 

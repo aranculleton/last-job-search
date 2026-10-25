@@ -189,7 +189,7 @@ def _one_writer(p: str):
     each wrote their own row over the other's, or crashed on the shared temporary file."""
     lock = os.path.join(tempfile.gettempdir(), "ljs-judged-%s.lock"
                         % hashlib.sha1(os.path.abspath(p).encode()).hexdigest()[:16])
-    with open(lock, "a+") as fh:
+    with open(lock, "a+", encoding="utf-8") as fh:
         try:
             import fcntl
             fcntl.flock(fh, fcntl.LOCK_EX)

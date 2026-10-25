@@ -123,7 +123,8 @@ def _gh(args: list[str]) -> subprocess.CompletedProcess:
     cmd = ["gh", *args]
     if os.environ.get("GITHUB_REPOSITORY"):
         cmd += ["--repo", os.environ["GITHUB_REPOSITORY"]]
-    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True)
+    return subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace")
 
 
 def _key(version: str) -> tuple:
@@ -132,7 +133,8 @@ def _key(version: str) -> tuple:
 
 def tags() -> list[str]:
     out = subprocess.run(["git", "-C", ROOT, "ls-remote", "--tags", "--refs", "origin", "v*"],
-                         capture_output=True, text=True, check=True).stdout
+                         capture_output=True, text=True, check=True,
+                         encoding="utf-8", errors="replace").stdout
     return [ln.split("refs/tags/", 1)[1] for ln in out.splitlines() if "refs/tags/" in ln]
 
 
