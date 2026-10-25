@@ -200,7 +200,10 @@ def write_rows(path: str, rows, columns) -> None:
             "to it: saving would put that mark in place of the letter for good. Open the file, "
             "type the name on that line again, save it as UTF-8, then run this again.")
     first = io.StringIO(text, newline="").readline()
-    head = next(csv.reader(io.StringIO(text, newline="")), [])
+    # Each name as read_rows reads it: a column typed "Referral notes " was read under the
+    # trimmed name and written under the typed one, so the first save emptied it, and a
+    # schema column typed that way was added again at the end (networking audit, 2026-10-25).
+    head = [h.strip() for h in next(csv.reader(io.StringIO(text, newline="")), [])]
     fields = [k for k in dict.fromkeys(head) if k] or list(columns)
     # A column the file lacks joins it only once a row has something to put in it. Added
     # empty, it rewrote every row: saving one new contact was a 460-line change to a
@@ -213,12 +216,26 @@ def write_rows(path: str, rows, columns) -> None:
               "at the end; every row keeps its other fields where they were", file=sys.stderr)
     fields += added
     ending = "\r\n" if first.endswith("\r\n") else "\n"
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=fields, restval="", extrasaction="ignore",
-                           lineterminator=ending)
-        w.writeheader()
-        for row in rows:
-            w.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in fields})
+    # Written beside it and put in its place in one step: written in place, a save stopped
+    # half way (a closed laptop, a chat ended) left half the message log, the one file that
+    # must never be lost (networking audit, 2026-10-25).
+    real = os.path.realpath(path)          # a linked file is written where it lives
+    folder, name = os.path.split(real)
+    part = os.path.join(folder, f".{name}.{os.getpid()}.saving")
+    try:
+        with open(part, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields, restval="", extrasaction="ignore",
+                               lineterminator=ending)
+            w.writeheader()
+            for row in rows:
+                w.writerow({k: ("" if row.get(k) is None else row.get(k)) for k in fields})
+        os.replace(part, real)
+    except BaseException:
+        try:
+            os.remove(part)
+        except OSError:
+            pass
+        raise
 
 
 def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:
