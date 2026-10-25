@@ -1687,8 +1687,34 @@ def _reaches_fix(name, their=()) -> str:
             % (who, f", or name {named}, which their= holds" if named else ""))
 
 
+# A referral ask to someone who has not engaged compresses the three stages into one.
+ASK_TOO_SOON = ("a referral ask goes only to someone who has answered, spoken with the "
+                "candidate or offered help, and nothing from {who} says they have: a first "
+                "note asking for a conversation comes first (compose.first_note()). If they "
+                "did answer or you spoke, log it (state.py received, or the call), then ask")
+
+
+def engaged(thread) -> bool:
+    """Has the person a referral ask is for engaged: a message of theirs or a call held in
+    their thread, or, given their contact_id, a row that says they replied before the log
+    began (throttle.RESPONDED)? `thread` is their contact_id or their message rows."""
+    import state
+    import throttle
+    if isinstance(thread, str):
+        cid = thread.strip()
+        book = person.state("network_contacts.csv")
+        log = person.state("network_threads.csv")
+        row = state.already_contacted(state.load_contacts(book), contact_id=cid) \
+            if cid and os.path.exists(book) else None
+        if row is not None and str(row.get("status") or "").strip() in throttle.RESPONDED:
+            return True
+        thread = state.threads_for(state.load_threads(log), cid) \
+            if cid and os.path.exists(log) else []
+    return any(state.said_something(r) or state.call_held(r) for r in thread or ())
+
+
 def referral_ask(name, context, role, link, close=None, work_auth=None,
-                 seniority="peer") -> str:
+                 seniority="peer", thread=None) -> str:
     """The ask the first note exists to earn, sent once they have engaged.
 
     Only inside a live thread: after a reply, a call or an offer of help. Asked
@@ -1699,9 +1725,18 @@ def referral_ask(name, context, role, link, close=None, work_auth=None,
 
     `context` is what they already did or said ("thanks again for the chat on
     Tuesday"), one line, no restating. `role` names the role and employer;
-    `link` is the posting.
+    `link` is the posting. `thread` is who it goes to: their contact_id, or their
+    message rows. Raises ValueError without it, or when nothing in it is theirs
+    (`engaged`): the three stages were "never compressed into one" in the skill and
+    nowhere in code, and an ask to someone never written to composed and passed
+    validate() with nothing said (networking audit, 2026-10-25).
     """
     _no_reaction_waiting("referral ask")
+    if thread is None:
+        raise ValueError("referral_ask needs thread=: their contact_id, or their messages, so "
+                         "it goes only to someone who has engaged")
+    if not engaged(thread):
+        raise ValueError(ASK_TOO_SOON.format(who=name or "them"))
     for what, value in (("context", context), ("role", role), ("link", link)):
         if not str(value or "").strip():
             raise ValueError(f"referral_ask needs {what}")
@@ -2403,6 +2438,8 @@ def validate(message, kind, name=None, seniority="peer", employers=(),
     out = list(tone.check(text, recipient_seniority=seniority, name=name,
                           live_thread=(k in ("reply", "referral_ask")),
                           others=book_names(contact) if contact else ()))
+    if k == "referral_ask" and contact and not engaged(contact):
+        out.append(tone.Violation("referral_ask_too_soon", ASK_TOO_SOON.format(who=name or contact)))
     if k in FIRST_MESSAGE_KINDS:
         out += first_note_findings(text, recruiter=recruiter, reader=rtype, work_auth=work_auth,
                                    employers=tuple(employers or ()) + (_reader_company(contact),))
