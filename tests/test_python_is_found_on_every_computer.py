@@ -15,6 +15,7 @@ import subprocess
 import sys
 
 import pytest
+from pathlib import Path
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PY_SH = os.path.join(ROOT, "tools", "py.sh")
@@ -42,9 +43,20 @@ def _script(path, text):
     return path
 
 
+def _alone(tmp_path):
+    """py.sh in a folder of its own: the checkout's own .venv, made wherever env_check
+    --fix has run (a CI runner, a person's computer), comes first by design, so a test of
+    the stand-ins must not see it."""
+    tools = tmp_path / "alone" / "tools"
+    tools.mkdir(parents=True)
+    shutil.copy(PY_SH, tools / "py.sh")
+    return str(tools / "py.sh")
+
+
 def _run(args, path, cwd=ROOT, stdin=None, env=None):
     e = {"PATH": str(path), "HOME": os.environ.get("HOME", "/tmp"), **(env or {})}
-    return subprocess.run([shutil.which("sh"), PY_SH, *args], cwd=cwd, env=e, input=stdin,
+    sh = _alone(Path(str(path)).parent)
+    return subprocess.run([shutil.which("sh"), sh, *args], cwd=cwd, env=e, input=stdin,
                           capture_output=True, text=True, timeout=60)
 
 
@@ -134,7 +146,7 @@ def test_the_shipped_hook_runs_where_python3_is_a_store_stand_in(tmp_path, event
     project = tmp_path / "My Job Search"
     shutil.copytree(ROOT, project, ignore=shutil.ignore_patterns(
         ".git", "__pycache__", ".pytest_cache", "documents", "cv", "cover_letters", "texmf",
-        "node_modules", ".claude"))
+        "node_modules", ".claude", ".venv", "venv"))
     b = _bin(tmp_path)
     _script(b / "python3", STORE_STUB)
     log = tmp_path / "ran.txt"
