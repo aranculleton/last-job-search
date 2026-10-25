@@ -143,7 +143,7 @@ STILL_AUTOMATIC = (
     "Thanks for your message. I'm out of the office until 1 Nov, with no access to email.",
     "Hello there, I am out of the office until Monday. For urgent queries please contact Bo "
     "Venn, who is covering for me.",
-    "Dear All, I am on annual leave until 2 December. I will reply on my return.",
+    "Hello Team, I am on annual leave until 2 December. I will reply on my return.",
     "Thank you for your message. I'm currently on vacation until Nov 3 with intermittent "
     "access to email.",
 )
