@@ -179,6 +179,11 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str,
         (meta.get("warm_route_note") or ""),
         (meta.get("outreach_pending_note") or ""),
         (f"Req {str(draft['req_id']).strip()}." if str(draft.get("req_id") or "").strip() else ""),
+        # The link as checked when it was staged (tools/apply_link.py): the employer's own
+        # listing where it differs from where the posting was found, or that it had closed.
+        (f"Apply at {meta['apply_url']} ({meta.get('link_check', '')})."
+         if meta.get("apply_url") and meta.get("apply_url") != meta.get("url") else
+         f"Link {meta['link_check']}." if meta.get("link_status") == "closed" else ""),
         made_for_note(who) if who else "",
         (f"Letter addressed to {str(draft['contact_person']).strip()}."
          if who and str(draft.get("contact_person") or "").strip() else ""),
