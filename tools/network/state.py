@@ -941,11 +941,39 @@ _TEMPLATE = re.compile(
 # for later counts ("I'll pass your profile to our recruiter"): out of the office with a
 # promise in it was read as an automatic reply, so nobody thanked the person advocating
 # (2026-10-21).
+#
+# So does an answer to what was asked, beside a mention of leave (networking audit,
+# 2026-10-25): "Thanks Morgan, I'm on parental leave until January, so not the best person
+# to ask. Try Sam Reid" was read as an out-of-office, the reply was hidden and a nudge was
+# offered. A template knows neither the reader's name nor what they asked, so these count:
+# a greeting by a first name, a no ("isn't hiring", "not interested"), a person to try by
+# name, and a promise about what was sent ("I'll take a look at your profile"). A template's
+# own redirect ("for urgent matters please contact ...") and its promise to answer email on
+# return ("I will respond when I am back") are not among them.
+_NAME = r"(?-i:[A-Z][a-z]+(?:[ -][A-Z][a-z'-]+)?)"
+_NOT_A_NAME = (r"(?!(?-i:Sender|Sir|Madam|Customer|Colleagues?|All|Team|Everyone|There|Valued|"
+               r"Recipient|Thanks?|Thank|Hiring|Candidate|Friend|Again|Later|Back)\b)")
 _ENGAGED = re.compile(
     r"\?|\b(?:happy|glad|keen|love|delighted) to\b|\blet'?s\b|\bworks for me\b|\bsounds good\b"
     r"|\bsend (?:me|over|it|your)\b|\bi(?:'ve| have) (?:passed|shared|forwarded|sent)\b"
     r"|\bi(?:'ll| will| can| could)(?: happily| gladly| certainly| definitely)? (?:pass|forward|"
-    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b", re.I)
+    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b"
+    # a greeting by name, the way a person opens and a template cannot
+    r"|\A\W*(?:hi|hey|hello|dear|thanks|thank you|cheers)[ ,!-]+" + _NOT_A_NAME + _NAME + r"\b"
+    # a no
+    r"|\b(?:(?:is|are|am)n'?t|(?:is|are|am)\s+not|not)\s+(?:currently\s+|really\s+|actively\s+)?"
+    r"(?:hiring|recruiting|interested)\b|\bnot the (?:best|right) (?:person|contact|one)\b"
+    r"|\bno thanks\b|\bno,? thank you\b|\b(?:can'?t|cannot|won'?t be able to) help\b"
+    r"|\b(?:no|nothing)\s+(?:open|available|suitable|coming up|roles?|openings?|vacanc(?:y|ies)|"
+    r"positions?|headcount)\b|\bgood luck\b"
+    # a person to try, by name
+    r"|\btry\s+" + _NOT_A_NAME + _NAME + r"\b|\b(?:speak|talk|chat)\s+(?:to|with)\s+" + _NOT_A_NAME
+    + _NAME + r"\b|" + _NAME + r"\s+(?:runs|leads|heads|manages|handles|owns|does|is (?:running|"
+    r"leading|handling|doing|in charge of))\s+(?:the\s+|our\s+|their\s+)?(?:hiring|recruit\w*)\b"
+    r"|\b(?:she|he|they)(?:'s| is| are|'re)\s+(?:the one\s+)?(?:hiring|recruiting)\b"
+    # a promise about what was sent, not about answering email
+    r"|\b(?:take|have) a (?:look|read)\b|\blook (?:at|over|through) your\b"
+    r"|\bi(?:'ll| will) (?:think about|consider|keep (?:you|an eye))\b", re.I)
 # Gone: the address no longer reaches them. Third person only, the way the template
 # writes it, and about a person: a name, a pronoun or "this person" as the subject. "I am
 # no longer at Acme" is them, writing, and reply.py reads that; "our team is no longer part
@@ -1097,12 +1125,26 @@ def _auto_reply(body, subject, sent_on):
     return None
 
 
+@functools.lru_cache(maxsize=1)
+def _person_scenarios() -> frozenset:
+    """The scenarios /reply reads a person's message as (reply.SCENARIOS), automatic replies
+    left out. A row logged as one of them was read as a person, and that wins over its
+    words: "referral_offered" on a message that also mentions leave is a referral offered."""
+    try:
+        import reply
+    except ImportError:  # the reader is beside this file; never without it in the app
+        return frozenset()
+    return frozenset(reply.SCENARIOS) - AUTO_REPLY_SCENARIOS - {"gone_quiet"}
+
+
 def is_auto_reply(row) -> bool:
     """Is this inbound row an automatic reply (an out-of-office, a "no longer here") and not them?"""
     if _direction(row) != "in":
         return False
     if _scenario(row) in AUTO_REPLY_SCENARIOS:
         return True
+    if _scenario(row) in _person_scenarios():
+        return False
     return auto_reply(row.get("full_text") or row.get("summary"), row.get("subject"),
                       row.get("date")) is not None
 
