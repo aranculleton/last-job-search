@@ -38,6 +38,7 @@ import argparse
 import json
 import os
 import sys
+from collections.abc import Mapping
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -77,6 +78,33 @@ def expectations(stems) -> dict[str, dict]:
     """{stem: what must hold} for the fixtures there are, from their names."""
     return {stem: want for stem in stems for prefix, want in EXPECTED_BY_NAME.items()
             if stem.startswith(prefix)}
+
+
+class _HardCuts(Mapping):
+    """The hard cuts of the corpus there is: {stem: what must hold} for its `cut__` postings,
+    read each time it is looked at, so a corpus changed since import is the one read."""
+
+    def _now(self) -> dict[str, dict]:
+        stems = sorted(n[:-4] for n in os.listdir(CORPUS) if n.endswith(".txt")) \
+            if os.path.isdir(CORPUS) else []
+        return {s: w for s, w in expectations(stems).items() if s.startswith("cut__")}
+
+    def __getitem__(self, stem):
+        return self._now()[stem]
+
+    def __iter__(self):
+        return iter(self._now())
+
+    def __len__(self):
+        return len(self._now())
+
+
+# Kept for the people whose own tests use it (profile/tests): the name this module's
+# expectations had until 2026-10-25, when it was four stems of one person's corpus written
+# out, all four hard cuts. It now reads the cuts of whatever corpus there is; expectations()
+# and EXPECTED_BY_NAME are what the check reads, `pass__` postings included. A public name
+# stays while a test may.
+EXPECTATIONS: Mapping[str, dict] = _HardCuts()
 
 
 def _title_and_location(text: str) -> tuple[str, str]:
