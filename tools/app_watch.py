@@ -133,7 +133,7 @@ def _files_findings(files: dict[str, str], tokens) -> list[str]:
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "wb") as fh:
                 fh.write(data)
-        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True)
+        return leak_scan.scan(d, tokens, leak_scan.load_allow(None), show=True, export=True)
 
 
 def _text_findings(label: str, text: str, tokens) -> list[str]:

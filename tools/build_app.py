@@ -594,7 +594,8 @@ def _carried(sha: str, entries: list[str], root: str = ROOT) -> list[str]:
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, "wb") as fh:
                 fh.write(data)
-        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None))
+        found = leak_scan.scan(d, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
+                               export=True)
     hit = {int(m.group(1)) for f in found for m in [_FOUND.search(f)] if m}
     return [e for n, e in enumerate(entries, 1) if n in hit]
 
@@ -605,8 +606,10 @@ def check(tree: str, when: dict, show: bool = False, ref: str = RELEASED,
     for each entry set aside). A finding on a set-aside entry is not one."""
     import leak_scan
     entries = list(when)
+    # The tree is an export of what is committed: a committed venv/ or node_modules/ is
+    # read too, as CI's --git scan reads it.
     findings = leak_scan.scan(tree, leak_scan.tokens_from(entries), leak_scan.load_allow(None),
-                              show=show)
+                              show=show, export=True)
     return without_aside(findings, entries, when, ref, root)
 
 
