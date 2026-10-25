@@ -258,7 +258,7 @@ def runtime() -> tuple:
     FileNotFoundError, read as "left to the scrape", and the round ended "thin market"
     (exit 2) having searched nothing. The build is plain JavaScript for Node, and Bun runs
     it as it is (`bun run dist/cli.mjs ...`), so either will do. Always two words, so the
-    CLI's path is the third word of every command whichever runs it. Raises NoRuntime,
+    CLI's path is the third word of every command whichever runs it. It raises NoRuntime,
     with what to run, when there is neither; a caller says so rather than calling it a
     thin market."""
     try:

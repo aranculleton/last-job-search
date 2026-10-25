@@ -59,9 +59,9 @@ _PLAIN = str.maketrans({"ø": "o", "Ø": "O", "ß": "ss", "æ": "ae", "Æ": "AE"
 
 
 def fold(text: str) -> str:
-    """The plain letters of a name: Société Générale is Societe Generale, Ørsted is
-    Orsted, Straße is Strasse. A file name keeps only ASCII letters, and dropping the
-    accented ones gave `SocitGnrale`, `Nestl` and `rsted`."""
+    """The plain letters of a name: Brévanne is Brevanne, Nørdvik is Nordvik, Weißfeld is
+    Weissfeld. A file name keeps only ASCII letters, and dropping the accented ones gave
+    `Brvanne`, `Nrdvik` and `Weifeld`."""
     text = unicodedata.normalize("NFKD", str(text or "").translate(_PLAIN))
     return "".join(c for c in text if not unicodedata.combining(c))
 

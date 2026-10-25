@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Install what this computer is missing, into the person's own folders, with no password.
 
-    python3 tools/env_check.py --fix                  everything missing here
+    python3 tools/env_check.py --fix                  everything missing here (`all`)
     python3 tools/env_check.py --fix latex gh         only those
                                                       (python, packages, runtime, gh, git, latex)
     python3 tools/env_check.py --fix --plan           what it would do, doing nothing
@@ -21,7 +21,7 @@ anything outside the person's own folders and this repo:
   cannot be given them without a password gets TinyTeX beside it, found first;
 - Bun, which runs the job-board searches where there is no Node, from its own release;
 - GitHub's command line, from its release archive;
-- on Windows, Git (Git for Windows' PortableGit, which needs no administrator) and a
+- on Windows, Git (PortableGit, the portable build of Git for Windows, which needs no administrator) and a
   `python3` command where only `python` works.
 
 Each install puts its folder on PATH for new shells (a marked block in the shell's
@@ -31,7 +31,6 @@ line tools on a Mac with no Git, and signing in to GitHub.
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import platform
@@ -121,7 +120,7 @@ def _works(cmd) -> bool:
 
 def download(url: str, dest: str) -> None:
     """Fetch `url` to `dest`, with curl where it is (it uses the computer's own
-    certificates; python.org's Python on a Mac has none until its "Install Certificates"
+    certificates; python.org's Python on a Mac has none until its install-certificates
     step), else Python's own. Raises Failed with a plain line."""
     curl = shutil.which("curl")
     if curl:
@@ -686,9 +685,11 @@ def plan() -> list[tuple[str, str]]:
 
 def main(argv=None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
-    if argv[:1] in (["-h"], ["--help"]):
-        print(__doc__.strip().split("\n\n")[1])
-        return 0
+    if not argv or argv[:1] in (["-h"], ["--help"]):
+        # Never an install from a bare command: `all` says everything, on purpose.
+        print(f"usage: python3 tools/env_check.py --fix [all | {' '.join(WHAT)}] [--plan]\n\n"
+              + __doc__.strip().split("\n\n")[1])
+        return 0 if argv else 2
     if "--plan" in argv:
         todo = plan()
         for what, how in todo:
@@ -696,7 +697,7 @@ def main(argv=None) -> int:
         if not todo:
             _say("Nothing is missing here.")
         return 0
-    asked = [a for a in argv if not a.startswith("-")]
+    asked = [a for a in argv if not a.startswith("-") and a != "all"]
     unknown = [a for a in asked if a not in FIXES]
     if unknown:
         print(f"env_check --fix: no such thing as {', '.join(unknown)}; "

@@ -225,7 +225,8 @@ def test_the_plan_and_the_run_say_one_plain_line_each(monkeypatch, capsys):
         monkeypatch.setitem(I.FIXES, what, (I.FIXES[what][0], lambda: "already here"))
     monkeypatch.setitem(I.FIXES, "gh", ("GitHub's command line", lambda: (
         "already here; signing in is yours, once: I start it")))
-    assert I.main([]) == 0
+    assert I.main([]) == 2 and "usage:" in capsys.readouterr().out    # never from a bare command
+    assert I.main(["all"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert out[-1] == "Done. Yours, once: GitHub sign-in."
     assert all(": " in line for line in out[:-1])
@@ -241,8 +242,9 @@ def test_the_plan_and_the_run_say_one_plain_line_each(monkeypatch, capsys):
 def test_env_check_fix_is_this_on_a_computer_and_the_setup_script_in_the_cloud(monkeypatch):
     import env_check
     monkeypatch.setattr(env_check, "CLOUD", False)
-    monkeypatch.setattr(I, "main", lambda argv: 7 if argv == ["latex"] else 0)
+    monkeypatch.setattr(I, "main", lambda argv: {("latex",): 7, ("all",): 5}.get(tuple(argv), 0))
     assert env_check.main(["--fix", "latex"]) == 7
+    assert env_check.main(["--fix"]) == 5
     monkeypatch.setattr(env_check, "CLOUD", True)
     ran = []
     monkeypatch.setattr(env_check.subprocess, "call", lambda cmd: ran.append(cmd) or 0)

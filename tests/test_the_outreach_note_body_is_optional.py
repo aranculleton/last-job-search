@@ -11,6 +11,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -66,7 +67,8 @@ def test_a_body_the_outreach_step_writes_is_merged_and_checked_whole(tmp_path):
 
 
 def test_the_drafter_is_not_asked_for_a_body_and_the_step_runs_only_when_wanted():
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         pytest.skip("node is not installed")
     probe = ("const src = require('fs').readFileSync(process.argv[1], 'utf8')"

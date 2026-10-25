@@ -180,7 +180,7 @@ def main(argv=None) -> int:
             _say(f"{a} UNREADABLE PDF ({exc})")
             fail = 1
             continue
-        r_lines, c_lines = rt_text.splitlines(), ct_text.splitlines()
+        r_lines = rt_text.splitlines()
         flat = re.sub(" +", " ", rt_text.replace("\n", " "))
         p = ""
         rp, cp = pdftext.pages(r_pdf), pdftext.pages(c_pdf)

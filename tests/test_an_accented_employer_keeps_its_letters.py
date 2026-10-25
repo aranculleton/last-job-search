@@ -1,8 +1,8 @@
 """An employer's name with accents keeps its letters in a file name, and Acme and ACME
 are one name, as they are one file on a Mac or Windows.
 
-doc_name dropped every letter outside ASCII, so Société Générale's documents were
-`<Name>_Resume_SocitGnrale`, Nestlé's `Nestl` and Ørsted's `rsted` (2026-10-25). The
+doc_name dropped every letter outside ASCII, so an employer called Brévanne had its
+documents named `<Name>_Resume_Brvanne`, and Nørdvik's `Nrdvik` (2026-10-25). The
 batch check compared names case by case, and two roles named Acme and ACME wrote one
 file. An application made under an old name keeps it: its files and tracker row carry
 it. The people and employers here are invented or the plain examples above.
@@ -21,11 +21,11 @@ import doc_name  # noqa: E402
 
 
 @pytest.mark.parametrize("company, want", [
-    ("Société Générale", "Societe"),            # two words over the length cap: the first
-    ("Nestlé", "Nestle"),
-    ("Ørsted", "Orsted"),
-    ("Brandt Straße Logistik", "BrandtStrasse"),
-    ("Łódź Freight", "LodzFreight"),
+    ("Société de Brévanne", "Societe"),          # over the length cap: the first word
+    ("Brévanne", "Brevanne"),
+    ("Nørdvik", "Nordvik"),
+    ("Weißfeld", "Weissfeld"),
+    ("Łąkowo", "Lakowo"),
     ("Acme Ltd", "Acme"),
 ])
 def test_accented_letters_keep_their_base_letter(company, want):
@@ -35,12 +35,12 @@ def test_accented_letters_keep_their_base_letter(company, want):
 def test_an_application_already_made_under_the_old_name_keeps_it(tmp_path, monkeypatch):
     import render_application as R
     monkeypatch.setattr(doc_name, "tracker_rows", lambda: [
-        {"company": "Nestlé", "role": "Analyst", "status": "applied",
-         "cv_file": f"cv/{doc_name.docpaths.resume_stem('Nestl')}.tex"}])
-    assert R.final_abbr({"company": "Nestlé", "role": "Analyst"}) == "Nestl"
+        {"company": "Brévanne", "role": "Analyst", "status": "applied",
+         "cv_file": f"cv/{doc_name.docpaths.resume_stem('Brvanne')}.tex"}])
+    assert R.final_abbr({"company": "Brévanne", "role": "Analyst"}) == "Brvanne"
     monkeypatch.setattr(doc_name, "tracker_rows", lambda: [])
     monkeypatch.setattr(R.os.path, "exists", lambda p: False)
-    assert R.final_abbr({"company": "Nestlé", "role": "Analyst"}) == "Nestle"
+    assert R.final_abbr({"company": "Brévanne", "role": "Analyst"}) == "Brevanne"
 
 
 def test_two_names_that_differ_only_in_case_are_one_file(monkeypatch):

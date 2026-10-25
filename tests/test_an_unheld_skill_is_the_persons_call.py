@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -126,7 +127,8 @@ def test_the_interview_pack_flags_what_they_said_yes_to():
 def test_the_workflow_will_not_draft_a_pick_still_waiting():
     src = open(os.path.join(ROOT, ".claude", "workflows", "draft-applications.js"),
                encoding="utf-8").read()
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         assert "Ask the person first" in src and "skills_yes" in src
         return

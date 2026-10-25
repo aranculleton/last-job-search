@@ -245,7 +245,7 @@ must never be lost: status is derived from it, and without it every contact reve
 
 ## Environment notes for cloud sessions
 
-- **`./tools/setup_env.sh` sets the container up**: LaTeX, Poppler and the Python side, one
+- **`./tools/setup_env.sh` sets the container up**: LaTeX and the Python side, one
   package at a time, and a no-op when they are present. The line in its header, pasted into
   the cloud environment's setup script (where: `python3 tools/claude_surfaces.py say
   cloud-environment`), caches it. It is not a SessionStart hook, on purpose:

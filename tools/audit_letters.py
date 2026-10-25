@@ -5,7 +5,7 @@ closing are. Rendering checks read the compiled PDF text, which is what the
 reader sees. Each rule is one from 03-writing-style.md or
 06-cover-letter-templates.md that a letter in this repo has actually broken.
 """
-import re, subprocess, sys, os
+import re, sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import render_application as R
 from fit_to_page import body_words, load

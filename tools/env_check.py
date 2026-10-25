@@ -270,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
             # A cloud container is root and has apt: the one script, as its setup line runs.
             return subprocess.call(["bash", os.path.join(ROOT, "tools", "setup_env.sh")])
         import installs
-        return installs.main(argv[1:])
+        return installs.main(argv[1:] or ["all"])
     if argv[:1] == ["--allowlist"]:
         print("\n".join(allowlist()))
         return 0

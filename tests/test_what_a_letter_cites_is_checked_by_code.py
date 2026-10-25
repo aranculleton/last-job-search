@@ -24,6 +24,7 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import subprocess
 import sys
 
@@ -192,7 +193,8 @@ def test_a_draft_written_against_other_research_is_refused():
 
 
 def test_the_workflow_hashes_the_research_the_way_the_audit_does():
-    node = subprocess.run(["node", "--version"], capture_output=True)
+    node = subprocess.run(["node", "--version"], capture_output=True) if shutil.which("node") \
+        else subprocess.CompletedProcess(["node"], 127)
     if node.returncode != 0:
         pytest.skip("node is not installed")
     probe = ("const src = require('fs').readFileSync(process.argv[1], 'utf8')"

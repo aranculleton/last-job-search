@@ -5,7 +5,8 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File computer_setup.ps1
 #
 # It installs only what is missing, each into the person's own folders:
-#   Git      Git for Windows' PortableGit, into %LOCALAPPDATA%\Programs\PortableGit, put on
+#   Git      PortableGit, the portable build of Git for Windows, into
+#            %LOCALAPPDATA%\Programs\PortableGit, put on
 #            the user PATH, and Claude Code told where its bash.exe is
 #            (CLAUDE_CODE_GIT_BASH_PATH in %USERPROFILE%\.claude\settings.json, the setting
 #            code.claude.com/docs/en/setup gives for a Git Bash it cannot find).
@@ -73,7 +74,7 @@ function Set-ClaudeEnv([string]$name, [string]$value) {
     if ($data.env.PSObject.Properties.Name -contains $name) { $data.env.$name = $value }
     else { $data.env | Add-Member -NotePropertyName $name -NotePropertyValue $value }
     # UTF-8 without a byte-order mark, which every JSON reader accepts.
-    [IO.File]::WriteAllText($path, ($data | ConvertTo-Json -Depth 20), (New-Object Text.UTF8Encoding $false))
+    [IO.File]::WriteAllText($path, ($data | ConvertTo-Json -Depth 20), ([Text.UTF8Encoding]::new($false)))
     return $true
 }
 
@@ -181,5 +182,5 @@ $g = Get-Command git -ErrorAction SilentlyContinue
 if ($g) { Write-Output ('git: ' + $g.Source) }
 if ($py) { Write-Output ('python: ' + $py) }
 if ($ghExe) { Write-Output ('gh: ' + $ghExe) }
-if ($Restart) { Write-Output 'restart: the Claude app, once, so new chats use Git Bash' }
+if ($Restart) { Write-Output 'restart: the Claude app, once, so new chats use the Git it installed' }
 exit 0

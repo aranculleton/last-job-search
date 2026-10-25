@@ -26,7 +26,6 @@ installs; the people, employers and postings are the example person's, all inven
 """
 from __future__ import annotations
 
-import io
 import json
 import os
 import shutil
@@ -100,9 +99,15 @@ def step_install() -> None:
     print(f"info: Poppler's pdftotext here: {shutil.which('pdftotext') or 'no (not needed)'}")
 
 
+def _tests(name: str):
+    """A module of the app's own test suite (tests/ is on sys.path above), loaded by name:
+    the example draft and the offline round live there, and are not packages to install."""
+    import importlib
+    return importlib.import_module(name)
+
+
 def _draft() -> dict:
-    from test_the_resume_says_what_the_draft_put_on_it import DRAFT
-    return json.loads(json.dumps(DRAFT))
+    return json.loads(json.dumps(_tests("test_the_resume_says_what_the_draft_put_on_it").DRAFT))
 
 
 def step_documents() -> None:
@@ -127,7 +132,7 @@ def step_round() -> None:
     os.environ.update(LJS_RESCREEN="off", LJS_PROFILE=EXAMPLE)
     import person
     person.reset()
-    import round_fixture as F
+    F = _tests("round_fixture")
     work = tempfile.mkdtemp(prefix="ljs_round_")
     began = time.monotonic()
     out = os.path.join(work, "scrape")
@@ -353,7 +358,7 @@ ALL = ("install", "documents", "round", "interview", "networking")
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help"):
-        print(__doc__.strip())
+        print("usage: python3 tools/platform_check.py <step>... | all\n\n" + __doc__.strip())
         return 0 if argv else 2
     names = list(ALL) if argv == ["all"] else argv
     unknown = [n for n in names if n not in STEPS]
@@ -365,7 +370,7 @@ def main(argv=None) -> int:
         began = time.monotonic()
         try:
             STEPS[name]()
-        except Exception as exc:  # noqa: BLE001  a step that crashes is a failed step
+        except Exception:  # noqa: BLE001  a step that crashes is a failed step
             import traceback
             check(f"{name}: ran to the end", False, traceback.format_exc())
         print(f"time: {name} {time.monotonic() - began:.1f} s", flush=True)

@@ -19,7 +19,7 @@ import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import local_path  # noqa: E402  pdftotext where Homebrew keeps it, on a Mac's bare PATH
+import local_path  # noqa: E402  the repo's .venv, where env_check --fix puts pypdf
 
 local_path.extend()
 from pathlib import Path
@@ -50,10 +50,9 @@ def run_tool(command):
         ).stdout
     except FileNotFoundError as exc:
         raise VerificationError(
-            f"required command '{command[0]}' was not found. "
-            "Install pypdf (`pip install pypdf`) or poppler-utils "
-            "(macOS: brew install poppler, Debian/Ubuntu: apt install poppler-utils, "
-            "Windows: winget install oschwartz10612.Poppler)"
+            f"required command '{command[0]}' was not found, and pypdf, which reads the "
+            "PDF without it, is not installed either: `python3 tools/env_check.py --fix` "
+            "installs pypdf (no password)"
         ) from exc
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or "").strip() or (exc.stdout or "").strip()
