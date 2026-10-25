@@ -85,7 +85,23 @@ def test_where_pypdf_cannot_run_poppler_still_reads(tmp_path, monkeypatch):
     which = pdftext.shutil.which
     monkeypatch.setattr(pdftext.shutil, "which", lambda n, *a, **k: None if n == "pdfinfo"
                         else which(n, *a, **k))
-    assert pdftext.pages(_pdf(tmp_path / "two.pdf", pages=2)) == 2 and pdftext.pages(pdf) == 1
+    two = _pdf(tmp_path / "two.pdf", pages=2)
+    got = pdftext.pages(two)
+    if got != 2:
+        # What pdftotext itself said of both files, and whether a pdfinfo counted the first,
+        # so a failure on a computer this cannot be run on says why (on Windows, in cp1252
+        # under a folder named with "ë", it came back None, 2026-10-25).
+        exe = which("pdftotext")
+        said = []
+        for f in (pdf, two):
+            ran = subprocess.run([exe, "-layout", "-enc", "UTF-8", f, "-"], capture_output=True)
+            feeds = ran.stdout.count(b"\f")         # outside the f-string: 3.9 allows no \ there
+            err = ran.stderr.decode("utf-8", "replace")[:300]
+            said.append(f"{os.path.basename(f)}: exit {ran.returncode}, {feeds} form feed(s), "
+                        f"{len(ran.stdout)} bytes, stderr {err!r}")
+        raise AssertionError(f"pages {got!r} from {exe} (pdfinfo: {which('pdfinfo')}); "
+                             + "; ".join(said))
+    assert pdftext.pages(pdf) == 1
 
 
 def test_the_page_checks_use_it(tmp_path, no_poppler):
