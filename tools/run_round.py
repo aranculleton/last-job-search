@@ -736,6 +736,14 @@ def main():
     if summary:
         print(f"shortlist summary: {os.path.relpath(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")
+    # What the round filtered out and why, kept every round before the prune deletes the
+    # stage files that say it (tools/filtered.py; `filtered.py back` brings one back).
+    import filtered
+    left_out = filtered.write(a.out, a.summary_dir or person.state(SUMMARY_DIR),
+                              os.path.basename(os.path.abspath(a.out)))
+    if left_out:
+        print(f"filtered out: {os.path.relpath(left_out, ROOT)} (each with its reason; "
+              "tools/filtered.py back brings one back)")
     # Read before the prune below deletes 00_scrape/, or a portal that went
     # quiet is never reported and the MISSED message blames the market.
     down = _portals_down(a.out)
