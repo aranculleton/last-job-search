@@ -504,6 +504,8 @@ contacted. Load the skill before any outreach. What a session needs before it do
   Premium (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard: `compose.py` raises, never truncates.
 - No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays on**:
   only the person switches it off, never a session.
+- **A chat on the person's computer** starts with the networking skill's "On a new computer"
+  step (`reading.py new-computer`): LinkedIn signed in, then its download, unprompted.
 - Never claim anything not in `profile/01-candidate-profile.md`.
 - **A LinkedIn download the person gives is taken first**, before anything is written from it:
   `python3 tools/network/export.py take <the ZIP or its folder>` saves it and imports its

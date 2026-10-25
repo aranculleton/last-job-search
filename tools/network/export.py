@@ -40,6 +40,8 @@ What it gives:
     python3 tools/network/export.py take --find                     # the newest one on this computer
     python3 tools/network/export.py files [<zip|folder>]          # what it holds, what is missing
     python3 tools/network/export.py due                           # the brief's fortnightly ask
+    python3 tools/network/export.py status [--tools browser]      # the next step, from what is recorded
+    python3 tools/network/export.py requested [--date YYYY-MM-DD] # it was asked for on LinkedIn
     python3 tools/network/export.py save <zip|csv>... [--only connections|history|profile]
     python3 tools/network/export.py history [--from <zip|folder>] [--apply]
     python3 tools/network/export.py pending [--from <zip|folder>] [--days N] [--all]
@@ -490,6 +492,32 @@ def record_path() -> str:
     return person.state("documents", "network", "linkedin_export.json")
 
 
+def load_record() -> dict:
+    """What is recorded about the download: `taken_on` (with what it held), `requested_on`.
+    {} when nothing is. The file sits beside the message log, so it is committed, and it
+    merges key by key when two chats changed it (tools/merge_state.py, .gitattributes)."""
+    import json
+    try:
+        with open(record_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def save_record(updates: dict) -> dict:
+    """The record with `updates` written over it, every other key kept: a download taken
+    keeps the day it was asked for, and a request keeps the last download's day."""
+    import json
+    got = dict(load_record(), **updates)
+    path = record_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(got, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return got
+
+
 def newest(tables) -> dict:
     """{kind: the newest day a row of that file carries, ISO} for the tables given."""
     out = {}
@@ -533,6 +561,11 @@ def due(today, threads=None) -> str:
     taken, _how = last_taken(threads)
     if not EXPORT_EVERY_DAYS or taken is None or (today - taken).days < EXPORT_EVERY_DAYS:
         return ""
+    asked = st.as_date(load_record().get("requested_on"))
+    if asked and asked > taken and (today - asked).days <= REQUEST_WAIT_DAYS:
+        # Asked for already, by the chat on their computer: it picks the download up there.
+        return (f"Your new LinkedIn download was asked for on {asked.isoformat()}; the chat "
+                "on your computer picks it up once it is ready.")
     return (f"Your LinkedIn download is {(today - taken).days} days old (taken "
             f"{taken.isoformat()}). A new one shows who accepted your requests, who replied "
             "and which requests still wait: ask for it with the steps "
@@ -540,14 +573,101 @@ def due(today, threads=None) -> str:
 
 
 def _record(tables, today) -> None:
-    import json
-    path = record_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    got = {"taken_on": today.isoformat(), "newest": newest(tables),
-           "rows": {t["kind"]: len(t["rows"]) for t in tables if t.get("found")}}
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(got, fh, indent=1, sort_keys=True)
-        fh.write("\n")
+    save_record({"taken_on": today.isoformat(), "newest": newest(tables),
+                 "rows": {t["kind"]: len(t["rows"]) for t in tables if t.get("found")}})
+
+
+# ------------------------------------------------------------- the next step, from the record
+
+# LinkedIn's link to the download arrives anything from minutes to a day after it is asked
+# for, and works for 72 hours (claude_surfaces: linkedin-export-files). Asked for longer ago
+# than this with nothing taken since, it is asked for again.
+REQUEST_WAIT_DAYS = 3
+BROWSERS = ("browser", "chrome", "enable")
+# What the person is told when it has been asked for: one line, nothing to do.
+REQUESTED_SAY = ("I've asked LinkedIn for a copy of your data. It takes a while to prepare, "
+                 "and I'll pick it up when it's ready.")
+
+
+def _found_since(taken, found=None) -> str:
+    """The newest download on this computer made after the last one was taken, or ""."""
+    paths = find_exports() if found is None else list(found)
+    for p in paths:
+        try:
+            made = datetime.datetime.fromtimestamp(os.path.getmtime(p)).date()
+        except OSError:
+            continue
+        if taken is None or made > taken:
+            return p
+    return ""
+
+
+def status(today=None, tools=(), found=None, threads=None) -> dict:
+    """The next step for the LinkedIn download, from what is recorded, so no chat has to
+    remember it: {"state", "line", "do", "path", "taken_on", "requested_on", "due_on"}.
+
+    `take`: a download on this computer is newer than the last one taken (one the browser
+    fetched, or one the person saved themselves). `fresh`: the last one is younger than
+    EXPORT_EVERY_DAYS (or the person's 0, never asked again). `waiting`: asked for within
+    REQUEST_WAIT_DAYS and not here yet. `request`: none taken, or the last is due, and none
+    asked for. `tools` is the chat's browser tools (browser, chrome, enable): with one,
+    Claude does the step in that browser; without, the person is given the steps once.
+    `found` stands for the downloads find_exports() would see."""
+    st = _state()
+    today = st._need_date(today or datetime.date.today().isoformat(), "today")
+    have = {str(t).strip().lower() for t in tools or ()} & set(BROWSERS)
+    taken, _how = last_taken(threads)
+    rec = load_record()
+    asked = st.as_date(rec.get("requested_on"))
+    if asked and taken and asked <= taken:
+        asked = None                               # that request was the one taken since
+    due_on = (taken + datetime.timedelta(days=EXPORT_EVERY_DAYS)) if taken and \
+        EXPORT_EVERY_DAYS else None
+    out = {"taken_on": taken.isoformat() if taken else "", "path": "",
+           "requested_on": asked.isoformat() if asked else "",
+           "due_on": due_on.isoformat() if due_on else ""}
+    path = _found_since(taken, found)
+    if path:
+        return dict(out, state="take", path=path,
+                    line=f"take: {path}",
+                    do=f"python3 tools/network/export.py take \"{path}\": it saves the download "
+                       "and imports its history, and says what changed")
+    if taken and (not EXPORT_EVERY_DAYS or today < due_on):
+        return dict(out, state="fresh",
+                    line=f"fresh: taken {taken.isoformat()}"
+                         + (f"; the next is due {due_on.isoformat()}" if due_on else ""),
+                    do="nothing")
+    if asked and (today - asked).days <= REQUEST_WAIT_DAYS:
+        if have:
+            do = ("in the browser, open LinkedIn's page for a copy of your data (the place "
+                  f"`{STEPS}` names) and look for the archive: once it is ready, download it "
+                  "there, then run `export.py status` again, which finds it in Downloads. "
+                  "Not ready yet: nothing to say, and look again on the next run")
+        else:
+            do = ("nothing until the person has the ZIP (LinkedIn emails them a link): "
+                  "`export.py take <it>` when they attach it")
+        return dict(out, state="waiting", line=f"waiting: asked for on {asked.isoformat()}",
+                    do=do)
+    if have:
+        do = (f"in the browser, ask LinkedIn for its whole archive, as `{STEPS}` says, "
+              "clicking only what those steps name. If LinkedIn asks for the password, the "
+              "person types it there; never type it. Then `export.py requested`, and tell "
+              f"the person, once: {REQUESTED_SAY}")
+    else:
+        do = (f"ask the person once, with the steps `{STEPS}` prints (checked that day by a "
+              "web search of LinkedIn's help page, never a fetch of linkedin.com), then "
+              "`export.py requested` once they say it is asked for")
+    return dict(out, state="request",
+                line="request: " + (f"the last one is {(today - taken).days} days old"
+                                    if taken else "none taken yet"),
+                do=do)
+
+
+def requested(today=None) -> dict:
+    """Record that the download was asked for on LinkedIn, and when."""
+    st = _state()
+    day = st._need_date(today or datetime.date.today().isoformat(), "date")
+    return save_record({"requested_on": day.isoformat()})
 
 
 def since_last(before, after, plan, contacts, threads, today) -> list:
@@ -1611,6 +1731,13 @@ def main(argv=None) -> int:
     t.add_argument("--threads", default=st.THREADS_CSV)
     d = sub.add_parser("due", help="one line once the last download is EXPORT_EVERY_DAYS old")
     d.add_argument("--today", default=datetime.date.today().isoformat())
+    stt = sub.add_parser("status", help="the next step for the download: request, waiting, "
+                                        "take or fresh")
+    stt.add_argument("--tools", default="", help="this chat's browser tools: browser, chrome, "
+                                                 "enable, or none")
+    stt.add_argument("--today", default=datetime.date.today().isoformat())
+    rq = sub.add_parser("requested", help="record that it was asked for on LinkedIn")
+    rq.add_argument("--date", default=datetime.date.today().isoformat())
     f = sub.add_parser("files", help="what the export holds, and what is missing")
     f.add_argument("src", nargs="?", default=None)
     s = sub.add_parser("save", help="copy the named files into documents/linkedin/")
@@ -1635,7 +1762,23 @@ def main(argv=None) -> int:
             p.add_argument("--reason", default="")
     a = ap.parse_args(argv)
     return {"take": _cli_take, "files": _cli_files, "save": _cli_save, "history": _cli_history,
-            "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due}[a.cmd](a)
+            "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due,
+            "status": _cli_status, "requested": _cli_requested}[a.cmd](a)
+
+
+def _cli_status(a) -> int:
+    got = status(a.today, [t for t in a.tools.split(",") if t.strip()])
+    print(got["line"])
+    if got["do"] != "nothing":
+        print(f"do: {got['do']}")
+    return 0
+
+
+def _cli_requested(a) -> int:
+    got = requested(a.date)
+    print(f"requested: asked for on {got['requested_on']}; `export.py status` says when to "
+          "look for it")
+    return 0
 
 
 def _cli_due(a) -> int:

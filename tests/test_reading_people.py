@@ -340,10 +340,11 @@ def test_where_the_session_runs_is_read_from_its_environment():
 
 
 def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anything():
-    # It says which browser, whether it can be used, and the sign-in step the first time.
+    # It says which browser and whether it can be used; whether LinkedIn is signed in is read
+    # off the first page, and asked only then (reading.signed_out_say).
     r = reading.route(["browser"], "browser", LOCAL, signed_in=False)
     assert r["route"] == "browser" and r["usable"] and "browser pane in the Claude desktop app" in r["say"]
-    assert "sign in yourself, once" in r["say"] and r["signin"]
+    assert r["signin"] and "sign in" not in r["say"].lower()
     assert "sign in" not in reading.route(["browser"], "browser", LOCAL, signed_in=True)["say"]
     assert "while the app is open" in reading.route(["browser"], "browser", CLOUD_DESKTOP,
                                                     signed_in=True)["say"]

@@ -5,7 +5,7 @@ computer steps and "paste the profile", while its own "do" line asked for screen
 and the ladder told a phone to send LinkedIn's Save to PDF, which the phone app does not
 have (networking audit, 2026-10-25). One line now says what to send for where the chat
 runs, and the route, the ladder and /network all say it. And the sign-in line no longer
-tells someone reading in their own Chrome that a pane will keep a sign-in.
+tells someone reading in their own browser that a pane will keep a sign-in.
 """
 from __future__ import annotations
 
@@ -47,9 +47,12 @@ def test_the_phone_line_is_short_and_says_one_thing_to_send():
     assert "paste the" not in r["say"].lower()
 
 
-def test_reading_in_their_own_chrome_never_promises_a_pane_keeps_the_sign_in():
+def test_reading_in_their_own_browser_never_promises_a_pane_keeps_the_sign_in():
     local = {"CLAUDECODE": "1"}
     chrome = reading.route(["chrome"], "browser", local, signed_in=False)["say"]
     assert "your own Chrome" in chrome and "pane" not in chrome
+    # Whether they are signed in is read off the first page; the route says nothing of it.
     pane = reading.route(["browser"], "browser", local, signed_in=False)["say"]
-    assert "sign in yourself, once" in pane and "keeps it for later chats" in pane
+    assert "sign in" not in pane.lower()
+    assert "Keep cookies" in reading.signed_out_say("pane")
+    assert "pane" not in reading.signed_out_say("chrome")

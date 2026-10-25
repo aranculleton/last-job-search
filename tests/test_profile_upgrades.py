@@ -389,8 +389,10 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     # (the maintainer's instruction, 2026-10-22).
     assert not [u.id for u in U.REGISTRY
                 if re.search(r"\b(?:inbox|gmail|e-?mails?)\b", u.ask or "", re.I)]
-    # Consent to a risk to their own account names the risk.
-    assert "terms forbid" in U.by_id("profile-reads").ask
+    # Reading in the chat's browser needs no question first, and the question that is
+    # left (never asked: nothing makes it pending) carries no warning (2026-10-25).
+    assert U.by_id("profile-reads").pending() == ""
+    assert not re.search(r"\bterms\b|\brisk", U.by_id("profile-reads").ask)
     # Only the person can download their own connections; Claude never touches LinkedIn.
     assert U.by_id("connections-export").steps().endswith("Nothing is sent to anyone.")
     # Where they will mostly work is theirs to say; nothing in a profile answers it.
