@@ -33,6 +33,10 @@ make sense to somebody whose repo just received it.
   tracking system before you see it.
 - **"Show me around"**: a short tour of what you can ask for, offered once at the end of
   setup and whenever you ask.
+- **Jobs a search set aside can be brought back.** Ask to see what was filtered out and
+  why, and name the one you want: it joins your shortlist with the reason kept.
+- **Apply links you can trust**: tracking is taken off every link, and where the employer
+  publishes its own listing, the link is checked against it and points there.
 - **A chat on your own computer works on Windows, Mac and Linux**, set up with no password
   and nothing installed first. A Mac gets a current Python of its own, and Apple's is left
   alone.
@@ -54,6 +58,10 @@ make sense to somebody whose repo just received it.
 - **Fewer first-time lines**: two a day at most, and a tip seen in one chat is not repeated
   in another.
 - **No email, and no other connections**: the app never reads your inbox.
+- **The date of an application is the day you applied**, written when you tell the app,
+  never a guess from when its documents were made.
+- **Updates still arrive by themselves.** If you would rather choose when, say so ("only
+  update when I say") and the app tells you once when one is waiting.
 - **Taking an update is quicker**: the app's own tests are not run again on your computer
   for an update its test machines already passed on Linux, a Mac and Windows. Your own
   checks still run every time.
@@ -64,6 +72,12 @@ make sense to somebody whose repo just received it.
 
 - **A new computer could not save anything** when its git had no name set. Your copy now
   takes your GitHub name and GitHub's private address for it, for that copy alone.
+- **Job titles are clean**: badges such as "Easy Apply" and a second copy of the place are
+  taken off, and nothing that is part of the title is.
+- **Years of experience and degree requirements** are read in more of the ways postings
+  write them, and "18 years or older" is never read as experience.
+- **Taking an update could put you back on an older version** the second time; it no
+  longer can.
 - **On Windows, a job search stopped on its last line** when your job search folder and the
   computer's temporary folder were on different drives.
 - **Text in any alphabet is read and written correctly on Windows**, in every file the app
