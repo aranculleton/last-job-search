@@ -546,6 +546,13 @@ def main(argv: list[str]) -> int:
               f"{platform.python_version()} (python3 tools/env_check.py says how to install it)",
               file=sys.stderr)
         return COULD_NOT
+    # What it prints names people ("Łukasz"), and a cp1252 Windows terminal could not show
+    # them: the driver stopped mid-merge and git fell back to its line merge.
+    try:
+        import python_floor
+        python_floor.utf8_stdio()
+    except Exception:  # noqa: BLE001  git runs this alone; nothing else need be importable
+        pass
     if len(argv) != 4:
         print(__doc__.strip().splitlines()[-1].strip(), file=sys.stderr)
         return 2

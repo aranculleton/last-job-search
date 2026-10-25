@@ -140,3 +140,11 @@ def test_the_tracker_readers_read_a_bom_tracker(tmp_path, monkeypatch):
     p.write_bytes(b"\xef\xbb\xbfcompany,role,status\r\nAcme,Analyst,applied\r\n")
     assert state.load_tracker(str(p))[0]["company"] == "Acme"
     assert open_actions._tracker(str(p))[0]["company"] == "Acme"
+
+
+def test_a_name_read_in_an_undecodable_locale_prints_as_its_own_bytes():
+    # os.listdir in a C locale gives "Łukasz" as two escaped bytes; a lone surrogate from
+    # anywhere else, which no encoding can write, is "?" rather than a crash.
+    text = "\udcc5\udc81ukasz \ud800 Ł"
+    assert text.encode("utf-8", errors=python_floor._SAFE) == b"\xc5\x81ukasz ? \xc5\x81"
+    assert b"a\xffb".decode("utf-8", errors=python_floor._SAFE) == "a�b"

@@ -237,7 +237,7 @@ def _probe(code: str) -> str:
             return got
     prelude = "import sys; sys.path[:0] = %r\n" % (_probe_path(),)
     try:
-        r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=os.environ,
+        r = subprocess.run([sys.executable, "-c", prelude + code], cwd=ROOT, env=_utf8_child(),
                            capture_output=True, text=True, timeout=PROBE_SECONDS,
                            encoding="utf-8", errors="replace")
     except (OSError, subprocess.TimeoutExpired):
@@ -246,6 +246,14 @@ def _probe(code: str) -> str:
 
 
 PROBE_SECONDS = 120
+
+
+def _utf8_child() -> dict:
+    """The environment for a Python this reads the output of as UTF-8: told to write it.
+    On a Windows terminal in cp1252 (or PYTHONIOENCODING=cp1252) a probe printing "café –"
+    wrote cp1252, which read back as two stand-in characters, and the same probe answered
+    differently alone and inside a look."""
+    return dict(os.environ, PYTHONIOENCODING="utf-8")
 
 
 def _probe_path() -> list[str]:
@@ -298,7 +306,7 @@ def _one_interpreter():
 def _start_worker():
     try:
         proc = subprocess.Popen([sys.executable, "-c", _WORKER % (_probe_path(),)], cwd=ROOT,
-                                env=os.environ, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                env=_utf8_child(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, encoding="ascii",
                                 errors="replace")
     except OSError:

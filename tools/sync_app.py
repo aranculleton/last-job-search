@@ -932,7 +932,19 @@ def adopt() -> int:
     return 0
 
 
+
+def _utf8_stdio() -> None:
+    """The terminal in UTF-8 whatever the computer's code page (python_floor.utf8_stdio): a
+    name with "Ł" in it stopped this on a cp1252 Windows terminal. Never raises."""
+    try:
+        import python_floor
+        python_floor.utf8_stdio()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def main(argv: list[str]) -> int:
+    _utf8_stdio()
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="report only; change nothing")

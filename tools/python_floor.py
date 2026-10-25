@@ -11,6 +11,7 @@ sentence instead of a traceback halfway through a state file.
 """
 from __future__ import annotations
 
+import codecs
 import platform
 import sys
 
@@ -40,6 +41,23 @@ def ok(info=None) -> bool:
     return tuple((info or sys.version_info)[:2]) >= FLOOR
 
 
+def _safe(e):
+    """Never stop on text: a name os read in an undecodable locale goes out as its own bytes
+    (what "surrogateescape" does), any other character that cannot be written is "?", and
+    a byte that cannot be read is U+FFFD."""
+    if isinstance(e, UnicodeEncodeError):
+        out = bytearray()
+        for ch in e.object[e.start:e.end]:
+            c = ord(ch)
+            out += bytes([c - 0xDC00]) if 0xDC80 <= c <= 0xDCFF else b"?"
+        return bytes(out), e.end
+    return "\ufffd", e.end
+
+
+_SAFE = "ljs-safe"
+codecs.register_error(_SAFE, _safe)
+
+
 def utf8_stdio(streams=None) -> list[str]:
     """Read and write the terminal in UTF-8, whatever this computer's own encoding is.
 
@@ -50,7 +68,9 @@ def utf8_stdio(streams=None) -> list[str]:
     from stdin came in garbled. `.claude/settings.json` turns UTF-8 mode on for every chat
     (PYTHONUTF8, https://docs.python.org/3/using/cmdline.html#envvar-PYTHONUTF8); this is for
     a tool run any other way. A character the terminal cannot show prints as "?" rather than
-    stopping it. Returns the names of the streams it changed."""
+    stopping it. A file name the computer's C locale could not decode (a Linux or Mac
+    terminal with no UTF-8 locale set) prints as the bytes it is, so "Łukasz.md" stays
+    "Łukasz.md". Returns the names of the streams it changed."""
     changed = []
     for name in streams or ("stdin", "stdout", "stderr"):
         s = getattr(sys, name, None)
@@ -58,7 +78,7 @@ def utf8_stdio(streams=None) -> list[str]:
         if enc in ("utf-8", "utf8") or not hasattr(s, "reconfigure"):
             continue
         try:
-            s.reconfigure(encoding="utf-8", errors="replace")
+            s.reconfigure(encoding="utf-8", errors=_SAFE)
             changed.append(name)
         except (ValueError, OSError, AttributeError):  # a stream already read from, or closed
             pass
