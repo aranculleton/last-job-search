@@ -806,3 +806,15 @@ def test_the_employers_where_more_may_be_written_to_merge_by_employer():
     assert not problems
     assert [r["employer"] for r in json.loads(text)] == ["Quayside Foods", "Larkspur Retail",
                                                           "Lanternfish"]
+
+
+def test_the_other_side_is_read_from_gits_name_for_it_in_any_case(monkeypatch):
+    """git names the other side of a merge in the driver's environment, GITHEAD_<sha>. On
+    Windows Python gives every name in os.environ in capitals, so the sha came back as
+    capitals, matched nothing, and every row both chats changed was left for a person there
+    (the suite on Windows, 2026-10-25)."""
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    for k in [k for k in os.environ if k.upper().startswith("GITHEAD_")]:
+        monkeypatch.delenv(k)
+    monkeypatch.setenv("GITHEAD_" + sha.upper(), "theirs")
+    assert M._theirs() == sha

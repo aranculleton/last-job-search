@@ -151,8 +151,10 @@ def bash(platform: str | None = None, env: dict | None = None, which=None,
         return env.get(name) or env.get(name.upper()) or ""
     wanted = [get("CLAUDE_CODE_GIT_BASH_PATH"), _settings_bash(home)]
     local = get("LOCALAPPDATA") or os.path.join(home, "AppData", "Local")
-    for base in (get("ProgramFiles"), get("ProgramW6432"), get("ProgramFiles(x86)"),
-                 r"C:\Program Files", os.path.join(local, "Programs")):
+    # C:\Program Files only where Windows names no folder for programs: where it names one,
+    # that is where Git for Windows installed.
+    for base in (get("ProgramFiles") or r"C:\Program Files", get("ProgramW6432"),
+                 get("ProgramFiles(x86)"), os.path.join(local, "Programs")):
         if base:
             wanted.append(os.path.join(base, "Git", "bin", "bash.exe"))
     wanted.append(os.path.join(local, "Programs", "PortableGit", "bin", "bash.exe"))

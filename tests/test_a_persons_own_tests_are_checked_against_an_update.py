@@ -122,7 +122,8 @@ def test_a_test_reaching_into_private_parts_is_noted_before_it_breaks(tmp_path):
         "    with mock.patch('ats_boards._request'), mock.patch.object(A, '_get'):\n        pass\n")
     (tests / "test_public.py").write_text("import ats_boards\ndef test_b():\n    ats_boards.FETCH\n")
     risks = sync_app.own_test_risks(str(tmp_path))
-    assert risks == {os.path.join("profile", "tests", "test_reaching.py"): [
+    # Named with "/", as git and the person's other files name it, on Windows too.
+    assert risks == {"profile/tests/test_reaching.py": [
         "ats_boards._ROBOTS", "ats_boards._get", "ats_boards._request", "fit._core_points"]}
     note = sync_app.own_test_risks_report(risks)
     assert note.startswith("Note: 1 of your own test file(s) reach into private parts of the app")

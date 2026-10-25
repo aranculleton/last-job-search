@@ -477,8 +477,12 @@ def _git(*args) -> str:
 
 def _theirs() -> str:
     import re
-    named = [k[len("GITHEAD_"):] for k in os.environ
-             if re.fullmatch(r"GITHEAD_[0-9a-f]{40}([0-9a-f]{24})?", k)]
+    # Any case: on Windows Python gives every name in os.environ in capitals
+    # (https://docs.python.org/3/library/os.html#os.environ), so GITHEAD_<sha> came back
+    # with its sha in capitals, matched nothing, and every change both chats made to one
+    # row was left for a person there (2026-10-25).
+    named = [k[len("GITHEAD_"):].lower() for k in os.environ
+             if re.fullmatch(r"GITHEAD_[0-9a-fA-F]{40}([0-9a-fA-F]{24})?", k)]
     if len(named) == 1:
         return named[0]
     if named:

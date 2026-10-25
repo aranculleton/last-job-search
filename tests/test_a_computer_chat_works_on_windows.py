@@ -150,9 +150,11 @@ def test_the_days_sync_pull_and_own_folder_on_windows(tmp_path, win):
     rc, out, err = run([py, "tools/sync_app.py", "--worktree", "Laptop chat"], me, env)
     assert rc == 0, out + err
     assert (me / ".claude" / "worktrees" / "laptop-chat" / "tools" / "sync_app.py").exists()
-    # The driver it set runs a Python that is not the Store stand-in.
+    # The driver it set runs a Python that is not the Store stand-in: the one the sync ran
+    # under, by its full path (the stand-in folder's, "Program Files" in it, off Windows).
     driver = git(me, "config", "--get", "merge.ljs-state.driver")
-    assert "python3 tools/merge_state.py" not in driver and "Program Files" in driver
+    assert "python3 tools/merge_state.py" not in driver
+    assert py.replace("\\", "/") in driver if sys.platform == "win32" else "Program Files" in driver
 
 
 # ------------------------------------------------------------------ the merge driver
