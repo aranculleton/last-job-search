@@ -783,6 +783,15 @@ JOB_ASKS = (
     (r"\b(?:any|have|has|got)\b[^.?!]{0,25}\b(?:openings?|vacanc\w+|open (?:roles?|positions?|reqs?))\b",
      "asks", _OPEN_FIX),
     (r"\brefer me\b", "asks", _LATER_FIX),
+    # A referral asked for in so many words: "I'd love a referral for the Staff Data
+    # Scientist role" passed validate() and advise() to a peer and to a head of data
+    # (networking audit, 2026-10-25). The referral is the third stage, asked of someone
+    # who has spoken to them about one linked role (referral_ask), never in a first note.
+    # How they joined ("you came in through a referral") and a programme are not asks.
+    (r"(?<!through )(?<!via )(?<!by )\b(?:a|an|any|your) (?:internal |employee |quick )?"
+     r"referral\b(?! (?:programme|program|scheme|bonus|partner|network))"
+     r"|\brefer(?:ring)? my (?:name|profile|application|resume|cv)\b"
+     r"|\bput (?:me|my name) forward\b", "asks", _LATER_FIX),
     (r"\b(?:be )?considered for (?:the|a|an|your|this|that)\b", "asks", _LATER_FIX),
     # Saying you applied, in every form it takes: "I've just applied", the outreach note's
     # own opening, matched "I just applied" only. A first note is no place for it; the note

@@ -462,9 +462,9 @@ a month-old posting look fresh. A round records every posting it surfaces at `st
 "surfaced"` (`tools/throttle.py` `write_back`), with `first_seen` set once and `last_seen` moved
 on each sighting; a posting under a new URL with the same title, employer and city as one seen in
 the last 30 days (`throttle.RELIST_WINDOW`) is that posting relisted and keeps its `first_seen`.
-`tools/prefilter.py` ages a posting by the earlier of its portal date and `first_seen` (and a job
-alert's `alert_date`), and the freshness bonus in `tools/opportunity.py` is given only on a
-portal date and never on an unknown or future one.
+`tools/prefilter.py` ages a posting by the earlier of its portal date and `first_seen`, and the
+freshness bonus in `tools/opportunity.py` is given only on a portal date and never on an unknown
+or future one.
 
 2. Only present jobs NOT already in the seen list or tracker.
 

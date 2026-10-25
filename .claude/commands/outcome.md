@@ -105,8 +105,6 @@ Enter this branch from the `followup` argument (Step 0) or from the offer under 
 
 **One more case reaches this branch from `tools/open_actions.py --due`, not from `followups.py`:** an `interview` row with no word for 14 days since its last stage and nothing booked (`open_actions.INTERVIEW_QUIET_DAYS`). It is never a nudge: the due list asks whether to send a short status note or to record what happened. `/outcome followup <company>` drafts the status note (the same rules as below, the question being where the process stands), logged the same way, `followed up YYYY-MM-DD` and `followup_YYYY-MM-DD.md`. After two with no word, the list asks only for the outcome.
 
-`/gmail-sync`'s 30-day staleness flag (its Step 9) is a different thing: a read-only alarm that a row has been forgotten entirely, not a nudge.
-
 **Drafting.** First `python3 tools/learned.py brief messages` (and `brief voice`): the rules there are the person's own and outrank the defaults below. Then, for each selected application:
 
 1. Read the archive folder's `job_posting.md`, and the submitted documents at the paths the tracker row names. Together they are the source of **every claim** the note may make - this is Rule 3 (never fabricate) widened to "no new claims": a follow-up that introduces skills or experience the submitted materials don't contain is a fabrication vector.

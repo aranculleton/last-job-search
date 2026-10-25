@@ -375,14 +375,12 @@ def age_days(job: dict, today: _dt.date | None = None) -> int | None:
     """Days since the posting is known to have existed, or None when nothing says.
 
     The earliest of the portal's date, the day this search first saw it
-    (`first_seen`, from seen_jobs.json), the day a job alert sent it
-    (`alert_date`) and the oldest date another copy of it in the same round
-    carries (`copy_date`, `stamp_copies`). A portal relisting a posting gives it a
+    (`first_seen`, from seen_jobs.json) and the oldest date another copy of it in
+    the same round carries (`copy_date`, `stamp_copies`). A portal relisting a posting gives it a
     new date, so the portal's date alone let a month-old posting read as new.
     """
     ages = [a for a in (posted_age(job, today),
                         days_since(job.get("first_seen"), today, iso_only=True),
-                        days_since(job.get("alert_date"), today, iso_only=True),
                         days_since(job.get("copy_date"), today, iso_only=True))
             if a is not None]
     return max(ages) if ages else None
@@ -404,7 +402,7 @@ def stamp_copies(rows: list, today: _dt.date | None = None) -> list:
         d = copy_date(index, job) if isinstance(job, dict) else ""
         if d and not job.get("copy_date"):
             own = [x.isoformat() for x in (as_date(job.get(f), iso_only=True) for f in
-                                          ("date", "posted_date", "first_seen", "alert_date"))
+                                          ("date", "posted_date", "first_seen"))
                    if x is not None]
             if not own or d < min(own):
                 job = dict(job, copy_date=d)

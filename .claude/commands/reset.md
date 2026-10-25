@@ -82,8 +82,7 @@ Report which of these exist, with the row count of each CSV:
 - upskill/*.md                 [n files]
 - networking/                  [n files: research notes]
 - handoff/                     [n files]
-- job_scraper/notion_sync.json
-- gmail_sync/                  (the Gmail sync cursor)
+- job_scraper/notion_sync.json, gmail_sync/   (left by an older version of the app, if there)
 - salary_data.json             (salary data you added, if any)
 - rounds/                      (local working files, never committed)
 ```

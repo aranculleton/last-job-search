@@ -438,13 +438,11 @@ def _public_holidays() -> str:
 
 
 def _profile_reads() -> str:
-    if _missing("networking", "PROFILE_READS"):
-        return ("nobody has asked whether Claude may read the LinkedIn profile of each person "
-                "about to be messaged in your own browser (profile/networking.py has no "
-                "PROFILE_READS), so a note rests on what you paste and on their public work")
-    if str(getattr(_mod("networking"), "PROFILE_READS", "") or "") == "paste":
-        u = by_id("profile-reads")
-        return again("profile-reads", u.ask_version, u.changed)
+    """Nothing to ask, ever: unset, PROFILE_READS reads in the browser a chat has
+    (tools/network/reading.py reads_setting), and "paste" or "off" is the person's own word.
+    The question it asked first, with its warnings, kept a computer chat from reading at all
+    (the maintainer, 2026-10-25); the upgrade stays registered so a recorded no still names
+    something."""
     return ""
 
 
@@ -1299,19 +1297,14 @@ REGISTRY: tuple[Upgrade, ...] = (
             _profile_reads, "write PROFILE_READS = \"browser\" or \"paste\" in "
             "profile/networking.py from their answer; \"paste\" again is also `python3 "
             "tools/profile_upgrades.py --no profile-reads`", "question", "~1 min",
-            names=("networking.PROFILE_READS",),
             priority=2,
             needs="you",
             ask_version=2,
             changed="finding people no longer needs any read, and a read is now only of the best "
                     "ten a run finds, paced, in a chat on your computer",
-            ask="Before writing to the best few people a search finds, should I read their "
-                "LinkedIn profiles in your own browser? LinkedIn's terms forbid automated "
-                "access, so that carries some risk to your account. Or you paste one or two. "
-                "Which?",
-            steps=lambda: ("Reading in your browser works in a chat on your computer in the Claude "
-                           "desktop app. I read one profile at a time, at a person's pace, and "
-                           "click nothing: the risk is lower with those limits, never nothing.\n"
+            ask="Should I read the LinkedIn profiles of the people I write to in your browser, "
+                "or work from ones you paste?",
+            steps=lambda: ("In a chat on your computer, I read each one in the browser there.\n"
                            "Pasting instead: open their profile, select all, copy, and paste it "
                            "here."),
             why_ask="A message that mentions something real about the person gets far more "
@@ -1598,6 +1591,11 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    # Read in the browser a chat has, with no question first, since 2026-10-25: the question
+    # and its warnings kept a person's computer chat from reading at all.
+    "networking.PROFILE_READS": "\"browser\": the profiles of the people a run writes to are "
+                                "read in the browser the chat has; \"paste\" or \"off\" is "
+                                "the person's own word (tools/network/reading.py reads_setting)",
     # The number written to at one employer while nobody there has answered; a setting
     # since 2026-10-24, when the person wanted more at four employers.
     "networking.PEOPLE_PER_EMPLOYER": "2, the people written to at one employer while "

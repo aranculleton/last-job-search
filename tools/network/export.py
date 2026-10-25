@@ -40,6 +40,8 @@ What it gives:
     python3 tools/network/export.py take --find                     # the newest one on this computer
     python3 tools/network/export.py files [<zip|folder>]          # what it holds, what is missing
     python3 tools/network/export.py due                           # the brief's fortnightly ask
+    python3 tools/network/export.py status [--tools browser]      # the next step, from what is recorded
+    python3 tools/network/export.py requested [--date YYYY-MM-DD] # it was asked for on LinkedIn
     python3 tools/network/export.py save <zip|csv>... [--only connections|history|profile]
     python3 tools/network/export.py history [--from <zip|folder>] [--apply]
     python3 tools/network/export.py pending [--from <zip|folder>] [--days N] [--all]
@@ -172,6 +174,13 @@ def _source(src) -> tuple[str, str]:
     return "file", src
 
 
+def _entry_name(name: str) -> str:
+    """A ZIP entry's own file name. An archive made on Windows by PowerShell 5.1's
+    Compress-Archive writes its folders with backslashes ("Export\\Connections.csv"), which
+    no reader off Windows splits on: the export's files were never found in it."""
+    return str(name or "").replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+
+
 def _kind_of_file(path: str) -> str:
     base = os.path.basename(path).lower()
     return next((k for k, f in FILES.items() if f.lower() == base), "")
@@ -183,7 +192,7 @@ def _raw(kind: str, src=None) -> tuple[str, str]:
     want = FILES[kind].lower()
     if how == "zip":
         with zipfile.ZipFile(path) as z:
-            found = [n for n in z.namelist() if os.path.basename(n).lower() == want]
+            found = [n for n in z.namelist() if _entry_name(n).lower() == want]
             if not found:
                 return "", ""
             # The shortest path: the export's own file, not one nested in a folder of extras.
@@ -292,8 +301,8 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
         if how == "zip":
             with zipfile.ZipFile(path) as z:
                 want = {FILES[k].lower() for k in kinds}
-                other += sum(1 for n in z.namelist() if not n.endswith("/")
-                             and os.path.basename(n).lower() not in want)
+                other += sum(1 for n in z.namelist() if not n.endswith(("/", "\\"))
+                             and _entry_name(n).lower() not in want)
         elif how == "file" and _kind_of_file(path) not in kinds:
             missing.append(os.path.basename(path) + " (not a file this reads)")
             continue
@@ -345,17 +354,79 @@ def save(srcs, only: str = "all", dest: str | None = None, name_absent=None) -> 
 # at, and only an archive or a folder that is LinkedIn's: one named for it, or one holding
 # its files.
 SEARCH_DIRS = ("Downloads", "Desktop", "Documents")
+# Windows keeps where each of those really is in the registry, and OneDrive moves Desktop
+# and Documents into its own folder (OneDrive/Desktop, "OneDrive - <Organisation>"/
+# Documents): a download saved to the Desktop on such a computer was never looked for.
+_SHELL_FOLDERS = {"Downloads": "{374DE290-123F-4565-9164-39C4925E467B}",
+                  "Desktop": "Desktop", "Documents": "Personal"}
 
 
-def find_exports(base: str | None = None) -> list:
+def _windows_folders() -> list:
+    """Where Windows says Downloads, Desktop and Documents are; [] anywhere else."""
+    if sys.platform != "win32":
+        return []
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows"
+                             r"\CurrentVersion\Explorer\User Shell Folders")
+    except (ImportError, OSError):
+        return []
+    out = []
+    with key:
+        for value in _SHELL_FOLDERS.values():
+            try:
+                raw, _kind = winreg.QueryValueEx(key, value)
+            except OSError:
+                continue
+            out.append(os.path.expandvars(str(raw)))
+    return out
+
+
+def search_folders(base: str | None = None) -> list:
+    """Every folder a download may have landed in, each once: Downloads, Desktop and
+    Documents in the home folder, the same in each OneDrive folder there, and on Windows
+    where the registry says they are."""
+    home_dir = base or os.path.expanduser("~")
+    found = [os.path.join(home_dir, d) for d in SEARCH_DIRS]
+    roots = []
+    if base is None:
+        roots += [os.environ.get(v, "") for v in ("OneDrive", "OneDriveConsumer",
+                                                  "OneDriveCommercial")]
+    try:
+        roots += [e.path for e in os.scandir(home_dir)
+                  if e.is_dir() and e.name.lower().startswith("onedrive")]
+    except OSError:
+        pass
+    for r in roots:
+        if r:
+            found += [os.path.join(r, d) for d in SEARCH_DIRS]
+    if base is None:
+        found += _windows_folders()
+    out, seen = [], set()
+    for f in found:
+        k = os.path.normcase(os.path.realpath(f))
+        if k not in seen:
+            seen.add(k)
+            out.append(f)
+    return out
+
+
+def find_exports(base: str | None = None, denied: list | None = None) -> list:
     """LinkedIn downloads on this computer, newest first: a ZIP with "linkedin" in its name
     that holds Connections.csv or messages.csv, or a folder holding either (with "linkedin"
-    in its name, or both files). Nothing in them is read; a cloud computer has none."""
-    base = base or os.path.expanduser("~")
+    in its name, or both files). Nothing in them is read; a cloud computer has none.
+
+    A folder the computer would not let this look in (a Mac asks before an app reads
+    Downloads, Desktop or Documents) is added to `denied` when given, so "none found" is
+    never said of a folder nobody could look in."""
     out = []
-    for d in SEARCH_DIRS:
+    for folder in search_folders(base):
         try:
-            entries = list(os.scandir(os.path.join(base, d)))
+            entries = list(os.scandir(folder))
+        except PermissionError:
+            if denied is not None:
+                denied.append(folder)
+            continue
         except OSError:
             continue
         # A ZIP opened by the computer can land one folder deeper ("<name>/<name>/"): the
@@ -371,7 +442,7 @@ def find_exports(base: str | None = None) -> list:
             try:
                 if e.is_file() and name.endswith(".zip") and "linkedin" in name:
                     with zipfile.ZipFile(e.path) as z:
-                        held = {os.path.basename(n).lower() for n in z.namelist()}
+                        held = {_entry_name(n).lower() for n in z.namelist()}
                     if held & {"connections.csv", "messages.csv"}:
                         out.append(e.path)
                 elif e.is_dir():
@@ -421,6 +492,32 @@ def record_path() -> str:
     return person.state("documents", "network", "linkedin_export.json")
 
 
+def load_record() -> dict:
+    """What is recorded about the download: `taken_on` (with what it held), `requested_on`.
+    {} when nothing is. The file sits beside the message log, so it is committed, and it
+    merges key by key when two chats changed it (tools/merge_state.py, .gitattributes)."""
+    import json
+    try:
+        with open(record_path(), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def save_record(updates: dict) -> dict:
+    """The record with `updates` written over it, every other key kept: a download taken
+    keeps the day it was asked for, and a request keeps the last download's day."""
+    import json
+    got = dict(load_record(), **updates)
+    path = record_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(got, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+    return got
+
+
 def newest(tables) -> dict:
     """{kind: the newest day a row of that file carries, ISO} for the tables given."""
     out = {}
@@ -464,6 +561,11 @@ def due(today, threads=None) -> str:
     taken, _how = last_taken(threads)
     if not EXPORT_EVERY_DAYS or taken is None or (today - taken).days < EXPORT_EVERY_DAYS:
         return ""
+    asked = st.as_date(load_record().get("requested_on"))
+    if asked and asked > taken and (today - asked).days <= REQUEST_WAIT_DAYS:
+        # Asked for already, by the chat on their computer: it picks the download up there.
+        return (f"Your new LinkedIn download was asked for on {asked.isoformat()}; the chat "
+                "on your computer picks it up once it is ready.")
     return (f"Your LinkedIn download is {(today - taken).days} days old (taken "
             f"{taken.isoformat()}). A new one shows who accepted your requests, who replied "
             "and which requests still wait: ask for it with the steps "
@@ -471,14 +573,101 @@ def due(today, threads=None) -> str:
 
 
 def _record(tables, today) -> None:
-    import json
-    path = record_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    got = {"taken_on": today.isoformat(), "newest": newest(tables),
-           "rows": {t["kind"]: len(t["rows"]) for t in tables if t.get("found")}}
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(got, fh, indent=1, sort_keys=True)
-        fh.write("\n")
+    save_record({"taken_on": today.isoformat(), "newest": newest(tables),
+                 "rows": {t["kind"]: len(t["rows"]) for t in tables if t.get("found")}})
+
+
+# ------------------------------------------------------------- the next step, from the record
+
+# LinkedIn's link to the download arrives anything from minutes to a day after it is asked
+# for, and works for 72 hours (claude_surfaces: linkedin-export-files). Asked for longer ago
+# than this with nothing taken since, it is asked for again.
+REQUEST_WAIT_DAYS = 3
+BROWSERS = ("browser", "chrome", "enable")
+# What the person is told when it has been asked for: one line, nothing to do.
+REQUESTED_SAY = ("I've asked LinkedIn for a copy of your data. It takes a while to prepare, "
+                 "and I'll pick it up when it's ready.")
+
+
+def _found_since(taken, found=None) -> str:
+    """The newest download on this computer made after the last one was taken, or ""."""
+    paths = find_exports() if found is None else list(found)
+    for p in paths:
+        try:
+            made = datetime.datetime.fromtimestamp(os.path.getmtime(p)).date()
+        except OSError:
+            continue
+        if taken is None or made > taken:
+            return p
+    return ""
+
+
+def status(today=None, tools=(), found=None, threads=None) -> dict:
+    """The next step for the LinkedIn download, from what is recorded, so no chat has to
+    remember it: {"state", "line", "do", "path", "taken_on", "requested_on", "due_on"}.
+
+    `take`: a download on this computer is newer than the last one taken (one the browser
+    fetched, or one the person saved themselves). `fresh`: the last one is younger than
+    EXPORT_EVERY_DAYS (or the person's 0, never asked again). `waiting`: asked for within
+    REQUEST_WAIT_DAYS and not here yet. `request`: none taken, or the last is due, and none
+    asked for. `tools` is the chat's browser tools (browser, chrome, enable): with one,
+    Claude does the step in that browser; without, the person is given the steps once.
+    `found` stands for the downloads find_exports() would see."""
+    st = _state()
+    today = st._need_date(today or datetime.date.today().isoformat(), "today")
+    have = {str(t).strip().lower() for t in tools or ()} & set(BROWSERS)
+    taken, _how = last_taken(threads)
+    rec = load_record()
+    asked = st.as_date(rec.get("requested_on"))
+    if asked and taken and asked <= taken:
+        asked = None                               # that request was the one taken since
+    due_on = (taken + datetime.timedelta(days=EXPORT_EVERY_DAYS)) if taken and \
+        EXPORT_EVERY_DAYS else None
+    out = {"taken_on": taken.isoformat() if taken else "", "path": "",
+           "requested_on": asked.isoformat() if asked else "",
+           "due_on": due_on.isoformat() if due_on else ""}
+    path = _found_since(taken, found)
+    if path:
+        return dict(out, state="take", path=path,
+                    line=f"take: {path}",
+                    do=f"python3 tools/network/export.py take \"{path}\": it saves the download "
+                       "and imports its history, and says what changed")
+    if taken and (not EXPORT_EVERY_DAYS or today < due_on):
+        return dict(out, state="fresh",
+                    line=f"fresh: taken {taken.isoformat()}"
+                         + (f"; the next is due {due_on.isoformat()}" if due_on else ""),
+                    do="nothing")
+    if asked and (today - asked).days <= REQUEST_WAIT_DAYS:
+        if have:
+            do = ("in the browser, open LinkedIn's page for a copy of your data (the place "
+                  f"`{STEPS}` names) and look for the archive: once it is ready, download it "
+                  "there, then run `export.py status` again, which finds it in Downloads. "
+                  "Not ready yet: nothing to say, and look again on the next run")
+        else:
+            do = ("nothing until the person has the ZIP (LinkedIn emails them a link): "
+                  "`export.py take <it>` when they attach it")
+        return dict(out, state="waiting", line=f"waiting: asked for on {asked.isoformat()}",
+                    do=do)
+    if have:
+        do = (f"in the browser, ask LinkedIn for its whole archive, as `{STEPS}` says, "
+              "clicking only what those steps name. If LinkedIn asks for the password, the "
+              "person types it there; never type it. Then `export.py requested`, and tell "
+              f"the person, once: {REQUESTED_SAY}")
+    else:
+        do = (f"ask the person once, with the steps `{STEPS}` prints (checked that day by a "
+              "web search of LinkedIn's help page, never a fetch of linkedin.com), then "
+              "`export.py requested` once they say it is asked for")
+    return dict(out, state="request",
+                line="request: " + (f"the last one is {(today - taken).days} days old"
+                                    if taken else "none taken yet"),
+                do=do)
+
+
+def requested(today=None) -> dict:
+    """Record that the download was asked for on LinkedIn, and when."""
+    st = _state()
+    day = st._need_date(today or datetime.date.today().isoformat(), "date")
+    return save_record({"requested_on": day.isoformat()})
 
 
 def since_last(before, after, plan, contacts, threads, today) -> list:
@@ -1392,7 +1581,14 @@ def _keep(src) -> None:
 def _cli_take(a) -> int:
     srcs = list(a.srcs)
     if a.find and not srcs:
-        srcs = find_exports()[:1]
+        denied: list = []
+        srcs = find_exports(denied=denied)[:1]
+        if not srcs and denied:
+            names = _and([os.path.basename(d.rstrip("\\/")) or d for d in denied])
+            print(f"export: this computer did not let me look in {names}, so I cannot say "
+                  "whether the LinkedIn download is there. Drag the ZIP into this chat, or "
+                  "tell me where it is.")
+            return 3
         if not srcs:
             print("export: no LinkedIn download on this computer (in Downloads, Desktop or "
                   "Documents). The steps for one: python3 tools/claude_surfaces.py steps "
@@ -1535,6 +1731,13 @@ def main(argv=None) -> int:
     t.add_argument("--threads", default=st.THREADS_CSV)
     d = sub.add_parser("due", help="one line once the last download is EXPORT_EVERY_DAYS old")
     d.add_argument("--today", default=datetime.date.today().isoformat())
+    stt = sub.add_parser("status", help="the next step for the download: request, waiting, "
+                                        "take or fresh")
+    stt.add_argument("--tools", default="", help="this chat's browser tools: browser, chrome, "
+                                                 "enable, or none")
+    stt.add_argument("--today", default=datetime.date.today().isoformat())
+    rq = sub.add_parser("requested", help="record that it was asked for on LinkedIn")
+    rq.add_argument("--date", default=datetime.date.today().isoformat())
     f = sub.add_parser("files", help="what the export holds, and what is missing")
     f.add_argument("src", nargs="?", default=None)
     s = sub.add_parser("save", help="copy the named files into documents/linkedin/")
@@ -1559,7 +1762,23 @@ def main(argv=None) -> int:
             p.add_argument("--reason", default="")
     a = ap.parse_args(argv)
     return {"take": _cli_take, "files": _cli_files, "save": _cli_save, "history": _cli_history,
-            "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due}[a.cmd](a)
+            "pending": _cli_pending, "withdrawn": _cli_withdrawn, "due": _cli_due,
+            "status": _cli_status, "requested": _cli_requested}[a.cmd](a)
+
+
+def _cli_status(a) -> int:
+    got = status(a.today, [t for t in a.tools.split(",") if t.strip()])
+    print(got["line"])
+    if got["do"] != "nothing":
+        print(f"do: {got['do']}")
+    return 0
+
+
+def _cli_requested(a) -> int:
+    got = requested(a.date)
+    print(f"requested: asked for on {got['requested_on']}; `export.py status` says when to "
+          "look for it")
+    return 0
 
 
 def _cli_due(a) -> int:

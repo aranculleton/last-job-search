@@ -52,7 +52,10 @@ Usage: `/reply <contact name or company>`, then paste their message.
    in a reply. If the person reacts to the draft, the reaction is recorded before the next
    draft (`learned.py record` or `skip`): the composers refuse to draft over one.
 
-6. **Record.** Their message goes into `network_threads.csv` now. Ours goes in only when
+6. **Record.** Their message goes into `network_threads.csv` now, by command, with their
+   words as they came: `python3 tools/network/state.py received <contact_id> --text-file
+   <file>` (`--scenario <the scenario from step 2>`; `--date` when it came another day;
+   `--channel` when it came another way than the thread runs). Never by hand. Ours goes in only when
    they say it went, dated the day it went: a draft is not a message, and logging it early
    makes the thread read as waiting on them before anything was sent (the same rule
    `/network` keeps for a first note). Every row carries its full text in `full_text`: a

@@ -15,7 +15,7 @@
     "Get a copy of your data", "Download your data", "larger download", "Connections filter",
     "Current company filter", "Manage invitations", "Sent tab", "Open folder", "Local group",
     "Free message", "Get more InMail credits", "Create repository from template",
-    "Only select repositories"
+    "Only select repositories", "Keep cookies"
   ],
   "entries": [
     {
@@ -506,6 +506,26 @@
       "status": "documented",
       "verified_on": "2026-10-19",
       "verified_against": "code.claude.com/docs/en/desktop read word for word 2026-10-19, and the built-in-browser skill as installed that day",
+      "ui_sensitive": true
+    },
+    {
+      "id": "browser-pane-stay-signed-in",
+      "claim": "The desktop app's Browser pane starts with a clean profile of its own, separate from the person's own browser, with none of their saved logins. It shows from the Browser button in the session's title bar, or Cmd+Shift+B on a Mac and Ctrl+Shift+B on Windows, and its menu has Keep cookies, which keeps sign-ins after the app is quit (the docs do not say whether it is on to begin with).",
+      "goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "how": "Cmd+Shift+B on a Mac or Ctrl+Shift+B on Windows shows the app's browser; choose Keep cookies in its \u22ee menu so you stay signed in",
+      "steps": [
+        "Show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows (or Browser in this chat's title bar).",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Say done here."
+      ],
+      "sources": [
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history"},
+        {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/desktop read 2026-10-25",
       "ui_sensitive": true
     }
   ]

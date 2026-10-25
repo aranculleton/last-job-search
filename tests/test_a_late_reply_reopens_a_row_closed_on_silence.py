@@ -1,9 +1,10 @@
 """A late reply to an application closed on silence is seen.
 
 `followups.py --close-quiet` closes a row as `no_response` after the chase ends, with a
-note promising that a reply after all is recorded. /gmail-sync built its search from the
-rows that are not final, and `no_response` is final, so no late reply to one was ever
-looked for, and a recruiter writing back on day 60 sat unread against a closed row.
+note promising that a reply after all is recorded. `no_response` is final, so a reader
+built from the rows that are not final never looks at one, and a recruiter writing back
+on day 60 sits unread against a closed row. `--closed-quiet` lists them, and the note
+sends a late reply to /outcome.
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import followups  # noqa: E402
 
 TODAY = datetime.date(2026, 10, 21)
-GMAIL_SYNC = Path(ROOT) / ".claude" / "commands" / "gmail-sync.md"
+OUTCOME = Path(ROOT) / ".claude" / "commands" / "outcome.md"
 
 
 def _row(company, status, notes):
@@ -51,8 +52,7 @@ def test_a_row_the_brief_just_closed_is_on_that_list(tmp_path):
     assert [g["company"] for g in followups.closed_quiet(rows, TODAY)] == ["Larkspur Retail"]
 
 
-def test_gmail_sync_searches_them_and_proposes_reopening_on_a_reply():
-    text = GMAIL_SYNC.read_text(encoding="utf-8")
-    assert "python3 tools/followups.py --closed-quiet" in text
-    assert "no_response -> interview" in text and "no_response -> rejected" in text
-    assert "reopened: they replied" in text
+def test_the_closing_note_says_where_a_late_reply_goes():
+    assert "/outcome records it" in followups.CLOSED_NOTE
+    text = OUTCOME.read_text(encoding="utf-8")
+    assert "a reply after that is recorded here as usual" in text

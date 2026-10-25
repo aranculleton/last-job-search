@@ -34,7 +34,7 @@ Each is now a rule, next to the code it governs:
 
     python3 tools/followups.py [--today YYYY-MM-DD]
     python3 tools/followups.py --close-quiet [--dry-run]   # the brief runs this
-    python3 tools/followups.py --closed-quiet              # what /gmail-sync still searches
+    python3 tools/followups.py --closed-quiet              # closed on silence, still reopenable
 """
 
 from __future__ import annotations
@@ -115,9 +115,10 @@ LOG_AS = "followed up %s"      # the /outcome Step 2b form, so there is one to w
 # saying "chase again" ends it too, so lifting it never means rewriting history.
 _NOT_CHASED = re.compile(r"\bdo(?:[\s-]+not|n['’]?t)[\s-]+chase\b", re.I)
 
-# The employer's word since the application, as the row's notes record it: what
-# /gmail-sync writes (any signal but an acknowledgement), its reopening of a row closed
-# on silence, a hold "per the employer", and the plain words a person writes. Silence is
+# The employer's word since the application, as the row's notes record it: a reopening
+# of a row closed on silence, a hold "per the employer", the plain words a person writes,
+# and the `gmail-sync:` notes an older copy of the app wrote (any signal but an
+# acknowledgement), which old trackers still carry. Silence is
 # counted from the latest of these, not from the application: a recruiter who wrote on
 # day 40 has not been silent for 45 days. An automatic acknowledgement is not a word.
 _EMPLOYER_WORD = re.compile(
@@ -552,9 +553,9 @@ def close_quiet(path: str = TRACKER, today: datetime.date | None = None,
 
 
 # A row closed on silence is closed on a presumption, not an answer, and the note it
-# carries says a late reply is recorded. /gmail-sync searched only open rows, and
-# `no_response` is final, so no late reply to one was ever seen. It reads these too, for
-# this long after the close: callers in other tools take months to come back.
+# carries says a late reply is recorded. `no_response` is final, so a reader that looks
+# only at open rows never sees a late reply to one. These are listed for this long after
+# the close: callers in other tools take months to come back.
 REOPEN_WINDOW_DAYS = 120
 _CLOSED_QUIET = re.compile(r"(\d{4}-\d{2}-\d{2}): closed as no_response\b[^|]*"
                            r"\(followups\.py --close-quiet\)")
@@ -646,8 +647,8 @@ def main() -> int:
                     help="close every application gone quiet as no_response, with a dated note")
     ap.add_argument("--dry-run", action="store_true", help="with --close-quiet: list, write nothing")
     ap.add_argument("--closed-quiet", action="store_true",
-                    help="list the rows closed as gone quiet in the last %d days, which "
-                         "/gmail-sync still searches for a late reply" % REOPEN_WINDOW_DAYS)
+                    help="list the rows closed as gone quiet in the last %d days, which a "
+                         "late reply reopens through /outcome" % REOPEN_WINDOW_DAYS)
     a = ap.parse_args()
     today = datetime.date.fromisoformat(a.today)
     if a.closed_quiet:

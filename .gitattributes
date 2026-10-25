@@ -11,3 +11,4 @@ documents/interview/question_bank.csv merge=ljs-state text eol=lf
 profile/tips.json merge=ljs-state text eol=lf
 profile/learned.json merge=ljs-state text eol=lf
 profile/more_at.json merge=ljs-state text eol=lf
+documents/network/linkedin_export.json merge=ljs-state text eol=lf
