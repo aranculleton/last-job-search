@@ -56,6 +56,11 @@ def test_new_shells_find_what_it_installed_and_running_it_again_adds_nothing(hom
     text = rc.read_text()
     assert text.startswith("export EDITOR=vi\n") and text.count(I.RC_START) == 1
     assert "# path: $HOME/.local/bin" in text and "# path: $HOME/.bun/bin" in text
+    # A folder named the Windows way is written with "/", which a shell reads; with its
+    # backslashes, "$HOME\.bun\bin" read as "$HOME.bunbin" (the suite on Windows).
+    I.persist(["C:\\Tools\\bin"], home=str(home))
+    text = rc.read_text()
+    assert "\\" not in text and '*) PATH="C:/Tools/bin:$PATH"' in text
 
 
 def test_claude_codes_own_settings_gain_one_value_and_keep_the_rest(tmp_path):

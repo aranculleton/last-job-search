@@ -241,9 +241,12 @@ def persist(dirs: list[str], home: str | None = None) -> list[str]:
     if WINDOWS:
         return _persist_windows(dirs)
     home = home or HOME
+    # A shell's startup file takes "/" whatever the computer: a backslash there is an
+    # escape, and $HOME\.bun\bin would read as $HOME.bunbin.
     shown = []
     for d in dirs:
-        shown.append("$HOME" + d[len(home):] if d.startswith(home + os.sep) else d)
+        shown.append(("$HOME" + d[len(home):] if d.startswith(home + os.sep) else d)
+                     .replace("\\", "/"))
     changed = []
     for rc in rc_files():
         rc = rc.replace(HOME, home, 1)
