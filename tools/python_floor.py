@@ -43,7 +43,7 @@ def ok(info=None) -> bool:
 def utf8_stdio(streams=None) -> list[str]:
     """Read and write the terminal in UTF-8, whatever this computer's own encoding is.
 
-    Windows' Python writes to a pipe in the computer's code page (cp1252 in English,
+    Python on Windows writes to a pipe in the computer's code page (cp1252 in English,
     https://docs.python.org/3/library/sys.html#sys.stdout) unless UTF-8 mode is on, so a
     contact called Łukasz, a reply ending in 👍 or a name in another alphabet stopped a tool
     with UnicodeEncodeError halfway through what it was saying, and a pasted profile read

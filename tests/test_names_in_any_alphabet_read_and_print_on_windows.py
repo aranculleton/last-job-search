@@ -1,6 +1,6 @@
 """Text in and out of the app's tools, whatever the computer's own encoding.
 
-Windows' Python reads and writes a pipe in the computer's code page (cp1252 in English)
+Python on Windows reads and writes a pipe in the computer's code page (cp1252 in English)
 unless UTF-8 mode is on, and a spreadsheet saves CSV with a byte-order mark ("CSV UTF-8")
 or in that same code page (plain "CSV"). Found 2026-10-25:
 - a contact called Łukasz, or a reply ending in 👍, stopped a tool halfway through;
@@ -30,11 +30,11 @@ def _cp1252_env(**more):
 
 def test_a_tool_prints_any_name_where_the_terminal_is_cp1252():
     code = ("import sys; sys.path.insert(0, 'tools'); import person; "
-            "print('Łukasz Wójcik 👍 李雷'); print(sys.stdin.read().strip())")
+            "print('Łukasz 👍 李雷'); print(sys.stdin.read().strip())")
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=_cp1252_env(),
-                       input="Zoë Ødegård".encode("utf-8"), capture_output=True, timeout=60)
+                       input="Zoë, Ødegård".encode("utf-8"), capture_output=True, timeout=60)
     assert r.returncode == 0, r.stderr.decode("utf-8", "replace")
-    assert r.stdout.decode("utf-8").split() == ["Łukasz", "Wójcik", "👍", "李雷", "Zoë", "Ødegård"]
+    assert r.stdout.decode("utf-8").split() == ["Łukasz", "👍", "李雷", "Zoë,", "Ødegård"]
 
 
 def test_without_the_fix_that_same_print_stops_the_tool():
@@ -100,10 +100,10 @@ HEAD = "contact_id,name,company\r\n"
 
 def test_a_contact_book_excel_saved_as_csv_utf8_keeps_every_id(tmp_path, capsys):
     p = tmp_path / "network_contacts.csv"
-    p.write_bytes(b"\xef\xbb\xbf" + (HEAD + "lukasz_w,Łukasz Wójcik,Acme\r\n")
+    p.write_bytes(b"\xef\xbb\xbf" + (HEAD + "lukasz_w,Łukasz,Acme\r\n")
                   .encode("utf-8"))
     rows = csv_store.read_rows(str(p), ("contact_id", "name", "company"))
-    assert rows == [{"contact_id": "lukasz_w", "name": "Łukasz Wójcik", "company": "Acme"}]
+    assert rows == [{"contact_id": "lukasz_w", "name": "Łukasz", "company": "Acme"}]
     assert csv_store.header(str(p)) == ["contact_id", "name", "company"]
     csv_store.write_rows(str(p), rows, ("contact_id", "name", "company"))
     saved = p.read_bytes()
@@ -114,10 +114,10 @@ def test_a_contact_book_excel_saved_as_csv_utf8_keeps_every_id(tmp_path, capsys)
 
 def test_one_saved_as_plain_csv_is_read_and_saved_back_in_utf8(tmp_path, capsys):
     p = tmp_path / "network_contacts.csv"
-    p.write_bytes((HEAD + "zoe_d,Zoë Dürr,Café Ltd\r\n").encode("cp1252"))
+    p.write_bytes((HEAD + "zoe_d,Zoë,Café Ltd\r\n").encode("cp1252"))
     rows = csv_store.read_rows(str(p), ("contact_id", "name", "company"))
-    assert rows[0]["name"] == "Zoë Dürr" and rows[0]["company"] == "Café Ltd"
-    assert p.read_bytes() == (HEAD + "zoe_d,Zoë Dürr,Café Ltd\r\n").encode("utf-8")
+    assert rows[0]["name"] == "Zoë" and rows[0]["company"] == "Café Ltd"
+    assert p.read_bytes() == (HEAD + "zoe_d,Zoë,Café Ltd\r\n").encode("utf-8")
     assert "Windows' older text format" in capsys.readouterr().err
     # Read again: plain UTF-8 now, nothing more said.
     csv_store.read_rows(str(p), ("contact_id",))
@@ -129,7 +129,7 @@ def test_a_utf8_file_with_one_damaged_byte_is_read_and_left_alone(tmp_path, caps
     body = (HEAD + "lukasz_w,Łukasz,Acme\r\n").encode("utf-8") + b"bad,\xff,x\r\n"
     p.write_bytes(body)
     rows = csv_store.read_rows(str(p), ("contact_id", "name"))
-    assert rows[0]["name"] == "Łukasz" and rows[1]["name"] == "�"
+    assert rows[0]["name"] == "Łukasz" and rows[1]["name"] == "\ufffd"
     assert p.read_bytes() == body and "damaged character" in capsys.readouterr().err
 
 

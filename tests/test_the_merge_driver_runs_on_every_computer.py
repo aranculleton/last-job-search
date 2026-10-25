@@ -160,13 +160,13 @@ def test_the_row_merge_still_merges_two_chats_rows_with_the_new_driver(tmp_path)
     merge_state.install(str(a))
     g(a, "switch", "-q", "-c", "one")
     with open(a / "network_threads.csv", "a", encoding="utf-8") as fh:
-        fh.write("2026-10-03,di_moss,out,linkedin,first_note,Hello Di\n")
+        fh.write("2026-10-03,di_moss,out,linkedin,first_note,note to di\n")
     g(a, "commit", "-qam", "one")
     g(a, "switch", "-q", "master")
     with open(a / "network_threads.csv", "a", encoding="utf-8") as fh:
-        fh.write("2026-10-03,ed_fenn,out,email,first_note,Hello Ed\n")
+        fh.write("2026-10-03,ed_fenn,out,email,first_note,note to ed\n")
     g(a, "commit", "-qam", "two")
     r = g(a, "merge", "-q", "--no-edit", "one", check=False)
     assert r.returncode == 0, r.stdout + r.stderr
     text = (a / "network_threads.csv").read_text(encoding="utf-8")
-    assert "Hello Di" in text and "Hello Ed" in text
+    assert "note to di" in text and "note to ed" in text

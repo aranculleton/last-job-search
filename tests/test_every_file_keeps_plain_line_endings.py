@@ -30,12 +30,19 @@ def test_the_first_rule_is_every_text_file_lf():
     assert rules[0] == "* text=auto eol=lf"
 
 
-def test_nothing_tracked_holds_crlf():
-    if not os.path.isdir(os.path.join(ROOT, ".git")) and \
-            subprocess.run(["git", "-C", ROOT, "rev-parse"], capture_output=True).returncode:
-        pytest.skip("not a git checkout")
-    bad = [ln for ln in git(ROOT, "ls-files", "--eol").splitlines()
-           if ln.split()[0] in ("i/crlf", "i/mixed")]
+def test_no_app_text_file_holds_crlf():
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import repo_files
+    bad = []
+    for rel in repo_files.tracked():
+        try:
+            with open(os.path.join(ROOT, rel), "rb") as fh:
+                data = fh.read()
+        except OSError:
+            continue
+        if b"\0" not in data and b"\r\n" in data:          # a NUL byte: binary, left alone
+            bad.append(rel)
     assert bad == []
 
 

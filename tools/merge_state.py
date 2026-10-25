@@ -372,8 +372,8 @@ def merge_json(base, ours, theirs, path: str = "", later=None,
 # a driver that said python3 fell back to the line merge there on every merge, and two
 # chats' appended rows conflicted. Should that Python have gone since (removed, or a
 # virtual environment deleted), the shell says 126 or 127 and tools/py.sh finds another.
-# Git runs the driver in a shell, Git Bash's on Windows, so the path is written with
-# forward slashes and single-quoted.
+# Git runs the driver in a shell (on Windows, the one Git Bash brings), so the path is
+# written with forward slashes and single-quoted.
 def _sh_quote(path: str) -> str:
     return "'" + path.replace("\\", "/").replace("'", "'\\''") + "'"
 
