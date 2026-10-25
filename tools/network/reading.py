@@ -5676,8 +5676,9 @@ def _cli_next(a) -> int:
             # A read waiting in the background that ran past midnight found a new day with
             # no list, and stopped saying nothing was left.
             print(f"new day: yesterday's list ended with {len(left)} not read "
-                  f"({', '.join(left[:5])}). Today needs its own: "
-                  f"python3 tools/network/reading.py shortlist {' '.join(left)}, then "
+                  f"({', '.join(left[:5])}). Today needs its own: run the day's check "
+                  "(python3 tools/sync_app.py --if-stale --on \"<this session's model>\"), "
+                  f"then python3 tools/network/reading.py shortlist {' '.join(left)}, then "
                   "reading.py next again")
             return EXIT["new_day"]
         done = [i for i in _shortlist_file(datetime.date.today()) if _read_on(i, today)]

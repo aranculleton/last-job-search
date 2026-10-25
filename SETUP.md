@@ -293,7 +293,7 @@ package under `pypdf`. `pip3 install --upgrade cffi`.
 
 **Portal CLI does nothing.** Check Node or Bun is here (`python3 tools/env_check.py`) and that the portal is
 on: `python3 tools/portals.py` prints what the next round searches. The app's two portals are
-switched in `profile/search.py` `PORTALS`, never in their `SKILL.md`, which an update puts back.
+switched in `profile/search.py` `PORTALS`, never in their `SKILL.md`, which a sync puts back.
 
 **LaTeX cannot find `moderncv`.** The distribution is minimal; see the package list
 above. On the resume specifically, confirm you are running lualatex and not pdflatex.

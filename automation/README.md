@@ -9,7 +9,7 @@ registry, `profile/routines.json` (`profile.example/routines.json` shows the sha
 
 | Task | What it delivers |
 |---|---|
-| **Job search: morning brief**, twice a week (Monday and Thursday suit most searches) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also looks at the app and says once when an update is waiting; it never takes one, which waits for the person's word (`prompts/morning_brief.md`). |
+| **Job search: morning brief**, twice a week (Monday and Thursday suit most searches) | Led by where the search is (an interview to prep, replies owed, applications waiting, or too little going out), then what is owed with the replies and nudges drafted, the counts since the last brief, three things to do before the next one, and the news that matters. Every run also takes the app's updates, so the copy stays current when no chat is opened (`prompts/morning_brief.md`). |
 | **Job search: shortlist**, optional and off by default | A scored round of new postings, best first (`prompts/job_round.md`). Reply with picks in the same chat and it drafts, verifies and records them. |
 
 **If no brief has arrived two hours after its time on one of its days, the automation is

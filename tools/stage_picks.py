@@ -969,6 +969,11 @@ def _no_role(contact_id: str) -> int:
 
 
 def main() -> int:
+    try:  # a chat that carried on into a new day has not checked the app since
+        import sync_app
+        sync_app.nudge()
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("stage")

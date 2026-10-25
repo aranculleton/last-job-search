@@ -387,7 +387,7 @@ stops at LinkedIn's first signal. LinkedIn is never fetched from a session.
         most of a run). Run `python3 tools/network/reading.py next`: it names who to read and
         their address. Read the page, run `read`, show the note it allows, then `next` again,
         straight away. When it says `new day` (exit 13), a run went past midnight: do what it
-        prints (today's list). When `next` says `done` (exit 12), show
+        prints (the day's check, then today's list). When `next` says `done` (exit 12), show
         any draft not yet shown and tell the person the run is done, with a notification
         where the session has one. Never open two pages at once.
       - **Only LinkedIn stops a read.** A security check or CAPTCHA, an "unusual activity"

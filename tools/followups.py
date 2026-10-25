@@ -636,6 +636,11 @@ def render(items: list[dict], today: datetime.date) -> list[str]:
 
 
 def main() -> int:
+    try:  # a chat that carried on into a new day has not checked the app since
+        import sync_app
+        sync_app.nudge()
+    except Exception:
+        pass
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     ap.add_argument("--close-quiet", action="store_true",

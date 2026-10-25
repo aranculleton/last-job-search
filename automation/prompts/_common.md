@@ -21,13 +21,13 @@ employer or a contact.
    (add `-2` if that name exists). Never reset, rebase or force anything: the session's
    permission checks block history-rewriting git commands, and they are right to. A new
    branch per run means there is never earlier work to overwrite.
-2. **Look at the app**: `python3 tools/sync_app.py --if-stale --on "<the model this run
-   is on>"`. It changes nothing of the app: a scheduled run never takes an update, which
-   waits for the person's own word in their own chat. When it prints "An update is
-   waiting", that one line goes at the end of the message, once: leave it out when the last
-   message (the newest `documents/briefs/*.md`) already said it. Its model check and its place check are for a person's own chat: leave both out of the message. If it prints "Job sites blocked", those words open the message, every run until it is fixed. Exit 1 or 2: one line in the
-   message, and carry on with the run. If it lists upgrades Claude applies itself (they
-   belong to the version this repo already has), run
+2. **Take the app's updates**: `python3 tools/sync_app.py --if-stale --on "<the model this run
+   is on>"`. A person may not open a chat for days, so this run is what keeps their copy
+   current. Where their profile says updates wait for their word (`"app_updates": "when_asked"`),
+   the same command only looks: a line "An update is waiting" goes at the end of the message,
+   once, left out when the last message (the newest `documents/briefs/*.md`) already said it.
+   Its model check and its place check are for a person's own chat: leave both out of the message. If it prints "Job sites blocked", those words open the message, every run until it is fixed. Exit 1 or 2: one line in the
+   message, and carry on with the run. If it lists upgrades Claude applies itself, run
    `/upgrade 20` now; at the end of the message, one plain line per change it made for
    them, never a commit or a command. Never put a question to the person mid-run: at
    most three of the ones that need them go at the end of the message.

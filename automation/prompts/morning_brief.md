@@ -2,7 +2,7 @@
 
 One message, twice a week, built around where this person's search is right now. It does
 not search for jobs: a fresh shortlist is one "find me jobs" away whenever they want one.
-`_common.md` first, which has already looked at the app (and taken nothing from it).
+`_common.md` first, which has already brought in the app's updates.
 
 ## Read first
 

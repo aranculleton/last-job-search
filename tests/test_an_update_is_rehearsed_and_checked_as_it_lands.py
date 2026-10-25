@@ -107,3 +107,21 @@ def test_an_app_commit_held_only_by_origin_master_is_copied_by_its_commit(tmp_pa
     missing = "0" * 40
     said = rehearse_sync.copy_app(app_repo, str(tmp_path / "app2"), missing)
     assert said.startswith("000000000000 could not be copied from")
+
+
+def test_a_rehearsal_looks_first_only_where_the_person_chose_to_say_when(tmp_path):
+    # By default an update arrives by itself, so the rehearsal's plain run takes it. Where
+    # their profile asks to choose when, and their copy of the sync knows --update, the
+    # rehearsal plays the look first and then the update they asked for.
+    import rehearse_sync as rs
+    (tmp_path / "tools").mkdir()
+    (tmp_path / "profile").mkdir()
+    sync = tmp_path / "tools" / "sync_app.py"
+    person = tmp_path / "profile" / "person.json"
+    sync.write_text('mode.add_argument("--update")\n', encoding="utf-8")
+    person.write_text("{}\n", encoding="utf-8")
+    assert rs._waits(str(tmp_path)) is False
+    person.write_text('{"app_updates": "when_asked"}\n', encoding="utf-8")
+    assert rs._waits(str(tmp_path)) is True
+    sync.write_text("an older copy with no such option\n", encoding="utf-8")
+    assert rs._waits(str(tmp_path)) is False
