@@ -444,7 +444,7 @@ def application_cases(tracker: list[dict], today=None) -> list[dict]:
         if id(r) in later or throttle.is_process(r):
             continue        # a process with no application is not an application's result
         status = str(r.get("status") or "").strip().lower()
-        applied = _date(r.get("date"))
+        applied = _date(throttle.applied_on(r))
         if status in WIN or (status in LOSS and reached_interview(r)):
             won = True
         elif status in LOSS or (status == "applied" and applied
@@ -468,7 +468,8 @@ def _waiting(tracker, today) -> int:
     later = followups.superseded(tracker)
     return sum(1 for r in tracker if str(r.get("status") or "").strip().lower() == "applied"
                and id(r) not in later
-               and _date(r.get("date")) and (today - _date(r.get("date"))).days < SILENT_DAYS)
+               and _date(throttle.applied_on(r))
+               and (today - _date(throttle.applied_on(r))).days < SILENT_DAYS)
 
 
 def brief_documents(tracker, kept, today=None) -> str:

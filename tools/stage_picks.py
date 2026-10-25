@@ -436,8 +436,12 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
     # rewrites picks.json, and the files a slug holds still need to say whose they are.
     staged_roles = _read_roles(round_dir)
     staged, apps_in, claimed, seen_slugs = [], [], set(), set()
+    # Each link as the person will click it: tracking off, a redirect unwrapped, checked on
+    # the employer's own board where one is on file (tools/apply_link.py), each board once.
+    import apply_link
+    links = apply_link.Checker()
     for n, pick in enumerate(picks, 1):
-        r = _find(shortlist, pick)
+        r = links.shown(_find(shortlist, pick))
         # Checked before the posting is fetched: a contact at another employer is a mistake.
         mine = _for_contact_fields(contact, r["company"], route) if contact is not None else {}
         abbr = choose_abbr(r["company"], r["title"], rows, root, claimed)
@@ -476,6 +480,7 @@ def stage(round_dir: str, picks: list[str], rows: list[dict] | None = None,
             f"- location: {r.get('location', '')}",
             f"- posted: {r.get('date', '')}",
             f"- url: {r.get('url', '')}",
+            f"- apply link: {apply_link.line(r)}",
             f"- portal: {r.get('portal', '')}",
             f"- fit {r.get('fit')}, opportunity {r.get('opportunity')}, priority {r.get('priority')}",
             f"- flags: {json.dumps(r.get('flags') or [])}",

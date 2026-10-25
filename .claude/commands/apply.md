@@ -128,8 +128,11 @@ since, or can back it up, and the word left off can be the one an ATS screens on
 posting too, and ask the same way about any other skill it names that the profile lacks.
 
 The tracker knows only what was recorded here (CLAUDE.md, "Memory": "The tracker only knows
-what was recorded"). A yes is recorded as a tracker row at `applied` with the date they give, and
-nothing is drafted.
+what was recorded"). A yes is recorded with `python3 tools/confirm.py applied --new --company
+"<Employer>" --role "<Role>" --url "<link>" --on <the date they give> --source chat` (or
+`confirm.py applied "<Employer>::<role words>" --on <date> --source chat` when the tracker
+already has the row), never by editing the tracker, and the line it prints is shown to them so
+they see exactly which application it recorded. Nothing is drafted.
 
 **Stop until the user answers.** A rejected angle after drafting costs the whole drafting and
 review cycle again; a rejected angle here costs fifteen lines.

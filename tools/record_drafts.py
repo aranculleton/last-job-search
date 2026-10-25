@@ -51,13 +51,13 @@ import csv_store  # noqa: E402
 import docpaths  # noqa: E402
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
-from throttle import FINAL, UNSENT, _same_title  # noqa: E402
+from throttle import CONFIRM_COLUMNS, FINAL, UNSENT, _same_title  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TRACKER = person.state("job_search_tracker.csv")
 HEADER = ["date", "company", "sector", "role", "role_type", "channel", "status",
           "contact_person", "fit_rating", "notes", "cv_file", "cover_letter_file",
-          "source", "deadline"]
+          "source", "deadline", *CONFIRM_COLUMNS]
 # A final status is throttle.FINAL, imported rather than copied: the copy that
 # lived here lacked `declined`, so a declined row read as open and a new draft
 # for the same role overwrote its outcome. The match is the throttle's too: one
@@ -179,6 +179,11 @@ def _row_for(draft: dict, meta: dict, today: str, round_name: str,
         (meta.get("warm_route_note") or ""),
         (meta.get("outreach_pending_note") or ""),
         (f"Req {str(draft['req_id']).strip()}." if str(draft.get("req_id") or "").strip() else ""),
+        # The link as checked when it was staged (tools/apply_link.py): the employer's own
+        # listing where it differs from where the posting was found, or that it had closed.
+        (f"Apply at {meta['apply_url']} ({meta.get('link_check', '')})."
+         if meta.get("apply_url") and meta.get("apply_url") != meta.get("url") else
+         f"Link {meta['link_check']}." if meta.get("link_status") == "closed" else ""),
         made_for_note(who) if who else "",
         (f"Letter addressed to {str(draft['contact_person']).strip()}."
          if who and str(draft.get("contact_person") or "").strip() else ""),
@@ -235,7 +240,7 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             done.append(("added", new))
             continue
         # Never move an open row backwards: refresh the documents and the score,
-        # keep its status, and only move the date if nothing was ever sent.
+        # keep its status and its date.
         for col in ("cv_file", "cover_letter_file", "fit_rating", "source"):
             if new[col] and not (col == "source" and new[col].startswith("contact:")
                                  and (open_match.get("source") or "").strip()):
@@ -251,8 +256,8 @@ def record(drafts: list[dict], metas: dict[str, dict], today: str, round_name: s
             if said not in (open_match.get("notes") or ""):
                 open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | "
                                        + said).strip(" |")
-        if (open_match.get("status") or "").strip().lower() == "drafted":
-            open_match["date"] = today
+        # The row keeps its `date`, the day it was made: it is part of the key two chats'
+        # copies of the tracker merge on (tools/merge_state.py).
         open_match["notes"] = ((open_match.get("notes") or "").rstrip() + " | redrafted").strip(" |")
         done.append(("updated", open_match))
     csv_store.write_rows(path, rows, HEADER)

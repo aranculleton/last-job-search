@@ -202,8 +202,10 @@ class DraftedMeansDraftedToEveryReader(unittest.TestCase):
          "the headline count would include applications that were never sent"),
         (OUTCOME, "## Step 2b: Follow-Up Branch", "neither final nor `drafted`",
          "it would chase an employer who received nothing"),
+        # The day it went is its own column, so `date` (part of the tracker's merge key)
+        # never moves and the drafting date is never read as the application date.
         (OUTCOME, "## Step 4: Update the Tracker",
-         "overwrite its `date` column with the actual submission date",
+         "The day it went is `applied_on`. `confirm.py applied <row> --on <the submission date>",
          "the drafting date would be reported as the application date"),
         (SCRAPER, None, "do not add a second row",
          "/scrape would duplicate the row Step 3b just wrote"),
