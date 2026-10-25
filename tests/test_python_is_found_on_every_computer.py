@@ -104,8 +104,10 @@ def _alone(tmp_path):
 def _run(args, path, cwd=ROOT, stdin=None, env=None):
     e = _env(path, **(env or {}))
     sh = _alone(Path(str(path)).parent)
-    return subprocess.run([SH, sh, *args], cwd=cwd, env=e, input=stdin,
-                          capture_output=True, text=True, encoding="utf-8", timeout=60)
+    # errors="replace": a path printed in another code page then fails as the wrong path,
+    # with what was printed, where a strict read gave stdout None and no reason.
+    return subprocess.run([SH, sh, *args], cwd=cwd, env=e, input=stdin, capture_output=True,
+                          text=True, encoding="utf-8", errors="replace", timeout=60)
 
 
 def test_which_names_a_python_that_runs_three_nine_or_newer():
@@ -135,6 +137,29 @@ def test_only_windows_py_launcher_is_resolved_to_the_python_it_starts(tmp_path):
     r = _run(["--which"], b)
     assert r.returncode == 0, r.stderr
     assert os.path.realpath(r.stdout.strip()) == os.path.realpath(sys.executable)
+
+
+def test_the_launchers_python_under_a_folder_named_with_an_accent_is_found(tmp_path):
+    # Python on Windows writes to a pipe in the ANSI code page unless asked for UTF-8
+    # (https://docs.python.org/3/library/sys.html#sys.stdout), and the -I that keeps the
+    # try fast also drops PYTHONUTF8, so py.sh asks with -X utf8. The stand-in `py` answers
+    # as that Python does: its path in cp1252, or in UTF-8 when asked. Git Bash, like any
+    # sh here, reads a path as UTF-8, so only the second one runs.
+    b = _bin(tmp_path)
+    _script(b / "python3", STORE_STUB)
+    real = tmp_path / "Zoë Quillfeather" / "python"
+    real.parent.mkdir()
+    _real_python(real)
+    named = _posix(real)
+    py = b / "py"
+    py.write_bytes(b'#!/bin/sh\ncase " $* " in\n'
+                   b'  *" -X utf8 "*) printf \'%s\\n\' "' + named.encode("utf-8") + b'" ;;\n'
+                   b'  *) printf \'%s\\n\' "' + named.encode("cp1252", "replace") + b'" ;;\n'
+                   b'esac\n')
+    py.chmod(0o755)
+    r = _run(["--which"], b)
+    assert r.returncode == 0, r.stderr
+    assert _named(r.stdout) == _named(real)
 
 
 def test_no_python_at_all_is_one_plain_line_and_exit_1(tmp_path):

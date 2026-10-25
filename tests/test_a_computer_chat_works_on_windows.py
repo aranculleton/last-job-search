@@ -20,6 +20,7 @@ import pytest
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
 sys.path.insert(0, TOOLS)
+import personal_paths  # noqa: E402
 
 pytestmark = pytest.mark.skipif(not (shutil.which("git") and shutil.which("sh")),
                                 reason="needs git and a POSIX sh")
@@ -73,6 +74,13 @@ def run(argv, cwd, env, stdin=None, timeout=180):
     return r.returncode, out, err
 
 
+def said(rc, out, err):
+    """What a command said, on one line: pytest's summary shows a message's first line only,
+    and the reason a sync stopped was on its second (2026-10-25)."""
+    lines = [ln.strip() for ln in (out + "\n" + err).splitlines() if ln.strip()]
+    return f"exit {rc}: " + " | ".join(lines)[-1500:]
+
+
 def git(cwd, *args, env=None):
     return subprocess.run(["git", *args], cwd=cwd, env=dict(os.environ, **GIT_ID, **(env or {})),
                           capture_output=True, text=True, encoding="utf-8", errors="replace",
@@ -80,9 +88,21 @@ def git(cwd, *args, env=None):
 
 
 def _copy_app(dest):
-    shutil.copytree(ROOT, dest, ignore=shutil.ignore_patterns(
+    """The app as GitHub holds it: this checkout less the person's own files. The suite also
+    runs inside a person's copy (ci_local.sh there, as the computer chat's CI leg does), where
+    their contact book sits beside the tools, and a stand-in app carrying it is one the sync
+    rightly refuses: "The app's commits touch personal paths" (2026-10-25)."""
+    skip = shutil.ignore_patterns(
         ".git", "__pycache__", ".pytest_cache", "documents", "cv", "cover_letters", "texmf",
-        "node_modules", "worktrees", "profile"))
+        "node_modules", "worktrees", "profile")
+
+    def ignore(folder, names):
+        rel = os.path.relpath(folder, ROOT).replace(os.sep, "/")
+        return set(skip(folder, names)) | {
+            n for n in names if not os.path.isdir(os.path.join(folder, n))
+            and personal_paths.is_personal(n if rel == "." else f"{rel}/{n}")}
+
+    shutil.copytree(ROOT, dest, ignore=ignore)
 
 
 # ------------------------------------------------------------------ the hooks
@@ -140,15 +160,15 @@ def test_the_days_sync_pull_and_own_folder_on_windows(tmp_path, win):
     app, me, _origin = _person_repo(tmp_path)
     env = dict(env, LJS_APP_URL=str(app))
     rc, out, err = run([py, "tools/sync_app.py", "--pull"], me, env)
-    assert rc == 0, out + err
+    assert rc == 0, said(rc, out, err)
     rc, out, err = run([py, "tools/sync_app.py", "--if-stale", "--on", "a model",
                         "--tools", "none"], me, env, timeout=600)
-    assert rc == 0, out + err
+    assert rc == 0, said(rc, out, err)
     assert "A reply from Łukasz is read whole" in out
     assert "already checked today" in run([py, "tools/sync_app.py", "--if-stale", "--on", "x",
                                            "--tools", "none"], me, env)[1]
     rc, out, err = run([py, "tools/sync_app.py", "--worktree", "Laptop chat"], me, env)
-    assert rc == 0, out + err
+    assert rc == 0, said(rc, out, err)
     assert (me / ".claude" / "worktrees" / "laptop-chat" / "tools" / "sync_app.py").exists()
     # The driver it set runs a Python that is not the Store stand-in: the one the sync ran
     # under, by its full path (the stand-in folder's, "Program Files" in it, off Windows).
