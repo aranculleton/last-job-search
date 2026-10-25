@@ -36,7 +36,8 @@ make. The rest of
 `bullets.py`, `skills.py`, `search.py`, `employers.py`, `boards.py`, `networking.py`,
 `claims.py`, `screening.py`) and the documents written from it: `02-behavioral-profile.md`,
 `04-job-evaluation.md`, `10-triage-blockers.md`, `12-scoring-brief.md`, `13-positioning.md`.
-If there is no `profile/`, nothing here can run: start with `/setup`.
+If there is no `profile/`, nothing here can run: start with `/setup`, once `python3
+tools/place.py state` says there is none anywhere (start of every session, step 3).
 
 ## Start of every session
 
@@ -69,7 +70,12 @@ Every session in a person's repo starts with the same five steps, before anythin
    that fails too, say so in one line and carry on. Exit 1 means it stopped with nothing
    changed: do what it printed yourself (commit the work it lists, carry across what it
    names) and run it again. Never put it to the person: saving and updating are always yes.
-3. **No `profile/`?** Then nothing here can run yet. Start with `/setup`, before anything else.
+3. **No `profile/`?** First `python3 tools/place.py state`, before anything is asked: another
+   chat may hold the profile on master or on a branch it has not landed (it brings it in and
+   the search is set up), or still be writing it (say its one line and start nothing). Only
+   with none anywhere, start `/setup`. **A profile here is never set up again** (that is
+   `/reset`): in a chat on their computer it is "Your search is already set up; this computer
+   is ready for it too.", and nothing is asked, least of all a resume.
 4. **If the sync brought changes**, say in one plain line what changed for them, from the
    lines it printed under "What changed": never a file, a command, a version or a git word.
 5. **Profile upgrades apply themselves; nobody has to ask.** The sync ends by listing what
@@ -199,10 +205,11 @@ merging a pull request, `git fetch origin master` and then `git merge origin/mas
 command of its own, so that merge
 happens in the container, where the driver is set, and not on GitHub, where it is not.
 
-**On the person's own computer** a chat has no GitHub tools and lands its work with `gh`,
-and **each local chat works in a folder of its own, made before any other work**
-(`python3 tools/sync_app.py --worktree <name>`): two chats in one folder switch branches
-under each other. RUNBOOK.md step 4 has the commands, how to tell a merge worked, and what
+**On the person's own computer** a chat has no GitHub tools and lands its work with `gh`.
+**The first chat on a computer works in the copy itself**, the folder COMPUTER.md made; **a
+second chat open there at the same time works in a folder of its own, made before any other
+work** (`python3 tools/sync_app.py --worktree <name>`): two chats in one folder switch
+branches under each other. RUNBOOK.md step 4 has the commands, how to tell a merge worked, and what
 to do when the desktop app refuses one. **Each runs as a command of its own, the merge above
 all, never chained**: a chain with one part the app has not pre-approved sends the whole of
 it, merge included, to auto mode's own check, which refuses the merge.
@@ -278,24 +285,27 @@ or rebuild one, and never test a chat-bound task with `fire_trigger` (use a one-
 `run_once_at` task bound to the chat). `python3 tools/routines.py check` validates the
 registry.
 
-**"Set up my brief" is set-up (a) in `automation/README.md`.** First `python3 tools/routines.py
-brief` (with `--triggers <file>` holding the account's scheduled tasks, where the chat can list
-them): a brief that exists, whatever it is called, is attached to and never made twice, and a
-task that only looks like one is asked about. The brief always runs in the cloud. **In a cloud
-chat**, the task's own chat comes next: start it yourself where the session can
-(`create_session` on the person's private repo, titled "Job search: morning brief", with the
-paste in (a) step 2 as its prompt), otherwise give them that paste for a new chat at
-claude.ai/code; that chat asks its two questions, so say where to answer them, and creates the
-task. **On their computer** (`python3 tools/claude_surfaces.py show <id>` for remote-trigger,
-routines-cloud, routines-local and cli-cloud, each dated and sourced): with the `RemoteTrigger`
-tool, make it yourself as (b), on the private repo, the stub as its prompt, notifications on,
-recorded as `routines_screen`; without it, ask them once, in the words `claude_surfaces.py say
-routines-cloud` prints. Never start a cloud chat from your own shell (cli-cloud: the command
-refuses a shell that is not an interactive terminal, which yours is not), and never make a
-desktop scheduled task for the brief (it runs on the computer). The line `routines.py brief`
-prints is for you: act on it, and tell the person in one plain line only that their brief is
-set up or is being set up, never its file, id or task name. (b) is also for someone who
-would rather have each run arrive as a new chat and a notification.
+**"Set up my brief" is set-up (a) in `automation/README.md`, and `/setup` does it at its end,
+asking nothing.** First list the account's scheduled tasks (`list_triggers`, every page) and
+run `python3 tools/routines.py brief --triggers <each page>`: a brief that exists, whatever it
+is called, is attached to and never made twice, and a task that only looks like one is asked
+about. The brief always runs in the cloud. **In a cloud chat** with none, `brief` prints the
+calls to make, in order: `create_session` on the person's private repo, titled "Job search:
+morning brief" and with no prompt; `create_trigger` bound to that chat
+(`persistent_session_id`), `CRON_TZ=<their zone> 38 7 * * 1,4`, the stub as its prompt,
+`connectors: []`; and a one-off `run_once_at` first brief bound to the same chat, never
+`fire_trigger`. Then `routines.py record`, and land it. A chat told "Set up my brief in this
+chat" binds the task to itself the same way. **On their computer**
+(`python3 tools/claude_surfaces.py show <id>` for remote-trigger, routines-cloud,
+routines-local and cli-cloud): with the `RemoteTrigger` tool, make it yourself as (b), on the
+private repo, the stub as its prompt, notifications on, recorded as `routines_screen`;
+without it, give them once the steps `claude_surfaces.py steps routines-cloud` prints. Never
+start a cloud chat from your own shell (cli-cloud: the command refuses a shell that is not an
+interactive terminal, which yours is not), and never make a desktop scheduled task for the
+brief (it runs on the computer). The lines `routines.py brief` prints are for you: act on
+them, and tell the person only the one line it gives ("Your brief is set up: Mondays and
+Thursdays at 7:38, ..."), never its file, id or task name. (b) is also for someone who would
+rather have each run arrive as a new chat and a notification.
 
 **Silence is the alarm**: the brief is delivered on each of its days even when nothing is
 due, so one of those mornings with no brief means the automation is broken; `automation/README.md` has the set-up
@@ -517,8 +527,9 @@ contacted. Load the skill before any outreach. What a session needs before it do
 ## A step on another company's site is checked before it is given
 
 Steps that name LinkedIn's, Gmail's, GitHub's or Claude's own screens come from
-`tools/claude_surfaces.json` (`claude_surfaces.py steps <id>`), each headed by the day it was
-checked and its official page. Before giving one, check that page that day: a web search for
+`tools/claude_surfaces.json` (`claude_surfaces.py steps <id>`). Each carries the day it was
+checked and its official page, for you and never the person: `steps` and `say` print them on
+stderr, and `show <id>` prints the quotes. Before giving one, check that page that day: a web search for
 linkedin.com, which no session fetches, and a fetch for the rest. Where the page says
 something else, give what it says and fix the entry. Where it cannot be checked, say "I could
 not check this today" and keep the step short. Never pass on a step about another site from

@@ -6,7 +6,7 @@ description: >
   like: job posting, job application, CV, cover letter, resume, interview prep, job fit,
   career, application, apply, tailor, ATS, shortlist
 allowed-tools: Read, Glob, Grep, WebFetch, WebSearch, Bash, Edit, Write, AskUserQuestion
-framework_version: 1.5.8
+framework_version: 1.5.9
 ---
 
 # Job Application Assistant
@@ -63,6 +63,7 @@ candidate, and the app ships none of it. The rest are the app's and live beside 
 | `11-cost-model.md` | Where lifecycle tokens actually go, and which model each stage should run on |
 | `profile/12-scoring-brief.md` | The compact Tier 3 scoring brief, derived from the profile - the only file a scoring agent needs to produce a score |
 | `profile/13-positioning.md` | How to win a role once it is worth going after: brand, framing, voice and what not to do |
+| `setup-sections.md` | How /setup writes each part of the profile, section by section; `/setup` itself is the order and the questions |
 
 ---
 

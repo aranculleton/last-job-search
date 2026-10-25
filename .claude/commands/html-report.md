@@ -125,9 +125,14 @@ Columns with only empty values across all rows may be omitted.
 
 Write the complete HTML to the output path using the Write tool.
 
-Then **send the file into the conversation** with the session's file-sending tool (SendUserFile or its equivalent), so it opens in one tap: in a cloud session the person has no browser pointed at this container, and a path is not something they can open. Where no such tool exists, say so in one line and give the path. Then present:
+Then put it where they can open it, in this order:
 
-> **Dashboard:** sent above, and kept at `<output path>`
+1. **Where the chat has the Artifact tool**, publish the same file as a private artifact and give its link: an artifact is a page "published from your session to a private URL on claude.ai", opened in any browser and updated in place when the dashboard is made again ([artifacts](https://code.claude.com/docs/en/artifacts)), so it opens on a phone or a computer alike. It stays private unless they share it. A later `/html-report` finds it (the tool's own list of their artifacts) and updates it at the same address rather than making a second.
+2. **Also send the file** with the session's file-sending tool (SendUserFile or its equivalent, `display: "attach"`), so they can keep it: in a cloud session the person has no browser pointed at this container, and a path is not something they can open. With neither tool (a chat on their computer with no file-sending tool), write its full path as plain text: the desktop app opens a path written in the chat when it is clicked.
+
+Then present:
+
+> **Dashboard:** <the artifact's link, or "sent above">, and kept at `<output path>`
 >
 > **Summary:**
 > - Applications sent: N · drafted, not yet sent: N
