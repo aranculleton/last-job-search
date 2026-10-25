@@ -115,6 +115,18 @@ def test_the_apps_own_address_in_capitals_is_still_the_app_and_the_owner_alone_i
     assert found == ["t.py:2: denylist entry 1", "t.py:3: denylist entry 1"]
 
 
+def test_a_pr_or_commit_text_may_link_the_app_but_never_name_its_owner(tmp_path):
+    # Commit messages and PR text are scanned without a file's allowances; the app's own
+    # address is allowed there too, in any case, and nothing else is (2026-10-25).
+    owner = "".join(["ar", "ancull", "eton"])
+    t = tmp_path / "pr.txt"
+    t.write_text(f"Steps: https://github.com/{owner}/last-job-search/blob/master/X.md\n"
+                 f"APP = \"{owner.upper()}/last-job-search\"\n"
+                 f"Thanks to {owner} for the idea\n", encoding="utf-8")
+    found = leak_scan.scan_text([str(t)], leak_scan.tokens_from([owner]))
+    assert found == ["pr.txt:3: denylist entry 1"]
+
+
 def test_an_unknown_binary_fails_and_a_vendored_font_passes(tmp_path, monkeypatch):
     t = _tree(tmp_path, {"cover_letters/OpenFonts/fonts/x.ttf": b"\0\1binary",
                          "documents_scan.png": b"\x89PNG\0\0"})

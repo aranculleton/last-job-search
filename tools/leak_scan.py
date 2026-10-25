@@ -232,10 +232,13 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
     commit messages. A public repo's PR descriptions and history are as public as its
     files, and a name written there once (2026-10-18) was never scanned."""
     keyed = [(_key(pat), (pat, n)) for pat, n in tokens]
+    # The allowances that hold anywhere (the app's own address and openroles'), so a PR
+    # or a commit that links the app is not a leak; nothing tied to one file applies.
+    anywhere = [re.compile(rx) for g, rx in ALLOW if g == "**"]
     out: list[str] = []
     for p in paths:
         with open(p, encoding="utf-8", errors="replace") as fh:
-            out += _scan_text(os.path.basename(p), fh.read(), [], keyed, show)
+            out += _scan_text(os.path.basename(p), fh.read(), anywhere, keyed, show)
     return out
 
 
