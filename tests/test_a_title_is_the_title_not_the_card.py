@@ -57,7 +57,7 @@ def test_a_badge_and_the_rows_own_place_are_cut(title, location, clean):
     ("Data Analyst - Austin, TX", "Toronto, ON"),
     # A place that is a word of the title is not a repeat of the row's.
     ("Teacher of Reading", "Reading, UK"),
-    ("Store Manager Toronto Eaton Centre", "Toronto, ON"),
+    ("Store Manager Toronto Wexmoor Centre", "Toronto, ON"),
     # Remote is the gate's to read where the location does not say it.
     ("Data Analyst - Toronto (Remote)", "Toronto, ON"),
     # Nothing left would be no title at all.
