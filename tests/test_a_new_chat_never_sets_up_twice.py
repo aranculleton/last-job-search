@@ -99,3 +99,15 @@ def test_a_profile_here_or_on_master_is_ready(repos, tmp_path):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text("{}")
     assert S.state(str(clone), fetch=False) == ("ready", "")
+
+
+def test_the_line_for_a_new_computer_names_the_copy_and_the_page(repos):
+    _origin, clone, _branch = repos
+    _git(clone, "remote", "set-url", "origin", "https://github.com/morgan-ellis/my-job-search.git")
+    assert S.this_copy(str(clone)) == ("morgan-ellis", "my-job-search")
+    line = S.paste(*S.this_copy(str(clone)))
+    assert line == ("Open my job search on this computer: github.com/morgan-ellis/my-job-search. "
+                    "Steps: https://github.com/aranculleton/last-job-search/blob/master/COMPUTER.md")
+    with open(os.path.join(ROOT, "COMPUTER.md"), encoding="utf-8") as fh:
+        page = fh.read()
+    assert "Open my job search on this computer" in page and S.PAGE.endswith("/COMPUTER.md")

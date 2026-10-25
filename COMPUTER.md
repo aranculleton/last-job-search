@@ -1,10 +1,10 @@
 # On your own computer
 
 **For you:** open the Claude desktop app, choose **Code**, pick a new empty folder, and
-paste the line your other chat gave you (or say "Set up my job search on this computer
-from github.com/aranculleton/last-job-search/blob/master/COMPUTER.md"). Claude does the
-rest. The only things that are yours: copying one code into GitHub's page to sign in, and
-on a Mac with nothing set up, clicking **Install** in a window from Apple.
+paste the line your other chat gave you, which starts "Open my job search on this
+computer" (or type that, with a link to this page). Claude does the rest. The only things
+that are yours: copying one code into GitHub's page to sign in, and on a Mac with nothing
+set up, clicking **Install** in a window from Apple.
 
 ---
 
@@ -13,6 +13,10 @@ never send the person to Homebrew, winget, an installer or a terminal. Nothing h
 an administrator password. Say one plain line per step at most, and never show a command,
 a path, a branch or the word "repository" to the person. Put nothing on top of the steps:
 no notes about browsers, accounts or automation.
+
+The person's message reads like "Open my job search on this computer: github.com/OWNER/NAME.
+Steps: https://github.com/aranculleton/last-job-search/blob/master/COMPUTER.md". A chat
+that is to give them that line prints it with `python3 tools/setup_state.py --paste`.
 
 `APP` below is a fresh shallow copy of the public app, kept outside the person's folder:
 `~/.cache/last-job-search-app` on a Mac or Linux, `%LOCALAPPDATA%\last-job-search-app` on

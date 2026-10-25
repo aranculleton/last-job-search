@@ -18,6 +18,9 @@ with no profile anywhere, is set up:
 
 Exit 0 for ready and ready-elsewhere, 3 for running, 4 for unfinished and none.
 
+    python3 tools/setup_state.py --paste  the one line a person pastes into a new chat on
+                                          their computer (COMPUTER.md), naming this copy
+
 "Under way" is the marker /setup keeps while it runs (`profile/.setup_running`, removed
 when it ends), or a branch holding part of a profile that was pushed to within the
 last RECENT_HOURS. A part-profile older than that was left, and /setup carries it on.
@@ -48,6 +51,21 @@ SAY = {
     "none": "",
 }
 EXIT = {"ready": 0, "ready-elsewhere": 0, "running": 3, "unfinished": 4, "none": 4}
+PAGE = "https://github.com/aranculleton/last-job-search/blob/master/COMPUTER.md"
+
+
+def paste(owner: str, name: str) -> str:
+    """What the person pastes into the first chat on their computer: their copy and the
+    page that chat follows."""
+    return f"Open my job search on this computer: github.com/{owner}/{name}. Steps: {PAGE}"
+
+
+def this_copy(root=ROOT) -> tuple[str, str]:
+    """(owner, name) of this copy on GitHub, from its origin; ("", "") when not known."""
+    import re
+    code, url = _git("remote", "get-url", "origin", root=root)
+    m = re.search(r"github\.com[/:]([^/]+)/([^/]+?)(?:\.git)?/?$", url.strip()) if code == 0 else None
+    return (m.group(1), m.group(2)) if m else ("", "")
 
 
 def _git(*args, root=ROOT, timeout=60):
@@ -122,6 +140,13 @@ def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] in (["-h"], ["--help"]):
         print(__doc__.strip().split("\n\n")[1])
+        return 0
+    if "--paste" in argv:
+        owner, name = this_copy()
+        if not owner:
+            print("setup_state: this copy has no GitHub address to name", file=sys.stderr)
+            return 1
+        print(paste(owner, name))
         return 0
     s, where = state(fetch="--no-fetch" not in argv)
     print(s + (f" ({where})" if where else ""))
