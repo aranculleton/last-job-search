@@ -50,7 +50,7 @@ def test_a_bullet_on_the_page_twice_is_found():
     assert A.duplicate_bullets(alike) == []
 
 
-def test_the_skills_check_reads_the_same_on_every_computer():
+def test_the_skills_check_reads_the_same_on_every_computer(tmp_path):
     # The check is Python now (tools/verify_batch.py), so no sed of a Mac's or of Linux's
     # decides what it reads; the shell name is a shim that runs it.
     import verify_batch as B
@@ -71,7 +71,12 @@ def test_the_skills_check_reads_the_same_on_every_computer():
         # "\r\n" on Windows (https://docs.python.org/3/library/subprocess.html, "Frequently
         # Used Arguments"), so sed read other lines from the ones the port reads. The full
         # path, as Windows looks in its own folders first for a bare name.
-        out = subprocess.run([sed, "-n", "/^Skills/,/^Education/{/^Education/d;p;}"],
+        # The script in a file of its own: on its command line, Git for Windows' sed read an
+        # argument starting with "/" as a path to turn into a Windows one ("char 23:
+        # unknown command: `/'"), and no sed reads its own script file that way.
+        script = tmp_path / "skills.sed"
+        script.write_bytes(b"/^Skills/,/^Education/{/^Education/d;p;}\n")
+        out = subprocess.run([sed, "-n", "-f", str(script)],
                              input=b"Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
                              capture_output=True)
         said = out.stdout.decode("utf-8", "replace").replace("\r\n", "\n")

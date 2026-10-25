@@ -55,8 +55,10 @@ def test_the_batch_and_each_application_keep_it_and_one_line_says_the_total(tmp_
     assert a["totals"]["seconds"] == 120
     # Fernhill's figures were never copied in: not available, not zero.
     assert batch["postings"]["b"]["totals"]["tokens"] is None
+    # Named the way the app names a file in its own folder, with "/" on every computer
+    # (local_path.rel), never Windows' "\\".
     assert kept == [os.path.relpath(os.path.join(folder, "cost.json"),
-                                    os.environ["LJS_STATE"])]
+                                    os.environ["LJS_STATE"]).replace(os.sep, "/")]
     assert json.load(open(os.path.join(folder, "cost.json")))["slug"] == "a"
     assert line.startswith("batch: 2 posting(s), 6 agent call(s), 2 model audit(s)")
     assert "tokens not available" in line
