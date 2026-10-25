@@ -651,7 +651,9 @@ a draft, a batch of notes, an interview pack, a prep, a brief), end with the one
 nothing if it prints nothing. It decides when: the first time a kind of work is done, a line
 saying the first go may be off and how to say so; after that a short tip on using the app,
 at most one every two days. Never write one of your own, never more than one a reply, and
-never in place of the work. "No more tips" is `python3 tools/tips.py off`.
+never in place of the work. "No more tips" is `python3 tools/tips.py off`. **When they ask
+what it can do or how to use a part of it** ("show me around", "how do I..."), it is
+`python3 tools/tips.py tour` (or `tour <topic>`), passed on as it prints: short, never a manual.
 
 **Updates and what they have taught it.** A sync's genuine fixes apply: they change
 code, not their settings. When an update would change a setting `learned.py locked`
