@@ -1438,8 +1438,11 @@ def settle(contacts, threads, ids) -> list:
         rows = st.threads_for(threads, cid)
         stored = str(c.get("status") or "").strip()
         derived = st.derive_status(rows)
-        if (not stored or stored in st.DERIVABLE) and derived != stored \
-                and derived != "not_contacted":
+        # A thread gone cold that they have now answered is open again, as state.received
+        # makes it for a reply logged by command.
+        if ((not stored or stored in st.DERIVABLE) and derived != stored
+                and derived != "not_contacted") or (
+                stored in st.REOPENED_BY_A_REPLY and st.reopened(c, rows, derived)):
             c["status"] = derived
             changed.append((cid, stored, derived))
         if not str(c.get("first_contacted") or "").strip():

@@ -1318,6 +1318,8 @@ def effective_status(contact, thread_rows) -> str:
     stored = str(contact.get("status") or "").strip()
     derived = derive_status(thread_rows)
     if stored in schema.TERMINAL:
+        if stored in REOPENED_BY_A_REPLY and reopened(contact, thread_rows, derived):
+            return derived
         return stored
     if derived == "replied_needs_response":
         return derived
@@ -1358,6 +1360,27 @@ def closed_on(contact) -> datetime.date | None:
             dates.append(as_date(m.group(1) or m.group(2)))
     dates = [d for d in dates if d]
     return max(dates) if dates else None
+
+
+# The one closed status a message from them undoes by itself: gone_cold says nobody
+# answered, and an answer makes it untrue. A late reply to a thread gone cold was never owed:
+# the status was terminal whatever the log said, so the due list read "0 replies owed" while
+# they waited for an answer (networking audit, 2026-10-25). `received` reopened it; a reply
+# the LinkedIn download brought, or a row logged by hand, did not. closed, dropped and
+# converted_to_application are the person's decisions, and a late message there is reported
+# by reconcile ("reopened") for them to judge.
+REOPENED_BY_A_REPLY = frozenset({"gone_cold"})
+
+
+def reopened(contact, rows, derived=None) -> bool:
+    """Have they written since this thread was closed? Their message is the last word, the
+    close was not marked on purpose, and it is not dated on or after their last message."""
+    if derived is None:
+        derived = derive_status(rows)
+    return (derived == "replied_needs_response"
+            and not CLOSED_ON_PURPOSE.search(" ".join(
+                str(contact.get(k) or "") for k in ("next_action", "notes")))
+            and not _closed_after_last_reply(contact, rows))
 
 
 def _closed_after_last_reply(contact, rows) -> bool:
@@ -1430,10 +1453,7 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
         elif stored in DERIVABLE and stored != derived:
             flag(cid, name, stored, derived, "contradicts_log",
                  "the log says the status is " + derived)
-        elif (stored in schema.TERMINAL and derived == "replied_needs_response"
-              and not CLOSED_ON_PURPOSE.search(" ".join(
-                  str(contact.get(k) or "") for k in ("next_action", "notes")))
-              and not _closed_after_last_reply(contact, rows)):
+        elif stored in schema.TERMINAL and reopened(contact, rows, derived):
             flag(cid, name, stored, derived, "reopened",
                  "thread was closed and they have since replied")
 
