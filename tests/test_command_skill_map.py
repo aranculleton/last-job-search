@@ -28,7 +28,7 @@ SECTION = "## Commands and skills: what routes where"
 
 
 def claude_md():
-    return open(CLAUDE_MD).read()
+    return open(CLAUDE_MD, encoding="utf-8").read()
 
 
 def mapped_section():
@@ -48,7 +48,7 @@ def skill_names():
         path = os.path.join(SKILLS, d, "SKILL.md")
         if not os.path.exists(path):
             continue
-        m = re.search(r"^name:\s*(\S+)", open(path).read(), re.M)
+        m = re.search(r"^name:\s*(\S+)", open(path, encoding="utf-8").read(), re.M)
         if m:
             out.add(m.group(1))
     return out
@@ -85,7 +85,7 @@ class TheMapMatchesTheFilesystem(unittest.TestCase):
             path = os.path.join(SKILLS, d, "SKILL.md")
             if not os.path.exists(path):
                 continue
-            m = re.search(r"^name:\s*(\S+)", open(path).read(), re.M)
+            m = re.search(r"^name:\s*(\S+)", open(path, encoding="utf-8").read(), re.M)
             if not m or m.group(1) == d:
                 continue
             with self.subTest(skill=d, declared=m.group(1)):
@@ -110,16 +110,16 @@ class TheAmbiguousPairsAreDisambiguatedWhereTheyLive(unittest.TestCase):
     when the command runs."""
 
     def test_prep_says_it_is_not_interview(self):
-        self.assertIn("Not `/interview`", open(os.path.join(COMMANDS, "prep.md")).read())
+        self.assertIn("Not `/interview`", open(os.path.join(COMMANDS, "prep.md"), encoding="utf-8").read())
 
     def test_interview_says_it_is_not_prep(self):
-        self.assertIn("Not `/prep`", open(os.path.join(COMMANDS, "interview.md")).read())
+        self.assertIn("Not `/prep`", open(os.path.join(COMMANDS, "interview.md"), encoding="utf-8").read())
 
     def test_the_skills_interview_step_is_the_interview_command(self):
         """"Help me prepare for an interview at X" routes to the skill's Step 4, which
         was four lines of its own: no archive, no research, no learned rules, no pack
         on disk. It must defer to /interview, the one place the steps live."""
-        skill = open(os.path.join(SKILLS, "job-application-assistant", "SKILL.md")).read()
+        skill = open(os.path.join(SKILLS, "job-application-assistant", "SKILL.md"), encoding="utf-8").read()
         step = skill.split("### Step 4: Interview Preparation", 1)[1].split("\n## ", 1)[0]
         step = step.split("\n### ", 1)[0]
         self.assertIn("`/interview`", step)
@@ -132,7 +132,7 @@ class TheAmbiguousPairsAreDisambiguatedWhereTheyLive(unittest.TestCase):
 class ThePortalsAreWhatTheMapClaims(unittest.TestCase):
 
     def _enabled(self, name):
-        s = open(os.path.join(AGENT_SKILLS, name, "SKILL.md")).read()
+        s = open(os.path.join(AGENT_SKILLS, name, "SKILL.md"), encoding="utf-8").read()
         m = re.search(r"^enabled:\s*(true|false)", s, re.M)
         return m and m.group(1) == "true"
 
