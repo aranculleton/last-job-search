@@ -486,10 +486,12 @@ def step_networking(root: str = ROOT, env: dict | None = None) -> None:
 
 
 def step_suite() -> None:
-    code, out, took = run([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"],
-                          env=env_for(), timeout=5400)
-    tail = "\n".join(out.strip().splitlines()[-40:])
-    check("the test suite", code == 0, tail, took)
+    code, out, took = run([PY, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-rf",
+                           "--tb=short", "tests"], env=env_for(), timeout=5400)
+    # Every failure by name, then the tail: the last lines alone named two of eleven.
+    lines = out.strip().splitlines()
+    failed = [ln for ln in lines if ln.startswith(("FAILED ", "ERROR "))]
+    check("the test suite", code == 0, "\n".join(failed[:80] + lines[-40:]), took)
 
 
 # ------------------------------------------------------------------ a computer chat
@@ -576,8 +578,12 @@ def step_computer() -> None:
     if shell:
         code, out, took = run([shell, "tools/ci_local.sh", "--quick"], cwd=here, env=cenv,
                               timeout=3600)
+        # Every test that failed by name, then the tail: the last lines alone named two of
+        # 23 (2026-10-25).
+        lines = out.strip().splitlines()
+        failed = [ln for ln in lines if ln.lstrip().startswith(("FAILED ", "ERROR "))]
         check("computer: the local checks before a merge (ci_local.sh --quick)", code == 0,
-              "\n".join(out.strip().splitlines()[-30:]), took)
+              "\n".join(failed[:80] + lines[-30:]), took)
     shutil.rmtree(tmp, ignore_errors=True)
 
 

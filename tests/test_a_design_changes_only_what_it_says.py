@@ -215,10 +215,17 @@ def test_a_vendored_font_is_loaded_by_a_relative_path_without_spaces(tmp_path, m
     opts, _stem = doc_design.fontspec_options("latin-modern-sans", os.path.join(ROOT, "cv"))
     assert "Path=" not in opts     # TeX's own font, found by TeX
     # The real case: the app inside a folder named with a space ("Jane Doe"), and a document
-    # compiled outside it, where no relative path avoids the space. It is refused, loudly.
-    monkeypatch.setattr(doc_design, "ROOT", str(tmp_path / "Jane Doe" / "job search"))
-    with pytest.raises(ValueError, match="space in its path"):
-        doc_design.fontspec_options("lato", str(tmp_path / "elsewhere" / "cv"))
+    # compiled outside it, where no relative path avoids the space. It was refused, and every
+    # design failed from a copy under such a folder (2026-10-25); the font now goes beside
+    # the document, by a path with no space.
+    root = tmp_path / "Jane Doe" / "job search"
+    shutil.copytree(os.path.join(ROOT, doc_design.FONT_DIR, "lato"),
+                    root / doc_design.FONT_DIR / "lato")
+    monkeypatch.setattr(doc_design, "ROOT", str(root))
+    opts, _stem = doc_design.fontspec_options("lato", str(tmp_path / "elsewhere" / "cv"))
+    assert "Path=.fonts/lato/" in opts
+    assert sorted(os.listdir(tmp_path / "elsewhere" / "cv" / ".fonts" / "lato")) == sorted(
+        os.listdir(root / doc_design.FONT_DIR / "lato"))
     # Inside the app, the path from cv/ never leaves it, so a space above it does not matter.
     opts, _stem = doc_design.fontspec_options(
         "lato", str(tmp_path / "Jane Doe" / "job search" / "cv"))
@@ -363,3 +370,24 @@ def test_the_template_is_never_stepped_down(monkeypatch):
     monkeypatch.setattr(F, "body_words", lambda a: 100)
     F.fit(a)
     assert "design_step" not in a
+
+
+def test_a_font_reached_through_a_folder_with_a_space_is_put_beside_the_document(
+        tmp_path, monkeypatch):
+    """fontspec reads no font path with a space in it, and the way from a document in one
+    folder to the app's fonts in another can cross one (a user folder whose name has a
+    space, as the suite found running from a copy under one, 2026-10-25): it stopped every
+    design with a ValueError. The font's files are put beside the document then."""
+    app = tmp_path / "Zoë Quillfeather" / "my copy"
+    fonts = app / doc_design.FONT_DIR / "lato"
+    fonts.mkdir(parents=True)
+    (fonts / "Lato-Regular.ttf").write_bytes(b"\0font")
+    monkeypatch.setattr(doc_design, "ROOT", str(app))
+    beside = tmp_path / "Zoë Quillfeather" / "elsewhere" / "cv"
+    beside.mkdir(parents=True)
+    assert doc_design._font_path("lato", str(beside)) == ".fonts/lato/"
+    assert (beside / ".fonts" / "lato" / "Lato-Regular.ttf").read_bytes() == b"\0font"
+    # From inside the copy, the way there has no space: the app's own folder, as before.
+    inside = app / "cv"
+    inside.mkdir()
+    assert doc_design._font_path("lato", str(inside)) == "../cover_letters/OpenFonts/fonts/lato/"

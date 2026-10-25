@@ -306,10 +306,16 @@ def _font_path(folder, tex_dir):
     except ValueError:      # another drive on Windows: no relative path exists
         rel = target
     rel = rel.replace("\\", "/").rstrip("/") + "/"
-    if " " in rel:
-        raise ValueError(f"the font folder {rel!r} has a space in its path from {tex_dir!r}; "
-                         "fonts are loaded by a path without spaces")
-    return rel
+    if " " not in rel:
+        return rel
+    # The way there crosses a folder with a space in its name (a user folder whose name has
+    # one, between a temporary folder and the copy, 2026-10-25), and fontspec reads no such
+    # path: the font's files go beside the document instead.
+    import shutil
+    here = os.path.join(tex_dir, ".fonts", folder)
+    if not os.path.isdir(here):
+        shutil.copytree(target, here)
+    return f".fonts/{folder}/"
 
 
 def fontspec_options(name, tex_dir, extra=""):
