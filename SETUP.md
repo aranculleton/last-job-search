@@ -123,15 +123,31 @@ What `--fix` does for each tool, and how to do it by hand (`tools/installs.py` h
 
 ### Python
 
-3.9 or newer: a Mac's own `python3` (3.9.6, from Apple's command line tools, which a
-first `git` command offers to install) is enough. CI runs the suite on 3.9 and 3.13, so
-nothing in the app may need a newer one. On Windows, the Python install manager from
+3.9 or newer starts every command: a Mac's own `python3` (3.9.6, from Apple's command line
+tools, which a first `git` command offers to install) does. 3.9 has had no security fixes
+since October 2025, so on a Mac `--fix` (and `--fix python`) also installs Python 3.13 into
+your own folders, with no password and no Homebrew: uv by its own installer
+(`curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh`, into
+`~/.local/bin`, https://docs.astral.sh/uv/getting-started/installation/), then
+`uv python install 3.13` (into `~/.local/share/uv/python`,
+https://docs.astral.sh/uv/reference/storage/), and the `.venv` below is made with it.
+Apple's `python3` is left as it was: no `--default`, no new command on your PATH, no shell
+startup file changed. An app command started by `python3` runs itself again under the
+`.venv`'s Python when that is another version (`tools/local_path.py`, `run_in_venv()`), so
+nothing is typed differently. A Linux whose Python is older than 3.9 gets the same route
+(`python3 tools/python_floor.py` prints the one command); any other Linux keeps its own.
+Python's own HTTPS (`python3 tools/env_check.py --https`) finds the system's certificates:
+a Python whose OpenSSL has none where it looks (python.org's for a Mac, before its
+"Install Certificates" step, https://docs.python.org/3/using/mac.html) is pointed at
+`/etc/ssl/cert.pem` through `SSL_CERT_FILE`; uv's Python already looks there.
+CI runs the suite on 3.9 and 3.13, so nothing in the app may need a newer one. On
+Windows, the Python install manager from
 python.org (`tools/computer_setup.ps1` adds it with `Add-AppxPackage`, as its page says)
 gives `python`, `py` and `python3`; where only `python` works, `--fix python` adds a
 `python3` command.
 
-The packages (`requirements.txt`) go in the repo's own `.venv`, made with the computer's
-own Python:
+The packages (`requirements.txt`) go in the repo's own `.venv`, made with that Python on a
+Mac and with the computer's own Python elsewhere:
 
 ```bash
 python3 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt

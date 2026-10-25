@@ -177,3 +177,4 @@ Zoë Ångström-Núñez       # invented: the accented name tools/platform_check
 Ørkenvik Logistik        # invented: an employer in the LinkedIn download tools/platform_check.py reads
 Riverside Cafe          # invented, the example line in tools/history_interview.py
 Café Brûlé              # invented, tests/test_a_person_without_a_resume_leaves_with_one.py
+Install Certificates     # python.org's own script for a Mac ("Install Certificates.command"), not a name
