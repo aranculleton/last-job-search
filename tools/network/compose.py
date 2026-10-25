@@ -562,11 +562,10 @@ def _known_names() -> frozenset:
         for item in getattr(_SKILLS, "ITEMS", ()) or ():
             names.add(_first_word(item[1] if len(item) > 1 else ""))
         try:
-            import csv
+            import csv_store             # the mark a spreadsheet adds, and its encoding
             for f in ("network_contacts.csv", "job_search_tracker.csv"):
-                with open(person.state(f), newline="", encoding="utf-8") as fh:
-                    for r in csv.DictReader(fh):
-                        names.add(_first_word(r.get("company")))
+                for r in csv_store.dict_rows(person.state(f), refuse=False):
+                    names.add(_first_word(r.get("company")))
         except (OSError, ValueError):
             pass
         names.discard("")

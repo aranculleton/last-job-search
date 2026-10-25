@@ -116,8 +116,36 @@ def merge_fields(base: dict | None, ours: dict, theirs: dict,
 # ------------------------------------------------------------------ CSV
 
 
+# The byte-order mark a spreadsheet's "CSV UTF-8" starts a file with. Read as part of the
+# first column's name ("\ufeffcontact_id"), the marked side's rows had no key, the other
+# side's read as removed, and every contact_id in the merged book came back empty with no
+# conflict said (networking audit, 2026-10-25). It is dropped from each side on reading,
+# so the merge is row by row and the file is written back without it.
+_MARK = "\ufeff"
+
+
+def _unmark(text: str) -> str:
+    return text[len(_MARK):] if text.startswith(_MARK) else text
+
+
+def decode(raw: bytes) -> str:
+    """One side of the merge as text, read the way every tool reads a state file
+    (csv_store.decode): the mark dropped, a file a spreadsheet saved in Windows' own
+    encoding read as that. Raises ValueError for a file that cannot be read for sure (UTF-8
+    with a damaged character), and the merge is left to git's line merge, which loses
+    nothing."""
+    try:
+        import csv_store
+    except ImportError:  # git runs this alone: without its neighbour, UTF-8 or nothing
+        return _unmark(raw.decode("utf-8"))
+    text, how = csv_store.decode(raw)
+    if how == csv_store.DAMAGED:
+        raise ValueError("a character in it is not readable text")
+    return text
+
+
 def _read(text: str) -> tuple[list[str], list[dict]]:
-    rows = list(csv.reader(io.StringIO(text, newline="")))
+    rows = list(csv.reader(io.StringIO(_unmark(text), newline="")))
     if not rows:
         return [], []
     head = rows[0]
@@ -517,6 +545,7 @@ def eol(path: str) -> str | None:
 def merge(base: str, ours: str, theirs: str, path: str, later=None,
           settled: list | None = None, ending: str | None = None) -> tuple[str, list[str]]:
     name = os.path.basename(path)
+    base, ours, theirs = _unmark(base), _unmark(ours), _unmark(theirs)
     if name.endswith(".json"):
         try:
             b = json.loads(base) if base.strip() else {}
@@ -559,8 +588,8 @@ def main(argv: list[str]) -> int:
     base_p, ours_p, theirs_p, path = argv
 
     def read(p):
-        with open(p, encoding="utf-8", newline="") as f:
-            return f.read()
+        with open(p, "rb") as f:
+            return decode(f.read())
 
     settled: list[str] = []
     try:
