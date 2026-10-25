@@ -378,7 +378,7 @@ def fix_packages() -> str:
             if code != 0:
                 raise Failed("could not install pip for the packages: "
                              + (out.strip().splitlines() or ["no output"])[-1][:160])
-        open(os.path.join(venv, OURS), "w").close()
+        open(os.path.join(venv, OURS), "w", encoding="utf-8").close()
     extra = ["--upgrade", "cffi", "cryptography"] if broken else []
     code, out = _run([venv_python(venv), "-m", "pip", "install", "--disable-pip-version-check",
                       "-q", "-r", os.path.join(ROOT, "requirements.txt"), *extra], timeout=900)

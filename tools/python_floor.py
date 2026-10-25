@@ -22,13 +22,16 @@ def how_to_install(system: str | None = None) -> str:
     """The one way to get a newer Python where this session runs."""
     system = system or sys.platform
     if system == "darwin":
-        return ("on a Mac, run `xcode-select --install` once (it asks for your Mac password "
-                "and brings Python 3.9), or use the installer at "
-                "https://www.python.org/downloads/")
+        return ("on a Mac, run `xcode-select --install` once (Apple's window asks to install "
+                "its developer tools, which bring Python 3.9)")
     if system.startswith("win"):
-        return ("use the installer at https://www.python.org/downloads/ and tick "
-                "\"Add python.exe to PATH\", or run `winget install Python.Python.3.12`")
-    return "install it with your system's package manager, for example `sudo apt-get install python3`"
+        return ("run `powershell -ExecutionPolicy Bypass -File tools/computer_setup.ps1`, which "
+                "installs python.org's own install manager with no administrator (or use the "
+                "installer at https://www.python.org/downloads/ and tick \"Add python.exe to "
+                "PATH\")")
+    return ("install it with the system's package manager (it needs your password): "
+            "`sudo apt-get install python3` on Debian or Ubuntu, `sudo dnf install python3` on "
+            "Fedora, `sudo pacman -S python` on Arch")
 
 
 def message(version: str | None = None, system: str | None = None) -> str:

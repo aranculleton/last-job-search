@@ -468,7 +468,7 @@ def main() -> int:
                     help="an earlier round's hydrated file: its bodies are reused, not fetched")
     a = ap.parse_args()
 
-    data = json.load(open(a.infile))
+    data = json.load(open(a.infile, encoding="utf-8"))
     jobs = list(data.values()) if isinstance(data, dict) else list(data)
     cache = cached_bodies(a.cache)
     reused = 0
@@ -485,7 +485,7 @@ def main() -> int:
     after = sum(1 for j in out if (j.get("desc") or "").strip())
     errors = [j for j in out if j.get("hydrate_error")]
     guarded_n = sum(1 for j in out if j.get("posting_guard"))
-    json.dump(out, open(a.out, "w"), indent=1)
+    json.dump(out, open(a.out, "w", encoding="utf-8"), indent=1)
     frac = after / len(out) if out else 0.0
     print(f"{len(out)} postings: {before} had a description"
           + (f" ({reused} from the round before)" if reused else "")

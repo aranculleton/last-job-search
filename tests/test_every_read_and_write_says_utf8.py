@@ -18,13 +18,7 @@ SUBPROCESS = {"run", "check_output", "Popen", "check_call", "call"}
 # Call sites in files another part of this same change rewrites, so they were left for it
 # rather than edited twice; each is the same one-line fix. The test below fails as soon as
 # one is fixed, so the list can only shrink, and it is emptied when the change lands.
-PENDING = {
-    ("tools/audit_letters.py", "subprocess.run"): 1,
-    ("tools/env_check.py", "subprocess.run"): 3,
-    ("tools/fit_to_page.py", "subprocess.run"): 3,
-    ("tools/hydrate.py", "open"): 2,
-    ("tools/scrape_wide.py", "open"): 4,
-}
+PENDING: dict = {}
 
 
 def _files():

@@ -279,7 +279,9 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
                  "a mark says what may come up on your screen while I do:"]
         mark = {"password": "  [a window may ask for your computer's password]",
                 "sign-in": "  [a page opens in your browser to sign in to GitHub]",
-                "dialog": "  [a window asks to install Apple's developer tools: choose Install]"}
+                "dialog": "  [a window asks to install Apple's developer tools: choose Install]",
+                "yours": "  [this one needs your password, so it is yours: paste it into a "
+                         "terminal window, then tell me]"}
         for what, cmd, whose in fixes:
             lines.append(f"  - {what}: {cmd}{mark.get(whose, '')}")
         out.append("\n".join(lines))

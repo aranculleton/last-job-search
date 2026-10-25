@@ -184,14 +184,15 @@ VENV_FIRST = "import sys; sys.path.insert(0, sys.argv[1]); import local_path; lo
 def module_state(name: str) -> bool:
     """Is a Python module importable here? Asked apart, like pypdf, so a broken one cannot crash this."""
     return subprocess.run([sys.executable, "-c", VENV_FIRST + f"import {name}", TOOLS],
-                          capture_output=True, text=True).returncode == 0
+                          capture_output=True, text=True, encoding="utf-8",
+                          errors="replace").returncode == 0
 
 
 def pypdf_state() -> str:
     """'ok', 'missing' or 'broken'. Run apart, because a pyo3 panic kills the
     interpreter rather than raising."""
     p = subprocess.run([sys.executable, "-c", VENV_FIRST + "import pypdf; pypdf.PdfReader", TOOLS],
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode == 0:
         return "ok"
     return "missing" if "No module named" in p.stderr else "broken"
@@ -211,6 +212,21 @@ def _install(what: str) -> str:
 
 
 FIX = "python3 tools/env_check.py --fix"
+
+
+LINUX_MANAGERS = (("apt-get", "sudo apt-get install -y {}"), ("dnf", "sudo dnf install -y {}"),
+                  ("pacman", "sudo pacman -S --noconfirm {}"),
+                  ("zypper", "sudo zypper install -y {}"))
+
+
+def linux_install(package: str, have=None) -> str:
+    """The one command that installs a system package on this Linux, by the package manager
+    it has (Debian and Ubuntu, Fedora, Arch, openSUSE), apt-get where none is found."""
+    have = have or shutil.which
+    for tool, cmd in LINUX_MANAGERS:
+        if have(tool):
+            return cmd.format(package)
+    return LINUX_MANAGERS[0][1].format(package)
 
 
 def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
@@ -234,16 +250,19 @@ def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
     pypdf = pypdf or pypdf_state()
     mac, win = system == "darwin", system.startswith("win")
     out = []
+    # Linux is the one place a missing Python or Git needs the system's own package manager,
+    # and so the person's password at a terminal: Claude's shell has no terminal for sudo.
+    # Which manager is read from what the computer has, not assumed to be Ubuntu's.
     if not py_ok:
         out.append(("Python 3.9 or newer",
                     "xcode-select --install" if mac else
                     "powershell -ExecutionPolicy Bypass -File tools/computer_setup.ps1" if win
-                    else "sudo apt-get install -y python3",
-                    "dialog" if mac else "" if win else "password"))
+                    else linux_install("python3", have),
+                    "dialog" if mac else "" if win else "yours"))
     if not have("git"):
         out.append(("Git", "xcode-select --install" if mac else f"{FIX} git" if win
-                    else "sudo apt-get install -y git", "dialog" if mac else "" if win
-                    else "password"))
+                    else linux_install("git", have), "dialog" if mac else "" if win
+                    else "yours"))
     if [m for m in ("pytest", "yaml") if not module(m)] or pypdf != "ok":
         out.append(("the Python packages", f"{FIX} packages", ""))
     if not (have("lualatex") and have("xelatex")):
@@ -266,7 +285,7 @@ def _gh_signed_in(have) -> bool:
         return False
     try:
         return subprocess.run(["gh", "auth", "status"], capture_output=True, text=True,
-                              timeout=20).returncode == 0
+                              encoding="utf-8", errors="replace", timeout=20).returncode == 0
     except (OSError, subprocess.TimeoutExpired):
         return False
 

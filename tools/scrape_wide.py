@@ -1145,7 +1145,7 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
     for j in rows:
         by_portal[j["portal"]] = by_portal.get(j["portal"], 0) + 1
 
-    json.dump(kept, open(f"{out}/kept.json", "w"), indent=1)
+    json.dump(kept, open(f"{out}/kept.json", "w", encoding="utf-8"), indent=1)
     # LinkedIn's search endpoint returns no body, so `desc` is None for every
     # LinkedIn row here. Anything downstream that reads a posting - the text
     # screen, the knockout stage, the extractor - is blind until
@@ -1157,8 +1157,8 @@ def finish(out: str, seen: dict, today: dt.date, jobage: int, n_tasks: int,
               f"Run `python3 tools/hydrate.py {out}/kept.json --out "
               f"{out}/hydrated.json` before ranking, screening or extracting, "
               f"or every one of them reaches the model blind.")
-    json.dump(dropped, open(f"{out}/dropped.json", "w"), indent=1)
-    json.dump(rows, open(f"{out}/scraped.json", "w"), indent=1)
+    json.dump(dropped, open(f"{out}/dropped.json", "w", encoding="utf-8"), indent=1)
+    json.dump(rows, open(f"{out}/scraped.json", "w", encoding="utf-8"), indent=1)
     try:
         os.remove(os.path.join(out, PARTIAL))
     except OSError:
@@ -1311,7 +1311,7 @@ def main() -> int:
                     _say("Claude, not for them: " + note, a.log)
             json.dump({"portals_down": down, "detail": {k: v[1] for k, v in health.items()},
                        "not_searched": not_searched(health), "say": say},
-                      open(os.path.join(a.out, "00_portal_health.json"), "w"), indent=1)
+                      open(os.path.join(a.out, "00_portal_health.json"), "w", encoding="utf-8"), indent=1)
     skipped = not_searched(health)
     for skill in [k for k, v in on.items() if v and portals.short(k) in skipped]:
         on[skill] = False
