@@ -104,10 +104,10 @@ def test_the_bar_and_the_sector_read_the_tech_list_alike(judged_file, monkeypatc
     the list as written, so a hyphenated or capitalised entry never matched there and the
     bar said 'not on your employer lists' of a listed employer."""
     import sector
-    listed = {"quillfeather-two", "Tidewell"}
+    listed = {"acme-two", "Tidewell"}
     monkeypatch.setattr(sector, "TECH_COMPANIES", listed)
     monkeypatch.setattr(bar, "TECH_COMPANIES", listed, raising=False)   # its own copy, before
-    for name in ("Quillfeather-Two Interactive", "Tidewell"):
+    for name in ("Acme-Two Interactive", "Tidewell"):
         assert sector.verdict(name)[0] == sector.V_TECH, name
         v, why = bar.verdict(name)
         assert v == bar.SIGNAL and why.startswith("established technology company"), (name, why)
