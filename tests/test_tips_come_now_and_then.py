@@ -155,7 +155,7 @@ def test_the_tour_is_one_short_line_a_thing_and_each_topic_a_few_lines(profile):
     assert lines[0] == tips.TOUR_OPEN and lines[-1] == tips.TOUR_CLOSE
     assert len(lines) <= 12 and _words(menu) <= 150
     assert all(_words(l) <= 14 for l in lines[1:-1])
-    for key, menu_line, detail in tips.TOUR:
+    for key, _menu, detail in tips.TOUR:
         assert _words(detail) <= 60, key
         assert "\n" not in detail
 
