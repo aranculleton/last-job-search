@@ -66,7 +66,7 @@ def collect() -> dict:
     """{module: {name: {"required": bool, "where": [file:line, ...]}}}"""
     out: dict = defaultdict(lambda: defaultdict(lambda: {"required": False, "where": []}))
     for path in _files():
-        rel = os.path.relpath(path, ROOT)
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
         if "person.module(" not in text:
@@ -127,7 +127,7 @@ def collect_person() -> dict:
     """
     out: dict = defaultdict(lambda: {"required": False, "where": []})
     for path in _files():
-        rel = os.path.relpath(path, ROOT)
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
         own = os.path.basename(path) == "person.py"

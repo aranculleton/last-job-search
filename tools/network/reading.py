@@ -1956,7 +1956,7 @@ def move_runtime() -> list:
             if not pace.put(keys[rel], got):
                 continue
         os.remove(p)
-        moved.append(os.path.join(*rel))
+        moved.append("/".join(rel))          # a repo path, named the same on every computer
     return moved
 
 

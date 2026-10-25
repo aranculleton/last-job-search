@@ -111,7 +111,9 @@ def disabled_portal_prefixes(root: str = ".agents/skills") -> list[str]:
             if stripped.startswith("enabled:"):
                 value = stripped.split(":", 1)[1].split("#", 1)[0].strip().lower()
                 if value in ("false", "no", "0"):
-                    prefixes.append(os.path.join(root, name) + "/")
+                    # Compared with git's paths, which take "/" on every computer: joined
+                    # with os.path the prefix was ".agents/skills\\name/" on Windows.
+                    prefixes.append(root.replace(os.sep, "/").rstrip("/") + f"/{name}/")
                 break
     return prefixes
 

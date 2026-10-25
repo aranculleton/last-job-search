@@ -1455,7 +1455,7 @@ def own_test_risks(root: str | None = None) -> dict[str, list[str]]:
                         found.append(f"{alias[args[0].id]}.{args[1].value}")
             found += _source_reads(root, tree)
             if found:
-                out[os.path.relpath(path, root)] = sorted(set(found))
+                out[os.path.relpath(path, root).replace(os.sep, "/")] = sorted(set(found))
     return out
 
 
