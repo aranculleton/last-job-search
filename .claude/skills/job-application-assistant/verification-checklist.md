@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.4
+framework_version: 2.1.5
 ---
 
 # Verification checklist
@@ -40,7 +40,7 @@ After creating or updating a CV or cover letter, verify **all** of the following
 
 ### Compiled PDF verification (MANDATORY - never skip)
 Both documents MUST be compiled and visually inspected via the Read tool on the PDF output. "Looks fine in the .tex" is not acceptable - LaTeX page-break decisions are unpredictable. Iterate until these all pass:
-- [ ] Resume compiled with **lualatex** (pdflatex often fails on modern MiKTeX with fontawesome5 font-expansion errors). Cover letter compiled with **xelatex** (cover.cls requires fontspec). If a custom template is active (registered via `/add-template`), compile with its declared command instead - see the `ACTIVE-TEMPLATE` block in `profile/templates/ACTIVE.md`, which `/add-template` writes.
+- [ ] Resume compiled with **lualatex**, or **xelatex** when it has a design (the engine its `.tex` names on its `Compile with:` line; pdflatex often fails on modern MiKTeX with fontawesome5 font-expansion errors). A resume with a design passes `python3 tools/design_check.py <pdf> --page <letter|a4>`. Cover letter compiled with **xelatex** (cover.cls requires fontspec). If a custom template is active (registered via `/add-template`), compile with its declared command instead - see the `ACTIVE-TEMPLATE` block in `profile/templates/ACTIVE.md`, which `/add-template` writes.
 - [ ] **Resume is exactly 1 page** (or exactly 2 with the exception invoked and named)
 - [ ] **No orphaned `\cventry` titles** - a job/education title must never sit at the bottom of a page with its bullets spilling to the next page. Use `\needspace{5\baselineskip}` before each `\cventry` to prevent this, and `\enlargethispage{2-3\baselineskip}` to rescue a trailing section that just barely spills
 - [ ] **Cover letter is exactly 1 page** - signature block must fit with the body, never overflow

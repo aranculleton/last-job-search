@@ -1,5 +1,5 @@
 ---
-framework_version: 2.1.13
+framework_version: 2.1.14
 ---
 
 # Resume Templates and Tailoring Guide
@@ -11,7 +11,7 @@ framework_version: 2.1.13
 All resumes use the moderncv LaTeX package with the "banking" style and black text (the "black" color scheme).
 
 **Output file:** `cv/<Prefix>_Resume_<ABBR>.tex`, where `<Prefix>` is `identity.file_prefix` in `profile/person.json`
-**Compile with:** **lualatex** on MiKTeX/TeX Live. pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly.
+**Compile with:** **lualatex** on MiKTeX/TeX Live for the template; **xelatex** for a design (see "Designs" below; the `.tex` names its engine on its `Compile with:` line). pdflatex often fails on modern MiKTeX installs with `fontawesome5` font-expansion errors; lualatex handles the same sources cleanly.
 **Fact source:** the grounding sources CLAUDE.md, "The person", defines: the files
 `profile/person.json` `grounding.sources` names (by default `profile/01-candidate-profile.md`,
 the Candidate Profile section of `profile/CLAUDE.md` and `profile/bullets.py`), with `01`
@@ -191,6 +191,25 @@ Every resume's text is black by default (`\moderncvcolor{black}`, links black to
 Black is the default and the fallback. A person who wants colour chooses it per kind of employer in `person.json` `documents.styles`; a draft's own `style` key wins for one application. `templates/doc_style.py` holds the shape and the eight styles: black, navy, burgundy, forest, teal, plum, slate, and blue, the colour every resume had before 2026-10-24. The kind comes from the person's own employer lists in `employers.py`, never a guess: `startup` (on `YC_AND_BACKED`), `technology company` (`TECH_COMPANIES`), `software product` (`ADJACENT_COMPANIES`), or the word `NOT_TECH` gives the name (bank, insurer, professional services, ...). An employer named under `employers` in the setting beats its kind. `python3 templates/doc_style.py "<employer>"` says which style a name gets and why.
 
 A style is a colour and nothing else: on the resume the name, the section titles and rules and the bullet marks take it, on the letter the name and the bullet marks. Every word sits where it sits in black, so the same bullets fit and every check reads the same (`tests/test_a_style_is_only_colour.py`). Fonts and layouts were measured and turned down: each moved lines, and with them the bullets `fit_to_page.py` keeps. Every accent reads at a contrast of 4.5 or more on white and prints a dark grey in black and white. The colour lines are set for moderncv 2.3 (the cloud's) and 2.4 and later (a current Mac install) alike, which read colour differently. When the person asks for a colour, write the setting; never edit a `.tex`.
+
+### Designs: fonts, sizes, margins and where things sit
+
+The layout is `templates/doc_design.py`, beside the colour: the page (Letter or A4), the margins, the body and heading fonts, the sizes of the name, the section titles, the body and the contact lines, the line spacing, where the name sits (left, centre, right), where the dates sit (right of the title, or before it), whether a rule runs under each section title, the bullet size, and a ragged right edge. Every setting starts unset, and unset is the template exactly: a person nobody chose a design for keeps the same page, the same words in the same places (`tests/test_a_design_changes_only_what_it_says.py`).
+
+Who decides, most specific first: one application's own `design` (a name, or settings), then the person's own `documents.design`, then `documents.designs.employers` for a named employer, then `documents.designs.kinds` for its kind (the kinds the colour styles read), then the market's page size (`person.paper`), then the template. A level that names a design takes that design's values; settings given on their own change only themselves, so "bigger font" on top of the kind's design keeps everything else. The named designs: `classic` (a serif with Times New Roman's widths, centred name, for banks, insurers, law, consulting and the public sector), `modern` (Lato, the name on the left, no rules, for technology and startups), `compact` (the template's look with narrow margins and a smaller name, for a long history), `spacious` (wider margins and spacing, dates first, for an early career). `/setup` writes `SUGGESTED_KINDS` into `documents.designs.kinds` for a new person; an existing person keeps their page until they choose.
+
+When the person reacts to a page ("bigger", "less cramped", "centre my name", "use a serif"), write the setting, never the `.tex`: `python3 templates/doc_design.py adjust <change>` (the changes are its `ADJUST`: bigger, smaller, roomier, tighter, more-spacing, less-spacing, bigger-name, smaller-name, name-left, name-centre, name-right, dates-left, dates-right, serif, sans, rules, no-rules), `use <design>` or `set <setting> <value>`, each with `--kind` or `--employer` to set it for one kind or one employer only; then record it with `learned.py record` (it prints the line). Every value has bounds, and a value outside them is refused rather than rounded.
+
+What keeps a design safe for an applicant tracking system, measured rather than assumed (2026-10-25):
+
+- **Fonts.** Only Latin Modern Sans (every TeX install carries it) and two fonts vendored with their licences beside them, Lato and Liberation Serif, each loaded from its file by a relative path so a Mac, Windows and the cloud set the same glyphs. Common ligatures are off, so "fi" and "fl" read as letters. `tools/design_check.py --fonts` compiles each one and reads it back with pypdf the way a parser does: words keep their spaces, accented names, the phone and the email come back as typed. Caladea and Carlito read with no spaces at all and are not offered; Raleway ran an accented name together in every pypdf before 6.x; Lato did the same under LuaLaTeX before pypdf 5.9.
+- **The engine.** So a design's resume is set with XeLaTeX, the engine its letter always used: every font here read back cleanly in pypdf 3.17, 4.0, 5.0, 5.9 and 6.17 under XeLaTeX. The template's own resume keeps LuaLaTeX. The `.tex` says which on its `Compile with:` line, and `fit_to_page.py` compiles with it.
+- **Sizes.** The document size is 11 or 12: moderncv sets the body one step smaller, so 11 gives 10pt text, the floor most guides give, and 10 would give 9pt. Margins run from 12mm to an inch (12.0 to 25.4mm), the range Jobscan and university career services give ([Jobscan](https://www.jobscan.co/blog/how-to-set-resume-margins/), [a university careers service](https://career.vt.edu/job-search/presenting_yourself/resumes/types_and_formats.html)).
+- **One page, always.** `fit_to_page.py` fits the bullets to the design as it does to the template; when even every role at its floor does not fit, it makes the design one bounded step smaller (closer lines, then the margins, then the sizes) rather than leave two pages. The template is never stepped down.
+- **What is checked on every render.** `tools/design_check.py <pdf> --page letter|a4`: the page size, one page, no text under 8.5pt and a body of at least 10pt, every word at least 10mm from every edge (parsers drop what they take for headers and footers there, [a university careers service](https://www.scu.edu/careercenter/toolkit/job-scan-common-ats-resume-formatting-mistakes/)), and one column, read in order down the page. `design_check.py --all` renders the example person in every design and runs these and `verify_batch.sh` on both documents; CI runs it on Linux, macOS and Windows.
+- **Machines agree.** Every named design rendered on TeX Live 2023 (moderncv 2.3.1) and on TinyTeX 2026 (moderncv 2.6.1) put every word within 0.000pt of the same place: the header, the section titles and the entries are drawn by the design itself, not by moderncv, which moves the template's own page by about 10pt between those versions.
+
+The design's choices were checked against RenderCV's own design settings (page size and margins, typography, header alignment, date column; MIT, [its Typst package](https://typst.app/universe/package/rendercv)), which is where a similar project draws the same lines.
 
 ### Spacing inside itemize lists (important)
 

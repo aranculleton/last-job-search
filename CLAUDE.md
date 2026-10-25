@@ -608,7 +608,9 @@ sending records itself when the send is logged with its words. Then, in the same
 2. Make it stick where it governs. That means the profile setting: `networking.py`
    (`OPENER`, `ABOUT_ME`, `ASK`, `GREETING`, `REFERRAL_LINE`, `REFERRAL_CLOSE`,
    `TITLE_SETS`), `search.py` (the bar, the scoring words), `profile/CLAUDE.md` (how they
-   want to come across, document rules), `07-interview-prep.md`. A job they dislike is
+   want to come across, document rules), `07-interview-prep.md`, and for how a page looks
+   ("bigger font", "less cramped", "centre my name") `person.json` `documents.design`
+   through `python3 templates/doc_design.py adjust <change>`. A job they dislike is
    `python3 tools/exclude.py add <url> --basis person --reason "<their words>"`. A person
    they do not want contacted is a `closed` contact with their reason. A *kind* of job or
    person becomes the rule that covers all of them. **Rulings change, and that is
