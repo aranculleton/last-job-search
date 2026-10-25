@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import re
+import unicodedata
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -51,19 +52,35 @@ GENERIC = {"inc", "incorporated", "ltd", "limited", "pty", "llc", "llp", "lp", "
 MAX_CHARS = 14   # long enough for a two-word brand, short enough to stay a name
 
 
-def _words(company: str) -> list[str]:
+# Letters that are not an ASCII letter plus an accent, so NFKD leaves them whole.
+_PLAIN = str.maketrans({"ø": "o", "Ø": "O", "ß": "ss", "æ": "ae", "Æ": "AE", "œ": "oe",
+                        "Œ": "OE", "đ": "d", "Đ": "D", "ł": "l", "Ł": "L", "þ": "th",
+                        "Þ": "Th", "ð": "d", "Ð": "D", "ı": "i", "ħ": "h", "Ħ": "H"})
+
+
+def fold(text: str) -> str:
+    """The plain letters of a name: Société Générale is Societe Generale, Ørsted is
+    Orsted, Straße is Strasse. A file name keeps only ASCII letters, and dropping the
+    accented ones gave `SocitGnrale`, `Nestl` and `rsted`."""
+    text = unicodedata.normalize("NFKD", str(text or "").translate(_PLAIN))
+    return "".join(c for c in text if not unicodedata.combining(c))
+
+
+def _words(company: str, legacy: bool = False) -> list[str]:
     """Words, with a hyphenated name kept whole: Co-Ventures is one word."""
-    parts = re.split(r"[^A-Za-z0-9-]+", str(company or "").strip())
+    parts = re.split(r"[^A-Za-z0-9-]+", (str(company or "") if legacy else fold(company)).strip())
     return [p.strip("-") for p in parts if p.strip("-")]
 
 
-def suffix(company: str, role_token: str = "") -> str:
+def suffix(company: str, role_token: str = "", legacy: bool = False) -> str:
     """The `<Name>` in <Prefix>_Resume_<Name>.tex.
 
     `role_token` is appended only when applying to two different roles at one
     employer, which is the one case where the company name alone collides.
+    `legacy` is the name before accents were folded (letters simply dropped), which
+    an application already made under it keeps (render_application.final_abbr).
     """
-    words = _words(company)
+    words = _words(company, legacy)
     if not words:
         return ""
     known = KNOWN.get(" ".join(words).lower())
