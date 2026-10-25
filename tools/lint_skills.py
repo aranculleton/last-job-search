@@ -21,6 +21,12 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+try:
+    import local_path  # the repo's .venv, where env_check --fix installs PyYAML
+    local_path.use_venv()
+except Exception:  # noqa: BLE001  the lint must not need it
+    pass
 try:
     import yaml
 except ImportError:

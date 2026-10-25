@@ -173,16 +173,22 @@ def allowlist() -> list[str]:
     return list(dict.fromkeys(h for h in out if h))
 
 
+TOOLS = os.path.join(ROOT, "tools")
+# What the tools themselves import: the repo's .venv first (local_path.use_venv), where
+# env_check --fix puts the packages a system Python refuses.
+VENV_FIRST = "import sys; sys.path.insert(0, sys.argv[1]); import local_path; local_path.use_venv(); "
+
+
 def module_state(name: str) -> bool:
     """Is a Python module importable here? Asked apart, like pypdf, so a broken one cannot crash this."""
-    return subprocess.run([sys.executable, "-c", f"import {name}"],
+    return subprocess.run([sys.executable, "-c", VENV_FIRST + f"import {name}", TOOLS],
                           capture_output=True, text=True).returncode == 0
 
 
 def pypdf_state() -> str:
     """'ok', 'missing' or 'broken'. Run apart, because a pyo3 panic kills the
     interpreter rather than raising."""
-    p = subprocess.run([sys.executable, "-c", "import pypdf; pypdf.PdfReader"],
+    p = subprocess.run([sys.executable, "-c", VENV_FIRST + "import pypdf; pypdf.PdfReader", TOOLS],
                        capture_output=True, text=True)
     if p.returncode == 0:
         return "ok"
