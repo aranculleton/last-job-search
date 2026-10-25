@@ -101,3 +101,15 @@ def test_moving_an_older_list_keeps_todays_list_in_the_ledger_too(here):
                                                      "ids": ["ana_rook"]}), encoding="utf-8")
     reading.move_runtime()
     assert sorted(pace.load()["shortlist"]["ids"]) == ["ana_rook", "bo_venn"]
+
+
+def test_reading_the_contact_book_and_the_messages_creates_neither(tmp_path, monkeypatch):
+    """A look created both files where they were missing: profile_upgrades --all left them
+    behind as new files, and the sync then refused its instant upgrades because the folder
+    had uncommitted changes (2026-10-25). A read is a read; the first save writes them."""
+    from network import state
+    book, log = tmp_path / "network_contacts.csv", tmp_path / "network_threads.csv"
+    assert state.load_contacts(str(book)) == [] and state.load_threads(str(log)) == []
+    assert not book.exists() and not log.exists()
+    state.save_contacts([], str(book))
+    assert book.read_text(encoding="utf-8").startswith("contact_id")

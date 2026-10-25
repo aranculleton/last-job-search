@@ -212,10 +212,13 @@ def _write_csv(path: str, rows, columns) -> None:
 def _read_csv(path: str, columns) -> list[dict]:
     """Rows as dicts, with every schema column present and every extra column kept.
 
-    A missing file is created holding the header alone (tools/csv_store.py).
+    A missing file is no rows, and stays missing: the first save writes it, header and
+    all. Created on a read, a look (profile_upgrades --all, the sync's own --after-sync)
+    left two new files in a copy without them, and then refused the instant upgrades
+    because the folder had uncommitted changes (2026-10-25).
     """
     import csv_store
-    return csv_store.read_rows(path, columns, create=True)
+    return csv_store.read_rows(path, columns)
 
 
 def load_contacts(path: str = CONTACTS_CSV) -> list[dict]:
