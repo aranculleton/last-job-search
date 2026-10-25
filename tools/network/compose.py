@@ -291,8 +291,12 @@ def _sentence(text) -> str:
     if s[0].islower():
         s = s[0].upper() + s[1:]
     # The person's own ASK ("Would you have 15 minutes for a few questions
-    # sometime") ended every first note on a question with a full stop.
-    if _QUESTION_OPENER.match(s):
+    # sometime") ended every first note on a question with a full stop. Read on the
+    # last sentence: a piece of two that opens on a question and closes on a statement
+    # ("Would you be comfortable referring me for it? Happy to send ..., and no problem
+    # at all if not.") ended every referral ask on "if not?" (networking audit, 2026-10-25).
+    last = re.split(r"(?<=[.!?])\s+", s)[-1]
+    if _QUESTION_OPENER.match(last):
         return s.rstrip(".!") + "?" if s[-1] != "?" else s
     return s if s[-1] in ".!?" else s + "."
 

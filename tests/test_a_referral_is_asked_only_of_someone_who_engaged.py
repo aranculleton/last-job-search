@@ -75,3 +75,13 @@ def test_read_from_the_book_and_the_log_by_contact(tmp_path, monkeypatch):
     assert LINK in _ask(CID)
     assert "referral_ask_too_soon" not in [r for r, _ in compose.validate(
         text, "referral_ask", name="Tal Ames", contact=CID)]
+
+
+def test_the_default_close_ends_as_a_statement_and_the_ask_as_a_question():
+    text = _ask([_msg("out", "Hi Tal"), _msg("in", "Happy to help.")])
+    assert "Would you be comfortable referring me for it?" in text
+    assert "no problem at all if not." in text and "if not?" not in text
+    assert compose._sentence("Would you have 15 minutes sometime") == \
+        "Would you have 15 minutes sometime?"
+    assert compose._sentence("Thanks again. Would you have 15 minutes sometime.") == \
+        "Thanks again. Would you have 15 minutes sometime?"
