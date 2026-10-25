@@ -244,6 +244,21 @@ _CUE_AFTER = re.compile(_LANG_STEP + r"{0,3}" + _LANG_SEP
                         r"(?:required|essential|mandatory|necessary|a must)\b)", re.I)
 _UNAMBIGUOUS_RX = (re.compile(r"(?:" + _UNAMBIGUOUS_LANGUAGE + r")", re.I)
                    if _UNAMBIGUOUS_LANGUAGE else _NEVER)
+# A name joined to "speaking" or "language" and set before a word for a market, the people
+# in one or a thing names what the job deals with, not a language the person speaks:
+# "Experience with Spanish-speaking markets is required" and "Japanese-language source
+# systems required" were cut as language requirements, the hyphen read as the cue beside
+# the name. A word for the person keeps the cue ("a Spanish-speaking analyst",
+# "Spanish-speaking candidates"), and so does a word between that starts another phrase.
+_AS_A_MARKET = re.compile(
+    r"[-\s]+(?:speaking|language|spoken)\s+"
+    r"(?:(?!(?:for|to|in|on|at|with|and|or|of|who|that|is|are|be|will|must|should)\b)"
+    r"[a-z&]+\s+){0,2}?"
+    r"(?:markets?|countr(?:y|ies)|regions?|territor(?:y|ies)|communit(?:y|ies)|populations?|"
+    r"audiences?|customers?|clients?|consumers?|users?|patients?|listeners?|viewers?|"
+    r"readers?|households?|segments?|economies|media|press|content|publications?|"
+    r"sources?|systems?|data|documents?|documentation|materials?|websites?|sites?|"
+    r"platforms?|products?|campaigns?|channels?|world)\b", re.I)
 
 # A second language named as a nice-to-have. The screen's own preference words (PREFERRED,
 # and ENCOURAGE, which holds "not required" and "welcome"), and the few a language line adds.
@@ -415,7 +430,7 @@ def _languages_named(sentence: str):
         if not _UNAMBIGUOUS_RX.fullmatch(m.group(0)):
             yield m                     # an English word, matched only beside its cue
         elif (_CUE_BEFORE.search(s[max(0, m.start() - 100):m.start()])
-                or _CUE_AFTER.match(s, m.end())):
+                or (_CUE_AFTER.match(s, m.end()) and not _AS_A_MARKET.match(s, m.end()))):
             yield m
 
 

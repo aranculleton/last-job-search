@@ -96,6 +96,19 @@ REQUIRED = (
     "Fluent Spanish is required, although Python is a plus.",
     "Fluent Spanish is required, and it would be great to have Tableau.",
     "Fluent Spanish is required for an asset management client.",
+    # Joined to its cue by a hyphen, before a word for the person, it is still theirs to speak.
+    "A Spanish-speaking analyst is required.",
+    "A Spanish-speaking analyst for our markets is required.",
+    "Experience in Spanish-speaking markets required; fluent Spanish essential.",
+)
+# A language joined to "speaking" or "language" before a market, its people or a thing names
+# what the job deals with. Each was cut, the hyphen read as the language's cue, and held.
+MARKETS = (
+    "Experience with Spanish-speaking markets is required.",
+    "Experience with Japanese-language source systems required.",
+    "Spanish-language content experience is required.",
+    "Experience with Spanish speaking Latin American markets is required.",
+    "Experience supporting Mandarin-speaking customers is essential.",
 )
 
 
@@ -105,6 +118,11 @@ def _cuts(sentence):
 
 @pytest.mark.parametrize("sentence", NICE_TO_HAVE)
 def test_a_language_asked_as_a_preference_or_a_market_is_not_cut(sentence):
+    assert _cuts(sentence) == []
+
+
+@pytest.mark.parametrize("sentence", MARKETS)
+def test_a_language_named_as_a_market_is_not_cut(sentence):
     assert _cuts(sentence) == []
 
 
@@ -263,3 +281,21 @@ def test_words_the_screen_did_not_write_are_never_re_judged():
     assert not text_screen.ruling_refused("knockout at triage: Spanish stated as a requirement")
     assert not text_screen.ruling_refused(
         'Spanish stated as a requirement: "Bilingual in Spanish is a plus." Also a sales role.')
+
+
+def test_a_saved_ruling_on_a_market_is_released_and_one_on_the_person_holds(tmp_path, monkeypatch):
+    """Rulings the screen wrote resting on the language settings, which have not changed: the
+    throttle re-judges each on the sentence it quotes, and lets the market ones go."""
+    monkeypatch.setenv("LJS_RESCREEN", "off")
+    path = str(tmp_path / "seen_jobs.json")
+    said = [f'{"Japanese" if "Japanese" in s else "Mandarin" if "Mandarin" in s else "Spanish"} '
+            f'stated as a requirement: "{s}"' for s in MARKETS]
+    held = 'Spanish stated as a requirement: "A Spanish-speaking analyst is required."'
+    exclude.add_many([{"url": URL.format(i), "reason": r, "title": f"Planning Analyst {i}",
+                       "company": "Fernwick Foods",
+                       "location": "Salford, England, United Kingdom"}
+                      for i, r in enumerate(said + [held])], today="2026-10-21", path=path)
+    with open(path, encoding="utf-8") as fh:
+        entries = json.load(fh)["seen"]
+    urls, _ = throttle.ruled_out(entries)
+    assert sorted(urls) == [norm(URL.format(len(said)))]
