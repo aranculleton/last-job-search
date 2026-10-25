@@ -121,6 +121,28 @@ def test_a_word_the_app_had_before_it_was_recorded_is_not_a_leak(tmp_path, monke
     assert capsys.readouterr().out.startswith("APP LEAK: 1 match(es) in the public app's files")
 
 
+def test_a_copy_set_up_as_the_example_person_is_not_a_leak(tmp_path, monkeypatch, capsys):
+    """A copy whose profile is the app's invented example person, made to try the app,
+    reported that person's name in the app as a leak (2026-10-25). The example is the
+    app's own; anyone else's name in the app is still found."""
+    import json
+    _setup(tmp_path, monkeypatch, "Thanks to Zorblax Quux and Morgan Ellis.\n")
+    _, mine = tmp_path / "example-owner" / "app", tmp_path / "mine"
+    (mine / "profile.example").mkdir()
+    for folder in ("profile.example", "profile"):
+        (mine / folder / "person.json").write_text(
+            json.dumps({"identity": {"name": "Morgan Ellis"}}), encoding="utf-8")
+    monkeypatch.setattr(build_app, "recorded",
+                        lambda: {"Morgan Ellis": None, "Zorblax Quux": None})
+    assert app_watch.main(["--all"]) == 1
+    out = capsys.readouterr().out
+    assert "'Zorblax Quux'" in out and "Morgan Ellis" not in out.split("\n")[0]
+    (mine / "profile" / "person.json").write_text(
+        json.dumps({"identity": {"name": "Someone Else"}}), encoding="utf-8")
+    assert app_watch.main(["--all"]) == 1
+    assert "2 matches" in capsys.readouterr().out
+
+
 def test_an_entry_holding_a_line_break_shifts_no_other_entry(tmp_path, monkeypatch, capsys):
     """Written to a file and read back, a tracker cell with a line break took two numbers,
     and the real leak after it was judged as its neighbour, an ordinary word the app had

@@ -71,6 +71,29 @@ def is_maintainers() -> bool:
         and os.path.isdir(os.path.join(ROOT, "profile"))
 
 
+def _example_words() -> str | None:
+    """Every word of the app's invented example person, lowercased, when this repo's
+    profile is that person; None for anyone else."""
+    def name(folder: str) -> str:
+        try:
+            with open(os.path.join(ROOT, folder, "person.json"), encoding="utf-8") as fh:
+                return str((json.load(fh).get("identity") or {}).get("name") or "").strip()
+        except (OSError, ValueError, AttributeError):
+            return ""
+    theirs = name("profile.example")
+    if not theirs or name("profile") != theirs:
+        return None
+    text = []
+    for d, _, files in os.walk(os.path.join(ROOT, "profile.example")):
+        for n in files:
+            try:
+                with open(os.path.join(d, n), encoding="utf-8", errors="replace") as fh:
+                    text.append(fh.read())
+            except OSError:
+                pass
+    return "\n".join(text).lower()
+
+
 def _state_path() -> str:
     d = _git("rev-parse", "--git-common-dir").stdout.strip() or ".git"
     return os.path.join(d if os.path.isabs(d) else os.path.join(ROOT, d), STATE)
@@ -187,6 +210,14 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
     import build_app
     import leak_scan
     when = build_app.recorded()
+    # A copy set up as the app's own invented person (its profile copied from
+    # profile.example/, to try the app) records that person's words, and the app carries
+    # them on purpose: they are never this repo's to leak (2026-10-25).
+    example = _example_words()
+    ours = len(when)
+    if example is not None:
+        when = {t: w for t, w in when.items() if t.lstrip("=").lower() not in example}
+    as_example = ours - len(when)
     denylist = list(when)
     digest = hashlib.sha1("\n".join(denylist).encode("utf-8")).hexdigest()[:16]
     # Numbered straight from the list, one number an entry: written to a file and read
@@ -255,7 +286,9 @@ def watch(everything: bool = False) -> tuple[list[str], str]:
                f"message(s) and {len(prs)} pull request(s) checked against {len(denylist)} "
                "entries from this repo" + (f"; {unread}" if unread else "")
                + (f"; {len(aside)} set aside, carried by the app before this repo recorded "
-                  "them" if aside else ""))
+                  "them" if aside else "")
+               + (f"; {as_example} set aside, the app's own example person"
+                  if as_example else ""))
     return findings, summary
 
 

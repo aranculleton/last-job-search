@@ -78,6 +78,8 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **A copy set up as the app's example person** no longer reports that person's name in
+  the app as a leak; the example is the app's own.
 - **A new computer could not save anything** when its git had no name set. Your copy now
   takes your GitHub name and GitHub's private address for it, for that copy alone.
 - **Job titles are clean**: badges such as "Easy Apply" and a second copy of the place are
