@@ -133,9 +133,13 @@ def test_the_days_sync_pull_and_own_folder_on_windows(tmp_path, win):
     rc, out, err = run([py, "tools/sync_app.py", "--if-stale", "--on", "a model",
                         "--tools", "none"], me, env, timeout=600)
     assert rc == 0, out + err
-    assert "A reply from Łukasz is read whole" in out
+    assert "An update is waiting: A reply from Łukasz is read whole" in out
     assert "already checked today" in run([py, "tools/sync_app.py", "--if-stale", "--on", "x",
                                            "--tools", "none"], me, env)[1]
+    rc, out, err = run([py, "tools/sync_app.py", "--update", "--on", "a model",
+                        "--tools", "none"], me, env, timeout=600)
+    assert rc == 0, out + err
+    assert "What changed" in out and "A reply from Łukasz is read whole" in out
     rc, out, err = run([py, "tools/sync_app.py", "--worktree", "Laptop chat"], me, env)
     assert rc == 0, out + err
     assert (me / ".claude" / "worktrees" / "laptop-chat" / "tools" / "sync_app.py").exists()

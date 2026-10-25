@@ -1,4 +1,5 @@
-"""tools/sync_app.py: a person's repo takes the app's updates and never its own edits back.
+"""tools/sync_app.py: a person's repo takes the app's updates when they say so, and never its
+own edits back.
 
 Each test builds two throwaway repositories: an "app" with a few commits, and a
 person's repo made from it the way "Use this template" makes one (the app's
@@ -79,7 +80,7 @@ def test_the_first_sync_merges_a_template_made_repo(repos):
     write(app, "README.md", "v2\n")
     write(app, "CHANGELOG.md", "# Changelog\n- README is v2\n")
     commit(app, "app v2")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0, out
     assert read(me, "README.md") == "v2\n"
     assert read(me, "job_search_tracker.csv") == "date,company\n"
@@ -89,20 +90,20 @@ def test_the_first_sync_merges_a_template_made_repo(repos):
 
 def test_a_later_sync_brings_only_the_new_commits(repos):
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     write(app, "tools/x.py", "a = 2\n")
     commit(app, "app v3")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0, out
     assert read(me, "tools/x.py") == "a = 2\n"
     assert "1 new commit" in out
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "up to date" in out
 
 
 def test_check_reports_and_changes_nothing(repos):
     app, me = repos
-    run(me, app)
+    run(me, app, "--update")
     write(app, "tools/x.py", "a = 3\n")
     commit(app, "app v3")
     before = head(me)
@@ -113,13 +114,13 @@ def test_check_reports_and_changes_nothing(repos):
 
 def test_an_app_file_edited_here_is_put_back_and_named(repos):
     app, me = repos
-    run(me, app)
+    run(me, app, "--update")
     write(me, "README.md", "my edit\n")
     write(me, "tools/mine.py", "mine = True\n")
     commit(me, "local edits")
     rc, out = run(me, app, "--check")
     assert "drift: 1" in out and "README.md" in out
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0, out
     assert read(me, "README.md") == "v1\n"
     assert "put back (edited here): README.md" in out
@@ -129,12 +130,12 @@ def test_an_app_file_edited_here_is_put_back_and_named(repos):
 
 def test_a_conflict_on_an_app_file_takes_the_apps_version(repos):
     app, me = repos
-    run(me, app)
+    run(me, app, "--update")
     write(me, "tools/x.py", "a = 'mine'\n")
     commit(me, "local edit")
     write(app, "tools/x.py", "a = 'app'\n")
     commit(app, "app edit")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0, out
     assert read(me, "tools/x.py") == "a = 'app'\n"
 
@@ -144,7 +145,7 @@ def test_an_app_that_carries_a_personal_path_is_refused(repos):
     write(app, "job_search_tracker.csv", "date,company\nleaked,row\n")
     commit(app, "broken app")
     before = head(me)
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 1 and "job_search_tracker.csv" in out
     assert head(me) == before
     assert read(me, "job_search_tracker.csv") == "date,company\n"
@@ -153,7 +154,7 @@ def test_an_app_that_carries_a_personal_path_is_refused(repos):
 def test_uncommitted_changes_stop_it_first(repos):
     app, me = repos
     write(me, "README.md", "half done\n")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 1 and "Commit or stash" in out
     assert read(me, "README.md") == "half done\n"
 
@@ -162,7 +163,7 @@ def test_in_the_app_itself_it_does_nothing(repos):
     app, me = repos
     sh(me, "git", "remote", "set-url", "origin", app)
     before = head(me)
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "the app itself" in out and head(me) == before
 
 
@@ -195,7 +196,7 @@ def test_adopt_records_the_history_without_changing_a_file(tmp_path):
     assert sh(me, "git", "rev-parse", "HEAD^{tree}") == tree
     write(app, "README.md", "v2\n")
     commit(app, "app v2")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and read(me, "README.md") == "v2\n" and "1 new commit" in out
 
 
@@ -212,7 +213,7 @@ def test_a_shallow_clone_finds_its_last_sync_instead_of_starting_over(repos, tmp
     """Cloud sessions clone shallow. A last sync below the clone's depth looks like
     no sync at all, and treating it as one would re-merge the whole app."""
     app, me = repos
-    run(me, app)
+    run(me, app, "--update")
     for i in range(5):
         write(me, f"documents/note{i}.md", f"{i}\n")
         commit(me, f"work {i}")
@@ -223,7 +224,7 @@ def test_a_shallow_clone_finds_its_last_sync_instead_of_starting_over(repos, tmp
     assert sh(shallow, "git", "rev-parse", "--is-shallow-repository").strip() == "true"
     write(app, "tools/x.py", "a = 9\n")
     commit(app, "app v4")
-    rc, out = run(shallow, app)
+    rc, out = run(shallow, app, "--update")
     assert rc == 0, out
     assert "1 new commit" in out and read(shallow, "tools/x.py") == "a = 9\n"
 
@@ -242,14 +243,14 @@ def _add_app_portal(app, name):
 
 def test_a_persons_own_portal_is_theirs_and_never_drift(repos):
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     write(me, ".agents/skills/localboard-search/SKILL.md", "---\nname: localboard-search\n---\n")
     commit(me, "/add-portal")
     rc, out = run(me, app, "--check")
     assert "localboard" not in out, out
     write(app, "tools/x.py", "a = 9\n")
     commit(app, "app v9")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0, out
     assert os.path.exists(os.path.join(me, ".agents/skills/localboard-search/SKILL.md"))
 
@@ -258,24 +259,24 @@ def test_a_portal_the_app_starts_shipping_reaches_a_repo_on_the_old_rules(repos)
     """The person's sync judges incoming paths by their own personal_paths, which
     does not list the new portal yet; the app's own list is what lets it in."""
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     _add_app_portal(app, "worldboard-search")
     commit(app, "ship a portal that works anywhere")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0, out
     assert os.path.exists(os.path.join(me, ".agents/skills/worldboard-search/SKILL.md"))
 
 
 def test_the_app_cannot_claim_anything_but_a_portal_that_way(repos):
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     pp = read(app, "tools/personal_paths.py")
     anchor = '    ".agents/skills/freehire-search/**",\n'
     write(app, "tools/personal_paths.py", pp.replace(anchor, anchor + '    "job_search_tracker.csv",\n'))
     write(app, "job_search_tracker.csv", "date,company\nleaked,row\n")
     commit(app, "broken app")
     before = head(me)
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 1 and "job_search_tracker.csv" in out
     assert head(me) == before
 
@@ -292,9 +293,9 @@ def test_the_sync_lists_pending_upgrades_after_merging_and_when_up_to_date(repos
     app, me = repos
     write(app, "tools/profile_upgrades.py", STUB)
     commit(app, "app ships the registry")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "Profile upgrades pending (1)" in out, out
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "up to date" in out and "Profile upgrades pending (1)" in out, out
     rc, out = run(me, app, "--check")
     assert rc == 0 and "Profile upgrades pending (1)" in out, out
@@ -304,7 +305,7 @@ def test_a_broken_registry_never_changes_the_syncs_answer(repos):
     app, me = repos
     write(app, "tools/profile_upgrades.py", "raise SystemExit(3)\n")
     commit(app, "a broken registry")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "profile upgrades: the check exited 3" in out, out
 
 
@@ -323,34 +324,23 @@ def _stamp(me):
     return read(me, ".git/ljs-last-sync").strip() if os.path.exists(p) else ""
 
 
-def test_if_stale_syncs_once_a_day_and_then_does_nothing(repos, tmp_path):
+def test_if_stale_looks_once_a_day_and_never_takes_the_update(repos, tmp_path):
     app, me = repos
     _with_local_origin(me, tmp_path)
+    assert run(me, app, "--update")[0] == 0
+    write(me, ".git/ljs-last-sync", "2000-01-01\n")
+    before = head(me)
     write(app, "README.md", "v2\n")
     commit(app, "app v2")
     rc, out = run(me, app, "--if-stale")
     assert rc == 0, out
-    assert read(me, "README.md") == "v2\n"
-    assert _stamp(me) != ""
-    before = head(me)
+    assert head(me) == before and read(me, "README.md") == "v1\n"
+    assert "An update is waiting" in out and _stamp(me) > "2000-01-01"
     write(app, "README.md", "v3\n")
     commit(app, "app v3")
     rc, out = run(me, app, "--if-stale")
-    assert rc == 0 and "already checked today" in out
-    assert head(me) == before and read(me, "README.md") == "v2\n"
-
-
-def test_a_check_from_an_earlier_day_runs_again(repos, tmp_path):
-    app, me = repos
-    _with_local_origin(me, tmp_path)
-    assert run(me, app)[0] == 0
-    write(me, ".git/ljs-last-sync", "2000-01-01\n")
-    write(app, "README.md", "v2\n")
-    commit(app, "app v2")
-    rc, out = run(me, app, "--if-stale")
-    assert rc == 0, out
-    assert read(me, "README.md") == "v2\n"
-    assert _stamp(me) > "2000-01-01"
+    assert rc == 0 and "already checked today" in out and "An update is waiting" not in out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
 
 
 def test_if_stale_brings_in_master_first(repos, tmp_path):
@@ -377,56 +367,132 @@ def test_if_stale_with_uncommitted_work_stops_and_records_nothing(repos, tmp_pat
     assert _stamp(me) == ""
 
 
-def test_the_reminder_shows_only_when_todays_check_has_not_run(repos, tmp_path):
-    app, me = repos
-    _with_local_origin(me, tmp_path)
-    probe = [sys.executable, "-c",
-             "import sys; sys.path.insert(0, 'tools'); import sync_app; sync_app.nudge()"]
-    env = dict(ENV, LJS_APP_URL=app)
-    first = subprocess.run(probe, cwd=me, env=env, text=True, capture_output=True)
-    assert "has not been checked for updates today" in first.stderr
-    assert run(me, app)[0] == 0
-    after = subprocess.run(probe, cwd=me, env=env, text=True, capture_output=True)
-    assert after.stderr == ""
-    sh(app, "git", "remote", "add", "origin", app)  # the app is the repo whose origin is the app
-    in_app = subprocess.run(probe, cwd=app, env=dict(ENV, LJS_APP_URL=app),
-                            text=True, capture_output=True)
-    assert in_app.stderr == ""
-
-
 def test_a_changed_claude_md_tells_an_open_chat_to_read_it_again(repos):
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     write(app, "tools/x.py", "a = 2\n")
     commit(app, "code only")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "read CLAUDE.md again" not in out
     write(app, "CLAUDE.md", "# Rules, v2\n")
     commit(app, "new rules")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "CLAUDE.md changed" in out and "read CLAUDE.md again now" in out
 
 
-def test_the_tools_a_day_without_a_search_starts_with_carry_the_reminder():
-    # Someone who only networks, or only asks what they owe, never runs a round.
+def test_no_tool_a_day_starts_with_tells_a_chat_to_take_an_update():
+    # These printed "Run sync_app.py --if-stale first" whenever the day's check had not run,
+    # which took the update in the middle of whatever the person had asked for.
     for rel in ("tools/run_round.py", "tools/stage_picks.py", "tools/open_actions.py",
                 "tools/followups.py", "tools/network/state.py"):
-        assert "sync_app.nudge()" in read(ROOT, rel), rel
+        assert "sync_app.nudge" not in read(ROOT, rel), rel
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import sync_app as s
+    assert not hasattr(s, "nudge")
+
+
+# ----------------------------------------------- the app updates only when they say so
+
+def _release(app, entry, readme):
+    write(app, "README.md", readme)
+    write(app, "CHANGELOG.md", read(app, "CHANGELOG.md") + f"- **{entry}**\n  More words.\n")
+    commit(app, entry)
+
+
+def test_a_look_changes_nothing_and_says_a_waiting_version_once(repos):
+    app, me = repos
+    assert run(me, app, "--update")[0] == 0
+    before = head(me)
+    _release(app, "Interview packs open with where the process stands", "v2\n")
+    rc, out = run(me, app)
+    assert rc == 0, out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
+    assert sh(me, "git", "status", "--porcelain").strip() == ""
+    line = ('An update is waiting: Interview packs open with where the process stands. '
+            'Say "update" when you want it.')
+    assert out.count(line) == 1, out
+    assert "What changed" not in out
+    # Never a command: the update is the person's word, and nothing printed asks for it.
+    assert "--update" not in out and "python3" not in out, out
+    rc, out = run(me, app, "--on", "a model", "--tools", "none")
+    assert rc == 0 and "An update is waiting" not in out, out
+    assert head(me) == before
+    # A newer version is a new line, once.
+    _release(app, "A reply to a recruiter names the role", "v3\n")
+    rc, out = run(me, app)
+    assert rc == 0 and out.count("An update is waiting") == 1, out
+    assert "Interview packs open with where the process stands, and 1 more change." in out
+    assert head(me) == before
+
+
+def test_update_takes_it_with_what_changed_and_the_upgrades(repos):
+    app, me = repos
+    assert run(me, app, "--update")[0] == 0
+    write(app, "tools/profile_upgrades.py", STUB)
+    _release(app, "Interview packs open with where the process stands", "v2\n")
+    rc, out = run(me, app)
+    assert rc == 0 and "An update is waiting" in out, out
+    # Upgrades come with the version that brings them, never before it is taken.
+    assert "Profile upgrades pending" not in out, out
+    rc, out = run(me, app, "--update")
+    assert rc == 0, out
+    assert read(me, "README.md") == "v2\n"
+    assert "What changed" in out and "Interview packs open with where the process stands" in out
+    assert "Profile upgrades pending (1)" in out, out
+    rc, out = run(me, app)
+    assert rc == 0 and "up to date" in out and "An update is waiting" not in out, out
+    # The version taken: its upgrades still apply themselves on every look.
+    assert "Profile upgrades pending (1)" in out, out
+
+
+def test_nobody_set_up_yet_hears_nothing_about_an_update(repos):
+    app, me = repos
+    sh(me, "git", "rm", "-q", "-r", "profile")
+    commit(me, "not set up")
+    write(app, "README.md", "v2\n")
+    commit(app, "app v2")
+    rc, out = run(me, app)
+    assert rc == 0 and "An update is waiting" not in out, out
+    assert read(me, "README.md") == "v1\n"
+
+
+def test_a_look_reports_an_edited_app_file_and_puts_nothing_back(repos):
+    app, me = repos
+    assert run(me, app, "--update")[0] == 0
+    write(me, "tools/x.py", "a = 'edited here'\n")
+    commit(me, "an app file edited here")
+    rc, out = run(me, app)
+    assert rc == 0 and "drift: 1 app-owned file(s) edited here" in out, out
+    assert read(me, "tools/x.py") == "a = 'edited here'\n"
+
+
+def test_a_repo_on_the_apps_master_waits_for_their_word_too(repos):
+    # The maintainer's own repo follows master; the same rule holds there.
+    app, me = repos
+    assert run(me, app, "--update")[0] == 0
+    write(me, "profile/person.json", '{"app_channel": "master"}\n')
+    commit(me, "follow master")
+    before = head(me)
+    write(app, "README.md", "v2\n")
+    commit(app, "unreleased")
+    rc, out = run(me, app)
+    assert rc == 0 and "app's master" in out and "An update is waiting" in out, out
+    assert head(me) == before and read(me, "README.md") == "v1\n"
 
 
 def test_stable_takes_releases_and_never_goes_backwards(repos):
     app, me = repos
     sh(app, "git", "tag", "v1.0.0")
-    rc, out = run(me, app)  # first sync: master, whatever the channel
+    rc, out = run(me, app, "--update")  # first sync: master, whatever the channel
     assert rc == 0 and "first sync" in out
     write(app, "README.md", "v2, not released\n")
     commit(app, "after the release")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "releases, newest v1.0.0" in out
     assert read(me, "README.md") == "v1\n"  # what is not released does not arrive
     sh(app, "git", "tag", "v1.1.0")
     sh(app, "git", "tag", "v1.0.9", "HEAD~1")  # an older version number, tagged later
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "newest v1.1.0" in out and read(me, "README.md") == "v2, not released\n"
 
 
@@ -438,9 +504,9 @@ def test_a_first_sync_newer_than_the_newest_release_is_never_put_back(repos):
     sh(app, "git", "tag", "v1.0.0")
     write(app, "README.md", "v2, after the release\n")
     commit(app, "after the release")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "first sync" in out and read(me, "README.md") == "v2, after the release\n"
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "releases, newest v1.0.0" in out, out
     assert "put back" not in out and "up to date" in out, out
     assert read(me, "README.md") == "v2, after the release\n"
@@ -448,20 +514,20 @@ def test_a_first_sync_newer_than_the_newest_release_is_never_put_back(repos):
     assert rc == 0 and "drift: 0 app-owned file(s)" in out, out
     write(me, "tools/x.py", "a = 'edited here'\n")
     commit(me, "an app file edited here")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "put back (edited here): tools/x.py" in out, out
     assert read(me, "tools/x.py") == "a = 1\n" and read(me, "README.md") == "v2, after the release\n"
 
 
 def test_master_for_the_maintainer_or_when_chosen(repos):
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     sh(app, "git", "tag", "v1.0.0")
     write(app, "README.md", "v2\n")
     commit(app, "unreleased")
     write(me, "profile/person.json", '{"app_channel": "master"}\n')
     commit(me, "choose master")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "app's master" in out and read(me, "README.md") == "v2\n"
     sys.path.insert(0, os.path.join(ROOT, "tools"))
     import sync_app as s
@@ -470,10 +536,10 @@ def test_master_for_the_maintainer_or_when_chosen(repos):
 
 def test_no_release_yet_means_master(repos):
     app, me = repos
-    assert run(me, app)[0] == 0
+    assert run(me, app, "--update")[0] == 0
     write(app, "README.md", "v2\n")
     commit(app, "more")
-    rc, out = run(me, app)
+    rc, out = run(me, app, "--update")
     assert rc == 0 and "no release yet" in out and read(me, "README.md") == "v2\n"
 
 

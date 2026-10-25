@@ -94,7 +94,6 @@ def test_a_missing_saved_scrape_is_said_plainly(tmp_path):
 @pytest.fixture
 def stages(tmp_path, monkeypatch):
     """main() with `_stream` stood in: `timeout` names the stages that run out of time."""
-    import sync_app
     plan = {"timeout": set()}
 
     def stream(cmd, log, budget):
@@ -105,7 +104,6 @@ def stages(tmp_path, monkeypatch):
 
     monkeypatch.setattr(run_round, "_stream", stream)
     monkeypatch.setattr(run_round, "_upgrades_line", lambda: "")
-    monkeypatch.setattr(sync_app, "nudge", lambda *a, **k: None)
     spawned = []
     monkeypatch.setattr(run_round.subprocess, "call",
                         lambda cmd, *a, **k: spawned.append(list(cmd)) or 0)

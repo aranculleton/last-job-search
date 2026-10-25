@@ -496,8 +496,11 @@ def step_computer() -> None:
           code == 0 and out.startswith("ready") and "?" not in out, out.strip(), took)
     for label, cmd, codes in (
             ("pull master", [PY, "tools/sync_app.py", "--pull"], (0,)),
-            ("take the app's update", [PY, "tools/sync_app.py", "--on", "check", "--tools",
-                                       "none"], (0,)),
+            ("look at the app, changing nothing", [PY, "tools/sync_app.py", "--on", "check",
+                                                   "--tools", "none"], (0,)),
+            ("take the update, as the person would ask", [PY, "tools/sync_app.py", "--update",
+                                                          "--on", "check", "--tools", "none"],
+             (0,)),
             ("the day's check, once", [PY, "tools/sync_app.py", "--if-stale", "--on", "check",
                                        "--tools", "none"], (0,)),
             ("the place check", [PY, "tools/place.py"], (0, 1)),

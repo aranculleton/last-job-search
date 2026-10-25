@@ -676,11 +676,6 @@ def render_due(items, today):
 
 
 def main():
-    try:  # a chat that carried on into a new day has not checked the app since
-        import sync_app
-        sync_app.nudge()
-    except Exception:
-        pass
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--company", help="one employer, by any spelling of its name")
     ap.add_argument("--all", action="store_true",

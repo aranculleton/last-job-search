@@ -167,7 +167,8 @@ def test_the_first_sync_before_setup_says_nothing_about_what_changed(tmp_path):
     g(app, "commit", "-q", "-m", "app v2")
 
     def run():
-        return subprocess.run([sys.executable, str(me / "tools" / "sync_app.py")], cwd=me,
+        return subprocess.run([sys.executable, str(me / "tools" / "sync_app.py"), "--update"],
+                              cwd=me,
                               env=dict(ENV, LJS_APP_URL=str(app)), capture_output=True,
                               text=True, timeout=120)
     r = run()

@@ -4209,11 +4209,6 @@ def main(argv=None) -> int:
         return _cli_no_reply(argv[1:])
     if argv[:1] == ["follow-ups"]:
         return _cli_follow_ups(argv[1:])
-    try:  # a chat that carried on into a new day has not checked the app since
-        import sync_app
-        sync_app.nudge()
-    except Exception:
-        pass
     ap = argparse.ArgumentParser(description="Networking pipeline state.")
     ap.add_argument("--contacts", default=CONTACTS_CSV)
     ap.add_argument("--threads", default=THREADS_CSV)

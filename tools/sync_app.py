@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-"""Bring the app's updates into a person's repo. Nothing is ever sent back.
+"""Look at the app's updates for a person's repo, and take one when they say so.
 
 A person's repo is made from the app with "Use this template", so the two share
-files but not history. This fetches the app and merges its new commits:
+files but not history. The app updates only when the person says so: every run
+but --update looks at the app and changes nothing of it.
 
-    python3 tools/sync_app.py            # fetch the app, merge what is new
+    python3 tools/sync_app.py            # look: is an update waiting? Changes nothing of the app
+    python3 tools/sync_app.py --update   # take the waiting update: only on the person's word
     python3 tools/sync_app.py --check    # how far behind, and any drift; changes nothing
     python3 tools/sync_app.py --adopt    # once, for the repo the app was first built from
-    python3 tools/sync_app.py --if-stale # the day's first check: master, then the app; else nothing
-    ... --on "<model>"                   # with either: the day's model check after the sync
+    python3 tools/sync_app.py --if-stale # the day's first look: master, then the app; else nothing
+    ... --on "<model>"                   # with any of them: the day's model check after it
     ... --tools "<browser,chrome,enable or none>"   # the place check, once in a chat
 
-The rules, enforced here rather than remembered:
+A look fetches the app read-only and compares. When a newer version is waiting it
+prints one line for the person, once for that version: "An update is waiting: <what
+it brings>. Say "update" when you want it." Nothing ever takes it on its own, and no
+tool needs it mid-task: a person who never says "update" keeps working on the
+version they have.
+
+The rules of an update, enforced here rather than remembered:
 
 - The app owns every path `tools/personal_paths.py` does not call personal; the
   person owns the rest. A personal path is never touched. If the app's commits
@@ -22,35 +30,37 @@ The rules, enforced here rather than remembered:
   App changes are made in the app and arrive here; an edit made here would be
   overwritten by the app's next change to that file anyway, silently, so it is
   overwritten now, loudly. A file the app does not have is left alone and
-  reported.
+  reported. A look reports drift and puts nothing back.
 - Uncommitted changes stop it before anything happens. Anything the merge
   cannot settle aborts it and leaves the repo exactly as it was.
 - In the app itself, a no-op.
-- After every sync, "up to date" included, it lists the profile upgrades this
-  repo still needs and runs the instant ones (`tools/profile_upgrades.py`).
+- After every look and every update, it lists the profile upgrades this repo
+  still needs and runs the instant ones (`tools/profile_upgrades.py`): those of
+  the version it holds, so an update not taken brings none.
 
-The first sync of a template-made repo has no common commit, so it merges with
+The first update of a template-made repo has no common commit, so it merges with
 --allow-unrelated-histories: identical files merge clean, and an app-owned file
-that differs takes the app's version.
+that differs takes the app's version. Setting up (`/setup`) takes it, since the
+person asked to be set up.
 
 --if-stale is for a chat that carries on for days, which is how most people use it: the
-start-of-session steps never run again in one, so updates would wait for a new chat that
-never comes. It does what a session's first two steps do (bring master in, then sync)
-unless they already ran today, which a stamp in the git directory records, and otherwise
-prints one line and does nothing. Every successful sync writes that stamp.
-`run_round.py` and `stage_picks.py` print a reminder when today's check has not run.
+start-of-session steps never run again in one. It does what a session's first two steps do
+(bring master in, then look at the app) unless they already ran today, which a stamp in
+the git directory records, and otherwise prints one line and does nothing. Every
+successful look and update writes that stamp. Bringing master in is not an update: it is
+this repo's own work from its other chats.
 
 --adopt is for the one repo whose app-owned files ARE the app, the private repo
 the app's first commit was built from. It checks that every app-owned file is
 byte-identical to the app's, then records the app's history as merged without
-changing a file (`git merge -s ours`), so later syncs bring only new app commits.
+changing a file (`git merge -s ours`), so later updates bring only new app commits.
 
 The app's address lives here, in an app-owned file, so a change to it reaches
-everyone on their next sync. LJS_APP_URL overrides it (the tests point it at a
+everyone with their next update. LJS_APP_URL overrides it (the tests point it at a
 local repository).
 
-Exit: 0 synced or up to date, 1 stopped (uncommitted changes, a conflict, or
---adopt found a difference), 2 the app could not be reached.
+Exit: 0 looked, updated or up to date, 1 stopped (uncommitted changes, a conflict,
+or --adopt found a difference), 2 the app could not be reached.
 """
 
 from __future__ import annotations
@@ -78,6 +88,7 @@ BRANCH = "master"
 APP = f"{REMOTE}/{BRANCH}"
 MASTER = APP
 STABLE = f"{REMOTE}/stable"
+TAG = ""  # the release APP names, when it names one (follow())
 RELEASE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 
 
@@ -268,8 +279,8 @@ def follow() -> str:
     app-owned files back. Once synced, a release older than what this repo
     already holds is an ancestor of it, so stable never goes backwards.
     """
-    global APP
-    APP = MASTER
+    global APP, TAG
+    APP, TAG = MASTER, ""
     if channel() == "master":
         return "following the app's master (every change, the day it merges)"
     tag = newest_release()
@@ -283,7 +294,7 @@ def follow() -> str:
     if r.returncode != 0 or sha.returncode != 0:
         return f"following the app's master: release {tag} could not be fetched"
     git("update-ref", f"refs/remotes/{STABLE}", sha.stdout.strip())
-    APP = STABLE
+    APP, TAG = STABLE, tag
     return f"following the app's releases, newest {tag}"
 
 
@@ -402,17 +413,22 @@ def headlines(lines: list[str], maintainer: bool = True) -> list[str]:
     return out if entries else lines
 
 
+def _stop_dirty(dirty: list[str]) -> int:
+    print("sync_app: stopped, nothing changed. Commit or stash these first:")
+    for ln in dirty[:20]:
+        print(f"  {ln}")
+    if not CLOUD:
+        print("  If another chat works in this folder, these are its files: never commit or "
+              "discard them from here. Give this chat a folder of its own instead: "
+              "python3 tools/sync_app.py --worktree <a short name for this chat>")
+    return 1
+
+
 def sync() -> int:
+    """The update: the app's waiting commits merged in. Run only when the person says so."""
     dirty = _dirty()
     if dirty:
-        print("sync_app: stopped, nothing changed. Commit or stash these first:")
-        for ln in dirty[:20]:
-            print(f"  {ln}")
-        if not CLOUD:
-            print("  If another chat works in this folder, these are its files: never commit or "
-                  "discard them from here. Give this chat a folder of its own instead: "
-                  "python3 tools/sync_app.py --worktree <a short name for this chat>")
-        return 1
+        return _stop_dirty(dirty)
     base = merge_base()
     old = git("rev-parse", "HEAD").stdout.strip()
     behind = git("merge-base", "--is-ancestor", APP, "HEAD", check=False).returncode != 0
@@ -689,12 +705,91 @@ def stale() -> bool:
         return False
 
 
-def nudge() -> None:
-    """One line on stderr when today's check has not run; for the tools a day's work starts with."""
-    if stale():
-        print("note: the app has not been checked for updates today. Run "
-              "`python3 tools/sync_app.py --if-stale --on \"<this session's model>\"` first, then "
-              "this again.", file=sys.stderr)
+# ------------------------------------------------------------ an update waiting
+#
+# The app updates only when the person says so (the maintainer, 2026-10-25). A check
+# looks at the app and changes nothing; when a newer version is waiting it says so to the
+# person in one line, once for that version, and `--update` takes it when they ask.
+#
+# What was said is kept in the git folder every worktree of this clone shares, never in a
+# tracked file: it records what this computer's chats have told the person, and a tracked
+# record would be a commit on every check that every chat then merges. A new cloud chat is
+# a new clone, so it says a waiting version once more; the brief leaves the line out when
+# its last message already said it (automation/prompts/_common.md).
+
+SAID = "ljs-update-said"
+
+
+def _said_path(root: str | None = None) -> str | None:
+    dirs = _git_dirs(root or ROOT)
+    return os.path.join(dirs[1], SAID) if dirs else None
+
+
+def waiting() -> str:
+    """The app commit an update would bring in, or "" when this repo already holds it."""
+    if git("merge-base", "--is-ancestor", APP, "HEAD", check=False).returncode == 0:
+        return ""
+    return git("rev-parse", "--verify", "-q", APP + "^{commit}", check=False).stdout.strip()
+
+
+def brings(base: str | None, maintainer: bool) -> str:
+    """What the waiting update brings, in plain words: its first change, and how many more.
+    Read from the CHANGELOG entries it adds, as an update's own "What changed" lines are."""
+    # Never synced: the copy was made from the app, so its own CHANGELOG is where it starts.
+    diff = git("diff", base or "HEAD", APP, "--", "CHANGELOG.md", check=False).stdout
+    lines = [ln[1:] for ln in diff.splitlines()
+             if ln.startswith("+") and not ln.startswith("+++") and ln[1:].strip()]
+    heads = (headlines(lines, maintainer=maintainer)
+             if any(ln.strip().startswith("- ") for ln in lines) else [])
+    if not heads:
+        return "small fixes and improvements"
+    first = heads[0].rstrip(" .;:,")
+    if len(first) > 140:
+        first = first[:140].rsplit(" ", 1)[0].rstrip(" .;:,") + "..."
+    more = len(heads) - 1
+    return first + (f", and {more} more change{'' if more == 1 else 's'}" if more else "")
+
+
+def waiting_line(base: str | None, maintainer: bool) -> str:
+    """The one line the person hears about a waiting update."""
+    return f'An update is waiting: {brings(base, maintainer)}. Say "update" when you want it.'
+
+
+def say_waiting(sha: str, line: str, root: str | None = None) -> bool:
+    """Print the line for the waiting version `sha`, unless this clone has said it already.
+    True when it was printed. Never raises."""
+    p = _said_path(root)
+    try:
+        with open(p, encoding="utf-8") as fh:
+            if fh.read().split()[:1] == [sha]:
+                return False
+    except (OSError, TypeError, IndexError):
+        pass
+    print("Update waiting. Claude: tell the person this once, at the end of your reply, in "
+          "these words; the app updates only when they say so:")
+    print(f"  {line}")
+    try:
+        with open(p, "w", encoding="utf-8") as fh:
+            fh.write(sha + "\n")
+    except (OSError, TypeError):
+        pass
+    return True
+
+
+def look() -> int:
+    """The default run and --if-stale: the app looked at and nothing of it taken. When a
+    newer version is waiting, one line for the person, once for that version."""
+    dirty = _dirty()
+    if dirty:
+        return _stop_dirty(dirty)   # the day's upkeep below commits; never over their work
+    rc = check()
+    sha = waiting()
+    if sha:
+        print(f"sync_app: the update waiting is {TAG or sha[:12]}; none of it was taken.")
+    if sha and os.path.isdir(os.path.join(ROOT, "profile")):
+        # Nothing for someone not set up yet: setting up takes the first update.
+        say_waiting(sha, waiting_line(installed(), maintainers()))
+    return rc
 
 
 def rewritten(old: str, new: str) -> bool:
@@ -906,7 +1001,7 @@ def check() -> int:
     if git("merge-base", "--is-ancestor", APP, "HEAD", check=False).returncode == 0:
         print("sync_app: up to date with the app.")
     elif base is None:
-        print("sync_app: never synced. The first sync merges the app as unrelated history.")
+        print("sync_app: never synced. The first update merges the app as unrelated history.")
     else:
         n = git("rev-list", "--count", f"HEAD..{APP}").stdout.strip()
         print(f"sync_app: {n} app commit(s) to bring in.")
@@ -916,7 +1011,7 @@ def check() -> int:
         mine = set(git("diff", "--name-only", "--no-renames", base, "HEAD").stdout.split())
         changed = [p for p in changed if p in mine]
     print(f"  drift: {len(changed)} app-owned file(s) edited here"
-          + (" (the next sync puts them back): " + ", ".join(changed[:8]) if changed else ""))
+          + (" (the next update puts them back): " + ", ".join(changed[:8]) if changed else ""))
     if extra:
         print(f"  {len(extra)} app-owned file(s) here that the app does not have (kept)")
     return 0
@@ -965,10 +1060,12 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--check", action="store_true", help="report only; change nothing")
+    mode.add_argument("--update", action="store_true",
+                      help="take the waiting update: only when the person has said so")
     mode.add_argument("--adopt", action="store_true",
                       help="once, for the repo the app was built from")
     mode.add_argument("--if-stale", action="store_true",
-                      help="master, then the app, unless today's check already ran")
+                      help="master, then a look at the app, unless today's check already ran")
     mode.add_argument("--own-tests", action="store_true",
                       help="which of the person's own tests fail on this tree, and what to do")
     mode.add_argument("--own-test-risks", action="store_true",
@@ -1022,7 +1119,7 @@ def main(argv: list[str]) -> int:
             place_check(a.tools)
             return 0
         if _dirty():
-            return sync()  # prints what is uncommitted and stops, changing nothing
+            return _stop_dirty(_dirty())  # changing nothing
         rc = pull_master()
         if rc:
             return rc
@@ -1040,7 +1137,8 @@ def main(argv: list[str]) -> int:
     if a.adopt:
         return adopt()
     before = git("rev-parse", "HEAD", check=False).stdout.strip()
-    rc = sync()
+    # Only the person's word takes an update; every other run looks and changes nothing.
+    rc = sync() if a.update else look()
     if rc == 0:
         _record_check()
         if git("rev-parse", "HEAD", check=False).stdout.strip() != before:

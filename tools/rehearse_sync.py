@@ -12,10 +12,12 @@ throwaway copies, with nothing sent anywhere and nothing in either repository ch
 1. A copy of the app at `--app` stands in for the app on GitHub, with that commit as its
    newest release, so a repo on releases and one on master both take it.
 2. A copy of their repo at `--ref` stands in for their GitHub repo.
-3. A cloud chat: a fresh clone syncs with its own copy of tools/sync_app.py (the one they
-   have now), exactly as a chat starts.
-4. A chat on their computer: another clone makes its own folder (`--worktree`) and syncs
-   there, at the same time, from the same starting point.
+3. A cloud chat: a fresh clone runs its own copy of tools/sync_app.py (the one they have
+   now), exactly as a chat starts: a look that must change nothing and say the waiting
+   update once, then `--update`, as when the person says "update". A copy older than
+   `--update` takes the update on its plain run, as it did.
+4. A chat on their computer: another clone makes its own folder (`--worktree`) and does
+   the same there, at the same time, from the same starting point.
 5. Each chat then runs the everyday commands (the due list, the contact book, the call
    preps, the interview packs, the upgrades plan, their own tests, and the local CI unless
    `--no-ci`), and a crash or an unexpected exit code fails the rehearsal.
@@ -156,6 +158,34 @@ def everyday(reh: Rehearsal, chat: str, root: str, env: dict, ci: bool) -> None:
              "" if not status else "files changed or left behind")
 
 
+def take_update(reh: Rehearsal, chat: str, root: str, env: dict) -> None:
+    """The update, as a chat takes it: when the person says "update". A copy of the sync that
+    knows `--update` first looks, as every session starts, and that look must change
+    nothing and say the waiting update once; a second look says nothing more. An older
+    copy has no `--update` and takes the update on its plain run."""
+    py = sys.executable
+    base = [py, "tools/sync_app.py", "--on", "rehearsal", "--tools", "none"]
+    try:
+        with open(os.path.join(root, "tools", "sync_app.py"), encoding="utf-8") as fh:
+            asks = '"--update"' in fh.read()
+    except OSError:
+        asks = False
+    if asks:
+        head = _git("rev-parse", "HEAD", cwd=root).stdout.strip()
+        ok, out = reh.check(chat, "look at the app", base, root, env)
+        same = _git("rev-parse", "HEAD", cwd=root).stdout.strip() == head
+        reh.note(chat, "the look changed nothing", ok and same, out,
+                 "" if same else "the look moved this chat's commit")
+        said = out.count("An update is waiting")
+        reh.note(chat, "the waiting update said once", said == 1, out,
+                 "" if said == 1 else f"said {said} times")
+        ok, again = reh.check(chat, "a second look says nothing more", base, root, env)
+        reh.note(chat, "said once, not twice", "An update is waiting" not in again, again,
+                 "" if "An update is waiting" not in again else "said again")
+    reh.check(chat, "take the update", base[:2] + (["--update"] if asks else []) + base[2:],
+              root, env)
+
+
 def start_commit(repo: str, ref: str, origin: str) -> tuple[str, str]:
     """(the commit of the person's repo the rehearsal starts from, made the master of the
     bare copy `origin`, or "", and a plain line to say). The bare copy holds only the repo's
@@ -258,9 +288,7 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
         # The cloud chat: a fresh clone, its own copy of the sync, as a chat starts.
         ok, _ = reh.check("cloud", "pull master", [py, "tools/sync_app.py", "--pull"], cloud,
                           envs["cloud"])
-        ok, out = reh.check("cloud", "take the update", [py, "tools/sync_app.py", "--on",
-                                                         "rehearsal", "--tools", "none"],
-                            cloud, envs["cloud"])
+        take_update(reh, "cloud", cloud, envs["cloud"])
         merged = _git("merge-base", "--is-ancestor", sha, "HEAD", cwd=cloud).returncode == 0
         reh.note("cloud", "the update is merged", merged,
                  _git("log", "-1", "--format=%s", cwd=cloud).stdout, "" if merged else
@@ -272,9 +300,7 @@ def rehearse(repo: str, ref: str, app_ref: str, ci: bool, keep: bool) -> int:
                             envs["computer"])
         wt = folder_said(out)
         if wt and os.path.isdir(wt):
-            reh.check("computer", "take the update", [py, "tools/sync_app.py", "--on",
-                                                      "rehearsal", "--tools", "none"],
-                      wt, envs["computer"])
+            take_update(reh, "computer", wt, envs["computer"])
         else:
             reh.note("computer", "take the update", False, out, "no folder was made")
 
