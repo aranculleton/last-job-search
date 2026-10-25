@@ -743,7 +743,7 @@ def main():
     left_out = filtered.write(a.out, a.summary_dir or person.state(SUMMARY_DIR),
                               os.path.basename(os.path.abspath(a.out)))
     if left_out:
-        print(f"filtered out: {os.path.relpath(left_out, ROOT)} (each with its reason; "
+        print(f"filtered out: {local_path.rel(left_out, ROOT)} (each with its reason; "
               "tools/filtered.py back brings one back)")
     # Read before the prune below deletes 00_scrape/, or a portal that went
     # quiet is never reported and the MISSED message blames the market.

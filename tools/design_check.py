@@ -269,6 +269,11 @@ def all_designs(out_dir=None):
     env.pop("LJS_STATE", None)
     with open(FIXTURE, encoding="utf-8") as fh:
         draft = json.load(fh)
+    # The Python that has the app's packages (pypdf): the repo's .venv where one runs, as
+    # every app command finds it. The scratch copy has no .venv of its own, and a bare
+    # /usr/bin/python3 there read no PDF: verify_batch failed on every design with nothing
+    # printed (2026-10-25).
+    py = local_path.venv_python() if local_path.venv_runs() else sys.executable
     bad = 0
     try:
         for name in doc_design.DESIGNS:
@@ -276,7 +281,7 @@ def all_designs(out_dir=None):
             path = os.path.join(tmp, f"drafts_{name}.json")
             with open(path, "w", encoding="utf-8") as fh:
                 json.dump([d], fh, ensure_ascii=False)
-            fit = subprocess.run([sys.executable, "tools/fit_to_page.py", path], cwd=app, env=env,
+            fit = subprocess.run([py, "tools/fit_to_page.py", path], cwd=app, env=env,
                                  capture_output=True, text=True, encoding="utf-8",
                                  errors="replace", timeout=900)
             found = [] if fit.returncode == 0 else ["FIT: " + (fit.stderr or fit.stdout)[-300:]]
@@ -288,17 +293,13 @@ def all_designs(out_dir=None):
                 pdfs[kind] = os.path.join(app, folder, hits[0]) if hits else None
             page = None
             if not found:
-                bash = shutil.which("bash")
-                if bash:
-                    vb = subprocess.run([bash, "tools/verify_batch.sh", path], cwd=app, env=env,
-                                        capture_output=True, text=True, encoding="utf-8",
-                                        errors="replace", timeout=900)
-                    if vb.returncode != 0:
-                        found.append("VERIFY_BATCH: " + " ".join(
-                            ln for ln in vb.stdout.splitlines()
-                            if re.search(r"FAIL|^\w+\s+\d/\d", ln))[-400:])
-                else:
-                    found.append("VERIFY_BATCH: SKIP, no bash on this computer")
+                vb = subprocess.run([py, "tools/verify_batch.py", path], cwd=app, env=env,
+                                    capture_output=True, text=True, encoding="utf-8",
+                                    errors="replace", timeout=900)
+                if vb.returncode != 0:
+                    said = " ".join(ln for ln in vb.stdout.splitlines()
+                                    if re.search(r"FAIL|^\w+\s+\d/\d", ln))
+                    found.append("VERIFY_BATCH: " + (said or (vb.stdout + vb.stderr).strip())[-400:])
                 page = (doc_design.DESIGNS[name][0].get("page")
                         or _market_page(app, env))
                 for kind, pdf in pdfs.items():
