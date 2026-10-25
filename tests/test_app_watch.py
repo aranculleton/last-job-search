@@ -208,3 +208,35 @@ def test_the_sync_runs_it_after_every_successful_sync_and_look(sync_steps, monke
     assert steps.index("sync") < steps.index("_record_check") < steps.index("app_watch")
     rc, steps = sync_steps(sync_rc=1)
     assert rc == 1 and "app_watch" not in steps and "_record_check" not in steps
+
+
+def test_a_leak_is_reported_on_every_look_until_it_is_gone(tmp_path, monkeypatch, capsys):
+    """Every blob, commit and pull request scanned was marked read, findings or not, so the
+    next sync said "App watch: clean" while the name was still public (found 2026-10-25).
+    One missed morning and the daily check reassured from then on."""
+    app, _ = _setup(tmp_path, monkeypatch)
+    _git(app, "switch", "-q", "-c", "leaky")
+    (app / "docs_note.md").write_text("Thanks to Zorblax Quux.\n")
+    _git(app, "add", "-A")
+    _git(app, "commit", "-qm", "A note from Zorblax Quux")
+    pr = {"number": 4, "title": "Fix", "body": "Found by Zorblax Quux",
+          "updated_at": "2026-10-19T00:00:00Z"}
+    asked = []
+
+    def prs(since):
+        asked.append(since)
+        return ([pr] if pr["updated_at"] > since else []), ""
+    monkeypatch.setattr(app_watch, "_pull_requests", prs)
+    for _look in range(3):
+        assert app_watch.main([]) == 1
+        out = capsys.readouterr().out
+        assert out.startswith("APP LEAK: 3 match(es) in the public app (1 in files, "
+                              "1 in commit messages, 1 in pull request text)"), out
+    # The branch is deleted and the pull request edited: clean, and the marks move on.
+    _git(app, "switch", "-q", "master")
+    _git(app, "branch", "-q", "-D", "leaky")
+    pr.update(body="Found by a reader", updated_at="2026-10-20T00:00:00Z")
+    assert app_watch.main([]) == 0
+    assert capsys.readouterr().out.startswith("App watch: clean")
+    assert app_watch.main([]) == 0
+    assert asked[-1] == "2026-10-20T00:00:00Z"
