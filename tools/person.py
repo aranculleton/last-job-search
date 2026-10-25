@@ -54,6 +54,13 @@ local_path.extend()
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV = "LJS_PROFILE"
 DEFAULT = "profile"
+EXAMPLE = os.path.join(ROOT, "profile.example")
+
+
+def in_example(path: str) -> bool:
+    """Is `path` inside the app's example person (profile.example/)? The app's own tests and
+    any chat in the app's checkout read it, so a tool run there records nothing into it."""
+    return os.path.realpath(path).startswith(os.path.realpath(EXAMPLE) + os.sep)
 
 
 def home_zone_named(profile_dir: str) -> str:

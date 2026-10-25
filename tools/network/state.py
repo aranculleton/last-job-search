@@ -156,7 +156,10 @@ def _holidays(first: datetime.date, last: datetime.date) -> set:
     (tools/holidays.py): a follow-up counted Thanksgiving as a business day."""
     try:
         import holidays
-        return {d for y in range(first.year, last.year + 1) for d in holidays.for_year(y)
+        # A year's table can hold a day of the year before: the US New Year's Day of a
+        # Saturday is kept on Friday 31 December, in the next year's table, so a range
+        # ending in December reads the next year too (networking audit, 2026-10-25).
+        return {d for y in range(first.year, last.year + 2) for d in holidays.for_year(y)
                 if first <= d <= last and d.weekday() not in WEEKEND}
     except Exception:  # no profile, or no rules for the country: weekends alone, as before
         return set()
@@ -941,11 +944,39 @@ _TEMPLATE = re.compile(
 # for later counts ("I'll pass your profile to our recruiter"): out of the office with a
 # promise in it was read as an automatic reply, so nobody thanked the person advocating
 # (2026-10-21).
+#
+# So does an answer to what was asked, beside a mention of leave (networking audit,
+# 2026-10-25): "Thanks Morgan, I'm on parental leave until January, so not the best person
+# to ask. Try Bo Venn" was read as an out-of-office, the reply was hidden and a nudge was
+# offered. A template knows neither the reader's name nor what they asked, so these count:
+# a greeting by a first name, a no ("isn't hiring", "not interested"), a person to try by
+# name, and a promise about what was sent ("I'll take a look at your profile"). A template's
+# own redirect ("for urgent matters please contact ...") and its promise to answer email on
+# return ("I will respond when I am back") are not among them.
+_NAME = r"(?-i:[A-Z][a-z]+(?:[ -][A-Z][a-z'-]+)?)"
+_NOT_A_NAME = (r"(?!(?-i:Sender|Sir|Madam|Customer|Colleagues?|All|Team|Everyone|There|Valued|"
+               r"Recipient|Thanks?|Thank|Hiring|Candidate|Friend|Again|Later|Back)\b)")
 _ENGAGED = re.compile(
     r"\?|\b(?:happy|glad|keen|love|delighted) to\b|\blet'?s\b|\bworks for me\b|\bsounds good\b"
     r"|\bsend (?:me|over|it|your)\b|\bi(?:'ve| have) (?:passed|shared|forwarded|sent)\b"
     r"|\bi(?:'ll| will| can| could)(?: happily| gladly| certainly| definitely)? (?:pass|forward|"
-    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b", re.I)
+    r"share|introduce|ask|send|connect you|put you in touch|flag|mention|refer)\b"
+    # a greeting by name, the way a person opens and a template cannot
+    r"|\A\W*(?:hi|hey|hello|dear|thanks|thank you|cheers)[ ,!-]+" + _NOT_A_NAME + _NAME + r"\b"
+    # a no
+    r"|\b(?:(?:is|are|am)n'?t|(?:is|are|am)\s+not|not)\s+(?:currently\s+|really\s+|actively\s+)?"
+    r"(?:hiring|recruiting|interested)\b|\bnot the (?:best|right) (?:person|contact|one)\b"
+    r"|\bno thanks\b|\bno,? thank you\b|\b(?:can'?t|cannot|won'?t be able to) help\b"
+    r"|\b(?:no|nothing)\s+(?:open|available|suitable|coming up|roles?|openings?|vacanc(?:y|ies)|"
+    r"positions?|headcount)\b|\bgood luck\b"
+    # a person to try, by name
+    r"|\btry\s+" + _NOT_A_NAME + _NAME + r"\b|\b(?:speak|talk|chat)\s+(?:to|with)\s+" + _NOT_A_NAME
+    + _NAME + r"\b|" + _NAME + r"\s+(?:runs|leads|heads|manages|handles|owns|does|is (?:running|"
+    r"leading|handling|doing|in charge of))\s+(?:the\s+|our\s+|their\s+)?(?:hiring|recruit\w*)\b"
+    r"|\b(?:she|he|they)(?:'s| is| are|'re)\s+(?:the one\s+)?(?:hiring|recruiting)\b"
+    # a promise about what was sent, not about answering email
+    r"|\b(?:take|have) a (?:look|read)\b|\blook (?:at|over|through) your\b"
+    r"|\bi(?:'ll| will) (?:think about|consider|keep (?:you|an eye))\b", re.I)
 # Gone: the address no longer reaches them. Third person only, the way the template
 # writes it, and about a person: a name, a pronoun or "this person" as the subject. "I am
 # no longer at Acme" is them, writing, and reply.py reads that; "our team is no longer part
@@ -1097,12 +1128,26 @@ def _auto_reply(body, subject, sent_on):
     return None
 
 
+@functools.lru_cache(maxsize=1)
+def _person_scenarios() -> frozenset:
+    """The scenarios /reply reads a person's message as (reply.SCENARIOS), automatic replies
+    left out. A row logged as one of them was read as a person, and that wins over its
+    words: "referral_offered" on a message that also mentions leave is a referral offered."""
+    try:
+        import reply
+    except ImportError:  # the reader is beside this file; never without it in the app
+        return frozenset()
+    return frozenset(reply.SCENARIOS) - AUTO_REPLY_SCENARIOS - {"gone_quiet"}
+
+
 def is_auto_reply(row) -> bool:
     """Is this inbound row an automatic reply (an out-of-office, a "no longer here") and not them?"""
     if _direction(row) != "in":
         return False
     if _scenario(row) in AUTO_REPLY_SCENARIOS:
         return True
+    if _scenario(row) in _person_scenarios():
+        return False
     return auto_reply(row.get("full_text") or row.get("summary"), row.get("subject"),
                       row.get("date")) is not None
 
@@ -1276,6 +1321,8 @@ def effective_status(contact, thread_rows) -> str:
     stored = str(contact.get("status") or "").strip()
     derived = derive_status(thread_rows)
     if stored in schema.TERMINAL:
+        if stored in REOPENED_BY_A_REPLY and reopened(contact, thread_rows, derived):
+            return derived
         return stored
     if derived == "replied_needs_response":
         return derived
@@ -1316,6 +1363,27 @@ def closed_on(contact) -> datetime.date | None:
             dates.append(as_date(m.group(1) or m.group(2)))
     dates = [d for d in dates if d]
     return max(dates) if dates else None
+
+
+# The one closed status a message from them undoes by itself: gone_cold says nobody
+# answered, and an answer makes it untrue. A late reply to a thread gone cold was never owed:
+# the status was terminal whatever the log said, so the due list read "0 replies owed" while
+# they waited for an answer (networking audit, 2026-10-25). `received` reopened it; a reply
+# the LinkedIn download brought, or a row logged by hand, did not. closed, dropped and
+# converted_to_application are the person's decisions, and a late message there is reported
+# by reconcile ("reopened") for them to judge.
+REOPENED_BY_A_REPLY = frozenset({"gone_cold"})
+
+
+def reopened(contact, rows, derived=None) -> bool:
+    """Have they written since this thread was closed? Their message is the last word, the
+    close was not marked on purpose, and it is not dated on or after their last message."""
+    if derived is None:
+        derived = derive_status(rows)
+    return (derived == "replied_needs_response"
+            and not CLOSED_ON_PURPOSE.search(" ".join(
+                str(contact.get(k) or "") for k in ("next_action", "notes")))
+            and not _closed_after_last_reply(contact, rows))
 
 
 def _closed_after_last_reply(contact, rows) -> bool:
@@ -1388,10 +1456,7 @@ def reconcile(contacts, threads, tracker=None) -> list[dict]:
         elif stored in DERIVABLE and stored != derived:
             flag(cid, name, stored, derived, "contradicts_log",
                  "the log says the status is " + derived)
-        elif (stored in schema.TERMINAL and derived == "replied_needs_response"
-              and not CLOSED_ON_PURPOSE.search(" ".join(
-                  str(contact.get(k) or "") for k in ("next_action", "notes")))
-              and not _closed_after_last_reply(contact, rows)):
+        elif stored in schema.TERMINAL and reopened(contact, rows, derived):
             flag(cid, name, stored, derived, "reopened",
                  "thread was closed and they have since replied")
 
@@ -1624,7 +1689,12 @@ def owed(contacts, threads, today) -> list[dict]:
         pending = request_pending(msgs)
         if pending is not None:
             if (today - pending).days < REQUEST_WITHDRAW_DAYS:
-                _action_row()
+                # The app's own "Once they accept: ..." line is no job while nobody has: it
+                # was listed overdue six working days after every request, with nothing to
+                # send (networking audit, 2026-10-25). A date of the person's own is owed.
+                if not (_APP_ACTION.fullmatch(" ".join(action.split()))
+                        and base["next_action_due"] in _app_dates(msgs, action)):
+                    _action_row()
                 continue
             items.append(dict(base, kind="request_pending", channel="connection",
                               since=pending.isoformat(),
@@ -2265,6 +2335,18 @@ def received(contacts, threads, contact_id, today, text="", date=None, channel="
     return {"row": row, "said": said}
 
 
+def _words_from(path: str, prog: str):
+    """A message's words from the file named, or None with one plain line said: a missing
+    file ended `sent`, `text`, `nudge`, `message` and `resent` in a traceback (networking
+    audit, 2026-10-25), where `received` already said it plainly."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"{prog}: cannot read {path}: {getattr(e, 'strerror', None) or e}")
+        return None
+
+
 def _cli_received(argv) -> int:
     ap = argparse.ArgumentParser(
         prog="state.py received",
@@ -2281,11 +2363,8 @@ def _cli_received(argv) -> int:
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
-    try:
-        with open(a.text_file, encoding="utf-8") as fh:
-            text = fh.read()
-    except OSError as e:
-        print(f"received: cannot read {a.text_file}: {e.strerror or e}")
+    text = _words_from(a.text_file, "received")
+    if text is None:
         return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     try:
@@ -2644,8 +2723,9 @@ def _cli_text(argv) -> int:
     ap.add_argument("--threads", default="")
     a = ap.parse_args(argv)
     path = a.threads or person.state("network_threads.csv")
-    with open(a.text_file, encoding="utf-8") as fh:
-        text = fh.read()
+    text = _words_from(a.text_file, "text")
+    if text is None:
+        return 1
     threads = load_threads(path)
     try:
         fill_text(threads, a.contact_id, a.date, text)
@@ -2703,13 +2783,15 @@ def _cli_sent(argv) -> int:
         # went, with the words each carried.
         print(BATCH_SENT_CHECK)
         return 1
+    given = _words_from(a.text_file, "sent") if a.text_file else ""
+    if given is None:
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
     done = 0
     for cid in a.contact_ids:
         text, before, subject, placeholder = "", None, a.subject, False
         if a.text_file:
-            with open(a.text_file, encoding="utf-8") as fh:
-                text = fh.read()
+            text = given
             before = _draft_of(cid)
         elif a.draft:
             text = _draft_of(cid)
@@ -2802,8 +2884,17 @@ def _cli_followed_up(argv, kind) -> int:
     texts = {}
     if a.texts:
         import json
-        with open(a.texts, encoding="utf-8") as fh:
-            texts = {str(k): str(v) for k, v in (json.load(fh) or {}).items()}
+        raw = _words_from(a.texts, kind)
+        if raw is None:
+            return 1
+        try:
+            texts = {str(k): str(v) for k, v in (json.loads(raw) or {}).items()}
+        except (ValueError, AttributeError):
+            print(f"{kind}: {a.texts} is not a file of {{contact id: message}} pairs (JSON)")
+            return 1
+    given = _words_from(a.text_file, kind) if a.text_file else ""
+    if given is None:
+        return 1
     if not a.contact_ids:
         # --texts is how several are logged at once: its ids are the ones it names.
         a.contact_ids = list(texts)
@@ -2815,8 +2906,7 @@ def _cli_followed_up(argv, kind) -> int:
     for cid in a.contact_ids:
         before = None
         if a.text_file:
-            with open(a.text_file, encoding="utf-8") as fh:
-                text = fh.read()
+            text = given
             before = _draft_of(cid)
         elif cid in texts:
             text, before = texts[cid], _draft_of(cid)
@@ -2924,11 +3014,10 @@ def _cli_resent(argv) -> int:
     ap.add_argument("--threads", default=THREADS_CSV)
     ap.add_argument("--today", default=datetime.date.today().isoformat())
     a = ap.parse_args(argv)
+    text = _words_from(a.text_file, "resent") if a.text_file else ""
+    if text is None:
+        return 1
     contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
-    text = ""
-    if a.text_file:
-        with open(a.text_file, encoding="utf-8") as fh:
-            text = fh.read()
     try:
         got = resent(contacts, threads, a.contact_id, a.today, text=text, date=a.date or None,
                      subject=a.subject)
@@ -3586,9 +3675,12 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
                       "reason": reason, "detail": detail})
 
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    # One pass over the log for the book: threads_for per contact read the whole log once a
+    # contact, 25 of state.py's 29 seconds on 2,000 contacts (networking audit, 2026-10-25).
+    index = by_contact(threads)
     for cid, contact in by_id.items():
         made = None
-        for r in threads_for(threads, cid):
+        for r in _rows_of(index, cid):
             if says_resume_went(r) and not names_a_file(r):
                 if made is None:
                     made = [str(row.get("cv_file") or "").strip() for row in tracker or ()
@@ -3622,11 +3714,12 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
         cid = str(contact.get("contact_id") or "").strip()
         # The portal route: it went in through the portal under their name, never to them,
         # so there is no message to log. Said by the row, or by what they asked for last.
-        if through_portal(row) or resume_route(threads, cid) == ROUTE_PORTAL:
+        mine = _rows_of(index, cid)
+        if through_portal(row) or resume_route(mine, cid) == ROUTE_PORTAL:
             continue
         day = as_date(row.get("date"))
         stem = _resume_stem(cv)
-        went = [s for s in resumes_sent(threads, cid)
+        went = [s for s in resumes_sent(mine, cid)
                 if (as_date(s["date"]) or datetime.date.min) >= (day or datetime.date.min)
                 or stem in {_resume_stem(f) for f in s["files"]}]
         if went or _settled_since(contact, day):

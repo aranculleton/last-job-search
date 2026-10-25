@@ -48,6 +48,13 @@ KEYS = {
     "network_threads.csv": None,
     "question_bank.csv": None,          # documents/interview/: a log, rows only added
 }
+# A log row both sides changed is still one row: the fields that say which message it is.
+# Keyed by its whole row, a message one chat named the file of and another added the words
+# of was two new rows and a removed one, and the merge kept both copies, saying nothing;
+# the copy read as a second message sent and spent the one nudge (networking audit,
+# 2026-10-25). Only a row in the common ancestor that both sides changed is paired this
+# way: two messages each side added on one day are two messages, and both are kept.
+SAME_MESSAGE = {"network_threads.csv": ("contact_id", "date", "direction", "channel")}
 # Free text that both sides may have added to: kept from both, never a conflict.
 NOTES = {"notes"}
 # Lists of records inside a JSON state file, merged item by item the way rows are: each
@@ -116,13 +123,60 @@ def merge_fields(base: dict | None, ours: dict, theirs: dict,
 # ------------------------------------------------------------------ CSV
 
 
+# The byte-order mark a spreadsheet's "CSV UTF-8" starts a file with. Read as part of the
+# first column's name ("\ufeffcontact_id"), the marked side's rows had no key, the other
+# side's read as removed, and every contact_id in the merged book came back empty with no
+# conflict said (networking audit, 2026-10-25). It is dropped from each side on reading,
+# so the merge is row by row and the file is written back without it.
+_MARK = "\ufeff"
+
+
+def _unmark(text: str) -> str:
+    return text[len(_MARK):] if text.startswith(_MARK) else text
+
+
+def decode(raw: bytes) -> str:
+    """One side of the merge as text, read the way every tool reads a state file
+    (csv_store.decode): the mark dropped, a file a spreadsheet saved in Windows' own
+    encoding read as that. Raises ValueError for a file that cannot be read for sure (UTF-8
+    with a damaged character), and the merge is left to git's line merge, which loses
+    nothing."""
+    try:
+        import csv_store
+    except ImportError:  # git runs this alone: without its neighbour, UTF-8 or nothing
+        return _unmark(raw.decode("utf-8"))
+    text, how = csv_store.decode(raw)
+    if how == csv_store.DAMAGED:
+        raise ValueError("a character in it is not readable text")
+    return text
+
+
 def _read(text: str) -> tuple[list[str], list[dict]]:
-    rows = list(csv.reader(io.StringIO(text, newline="")))
+    rows = list(csv.reader(io.StringIO(_unmark(text), newline="")))
     if not rows:
         return [], []
     head = rows[0]
     return head, [dict(zip(head, (r + [""] * len(head))[:len(head)]))
                   for r in rows[1:] if r]
+
+
+def _pair_edits(B: dict, O: dict, T: dict, ident) -> None:
+    """A base row neither side kept as it was, where each side holds exactly one new row
+    that is the same message (`ident`): that row changed on both sides. Theirs and the
+    base are put under our key, in place, so the row is merged field by field."""
+    def same(row):
+        return tuple(str(row.get(f) or "").strip() for f in ident)
+
+    new_o = [k for k in O if k not in B]
+    new_t = [k for k in T if k not in B]
+    for k in [k for k in B if k not in O and k not in T]:
+        mine = [x for x in new_o if same(O[x]) == same(B[k])]
+        theirs = [x for x in new_t if same(T[x]) == same(B[k])]
+        if len(mine) == 1 and len(theirs) == 1 and mine[0] not in T:
+            T[mine[0]] = T.pop(theirs[0])
+            B[mine[0]] = B.pop(k)
+            new_o.remove(mine[0])
+            new_t.remove(theirs[0])
 
 
 def _keyed(rows: list[dict], fields) -> dict:
@@ -193,6 +247,8 @@ def merge_csv(base: str, ours: str, theirs: str, name: str, later=None,
         # A log is keyed by its whole row, so read every side under one header.
         rb, ro, rt = ([{h: r.get(h, "") for h in head} for r in rs] for rs in (rb, ro, rt))
     B, O, T = _keyed(rb, fields), _keyed(ro, fields), _keyed(rt, fields)
+    if fields is None and all(f in head for f in SAME_MESSAGE.get(name, ("",))):
+        _pair_edits(B, O, T, SAME_MESSAGE[name])
     out, problems = [], []
 
     def place(k):
@@ -517,6 +573,7 @@ def eol(path: str) -> str | None:
 def merge(base: str, ours: str, theirs: str, path: str, later=None,
           settled: list | None = None, ending: str | None = None) -> tuple[str, list[str]]:
     name = os.path.basename(path)
+    base, ours, theirs = _unmark(base), _unmark(ours), _unmark(theirs)
     if name.endswith(".json"):
         try:
             b = json.loads(base) if base.strip() else {}
@@ -559,8 +616,8 @@ def main(argv: list[str]) -> int:
     base_p, ours_p, theirs_p, path = argv
 
     def read(p):
-        with open(p, encoding="utf-8", newline="") as f:
-            return f.read()
+        with open(p, "rb") as f:
+            return decode(f.read())
 
     settled: list[str] = []
     try:

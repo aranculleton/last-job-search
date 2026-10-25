@@ -309,7 +309,7 @@ def unjudged(path: str | None = None) -> list[str]:
     that no list names and nobody has judged, each once, in shortlist order."""
     if not path:
         from run_round import round_order
-        found = sorted(glob.glob(person.state("documents", "rounds", "*.json")),
+        found = sorted(glob.glob(os.path.join(glob.escape(person.state("documents", "rounds")), "*.json")),
                        key=round_order)
         if not found:
             return []

@@ -241,10 +241,6 @@ def for_year(year: int, country: str | None = None, region: str | None = None,
     return days
 
 
-def is_holiday(day: dt.date) -> bool:
-    return day in for_year(day.year)
-
-
 def covered() -> bool:
     """Do this person's holidays come from somewhere: the rules or their own list?"""
     country, _region, extra = _settings()

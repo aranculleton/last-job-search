@@ -95,7 +95,7 @@ def _months(text: str) -> float | None:
 def _files() -> list[str]:
     """Every markdown file in the profile, and the data file that carries the person's
     networking wording."""
-    found = sorted(glob.glob(person.path("*.md")))
+    found = sorted(glob.glob(os.path.join(glob.escape(person.path()), "*.md")))
     nets = person.path("networking.py")
     return found + ([nets] if os.path.exists(nets) else [])
 

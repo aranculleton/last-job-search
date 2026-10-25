@@ -1012,7 +1012,24 @@ def referral_holds(path: str = CONTACTS, rows: list[dict] | None = None,
     An internal referral already in flight is the one case where applying makes
     things worse: the employer ends up with two records of the same candidate
     and the referral is the one that loses.
+
+    The hold is the status stored on the contact row, which the person (or whoever
+    learns it) writes and changes when the referral is done. The log's own reading
+    is not enough: when the referrer writes again ("I've passed your resume to the
+    hiring manager"), a reply is owed and the log reads `replied_needs_response`, and
+    the hold, the block on cold applications and the held application nudge were all
+    lifted by her update (networking audit, 2026-10-25). Both are true at once.
     """
+    if rows is None:
+        rows = _contact_rows(path)
+        if not rows:
+            return {}
+        live = _derived_statuses(rows, threads_beside(path))
+    live = dict(live or {})
+    for r in rows:
+        cid = _contact_id(r)
+        if cid and str(r.get("status") or "").strip() == REFERRAL_IN_PROGRESS:
+            live[cid] = REFERRAL_IN_PROGRESS
     out: dict[str, str] = {}
     for k, people in _contacts_by_employer(path, {REFERRAL_IN_PROGRESS}, rows, live).items():
         p = people[0]

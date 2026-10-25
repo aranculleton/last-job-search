@@ -239,7 +239,7 @@ _WINS: dict = {"key": None, "wins": {}}
 def _wins_key():
     root = person.state()
     paths = [os.path.join(root, "job_search_tracker.csv")] + sorted(
-        glob.glob(os.path.join(root, "documents", "applications", "*", "draft.json")))
+        glob.glob(os.path.join(glob.escape(root), "documents", "applications", "*", "draft.json")))
     sig = []
     for p in paths:
         try:

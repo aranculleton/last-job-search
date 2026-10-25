@@ -1769,7 +1769,7 @@ def _loads(pages: bool = True) -> list:
                     "load_seconds": src.get("load_seconds"),
                     "id": str(ident or src.get("id") or "")})
 
-    for f in glob.glob(person.state(*DIR, "*", "reading.json")):
+    for f in glob.glob(os.path.join(glob.escape(person.state(*DIR)), "*", "reading.json")):
         try:
             with open(f, encoding="utf-8") as fh:
                 srcs = json.load(fh).get("sources", [])
@@ -2313,7 +2313,7 @@ def _meanwhile_lines(contacts=None) -> list:
 def reads_today(today: datetime.date | None = None) -> int:
     day = (today or datetime.date.today()).isoformat()
     n = 0
-    for f in glob.glob(person.state(*DIR, "*", "reading.json")):
+    for f in glob.glob(os.path.join(glob.escape(person.state(*DIR)), "*", "reading.json")):
         try:
             with open(f, encoding="utf-8") as fh:
                 srcs = json.load(fh).get("sources", [])
@@ -3982,7 +3982,7 @@ def known_company_id(company: str) -> tuple:
     read, or ("", ""): the number a narrowed people search needs, with no page loaded for it."""
     from company_key import key as company_key
     k = company_key(company)
-    for f in sorted(glob.glob(person.state(*DIR, "*", "reading.json"))):
+    for f in sorted(glob.glob(os.path.join(glob.escape(person.state(*DIR)), "*", "reading.json"))):
         try:
             with open(f, encoding="utf-8") as fh:
                 got = (json.load(fh).get("company_ids") or {}).get(k)

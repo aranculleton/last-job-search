@@ -2624,7 +2624,8 @@ def _reading_for(name, company):
     import glob
     want = state._match_name(name)
     k = company_key(company)
-    for path in glob.glob(person.state("documents", "network", "*", "reading.json")):
+    for path in glob.glob(os.path.join(glob.escape(person.state("documents", "network")), "*",
+                                         "reading.json")):
         try:
             with open(path, encoding="utf-8") as fh:
                 got = json.load(fh)
@@ -3910,7 +3911,7 @@ def handkept_notes(tracker=None, contacts=None) -> list:
     contacts = state.load_contacts(person.state("network_contacts.csv")) \
         if contacts is None and os.path.exists(person.state("network_contacts.csv")) \
         else (contacts or [])
-    top = glob.glob(person.state("documents", "network", "*.md"))
+    top = glob.glob(os.path.join(glob.escape(person.state("documents", "network")), "*.md"))
     out = []
     for r in tracker:
         if _text(r.get("status")).lower() in throttle.FINAL:
@@ -3925,16 +3926,16 @@ def handkept_notes(tracker=None, contacts=None) -> list:
         if not is_process(r):
             if not living:
                 continue
-            named = glob.glob(os.path.join(folder, "*.md"))
+            named = glob.glob(os.path.join(glob.escape(folder), "*.md"))
         else:
             named = [p for p in top
                      if _NOTE_WORDS.search(os.path.basename(p).replace("_", " "))
                      and _names_employer(os.path.basename(p), k)]
             mine = [c for c in contacts if company_key(c.get("company")) == k]
             for c in mine:
-                named += glob.glob(person.state("documents", "network",
-                                                _text(c.get("contact_id")) or "-", "*.md"))
-            named += glob.glob(os.path.join(folder, "*.md"))
+                named += glob.glob(os.path.join(glob.escape(person.state(
+                    "documents", "network", _text(c.get("contact_id")) or "-")), "*.md"))
+            named += glob.glob(os.path.join(glob.escape(folder), "*.md"))
         # The rounds the living document is for: a pack kept for one of them beside it is
         # an older draft of the same round, and what it holds is folded in like a note.
         m = _STAGES_MARK.search(living)

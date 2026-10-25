@@ -317,7 +317,8 @@ def test_the_outreach_note_runs_validate_for_a_message():
     lambda: compose.email("Wren Halloway", "Our call", "Thanks for the call on Tuesday",
                           "Happy to circle back next month.", ""),
     lambda: compose.referral_ask("Wren Halloway", "thanks for the chat, happy to circle back",
-                                 "Planning Analyst", "https://example.com/job/1"),
+                                 "Planning Analyst", "https://example.com/job/1",
+                                 thread=[{"direction": "in", "channel": "message", "full_text": "Happy to help."}]),
     lambda: compose.warm_intro("Bo Venn", "Wren Halloway", "Bo suggested I get in touch. I am "
                                "passionate about forecasting."),
 ])

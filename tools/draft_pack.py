@@ -130,11 +130,13 @@ def letter_paths() -> list[str]:
         pre = person.get("identity.file_prefix")
     except Exception:
         return []
-    return sorted(glob.glob(person.state("cover_letters", f"{pre}_Cover_Letter_*.tex")))
+    return sorted(glob.glob(os.path.join(glob.escape(person.state("cover_letters")),
+                                    f"{glob.escape(pre)}_Cover_Letter_*.tex")))
 
 
 def note_paths() -> list[str]:
-    return sorted(glob.glob(person.state("documents", "applications", "*", "outreach.md")))
+    return sorted(glob.glob(os.path.join(glob.escape(person.state("documents", "applications")),
+                                    "*", "outreach.md")))
 
 
 def corpus_inputs() -> dict:

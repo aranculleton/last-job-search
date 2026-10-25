@@ -349,7 +349,8 @@ def drafts(root: str | None = None) -> list[dict]:
     """Every kept draft object, from documents/applications/*/draft.json."""
     root = root or person.state()
     out = []
-    for path in sorted(glob.glob(os.path.join(root, "documents", "applications", "*", "draft.json"))):
+    for path in sorted(glob.glob(os.path.join(glob.escape(root), "documents", "applications",
+                                              "*", "draft.json"))):
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
@@ -578,7 +579,13 @@ _STEP_RX = (
 # `- [x] Phone screen (2026-03-10)` once held, and before it, as /outcome writes a
 # booked stage, `- [ ] Phone screen (scheduled 2026-03-10, with Head of Planning)`.
 _STAGE_LINE = re.compile(r"^\s*[-*]\s*\[( |x|X)\]\s*(.+?)\s*$")
+# A time after the date is read past: `register_process` and a hand-written line both
+# wrote "(scheduled 2026-10-27 10:00, with ...)", and the stage read back with no date, so
+# no "no pack yet" and no thank-you reminder ever reached the due list (networking audit,
+# 2026-10-25).
 _STAGE_WHEN = re.compile(r"\((?P<sched>scheduled\s+)?(?P<date>\d{4}-\d{2}-\d{2})"
+                         r"(?:,?\s*(?:at\s+)?\d{1,2}(?:[:.]\d{2})?\s*(?:[ap]\.?m\.?)?"
+                         r"(?:\s*(?-i:[A-Z]{2,5})\b)?(?=\s*[,)]))?"
                          r"(?:\s*,\s*with\s+(?P<with>[^)]*))?\)", re.I)
 
 

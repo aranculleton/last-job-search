@@ -121,8 +121,6 @@ def _data() -> dict:
     return data if isinstance(data, dict) else {"entries": data}
 
 
-_EXAMPLE = os.path.realpath(os.path.join(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__))), "profile.example"))
 
 
 def _writable() -> str:
@@ -131,7 +129,7 @@ def _writable() -> str:
     path = _path()
     if not path:
         raise SystemExit("learned: no profile; nothing can be recorded before /setup")
-    if os.path.realpath(path).startswith(_EXAMPLE + os.sep):
+    if person.in_example(path):
         raise SystemExit("learned: profile.example is the app's example person; nothing is "
                          "recorded there")
     return path
@@ -1148,7 +1146,7 @@ def hook(event: dict) -> dict:
     (which also holds messages sent while the chat was working) and from the list. Returns
     what the hook prints: {} to let things be."""
     path = _path()
-    if path is None or os.path.realpath(path).startswith(_EXAMPLE + os.sep):
+    if path is None or person.in_example(path):
         return {}                     # the app itself, before /setup, or its example person
     name = event.get("hook_event_name") or ""
     if name == "UserPromptSubmit":

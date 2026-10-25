@@ -31,7 +31,6 @@ Exit 0 when every step passed, 1 when something failed (each named, with its out
 from __future__ import annotations
 
 import argparse
-import csv
 import os
 import re
 import shutil
@@ -111,12 +110,12 @@ def _env(cloud: bool, app_url: str, home: str) -> dict:
 
 def _live_interviews(root: str) -> list[tuple[str, str]]:
     path = os.path.join(root, "job_search_tracker.csv")
+    import csv_store                     # the mark a spreadsheet adds, and its encoding
     try:
-        with open(path, newline="", encoding="utf-8") as fh:
-            return [(r.get("company", ""), r.get("role", "")) for r in csv.DictReader(fh)
-                    if str(r.get("status", "")).strip().lower() == "interview"
-                    and r.get("company")][:6]
-    except OSError:
+        return [(r.get("company", ""), r.get("role", "")) for r in csv_store.dict_rows(path)
+                if str(r.get("status", "")).strip().lower() == "interview"
+                and r.get("company")][:6]
+    except (OSError, csv_store.Conflicted):
         return []
 
 
