@@ -166,12 +166,20 @@ def test_uncommitted_work_stops_the_merge_and_says_so(tmp_path, monkeypatch, cap
     assert (me / "a.txt").read_text(encoding="utf-8") == "my edit"
 
 
-def test_a_chat_on_the_persons_computer_is_told_first_to_take_a_folder_of_its_own(
+def test_a_second_chat_on_the_persons_computer_is_told_to_take_a_folder_of_its_own(
         tmp_path, monkeypatch):
     _origin, me = _setup(tmp_path)
     monkeypatch.setattr(sync_app, "ROOT", str(me))
     monkeypatch.setattr(sync_app, "CLOUD", False)
-    assert "--worktree" in sync_app.own_folder()       # the main folder
+    # The first chat works in the copy itself, as CLAUDE.md says; it was told to move too
+    # (2026-10-25). A second chat while the first is working there is told.
+    assert sync_app.own_folder(now=1000.0, chat="session_first") == ""
+    assert sync_app.own_folder(now=2000.0, chat="session_first") == ""
+    assert "--worktree" in sync_app.own_folder(now=3000.0, chat="session_second")
+    # Hours after the first chat's last sync, the main folder is nobody's.
+    later = 3000.0 + sync_app.MAIN_CHAT_HOURS * 3600
+    assert sync_app.own_folder(now=later, chat="session_second") == ""
+    assert "--worktree" in sync_app.own_folder(now=later + 60, chat="session_first")
     own = tmp_path / "me-two"
     g(me, "worktree", "add", "-q", "-b", "chat/two", str(own))
     monkeypatch.setattr(sync_app, "ROOT", str(own))

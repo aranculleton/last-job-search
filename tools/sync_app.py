@@ -1027,13 +1027,26 @@ def pull_master() -> int:
     return 0
 
 
-def own_folder() -> str:
-    """The first thing a chat on the person's computer is told, while it is still in their
-    main folder: make one of its own. Two chats in one folder switch branches under each
-    other and fight over git's index, and the second one is usually opened before anyone
-    thinks of it, so this is said before any work starts rather than when it goes wrong.
-    "" in the cloud, where every chat has its own container, and in a folder already made
-    for a chat."""
+# Which chat works in the main folder on this computer, and when it last said so: kept in
+# that folder's own git directory, never committed.
+MAIN_CHAT = "ljs-main-chat"
+# How long a chat holds the main folder after its last sync there: a chat that carries on
+# for days syncs before each piece of work, and one closed hours ago holds nothing.
+MAIN_CHAT_HOURS = 6
+
+
+def this_chat() -> str:
+    return os.environ.get("CLAUDE_CODE_SESSION_ID") or ""
+
+
+def own_folder(now: float | None = None, chat: str | None = None) -> str:
+    """What a second chat on the person's computer is told, while it is still in their main
+    folder: make one of its own. Two chats in one folder switch branches under each other
+    and fight over git's index. The first chat works in the copy itself (CLAUDE.md, "On the
+    person's own computer"), and was told to move all the same (2026-10-25): so the chat
+    that syncs in the main folder holds it, and only another chat, while it does, is told.
+    "" in the cloud, where every chat has its own container, in a folder already made for a
+    chat, and for the chat that holds the main folder."""
     if CLOUD:
         return ""
     here = git("rev-parse", "--absolute-git-dir", check=False).stdout.strip()
@@ -1044,10 +1057,28 @@ def own_folder() -> str:
         common = os.path.join(ROOT, common)
     if os.path.realpath(here) != os.path.realpath(common):
         return ""                                   # a worktree: this chat's own folder
-    return ("sync_app: this chat is in your main folder. Before any work, give it a folder of "
-            "its own: python3 tools/sync_app.py --worktree <a short name for this chat>, then "
-            "run every command there. Two chats in one folder switch branches under each "
-            "other.")
+    import time
+    now = time.time() if now is None else now
+    chat = this_chat() if chat is None else chat
+    path = os.path.join(here, MAIN_CHAT)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            held, when = (fh.read().split() + ["", "0"])[:2]
+        when = float(when)
+    except (OSError, ValueError):
+        held, when = "", 0.0
+    if held and held != chat and now - when < MAIN_CHAT_HOURS * 3600:
+        return ("sync_app: another chat is working in your main folder. Before any work, give "
+                "this one a folder of its own: python3 tools/sync_app.py --worktree <a short "
+                "name for this chat>, then run every command there. Two chats in one folder "
+                "switch branches under each other.")
+    if chat:
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(f"{chat} {now:.0f}\n")
+        except OSError:
+            pass
+    return ""
 
 
 def branch_name(name: str, today: datetime.date | None = None) -> str:

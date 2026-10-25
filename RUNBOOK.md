@@ -278,8 +278,9 @@ session cannot see and will duplicate.
 
 **On a computer of your own** (no GitHub tools in the chat; `gh` is the route, and
 `place.py` lists it, and `gh auth login`, which is the person's to run, when either is
-missing), each chat works in a folder of its own, made once and first, before any other work
-(the sync's first line says so while a chat is in the main folder):
+missing), the first chat works in the copy itself, and a second chat open there at the same
+time works in a folder of its own, made once and first, before any other work (the sync's
+first line says so when another chat is working in the main folder):
 `python3 tools/sync_app.py --worktree <name>` (`.claude/worktrees/<name>` inside this folder,
 where Claude Code keeps its own, on a new, unique branch from master), and every command runs
 there: `cd` into it once, and since it is inside the project the chat stays there. Two chats in one folder switch branches under each
