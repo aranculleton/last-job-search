@@ -189,3 +189,5 @@ Easy Apply          # a job board's badge after a title, tests/test_a_title_is_t
 Actively hiring     # a job board's badge after a title, tests/test_a_title_is_the_title_not_the_card.py
 New Grad            # a job title ("Software Engineer, New Grad"), tools/scrape_wide.py
 Oakmere Foods's     # invented employer, tests/test_the_link_shown_is_the_link_to_click.py
+Federal Reserve         # an institution, a news query in tools/brief.py
+European Central Bank   # an institution, the same

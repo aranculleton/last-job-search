@@ -65,6 +65,11 @@ make sense to somebody whose repo just received it.
 - **Setup and checking cost less of your Claude usage**: setup researches with one helper
   instead of five, and the helpers that research employers and check every document start
   without the app's long instructions, which they never needed.
+- **Your brief costs far less to run**: code gathers it with one command and a small search
+  helper finds the news, so a run uses about a third of what it did, and nothing it promised
+  is dropped. The news now comes from search results, never pages opened.
+- **Follow-ups start from a draft the app made and checked**, so Claude only finishes what
+  code could not.
 - **Taking an update is quicker**: the app's own tests are not run again on your computer
   for an update its test machines already passed on Linux, a Mac and Windows. Your own
   checks still run every time.
