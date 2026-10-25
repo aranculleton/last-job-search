@@ -1,6 +1,7 @@
 {
   "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "PYTHONUTF8": "1"
   },
   "permissions": {
     "allow": [
@@ -31,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/tools/learned.py hook"
+            "command": "sh \"${CLAUDE_PROJECT_DIR}\"/tools/py.sh \"${CLAUDE_PROJECT_DIR}\"/tools/learned.py hook"
           }
         ]
       }
@@ -41,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/tools/learned.py hook"
+            "command": "sh \"${CLAUDE_PROJECT_DIR}\"/tools/py.sh \"${CLAUDE_PROJECT_DIR}\"/tools/learned.py hook"
           }
         ]
       }

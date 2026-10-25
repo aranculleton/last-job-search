@@ -1,3 +1,29 @@
+# Every text file is kept with plain line endings, in the repo and on every computer.
+# Git for Windows checks text files out with CRLF by default (core.autocrlf), and a CRLF
+# shell script stops at its first line in bash ("set: pipefail: invalid option", or
+# "bash\r: No such file"), while a hashed app file no longer matched its recorded
+# version. eol=lf keeps the checkout LF on Windows too, and text=auto leaves anything git
+# sees as binary alone (https://git-scm.com/docs/gitattributes#_eol).
+* text=auto eol=lf
+
+# Binary whatever their first bytes look like: fonts, the documents a person keeps
+# (resumes, letters, a LinkedIn download), and pictures.
+*.otf binary
+*.ttf binary
+*.tfm binary
+*.pfb binary
+*.pdf binary
+*.zip binary
+*.docx binary
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+
 # The state files merge row by row when two chats changed them at once
 # (tools/merge_state.py, wired up by every sync). Without the driver, lines as usual.
 # Each is kept with plain line endings whatever wrote it: a chat that edited the contact

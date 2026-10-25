@@ -42,14 +42,15 @@ cd "$(dirname "$0")/.."
 . tools/local_path.sh
 
 # Which Python: the one the person set up for this repo when there is one (an
-# active virtual environment, or .venv here), else python3. A Mac's own python3 is
-# 3.9.6 and lacked PyYAML, so the first run said FAIL for a missing package while
-# the person's working 3.10 sat in a venv the script never used. Said first.
-PY="python3"
-if [ -n "${VIRTUAL_ENV:-}" ] && [ -x "$VIRTUAL_ENV/bin/python" ]; then
-  PY="$VIRTUAL_ENV/bin/python"
-elif [ -x .venv/bin/python ]; then
-  PY=".venv/bin/python"
+# active virtual environment, or .venv here), else the first of python3, python and
+# py -3 that runs. A Mac's own python3 is 3.9.6 and lacked PyYAML, so the first run
+# said FAIL for a missing package while the person's working 3.10 sat in a venv the
+# script never used. On Windows `python3` is a Store stand-in that fails, and every
+# check here said FAIL ("Not green") so nothing could be saved. tools/py.sh picks,
+# with a virtual environment's Scripts/python.exe on Windows too. Said first.
+if ! PY="$(sh tools/py.sh --which)"; then
+  echo "Not green: no Python 3.9 or newer was found on this computer. python3 tools/env_check.py says how to put it on." >&2
+  exit 1
 fi
 
 QUICK=0; FULL=0
@@ -117,7 +118,7 @@ for pair in yaml:pyyaml pytest:pytest pypdf:pypdf; do
   "$PY" -c "import ${pair%%:*}" >/dev/null 2>&1 || missing_mods="$missing_mods ${pair##*:}"
 done
 if [ -n "$missing_mods" ]; then
-  echo "  missing for this Python:$missing_mods ($PY -m pip install --user$missing_mods;"
+  echo "  missing for this Python:$missing_mods (python3 tools/env_check.py says how to install them;"
   echo "  the checks that need them say SKIP or FAIL below for that reason, not the code's)"
 fi
 echo
@@ -234,6 +235,9 @@ echo "python floor"
 FLOOR_VERSION=3.9
 FLOOR_NAME="tests on Python $FLOOR_VERSION (CI's floor leg)"
 FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
+if [ -z "$FLOOR_PY" ] && command -v py >/dev/null 2>&1; then      # Windows' launcher
+  FLOOR_PY="$(py -$FLOOR_VERSION -c 'import sys; print(sys.executable)' 2>/dev/null | tr -d '\r' || true)"
+fi
 if [ -z "$FLOOR_PY" ] && command -v uv >/dev/null 2>&1; then
   FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
   if [ -z "$FLOOR_PY" ]; then
@@ -245,15 +249,19 @@ if [ -z "$FLOOR_PY" ]; then
   skip "$FLOOR_NAME" "no python$FLOOR_VERSION here, and no uv to fetch one"
 else
   FLOOR_ENV="${TMPDIR:-/tmp}/ci_local_py${FLOOR_VERSION/./}"
-  if ! "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
+  # A virtual environment keeps its Python in bin/ everywhere but Windows, which uses
+  # Scripts/ (https://docs.python.org/3/library/venv.html#how-venvs-work).
+  floor_bin() { if [ -d "$FLOOR_ENV/Scripts" ]; then echo "$FLOOR_ENV/Scripts/python.exe"; else echo "$FLOOR_ENV/bin/python"; fi; }
+  if ! "$(floor_bin)" -c "import pytest" >/dev/null 2>&1; then
     rm -rf "$FLOOR_ENV"
     "$FLOOR_PY" -m venv "$FLOOR_ENV" >/dev/null 2>&1 \
-      && "$FLOOR_ENV/bin/pip" install -q pytest >/dev/null 2>&1
+      && "$(floor_bin)" -m pip install -q pytest >/dev/null 2>&1
   fi
-  if "$FLOOR_ENV/bin/python" -c "import pytest" >/dev/null 2>&1; then
-    app_check run "$FLOOR_NAME" "$FLOOR_ENV/bin/python" -m pytest tests -q -p no:cacheprovider
+  FLOOR_ENV_PY="$(floor_bin)"
+  if "$FLOOR_ENV_PY" -c "import pytest" >/dev/null 2>&1; then
+    app_check run "$FLOOR_NAME" "$FLOOR_ENV_PY" -m pytest tests -q -p no:cacheprovider
     if [ -d profile/tests ] && { [ "$DATA_ONLY" = "0" ] || printf '%s\n' "$CHANGED" | grep -q '^profile/tests/'; }; then
-      PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV/bin/python" \
+      PYTHONDONTWRITEBYTECODE=1 run "$FLOOR_NAME, profile/tests" "$FLOOR_ENV_PY" \
         -m pytest profile/tests -q -p no:cacheprovider
     fi
   else

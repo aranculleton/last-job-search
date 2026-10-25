@@ -152,6 +152,13 @@ ALLOWED_IGNORE_NEGATIONS = {
 # runs nothing else, needs no network and does nothing in a repo with no profile. It is
 # the only one, and SessionStart stays empty: a setup step is never a hook.
 #
+# Since 2026-10-25 it starts through tools/py.sh, the repo's own launcher, which finds a
+# Python 3.9 or newer and runs nothing else: `python3` alone is not a command on a Windows
+# computer with python.org's Python, so the check never ran there. `sh` is on every Mac and
+# Linux, and on Windows the hooks run in Git Bash, which has it. Each placeholder sits in
+# double quotes, the form the hooks docs give for shell-form commands
+# (https://code.claude.com/docs/en/hooks#reference-scripts-by-path).
+#
 # A hook is strictly more dangerous than a permissions.allow entry. A permission
 # pre-approves something Claude may choose to do; a hook runs unconditionally when
 # its event fires, with no prompt and no model decision in between. Cloning a repo
@@ -159,7 +166,7 @@ ALLOWED_IGNORE_NEGATIONS = {
 # August 2026 wave, planting a SessionStart hook in .claude/settings.json that
 # executed on session start:
 # https://research.jfrog.com/post/shai-hulud-is-back-august/
-LEARNED_HOOK = 'python3 "$CLAUDE_PROJECT_DIR"/tools/learned.py hook'
+LEARNED_HOOK = 'sh "${CLAUDE_PROJECT_DIR}"/tools/py.sh "${CLAUDE_PROJECT_DIR}"/tools/learned.py hook'
 ALLOWED_HOOKS: set[str] = {f"UserPromptSubmit:{LEARNED_HOOK}", f"Stop:{LEARNED_HOOK}"}
 
 FORBIDDEN_SCRIPTS = {"preinstall", "install", "postinstall", "prepare", "prepack"}

@@ -2094,16 +2094,25 @@ def run_instant(rows: list[tuple[Upgrade, str]]) -> list[str]:
     for u, _why in rows:
         if u.cost != "instant" or not u.command:
             continue
-        r = subprocess.run(list(u.command), cwd=ROOT, text=True, capture_output=True, timeout=600)
+        # The Python running this one, not whatever `python3` names: on a Windows computer
+        # with python.org's Python `python3` is a Store stand-in that exits 49, and the
+        # upgrade said "not applied" on every sync (build_versions.redo does the same).
+        argv = [sys.executable if u.command[0] == "python3" else u.command[0], *u.command[1:]]
+        try:
+            rc = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, timeout=600,
+                                encoding="utf-8", errors="replace").returncode
+            failed = f"exit {rc}" if rc else ""
+        except (OSError, subprocess.TimeoutExpired) as e:
+            failed = f"it could not run: {type(e).__name__}"
         touched = sorted(_changed())
         stray = [p for p in touched
                  if not is_personal(p) or not any(fnmatch.fnmatch(p, g) for g in u.paths)]
-        if r.returncode != 0 or stray:
+        if failed or stray:
             _git("checkout", "--", ".")
             _git("clean", "-fdq", "--", *touched) if touched else None
             notes.append(f"{u.id}: not applied ("
-                         + (f"exit {r.returncode}" if r.returncode else
-                            f"it touched {', '.join(stray[:3])}, outside its own files") + ")")
+                         + (failed or f"it touched {', '.join(stray[:3])}, outside its own files")
+                         + ")")
             continue
         if touched:
             _git("add", "-f", "--", *touched)
