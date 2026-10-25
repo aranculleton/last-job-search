@@ -266,7 +266,11 @@ def parse(text: str, kind: str) -> dict:
     """{"rows": [...], "missing": [columns], "found": bool} from one file's text.
 
     Each row's keys are COLUMNS' names where the header matched one (any case, any
-    spacing); a column nobody expected is kept under its own name."""
+    spacing); a column nobody expected is kept under its own name. Line ends are made
+    plain first: a file saved with CRLF (Windows, or a spreadsheet) gave a message running
+    over several lines as "Line one.\r\n\r\nLine two.", which then went into the message
+    log that way (2026-10-25)."""
+    text = text.replace("\r\n", "\n")
     at, cells = _header_at(text, kind)
     if at < 0:
         return {"rows": [], "missing": list(COLUMNS[kind]), "found": False}
