@@ -32,9 +32,12 @@ Usage: `/reply <contact name or company>`, then paste their message.
    `reply.nudge_due(rows, today)` before drafting anything. If it is not due, or the
    nudges the person's follow-up rule allows have gone out (one, unless MAX_UNANSWERED in
    profile/networking.py allows more), draft nothing and say why: one more costs more
-   than it recovers. If it is due, the nudge is `compose.nudge()`, with a new reason
-   to answer, and `reply.following_up_is_honest(rows, today)` says whether an apology
-   for the gap is owed.
+   than it recovers. If it is due, code drafts it first: `python3 tools/followup_drafts.py
+   --contact <contact_id>` gives the nudge the state supports (a draft on the row or in an
+   earlier pack, or a posting the search found at their employer), already through
+   `compose.validate()` and `compose.advise()`. Show a clean one as it is; only when it says
+   needs writing is the nudge `compose.nudge()` with a new reason to answer, and
+   `reply.following_up_is_honest(rows, today)` says whether an apology for the gap is owed.
 
 4. **Read what they have taught it**: `python3 tools/learned.py brief messages --channel
    <channel> --reader <reader>`: the messages they approved first, then the rules, which
@@ -44,8 +47,10 @@ Usage: `/reply <contact name or company>`, then paste their message.
    derived from their message, what not to do, and any action owed outside the
    thread (send an email, book a slot).
 
-5. **Draft, then validate.** `compose.validate()` plus `tone.restate_ratio()`
-   against their message. A high ratio means the draft is parroting them back,
+5. **Draft, then validate.** `python3 tools/followup_drafts.py check <file.json>` runs
+   the whole gate in one call (`[{"id": "<contact_id>", "text": "<the draft>"}]`):
+   `compose.validate()` plus `tone.restate_ratio()` against their message, then
+   `compose.advise()`. A high ratio means the draft is parroting them back,
    which is the most common tell of a machine-written reply. Rewrite it. Then
    `compose.advise(draft, "reply", company=<their employer>)`: rewrite what it warns about (a phrase that reads as
    generated, stacked hedges, a claim about them written as fact); a soft exit is allowed

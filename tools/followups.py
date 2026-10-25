@@ -76,8 +76,10 @@ NUDGE_1 = ("Hi {name}, I applied for the {role} role on {date} and wanted to mak
            "reached the right person. Happy to share anything that would help the review. "
            "Is there a good time for a short call?")
 NUDGE_2 = ("Hi {name}, following up once more on the {role} application from {date}. "
-           "If the role has moved on, no problem at all; if it is still open, I would "
-           "value ten minutes to talk through the fit.")
+           "If the role has moved on, no problem at all; if it is still open, could we "
+           "find ten minutes to talk through the fit?")
+# Each is checked by compose's gate before it is shown (`checked` below): "I would value",
+# the old close of the second, was the one line of these the app's own advise() flagged.
 # Either nudge, once they have written since the last one: "wanted to make sure it
 # reached the right person" is not true of an application they have answered.
 NUDGE_AFTER_WORD = ("Hi {name}, thank you for your note on {heard}. I wanted to ask where "
@@ -498,6 +500,24 @@ def body(it: dict) -> str:
     return it.get("message") or ""
 
 
+def checked(it: dict) -> list[str]:
+    """What compose's gate says of this nudge's draft: its findings (refused) and its
+    warnings (to rewrite on), each a line; [] when it is clean or there is no draft. The
+    same gate a draft written by hand gets (tools/followup_drafts.py), so a template the
+    person's own rules now refuse is said, never shown as ready."""
+    text = it.get("message") or ""
+    if not text:
+        return []
+    try:
+        import followup_drafts
+        name = (it.get("to") or {}).get("name") or ""
+        found, warned = followup_drafts.gate(text, "message", name=name,
+                                             company=it.get("company") or "")
+    except Exception:  # noqa: BLE001  a profile without networking settings: no gate to run
+        return []
+    return ["refused: " + f for f in found] + ["check: " + w for w in warned]
+
+
 def _quiet_why(it: dict, silence: str) -> str:
     """Why a row has gone quiet: two nudges unanswered, the silence since they last wrote,
     or `silence` (how long since it went, in the caller's words)."""
@@ -608,6 +628,7 @@ def render(items: list[dict], today: datetime.date) -> list[str]:
         lines.append("   " + to_line(it))
         if body(it):
             lines.append("   " + body(it))
+            lines += ["   " + c for c in checked(it)]
     if held:
         lines.append("")
         lines.append("HELD, not to send (%d): the nudge would be due, and this is why not" % len(held))
