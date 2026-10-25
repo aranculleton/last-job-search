@@ -35,11 +35,17 @@ make sense to somebody whose repo just received it.
   setup and whenever you ask.
 - **Jobs a search set aside can be brought back.** Ask to see what was filtered out and
   why, and name the one you want: it joins your shortlist with the reason kept.
+  Each round also writes `filtered/<round>.json` beside its summary, in `--summary-dir`
+  too, so that folder now holds a `filtered` folder as well as `<round>.json`.
 - **Apply links you can trust**: tracking is taken off every link, and where the employer
   publishes its own listing, the link is checked against it and points there.
 - **A chat on your own computer works on Windows, Mac and Linux**, set up with no password
   and nothing installed first. A Mac gets a current Python of its own, and Apple's is left
   alone.
+  The batch check is now `tools/verify_batch.py`, reading PDFs with pypdf, with the same
+  checks, flags and exit codes; `tools/verify_batch.sh` only starts it, so a test that
+  reads the checks' source reads the `.py`, and the Skills block is read up to whichever
+  heading follows it.
 - **A resume and its cover letter can take a colour chosen for a kind of employer** (a bank
   in navy, a startup in teal) **or for one application.** Nothing changes unless you ask:
   every document stays black, and a colour never moves a word, a line or the page. Ask
@@ -60,6 +66,9 @@ make sense to somebody whose repo just received it.
 - **No email, and no other connections**: the app never reads your inbox.
 - **The date of an application is the day you applied**, written when you tell the app,
   never a guess from when its documents were made.
+  A redrafted row keeps its `date`, part of the key two chats' trackers merge on, and the
+  tracker gains `applied_on`, `confirmed_by` and `confirmed_at` at the end
+  (`record_drafts.HEADER`), blank on rows from before them.
 - **Updates still arrive by themselves.** If you would rather choose when, say so ("only
   update when I say") and the app tells you once when one is waiting.
 - **Setup and checking cost less of your Claude usage**: setup researches with one helper
@@ -78,6 +87,12 @@ make sense to somebody whose repo just received it.
 
 ### Fixed
 
+- **Looking at your contact book or messages no longer creates them**: a missing file stays
+  missing until the first save writes it, so a check for updates leaves no new files behind
+  (`state.load_contacts`, `state.load_threads`).
+- **Two names your own checks may use are back**: `holidays.is_holiday`, now counting a
+  holiday kept in the next year's table as the business-day count does, and
+  `score_eval.EXPECTATIONS`, the hard cuts of whatever screened-postings corpus there is.
 - **A copy set up as the app's example person** no longer reports that person's name in
   the app as a leak; the example is the app's own.
 - **A new computer could not save anything** when its git had no name set. Your copy now
@@ -112,6 +127,8 @@ make sense to somebody whose repo just received it.
   person referring you writes.
 - **Messages from a LinkedIn download are dated on your own clock.**
 - **Referral asks go only to people who have replied**, and no longer end "if not?".
+  `compose.referral_ask()` takes `thread=`, their contact_id or their message rows, and
+  raises without it or when nothing in it is theirs.
 - Smaller networking fixes: saving works in folders with brackets in their names,
   unaccepted connection requests no longer show as overdue, columns you added by hand
   survive saves, an interrupted save no longer cuts a file short, interviews booked with a
@@ -121,6 +138,9 @@ make sense to somebody whose repo just received it.
   document or drops a line. Drafts not yet sent are made again.
 - **Neither check on a draft can be skipped**: a draft goes out only after both have passed,
   for that exact draft.
+  `stage_picks.py assemble` holds back an `audit_<slug>.json` that is a bare draft, or
+  that lacks the code and model audits of that draft; only a record `stage_picks.py
+  audit` wrote after both is assembled.
 - **A resume that compiled with an error is never called a clean fit**, two-page resumes and
   letter-size paper pass the design check, and every contact line the resume prints is
   checked.
@@ -129,6 +149,8 @@ make sense to somebody whose repo just received it.
 - Smaller document fixes: small numbers and year-shaped numbers are checked like any other,
   Canadian spelling is checked for more words, the summary has one length (36 to 52 words)
   everywhere, and a requisition number is taken off a role the same way wherever it is named.
+  The example letter (`cover_letters/cover_example.tex`) has the four blocks the renderer
+  writes, and a written-out date placeholder where it had `\today`.
 - **A refused update keeps your unsaved file**, the daily check follows your own day, and a
   rewritten copy of your search offers a command that carries only your own work.
 - **On Windows**: Git installs under a user folder with a space in its name, accents
