@@ -17,7 +17,7 @@ import state  # noqa: E402
 
 LOG = "contact_id,date,direction,channel,scenario,summary,full_text\n"
 FIRST = "acme_halloway,2026-10-01,out,message,first_message,First message sent,\n"
-OTHER = "brindle_ames,2026-10-01,out,message,first_message,First message sent,Hi Tal\n"
+OTHER = "brindle_rook,2026-10-01,out,message,first_message,First message sent,Hi Ana\n"
 
 
 def _merge(base, ours, theirs, tmp_path):

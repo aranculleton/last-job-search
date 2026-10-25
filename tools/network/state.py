@@ -947,7 +947,7 @@ _TEMPLATE = re.compile(
 #
 # So does an answer to what was asked, beside a mention of leave (networking audit,
 # 2026-10-25): "Thanks Morgan, I'm on parental leave until January, so not the best person
-# to ask. Try Sam Reid" was read as an out-of-office, the reply was hidden and a nudge was
+# to ask. Try Bo Venn" was read as an out-of-office, the reply was hidden and a nudge was
 # offered. A template knows neither the reader's name nor what they asked, so these count:
 # a greeting by a first name, a no ("isn't hiring", "not interested"), a person to try by
 # name, and a promise about what was sent ("I'll take a look at your profile"). A template's

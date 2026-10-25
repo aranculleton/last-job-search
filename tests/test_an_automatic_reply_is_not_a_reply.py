@@ -121,8 +121,8 @@ def test_a_return_date_with_no_year_is_read_from_the_day_it_came():
 # each of these was read as an out-of-office, so the reply was hidden and a nudge offered.
 ANSWERED_WHILE_AWAY = (
     "Thanks Morgan, I'm on parental leave until January so not the best person to ask. Try "
-    "Sam Reid on the analytics team, she runs hiring there.",
-    "Hi Morgan, I'm out of the office until the 20th, but Sam Reid runs hiring for that team.",
+    "Bo Venn on the analytics team, she runs hiring there.",
+    "Hi Morgan, I'm out of the office until the 20th, but Bo Venn runs hiring for that team.",
     "Hi Morgan, I'm away until Monday. Our team isn't hiring right now, sorry.",
     "I'm on holiday until 2 November. Not interested, thanks.",
     "I am on leave until 30 October. When I return I'll take a look at your profile.",
@@ -141,9 +141,9 @@ STILL_AUTOMATIC = (
     "analytics-team@example.com. Thanks!",
     "I'm away from my desk until Monday 3rd. I'll get back to you when I return.",
     "Thanks for your message. I'm out of the office until 1 Nov, with no access to email.",
-    "Hello there, I am out of the office until Monday. For urgent queries please contact Sam "
-    "Reid, who is covering for me.",
-    "Dear Sender, I am on annual leave until 2 December. I will reply on my return.",
+    "Hello there, I am out of the office until Monday. For urgent queries please contact Bo "
+    "Venn, who is covering for me.",
+    "Dear All, I am on annual leave until 2 December. I will reply on my return.",
     "Thank you for your message. I'm currently on vacation until Nov 3 with intermittent "
     "access to email.",
 )

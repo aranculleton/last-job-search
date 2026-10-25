@@ -24,7 +24,7 @@ MARK = "﻿"
 BOOK = "contact_id,name,company,status\n"
 TWO = ("acme_halloway,Wren Halloway,Acme,awaiting_reply\n"
        "brindle_castellan,Juno Castellan,Brindle,in_conversation\n")
-NEW = "corvid_ames,Tal Ames,Corvid,not_contacted\n"
+NEW = "corvid_rook,Ana Rook,Corvid,not_contacted\n"
 LOG = "contact_id,date,direction,channel,scenario,summary,full_text\n"
 MSGS = ("acme_halloway,2026-10-01,out,message,first_note,First note sent,Hi Wren\n"
         "brindle_castellan,2026-10-03,out,message,first_note,First note sent,Hi Juno\n")
@@ -50,7 +50,7 @@ def test_a_marked_contact_book_keeps_every_id(tmp_path, marked):
     assert not text.startswith(MARK) and text.splitlines()[0] == BOOK.strip()
     rows = _rows(text, tmp_path)
     assert [r["contact_id"] for r in rows] == ["acme_halloway", "brindle_castellan",
-                                               "corvid_ames"]
+                                               "corvid_rook"]
 
 
 def test_a_marked_message_log_keeps_every_message_to_its_person(tmp_path):
@@ -94,12 +94,12 @@ def test_the_driver_writes_the_file_back_unmarked_and_reads_windows_encoding(tmp
     base, ours, theirs = tmp_path / "O", tmp_path / "A", tmp_path / "B"
     base.write_bytes((BOOK + TWO).encode("utf-8"))
     ours.write_bytes(codecs_bom() + (BOOK + TWO).encode("utf-8"))
-    theirs.write_bytes((BOOK + TWO + "zoe_dube,Zoë Dubé,Corvid,not_contacted\n")
+    theirs.write_bytes((BOOK + TWO + "zoe_halloway,Zoë Halloway,Corvid,not_contacted\n")
                        .encode("cp1252"))
     assert merge_state.main([str(base), str(ours), str(theirs), "network_contacts.csv"]) == 0
     saved = ours.read_bytes()
     assert not saved.startswith(codecs_bom())
-    assert saved.decode("utf-8").splitlines()[-1] == "zoe_dube,Zoë Dubé,Corvid,not_contacted"
+    assert saved.decode("utf-8").splitlines()[-1] == "zoe_halloway,Zoë Halloway,Corvid,not_contacted"
 
 
 def test_the_driver_leaves_a_damaged_side_to_gits_own_merge(tmp_path, monkeypatch):
@@ -120,14 +120,14 @@ def codecs_bom():
 
 
 HEAD = "contact_id,name,company,notes\r\n"
-WINDOWS = ("zoe_d,Zoë Dubé,Acme,André’s old team\r\n"
-           "jose_n,José Núñez,Brindle,Zoë–Brindle intro\r\n"
-           "ines_o,Inès Ortiz,Corvid,met at the “data” meetup; 30° and sunny\r\n")
+WINDOWS = ("zoe_d,Zoë Halloway,Acme,André’s old team\r\n"
+           "jose_n,Ana Núñez,Brindle,Zoë–Brindle intro\r\n"
+           "ines_o,Inès,Corvid,met at the “data” meetup; 30° and sunny\r\n")
 
 
 @pytest.mark.parametrize("body", [
     WINDOWS,
-    "zoe_d,Zoë Dubé,Acme,André’s old team\r\n",
+    "zoe_d,Zoë Halloway,Acme,André’s old team\r\n",
     "jose_n,JOSÉ’S Café,Brindle,Ñ \r\nines_o,Inès,Corvid,é–\r\n",
 ])
 def test_a_file_in_windows_encoding_keeps_every_accented_name(tmp_path, capsys, body):
