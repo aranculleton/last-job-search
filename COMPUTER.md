@@ -87,10 +87,12 @@ and say that this chat can be continued after.
    - `ready` or `ready-elsewhere`: ask nothing and run no setup. Say its line: the search
      is ready on this computer, and it can read LinkedIn in their browser whenever they
      ask. Then do the networking skill's "On a new computer" step.
-   - `running`: say its line, that their setup is still running in their other chat, and
+   - `running`: say its line, that their setup is still going in their other chat, and
      start nothing.
-   - `unfinished` or `none`: run `/setup` and carry on there (a new chat in this same
-     folder works too).
+   - `unfinished`: say its line if it prints one (their setup stopped part-way) and, on
+     their "carry on", run `/setup`, which finishes it from what is written. With no line,
+     this chat is the one setting up: carry on with `/setup`.
+   - `none`: run `/setup` and carry on there (a new chat in this same folder works too).
 3. When the install in step 1 ends, say its outcome in one line (or nothing, if it all
    went through), and the restart line from 2b if there was one.
 
