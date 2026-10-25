@@ -75,6 +75,14 @@ def stub(reg: dict, key: str) -> str:
         label=label, Label=label.capitalize(), prompt_file=r["prompt_file"], relay_id=relay)
 
 
+def _at_most_daily(cron: str) -> bool:
+    """One minute of one hour: never `*`, a step, a range or a list in either field. An
+    hourly pickup would cost about 12M tokens a day, each run paying the whole chat again
+    (the cost audit of 2026-10-25)."""
+    fields = cron.split()[1:3]
+    return len(fields) == 2 and all(f.isdigit() for f in fields)
+
+
 def check(reg: dict, root: str = ROOT) -> list[str]:
     """Every problem with the registry, as one line each; [] when it is clean."""
     out = []
@@ -113,6 +121,9 @@ def check(reg: dict, root: str = ROOT) -> list[str]:
         if not cron.startswith(f"CRON_TZ={tz} ") or len(cron.split()) != 6:
             out.append(f"{name}: cron {cron!r} must be `CRON_TZ={tz} ` and five fields, "
                        f"or it fires in UTC")
+        elif not _at_most_daily(cron):
+            out.append(f"{name}: cron {cron!r} runs more than once a day; every run is a whole "
+                       f"chat's worth of tokens, so a task runs on one minute of one hour")
         if setup != "routines_screen" and not r.get("trigger_id"):
             out.append(f"{name}: no trigger_id; a chat-bound task is created from a chat, "
                        f"which reports the id")
