@@ -213,5 +213,13 @@ class TheRealAgentsKeepTheirModels(unittest.TestCase):
     def test_the_grounding_audit_is_never_downgraded(self):
         self.assertIn(self.model_of("grounding-auditor"), (None, "inherit"))
 
+    def test_both_start_without_the_projects_claude_md(self):
+        # The app's CLAUDE.md is about 13,000 tokens on every call a helper makes, and
+        # neither needs it: each is self-contained, and profile/CLAUDE.md still loads with
+        # the first profile file read (code.claude.com/docs/en/sub-agents, 2026-10-25).
+        for name in ("employer-researcher", "grounding-auditor"):
+            text = (REPO_ROOT / ".claude" / "agents" / f"{name}.md").read_text(encoding="utf-8")
+            self.assertIn("\nomitClaudeMd: true\n", text.split("\n---", 1)[0] + "\n", name)
+
 if __name__ == "__main__":
     unittest.main()

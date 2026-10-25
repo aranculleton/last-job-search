@@ -113,18 +113,21 @@ meanwhile."
    now** (CLAUDE.md, "Master is the trunk"), so a chat they open on their computer finds it
    and waits rather than starting again. Push after every step from here on, and land each:
    a dropped chat must never lose their answers.
-3. **Start the research in the background, in parallel**, as soon as their country and field
-   are known: one background agent per topic (sonnet, no worktree, each writing only its own
-   scratch file, `$SCRATCH/research/<topic>.md`, with every claim's source; you write
-   `profile/` from them). Each follows its section of setup-sections.md:
+3. **Start the research in the background** as soon as their country and field are known:
+   **one** background agent (sonnet, no worktree) that writes one scratch file per topic,
+   `$SCRATCH/research/<topic>.md`, every claim with its source (you write `profile/` from
+   them), following each topic's section of setup-sections.md:
    - job boards for their country, city, field and level, and whether each may be read (`boards`);
-   - each target employer's hiring system: `python3 tools/ats_boards.py --find "<Employer>"`,
-     one per employer, all at once (`boards`; it works before the profile is finished);
    - pay for their role, level and city (`market`);
    - eligibility wording, place names, languages, and the local document conventions
      (`market`, `documents`);
    - where the people they should meet are named, `PEOPLE_SOURCES` (`voice`).
-   Agents cannot ask the person anything: what needs their yes comes back to you.
+   One agent, never one per topic: each agent pays the app's whole instructions on every
+   step it takes, so five cost about five times as much for the same research. Each target
+   employer's hiring system is code, not an agent: `python3 tools/ats_boards.py --find
+   "<Employer>"`, one per employer, all at once with Bash in the background (`boards`; it
+   works before the profile is finished). The agent cannot ask the person anything: what
+   needs their yes comes back to you.
 4. **Ask four things, once**, with your own proposals filled in:
 
 > Thanks. Four quick ones, then I'll get on with it:

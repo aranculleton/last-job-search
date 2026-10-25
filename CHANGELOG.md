@@ -62,6 +62,9 @@ make sense to somebody whose repo just received it.
   never a guess from when its documents were made.
 - **Updates still arrive by themselves.** If you would rather choose when, say so ("only
   update when I say") and the app tells you once when one is waiting.
+- **Setup and checking cost less of your Claude usage**: setup researches with one helper
+  instead of five, and the helpers that research employers and check every document start
+  without the app's long instructions, which they never needed.
 - **Taking an update is quicker**: the app's own tests are not run again on your computer
   for an update its test machines already passed on Linux, a Mac and Windows. Your own
   checks still run every time.
