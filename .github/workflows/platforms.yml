@@ -18,8 +18,9 @@
 #                     python3 command where only python works.
 #   windows-chat      a computer chat on Windows under Git Bash, python3 taken off PATH as
 #                     the python.org installer leaves it, Windows' own code page: a copy
-#                     that is already set up asks nothing, then its ordinary day, the
-#                     general resume rendered from that copy's folder, and the seed read.
+#                     that is already set up, cloned under a folder with a space and an
+#                     accent, asks nothing, then its ordinary day, the general resume
+#                     rendered from that copy's folder, and the seed read.
 #
 # Runs only on the public app (whose minutes are free) or by hand, on pull requests that
 # touch the install, the documents, the portals or this file, and weekly, so a change in
@@ -247,7 +248,11 @@ jobs:
           if python3 -c pass 2>/dev/null; then echo "python3 still runs"; fi
           python -c "import sys, locale; print(sys.stdout.encoding, locale.getpreferredencoding())"
           python tools/env_check.py --fix packages runtime latex
-          python tools/platform_check.py computer general designs seed
+          # The copies it clones and the folders it works in sit under a space and an
+          # accent, as under a person's own user folder ("Zoë Quillfeather").
+          tmp="$RUNNER_TEMP/Zo$(printf '\303\253') Quillfeather"
+          mkdir -p "$tmp"
+          TMP="$tmp" TEMP="$tmp" python tools/platform_check.py computer general designs seed
 
       - name: The whole test suite on Windows, every failure listed
         if: always()

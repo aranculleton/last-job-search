@@ -406,8 +406,8 @@ def _refused(r: subprocess.CompletedProcess) -> int:
     paths = [ln.strip() for ln in said.splitlines() if ln.startswith("\t") and ln.strip()]
     if paths:
         print("sync_app: stopped, nothing changed. These files here are not saved yet, and "
-              "the update brings a file of the same name: save them under another name or "
-              "move them out of the way, then run this again:")
+              "the update brings a file of the same name: rename them or move them out of "
+              "this folder (the app's own file takes that name), then run this again:")
         for p in paths[:30]:
             print(f"  {p}")
         return 1
