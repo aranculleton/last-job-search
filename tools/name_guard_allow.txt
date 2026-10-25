@@ -205,3 +205,4 @@ Université de Lumière
 Δοκιμή Ανάλυση
 Пример Данные
 Orla O’Fennick
+Git Bash's          # a product (Git for Windows' shell), possessive in a commit message
