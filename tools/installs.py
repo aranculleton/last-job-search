@@ -96,6 +96,12 @@ GH_FALLBACK = "2.103.2"
 PORTABLE_GIT_FALLBACK = "2.56.0"
 MODULES = (("pytest", "pytest"), ("yaml", "pyyaml"), ("pypdf", "pypdf"),
            ("openpyxl", "openpyxl"))
+# Windows has no time zone data of its own, and Python's zoneinfo reads it from the tzdata
+# package there (https://docs.python.org/3/library/zoneinfo.html#data-sources). It was in
+# requirements.txt and never in this list, so a .venv made before it arrived was "already
+# here" for ever, and the person's own time could not be read.
+if sys.platform == "win32":
+    MODULES += (("tzdata", "tzdata"),)
 VENV = os.path.join(ROOT, ".venv")
 OURS = ".made-by-last-job-search"
 RC_START = "# >>> last-job-search: tools it installed for you >>>"

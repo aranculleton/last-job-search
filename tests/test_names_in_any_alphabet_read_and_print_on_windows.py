@@ -13,6 +13,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TOOLS = os.path.join(ROOT, "tools")
 sys.path.insert(0, TOOLS)
@@ -62,7 +64,17 @@ def _profile(tmp_path, timezone):
     return str(d)
 
 
-def test_a_cloud_chat_works_in_the_persons_own_day(tmp_path):
+# A cloud chat runs on a Linux computer. Windows has no time.tzset
+# (https://docs.python.org/3/library/time.html#time.tzset, "Availability: Unix"), so no
+# chat on it ever sets its zone this way.
+NO_TZSET = "a cloud chat runs on Linux; Windows has no time.tzset to change a process's zone"
+
+
+def test_a_cloud_chat_works_in_the_persons_own_day(tmp_path, monkeypatch):
+    # The choice of zone is read on every computer: with an environment of its own, the
+    # function sets it there and never needs the process's tzset, so it stands in for one.
+    import time
+    monkeypatch.setattr(time, "tzset", getattr(time, "tzset", lambda: None), raising=False)
     prof = _profile(tmp_path, "Sydney time (Australia/Sydney)")
     env = {"CLAUDE_CODE_REMOTE": "true"}
     assert person.cloud_day(env, prof) == "Australia/Sydney" and env["TZ"] == "Australia/Sydney"
@@ -82,6 +94,7 @@ def test_the_zone_also_comes_from_the_brief_registry(tmp_path):
     assert person.home_zone_named(str(d)) == "America/Toronto"
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason=NO_TZSET)
 def test_the_date_a_tool_sees_is_the_persons_after_cloud_day(tmp_path):
     prof = _profile(tmp_path, "Australia/Sydney")
     code = ("import sys, os, time; sys.path.insert(0, 'tools'); import person; "
@@ -148,3 +161,25 @@ def test_a_name_read_in_an_undecodable_locale_prints_as_its_own_bytes():
     text = "\udcc5\udc81ukasz \ud800 Ł"
     assert text.encode("utf-8", errors=python_floor._SAFE) == b"\xc5\x81ukasz ? \xc5\x81"
     assert b"a\xffb".decode("utf-8", errors=python_floor._SAFE) == "a�b"
+
+
+def test_windows_is_given_time_zone_data_and_a_copy_without_it_is_fixed():
+    """Windows has no IANA zones of its own; Python reads them from the tzdata package there
+    (https://docs.python.org/3/library/zoneinfo.html#data-sources). It was in
+    requirements.txt but not among the packages checked, so a copy whose packages went in
+    before it was "already here" for ever, and their own time could not be read."""
+    import env_check
+    with_it = env_check.local_fixes("win32", have=lambda t: "C:/x/" + t, py_ok=True,
+                                    pypdf="ok", module=lambda m: True, gh_signed_in=True,
+                                    newer=False)
+    without = env_check.local_fixes("win32", have=lambda t: "C:/x/" + t, py_ok=True,
+                                    pypdf="ok", module=lambda m: m != "tzdata",
+                                    gh_signed_in=True, newer=False)
+    assert [w for w, *_ in without if w not in [x for x, *_ in with_it]] == [
+        "the Python packages"]
+    elsewhere = env_check.local_fixes("linux", have=lambda t: "/usr/bin/" + t, py_ok=True,
+                                      pypdf="ok", module=lambda m: m != "tzdata",
+                                      gh_signed_in=True, newer=False)
+    assert "the Python packages" not in [w for w, *_ in elsewhere]
+    with open(os.path.join(ROOT, "tools", "installs.py"), encoding="utf-8") as fh:
+        assert 'MODULES += (("tzdata", "tzdata"),)' in fh.read()
