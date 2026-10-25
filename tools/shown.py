@@ -174,8 +174,11 @@ _TEXT_TYPES = (".md", ".txt", ".markdown")
 
 def for_the_person(text: str) -> str:
     """The document as the person reads it: the tools' comments out (a comment on lines of
-    its own with its lines), and no run of blank lines where one stood."""
-    out = _INLINE.sub("", _ALONE.sub("", str(text or "")))
+    its own with its lines), and no run of blank lines where one stood. Lines end in "\n":
+    a document saved on Windows ends them in "\r\n", where a comment's own line was not
+    seen as one and the copy kept the blank lines around it (2026-10-25)."""
+    out = str(text or "").replace("\r\n", "\n")
+    out = _INLINE.sub("", _ALONE.sub("", out))
     return re.sub(r"\n{3,}", "\n\n", out)
 
 
