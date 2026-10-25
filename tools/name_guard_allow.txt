@@ -165,3 +165,5 @@ Fernhill Realty         # invented employer, the same test
 Northgate Quant Partners    # invented employer, the same test
 Quantitative Analyst    # a job title, the same test
 Quant Research          # a job title, the same test
+Zoë Ångström-Núñez       # invented: the accented name tools/platform_check.py renders a resume for
+Ørkenvik Logistik        # invented: an employer in the LinkedIn download tools/platform_check.py reads

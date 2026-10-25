@@ -248,14 +248,15 @@ def compile_resume(abbr, passes=1):
     trimming therefore printed "1/2" on a one-page document, and shipped that
     way. So measurements stay at one pass and the final render asks for two.
     """
+    # Where the renderer wrote it: the checkout, or LJS_STATE's folder when that is set.
     return _compile("lualatex", docpaths.resume_stem(abbr) + ".tex",
-                    f"{ROOT}/cv", resume_pdf(abbr), passes)
+                    os.path.dirname(docpaths.resume_tex(abbr)), resume_pdf(abbr), passes)
 
 
 def compile_letter(abbr):
     """One xelatex pass; returns the page count."""
     return _compile("xelatex", docpaths.letter_stem(abbr) + ".tex",
-                    f"{ROOT}/cover_letters", letter_pdf(abbr))
+                    os.path.dirname(docpaths.letter_tex(abbr)), letter_pdf(abbr))
 
 
 def body_words(a):

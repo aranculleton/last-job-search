@@ -7,7 +7,14 @@ Mac, winget on Windows, sudo and TeX on Linux):
 
     python3 tools/platform_check.py install      env_check --fix, then each tool runs
     python3 tools/platform_check.py documents    a resume and letter in black and two
-                                                 colours, fitted and checked
+                                                 colours, fitted and checked, the colour
+                                                 present only where one was asked for
+    python3 tools/platform_check.py general      a general resume with no posting behind it
+                                                 for an accented name, the same three ways,
+                                                 the name read back from the text layer
+    python3 tools/platform_check.py seed         their own LinkedIn download (a byte-order
+                                                 mark, Windows line ends, accents) read
+                                                 into a profile seed
     python3 tools/platform_check.py round        an offline round matches its golden
                                                  summary (tests/round_fixture.py)
     python3 tools/platform_check.py interview    an interview pack from the example person
@@ -17,8 +24,8 @@ Mac, winget on Windows, sudo and TeX on Linux):
                                                  and accents taken, the due list
     python3 tools/platform_check.py computer     a computer chat arriving in a copy that is
                                                  already set up, and its ordinary day
-    python3 tools/platform_check.py all          install, documents, round, interview,
-                                                 networking
+    python3 tools/platform_check.py all          install, documents, general, seed, round,
+                                                 interview, networking
 
 Every step prints PASS or FAIL with what it saw and how long it took, keeps going after
 a failure, and the run exits 1 when any failed. Nothing reaches the network but the
@@ -28,6 +35,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -110,22 +118,214 @@ def _draft() -> dict:
     return json.loads(json.dumps(_tests("test_the_resume_says_what_the_draft_put_on_it").DRAFT))
 
 
-def step_documents() -> None:
-    env = env_for(LJS_PROFILE=EXAMPLE)
-    work = tempfile.mkdtemp(prefix="ljs_docs_")
+def _doc_state(root: str = ROOT) -> str:
+    """A state folder of its own for one batch, so nothing lands in the checkout: cv/, and
+    cover_letters/ with the letter's class and fonts beside it (copied, as a symlink on
+    Windows needs a setting a person has not turned on)."""
+    d = tempfile.mkdtemp(prefix="ljs_docs_")
+    os.makedirs(os.path.join(d, "cv"))
+    os.makedirs(os.path.join(d, "cover_letters"))
+    shutil.copy(os.path.join(root, "cover_letters", "cover.cls"), os.path.join(d, "cover_letters"))
+    shutil.copytree(os.path.join(root, "cover_letters", "OpenFonts"),
+                    os.path.join(d, "cover_letters", "OpenFonts"))
+    return d
+
+
+def _colours(pdf: str) -> set:
+    """Every fill and stroke colour a PDF's pages set, as hex (black is 000000)."""
+    import pdftext
+    pdftext.pypdf_ok()
+    from pypdf import PdfReader
+    out = set()
+    for page in PdfReader(pdf).pages:
+        data = page.get_contents().get_data().decode("latin-1")
+        for m in re.finditer(r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(?:rg|RG)\b", data):
+            out.add("%02X%02X%02X" % tuple(round(float(x) * 255) for x in m.groups()))
+        for m in re.finditer(r"(?<![\d.])([\d.]+)\s+(?:g|G)\b", data):
+            out.add("%02X" % round(float(m.group(1)) * 255) * 3)
+    return out
+
+
+def _batch(label: str, drafts: list, env: dict, name: str = "", root: str = ROOT) -> None:
+    """One batch in black and two colours: fitted to one page, checked, its colour present
+    only where a style asked for one, and `name` read back from the text layer."""
+    import doc_style
+    import pdftext
     for style in ("black", "navy", "burgundy"):
-        d = _draft()
-        d["style"] = style
-        drafts = os.path.join(work, f"drafts_{style}.json")
-        with open(drafts, "w", encoding="utf-8") as fh:
-            json.dump([d], fh, ensure_ascii=False)
-        code, out, took = run([PY, os.path.join(TOOLS, "fit_to_page.py"), drafts], env=env)
-        check(f"documents: {style} fitted to one page", code == 0 and "resume 1p" in out,
-              out.strip(), took)
-        code, out, took = run([PY, os.path.join(TOOLS, "verify_batch.py"), drafts], env=env)
-        check(f"documents: {style} checked", code == 0 and "BATCH: ALL PASS" in out,
+        here = _doc_state(root)
+        senv = dict(env, LJS_STATE=here)
+        ds = [dict(d, style=style) for d in drafts]
+        path = os.path.join(here, "drafts.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(ds, fh, ensure_ascii=False)
+        code, out, took = run([PY, os.path.join(root, "tools", "fit_to_page.py"), path],
+                              cwd=root, env=senv)
+        check(f"{label}: {style} fitted to one page", code == 0 and "resume 1p" in out
+              and "resume 2p" not in out, out.strip(), took)
+        code, out, took = run([PY, os.path.join(root, "tools", "verify_batch.py"), path],
+                              cwd=root, env=senv)
+        check(f"{label}: {style} checked", code == 0 and "BATCH: ALL PASS" in out,
               out.strip().splitlines()[-1] if code == 0 else out.strip(), took)
-    shutil.rmtree(work, ignore_errors=True)
+        pdfs = sorted(os.path.join(here, sub, f) for sub in ("cv", "cover_letters")
+                      for f in os.listdir(os.path.join(here, sub)) if f.endswith(".pdf"))
+        if not pdfs:
+            check(f"{label}: {style} made its PDFs", False, "no PDF in " + here)
+            continue
+        accent = doc_style.STYLES[style][0]
+        seen = set().union(*(_colours(p) for p in pdfs))
+        if accent:
+            check(f"{label}: {style} carries its colour #{accent}", accent in seen,
+                  ", ".join(sorted(seen)))
+        else:
+            others = {c for c in seen if c not in ("000000", "2B2B2B", "6A6A6A")}
+            check(f"{label}: black carries no colour", not others, ", ".join(sorted(seen)))
+        if name:
+            for pdf in pdfs:
+                text = pdftext.text(pdf)
+                ok = name in text and "\ufffd" not in text and "(cid:" not in text
+                check(f"{label}: {style} {os.path.basename(os.path.dirname(pdf))} reads "
+                      f"the name back", ok, text.strip().splitlines()[0] if text.strip() else "")
+
+
+def step_documents() -> None:
+    _batch("documents", [_draft()], env_for(LJS_PROFILE=EXAMPLE))
+
+
+# The commands another part of the app adds for a person with no resume yet: a general
+# resume for their main target role, staged with no posting, and the profile seed read
+# from their LinkedIn download. (file, arguments, what it leaves in {dir}); the first
+# whose file is there and whose --help names it is run. With none, the step says so and
+# runs what this branch has: the example person's draft, under an accented name, with
+# no posting behind it; and the export reader the networking side already uses.
+GENERAL_ENTRY = (("tools/stage_picks.py", ("general", "{dir}"), "drafts.json"),
+                 ("tools/general_resume.py", ("{dir}",), "drafts.json"))
+SEED_ENTRY = (("tools/network/own_profile.py", ("seed", "--from", "{src}")),
+              ("tools/profile_seed.py", ("{src}",)))
+# An invented name with a letter from each of three alphabets' accents, which a code
+# page, a font without the glyph or a LaTeX engine reading bytes loses first.
+ACCENTED = {"name": "Zoë Ångström-Núñez", "first": "Zoë", "last": "Ångström-Núñez",
+            "file_prefix": "Zoë_Ångström-Núñez"}
+
+
+def _entry(entries, env, root: str = ROOT):
+    """(command, what it leaves) for the first entry here, or None."""
+    for path, args, *leaves in entries:
+        cmd = args[0] if args and not args[0].startswith("{") else ""
+        if not os.path.isfile(os.path.join(root, path)):
+            continue
+        code, out, _ = run([PY, os.path.join(root, path), *([cmd] if cmd else []), "--help"],
+                           cwd=root, env=env)
+        if code == 0 and "usage" in out.lower() and (not cmd or cmd in out):
+            return [PY, os.path.join(root, path), *args], (leaves[0] if leaves else "")
+    return None
+
+
+def _accented_profile() -> str:
+    """The example person under an accented name: the same profile, every file copied."""
+    d = os.path.join(tempfile.mkdtemp(prefix="ljs_zoe_"), "profile")
+    shutil.copytree(EXAMPLE, d)
+    p = os.path.join(d, "person.json")
+    with open(p, encoding="utf-8") as fh:
+        data = json.load(fh)
+    data["identity"].update(ACCENTED)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, ensure_ascii=False, indent=2)
+    return d
+
+
+def step_general(root: str = ROOT, env: dict | None = None) -> None:
+    profile = _accented_profile()
+    env = dict(env or env_for(), LJS_PROFILE=profile, LJS_STATE=_state())
+    found = _entry(GENERAL_ENTRY, env, root)
+    if found:
+        work = tempfile.mkdtemp(prefix="ljs_general_")
+        cmd, leaves = found
+        cmd = [c.replace("{dir}", work) for c in cmd]
+        code, out, took = run(cmd, cwd=root, env=env)
+        made = os.path.join(work, leaves)
+        if not check("general: staged with no posting (" + " ".join(cmd[1:3]) + ")",
+                     code == 0 and os.path.isfile(made), out.strip(), took):
+            return
+        with open(made, encoding="utf-8") as fh:
+            drafts = json.load(fh)
+        drafts = drafts if isinstance(drafts, list) else [drafts]
+    else:
+        print("info: no general-resume command on this branch ("
+              + ", ".join(e[0] for e in GENERAL_ENTRY) + "); rendering the example "
+              "person's draft under an accented name instead", flush=True)
+        d = _draft()
+        d.pop("posting", None)
+        drafts = [d]
+    _batch("general", drafts, env, name=ACCENTED["name"], root=root)
+
+
+def _seed_files() -> dict:
+    """Their own profile as LinkedIn writes it: a byte-order mark, Windows line ends and
+    letters outside ASCII in every file. Invented."""
+    crlf = "\r\n"
+    rows = {
+        "Profile.csv": ["First Name,Last Name,Headline,Summary,Geo Location",
+                        "Zoë,Ångström-Núñez,Analyste de données,Prévisions et données,"
+                        "\"Montréal, Québec, Canada\""],
+        "Positions.csv": ["Company Name,Title,Description,Location,Started On,Finished On",
+                          "Ørkenvik Logistik,Analyste principale,\"Prévisions, SQL et Python\","
+                          "Montréal,Mar 2023,",
+                          "Brindle & Hart Logistics,Data Analyst,Forecasts by depot,"
+                          "Manchester,Jan 2020,Feb 2023"],
+        "Education.csv": ["School Name,Start Date,End Date,Notes,Degree Name,Activities",
+                          "Université de Lumière,2016,2019,,Licence en économie,Échecs"],
+        "Skills.csv": ["Name", "Prévision", "SQL", "Python", "Power BI"],
+    }
+    return {n: ("\ufeff" + crlf.join(r) + crlf).encode("utf-8") for n, r in rows.items()}
+
+
+def step_seed() -> None:
+    files = _seed_files()
+    base = tempfile.mkdtemp(prefix="ljs_seed_")
+    folder = os.path.join(base, "Basic_LinkedInDataExport_10-25-2026")
+    os.makedirs(folder)
+    for n, data in files.items():
+        with open(os.path.join(folder, n), "wb") as fh:
+            fh.write(data)
+    z = os.path.join(base, "Basic_LinkedInDataExport_10-25-2026.zip")
+    with zipfile.ZipFile(z, "w") as zf:
+        for n, data in files.items():
+            zf.writestr(f"Basic_LinkedInDataExport_10-25-2026/{n}", data)
+    env = env_for(LJS_PROFILE=EXAMPLE, LJS_STATE=_state())
+    found = _entry(SEED_ENTRY, env)
+    if found:
+        for src, label in ((z, "the ZIP"), (folder, "the folder")):
+            cmd = [c.replace("{src}", src) for c in found[0]]
+            code, out, took = run(cmd, env=env)
+            ok = code == 0 and ("Ørkenvik" in out or "Analyste principale" in out)
+            check(f"seed: {label} read into a profile seed (" + " ".join(cmd[1:3]) + ")",
+                  ok and "Traceback" not in out, out.strip()[:400], took)
+    else:
+        print("info: no profile-seed command on this branch ("
+              + ", ".join(e[0] for e in SEED_ENTRY) + "); reading the download with the "
+              "export reader the networking side uses", flush=True)
+    # The reader underneath, in a Python of its own, as a chat runs it: what comes back is
+    # printed as JSON with every letter escaped, so the console's code page cannot touch it.
+    probe = ("import json, sys; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/network']\n"
+             "import own_profile\n"
+             "print(json.dumps(own_profile.from_export(sys.argv[2])))\n")
+    want = {"company": "Ørkenvik Logistik", "title": "Analyste principale",
+            "school": "Université de Lumière", "skill": "Prévision",
+            "location": "Montréal, Québec, Canada"}
+    for src, label in ((z, "the ZIP"), (folder, "the folder")):
+        code, out, took = run([PY, "-c", probe, TOOLS, src], env=env)
+        try:
+            got = json.loads(out.strip().splitlines()[-1])
+        except (ValueError, IndexError):
+            check(f"seed: {label} read (own_profile.from_export)", False, out.strip(), took)
+            continue
+        seen = {"company": got["positions"][0]["company"] if got.get("positions") else "",
+                "title": got["positions"][0]["title"] if got.get("positions") else "",
+                "school": got["education"][0]["school"] if got.get("education") else "",
+                "skill": (got.get("skills") or [""])[0], "location": got.get("location", "")}
+        ok = seen == want and len(got.get("positions", [])) == 2 and len(got["skills"]) == 4
+        check(f"seed: {label} read with its byte-order mark, line ends and accents "
+              "(own_profile.from_export)", ok, json.dumps(seen, ensure_ascii=False), took)
 
 
 def step_round() -> None:
@@ -308,6 +508,14 @@ def step_computer() -> None:
         code, out, took = run(cmd, cwd=here, env=cenv)
         check(f"computer: {label}", code in codes and "Traceback" not in out, out.strip(), took)
     step_networking(here, cenv)
+    # The general resume again, from the copy in a folder with a space and an accent: where
+    # the TeX engine reads its files from a path a code page can lose.
+    import local_path
+    local_path.extend()
+    if shutil.which("lualatex") and shutil.which("xelatex"):
+        step_general(here, dict(cenv, PATH=os.environ["PATH"]))
+    else:
+        print("info: no LaTeX on this computer; the general step checks the resume", flush=True)
     code, out, took = run([PY, "tools/save_state.py"], cwd=here, env=cenv)
     check("computer: saving stages the state", code == 0 and "Traceback" not in out,
           out.strip()[:300], took)
@@ -349,10 +557,10 @@ def _merge_two_chats(tmp: str, origin: str, env: dict) -> None:
     check("computer: two chats' new messages merge row by row", ok, out.strip(), took)
 
 
-STEPS = {"install": step_install, "documents": step_documents, "round": step_round,
-         "interview": step_interview, "networking": step_networking, "suite": step_suite,
-         "computer": step_computer}
-ALL = ("install", "documents", "round", "interview", "networking")
+STEPS = {"install": step_install, "documents": step_documents, "general": step_general,
+         "seed": step_seed, "round": step_round, "interview": step_interview,
+         "networking": step_networking, "suite": step_suite, "computer": step_computer}
+ALL = ("install", "documents", "general", "seed", "round", "interview", "networking")
 
 
 def main(argv=None) -> int:

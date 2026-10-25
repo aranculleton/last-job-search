@@ -271,6 +271,9 @@ def _gh_signed_in(have) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] in (["--help"], ["-h"]):
+        print("usage: python3 tools/env_check.py [--fix [what ...] | --allowlist | --say]")
+        return 0
     if argv[:1] == ["--fix"]:
         if CLOUD:
             # A cloud container is root and has apt: the one script, as its setup line runs.

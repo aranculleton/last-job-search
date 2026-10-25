@@ -4,15 +4,18 @@
 #   person            every OS: the install route Claude runs (`env_check.py --fix`, no
 #                     Homebrew, no winget, no sudo, no administrator), then from the example
 #                     person: a resume and letter in black and two colours fitted and
-#                     checked, an offline round against its golden summary, an interview
-#                     pack, a networking day, and the test suite (tools/platform_check.py).
+#                     checked, a general resume with no posting for an accented name, their
+#                     own LinkedIn download read into a profile seed, an offline round
+#                     against its golden summary, an interview pack, a networking day, and
+#                     the test suite (tools/platform_check.py).
 #   windows-shell     Windows PowerShell 5.1 as the only shell, before Git exists: every
 #                     command COMPUTER.md gives for it (PortableGit and gh into the user's
 #                     own folders, Claude Code told where Git Bash is), and the python3
 #                     command where only python works.
 #   windows-chat      a computer chat on Windows under Git Bash, python3 taken off PATH as
 #                     the python.org installer leaves it, Windows' own code page: a copy
-#                     that is already set up asks nothing, then its ordinary day.
+#                     that is already set up asks nothing, then its ordinary day, the
+#                     general resume rendered from that copy's folder, and the seed read.
 #
 # Runs only on the public app (whose minutes are free) or by hand, on pull requests that
 # touch the install, the documents, the portals or this file, and weekly, so a change in
@@ -42,6 +45,11 @@ on:
       - "tools/sync_app.py"
       - "tools/merge_state.py"
       - "tools/py.sh"
+      - "tools/render_application.py"
+      - "tools/doc_name.py"
+      - "tools/stage_picks.py"
+      - "tools/network/export.py"
+      - "tools/network/own_profile.py"
       - "templates/**"
       - "cv/*.cls"
       - "cover_letters/*.cls"
@@ -108,8 +116,8 @@ jobs:
       - name: Install the way Claude does (env_check.py --fix)
         run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py install
 
-      - name: Documents, an offline round, an interview pack, a networking day
-        run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents round interview networking
+      - name: Documents, a general resume, a profile seed, a round, an interview pack, a networking day
+        run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents general seed round interview networking
 
       - name: The test suite
         run: |
@@ -181,14 +189,14 @@ jobs:
     name: windows (a computer chat, Git Bash, cp1252)
     if: ${{ !github.event.repository.private || github.event_name == 'workflow_dispatch' }}
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: A copy already set up, and the chat's ordinary day
+      - name: A copy already set up, the chat's ordinary day, a general resume and a seed
         run: |
           chcp.com 1252 || true
           unset PYTHONUTF8 PYTHONIOENCODING
@@ -198,5 +206,5 @@ jobs:
           done; unset IFS
           if python3 -c pass 2>/dev/null; then echo "python3 still runs"; fi
           python -c "import sys, locale; print(sys.stdout.encoding, locale.getpreferredencoding())"
-          python tools/env_check.py --fix packages runtime
-          python tools/platform_check.py computer
+          python tools/env_check.py --fix packages runtime latex
+          python tools/platform_check.py computer general seed
