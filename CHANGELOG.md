@@ -92,6 +92,18 @@ make sense to somebody whose repo just received it.
   computer's temporary folder were on different drives.
 - **Text in any alphabet is read and written correctly on Windows**, in every file the app
   opens.
+- **Text a job page hides from readers is removed** before anything reads the posting.
+- **A job naming a language only as a market** ("Spanish-speaking markets") is no longer
+  thrown out, and the jobs thrown out that way come back.
+- **Where a search finds several roles at one employer**, it keeps the one that fits you
+  best.
+- **A job past its closing date** no longer comes back, and a job you bring back stays back,
+  even when it is a relisted copy.
+- **Searches stop asking for more pages once a page is empty**, so fewer requests go to job
+  sites, and a slow search keeps every description it fetched instead of losing them all.
+- Smaller search fixes: tracking in a link no longer makes one job look like several, a job
+  on a similar-named board is no longer called closed, a redirect to a site you switched off
+  is not followed, and finding an employer's job board works before setup is finished.
 
 ## [3.13.0] - 2026-10-24
 
