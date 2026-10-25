@@ -430,6 +430,29 @@ def test_stable_takes_releases_and_never_goes_backwards(repos):
     assert rc == 0 and "newest v1.1.0" in out and read(me, "README.md") == "v2, not released\n"
 
 
+def test_a_first_sync_newer_than_the_newest_release_is_never_put_back(repos):
+    # A first sync takes master, newer than the release before it. The next sync follows
+    # releases, and measured against that older release every file changed since read as
+    # "edited here" and was put back: the person went back a version, told it was their edit.
+    app, me = repos
+    sh(app, "git", "tag", "v1.0.0")
+    write(app, "README.md", "v2, after the release\n")
+    commit(app, "after the release")
+    rc, out = run(me, app)
+    assert rc == 0 and "first sync" in out and read(me, "README.md") == "v2, after the release\n"
+    rc, out = run(me, app)
+    assert rc == 0 and "releases, newest v1.0.0" in out, out
+    assert "put back" not in out and "up to date" in out, out
+    assert read(me, "README.md") == "v2, after the release\n"
+    rc, out = run(me, app, "--check")
+    assert rc == 0 and "drift: 0 app-owned file(s)" in out, out
+    write(me, "tools/x.py", "a = 'edited here'\n")
+    commit(me, "an app file edited here")
+    rc, out = run(me, app)
+    assert rc == 0 and "put back (edited here): tools/x.py" in out, out
+    assert read(me, "tools/x.py") == "a = 1\n" and read(me, "README.md") == "v2, after the release\n"
+
+
 def test_master_for_the_maintainer_or_when_chosen(repos):
     app, me = repos
     assert run(me, app)[0] == 0

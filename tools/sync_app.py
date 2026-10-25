@@ -312,6 +312,19 @@ def merge_base() -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
+def installed() -> str | None:
+    """The newest app commit this repo holds, or None if it never synced: the version its
+    app-owned files should match. On releases that is usually the release it took, but a
+    first sync takes master, which is newer than the release before it: measured against
+    that release, every file changed since read as edited here, and the next sync put the
+    person back to the older release and called it their edit (2026-10-25)."""
+    base = merge_base()              # deepens a shallow clone until the last sync turns up
+    if base is None:
+        return None
+    r = git("merge-base", "HEAD", MASTER, check=False)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else base
+
+
 def _tree(ref: str) -> dict[str, tuple[str, str]]:
     """path -> (mode, blob) for every file at ref."""
     out = {}
@@ -332,10 +345,11 @@ def _index() -> dict[str, tuple[str, str]]:
     return out
 
 
-def drift(ref: str = "HEAD") -> tuple[list[str], list[str]]:
-    """App-owned files at ref that differ from the app's, and ones the app lacks."""
+def drift(ref: str = "HEAD", app: str | None = None) -> tuple[list[str], list[str]]:
+    """App-owned files at ref that differ from the app's at `app` (APP by default), and
+    ones the app lacks."""
     mine = {p: v for p, v in _tree(ref).items() if not is_personal(p)}
-    theirs = _tree(APP)
+    theirs = _tree(app or APP)
     changed = sorted(p for p, v in theirs.items() if mine.get(p) != v and not is_personal(p))
     extra = sorted(p for p in mine if p not in theirs)
     return changed, extra
@@ -426,17 +440,20 @@ def sync() -> int:
             else:
                 git("rm", "-q", "--", p)
     # Drift: app-owned files that still differ from the app's, after the merge or
-    # with nothing to merge, deleted ones included. Put back to the app's version.
+    # with nothing to merge, deleted ones included. Put back to the app's version: the one
+    # just merged, or with nothing to merge the one this repo already holds, never an older
+    # release than that.
+    ref = APP if behind else (installed() or APP)
     index = _index()
-    restored = [p for p, v in _tree(APP).items()
+    restored = [p for p, v in _tree(ref).items()
                 if not is_personal(p) and index.get(p) != v]
     for i in range(0, len(restored), 100):
-        git("checkout", APP, "--", *restored[i:i + 100])
+        git("checkout", ref, "--", *restored[i:i + 100])
     if any(is_personal(p) for p in git("diff", "--cached", "--name-only").stdout.split()):
         return _abort("A personal path would change.", [
             p for p in git("diff", "--cached", "--name-only").stdout.split() if is_personal(p)])
     if not behind and not restored:
-        _, extra = drift()
+        _, extra = drift(app=ref)
         print("sync_app: up to date with the app.")
         if extra:
             print(f"  {len(extra)} app-owned file(s) here that the app does not have (kept): "
@@ -885,7 +902,7 @@ def worktree(name: str) -> int:
 
 
 def check() -> int:
-    base = merge_base()
+    base = installed()
     if git("merge-base", "--is-ancestor", APP, "HEAD", check=False).returncode == 0:
         print("sync_app: up to date with the app.")
     elif base is None:
@@ -893,7 +910,7 @@ def check() -> int:
     else:
         n = git("rev-list", "--count", f"HEAD..{APP}").stdout.strip()
         print(f"sync_app: {n} app commit(s) to bring in.")
-    changed, extra = drift()
+    changed, extra = drift(app=base)
     if base is not None:
         # Behind is not drift: only files edited here since the last sync count.
         mine = set(git("diff", "--name-only", "--no-renames", base, "HEAD").stdout.split())
