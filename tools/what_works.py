@@ -411,8 +411,8 @@ _REACHED = re.compile(
 def outcome_md(row: dict) -> str:
     """The application's outcome.md, or "" when it has none."""
     try:
-        import outreach
-        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        import docpaths
+        folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
         with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
             return fh.read()
     except Exception:

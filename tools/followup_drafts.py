@@ -216,11 +216,10 @@ def posting_reason(contact: dict, since: str, rows: list[dict], tracker=()) -> d
     k = company_key(contact.get("company"))
     if not k:
         return {}
-    applied = {(company_key(r.get("company")), _slug(_clean_title(r.get("role"))))
-               for r in tracker or ()}
+    applied, by_key = _indexed(tracker or (), rows)
     best = {}
-    for r in rows:
-        if company_key(r.get("company")) != k or not str(r.get("title") or "").strip():
+    for r in by_key.get(k, ()):
+        if not str(r.get("title") or "").strip():
             continue
         fit = r.get("fit") if r.get("fit") is not None else r.get("priority")
         try:
@@ -236,6 +235,23 @@ def posting_reason(contact: dict, since: str, rows: list[dict], tracker=()) -> d
         if not best or float(fit) > float(best.get("fit") or best.get("priority") or 0):
             best = r
     return best
+
+
+# What every contact's look at the postings shares: the roles applied to and the postings by
+# employer, made once a run, not once a contact (on a large invented state, most of a
+# Windows brief's two seconds, 2026-10-25). Kept while the same two lists are passed.
+_INDEX: list = [None, None, None]
+
+
+def _indexed(tracker, rows) -> tuple:
+    if _INDEX[0] is not tracker or _INDEX[1] is not rows:
+        applied = {(company_key(r.get("company")), _slug(_clean_title(r.get("role"))))
+                   for r in tracker}
+        by_key: dict = {}
+        for r in rows:
+            by_key.setdefault(company_key(r.get("company")), []).append(r)
+        _INDEX[:] = [tracker, rows, (applied, by_key)]
+    return _INDEX[2]
 
 
 def _clean_title(title: str) -> str:
@@ -398,7 +414,7 @@ def _their_last(rows) -> str:
 class FoldersOnce:
     """Each application's folder, found once a run instead of once a call.
 
-    `outreach.app_folder` reads the whole tracker to find a row's abbreviation every time it
+    `docpaths.app_folder` reads the whole tracker to find a row's abbreviation every time it
     is asked, and the due list, the campaign chats and the counts ask it for every row: on
     a large tracker that was most of the brief's time. Within one run the abbreviations do
     not change (the upkeep writes a status, never a file name), so the lookup is made once
@@ -407,8 +423,7 @@ class FoldersOnce:
     def __enter__(self):
         import csv_store
         import docpaths
-        import outreach
-        self.mod, self.saved = outreach, outreach._abbr_on_file
+        self.mod, self.saved = docpaths, docpaths._abbr_on_file
         try:
             rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
         except OSError:
@@ -418,12 +433,12 @@ class FoldersOnce:
             m = rx.search(r.get("cv_file") or "")
             if m:
                 table[(company_key(r.get("company")),
-                       outreach.slug("x", r.get("role") or "x"))] = m.group(1)
+                       docpaths.slug("x", r.get("role") or "x"))] = m.group(1)
 
         def lookup(company, role):
-            return table.get((company_key(company), outreach.slug("x", role or "x")), "")
+            return table.get((company_key(company), docpaths.slug("x", role or "x")), "")
 
-        outreach._abbr_on_file = lookup
+        docpaths._abbr_on_file = lookup
         return self
 
     def __exit__(self, *exc):

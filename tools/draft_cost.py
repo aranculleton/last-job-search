@@ -110,13 +110,13 @@ def write(round_dir: str, result, usage=None) -> tuple[str, list[str], str]:
         fh.write("\n")
     kept = []
     try:
-        import outreach
+        import docpaths
     except Exception:
-        outreach = None
+        docpaths = None
     for slug, r in rows.items():
-        if outreach is None or not r.get("company"):
+        if docpaths is None or not r.get("company"):
             continue
-        folder = outreach.app_folder(r["company"], r.get("role") or "", r.get("abbr") or "")
+        folder = docpaths.app_folder(r["company"], r.get("role") or "", r.get("abbr") or "")
         if os.path.isdir(folder):
             with open(os.path.join(folder, "cost.json"), "w", encoding="utf-8") as fh:
                 json.dump(dict(r, slug=slug), fh, indent=1, ensure_ascii=False)

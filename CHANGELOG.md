@@ -162,7 +162,9 @@ make sense to somebody whose repo just received it.
   everywhere else, instead of leaving the row for you to settle.
 - Designs compile from a copy kept under a folder with a space in its name.
 - **The brief is twice as quick** on a large search: a call prep finds its application from
-  one look at the tracker, and an employer's name is worked out once.
+  one look at the tracker, an employer's name is worked out once, a contact's follow-up looks
+  at the applications and postings once a run rather than once a contact, and finding an
+  application's folder no longer loads the tools that write documents.
 
 ## [3.13.0] - 2026-10-24
 

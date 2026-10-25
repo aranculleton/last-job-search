@@ -1710,12 +1710,12 @@ def _process_lines(contact, application) -> list:
     no row at all, a booked call on the hiring side is sent to /interview the same way."""
     if not application:
         return _unregistered_lines(contact)
-    import outreach
+    import docpaths
     status = _text(application.get("status")).lower()
     if status not in LIVE_STATUSES:
         return []
     living = _pack().LIVING
-    folder = outreach.app_folder(_text(application.get("company")), _text(application.get("role")))
+    folder = docpaths.app_folder(_text(application.get("company")), _text(application.get("role")))
     path = local_path.rel(os.path.join(folder, living), STATE_ROOT).replace(os.sep, "/")
     out = []
     # The hiring side only: a peer's coffee chat at the same employer, or the referrer who
@@ -2371,8 +2371,8 @@ def _render_one(row, tracker, a, keep_if_same=False, dry_run=False) -> tuple:
         # documents name the same gaps: the tracker's notes are not the posting.
         posting = ""
         if application:
-            import outreach
-            posting = profile_facts.posting_in(outreach.app_folder(
+            import docpaths
+            posting = profile_facts.posting_in(docpaths.app_folder(
                 _text(application.get("company")), _text(application.get("role"))))
         facts = profile_facts.build(
             role=_text(application.get("role")) or _text(row.get("role")), posting=posting)

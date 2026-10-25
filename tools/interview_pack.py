@@ -69,7 +69,7 @@ if __name__ == "__main__" and not _person.exists():
 import bridges  # noqa: E402
 import csv_store  # noqa: E402
 import learned  # noqa: E402
-import outreach  # noqa: E402
+import docpaths  # noqa: E402
 import person  # noqa: E402
 import prep  # noqa: E402
 import profile_facts  # noqa: E402
@@ -878,7 +878,7 @@ def missing_postings(tracker=None) -> list:
     for r in tracker:
         if not is_process(r):
             continue
-        folder = outreach.app_folder(_text(r.get("company")), _text(r.get("role")))
+        folder = docpaths.app_folder(_text(r.get("company")), _text(r.get("role")))
         if os.path.isdir(folder) and not os.path.exists(os.path.join(folder, "job_posting.md")):
             out.append((_text(r.get("company")), _text(r.get("role")), folder))
     return out
@@ -956,7 +956,7 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
         have["notes"] = "; ".join(x for x in (_text(have.get("notes")), note + "; the drafted "
                                               "documents were never sent") if x)
         csv_store.write_rows(tracker_path, rows, record_drafts.HEADER)
-    folder = outreach.app_folder(company, role)
+    folder = docpaths.app_folder(company, role)
     os.makedirs(folder, exist_ok=True)
     write_posting(folder, company, _text(role), posting, have.get("source"), today)
     out = os.path.join(folder, "outcome.md")
@@ -1038,15 +1038,15 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
         if contacts is None else contacts
     row = _row(company, role, tracker, contacts)
     company, role = _text(row.get("company")) or company, _text(row.get("role")) or role
-    folder = outreach.app_folder(company, role)
+    folder = docpaths.app_folder(company, role)
     if not os.path.isdir(folder):
         # Built from a folder that is not there, a pack has no posting, no form and no
         # stages, and says nothing about it. A folder at this employer under another
         # name is the likely one: name them rather than guess.
-        mine = {os.path.basename(outreach.app_folder(_text(r.get("company")), _text(r.get("role"))))
+        mine = {os.path.basename(docpaths.app_folder(_text(r.get("company")), _text(r.get("role"))))
                 for r in tracker if company_key(r.get("company")) == company_key(company)
                 and r is not row}
-        others = [f for f in outreach.employer_folders(company) if f not in mine]
+        others = [f for f in docpaths.employer_folders(company) if f not in mine]
         if others:
             raise LookupError(
                 "no application folder %s for %s, %r; this employer has %s. Rename the one "
@@ -3707,7 +3707,7 @@ def record_campaign(company, role, chat="", declined=False, today=None) -> str:
     """The person's answer to the campaign chat: {"chat", "started"} or {"declined"}, in the
     process's folder. The offer is made once; open_actions and the brief read it, and leave
     an employer with a campaign chat to that chat."""
-    folder = outreach.app_folder(company, role)
+    folder = docpaths.app_folder(company, role)
     os.makedirs(folder, exist_ok=True)
     day = _text(today) or dt.date.today().isoformat()
     body = {"declined": day} if declined else {"chat": _text(chat), "started": day}
@@ -3918,7 +3918,7 @@ def handkept_notes(tracker=None, contacts=None) -> list:
             continue
         company, role = _text(r.get("company")), _text(r.get("role"))
         k = company_key(company)
-        folder = outreach.app_folder(company, role)
+        folder = docpaths.app_folder(company, role)
         living = _read(os.path.join(folder, LIVING))
         # An application with interviews has a living document too: what sits beside it is
         # read (an older pack for the round it covers, 2026-10-22); notes elsewhere that name
@@ -4335,7 +4335,7 @@ def add_asked(company, role, stage, question, story="", landed="", note="", date
 def add_rework(company, role, stage, question, note, date=None, where="mock") -> str:
     """An answer to work on, appended under To rework in the process's living document (or
     an older stage's pack, where the process predates it)."""
-    folder = outreach.app_folder(company, role)
+    folder = docpaths.app_folder(company, role)
     path = os.path.join(folder, LIVING)
     if not os.path.exists(path):
         path = os.path.join(folder, pack_name(stage))
@@ -4588,7 +4588,7 @@ def main(argv=None) -> int:
             tracker = what_works._csv(person.state("job_search_tracker.csv"))
             row = _row(a.company, a.role, tracker,
                        state.load_contacts(person.state("network_contacts.csv")))
-            path = os.path.join(outreach.app_folder(_text(row.get("company")),
+            path = os.path.join(docpaths.app_folder(_text(row.get("company")),
                                                     _text(row.get("role"))), LIVING)
             if not os.path.exists(path):
                 print("interview_pack: no %s yet: build it with pack --write" % _rel(path))
@@ -4660,7 +4660,7 @@ def main(argv=None) -> int:
             row = _row(a.company, a.role, tracker,
                        state.load_contacts(person.state("network_contacts.csv")))
             company, role = _text(row.get("company")) or a.company, _text(row.get("role"))
-            folder = outreach.app_folder(company, role)
+            folder = docpaths.app_folder(company, role)
             if os.path.isdir(folder):
                 booked = record_stage(folder, company, role, a.stage, a.date, a.with_,
                                       today=a.today)

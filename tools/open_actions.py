@@ -63,7 +63,7 @@ sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, "network"))
 
 import followups                                     # noqa: E402
-import outreach                                      # noqa: E402
+import docpaths                                      # noqa: E402
 import person                                        # noqa: E402
 import throttle                                      # noqa: E402
 import what_works                                    # noqa: E402
@@ -298,7 +298,7 @@ def render(entries, today, only_live=True):
 
 def _stages(row):
     """(the application's folder, its files, its outcome.md stages), each empty when absent."""
-    folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+    folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
     try:
         files = os.listdir(folder)
         with open(os.path.join(folder, "outcome.md"), encoding="utf-8") as fh:
@@ -569,7 +569,7 @@ def campaigns(tracker) -> dict:
     for row in tracker or ():
         if (row.get("status") or "").strip().lower() in FINAL:
             continue
-        folder = outreach.app_folder(row.get("company"), row.get("role") or "")
+        folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
         try:
             with open(os.path.join(folder, "campaign.json"), encoding="utf-8") as fh:
                 chat = str(_json.load(fh).get("chat") or "").strip()

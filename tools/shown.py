@@ -102,12 +102,12 @@ def _application(folder_name, root) -> tuple:
     tracker = os.path.join(root, "job_search_tracker.csv")
     if not os.path.exists(tracker):
         return "", ""
-    import outreach
+    import docpaths
     import csv_store                     # the mark a spreadsheet adds, and its encoding
     rows = csv_store.dict_rows(tracker, refuse=False)
     for r in reversed(rows):
         company, role = (r.get("company") or "").strip(), (r.get("role") or "").strip()
-        if company and os.path.basename(outreach.app_folder(company, role)) == folder_name:
+        if company and os.path.basename(docpaths.app_folder(company, role)) == folder_name:
             return company, _role_shown(company, role, rows)
     return "", ""
 
