@@ -65,9 +65,15 @@ def test_the_skills_check_reads_the_same_on_every_computer():
     code = [ln for ln in shim.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
     assert not [ln for ln in code if re.search(r"\b(sed|awk|pdftotext|pdfinfo)\b", ln)]
     assert "verify_batch.py" in shim
-    if shutil.which("sed"):
-        out = subprocess.run(["sed", "-n", "/^Skills/,/^Education/{/^Education/d;p;}"],
-                             input="Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
-                             capture_output=True, text=True)
-        assert out.stdout.splitlines() == B.sed_range(lines, "Skills", "Education",
-                                                      drop_end=True)
+    sed = shutil.which("sed")
+    if sed:
+        # Bytes in and out: in text mode Python turns each "\n" it writes into os.linesep,
+        # "\r\n" on Windows (https://docs.python.org/3/library/subprocess.html, "Frequently
+        # Used Arguments"), so sed read other lines from the ones the port reads. The full
+        # path, as Windows looks in its own folders first for a bare name.
+        out = subprocess.run([sed, "-n", "/^Skills/,/^Education/{/^Education/d;p;}"],
+                             input=b"Intro\nSkills\nSQL (advanced)\nEducation\nBSc\n",
+                             capture_output=True)
+        said = out.stdout.decode("utf-8", "replace").replace("\r\n", "\n")
+        assert said.splitlines() == B.sed_range(lines, "Skills", "Education", drop_end=True), (
+            sed, out.returncode, out.stderr.decode("utf-8", "replace"))
