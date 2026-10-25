@@ -197,10 +197,8 @@ def step_documents() -> None:
 # whose file is there and whose --help names it is run. With none, the step says so and
 # runs what this branch has: the example person's draft, under an accented name, with
 # no posting behind it; and the export reader the networking side already uses.
-GENERAL_ENTRY = (("tools/stage_picks.py", ("general", "{dir}"), "drafts.json"),
-                 ("tools/general_resume.py", ("{dir}",), "drafts.json"))
-SEED_ENTRY = (("tools/network/own_profile.py", ("seed", "--from", "{src}")),
-              ("tools/profile_seed.py", ("{src}",)))
+GENERAL_ENTRY = (("tools/stage_picks.py", ("general", "{dir}"), "drafts.json"),)
+SEED_ENTRY = (("tools/history_interview.py", ("seed", "{src}")),)
 # An invented name with a letter from each of three alphabets' accents, which a code
 # page, a font without the glyph or a LaTeX engine reading bytes loses first.
 ACCENTED = {"name": "Zoë Ångström-Núñez", "first": "Zoë", "last": "Ångström-Núñez",
