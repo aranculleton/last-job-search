@@ -345,7 +345,12 @@ def _research_source(research) -> str:
     fetched = _text(research.get("fetched_date"))
     if not company and not fetched:
         return ""
-    name = "%s/%s.json" % (RESEARCH_DIR, research_cache.file_key(company)) if company else RESEARCH_DIR
+    # The file it was read from, where the loader said: a country's own file
+    # (<key>--<cc>.json) or one keyed under another spelling was cited by a name it is not
+    # kept under (interview audit, 2026-10-25).
+    name = (_text(research.get("_cache_file"))
+            or ("%s/%s.json" % (RESEARCH_DIR, research_cache.file_key(company)) if company
+                else RESEARCH_DIR))
     return "%s, fetched %s" % (name, fetched) if fetched else name
 
 
@@ -2288,6 +2293,10 @@ def load_research(company, root=STATE_ROOT) -> dict:
     is reaches the document through `_stale_line`, from the file's own date.
     """
     data, _age, _fresh = research_cache.load(company, root=root)
+    if data:
+        found = research_cache.path(company, root=root)
+        if found:
+            data = dict(data, _cache_file=os.path.relpath(found, root).replace(os.sep, "/"))
     return data
 
 
@@ -2477,6 +2486,14 @@ def main(argv=None) -> int:
             "%d answer(s) not fit to say yet" % (len(held) - asks) if len(held) > asks else "",
             "%d draft(s) for you to confirm (%s)" % (drafts, DRAFT_TODO) if drafts else "")
             if x) + "." if found else "Every answer is fit to say aloud.")
+        if not held:
+            # Checked after a hand edit, the copy to send is made again from it.
+            try:
+                import shown
+                print("send: %s (this copy, never the file above: its name says whose it is)"
+                      % shown.copy(path, a.root))
+            except Exception as exc:  # noqa: BLE001  the check passed; only its copy failed
+                print("send: no named copy (%s); send %s" % (exc, os.path.relpath(path, a.root)))
         return 1 if held else 0
     if a.dry_run:
         print("would write %s; nothing written" % os.path.relpath(prep_path(row, a.root), a.root))

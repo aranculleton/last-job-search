@@ -137,8 +137,12 @@ def test_the_cli_says_where_the_file_is_and_whether_it_is_fresh(tmp_path, capsys
 def test_prep_reads_the_file_the_module_finds(tmp_path):
     _write(tmp_path, "brindle-and-hart-logistics-ltd.json",
            {"company": "Brindle and Hart Logistics Ltd", "fetched_date": _days_ago(1)})
-    assert prep.load_research("Brindle & Hart Logistics", str(tmp_path)) \
-        == C.load("Brindle & Hart Logistics", root=tmp_path)[0]
+    got = prep.load_research("Brindle & Hart Logistics", str(tmp_path))
+    # The same data, and the file it came from, which a fact read from it is cited by.
+    assert got.pop("_cache_file") == "company_research/brindle-and-hart-logistics-ltd.json"
+    assert got == C.load("Brindle & Hart Logistics", root=tmp_path)[0]
+    assert prep._research_source(dict(got, _cache_file="company_research/x--gb.json")) \
+        .startswith("company_research/x--gb.json, fetched ")
     assert prep.RESEARCH_FRESH_DAYS == C.RESEARCH_FRESH_DAYS
 
 

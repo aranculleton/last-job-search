@@ -968,37 +968,62 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
                               today, name))
     if _text(stage):
-        same = re.compile(r"^- \[ \] %s(?:\s*\(.*\))?\s*$" % re.escape(stage), re.M | re.I)
-        hits = list(same.finditer(text))
-        if not _text(with_) and hits:
-            # Rebooked with a new date only: the interviewer already on the line stays.
-            had = re.search(r",\s*with\s+([^)]*)\)", hits[0].group(0))
-            with_ = had.group(1).strip() if had else ""
-        line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
-            date, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
-        if not hits:
-            # A bare template line for the same step ("Phone screen" when a recruiter screen
-            # is booked) is this stage under another name: it is replaced, never doubled.
-            step = what_works.stage_step(stage)
-            hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)\s*$", text, re.M)
-                    if what_works.stage_step(m.group(1)) == step][:1]
-        if hits:
-            # The first keeps its place with the new date; any later copies go, line and all.
-            for m in reversed(hits[1:]):
-                end = m.end() + 1 if text[m.end():m.end() + 1] == "\n" else m.end()
-                text = text[:m.start()] + text[end:]
-            text = text[:hits[0].start()] + line + text[hits[0].end():]
-        else:
-            # A new stage goes after the last one held, so the order stays the order it ran.
-            held = list(re.finditer(r"^- \[[xX]\] .*$", text, re.M))
-            if held:
-                text = text[:held[-1].end()] + "\n" + line + text[held[-1].end():]
-            else:
-                text = text.replace("## Interview stages reached\n",
-                                    "## Interview stages reached\n%s\n" % line, 1)
+        text = _with_stage(text, stage, date, with_)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(text)
     return have, folder, added
+
+
+def _with_stage(text, stage, date="", with_="") -> str:
+    """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
+    <date>, with <who>)`, the line the brief, /outcome and every pack read."""
+    same = re.compile(r"^- \[ \] %s(?:\s*\(.*\))?\s*$" % re.escape(stage), re.M | re.I)
+    hits = list(same.finditer(text))
+    if not _text(with_) and hits:
+        # Rebooked with a new date only: the interviewer already on the line stays.
+        had = re.search(r",\s*with\s+([^)]*)\)", hits[0].group(0))
+        with_ = had.group(1).strip() if had else ""
+    line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
+        date, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
+    if not hits:
+        # A bare template line for the same step ("Phone screen" when a recruiter screen
+        # is booked) is this stage under another name: it is replaced, never doubled.
+        step = what_works.stage_step(stage)
+        hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)\s*$", text, re.M)
+                if what_works.stage_step(m.group(1)) == step][:1]
+    if hits:
+        # The first keeps its place with the new date; any later copies go, line and all.
+        for m in reversed(hits[1:]):
+            end = m.end() + 1 if text[m.end():m.end() + 1] == "\n" else m.end()
+            text = text[:m.start()] + text[end:]
+        return text[:hits[0].start()] + line + text[hits[0].end():]
+    # A new stage goes after the last one held, so the order stays the order it ran.
+    held = list(re.finditer(r"^- \[[xX]\] .*$", text, re.M))
+    if held:
+        return text[:held[-1].end()] + "\n" + line + text[held[-1].end():]
+    if "## Interview stages reached\n" in text:
+        return text.replace("## Interview stages reached\n",
+                            "## Interview stages reached\n%s\n" % line, 1)
+    return text.rstrip("\n") + "\n\n## Interview stages reached\n%s\n" % line
+
+
+def record_stage(folder, company, role, stage, date, with_="", today=None) -> str:
+    """Book a stage given to `pack --write` in the process's outcome.md, the record the
+    brief reminds from and every later pack reads: given there with a date, it was used
+    for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
+    there yet is started in the form documents/README.md gives. Returns the line booked."""
+    out = os.path.join(folder, "outcome.md")
+    text = _read(out)
+    if not text:
+        text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages "
+                "reached\n\n## Notes\n- %s: %s booked for %s.\n"
+                % (company, role, _text(today) or dt.date.today().isoformat(), stage, date))
+    text = _with_stage(text, stage, date, with_)
+    os.makedirs(folder, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    m = re.search(r"^- \[ \] %s.*$" % re.escape(stage), text, re.M | re.I)
+    return m.group(0) if m else ""
 
 
 def gather(company, role="", stage="", date="", with_="", today=None, story_map=None,
@@ -3744,7 +3769,16 @@ def pack_markdown(ctx, never_say=None) -> str:
               if formats else "", ""]
     screen = [ln for i, ln in enumerate(screen) if ln or (i == 2 and any(screen[:2]))]
     screen += ["**Likely questions, and what to answer with**"]
-    screen += ["%d. %s -> %s" % (i, q["question"], a["short"])
+    # Once they have written their reasons under the question, the one screen says so: it
+    # went on saying "ask you first" over an answer they had given (2026-10-25).
+    written = _answer_blocks(_owned(ctx["living"]).get("Your answers"))
+
+    def _short(q, a):
+        mine = written.get(what_works._norm(q["question"]))
+        if a["kind"] == "ask" and mine and spoken(_own_words(mine[1])):
+            return "your answer, below"
+        return a["short"]
+    screen += ["%d. %s -> %s" % (i, q["question"], _short(q, a))
                for i, (q, a) in enumerate(answered[:ONE_SCREEN_QUESTIONS], 1)]
     screen += ["", "**Hooks**"]
     letter = _text((ctx["draft"] or {}).get("_path"))
@@ -4576,9 +4610,28 @@ def main(argv=None) -> int:
                 if x) + "." if found else "Every answer written is fit to say aloud.")
             if todo and not held:
                 print("Still to write, beyond the first five: %d." % len(todo))
+            if not held:
+                # Checked after a hand edit, the copy to send is made again from it: it
+                # was the version before the edit, and nothing said so (2026-10-25).
+                _send_line(path)
             return 1 if held else 0
         if a.cmd == "asked":
-            path = add_asked(a.company, a.role, a.stage, a.question, a.story, a.landed,
+            company, role = a.company, a.role
+            if not _text(role):
+                # The process's own row names the role, as check and rework find it; a
+                # question kept with no role was never matched to its stage's pack again.
+                try:
+                    row = _row(a.company, "", what_works._csv(
+                        person.state("job_search_tracker.csv")),
+                        state.load_contacts(person.state("network_contacts.csv")))
+                    company = _text(row.get("company")) or company
+                    role = _text(row.get("role"))
+                except LookupError as exc:
+                    if "name the role" in str(exc):
+                        raise
+                    print("no application at %s, so no role is recorded with it: --role "
+                          "names one" % a.company)
+            path = add_asked(company, role, a.stage, a.question, a.story, a.landed,
                              a.note, a.date, a.source)
             print("added to %s" % _rel(path) if path else
                   "already in %s for that stage" % "/".join(what_works.BANK))
@@ -4599,6 +4652,18 @@ def main(argv=None) -> int:
                 raise ValueError("%s holds no {question: story title} object" % a.map)
         else:
             story_map = {}
+        if a.write and _text(a.stage) and _text(a.date):
+            # The stage and its day go on the record first, so the pack is built from it.
+            tracker = what_works._csv(person.state("job_search_tracker.csv"))
+            row = _row(a.company, a.role, tracker,
+                       state.load_contacts(person.state("network_contacts.csv")))
+            company, role = _text(row.get("company")) or a.company, _text(row.get("role"))
+            folder = outreach.app_folder(company, role)
+            if os.path.isdir(folder):
+                booked = record_stage(folder, company, role, a.stage, a.date, a.with_,
+                                      today=a.today)
+                if booked:
+                    print("booked in %s/outcome.md: %s" % (_rel(folder), booked))
         ctx = gather(a.company, a.role, a.stage, a.date, a.with_, a.today, story_map,
                      format_=a.format_)
         if not _show(ctx, write=a.write):

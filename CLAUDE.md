@@ -528,13 +528,17 @@ A screen name written outside the registry fails `tests/test_claude_surfaces.py`
 
 Whatever the person asked for arrives **in the reply**. That covers a message to send,
 a draft, a resume, a cover letter, an outreach note, an interview pack, a prep doc and
-a shortlist. Nobody should have to go looking in the repo. Text they will read or send
-(messages, notes, questions, a pack) is pasted in full, ready to copy. A document (a
-PDF, a long file) is sent with the session's file-sending tool (SendUserFile or its
-equivalent) so it opens in one tap, with the part they need to judge it pasted beside
-it, under a name that says whose it is: a prep document is sent as the copy `python3
-tools/shown.py <file>` makes ("Acme Analyst interview prep.md", never "prep.md"), which
-the prep tools print as `send:`. The file path is the record, written underneath, and
+a shortlist. Nobody should have to go looking in the repo. Text they will send
+(messages, notes, questions) is pasted in full, ready to copy. A document (a PDF, a pack,
+a prep, a long file) is sent with SendUserFile so it opens in one tap (`display:
+"render"` for a pack or a prep), with the part they need to judge it pasted beside it (a
+pack's one screen), under a name that says whose it is: a prep document is sent as the
+copy `python3 tools/shown.py <file>` makes ("Acme Analyst interview prep.md", never
+"prep.md"), which the prep tools print as `send:`. **Where the chat has no SendUserFile**
+(Claude Code's tools reference lists it for a cloud chat, and for a chat on a computer only
+while it is steered from claude.ai or the phone: `claude_surfaces.py show remote-control`), paste
+that one screen and write the copy's full path on a line of its own: in the desktop app a
+path in the chat opens when clicked. The file path is the record, written underneath, and
 never the answer on its own: "I've put it in documents/..." is not done. The same goes
 for anything updated: show the new version, not where it went.
 
@@ -542,6 +546,8 @@ for anything updated: show the new version, not where it went.
 
 1. **Per role, one file-sending call** holding that role's resume and cover letter
    together, captioned: role, employer, pay (or "pay not stated"), location, apply link.
+   With no SendUserFile in the chat, the caption's line and the two files' full paths,
+   one a line, in its place.
 2. **Then one index table in the reply**: role | apply link, the full web address, one row
    per role. Beside it, what they need to judge each one without opening anything (the
    outreach note, the screening answers to decide).
