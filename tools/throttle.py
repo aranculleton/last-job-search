@@ -1053,6 +1053,15 @@ def _as_score(value) -> float | None:
     return float(m.group(0)) if m else None
 
 
+def _fit_of(r: dict) -> float | None:
+    """A row's 0-100 fit, or its priority for a row that never went through fit.py."""
+    return _as_score(r.get("fit") if r.get("fit") is not None else r.get("priority"))
+
+
+def _said_score(x) -> str:
+    return "?" if x is None else f"{x:g}"
+
+
 def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
              pairs: dict[tuple, str], today: str,
              blocked: dict[str, str] | None = None,
@@ -1062,11 +1071,19 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
              holds: dict[str, str] | None = None,
              silent: dict[str, list[dict]] | None = None,
              closed: dict[str, list[dict]] | None = None) -> tuple[list[dict], list[dict]]:
-    """Split ranked rows into surfaced and skipped. Order by priority, highest first."""
+    """Split ranked rows into surfaced and skipped. Order by priority, highest first.
+
+    One role per employer keeps the one that fits the person best, its 0-100 `fit` (the
+    score the yield target and the company throttle's override read), and priority only
+    breaks a tie. It kept the higher priority, fit times opportunity, so a fit-82 role
+    was skipped as having "scored" lower than a fit-66 one with a fresher date, and a
+    round could miss its 75+ target with the 75+ role hidden behind it."""
     rows = sorted(rows, key=lambda r: -(r.get("priority") or 0))
     kept, skipped = [], []
     surfaced: dict[str, dict] = {}
-    for r in rows:
+    # Each row is decided best fit first, so the first surfaced at an employer is its best;
+    # the shortlist is put back in priority order at the end.
+    for at, r in sorted(enumerate(rows), key=lambda p: (-(_fit_of(p[1]) or 0), p[0])):
         k = key(r.get("company"))
         n = norm(r.get("url"))
         reason = None
@@ -1115,7 +1132,7 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
             # times opportunity, uncapped), so a role at fit 86 cleared a sent 75
             # "by 22 points" when the honest margin was 11. Priority is only the
             # fallback for a row that never went through fit.py.
-            here = _as_score(r.get("fit") if r.get("fit") is not None else r.get("priority"))
+            here = _fit_of(r)
             # The override is for a MATERIALLY BETTER role, not a better score on
             # the role already sent. Re-scoring is routine: change the scorer and
             # yesterday's 79 is today's 94 with nothing about the job different.
@@ -1159,9 +1176,9 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
         if reason is None and k and k in surfaced:
             s = surfaced[k]
             reason = (f"same-employer duplicate: {s.get('title')} scored higher this run "
-                      f"({s.get('priority')} vs {r.get('priority')})")
+                      f"(fit {_said_score(_fit_of(s))} vs {_said_score(_fit_of(r))})")
         if reason:
-            skipped.append({**r, "skip_reason": reason, "skipped_date": today})
+            skipped.append((at, {**r, "skip_reason": reason, "skipped_date": today}))
         else:
             r = {**r, "bar": verdict, "bar_reason": verdict_why}
             if k:
@@ -1205,8 +1222,10 @@ def throttle(rows: list[dict], open_apps: dict[str, dict], urls: dict[str, str],
                          % "; ".join("%s%s" % (q["name"],
                                                " (%s)" % q["title"] if q.get("title") else "")
                                      for q in waiting[:3]))}
-            kept.append(r)
-    return kept, skipped
+            kept.append((at, r))
+    def in_order(pairs):
+        return [r for _, r in sorted(pairs, key=lambda p: p[0])]
+    return in_order(kept), in_order(skipped)
 
 
 # Statuses a round may move to "surfaced" or "skipped": what an earlier round or a

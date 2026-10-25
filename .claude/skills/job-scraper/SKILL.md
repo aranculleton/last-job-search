@@ -128,7 +128,8 @@ Only draft unprompted if the user has explicitly said to in that request.
 - **Company throttle.** A company with an open application in the tracker is suppressed: do not
   surface more roles there. The only override is a role scoring 10+ points higher than what was
   already sent, named explicitly. Where one run turns up several eligible roles at one employer,
-  surface only the highest scorer and record the rest as same-employer duplicates.
+  surface only the highest scorer, by its 0-100 fit (priority breaks a tie), and record the rest
+  as same-employer duplicates.
 - **Yield target: at least 5 postings scoring 60+, of which 2 score 75+.** A run that misses
   it expands the search and goes again, up to 3 rounds: more title variants, then the
   remaining priority categories, then wider PASS-set locations, then adjacent target sectors

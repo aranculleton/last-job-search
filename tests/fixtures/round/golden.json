@@ -321,15 +321,6 @@
    "bar": "pay"
   },
   {
-   "id": "9104",
-   "url": "https://jobs.example/freehire/9104",
-   "fit": 85,
-   "opportunity": 50,
-   "priority": 73,
-   "priority_exact": 73.276,
-   "bar": "none"
-  },
-  {
    "id": "4000000104",
    "url": "https://www.linkedin.com/jobs/view/4000000104",
    "fit": 98,
@@ -348,6 +339,15 @@
    "priority": 71,
    "priority_exact": 70.69,
    "bar": "pay"
+  },
+  {
+   "id": "4000000123",
+   "url": "https://www.linkedin.com/jobs/view/4000000123",
+   "fit": 86,
+   "opportunity": 46,
+   "priority": 68,
+   "priority_exact": 68.207,
+   "bar": "none"
   },
   {
    "id": "4000000105",
@@ -370,15 +370,6 @@
    "bar": "none"
   },
   {
-   "id": "9105",
-   "url": "https://jobs.example/freehire/9105",
-   "fit": 72,
-   "opportunity": 46,
-   "priority": 57,
-   "priority_exact": 57.103,
-   "bar": "none"
-  },
-  {
    "id": "4000000108",
    "url": "https://www.linkedin.com/jobs/view/4000000108",
    "fit": 81,
@@ -394,6 +385,15 @@
    "opportunity": 40,
    "priority": 56,
    "priority_exact": 55.862,
+   "bar": "none"
+  },
+  {
+   "id": "4000000102",
+   "url": "https://www.linkedin.com/jobs/view/4000000102",
+   "fit": 74,
+   "opportunity": 43,
+   "priority": 55,
+   "priority_exact": 54.862,
    "bar": "none"
   },
   {
@@ -443,16 +443,20 @@
    "same-employer duplicate: Supply Chain Analyst scored higher "
   ],
   [
+   "https://jobs.example/freehire/9104",
+   "same-employer duplicate: Data Analyst scored higher this run"
+  ],
+  [
+   "https://jobs.example/freehire/9105",
+   "same-employer duplicate: Data Analyst scored higher this run"
+  ],
+  [
    "https://jobs.example/freehire/9107",
    "same-employer duplicate: Senior Supply Chain Analyst scored "
   ],
   [
-   "https://www.linkedin.com/jobs/view/4000000102",
-   "same-employer duplicate: Forecasting Analyst scored higher t"
-  ],
-  [
    "https://www.linkedin.com/jobs/view/4000000103",
-   "same-employer duplicate: Logistics Analyst scored higher thi"
+   "same-employer duplicate: Data Analyst scored higher this run"
   ],
   [
    "https://www.linkedin.com/jobs/view/4000000106",
@@ -481,10 +485,6 @@
   [
    "https://www.linkedin.com/jobs/view/4000000121",
    "same-employer duplicate: Senior Supply Chain Analyst scored "
-  ],
-  [
-   "https://www.linkedin.com/jobs/view/4000000123",
-   "same-employer duplicate: Logistics Analyst scored higher thi"
   ]
  ]
 }
