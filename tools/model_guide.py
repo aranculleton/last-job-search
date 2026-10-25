@@ -71,7 +71,7 @@ ALIASES = {
     "resume": "apply", "cover letter": "apply", "draft": "apply", "add-template": "apply",
     "reply": "outreach", "prep": "outreach", "message": "outreach",
     "threads": "tracking", "outcome": "tracking", "followups": "tracking",
-    "gmail-sync": "tracking", "html-report": "tracking",
+    "html-report": "tracking",
     "reset": "tracking",
     "upgrade": "research", "add-portal": "build", "upskill": "advice",
 }

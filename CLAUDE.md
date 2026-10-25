@@ -240,8 +240,7 @@ bodies, sits outside the ignored `rounds/` on purpose. `network_threads.csv` is 
 must never be lost: status is derived from it, and without it every contact reverts to
 `not_contacted` and the same people get messaged twice. **Build noise is never staged**
 (`*.aux`, `*.log`, `*.out`, `*.fls`, `*.fdb_latexmk`, `*.synctex.gz`, `cv/*.txt`,
-`__pycache__/`, `.pytest_cache/`), nor `salary_data.json` (licensed third-party data) or
-`gmail_sync/state.json`.
+`__pycache__/`, `.pytest_cache/`), nor `salary_data.json` (licensed third-party data).
 
 ## Environment notes for cloud sessions
 
@@ -369,8 +368,8 @@ slash. A command and a skill can share a stem; they are not alternatives to each
 | `networking` | `/network` `/reply` `/threads` `/prep` |
 | `upskill` | (none) |
 
-Also `/gmail-sync`, `/html-report` and `/upgrade` (which a session starts
-itself, CLAUDE.md step 5), which belong to no skill.
+Also `/html-report` and `/upgrade` (which a session starts itself,
+CLAUDE.md step 5), which belong to no skill.
 
 **Two things are typed with a slash.** A file in `.claude/commands/` is one. A skill's
 own declared `name:` is the other, which is why **`/scrape` and `/upskill` work with no
@@ -516,7 +515,7 @@ contacted. Load the skill before any outreach. What a session needs before it do
 
 ## A step on another company's site is checked before it is given
 
-Steps that name LinkedIn's, Gmail's, GitHub's or Claude's own screens come from
+Steps that name LinkedIn's, GitHub's or Claude's own screens come from
 `tools/claude_surfaces.json` (`claude_surfaces.py steps <id>`), each headed by the day it was
 checked and its official page. Before giving one, check that page that day: a web search for
 linkedin.com, which no session fetches, and a fetch for the rest. Where the page says

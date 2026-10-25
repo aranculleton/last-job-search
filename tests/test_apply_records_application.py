@@ -30,7 +30,6 @@ import outreach  # noqa: E402 - needs the path above
 COMMANDS = REPO / ".claude" / "commands"
 APPLY = COMMANDS / "apply.md"
 OUTCOME = COMMANDS / "outcome.md"
-GMAIL_SYNC = COMMANDS / "gmail-sync.md"
 HTML_REPORT = COMMANDS / "html-report.md"
 INTERVIEW = COMMANDS / "interview.md"
 SKILL = REPO / ".claude" / "skills" / "job-application-assistant" / "SKILL.md"
@@ -192,10 +191,7 @@ class DraftedMeansDraftedToEveryReader(unittest.TestCase):
     """`drafted` is non-final, so readers that mean *submitted* must say so.
 
     Each of these defines its set by exclusion from the final statuses, so
-    a new non-final value joins them all silently. The one exception is
-    /gmail-sync, which must keep searching for drafted rows: the user
-    submitting by hand and not running /outcome is the failure #269 is
-    about, and an employer reply is how it gets caught.
+    a new non-final value joins them all silently.
     """
 
     CASES = [
@@ -209,16 +205,6 @@ class DraftedMeansDraftedToEveryReader(unittest.TestCase):
         (OUTCOME, "## Step 4: Update the Tracker",
          "overwrite its `date` column with the actual submission date",
          "the drafting date would be reported as the application date"),
-        (GMAIL_SYNC, None, "`drafted` rows stay in this set",
-         "excluding them discards the row that identifies a submitted-but-"
-         "unrecorded application, which is the recovery #269 asks for"),
-        (GMAIL_SYNC, "## Step 5", "`drafted` -> `applied`, otherwise",
-         "the acknowledgement is the one email that proves a hand-submitted "
-         "application was sent; classified as noise, the recovery never fires"),
-        (GMAIL_SYNC, "### Step 7a", "also set `date` to the email's date",
-         "the row would keep the drafting date after being proved submitted"),
-        (GMAIL_SYNC, "## Step 9: Staleness Check", "Skip `drafted` rows here",
-         "an unsent draft reported as a forgotten application"),
         (SCRAPER, None, "do not add a second row",
          "/scrape would duplicate the row Step 3b just wrote"),
         (APPLY, "### Step 6b: Record the Application", "bare number, 0-100",
@@ -312,7 +298,7 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
 
     The header migration must be header-line-only (inserting it mid-column
     shifts every value of every existing row), and every path that rewrites
-    a tracker row (/outcome Step 4, /gmail-sync Step 7a) must preserve
+    a tracker row (/outcome Step 4) must preserve
     fields it does not parse - the deadline is the first such field.
     """
 
@@ -338,8 +324,6 @@ class DeadlineSurvivesEveryWrite(unittest.TestCase):
          "surfacing the deadline must not drag drafted rows into the follow-up offer"),
         (OUTCOME, "## Step 4: Update the Tracker", "preserve every other field of the row",
          "a status update that rewrites the row would blank the deadline column"),
-        (GMAIL_SYNC, "### Step 7a: Write Approved Updates", "preserve every other field",
-         "the sync path rewrites the row too - it must carry the same preservation rule"),
         (SKILL, "### Step 3b: Record the Application", "`deadline` is the application deadline",
          "the /scrape path reaches Step 3b without running /apply Step 0, so it must "
          "still be told what the field is and where it comes from"),
@@ -407,10 +391,6 @@ class ArchiveNameIsOnePathComponent(unittest.TestCase):
          "by the **Subfolder naming** rule in `documents/README.md`",
          "the /scrape path writes its documents before Step 3b consults /apply, "
          "so /apply's filename rule cannot protect it"),
-        (GMAIL_SYNC, "## Step 2: Load State",
-         "by the **Subfolder naming** rule in `documents/README.md`",
-         "gmail-sync both locates and creates archives; its old spaces-only "
-         "paraphrase would split state across two folders"),
         (INTERVIEW, "## Step 1: Load the Context",
          "by the **Subfolder naming** rule in `documents/README.md`",
          "interview must read the same archive /apply and /outcome wrote"),

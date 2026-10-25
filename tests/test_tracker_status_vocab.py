@@ -36,7 +36,6 @@ REPO = Path(__file__).resolve().parent.parent
 COMMANDS = REPO / ".claude" / "commands"
 
 OUTCOME = COMMANDS / "outcome.md"
-GMAIL_SYNC = COMMANDS / "gmail-sync.md"
 HTML_REPORT = COMMANDS / "html-report.md"
 APPLY = COMMANDS / "apply.md"
 INTERVIEW = COMMANDS / "interview.md"
@@ -219,25 +218,6 @@ class ReadersBucketMap(unittest.TestCase):
             "it is part of the archive `outcome.md` Status: enum, not a tracker CSV value",
         )
 
-    def test_gmail_sync_references_vocabulary_block(self):
-        """gmail-sync must defer to /outcome's vocabulary block for the
-        open-application set, not hardcode the final-status set with
-        space spellings that diverge from the writer."""
-        step2_text = section(GMAIL_SYNC, "## Step 2: Load State")
-        self.assertIn(
-            "Tracker status vocabulary",
-            step2_text,
-            "/gmail-sync Step 2 must reference the /outcome vocabulary block "
-            "instead of restating the final-status set with its own spellings",
-        )
-        self.assertNotIn(
-            "no response",
-            step2_text,
-            "/gmail-sync Step 2 must not restate the space spellings locally - "
-            "the vocabulary block is the single source for what counts as final, "
-            "and a second local list is what drifted in #298",
-        )
-
 
 class ReaderCases(unittest.TestCase):
     """Spot-checks across readers that prove the vocabulary block is reachable
@@ -267,14 +247,6 @@ class ReaderCases(unittest.TestCase):
             "## Step 2: Compute Summary Stats",
             "excluded from every statistic below",
             "drafted rows must be excluded from every statistic, not counted as sent",
-        ),
-        # /gmail-sync staleness check skips drafted
-        (
-            GMAIL_SYNC,
-            "## Step 9: Staleness Check",
-            "Skip `drafted` rows here",
-            "the staleness check must skip drafted rows — nothing was sent, "
-            "so nobody is late replying",
         ),
         # /apply's append-vs-update decision anchors to the vocabulary
         (
