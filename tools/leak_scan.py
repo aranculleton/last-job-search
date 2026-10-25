@@ -238,13 +238,41 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
     files, and a name written there once (2026-10-18) was never scanned."""
     keyed = [(_key(pat), (pat, n)) for pat, n in tokens]
     # The allowances that hold anywhere (the app's own address and openroles'), so a PR
-    # or a commit that links the app is not a leak; nothing tied to one file applies.
+    # or a commit that links the app is not a leak. In a patch (`git log -p`), the lines of
+    # each file's hunks take that file's own allowances too, as the tree scan gives them:
+    # a PDF operator the design check names passed the tree and failed its own commit's
+    # diff (2026-10-25). A commit's message takes only the ones that hold anywhere.
     anywhere = [re.compile(rx) for g, rx in ALLOW if g == "**"]
+    per_file = [(_regex(g), re.compile(rx)) for g, rx in ALLOW if g != "**"]
     out: list[str] = []
     for p in paths:
         with open(p, encoding="utf-8", errors="replace") as fh:
-            out += _scan_text(os.path.basename(p), fh.read(), anywhere, keyed, show)
+            text = fh.read()
+        name = os.path.basename(p)
+        for start, rel, chunk in _patch_chunks(text):
+            rules = anywhere + [rx for g, rx in per_file if rel and g.match(rel)]
+            for f in _scan_text(name, chunk, rules, keyed, show):
+                head, ln, rest = f.split(":", 2)
+                out.append(f"{head}:{int(ln) + start}:{rest}")
     return out
+
+
+_PATCH_FILE = re.compile(r"^(?:diff --git a/\S+ b/(\S+)|\+\+\+ b/(\S+))$")
+
+
+def _patch_chunks(text: str):
+    """(lines before it, the file its lines belong to or None, its text) for each run of
+    lines in one file's hunks; the whole text as one chunk when it is not a patch."""
+    lines = text.splitlines()
+    chunks, start, rel = [], 0, None
+    for i, line in enumerate(lines):
+        m = _PATCH_FILE.match(line)
+        new = (m.group(1) or m.group(2)) if m else (None if line.startswith("commit ") else rel)
+        if new != rel:
+            chunks.append((start, rel, "\n".join(lines[start:i])))
+            start, rel = i, new
+    chunks.append((start, rel, "\n".join(lines[start:])))
+    return [c for c in chunks if c[2]]
 
 
 def _scan_text(rel: str, text: str, rules, keyed, show: bool) -> list[str]:

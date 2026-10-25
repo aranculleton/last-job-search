@@ -304,3 +304,20 @@ def test_a_pdf_text_operator_in_the_design_check_is_not_an_employer(tmp_path, mo
                          "tools/other.py": f'op = "{short}"\n'})
     found = _scan(t, short + "\n", monkeypatch=monkeypatch)
     assert found == ["tools/design_check.py:2: denylist entry 1", "tools/other.py:1: denylist entry 1"]
+
+
+def test_a_files_own_allowance_holds_in_its_commits_diff_and_nowhere_else(tmp_path):
+    # The tree scan gave the design check its allowance; its commit's diff did not, and the
+    # push stopped on a PDF operator (2026-10-25). A message never takes a file's rules.
+    short = "".join(["T", "D"])
+    t = tmp_path / "patches.txt"
+    t.write_text("commit abc\n"
+                 f"Tidy the {short} reader\n"
+                 "diff --git a/tools/design_check.py b/tools/design_check.py\n"
+                 "+++ b/tools/design_check.py\n"
+                 f'+            elif op in ("Td", "{short}"):\n'
+                 "diff --git a/tools/other.py b/tools/other.py\n"
+                 "+++ b/tools/other.py\n"
+                 f'+op = "{short}"\n', encoding="utf-8")
+    found = leak_scan.scan_text([str(t)], leak_scan.tokens_from([short]))
+    assert found == ["patches.txt:2: denylist entry 1", "patches.txt:8: denylist entry 1"]
