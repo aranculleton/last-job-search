@@ -888,6 +888,9 @@ def _rev(text: str) -> str:
 # ---------------------------------------------------------------- the record
 
 NEWS_HOLDER = "Searching: the news is added when the search is back."
+# Said once above the items: the news reader searches and opens no page, so a line is only
+# ever what its search result said, and the record says so.
+NEWS_SOURCE = "From search results; no page was opened, so each line says only what its result said."
 
 
 def record_text(b: dict, news: list[str] | None = None) -> str:
@@ -952,7 +955,7 @@ def take_news(text: str, today: dt.date) -> dict:
             kept.append(s)
     path = brief_path(today.isoformat())
     body = _read(path)
-    news = ["- " + s for s in kept] or ["Quiet week."]
+    news = ([NEWS_SOURCE, ""] + ["- " + s for s in kept]) if kept else ["Quiet week."]
     if body:
         head = body.split("\n## News", 1)[0].rstrip()
         new = head + "\n\n## News\n\n" + "\n".join(news) + "\n"
