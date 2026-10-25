@@ -22,9 +22,11 @@ def _page(*repos, more=False):
 
 
 def test_only_copies_of_the_app_are_named_newest_first_across_pages():
-    pages = [_page(("morgan-ellis/my-job-search", "aranculleton/last-job-search"),
+    # The app's own name in another case is still the app (GitHub names are not
+    # case-sensitive); it is built from find_copy.APP rather than written out.
+    pages = [_page(("morgan-ellis/my-job-search", find_copy.APP),
                    ("morgan-ellis/dotfiles", None), more=True),
-             _page(("morgan-ellis/old-search", "ARANCULLETON/last-job-search"),
+             _page(("morgan-ellis/old-search", find_copy.APP.upper()),
                    ("morgan-ellis/notes", "someone/else"))]
     assert find_copy.copies(pages) == ["morgan-ellis/my-job-search", "morgan-ellis/old-search"]
     assert find_copy.copies([_page(("morgan-ellis/dotfiles", None))]) == []

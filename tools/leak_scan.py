@@ -87,13 +87,15 @@ BINARY_OK = tuple(_regex(g) for g in (
 ALLOW = (
     # The one permitted mention of the maintainer: the copyright credit.
     ("LICENSE", r"^Copyright \(c\) \d{4}(?:-\d{4})? .*$"),
-    # The app's own address is not a leak.
-    ("**", r"github\.com/aranculleton/last-job-search(?![-\w])"),
-    ("**", r"aranculleton/last-job-search(?![-\w])"),
+    # The app's own address is not a leak, in any letter case: GitHub reads owner and
+    # repository names without regard to case, so a test that the app is still the app in
+    # capitals names nobody new (2026-10-25). Only the whole address is set aside.
+    ("**", r"(?i)github\.com/aranculleton/last-job-search(?![-\w])"),
+    ("**", r"(?i)aranculleton/last-job-search(?![-\w])"),
     # Nor is the address of openroles, the app's employer-board reader published as its
     # own library and vendored in tools/openroles/.
-    ("**", r"github\.com/aranculleton/openroles(?![-\w])"),
-    ("**", r"aranculleton/openroles(?![-\w])"),
+    ("**", r"(?i)github\.com/aranculleton/openroles(?![-\w])"),
+    ("**", r"(?i)aranculleton/openroles(?![-\w])"),
     # Unmodified TeX Live packages carry their CTAN authors' public addresses.
     ("texmf/**", r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+"),
     # The families of interchangeable tools name software, not employers: only each

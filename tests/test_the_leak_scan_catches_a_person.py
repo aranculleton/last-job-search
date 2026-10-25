@@ -103,6 +103,18 @@ def test_the_apps_own_url_is_not_a_leak_but_a_personal_repo_is(tmp_path, monkeyp
     assert found == ["README.md:2: denylist entry 1"]
 
 
+def test_the_apps_own_address_in_capitals_is_still_the_app_and_the_owner_alone_is_not(
+        tmp_path, monkeypatch):
+    # GitHub reads names without regard to case, so a test that the app in capitals is
+    # still the app names nobody new; the owner's name on its own still fails (2026-10-25).
+    owner = "".join(["ar", "ancull", "eton"])
+    t = _tree(tmp_path, {"t.py": f"{owner.upper()}/last-job-search\n"
+                                 f"{owner.upper()} wrote this\n"
+                                 f"{owner.upper()}/last-job-search-person\n"})
+    found = _scan(t, owner + "\n", monkeypatch=monkeypatch)
+    assert found == ["t.py:2: denylist entry 1", "t.py:3: denylist entry 1"]
+
+
 def test_an_unknown_binary_fails_and_a_vendored_font_passes(tmp_path, monkeypatch):
     t = _tree(tmp_path, {"cover_letters/OpenFonts/fonts/x.ttf": b"\0\1binary",
                          "documents_scan.png": b"\x89PNG\0\0"})
