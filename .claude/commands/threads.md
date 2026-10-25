@@ -19,6 +19,13 @@ What is owed, what is due, what has gone cold.
    the same employer relate.
 6. `python3 tools/network/own_profile.py due`: it prints a line only when a look at their own
    LinkedIn profile is worth it. Act on that line alone, asking its question once at the end.
+7. **The drafts, made by code first**: `python3 tools/followup_drafts.py` (`--contact <id>`
+   for one). For everything owed it gives the draft the state can support, already through
+   `compose.validate()` and `compose.advise()`: a nudge from a draft on the row, an earlier
+   pack or a posting the search found at their employer; an application's follow-up from
+   `followups.py`. Show a clean one as it is. Write by hand only what it lists as needs
+   writing or flags (`followup_drafts.py context <id>` gives what a writer needs in one
+   call), then `followup_drafts.py check <file.json>` is the gate for what you wrote.
 
 ## Present
 
@@ -30,14 +37,16 @@ message logged since says one went. Say which file goes (the guidance names the 
 and the command that logs it with the file, `state.py message <id> --attached <file>`.
 
 **First message owed** next (`first_message`): they accepted a request that
-carried no note and nothing has been sent. Draft it with `compose.first_note()`; it is
-not a nudge.
+carried no note and nothing has been sent. Step 7's draft when it made one; otherwise draft
+it with `compose.first_note()`; it is not a nudge.
 
 **Nudge due** then: past 5 to 7 business days, no nudge sent yet, or the person's own
 rule where `profile/networking.py` sets `FOLLOW_UP_DAYS` and `MAX_UNANSWERED`
 (`schema.follow_up_rule()` says which is in force). One nudge only, unless their rule
-allows more. `compose.validate()` refuses check-in wording ("just checking in",
-"bumping this", "did you get a chance"): a nudge carries something new to answer.
+allows more. Step 7's draft first; one it could not make needs a new reason to answer,
+which only the thread, the profile or the person can give: `compose.nudge()` with it.
+`compose.validate()` refuses check-in wording ("just checking in", "bumping this", "did you
+get a chance"): a nudge carries something new to answer.
 
 **Requests to withdraw** (`request_pending`): a connection request nobody accepted in
 21 days. Nothing can be sent; say so and suggest withdrawing it. When they say they have
