@@ -1019,7 +1019,9 @@ def build(round_dir: str, today: str = "") -> dict:
             old = fh.read()
     meta["changed"] = old != text
     if meta["changed"]:
-        with open(path, "w", encoding="utf-8") as fh:
+        # "\n" whatever the computer: the pack is hashed and handed on as these very bytes,
+        # and Windows' text mode wrote "\r\n" (the suite on Windows, 2026-10-25).
+        with open(path, "w", encoding="utf-8", newline="\n") as fh:
             fh.write(text)
     with open(os.path.join(round_dir, "pack.json"), "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=1, ensure_ascii=False)
