@@ -40,7 +40,6 @@ fails on one that is unaccounted for.
 
 from __future__ import annotations
 
-import csv
 import datetime as dt
 import fnmatch
 import glob
@@ -327,9 +326,9 @@ METHODS: dict[str, dict] = {
             (48, "2026-10-23", False, "applications are delivered one way: per role one file-sending call with resume and letter, captioned role, employer, pay, location and apply link, then one index table; paths as plain text, never markdown links. An audit ruling no longer settles a longer sentence edited after it, an edit to the outreach note is kept in the note, and a newer model correction is never overwritten by an older edit"),
             (49, "2026-10-24", False, "the posting profile reads a degree's other way in past a semicolon, as the score does; the run book saves with tools/save_state.py and tells nobody but the maintainer of a problem with the app; verify_batch reads whole bullets for repeats and its skills check runs under a Mac's sed; every resume's text is black (name, headings, rule, contact line, links, bullet marks), with nothing else moved; drafts made before keep theirs until re-rendered; voice_check counts the person's own wording in a message (their opener and close, a message they approved) as theirs, never a finding, and a letter is held to the house style as before; save_state.py stages a file of the person's that was taken away as removed; on moderncv 2.4 and later (a Mac's TeX) the name is drawn 9.5pt higher, its box unchanged, so a text extractor reads it apart from the city and nothing else moves"),
             (50, "2026-10-24", False, "a resume and its letter can take a colour per kind of employer (person.json documents.styles, templates/doc_style.py), or one a draft names; black when nothing chooses one, so every draft renders exactly as before; a colour moves no word, and the claims check reads no font key as a word"),
-            (51, "2026-10-25", False, "PDFs are read with pypdf, Poppler only where present; verify_batch runs in Python with the same checks and exit codes; a LaTeX compile stops after 300 s and says so; compiles run where the files were written; an employer's accented letters stay in file names (existing names kept); every file is read and written as UTF-8; a general resume, for their main target role with no posting, is staged with `stage_picks.py general`, fitted, checked (no letter) and kept as their current resume, in their default colour or black; a design per kind of employer, employer, person or draft sets the fonts, sizes, margins, page and alignment (person.json documents.design and designs, templates/doc_design.py), the template exactly when none is chosen, and verify_batch checks each PDF against the rules an ATS needs (tools/design_check.py); a path printed across two Windows drives no longer stops a step; a pick's apply link is cleaned of tracking and checked against the employer's own listing; a redraft keeps the row's date; the run book names the update setting; the grounding auditor starts without the app's CLAUDE.md, which it never needed, and each audit costs about 13,000 fewer tokens; every design is checked with the app's own Python, which reads PDFs; staging quotes no posting above the fence, dates relists as the round does, and never calls a sibling board's posting closed"),
+            (51, "2026-10-25", False, "PDFs are read with pypdf, Poppler only where present; verify_batch runs in Python with the same checks and exit codes; a LaTeX compile stops after 300 s and says so; compiles run where the files were written; an employer's accented letters stay in file names (existing names kept); every file is read and written as UTF-8; a general resume, for their main target role with no posting, is staged with `stage_picks.py general`, fitted, checked (no letter) and kept as their current resume, in their default colour or black; a design per kind of employer, employer, person or draft sets the fonts, sizes, margins, page and alignment (person.json documents.design and designs, templates/doc_design.py), the template exactly when none is chosen, and verify_batch checks each PDF against the rules an ATS needs (tools/design_check.py); a path printed across two Windows drives no longer stops a step; a pick's apply link is cleaned of tracking and checked against the employer's own listing; a redraft keeps the row's date; the run book names the update setting; the grounding auditor starts without the app's CLAUDE.md, which it never needed, and each audit costs about 13,000 fewer tokens; every design is checked with the app's own Python, which reads PDFs; staging quotes no posting above the fence, dates relists as the round does, and never calls a sibling board's posting closed; works in folders with brackets in their names"),
         ),
-        "fingerprint": "86dc16934939a721",
+        "fingerprint": "8f6b3ad14ca30dc4",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -362,9 +361,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-22", False, "the pack is built before the stage is asked, and sent once per turn that changed it"),
             (20, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (21, "2026-10-22", False, "the document is sent as a copy named for the employer and role; an older pack for the round it covers, under any name, is folded in rather than listed as an earlier round"),
-            (22, "2026-10-25", True, "the pack's one screen stops asking for a reason they already wrote; a stage booked with the pack is written into outcome.md; the questions asked are recorded under the right role; a path printed across two Windows drives no longer stops it"),
+            (22, "2026-10-25", True, "the pack's one screen stops asking for a reason they already wrote; a stage booked with the pack is written into outcome.md; the questions asked are recorded under the right role; a path printed across two Windows drives no longer stops it; works in folders with brackets in their names"),
         ),
-        "fingerprint": "93d3af2d79b7fbe8",
+        "fingerprint": "6b6dbc1ba6e108c4",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -383,9 +382,9 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-21", False, "Employer research follows robots.txt redirects, keeps the crawl delay from the first request, shares one daily budget across runs, refuses a quote under six words, and marks a search summary as not read"),
             (7, "2026-10-21", False, "A page file name survives a URL holding half an emoji; every other page keeps its name"),
             (8, "2026-10-22", False, "a fresh cached fact no kept page can check has its page fetched again instead of being refused for 30 days"),
-            (9, "2026-10-25", False, "research file names work for any script and on Windows (no reserved names, a short hash where a name has no Latin letters); a path printed across two Windows drives no longer stops it; the researcher starts without the app's CLAUDE.md, which it never needed"),
+            (9, "2026-10-25", False, "research file names work for any script and on Windows (no reserved names, a short hash where a name has no Latin letters); a path printed across two Windows drives no longer stops it; the researcher starts without the app's CLAUDE.md, which it never needed; works in folders with brackets in their names"),
         ),
-        "fingerprint": "4edfe72c039f49c1",
+        "fingerprint": "2709e97e10d4266b",
     },
     "networking": {
         "by": "upgrade", "priority": 3, "applies": "contacts", "time": "~15 min",
@@ -483,9 +482,9 @@ METHODS: dict[str, dict] = {
             (57, "2026-10-24", False, "a second message to someone on a day one already went is refused unless --also; no-reply for a message that needs no answer; attach names the file on the newest message; the app's own follow-up line comes off anyone who has written since"),
             (58, "2026-10-24", False, "a headline that writes the employer short (\"at <Name>\" for \"<Name> Asset Management\") and a card count (\"500+\" on its own line) no longer read as having moved on; the number of people at one employer is the person's (PEOPLE_PER_EMPLOYER, more-at); an InMail is drafted only once their message window says free or credits allow"),
             (59, "2026-10-24", False, "a bare 'happy to connect' is no longer a referral offer; a chat offered is its own reading (settle a time); a phrase from a message the person approved is their own wording in every message; the first-round tip is not shown to someone whose log shows notes already sent; a chat declined ('not available to chat') is still a no, a talk with somebody else is not a chat offered; the same-day refusal counts messages only, never a call, an acceptance or a request; 'National Bank' for 'National Bank of <place>' is the same employer; the later word for one employer stands"),
-            (60, "2026-10-25", False, "their reply is logged by command (state.py received); a referral asked for in a first note is refused; a reading checks first whether LinkedIn is signed in and, signed out, asks them once to sign in, with nothing else said about it; profiles are read in the browser unless the person said paste or off; contact ids are names every computer accepts; the LinkedIn download has a status (request, waiting, take, fresh) and is found in Windows and OneDrive folders; the tracker is read whatever a spreadsheet saved it as; their own LinkedIn download's positions, education and skills can seed a resume; a nudge is drafted by code first (tools/followup_drafts.py), and a hand-written one is checked in one call"),
+            (60, "2026-10-25", False, "their reply is logged by command (state.py received); a referral asked for in a first note is refused; a reading checks first whether LinkedIn is signed in and, signed out, asks them once to sign in, with nothing else said about it; profiles are read in the browser unless the person said paste or off; contact ids are names every computer accepts; the LinkedIn download has a status (request, waiting, take, fresh) and is found in Windows and OneDrive folders; the tracker is read whatever a spreadsheet saved it as; their own LinkedIn download's positions, education and skills can seed a resume; a nudge is drafted by code first (tools/followup_drafts.py), and a hand-written one is checked in one call; messages from a LinkedIn download are dated on the person's own clock; a referral ask goes only to someone who has replied; the close ends with a full stop"),
         ),
-        "fingerprint": "8861c903a3ad899c",
+        "fingerprint": "28ae18fa97be5cd4",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -534,9 +533,9 @@ METHODS: dict[str, dict] = {
             (31, "2026-10-22", False, "a batch of six or more notes all in one sentence order is not saved, and reading.py batch says so; the queue is checked at the next save or batch, not redone; a removed reading limit's own comment goes with it"),
             (32, "2026-10-23", False, "a card-only note to someone known only from a connection made long ago is refused until their profile is read"),
             (33, "2026-10-24", False, "drafts honour the person's number at one employer (more-at) and hold an InMail until their message window is checked; an Open Profile note is held to an InMail's length; a reading is judged on the day given (grounded today=); nothing is kept in the example person"),
-            (34, "2026-10-25", False, "a phone is asked only for what a phone can send, in its short wording; the Chrome wording names the tab Claude opened; a path printed across two Windows drives no longer stops a reading"),
+            (34, "2026-10-25", False, "a phone is asked only for what a phone can send, in its short wording; the Chrome wording names the tab Claude opened; a path printed across two Windows drives no longer stops a reading; works in folders with brackets in their names"),
         ),
-        "fingerprint": "0f4799c8d10060b1",
+        "fingerprint": "d38316f503dcef53",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -580,9 +579,9 @@ METHODS: dict[str, dict] = {
             (27, "2026-10-22", False, "a graduate degree offered beside a bachelor's is no graduate bar, in the screen and the posting profile as in the score; curly apostrophes read like straight ones"),
             (28, "2026-10-23", False, "a bachelor's named after the graduate degree, or written B.Sc., B.S. or B.A., is read as the other way in, and a PhD offered beside a master's either way round is a master's bar; flags and scores only, nothing to redo"),
             (29, "2026-10-24", False, "a years bar is lost only to a preference word that governs it, not one about tech or a marketplace in the same sentence; experience in business operations is not a company's age; a degree's other way in is read in its own words (through work, research or projects, practical experience, in lieu of a degree); a degree's other way in counts only in the degree's own sentence, and a preference after another figure belongs to that figure"),
-            (30, "2026-10-25", False, "job-alert dates are no longer read (the mail reader was removed); every screen reads its files as UTF-8; a years bar and a degree route are read in more words (N or more years, years' experience, 7+ years in a field, an equivalent combination); a language named as a market is ranked, not cut, and its rulings are released; one role per employer keeps the best fit; a posting past its deadline stays out; bringing a relist back lifts the ruling that dropped it; the bar reads the tech list as the sector does"),
+            (30, "2026-10-25", False, "job-alert dates are no longer read (the mail reader was removed); every screen reads its files as UTF-8; a years bar and a degree route are read in more words (N or more years, years' experience, 7+ years in a field, an equivalent combination); a language named as a market is ranked, not cut, and its rulings are released; one role per employer keeps the best fit; a posting past its deadline stays out; bringing a relist back lifts the ruling that dropped it; the bar reads the tech list as the sector does; a referral in progress holds cold applications by its stored status"),
         ),
-        "fingerprint": "39a43a5d575953cc",
+        "fingerprint": "70e251a9e43c8642",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -920,17 +919,18 @@ def _tracker_statuses() -> set[str]:
     path = person.state("job_search_tracker.csv")
     import csv_store
     csv_store.refuse_conflicts(path)
+    # Read the way every state file is (a spreadsheet's save included), not as UTF-8
+    # alone, which a tracker saved in Windows' own encoding crashed (2026-10-25).
     try:
-        with open(path, encoding="utf-8", newline="") as fh:
-            return {(r.get("status") or "").strip().lower() for r in csv.DictReader(fh)}
+        return {(r.get("status") or "").strip().lower() for r in csv_store.read_rows(path)}
     except OSError:
         return set()
 
 
 def _has_rows(path: str) -> bool:
+    import csv_store
     try:
-        with open(path, encoding="utf-8", newline="") as fh:
-            return any(True for _ in csv.DictReader(fh))
+        return bool(csv_store.read_rows(path))
     except OSError:
         return False
 

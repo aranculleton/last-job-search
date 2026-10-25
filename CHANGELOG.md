@@ -104,6 +104,18 @@ make sense to somebody whose repo just received it.
 - Smaller search fixes: tracking in a link no longer makes one job look like several, a job
   on a similar-named board is no longer called closed, a redirect to a site you switched off
   is not followed, and finding an employer's job board works before setup is finished.
+- **A tracker or contact book saved from a spreadsheet** merges between chats with nothing
+  lost, keeps its accented names, and no longer stops the check for updates.
+- **A reply that mentions leave but answers you** counts as a reply, and a late reply to a
+  conversation that had gone quiet shows as owed.
+- **A referral in progress keeps holding cold applications** at that employer while the
+  person referring you writes.
+- **Messages from a LinkedIn download are dated on your own clock.**
+- **Referral asks go only to people who have replied**, and no longer end "if not?".
+- Smaller networking fixes: saving works in folders with brackets in their names,
+  unaccepted connection requests no longer show as overdue, columns you added by hand
+  survive saves, an interrupted save no longer cuts a file short, interviews booked with a
+  time reach the due list, and the networking view is faster on large contact books.
 
 ## [3.13.0] - 2026-10-24
 
