@@ -411,6 +411,10 @@ def build(a):
     # Black unless the person chose a colour for this kind of employer, or this draft names
     # one (templates/doc_style.py). Only colour: the same words on the same lines.
     d["style"], d["style_why"] = gen.doc_style.choose(a)
+    # The template's layout unless a design was chosen for this kind of employer, this
+    # employer, the person, or this draft (templates/doc_design.py); fit_to_page sets
+    # design_step when a design has to be made smaller to keep the page.
+    d["design"], d["design_name"], d["design_why"] = gen.doc_design.choose(a)
     return d
 
 

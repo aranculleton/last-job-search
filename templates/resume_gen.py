@@ -23,6 +23,7 @@ import person  # noqa: E402
 import docpaths  # noqa: E402
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import doc_style  # noqa: E402
+import doc_design  # noqa: E402
 
 # Everything about the person comes from the profile: the name and contact
 # line, the document noun and headings, the paper, education, certifications
@@ -34,9 +35,9 @@ _H = _DOC["headings"]
 
 RESUME_HEAD = r"""%% {noun_title} - {name}
 %% Tailored for: {company} - {role}
-{consent}%% Compile with: lualatex {fname}.tex
+{consent}%% Compile with: {engine} {fname}.tex
 
-\documentclass[11pt,{paper},sans]{{moderncv}}
+\documentclass[{body_size}pt,{paper},sans]{{moderncv}}
 \moderncvstyle{{banking}}
 %% Black: the name, the section titles, the rule under the name, the contact line and
 %% the bullet marks all take moderncv's black scheme (color1 and color2 both black).
@@ -62,12 +63,12 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 %% paragraphs. A text bullet from the body font does not.
 \AtBeginDocument{{\renewcommand*{{\labelitemi}}{{\strut\textcolor{{color1}}{{\large\rmfamily\textbullet}}}}}}
 
-\renewcommand*{{\namefont}}{{\fontsize{{30}}{{32}}\bfseries\upshape}}
+\renewcommand*{{\namefont}}{{{name_font}}}
 \colorlet{{firstnamecolor}}{{color1}}
 \colorlet{{lastnamecolor}}{{color1}}
 \colorlet{{namecolor}}{{color1}}
 \renewcommand*{{\sectionstyle}}[1]{{{{\sectionfont\color{{color1}}#1}}}}
-{style}
+{design}{style}
 \usepackage[utf8]{{inputenc}}
 \usepackage{{needspace}}
 
@@ -93,7 +94,7 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
     pdftitle={{{name} - {noun_title}}}, pdfsubject={{{noun_title} of {name}}},
     pdfkeywords={{{pdf_keywords}}}, pdfpagemode=UseNone,
 }}}}
-\usepackage[scale=0.885]{{geometry}}
+\usepackage[{geometry}]{{geometry}}
 \usepackage{{import}}
 
 \name{{{first}}}{{{last}}}
@@ -101,10 +102,10 @@ RESUME_HEAD = r"""%% {noun_title} - {name}
 {contact_lines}
 
 \begin{{document}}
-\makecvtitle
+{title}
 \enlargethispage{{3\baselineskip}}
 
-\vspace{{-22pt}}
+{after_title}
 """
 
 # The sections, in the order documents.section_order names (default below).
@@ -115,7 +116,7 @@ SECTION_ORDER = ("summary", "experience", "skills", "education", "certifications
 
 SUMMARY = r"""\section{{{h_summary}}}
 \vspace{{1pt}}
-\small{{{summary}}}
+{para_start}\small{{{summary}}}
 
 """
 
@@ -126,7 +127,7 @@ EXPERIENCE = r"""\section{{{h_experience}}}
 JOB = r"""
 \needspace{{{ns}\baselineskip}}
 \cventry{{{dates}}}{{{title}}}{{{employer}, {loc}}}{{}}{{}}{{%
-\begin{{itemize}}
+\begin{{itemize}}{item_start}
 {bullets}
 \end{{itemize}}}}
 """
@@ -157,7 +158,7 @@ LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \documentclass[{letter_paper}]{{cover}}
 \usepackage{{fancyhdr}}
-{letter_style}
+{letter_design}{letter_style}
 \pagestyle{{fancy}}
 \fancyhf{{}}
 
@@ -178,7 +179,7 @@ LETTER = r"""%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 \lettercontent{{{lead}}}
 
-{{\raggedright\fontspec[Path = OpenFonts/fonts/raleway/]{{Raleway-Medium}}\fontsize{{11pt}}{{13pt}}\selectfont
+{{{list_font}
 \begin{{itemize}}
 {bullets}
 \end{{itemize}}\par}}
@@ -233,7 +234,16 @@ def _identity():
     if _ID.get("linkedin"):
         head.append(" \\urlstyle{same}" + _href(_ID["linkedin"], "LinkedIn"))
     certs = getattr(_ROLES, "CERTIFICATIONS", "")
+    # The rows a design's own header prints (templates/doc_design.py header()), in the order
+    # moderncv's banking header prints them: the place, the phone and email, then the links.
+    sep = " \\textbullet{} "
+    rows = [_tex(_ID.get("location", ""))]
+    rows.append(sep.join(x for x in (_tex(_ID.get("phone", "")),
+                                     _href("mailto:" + _ID["email"], _ID["email"])
+                                     if _ID.get("email") else "") if x))
+    rows.append(sep.join(links + extra))
     return dict(
+        header_rows=rows,
         name=_tex(_ID["name"]), first=_tex(_ID["first"]), last=_tex(_ID["last"]),
         location=_tex(_ID.get("location", "")),
         noun_title=noun[:1].upper() + noun[1:],
@@ -265,10 +275,11 @@ def resume(a):
         # Escaped: an employer called "Brindle & Hart" is an alignment tab to
         # LaTeX, and the compile fails on the first one.
         jobs += JOB.format(ns=j.get("ns", 5), dates=_tex(j["dates"]), title=_tex(j["title"]),
-                           employer=_tex(j["employer"]), loc=_tex(j["loc"]), bullets=bl)
+                           employer=_tex(j["employer"]), loc=_tex(j["loc"]), bullets=bl,
+                           item_start="%ITEMSTART%")
     me = _identity()
     sections = {
-        "summary": SUMMARY.format(summary=a["summary"], **me),
+        "summary": SUMMARY.format(summary=a["summary"], para_start="%PARASTART%", **me),
         "experience": EXPERIENCE.format(**me) + jobs,
         "skills": SKILLS.format(skills=a["skills"], **me),
         "education": EDUCATION.format(edu=a.get("edu", EDU_STD), **me),
@@ -276,12 +287,22 @@ def resume(a):
     }
     # The style's colour lines, or nothing: a black resume is the template exactly.
     style = doc_style.resume_block(a.get("style"), a.get("style_why", ""))
+    p = docpaths.resume_tex(a["abbr"])
+    # The design's pieces: each is the template's own text when the design leaves it unset,
+    # so a resume nobody chose a design for is the template exactly (templates/doc_design.py).
+    vals = a.get("design") if isinstance(a.get("design"), dict) else None
+    design = doc_design.resume_parts(vals, me, os.path.dirname(p),
+                                     a.get("design_name", doc_design.DEFAULT),
+                                     a.get("design_why", ""))
+    if vals and vals.get("page"):
+        me["paper"] = doc_design.paper(vals, "resume")
     body = (RESUME_HEAD.format(company=a["company"], role=a["role"],
                                consent=a.get("consent", ""), style=style,
-                               fname=docpaths.resume_stem(a["abbr"]), **me)
+                               fname=docpaths.resume_stem(a["abbr"]), **design, **me)
             + "".join(sections[k] for k in section_order())
+            .replace("%PARASTART%", design["para_start"])
+            .replace("%ITEMSTART%", design["item_start"])
             + RESUME_END)
-    p = docpaths.resume_tex(a["abbr"])
     open(p, "w").write(body)
     return p
 
@@ -323,7 +344,13 @@ def letter(a):
     suffix = _DOC.get("salutation_suffix", " hiring team")
     # The country's paper unless the profile says otherwise (person.paper()).
     # US Letter is the class's default, so it is written as no option at all.
-    paper = person.paper("letter")
+    vals = a.get("design") if isinstance(a.get("design"), dict) else None
+    paper = doc_design.paper(vals, "letter")
+    p = docpaths.letter_tex(a["abbr"])
+    # The letter takes its resume's design: the same fonts, size, margins, page and alignment,
+    # or the template exactly when the design leaves them unset.
+    design = doc_design.letter_parts(vals, _identity(), os.path.dirname(p),
+                                     a.get("design_name", doc_design.DEFAULT))
     req = str(a.get("req_id") or "").strip()
     body = LETTER.format(company=a["company"], role=a["role"],
                          req=f" (requisition {req})" if req else "",
@@ -338,7 +365,6 @@ def letter(a):
                          page_label=_tex(_DOC.get("page_label", "Page")),
                          salutation_prefix=_tex(_DOC.get("salutation_prefix", "Dear")),
                          p1=a["p1"], p2=a["p2"], lead=a["lead"], bullets=bl, p4=a["p4"],
-                         **_identity())
-    p = docpaths.letter_tex(a["abbr"])
+                         **design, **_identity())
     open(p, "w").write(body)
     return p

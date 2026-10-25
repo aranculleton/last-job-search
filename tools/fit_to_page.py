@@ -224,7 +224,7 @@ def font_problems(pdf):
 
 
 def compile_resume(abbr, passes=1):
-    r"""lualatex; returns the page count.
+    r"""lualatex, or xelatex for a design (resume_engine); returns the page count.
 
     One pass settles the page count, which is all a measurement needs, and the
     second pass doubled the cost of every one. But moderncv's footer carries
@@ -233,8 +233,20 @@ def compile_resume(abbr, passes=1):
     trimming therefore printed "1/2" on a one-page document, and shipped that
     way. So measurements stay at one pass and the final render asks for two.
     """
-    return _compile("lualatex", docpaths.resume_stem(abbr) + ".tex",
+    return _compile(resume_engine(abbr), docpaths.resume_stem(abbr) + ".tex",
                     f"{ROOT}/cv", resume_pdf(abbr), passes)
+
+
+def resume_engine(abbr):
+    """The engine the .tex names on its "Compile with:" line: LuaLaTeX for the template,
+    XeLaTeX for a design (templates/doc_design.py ENGINE). LuaLaTeX when it names none."""
+    try:
+        with open(docpaths.resume_tex(abbr), encoding="utf-8") as fh:
+            head = fh.read(600)
+    except OSError:
+        return "lualatex"
+    m = re.search(r"Compile with: (lualatex|xelatex)\b", head)
+    return m.group(1) if m else "lualatex"
 
 
 def compile_letter(abbr):
@@ -483,6 +495,12 @@ def fit(a):
         # Everything that came off, which is more than one bullet when a sole
         # line was swapped for the one that describes the job.
         trimmed |= before - {b for j in a["jobs"] for b in j["bullets"]}
+        pages = _render_resume(a)
+    # A design too big for what must stay on the page (every role at its floor) is made a
+    # step smaller, never past a setting's bound, rather than left on two pages. The
+    # template has no step: it is fitted by its bullets alone, as it always was.
+    while pages > PAGES and R.gen.doc_design.step_down(R.build(a)["design"]) is not None:
+        a["design_step"] = int(a.get("design_step") or 0) + 1
         pages = _render_resume(a)
     # Fill the page. Add a bullet, recompile, and keep it only if the resume is
     # still within its pages; otherwise put the page back the way it was and stop.
