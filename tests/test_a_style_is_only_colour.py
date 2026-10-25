@@ -220,5 +220,5 @@ def test_a_style_moves_no_word_and_adds_only_its_own_colour(rendered, name):
     for pdf, black in ((resume, black_resume), (letter, black_letter)):
         fonts = lambda p: sorted(re.sub(r"^[A-Z]{6}\+", "", ln.split()[0]) for ln in  # noqa: E731
                                  subprocess.run(["pdffonts", p], capture_output=True,
-                                                text=True).stdout.splitlines()[2:] if ln.strip())
+                                                text=True, encoding="utf-8", errors="replace").stdout.splitlines()[2:] if ln.strip())
         assert fonts(pdf) == fonts(black)

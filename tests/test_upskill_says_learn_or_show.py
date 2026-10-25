@@ -36,7 +36,7 @@ def test_a_gap_nothing_covers_is_one_to_learn():
 
 def test_the_command_line_says_it_one_gap_a_line():
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "bridges.py"), "--nudge",
-                          "Tableau", "Kubernetes"], capture_output=True, text=True,
+                          "Tableau", "Kubernetes"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                          env=dict(os.environ), check=True).stdout
     lines = [ln for ln in out.splitlines() if not ln.startswith(" ")]
     assert lines[0].split()[:2] == ["Tableau", "evidence"]

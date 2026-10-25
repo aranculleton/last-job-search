@@ -24,7 +24,7 @@ def test_the_round_folder_is_read_whichever_way_its_separators_lean():
 
 def test_a_mistyped_option_is_a_broken_stage_not_a_thin_market():
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "run_round.py"), "--out",
-                        "x", "--pagez", "3"], cwd=ROOT, capture_output=True, text=True,
+                        "x", "--pagez", "3"], cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
                        env=dict(os.environ, LJS_PROFILE="profile.example"), timeout=120)
     assert r.returncode == 1 and "unrecognized arguments: --pagez" in r.stderr
 

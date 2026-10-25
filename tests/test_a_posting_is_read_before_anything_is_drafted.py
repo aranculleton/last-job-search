@@ -203,7 +203,7 @@ def test_the_command_line_prints_the_profile_and_the_question(tmp_path):
                           str(tmp_path / "apply"), "--company", "Oakmere Foods", "--role",
                           "Finance Data Analyst", "--posting-file", str(posting),
                           "--location", "Salford, England, United Kingdom"],
-                         capture_output=True, text=True, cwd=ROOT, env=dict(os.environ))
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT, env=dict(os.environ))
     assert out.returncode == 0, out.stderr
     assert "terms: fixed-term contract, about 4 months" in out.stdout
     assert "ASK THE PERSON BEFORE DRAFTING" in out.stdout and "--draft" in out.stdout

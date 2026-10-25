@@ -59,9 +59,9 @@ def test_bun_runs_the_committed_build():
     import subprocess
     cli = os.path.join(ROOT, ".agents", "skills", "freehire-search", "cli", "dist", "cli.mjs")
     out = subprocess.run([portals.shutil.which("bun"), "run", cli, "--help"],
-                         capture_output=True, text=True, timeout=60)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
     assert "freehire-cli" in out.stdout and "USAGE" in out.stdout
     if portals.shutil.which("node"):            # the same answer as Node gives, exit code too
         node = subprocess.run([portals.shutil.which("node"), "--no-warnings", cli, "--help"],
-                              capture_output=True, text=True, timeout=60)
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
         assert (node.returncode, node.stdout) == (out.returncode, out.stdout)

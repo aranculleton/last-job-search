@@ -33,7 +33,7 @@ def test_no_read_is_left_to_the_platforms_encoding(tmp_path):
             "throttle.expired_do_not_target(%r)"
             % (os.path.join(ROOT, "tools"), str(contacts), str(dnt), str(dnt)))
     r = subprocess.run([sys.executable, "-X", "warn_default_encoding", "-W",
-                        "error::EncodingWarning", "-c", code], capture_output=True, text=True)
+                        "error::EncodingWarning", "-c", code], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr[-800:]
 
 

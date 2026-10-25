@@ -83,7 +83,7 @@ def test_a_git_that_hangs_is_stopped_and_is_an_ordinary_failure(tmp_path, monkey
 def test_no_git_on_the_computer_is_one_plain_line(tmp_path):
     env = {"PATH": str(tmp_path), "HOME": str(tmp_path), "PYTHONDONTWRITEBYTECODE": "1"}
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "sync_app.py"), "--pull"],
-                       env=env, capture_output=True, text=True, timeout=60)
+                       env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60)
     assert r.returncode == 1
     assert "Traceback" not in r.stderr
     assert r.stdout.strip() == sync_app.NO_GIT
@@ -176,7 +176,7 @@ def test_the_first_sync_before_setup_says_nothing_about_what_changed(tmp_path):
     def run():
         return subprocess.run([sys.executable, str(me / "tools" / "sync_app.py")], cwd=me,
                               env=dict(ENV, LJS_APP_URL=str(app)), capture_output=True,
-                              text=True, timeout=120)
+                              text=True, encoding="utf-8", errors="replace", timeout=120)
     r = run()
     assert r.returncode == 0, r.stdout + r.stderr
     assert "What changed" not in r.stdout and "Twenty things" not in r.stdout

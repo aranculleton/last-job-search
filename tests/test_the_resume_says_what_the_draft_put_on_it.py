@@ -134,7 +134,7 @@ def test_a_real_render_passes_and_a_swallowed_percent_fails(tmp_path, monkeypatc
         F._compile("lualatex", os.path.basename(tex), os.path.dirname(tex), pdf)
         return subprocess.run([sys.executable, os.path.join(ROOT, "tools", "verify_pdf.py"),
                                pdf, "--roundtrip", str(drafts), "--abbr", a["abbr"]],
-                              capture_output=True, text=True, env=dict(os.environ))
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", env=dict(os.environ))
     ok = run()
     assert ok.returncode == 0, ok.stdout + ok.stderr
     assert "lines the draft put on the page are in the text layer, in order" in ok.stdout

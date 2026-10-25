@@ -114,7 +114,7 @@ def test_the_readme_stubs_are_what_the_tool_prints():
 
 def test_the_stub_cli_prints_a_tasks_prompt():
     p = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"),
-                        "stub", "job_round"], capture_output=True, text=True)
+                        "stub", "job_round"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert p.returncode == 0 and "automation/prompts/job_round.md" in p.stdout
 
 

@@ -118,7 +118,7 @@ def test_a_killed_scrape_leaves_files_the_round_can_go_on_with(tmp_path):
     (out / scrape_wide.PARTIAL).write_text(json.dumps(rows), encoding="utf-8")
     env = dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example"))
     p = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "scrape_wide.py"), "--out",
-                        str(out), "--finish", "--today", today], capture_output=True, text=True,
+                        str(out), "--finish", "--today", today], capture_output=True, text=True, encoding="utf-8", errors="replace",
                        env=env)
     assert p.returncode == 2, p.stderr
     assert "PARTIAL" in p.stdout and "3 postings had arrived" in p.stdout

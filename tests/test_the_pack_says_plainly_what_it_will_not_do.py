@@ -46,10 +46,10 @@ def test_a_score_is_still_refused(note):
 def test_help_with_no_profile_shows_the_usage_and_no_traceback(tmp_path, tool):
     env = dict(os.environ, LJS_PROFILE=str(tmp_path / "no-profile-here"))
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", tool), "--help"],
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert r.returncode == 0 and "Traceback" not in r.stderr, r.stderr
     assert r.stdout.strip()
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", tool), "check", "Anyone"],
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert r.returncode == 1 and "Traceback" not in r.stderr
     assert "no profile/ yet: /setup builds one." in r.stdout

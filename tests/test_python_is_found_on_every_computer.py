@@ -70,13 +70,18 @@ def _real_python(at):
         os.symlink(sys.executable, at)
 
 
+# What sh prints, py.sh's paths among them, is UTF-8 on every computer: Git Bash's too.
+# Read in Windows' own code page, a folder named with "ë" came back as "Ã«" and the path
+# matched nothing (the suite run from a copy under such a folder, 2026-10-25).
+
+
 def _named(path):
     """A path py.sh printed, as this computer names it: Git Bash prints /c/Users/...,
     which cygpath gives back the Windows way."""
     path = str(path).strip()
     if WIN and path.startswith("/"):
         path = subprocess.run([shutil.which("cygpath"), "-w", path], capture_output=True,
-                              text=True).stdout.strip()
+                              text=True, encoding="utf-8").stdout.strip()
     return os.path.normcase(os.path.normpath(path))
 
 
@@ -100,16 +105,16 @@ def _run(args, path, cwd=ROOT, stdin=None, env=None):
     e = _env(path, **(env or {}))
     sh = _alone(Path(str(path)).parent)
     return subprocess.run([SH, sh, *args], cwd=cwd, env=e, input=stdin,
-                          capture_output=True, text=True, timeout=60)
+                          capture_output=True, text=True, encoding="utf-8", timeout=60)
 
 
 def test_which_names_a_python_that_runs_three_nine_or_newer():
-    r = subprocess.run([SH, PY_SH, "--which"], capture_output=True, text=True, timeout=60)
+    r = subprocess.run([SH, PY_SH, "--which"], capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert r.returncode == 0, r.stderr
     exe = r.stdout.strip()
     # Run as its callers run it, from sh (ci_local.sh), which reads the path it printed.
     v = subprocess.run([SH, "-c", '"$0" -c "import sys; print(sys.version_info >= (3, 9))"',
-                        exe], capture_output=True, text=True)
+                        exe], capture_output=True, text=True, encoding="utf-8")
     assert v.stdout.strip() == "True", v.stderr
 
 
@@ -159,12 +164,12 @@ def test_the_repos_own_virtual_environment_comes_first_and_a_broken_one_is_skipp
     # A virtual environment whose Python was removed since: the file is there, it fails.
     _script(venv / "python", "#!/bin/sh\nexit 127\n")
     r = subprocess.run([SH, str(repo / "tools" / "py.sh"), "--which"], env=_env(b),
-                       capture_output=True, text=True, timeout=60)
+                       capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert _named(r.stdout) == _named(b / "python3")
     (venv / "python").unlink()
     _real_python(venv / "python")
     r = subprocess.run([SH, str(repo / "tools" / "py.sh"), "--which"], env=_env(b),
-                       capture_output=True, text=True, timeout=60)
+                       capture_output=True, text=True, encoding="utf-8", timeout=60)
     assert _named(r.stdout) == _named(venv / "python")
 
 
@@ -205,7 +210,7 @@ def test_the_shipped_hook_runs_where_python3_is_a_store_stand_in(tmp_path, event
     r = subprocess.run([SH, "-c", _shipped_hook(event)], cwd=project,
                        env=_env(b, *more, CLAUDE_PROJECT_DIR=str(project), HOME=str(tmp_path)),
                        input=json.dumps({"hook_event_name": event, "prompt": "fine"}),
-                       capture_output=True, text=True, timeout=120)
+                       capture_output=True, text=True, encoding="utf-8", timeout=120)
     assert r.returncode == 0, r.stderr
     assert "learned.py hook" in log.read_text(encoding="utf-8")
     # No profile in this copy: the check does nothing, and says nothing.

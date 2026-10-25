@@ -286,5 +286,5 @@ def test_someone_who_has_not_replied_is_never_asked_for_the_referral(tmp_path, m
 def test_the_note_checker_runs_from_the_command_line():
     import subprocess
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "outreach.py"), "--check-note",
-                        outreach.outreach_note(LETTER)], capture_output=True, text=True)
+                        outreach.outreach_note(LETTER)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stdout + r.stderr

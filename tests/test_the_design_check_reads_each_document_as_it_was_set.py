@@ -59,7 +59,7 @@ def _profile(tmp_path, **documents):
 
 def _run(args, profile):
     env = dict(os.environ, LJS_PROFILE=profile)
-    return subprocess.run([sys.executable, TOOL, *args], capture_output=True, text=True,
+    return subprocess.run([sys.executable, TOOL, *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env=env)
 
 
@@ -107,7 +107,7 @@ def test_no_pypdf_is_not_checked_never_a_finding(tmp_path):
     pdf.write_bytes(b"%PDF-1.4\n")
     blocked = (f"import sys, runpy; sys.modules['pypdf'] = None; sys.argv = {[TOOL, str(pdf), '--page', 'a4']!r}; "
                f"runpy.run_path({TOOL!r}, run_name='__main__')")
-    got = subprocess.run([sys.executable, "-c", blocked], capture_output=True, text=True,
+    got = subprocess.run([sys.executable, "-c", blocked], capture_output=True, text=True, encoding="utf-8", errors="replace",
                          env=dict(os.environ, LJS_PROFILE=os.path.join(ROOT, "profile.example")))
     assert got.returncode == design_check.EXIT_NO_READER == 3, got.stdout + got.stderr
     assert "NOT CHECKED" in got.stdout and "env_check.py --fix" in got.stdout

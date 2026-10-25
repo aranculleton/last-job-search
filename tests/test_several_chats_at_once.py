@@ -84,7 +84,7 @@ def test_seen_postings_merge_by_posting():
 
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", cwd, "-c", "user.name=t", "-c", "user.email=t@example.com",
-                           *args], capture_output=True, text=True)
+                           *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_git_uses_it_for_a_real_merge(tmp_path):
@@ -676,7 +676,7 @@ def test_their_uncommitted_edits_are_never_folded_into_the_line_ending_commit(tm
     subprocess.run(["git", "-C", repo, "update-index", "--add", "--cacheinfo",
                     "100644,%s,network_contacts.csv" % subprocess.run(
                         ["git", "-C", repo, "hash-object", "-w", "--no-filters", path],
-                        capture_output=True, text=True).stdout.strip()], check=True)
+                        capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()], check=True)
     _git(repo, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "crlf")
     with open(path, "wb") as fh:
         fh.write(b"contact_id,status\r\nc1,call_booked\r\n")           # their edit

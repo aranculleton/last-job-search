@@ -80,7 +80,7 @@ def test_no_location_spec_and_no_profile_still_import(tmp_path):
             % (os.path.join(ROOT, "tools"), os.path.join(ROOT, "tools", "network")))
     env = {**os.environ, "LJS_PROFILE": str(tmp_path / "nobody")}
     out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
-                         text=True, cwd=str(tmp_path))
+                         text=True, encoding="utf-8", errors="replace", cwd=str(tmp_path))
     assert out.returncode == 0, out.stderr
     assert out.stdout.split() == ["{}", "()", "None"]
 

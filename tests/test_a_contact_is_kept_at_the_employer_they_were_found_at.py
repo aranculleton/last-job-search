@@ -321,7 +321,7 @@ def test_the_check_opens_the_window_reads_it_and_closes_it(tmp_path, window, ans
     run = tmp_path / "run.js"
     run.write_text(HARNESS % (json.dumps(window.replace("\\n", "\n")),
                               json.dumps(reading.message_check_extractor())), encoding="utf-8")
-    got = json.loads(subprocess.run([node, str(run)], capture_output=True, text=True,
+    got = json.loads(subprocess.run([node, str(run)], capture_output=True, text=True, encoding="utf-8", errors="replace",
                                     timeout=60).stdout)
     assert got["got"]["answer"] == answer and got["got"]["opened"]
     assert got["closed"] and got["got"]["closed"]

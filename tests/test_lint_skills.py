@@ -15,7 +15,7 @@ def run_linter(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(root / "tools" / "lint_skills.py")],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
 
 

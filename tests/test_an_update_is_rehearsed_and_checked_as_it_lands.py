@@ -26,7 +26,7 @@ import rehearse_sync  # noqa: E402
 
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", cwd, "-c", "user.name=t", "-c", "user.email=t@example.com",
-                           *args], capture_output=True, text=True)
+                           *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def _repo_on_no_branch(tmp_path):

@@ -20,7 +20,7 @@ ENV = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@example.com",
 
 
 def sh(cwd, *args):
-    return subprocess.run(args, cwd=cwd, env=ENV, text=True, capture_output=True, check=True).stdout
+    return subprocess.run(args, cwd=cwd, env=ENV, text=True, encoding="utf-8", errors="replace", capture_output=True, check=True).stdout
 
 
 def write(repo, rel, text):
@@ -71,7 +71,7 @@ def repos(tmp_path):
 def run(me, app, *args):
     env = dict(ENV, LJS_APP_URL=app)
     r = subprocess.run([sys.executable, os.path.join(me, "tools", "sync_app.py"), *args],
-                       cwd=me, env=env, text=True, capture_output=True)
+                       cwd=me, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True)
     return r.returncode, r.stdout + r.stderr
 
 
@@ -384,14 +384,14 @@ def test_the_reminder_shows_only_when_todays_check_has_not_run(repos, tmp_path):
     probe = [sys.executable, "-c",
              "import sys; sys.path.insert(0, 'tools'); import sync_app; sync_app.nudge()"]
     env = dict(ENV, LJS_APP_URL=app)
-    first = subprocess.run(probe, cwd=me, env=env, text=True, capture_output=True)
+    first = subprocess.run(probe, cwd=me, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True)
     assert "has not been checked for updates today" in first.stderr
     assert run(me, app)[0] == 0
-    after = subprocess.run(probe, cwd=me, env=env, text=True, capture_output=True)
+    after = subprocess.run(probe, cwd=me, env=env, text=True, encoding="utf-8", errors="replace", capture_output=True)
     assert after.stderr == ""
     sh(app, "git", "remote", "add", "origin", app)  # the app is the repo whose origin is the app
     in_app = subprocess.run(probe, cwd=app, env=dict(ENV, LJS_APP_URL=app),
-                            text=True, capture_output=True)
+                            text=True, encoding="utf-8", errors="replace", capture_output=True)
     assert in_app.stderr == ""
 
 
@@ -658,7 +658,7 @@ def test_when_asked_the_tools_remind_nobody_to_check(repos, tmp_path):
     _when_asked(me)
     probe = [sys.executable, "-c",
              "import sys; sys.path.insert(0, 'tools'); import sync_app; sync_app.nudge()"]
-    r = subprocess.run(probe, cwd=me, env=dict(ENV, LJS_APP_URL=app), text=True,
+    r = subprocess.run(probe, cwd=me, env=dict(ENV, LJS_APP_URL=app), text=True, encoding="utf-8", errors="replace",
                        capture_output=True)
     assert r.stderr == ""
 

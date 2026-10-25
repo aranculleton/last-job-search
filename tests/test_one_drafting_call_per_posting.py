@@ -79,7 +79,7 @@ def test_the_drafter_is_shown_only_what_fails(tmp_path):
     d["p1"] = d["p1"].replace("demand, so", "demand \u2014 so")
     rd = make_round(tmp_path, d)
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "stage_picks.py"), "audit",
-                          str(rd), "--only", SLUG, "--json"], capture_output=True, text=True)
+                          str(rd), "--only", SLUG, "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert out.returncode == 1
     [got] = json.loads(out.stdout)
     assert got["gate"] == "model"
@@ -126,7 +126,7 @@ def run_workflow(gates, **extra):
     if node.returncode != 0:
         pytest.skip("node is not installed")
     out = subprocess.run(["node", "-e", HARNESS, WORKFLOW, json.dumps(gates), json.dumps(extra)],
-                         capture_output=True, text=True, check=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", check=True)
     return json.loads(out.stdout)
 
 
@@ -167,6 +167,6 @@ def test_the_drafter_returns_its_claim_map_and_the_checks_last_word():
              "const r = f({today: 'd', round_dir: '/r', picks: []});"
              "console.log(JSON.stringify({req: r.DRAFT_REQ, schema: r.DRAFT_SCHEMA.required}))")
     got = json.loads(subprocess.run(["node", "-e", probe, WORKFLOW], capture_output=True,
-                                    text=True, check=True).stdout)
+                                    text=True, encoding="utf-8", errors="replace", check=True).stdout)
     assert {"claim_map", "stretches"} <= set(got["req"])
     assert "check_output" in got["schema"]

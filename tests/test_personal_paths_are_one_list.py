@@ -69,7 +69,7 @@ def test_split_keeps_order_and_partitions():
 def _git(cwd, *args):
     import subprocess
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c",
-                           "user.email=t@example.com", *args], capture_output=True, text=True)
+                           "user.email=t@example.com", *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_local_checks_go_light_only_when_every_change_is_the_persons_own(tmp_path):
@@ -90,7 +90,7 @@ def test_local_checks_go_light_only_when_every_change_is_the_persons_own(tmp_pat
 
     def light():
         r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "personal_paths.py"),
-                            "--only-personal-changed"], capture_output=True, text=True,
+                            "--only-personal-changed"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                            env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
                            cwd=str(repo))
         return r.returncode == 0, r.stdout.split()
@@ -127,7 +127,7 @@ def test_the_light_check_is_asked_of_the_repo_it_runs_in(tmp_path):
 
     def flag():
         return subprocess.run([sys.executable, "tools/personal_paths.py",
-                               "--only-personal-changed"], capture_output=True, text=True,
+                               "--only-personal-changed"], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               cwd=str(repo), env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
     assert flag().returncode == 1                                         # nothing changed
     (repo / "network_contacts.csv").write_text("id\nc1\n")

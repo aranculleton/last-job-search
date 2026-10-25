@@ -73,7 +73,7 @@ def test_the_sync_moves_an_old_cursor_at_once(monkeypatch, tmp_path):
     env = dict(os.environ, LJS_STATE=str(tmp_path),
                LJS_PROFILE=os.path.join(ROOT, "profile.example"))
     p = subprocess.run([sys.executable, *u.command[1:]], cwd=ROOT, env=env,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert p.returncode == 0, p.stderr
     assert not (_rounds(tmp_path) / ".sweep.json").exists() and not u.pending()
     assert json.loads((_rounds(tmp_path) / ".sweep" / "cursor.json").read_text()) == OLD
@@ -81,5 +81,5 @@ def test_the_sync_moves_an_old_cursor_at_once(monkeypatch, tmp_path):
         assert any(Path(path).match(g) for g in u.paths), path
     # Run again with nothing to move, it changes nothing and says so.
     p = subprocess.run([sys.executable, *u.command[1:]], cwd=ROOT, env=env,
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert p.returncode == 0 and "nothing to move" in p.stdout

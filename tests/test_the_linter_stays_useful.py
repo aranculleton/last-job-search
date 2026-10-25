@@ -47,7 +47,7 @@ def selected_rules() -> set[str]:
 
 def _ruff(*args):
     return subprocess.run([sys.executable, "-m", "ruff", *args],
-                          cwd=str(ROOT), capture_output=True, text=True, timeout=180)
+                          cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180)
 
 
 def _ruff_missing(result) -> bool:

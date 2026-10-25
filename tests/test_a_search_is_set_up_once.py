@@ -33,7 +33,7 @@ REPO = ("example-owner", "my-job-search")
 
 def _git(cwd, *args):
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c",
-                           "user.email=t@example.com", *args], capture_output=True, text=True,
+                           "user.email=t@example.com", *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
                           check=True).stdout
 
 

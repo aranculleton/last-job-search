@@ -82,10 +82,18 @@ def run(cmd, cwd=ROOT, env=None, timeout=1800):
     return p.returncode, out.decode("utf-8", "replace"), time.monotonic() - began
 
 
+def _shown(detail: str) -> str:
+    """A failure's detail: its opening, where the failing tests are named, and its end, where
+    the error is. The end alone cut the names off: one test of eight was named (2026-10-25)."""
+    if len(detail) <= 4500:
+        return detail
+    return detail[:3000] + "\n     ...\n" + detail[-1500:]
+
+
 def check(step: str, ok: bool, detail: str = "", took: float | None = None) -> bool:
     RESULTS.append((step, ok, detail))
     t = f" ({took:.1f} s)" if took is not None else ""
-    print(f"{'PASS' if ok else 'FAIL'} {step}{t}" + (f"\n     {detail[-1500:]}" if detail and
+    print(f"{'PASS' if ok else 'FAIL'} {step}{t}" + (f"\n     {_shown(detail)}" if detail and
                                                      not ok else f": {detail[:200]}" if detail
                                                      else ""), flush=True)
     return ok

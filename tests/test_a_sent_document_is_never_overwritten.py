@@ -88,13 +88,13 @@ def test_a_kept_draft_run_again_keeps_its_posting(tmp_path):
     sys_path = [sys.executable, os.path.join(ROOT, "tools", "outreach.py")]
     first = tmp_path / "drafts.json"
     first.write_text(json.dumps([_draft()]), encoding="utf-8")
-    r = subprocess.run(sys_path + [str(first)], capture_output=True, text=True, env=env, cwd=ROOT)
+    r = subprocess.run(sys_path + [str(first)], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=ROOT)
     assert r.returncode == 0, r.stdout + r.stderr
     [folder] = (tmp_path / "documents" / "applications").iterdir()
     archived = (folder / "job_posting.md").read_text(encoding="utf-8")
     kept = folder / "draft.json"
     assert "posting" not in json.loads(kept.read_text(encoding="utf-8"))[0]
-    r = subprocess.run(sys_path + [str(kept)], capture_output=True, text=True, env=env, cwd=ROOT)
+    r = subprocess.run(sys_path + [str(kept)], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=ROOT)
     assert r.returncode == 0, r.stdout + r.stderr
     assert (folder / "job_posting.md").read_text(encoding="utf-8") == archived
     assert "kept the archived job_posting.md" in r.stdout

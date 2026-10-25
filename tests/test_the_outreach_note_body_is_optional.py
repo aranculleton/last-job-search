@@ -78,7 +78,7 @@ def test_the_drafter_is_not_asked_for_a_body_and_the_step_runs_only_when_wanted(
              "const r = f({today: 'd', round_dir: '/r', picks: []});"
              "console.log(JSON.stringify({req: r.DRAFT_REQ, schema: r.DRAFT_SCHEMA.required}))")
     got = json.loads(subprocess.run(["node", "-e", probe, WORKFLOW], capture_output=True,
-                                    text=True, check=True).stdout)
+                                    text=True, encoding="utf-8", errors="replace", check=True).stdout)
     assert "outreach_body" not in got["req"] and "outreach_body" not in got["schema"]
     assert {"claim_map", "stretches"} <= set(got["req"])
     assert labels(run_workflow({"A": "clean", "B": "clean"}, pack="P"), "outreach") == []

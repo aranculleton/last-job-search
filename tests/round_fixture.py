@@ -490,7 +490,7 @@ def free_stages(kept: str, out: str, work: str, delays: dict | None = None,
          "--out", out, "--today", TODAY, "--workers", str(workers), "--keep-intermediates",
          "--no-seen-write", "--seen", seen, "--tracker", tracker,
          "--summary-dir", os.path.join(work, "summary")],
-        cwd=ROOT, env=env, capture_output=True, text=True, timeout=600)
+        cwd=ROOT, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=600)
 
 
 # What is compared: who is ranked and shortlisted, their scores and their order, and

@@ -152,7 +152,7 @@ const run = async (picks) => {
 """
     out = subprocess.run(["node", "-e", harness,
                           os.path.join(ROOT, ".claude", "workflows", "draft-applications.js")],
-                         capture_output=True, text=True, check=True).stdout.strip()
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", check=True).stdout.strip()
     assert out == "threw threw ran"
 
 

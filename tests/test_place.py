@@ -286,7 +286,7 @@ def test_the_computer_chat_line_is_committed_so_the_next_sync_can_pull(tmp_path,
     def git(*args):
         return subprocess.run(["git", "-C", str(repo), "-c", "user.name=t", "-c",
                                "user.email=t@example.com", *args], capture_output=True,
-                              text=True, check=True).stdout
+                              text=True, encoding="utf-8", errors="replace", check=True).stdout
     git("init", "-q")
     git("add", "-A")
     git("commit", "-qm", "start")

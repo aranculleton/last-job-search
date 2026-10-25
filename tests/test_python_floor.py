@@ -53,7 +53,7 @@ def test_the_merge_driver_never_leaves_one_sides_copy(tmp_path):
     # (.merge_file_XXXXXX): a Windows path, its backslashes unquoted, is not one sh reads.
     cmd = (merge_state.DRIVER.replace("%O", base.name).replace("%A", ours.name)
            .replace("%B", theirs.name).replace("%P", "network_contacts.csv"))
-    r = subprocess.run(["sh", "-c", cmd], cwd=tmp_path, capture_output=True, text=True)
+    r = subprocess.run(["sh", "-c", cmd], cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode != 0
     merged = ours.read_text()
     assert "<<<<<<<" in merged and "replied" in merged and "closed" in merged

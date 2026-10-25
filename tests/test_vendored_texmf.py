@@ -46,7 +46,7 @@ class VendoredTree(unittest.TestCase):
     def test_none_of_it_is_gitignored(self):
         files = [os.path.join(dp, f) for dp, _, fs in os.walk(TEXMF) for f in fs]
         r = subprocess.run(["git", "check-ignore", *files], cwd=ROOT,
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(r.stdout.strip(), "", "ignored files would vanish on clone")
 
 
@@ -96,7 +96,7 @@ class NothingInTheHomeDirectory(unittest.TestCase):
         env = dict(os.environ, HOME=home, PATH=stubs + os.pathsep + os.environ.get("PATH", ""))
         env.pop("BUN_INSTALL", None)
         return subprocess.run([BASH, os.path.join(ROOT, "tools", "setup_env.sh")], cwd=ROOT,
-                              env=env, capture_output=True, text=True, timeout=120)
+                              env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
 
     @unittest.skipUnless(BASH, "no bash here")
     def test_setup_env_leaves_a_link_to_another_copy_alone_and_says_what_is_used(self):
@@ -163,7 +163,7 @@ class NothingInTheHomeDirectory(unittest.TestCase):
 class KpathseaFindsIt(unittest.TestCase):
     def test_fontawesome5_resolves_to_the_vendored_copy_or_the_system(self):
         r = subprocess.run(["kpsewhich", "fontawesome5.sty"], env=F.tex_env(),
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertTrue(r.stdout.strip(), "fontawesome5.sty not found with tex_env()")
 
 

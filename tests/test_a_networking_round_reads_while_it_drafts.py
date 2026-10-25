@@ -226,7 +226,7 @@ def test_the_extractor_finds_the_sections_whatever_order_the_page_puts_them_in(t
         "global.location = {href: 'https://www.linkedin.com/in/example'};\n"
         "console.log(eval(%s));\n" % (json.dumps(text), json.dumps(reading.EXTRACTOR)),
         encoding="utf-8")
-    raw = subprocess.run([node, str(harness)], capture_output=True, text=True, timeout=60).stdout
+    raw = subprocess.run([node, str(harness)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=60).stdout
     got = json.loads(raw)
     assert [s["heading"] for s in got["sections"]] == ["About", "Experience", "Education"]
     assert "Activity" not in got["top"] and "reposted" not in raw

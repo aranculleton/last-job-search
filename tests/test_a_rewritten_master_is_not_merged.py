@@ -17,7 +17,7 @@ import sync_app  # noqa: E402
 
 
 def g(cwd, *args):
-    return subprocess.run(["git", "-C", str(cwd), *args], text=True, capture_output=True, check=True)
+    return subprocess.run(["git", "-C", str(cwd), *args], text=True, encoding="utf-8", errors="replace", capture_output=True, check=True)
 
 
 def commit(cwd, name, text):

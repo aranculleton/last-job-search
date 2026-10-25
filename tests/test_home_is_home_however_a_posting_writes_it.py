@@ -107,7 +107,7 @@ def _ask(prof, locs=(), sentences=()):
     env = {**os.environ, "LJS_PROFILE": str(prof)}
     out = subprocess.run([sys.executable, "-c", ASK, json.dumps(list(locs)),
                           json.dumps(list(sentences))],
-                         env=env, capture_output=True, text=True, cwd=ROOT)
+                         env=env, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert out.returncode == 0, out.stderr
     return json.loads(out.stdout)
 

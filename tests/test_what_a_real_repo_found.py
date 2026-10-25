@@ -108,7 +108,7 @@ def test_a_single_apply_is_staged_like_a_round_pick(tmp_path):
                         str(out), "--company", "Larkspur Retail", "--role",
                         "Senior Supply Chain Analyst", "--posting-file", str(posting),
                         "--url", ROW["url"], "--fit", "81"],
-                       capture_output=True, text=True, cwd=ROOT)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert p.returncode == 0, p.stderr
     # The example tracker already holds an application for this very role, so staging
     # now holds it and asks first (tools/posting_profile.py); the answer releases it.

@@ -40,7 +40,7 @@ def _throttle(tmp_path, *extra):
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "throttle.py"), str(src),
                         "--out", str(out), "--seen", str(_seen(tmp_path)), "--today",
                         "2026-10-14", "--no-write", "--tracker", str(tmp_path / "none.csv"),
-                        *extra], capture_output=True, text=True)
+                        *extra], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     return [j["url"] for j in json.loads(out.read_text())]
 

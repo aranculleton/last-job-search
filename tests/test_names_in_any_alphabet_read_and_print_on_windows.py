@@ -103,7 +103,7 @@ def test_the_date_a_tool_sees_is_the_persons_after_cloud_day(tmp_path):
     env = {k: v for k, v in os.environ.items() if k not in ("TZ", "LJS_PROFILE")}
     env.update(CLAUDE_CODE_REMOTE="true", PYTHONDONTWRITEBYTECODE="1")
     r = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True,
-                       text=True, timeout=60)
+                       text=True, encoding="utf-8", errors="replace", timeout=60)
     zone, offset = r.stdout.split()
     assert zone == "Australia/Sydney" and offset in ("+1000", "+1100"), r.stderr
 

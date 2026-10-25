@@ -171,7 +171,7 @@ def test_two_drafts_in_one_batch_may_not_share_an_opening(tmp_path):
 def test_the_cli_prints_only_what_fails_for_the_drafter(tmp_path):
     rd = make_round(tmp_path, stretched())
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "stage_picks.py"), "audit",
-                          str(rd), "--only", SLUG, "--json"], capture_output=True, text=True)
+                          str(rd), "--only", SLUG, "--json"], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert out.returncode == 1
     got = json.loads(out.stdout)
     assert got[0]["gate"] == "model" and got[0]["fix"] == []

@@ -64,7 +64,7 @@ def test_a_python_since_removed_is_replaced_by_the_one_py_sh_finds(tmp_path):
     base, ours, theirs = _files(tmp_path)
     gone = str(tmp_path / "removed-python" / "python.exe")
     r = subprocess.run(["sh", "-c", _cmd(merge_state.driver(gone), base, ours, theirs)],
-                       cwd=tmp_path, capture_output=True, text=True)
+                       cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert ours.read_text() == "merged\n"
 
@@ -75,7 +75,7 @@ def test_the_line_merge_it_falls_back_to_labels_each_side(tmp_path):
     (tools / "merge_state.py").write_text("import sys\nsys.exit(3)\n")
     base, ours, theirs = _files(tmp_path)
     r = subprocess.run(["sh", "-c", _cmd(merge_state.driver(), base, ours, theirs)],
-                       cwd=tmp_path, capture_output=True, text=True)
+                       cwd=tmp_path, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode != 0
     merged = ours.read_text()
     assert "<<<<<<< ours" in merged and ">>>>>>> theirs" in merged
@@ -202,7 +202,7 @@ def test_a_copy_with_no_name_for_git_takes_its_github_owner(tmp_path, monkeypatc
     monkeypatch.setattr(sync_app, "ROOT", str(repo))
     sync_app._identity()
     got = lambda k: subprocess.run(["git", "config", k], cwd=repo, capture_output=True,  # noqa: E731
-                                   text=True).stdout.strip()
+                                   text=True, encoding="utf-8", errors="replace").stdout.strip()
     assert got("user.email") == "wren-allard@users.noreply.github.com"
     assert got("user.name") == "wren-allard"
     # Set in this copy alone, never for the whole computer.
@@ -218,4 +218,4 @@ def test_a_name_git_already_has_is_left_alone(tmp_path, monkeypatch):
     monkeypatch.setattr(sync_app, "ROOT", str(repo))
     sync_app._identity()
     assert subprocess.run(["git", "config", "user.email"], cwd=repo, capture_output=True,
-                          text=True).stdout.strip() == "wren@example.com"
+                          text=True, encoding="utf-8", errors="replace").stdout.strip() == "wren@example.com"

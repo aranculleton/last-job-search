@@ -30,10 +30,10 @@ TOOL = [sys.executable, os.path.join(ROOT, "tools", "outreach.py"), "--check-not
 
 def test_a_body_that_fits_alone_is_refused_with_its_opening():
     assert 66 <= len(BODY.split()) < outreach.MAX_NOTE_WORDS
-    alone = subprocess.run(TOOL + [BODY], capture_output=True, text=True)
+    alone = subprocess.run(TOOL + [BODY], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert alone.returncode == 0, alone.stdout
     whole = subprocess.run(TOOL + ["--company", COMPANY, "--role", ROLE, BODY],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert whole.returncode == 1 and "words" in whole.stdout
 
 

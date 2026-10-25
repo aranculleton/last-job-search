@@ -311,7 +311,7 @@ def test_the_check_and_read_aloud_commands_run(tmp_path):
                     "minutes for a call?\n", encoding="utf-8")
     for args in (["check", str(note)], ["read-aloud", str(note), str(note)]):
         r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "compose.py"),
-                            *args], capture_output=True, text=True, env=os.environ)
+                            *args], capture_output=True, text=True, encoding="utf-8", errors="replace", env=os.environ)
         assert "NameError" not in r.stderr and r.returncode in (0, 1), r.stderr
 
 

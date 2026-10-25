@@ -196,7 +196,7 @@ def test_the_escape_hatch_reaches_an_expanded_round(drive_round):
 class TestTheRoundWiresItUp(unittest.TestCase):
     def test_prefilter_accepts_the_flag(self):
         r = subprocess.run([sys.executable, str(ROOT / "tools" / "prefilter.py"), "--help"],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(0, r.returncode)
         self.assertIn("--seen", r.stdout)
 

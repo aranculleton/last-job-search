@@ -83,7 +83,7 @@ def test_a_missing_saved_scrape_is_said_plainly(tmp_path):
     cmd = [sys.executable, os.path.join(TOOLS, "run_round.py"), "--from-scraped",
            str(tmp_path / "nowhere.json"), "--out", str(tmp_path / "r1"),
            "--summary-dir", str(tmp_path / "summary")]
-    r = subprocess.run(cmd, capture_output=True, text=True, cwd=ROOT)
+    r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=ROOT)
     assert r.returncode == 1
     assert "Traceback" not in r.stderr
     assert "there is no file at" in r.stderr

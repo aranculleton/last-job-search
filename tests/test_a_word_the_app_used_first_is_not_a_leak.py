@@ -31,7 +31,7 @@ def _git(cwd, *a, day=None):
         env["GIT_COMMITTER_DATE"] = env["GIT_AUTHOR_DATE"] = f"{day}T12:00:00Z"
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c",
                            "user.email=t@example.com", *a], check=True, capture_output=True,
-                          text=True, env=env).stdout.strip()
+                          text=True, encoding="utf-8", errors="replace", env=env).stdout.strip()
 
 
 def _commit(repo, files, day):

@@ -131,7 +131,7 @@ class UpskillSkillSpec(unittest.TestCase):
             [sys.executable, str(REPO / "tools" / "lint_skills.py")],
             cwd=REPO,
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, f"lint_skills.py failed:\n{result.stdout}{result.stderr}")
 

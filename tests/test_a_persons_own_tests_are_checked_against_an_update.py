@@ -107,7 +107,7 @@ def test_a_persons_tests_are_tried_on_a_tree_before_it_ships(tmp_path, monkeypat
     assert try_personal_tests.main([str(person), "--ref", "HEAD"]) == 1
     assert "their own tests, 1 now fail" in capsys.readouterr().out
     assert subprocess.run(["git", "-C", str(person), "status", "--porcelain"],
-                          capture_output=True, text=True).stdout == ""      # nothing changed there
+                          capture_output=True, text=True, encoding="utf-8", errors="replace").stdout == ""      # nothing changed there
 
 
 def test_a_test_reaching_into_private_parts_is_noted_before_it_breaks(tmp_path):

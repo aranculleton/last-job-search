@@ -50,7 +50,7 @@ def tracked(*pathspecs: str, root: Path | str = ROOT, app_only: bool = True) -> 
     """The files git tracks under `root` (matching `pathspecs`), relative, each name whole;
     with `app_only`, never a person's own file. [] where `root` is not a git checkout."""
     out = subprocess.run(["git", "-C", str(root), "ls-files", "-z", "--", *pathspecs],
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace")
     if out.returncode != 0:
         return []
     names = [n for n in out.stdout.split("\0") if n]

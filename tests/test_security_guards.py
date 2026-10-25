@@ -17,7 +17,7 @@ def run_guards(root: Path) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(root / "tools" / "security_guards.py")],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
 
 
@@ -328,7 +328,7 @@ class GitignorePatternBehaviorTests(unittest.TestCase):
         result = subprocess.run(
             ["git", "-C", str(self.root), "check-ignore", "-v", path],
             capture_output=True,
-            text=True,
+            text=True, encoding="utf-8", errors="replace",
         )
         self.assertEqual(result.returncode, 0, f"{path}: not ignored by the shipped .gitignore")
         self.assertIn("documents/applications/**", result.stdout)

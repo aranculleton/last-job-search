@@ -18,7 +18,7 @@ import build_app  # noqa: E402
 def _git(cwd, *a):
     return subprocess.run(["git", "-C", str(cwd), "-c", "user.name=t", "-c",
                            "user.email=t@example.com", *a], check=True, capture_output=True,
-                          text=True).stdout
+                          text=True, encoding="utf-8", errors="replace").stdout
 
 
 def _setup(tmp_path, monkeypatch, body="All fine here.\n"):

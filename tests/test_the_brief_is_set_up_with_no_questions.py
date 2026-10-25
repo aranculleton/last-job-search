@@ -145,7 +145,7 @@ def _brief_cli(tmp_path, *args, remote=True):
     if remote:
         env["CLAUDE_CODE_REMOTE"] = "true"
     return subprocess.run([sys.executable, os.path.join(ROOT, "tools", "routines.py"), "brief",
-                           *args], capture_output=True, text=True, env=env)
+                           *args], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
 
 
 def test_in_a_cloud_chat_it_lists_first_and_never_plans_blind(tmp_path):
@@ -178,7 +178,7 @@ def test_employer_boards_are_looked_for_before_the_profile_exists(tmp_path):
                           "print(a.NO_PROFILE); print('\\n'.join(a._find_lines('Larkspur', "
                           "[{'kind': 'greenhouse', 'token': 'larkspur', 'in_range': 3, "
                           "'why': None, 'how': 'guessed', 'open': 3, 'titles': []}])))"],
-                         cwd=ROOT, capture_output=True, text=True, env=env)
+                         cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert got.returncode == 0, got.stderr
     assert got.stdout.startswith("True\ngreenhouse/larkspur: 3 open (no profile yet")
 
@@ -213,7 +213,7 @@ def test_a_workday_board_or_a_careers_site_is_found_before_the_profile_exists(tm
     read the profile, and crashed with no profile: the case the fallback above is for."""
     env = dict(os.environ, LJS_PROFILE=str(tmp_path / "no-profile"))
     got = subprocess.run([sys.executable, "-c", _FIND_NO_PROFILE], cwd=ROOT, capture_output=True,
-                         text=True, env=env)
+                         text=True, encoding="utf-8", errors="replace", env=env)
     assert got.returncode == 0, got.stderr
     lines = got.stdout.splitlines()
     assert "workday/acme.wd3/External: 2 open (no profile yet, so none judged in range)" in lines

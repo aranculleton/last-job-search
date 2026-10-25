@@ -105,7 +105,7 @@ def test_prefilter_drops_a_relist_by_its_first_sighting(tmp_path):
         posting("https://www.linkedin.com/jobs/view/4100000778", title="Inventory Analyst")]))
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "prefilter.py"), str(src),
                         "--out", str(out), "--dropped", str(dropped), "--today", ISO,
-                        "--seen", str(seen)], capture_output=True, text=True)
+                        "--seen", str(seen)], capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert [j["title"] for j in json.loads(out.read_text())] == ["Inventory Analyst"]
     gone = json.loads(dropped.read_text())

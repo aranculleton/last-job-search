@@ -61,7 +61,7 @@ def _judge_one(args):
             "bar.judge('Invented Firm %d', 'none', 'test %d', today='2026-10-21')"
             % (TOOLS, path, i, i))
     return subprocess.run([sys.executable, "-c", code], env=env, capture_output=True,
-                          text=True).returncode
+                          text=True, encoding="utf-8", errors="replace").returncode
 
 
 def test_judgements_made_at_once_are_all_kept(judged_file):

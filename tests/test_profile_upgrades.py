@@ -531,7 +531,7 @@ def test_a_changelog_instruction_names_its_upgrade():
 # ------------------------------------------------------------------ the instant runner
 
 def _git(cwd, *args):
-    return subprocess.run(["git", "-C", str(cwd), *args], check=True, text=True,
+    return subprocess.run(["git", "-C", str(cwd), *args], check=True, text=True, encoding="utf-8", errors="replace",
                           capture_output=True, env=dict(os.environ, GIT_AUTHOR_NAME="t",
                           GIT_AUTHOR_EMAIL="t@example.com", GIT_COMMITTER_NAME="t",
                           GIT_COMMITTER_EMAIL="t@example.com")).stdout
@@ -748,7 +748,7 @@ def test_a_process_folder_with_no_posting_is_given_one(profile, tmp_path, monkey
     assert "1 hiring process folder(s) with no job_posting.md" in \
         U.by_id("process-postings").pending()
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "interview_pack.py"),
-                        "postings"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+                        "postings"], cwd=ROOT, env=os.environ, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     text = open(os.path.join(folder, "job_posting.md"), encoding="utf-8").read()
     assert "not held yet" in text and "--posting" in text
@@ -832,7 +832,7 @@ def test_reading_files_that_change_on_every_read_are_moved_out_of_the_repo(profi
         '{"date": "2026-10-20", "ids": ["bo_venn"]}', encoding="utf-8")
     assert "1 reading file(s) in documents/network" in U.by_id("runtime-files").pending()
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "network", "reading.py"),
-                        "move-runtime"], cwd=ROOT, env=os.environ, capture_output=True, text=True)
+                        "move-runtime"], cwd=ROOT, env=os.environ, capture_output=True, text=True, encoding="utf-8", errors="replace")
     assert r.returncode == 0, r.stderr
     assert U.by_id("runtime-files").pending() == ""
     assert '"bo_venn"' in open(tmp_path / "ledger" / "reading-ledger.json").read()
@@ -882,7 +882,7 @@ def test_a_checkout_older_than_the_sync_says_so_and_never_lists_or_crashes(
     repo.mkdir()
 
     def run(*args):
-        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True,
+        return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, encoding="utf-8", errors="replace",
                               check=True).stdout.strip()
     run("init", "-q")
     run("config", "user.email", "t@example.com")

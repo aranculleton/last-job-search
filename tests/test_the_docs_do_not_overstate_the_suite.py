@@ -68,7 +68,7 @@ def count_tests() -> int:
     try:
         out = subprocess.run(
             [sys.executable, "-m", "pytest", "tests", "--collect-only", "-q"],
-            cwd=str(ROOT), capture_output=True, text=True, timeout=180).stdout
+            cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=180).stdout
         m = COLLECTED.search(out)
         if m:
             return int(m.group(1))

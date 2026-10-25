@@ -94,11 +94,11 @@ def test_a_missing_file_in_a_present_profile_names_the_file(profile_dir):
 def test_the_cli_serves_shell_scripts(profile_dir):
     env = dict(os.environ, **{person.ENV: str(profile_dir)})
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "person.py"),
-                          "get", "identity.email"], capture_output=True, text=True, env=env)
+                          "get", "identity.email"], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert out.returncode == 0 and out.stdout.strip() == "sam@example.com"
     env[person.ENV] = str(profile_dir / "gone")
     out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "person.py"), "dir"],
-                         capture_output=True, text=True, env=env)
+                         capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert out.returncode == 1 and "run /setup" in out.stderr
 
 

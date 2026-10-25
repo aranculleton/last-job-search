@@ -80,7 +80,7 @@ def test_no_point_at_all_is_not_feedback():
 
 def _run(*args):
     return subprocess.run([sys.executable, os.path.join(ROOT, "tools", "interview_pack.py"),
-                           "feedback", *args], capture_output=True, text=True)
+                           "feedback", *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
 
 
 def test_the_command_shows_checked_feedback_and_nothing_it_refused(tmp_path):

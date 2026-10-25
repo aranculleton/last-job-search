@@ -57,7 +57,7 @@ def test_rendering_a_kept_draft_keeps_its_date_and_never_copies_its_posting(tmp_
     env = dict(os.environ, LJS_STATE=str(tmp_path),
                LJS_PROFILE=os.path.join(ROOT, "profile.example"))
     r = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "render_application.py"), kept],
-                       capture_output=True, text=True, env=env, cwd=ROOT)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, cwd=ROOT)
     assert r.returncode == 0, r.stdout + r.stderr
     [after] = json.load(open(kept, encoding="utf-8"))
     assert "posting" not in after and after["posting_from"] == "job_posting.md"

@@ -106,7 +106,7 @@ def _other_python():
             if not path or f"3.{minor}" == here:
                 continue
             r = subprocess.run([path, "-I", "-S", "-c", "import sys; print(sys.version_info[:2])"],
-                               capture_output=True, text=True)
+                               capture_output=True, text=True, encoding="utf-8", errors="replace")
             if r.returncode == 0 and f", {minor})" in r.stdout:
                 return path
     return None
@@ -126,7 +126,7 @@ def test_for_real_a_tool_started_by_this_python_runs_under_a_venv_of_another(tmp
         "print('%d.%d' % sys.version_info[:2], sys.argv[1:])\n")
     subprocess.run([other, "-m", "venv", "--without-pip", str(root / ".venv")], check=True)
     want = subprocess.run([other, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"],
-                          capture_output=True, text=True).stdout.strip()
+                          capture_output=True, text=True, encoding="utf-8", errors="replace").stdout.strip()
     env = {k: v for k, v in os.environ.items() if k != L.REEXEC}
     r = subprocess.run([sys.executable, str(root / "tools" / "which.py"), "a b", "ü"],
                        capture_output=True, text=True, env=env, encoding="utf-8")
@@ -136,7 +136,7 @@ def test_for_real_a_tool_started_by_this_python_runs_under_a_venv_of_another(tmp
     r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
                         "import python_floor; python_floor.require(); "
                         "print('%d.%d' % sys.version_info[:2])", str(root / "tools")],
-                       capture_output=True, text=True, env=env)
+                       capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert r.stdout.strip() == "%d.%d" % sys.version_info[:2]
 
 

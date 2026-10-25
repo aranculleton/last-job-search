@@ -190,7 +190,7 @@ def test_the_compiled_pages_print_what_the_values_say(tmp_path):
     drafts.write_text(json.dumps([a], ensure_ascii=False), encoding="utf-8")
     env = dict(os.environ, LJS_PROFILE=str(_profile(tmp_path)), LJS_STATE=str(state))
     fit = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "fit_to_page.py"),
-                          str(drafts)], capture_output=True, text=True, env=env)
+                          str(drafts)], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert fit.returncode == 0, fit.stdout + fit.stderr
     assert "CHECK" not in fit.stdout
     import pdftext
@@ -211,5 +211,5 @@ def test_the_compiled_pages_print_what_the_values_say(tmp_path):
     assert "https://www.linkedin.com/in/example-jos%C3%A9-garc%C3%ADa" in uris
     assert "mailto:morgan_ellis@example.com" in uris
     verify = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "verify_batch.py"),
-                             str(drafts)], capture_output=True, text=True, env=env)
+                             str(drafts)], capture_output=True, text=True, encoding="utf-8", errors="replace", env=env)
     assert "BATCH: ALL PASS" in verify.stdout, verify.stdout + verify.stderr

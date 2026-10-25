@@ -89,7 +89,7 @@ def _node(tmp_path, script, text, anchors=()):
         "global.location = {href: 'https://www.linkedin.com/in/example'};\n"
         "console.log(eval(%s));\n" % (json.dumps([list(a) for a in anchors]), json.dumps(text),
                                       json.dumps(script)), encoding="utf-8")
-    return subprocess.run([node, str(harness)], capture_output=True, text=True,
+    return subprocess.run([node, str(harness)], capture_output=True, text=True, encoding="utf-8", errors="replace",
                           timeout=60).stdout
 
 

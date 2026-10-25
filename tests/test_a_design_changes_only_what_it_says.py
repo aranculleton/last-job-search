@@ -282,7 +282,7 @@ def test_every_design_passes_every_rule_an_ats_needs(tmp_path, monkeypatch, desi
     import subprocess
     for pdf in (resume, letter):
         out = subprocess.run([sys.executable, os.path.join(ROOT, "tools", "verify_pdf.py"),
-                              "--require", "pypdf", pdf], capture_output=True, text=True)
+                              "--require", "pypdf", pdf], capture_output=True, text=True, encoding="utf-8", errors="replace")
         assert out.returncode == 0, out.stdout + out.stderr
 
 
