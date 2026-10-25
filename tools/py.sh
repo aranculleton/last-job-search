@@ -48,9 +48,13 @@ pick() {
     fi
   done
   # Windows' launcher: `py -3` is two words, so it is resolved to the one
-  # executable it starts, which is what a caller can run.
+  # executable it starts, which is what a caller can run. -X utf8: Python on
+  # Windows writes to a pipe in the ANSI code page, so a Python under a folder
+  # named "Zoë" printed a path Git Bash (UTF-8) could not use, and -I drops the
+  # PYTHONUTF8 the app sets (https://docs.python.org/3/library/sys.html#sys.stdout,
+  # https://docs.python.org/3/using/cmdline.html#cmdoption-X).
   if command -v py >/dev/null 2>&1; then
-    cand=$(py -3 -I -S -c 'import sys; print(sys.executable if sys.version_info >= (3, 9) else "")' \
+    cand=$(py -3 -X utf8 -I -S -c 'import sys; print(sys.executable if sys.version_info >= (3, 9) else "")' \
       2>/dev/null | tr -d '\r')
     if runs "$cand"; then
       printf '%s\n' "$cand"

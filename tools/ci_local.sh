@@ -246,7 +246,8 @@ FLOOR_VERSION=3.9
 FLOOR_NAME="tests on Python $FLOOR_VERSION (CI's floor leg)"
 FLOOR_PY="$(command -v python$FLOOR_VERSION || true)"
 if [ -z "$FLOOR_PY" ] && command -v py >/dev/null 2>&1; then      # Windows' launcher
-  FLOOR_PY="$(py -$FLOOR_VERSION -c 'import sys; print(sys.executable)' 2>/dev/null | tr -d '\r' || true)"
+  # -X utf8: the path as Git Bash reads it, where a Python on Windows writes its code page.
+  FLOOR_PY="$(py -$FLOOR_VERSION -X utf8 -c 'import sys; print(sys.executable)' 2>/dev/null | tr -d '\r' || true)"
 fi
 if [ -z "$FLOOR_PY" ] && command -v uv >/dev/null 2>&1; then
   FLOOR_PY="$(uv python find $FLOOR_VERSION 2>/dev/null || true)"
