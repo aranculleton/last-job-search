@@ -81,28 +81,29 @@ def pages(pdf) -> int | None:
         except BaseException:
             return None
     exe = shutil.which("pdfinfo")
+    if exe:
+        out = subprocess.run([exe, str(pdf)], capture_output=True, text=True,
+                             encoding="utf-8", errors="replace").stdout
+        for line in out.splitlines():
+            if line.startswith("Pages:"):
+                try:
+                    return int(line.split()[1])
+                except (IndexError, ValueError):
+                    break
+    # Git for Windows carries pdftotext and no pdfinfo, so a Windows computer where pypdf
+    # cannot run read every PDF's text and none of its pages (the suite on Windows,
+    # 2026-10-25); and a pdfinfo there that cannot open a path under a user folder with an
+    # accent gave no count while pdftotext read the same file. pdftotext ends each page with
+    # a form feed, so it counts them whenever pdfinfo did not.
+    exe = shutil.which("pdftotext")
     if not exe:
-        # Git for Windows carries pdftotext and no pdfinfo, so a Windows computer where
-        # pypdf cannot run read every PDF's text and none of its pages (the suite on
-        # Windows, 2026-10-25). pdftotext ends each page with a form feed.
-        exe = shutil.which("pdftotext")
-        if not exe:
-            return None
-        got = subprocess.run([exe, "-layout", "-enc", "UTF-8", str(pdf), "-"],
-                             capture_output=True, text=True, encoding="utf-8",
-                             errors="replace")
-        if got.returncode != 0:
-            return None
-        return got.stdout.count("\f") or None
-    out = subprocess.run([exe, str(pdf)], capture_output=True, text=True,
-                         encoding="utf-8", errors="replace").stdout
-    for line in out.splitlines():
-        if line.startswith("Pages:"):
-            try:
-                return int(line.split()[1])
-            except (IndexError, ValueError):
-                return None
-    return None
+        return None
+    got = subprocess.run([exe, "-layout", "-enc", "UTF-8", str(pdf), "-"],
+                         capture_output=True, text=True, encoding="utf-8",
+                         errors="replace")
+    if got.returncode != 0:
+        return None
+    return got.stdout.count("\f") or None
 
 
 def reader() -> str:

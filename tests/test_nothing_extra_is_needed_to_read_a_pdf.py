@@ -104,6 +104,24 @@ def test_where_pypdf_cannot_run_poppler_still_reads(tmp_path, monkeypatch):
     assert pdftext.pages(pdf) == 1
 
 
+@pytest.mark.skipif(not pdftext.shutil.which("pdftotext"), reason="Poppler is not here")
+def test_a_pdfinfo_that_cannot_open_the_file_leaves_the_count_to_pdftotext(tmp_path, monkeypatch):
+    """On Windows, under a user folder with an accent, a pdfinfo gave no count for a file
+    pdftotext read (2026-10-25): the pages are counted from pdftotext's form feeds."""
+    pdf = _pdf(tmp_path / "two.pdf", pages=2)
+    monkeypatch.setattr(pdftext, "_pypdf", lambda: None)
+    which, run = pdftext.shutil.which, pdftext.subprocess.run
+    monkeypatch.setattr(pdftext.shutil, "which",
+                        lambda n, *a, **k: "pdfinfo" if n == "pdfinfo" else which(n, *a, **k))
+
+    def ran(cmd, *a, **k):
+        if cmd[0] == "pdfinfo":
+            return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="Couldn't open file")
+        return run(cmd, *a, **k)
+    monkeypatch.setattr(pdftext.subprocess, "run", ran)
+    assert pdftext.pages(pdf) == 2
+
+
 def test_the_page_checks_use_it(tmp_path, no_poppler):
     import fit_to_page as F
     pdf = _pdf(tmp_path / "r.pdf", pages=2)
