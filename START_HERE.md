@@ -40,7 +40,8 @@ Screens change: if yours looks different, tell Claude what you see.
 ## 3. Say "set me up"
 
 Claude asks two short rounds of questions, does the research itself and shows your first
-shortlist: up to an hour of its time, and you can put it down meanwhile. It ends by setting up
+shortlist: up to an hour of its time, and you can put it down meanwhile. No resume? Say
+"build one with me" and Claude makes it with you, one job at a time. It ends by setting up
 your brief, twice a week. If it says it can't reach job sites (recommended, once):
 
 <!-- claude-surface: cloud-internet -->

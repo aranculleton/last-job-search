@@ -24,7 +24,13 @@ VB="$(mktemp -d)"; trap 'rm -rf "$VB"' EXIT
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PROFILE_VARS="$(python3 "$ROOT/tools/docpaths.py" shell)" || { echo "verify_batch: cannot read the profile"; exit 1; }
 eval "$PROFILE_VARS"
+# The documents sit where the renderer wrote them: the checkout, or LJS_STATE's folder.
+DOCS="$(python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import person; print(person.state())' "$ROOT/tools")" || DOCS="$ROOT"
 ABBRS=$(python3 -c "import json,sys; print(' '.join(a['abbr'] for a in json.load(open(sys.argv[1]))))" "$DRAFTS")
+# A general resume has no letter (tools/general_resume.py): its letter checks are skipped.
+GENERAL=$(python3 -c "import json,sys; print(' '.join(a['abbr'] for a in json.load(open(sys.argv[1], encoding='utf-8')) if a.get('general')))" "$DRAFTS")
+is_general() { case " $GENERAL " in *" $1 "*) return 0 ;; esac; return 1; }
+LETTER_ABBRS=$(for a in $ABBRS; do is_general "$a" || echo "$a"; done)
 # One awk program per profile: which line opens which role, counted per role.
 AWK_ROLES=$(python3 - "$ROLE_NAMES" "$H_EDUCATION" <<'PYX'
 import json, re, sys
@@ -40,14 +46,17 @@ PYX
 fail=0; tb=0; n=0; readers=""; skipped=0
 printf "%-9s %-4s %-4s %-14s %s\n" ABBR pgs blt "$ROLE_HEADER" flags
 for a in $ABBRS; do
-  R="$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.pdf"; C="$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.pdf"
-  [ -f "$R" ] && [ -f "$C" ] || { echo "$a MISSING PDF"; fail=1; continue; }
-  pdftotext -layout -enc UTF-8 "$R" $VB/vb_r.txt; pdftotext -layout -enc UTF-8 "$C" $VB/vb_c.txt
+  R="$DOCS/cv/${PREFIX}_${NOUN_WORD}_$a.pdf"; C="$DOCS/cover_letters/${PREFIX}_Cover_Letter_$a.pdf"
+  if is_general "$a"; then C=""; fi
+  [ -f "$R" ] && { [ -z "$C" ] || [ -f "$C" ]; } || { echo "$a MISSING PDF"; fail=1; continue; }
+  pdftotext -layout -enc UTF-8 "$R" $VB/vb_r.txt
+  if [ -n "$C" ]; then pdftotext -layout -enc UTF-8 "$C" $VB/vb_c.txt; else : > $VB/vb_c.txt; fi
   tr '\n' ' ' < $VB/vb_r.txt | tr -s ' ' > $VB/vb_r1.txt
   p=""
-  rp=$(pdfinfo "$R"|awk '/^Pages/{print $2}'); cp=$(pdfinfo "$C"|awk '/^Pages/{print $2}')
+  rp=$(pdfinfo "$R"|awk '/^Pages/{print $2}'); cp=-
+  [ -z "$C" ] || cp=$(pdfinfo "$C"|awk '/^Pages/{print $2}')
   [ "$rp" -ge 1 ] 2>/dev/null && [ "$rp" -le "$RESUME_PAGES" ] || p="$p RESUME_${rp}p"
-  [ "$cp" = 1 ] || p="$p LETTER_${cp}p"
+  [ -z "$C" ] || [ "$cp" = 1 ] || p="$p LETTER_${cp}p"
   ord=$(sed -n "/^$H_EXPERIENCE/,/^$H_EDUCATION/p" $VB/vb_r.txt | grep -oE "^($ROLE_ALT)" | tr '\n' '>')
   [ "$ord" = "$ROLE_ORDER" ] || p="$p CHRONO"
   grep -q 'Core Competencies' $VB/vb_r.txt && p="$p COMPETENCIES"
@@ -56,7 +65,7 @@ for a in $ABBRS; do
   # generator carried Core Competencies with no Summary at all, and only
   # COMPETENCIES was ever checked, so a missing Summary, a merged "Education
   # and Certifications" and a wrong section order all passed.
-  lay=$(python3 - "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex" "$SECTIONS" <<'PYX'
+  lay=$(python3 - "$DOCS/cv/${PREFIX}_${NOUN_WORD}_$a.tex" "$SECTIONS" <<'PYX'
 import json, re, sys
 want = json.loads(sys.argv[2])
 secs = re.findall(r"\\section\{([^}]*)\}", open(sys.argv[1]).read())
@@ -88,9 +97,12 @@ PYX
   vr=$(python3 "$ROOT/tools/verify_pdf.py" --require pypdf "$R" 2>&1); st=$?
   if [ "$st" -eq 3 ]; then skipped=1; vr=$(python3 "$ROOT/tools/verify_pdf.py" "$R" 2>&1) || p="$p SPACING_RESUME"
   elif [ "$st" -ne 0 ]; then p="$p SPACING_RESUME"; fi
+  vc=""
+  if [ -n "$C" ]; then
   vc=$(python3 "$ROOT/tools/verify_pdf.py" --require pypdf "$C" 2>&1); st=$?
   if [ "$st" -eq 3 ]; then skipped=1; vc=$(python3 "$ROOT/tools/verify_pdf.py" "$C" 2>&1) || p="$p SPACING_LETTER"
   elif [ "$st" -ne 0 ]; then p="$p SPACING_LETTER"; fi
+  fi
   readers="$readers $(printf '%s\n%s\n' "$vr" "$vc" | grep -oE 'extractor: [a-z]+' | cut -d' ' -f2)"
   grep -qF -- "$EMAIL" $VB/vb_r1.txt && grep -qF -- "$PHONE" $VB/vb_r1.txt || p="$p CONTACT"
   # The round trip: every line the draft put on the page (contacts, headings, the summary,
@@ -132,7 +144,7 @@ PYX
   case " $p " in *" ROUNDTRIP "*) printf '%s\n' "$rt" | sed 's/^/          /' ;; esac
   [ -n "$p" ] && fail=1
 done
-echo "mean bullets: $((tb/n))"
+[ "$n" -gt 0 ] && echo "mean bullets: $((tb/n))"
 used=$(echo $readers | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ $//')
 case " $used " in
   *" pdftotext "*) echo "text layer read with: ${used:-nothing} (pdftotext fallback: words run together are NOT caught; pip3 install pypdf, or pip3 install --upgrade cffi if it is installed)" ;;
@@ -142,7 +154,7 @@ echo "=== claims ==="
 # The pipeline's exit status is the last command's, so a failing check hid
 # behind grep|head and the script said ALL PASS over letters carrying
 # drafter notes. PIPESTATUS[0] is the checker's own status.
-python3 "$ROOT/tools/check_claims.py" $(for a in $ABBRS; do echo "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex" "$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.tex"; done) 2>&1 | grep -E "^[0-9]+ error|ERROR" | head
+python3 "$ROOT/tools/check_claims.py" $(for a in $ABBRS; do echo "$DOCS/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; is_general "$a" || echo "$DOCS/cover_letters/${PREFIX}_Cover_Letter_$a.tex"; done) 2>&1 | grep -E "^[0-9]+ error|ERROR" | head
 [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "CLAIMS: FAILURES ABOVE"; fail=1; }
 echo "=== letters ==="
 # `tail -1` printed only the count, so "FAILURES ABOVE" pointed at nothing that
@@ -164,13 +176,13 @@ echo "=== numbers ==="
 # and in the posting in the opening and the close (never in the summary or the bullets,
 # which are the candidate's own work).
 python3 "$ROOT/tools/check_numbers.py" --drafts "$DRAFTS" \
-  $(for a in $ABBRS; do echo "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; done)
+  $(for a in $ABBRS; do echo "$DOCS/cv/${PREFIX}_${NOUN_WORD}_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "NUMBERS: FAILURES ABOVE"; fail=1; }
 echo "=== keywords (a report: nothing here fails the batch or changes a document) ==="
 # What the posting names against what the page carries: on it, held but not on it, and
 # not held. A skill the profile does not hold is listed as not held, never as one to add.
 for a in $ABBRS; do
-  python3 "$ROOT/tools/verify_pdf.py" "$ROOT/cv/${PREFIX}_${NOUN_WORD}_$a.pdf" \
+  python3 "$ROOT/tools/verify_pdf.py" "$DOCS/cv/${PREFIX}_${NOUN_WORD}_$a.pdf" \
     --keywords "$DRAFTS" --abbr "$a" 2>&1 | sed "s/^/$a: /"
 done
 echo "=== voice ==="
@@ -179,9 +191,13 @@ echo "=== voice ==="
 # recruiter who has read forty applications this week spots a generated letter
 # in one sentence, and an outreach note that reads as generated gets no reply.
 # Soft findings are a smell and do not fail the batch; hard ones do.
+if [ -n "$LETTER_ABBRS" ]; then
 python3 "$ROOT/tools/voice_check.py" --soft-ok \
-  $(for a in $ABBRS; do echo "$ROOT/cover_letters/${PREFIX}_Cover_Letter_$a.tex"; done)
+  $(for a in $LETTER_ABBRS; do echo "$DOCS/cover_letters/${PREFIX}_Cover_Letter_$a.tex"; done)
 [ "$?" -eq 0 ] || { echo "VOICE: FAILURES ABOVE"; fail=1; }
+else
+echo "no letters: a general resume"
+fi
 if [ "$skipped" = 1 ]; then
   echo "=== SPACING CHECK SKIPPED ==="
   echo "pypdf is not available, so words run together were NOT checked on any document."

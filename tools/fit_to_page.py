@@ -233,14 +233,15 @@ def compile_resume(abbr, passes=1):
     trimming therefore printed "1/2" on a one-page document, and shipped that
     way. So measurements stay at one pass and the final render asks for two.
     """
+    # Where the renderer wrote it: the checkout, or LJS_STATE's folder when that is set.
     return _compile("lualatex", docpaths.resume_stem(abbr) + ".tex",
-                    f"{ROOT}/cv", resume_pdf(abbr), passes)
+                    os.path.dirname(docpaths.resume_tex(abbr)), resume_pdf(abbr), passes)
 
 
 def compile_letter(abbr):
     """One xelatex pass; returns the page count."""
     return _compile("xelatex", docpaths.letter_stem(abbr) + ".tex",
-                    f"{ROOT}/cover_letters", letter_pdf(abbr))
+                    os.path.dirname(docpaths.letter_tex(abbr)), letter_pdf(abbr))
 
 
 def body_words(a):
@@ -504,6 +505,14 @@ def fit(a):
             pages = _render_resume(a)   # the PDF on disk must match the draft
             break
         pages = grown
+    if a.get("general"):
+        # A resume for no posting in particular has no letter (tools/general_resume.py).
+        pages = compile_resume(abbr, passes=2)
+        fonts = font_problems(resume_pdf(abbr))
+        if fonts:
+            raise CompileFailed("; ".join(fonts) + ". Use fonts the template embeds (the ones "
+                                "it ships with), then render again.")
+        return (pages, _lines(resume_pdf(abbr))), 0
     lpages = _render_letter(a)
     for _ in range(9):
         words = body_words(a)
@@ -551,12 +560,15 @@ def unheld_report(a):
     return out
 
 
-def needs_check(resume_pages, letter_pages, words):
+def needs_check(resume_pages, letter_pages, words, general=False):
     """Whether a fitted application is outside its budgets: the resume off the
-    profile's page count, the letter off one page, or the body over its cap.
+    profile's page count, the letter off one page, or the body over its cap. A
+    general resume (no letter) is held to its pages alone.
 
     It was `resume_pages == 1`, so every application of a person whose profile
     asks for two pages was flagged CHECK however well it fitted."""
+    if general:
+        return not 1 <= resume_pages <= PAGES
     return not (1 <= resume_pages <= PAGES and letter_pages == 1 and words <= MAX_BODY_WORDS)
 
 
@@ -608,6 +620,10 @@ if __name__ == "__main__":
         except CompileFailed as exc:
             print(f"fit_to_page: {a.get('abbr') or a.get('company')}: {exc}", file=sys.stderr)
             sys.exit(1)
+        if a.get("general"):
+            flag = "   <-- CHECK" if needs_check(rp, lp, 0, general=True) else ""
+            print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  no letter (a general resume){flag}")
+            continue
         bw = body_words(a)
         flag = "   <-- CHECK" if needs_check(rp, lp, bw) else ""
         print(f"{a['abbr']:<12} resume {rp}p/{rl}ln  letter {lp}p/{bw} body words{flag}")

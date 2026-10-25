@@ -173,3 +173,5 @@ Juno Nul                # invented, the same test
 Pell Aux                # invented, the same test
 Ρεν Άλαρντ              # invented: the fixtures' Wren Allard in Greek letters, the same test
 User Shell Folders      # a Windows registry key, tools/network/export.py
+Riverside Cafe          # invented, the example line in tools/history_interview.py
+Café Brûlé              # invented, tests/test_a_person_without_a_resume_leaves_with_one.py

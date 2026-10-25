@@ -85,14 +85,14 @@ In the background, at once, none waiting on another (Bash with `run_in_backgroun
 Then say, in about these words and nothing more:
 
 > Let's set up your job search. Two things to start:
-> 1. Your resume: attach it (PDF or Word) or paste it. No resume? Tell me your last two jobs.
+> 1. Your resume: attach it (PDF or Word) or paste it.
+>    No resume? Say "build one with me" and I'll make it with you.
 > 2. The work you want next, and where you'd like to work.
 >
 > I'll do the research and the rest.
 
 When job sites are blocked, the `--say` words go underneath, with "I'll keep setting you up
-meanwhile." If they want to talk it through instead of sending a resume, ask the same things
-in conversation, a few at a time.
+meanwhile."
 
 ---
 
@@ -100,7 +100,10 @@ in conversation, a few at a time.
 
 1. **Read what they sent** (setup-sections.md, `history`): every role, date, title, employer,
    place, result, skill, language, certification (held or in progress) and contact detail. A
-   disagreement between documents is written `[CONFIRM: ...]`, never asked now.
+   disagreement between documents is written `[CONFIRM: ...]`, never asked now. **"Build one
+   with me"** (or no resume, in any words) is the guided history in the same section: the
+   fastest source first, then one job a message from `python3 tools/history_interview.py ask`,
+   passed on as it prints. The research below starts from their first reply, not the last.
 2. **Write the first profile** at once, enough for the tools to run: `profile/person.json`
    (identity; documents from their country's defaults until research says otherwise),
    `01-candidate-profile.md` from the resume, and the place and work they named. Then
@@ -169,6 +172,12 @@ Then the state files (setup-sections.md, the last section), and commit and push.
   (only the questions for later may stay pending: anything else it lists is a step skipped
   here); `./tools/ci_local.sh --quick` (a failure naming an app-owned file is the app's:
   never edit it here). Commit and land it.
+- **Their resume, if they had none**: `python3 tools/stage_picks.py general "$SCRATCH/general"`
+  once the profile is written, while the round runs. It drafts, renders, checks and keeps a
+  one-page resume for the roles they search for, with no letter; send it with the shortlist
+  (CLAUDE.md, "Every output is shown") and paste the short copy it prints beside it. Someone
+  whose resume is more than a year out of date is offered it once, in one line with the
+  shortlist: "Want a fresh one-page resume from your profile too? Say "build my resume"."
 - **When it finishes**, show the shortlist the way CLAUDE.md's "Job Search Behaviour" says,
   then offer to write the top pick. That is the test application: everything in `/apply`
   applies, the already-applied question first. A round that misses its target (exit 2) says so

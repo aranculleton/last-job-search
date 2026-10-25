@@ -186,6 +186,31 @@ def _kind_of_file(path: str) -> str:
     return next((k for k, f in FILES.items() if f.lower() == base), "")
 
 
+# Where a file was read as Windows text (cp1252) rather than UTF-8: a CSV saved again from
+# Excel on Windows is cp1252, and read as UTF-8 every accented name in it came out as "?".
+DECODED: dict[str, str] = {}
+
+
+def _decode(data: bytes, where: str) -> str:
+    """UTF-8 (a byte-order mark dropped, as LinkedIn writes one), else Windows text."""
+    try:
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        DECODED[where] = "cp1252"
+        return data.decode("cp1252", errors="replace")
+    DECODED.pop(where, None)
+    return text
+
+
+def encoding_line(tables) -> str:
+    """One plain line when any file read was Windows text, else ""."""
+    odd = [t["file"] for t in tables if DECODED.get(t.get("where", ""))]
+    if not odd:
+        return ""
+    return (f"{', '.join(odd)} {'was' if len(odd) == 1 else 'were'} saved the Windows way, not "
+            "as UTF-8, so I read it that way: check any name with an accent.")
+
+
 def _raw(kind: str, src=None) -> tuple[str, str]:
     """(text, where it was read) for one file, or ("", "") when it is not there."""
     how, path = _source(src)
@@ -200,7 +225,8 @@ def _raw(kind: str, src=None) -> tuple[str, str]:
             if z.getinfo(name).file_size > MAX_BYTES:
                 raise ValueError(f"the {FILES[kind]} in that archive is too large to be LinkedIn's")
             data = z.read(name)
-        return data.decode("utf-8-sig", errors="replace"), f"{os.path.basename(path)}:{name}"
+        where = f"{os.path.basename(path)}:{name}"
+        return _decode(data, where), where
     if how == "folder":
         try:
             names = os.listdir(path)
@@ -215,7 +241,7 @@ def _raw(kind: str, src=None) -> tuple[str, str]:
     if os.path.getsize(path) > MAX_BYTES:
         raise ValueError(f"{path} is too large to be LinkedIn's {FILES[kind]}")
     with open(path, "rb") as fh:
-        return fh.read().decode("utf-8-sig", errors="replace"), path
+        return _decode(fh.read(), path), path
 
 
 def _header_at(text: str, kind: str) -> tuple[int, list]:
@@ -269,7 +295,8 @@ def read(kind: str, src=None) -> dict:
     got = parse(text, kind) if text else {"rows": [], "missing": list(COLUMNS[kind]),
                                           "found": False}
     usable = got["found"] and not [c for c in NEEDED[kind] if c in got["missing"]]
-    return {"kind": kind, "file": FILES[kind], "where": where, **got, "usable": usable}
+    return {"kind": kind, "file": FILES[kind], "where": where, **got, "usable": usable,
+            "encoding": DECODED.get(where, "utf-8") if where else ""}
 
 
 def describe(tables) -> list:

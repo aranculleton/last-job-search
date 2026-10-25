@@ -542,7 +542,8 @@ def setting() -> str:
         if net_dir not in sys.path:
             sys.path.append(net_dir)
         import reading
-        return reading.reads_setting(person.module("networking"))
+        got = str(getattr(person.module("networking"), "PROFILE_READS", "") or "").strip().lower()
+        return got if got in reading.READS_SETTINGS else reading.reads_setting(None)
     except Exception:  # a check must never break the sync that runs it
         return ""
 

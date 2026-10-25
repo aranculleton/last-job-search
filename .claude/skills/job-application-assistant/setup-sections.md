@@ -33,6 +33,22 @@ and set the ones their market needs that the example leaves out.
   disagreement is written `[CONFIRM: ...]` and asked in a later session, never before the
   profile is written. A LinkedIn "About" and reference letters are the best signal for how
   they work; label anything you infer from them as inferred.
+- **No resume ("build one with me", or none in any words).** The fastest source first, so
+  nothing they have already written is asked again: on their computer, their own LinkedIn
+  page read in the browser the chat uses (the networking skill's reading step, which signs in
+  when it needs to), written in `own_profile.py shape`'s form and seeded with `python3
+  tools/history_interview.py seed --paste <file> --browser`; else a LinkedIn download already
+  taken (`history_interview.py seed`); else, on a computer, the text of their LinkedIn page if
+  they paste it; else nothing. Then `python3 tools/history_interview.py ask --on
+  phone|computer [--seed <file>] --done <n>`, passed on as it prints: one job a message,
+  newest first, until they say that's all (five at most), then `--rest` for education,
+  certificates, languages and the rest. `--on phone` in a phone chat, `computer` anywhere
+  else. On a phone nothing asks for a file, a download or a PDF. Their words are the source:
+  each job goes into `01-candidate-profile.md` and `bullets.py` as they said it, with no number
+  they did not give, and anything unclear is `[CONFIRM: ...]`. They leave setup with a resume:
+  `python3 tools/stage_picks.py general <dir>` (setup.md Step 4), one page and no letter, in
+  the colour of person.json `documents.styles` `default`, else of the kind most of their target
+  employers are, else black; `--style` for that one resume.
 - **What is asked, and only that.** The first message asks for the resume and the work they
   want next and where; the second asks their right to work there and whether they need
   sponsorship now or later (their status in their own words: you work out what it clears),
