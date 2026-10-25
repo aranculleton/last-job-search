@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import html
 import json
 import os
 import re
@@ -100,6 +101,49 @@ UA = "last-job-search/1.0 (personal job search; contact via GitHub)"
 # refusal names the rule that was actually written.
 ROBOTS_AGENTS = ("*", "Claude-User", "last-job-search")
 openroles.configure(user_agent=UA, robots_agents=ROBOTS_AGENTS)
+
+# ------------------------------------------------------------ what no reader sees
+#
+# tools/hydrate.py takes out of a posting what a browser never shows (a hidden element,
+# a comment, a script), and it can find those only in markup. openroles turns each
+# board's HTML into text first (models.html_to_text), keeping the words of every
+# element, hidden or not, so by the time a board's body reached the guard nothing was
+# left to tell them apart, and a sentence styled display:none read as part of the job.
+# So a body is cleaned while it is still markup, by hydrate's own rule, and openroles
+# then makes its text from what is left. openroles is never edited here: each of its
+# readers looks the converter up by name when it runs, and the name is pointed at this
+# one. The fix belongs in openroles' html_to_text, and this goes when it is made there.
+import openroles.models as _or_models  # noqa: E402
+import hydrate as _hydrate  # noqa: E402
+
+_TO_TEXT = _or_models.html_to_text
+
+
+class _Cleaned(str):
+    """A board's text that had something hidden taken out of its markup, and what."""
+    found: dict = {}
+
+
+def shown_text(content) -> str:
+    """openroles' text of a board's HTML, made from what a reader of the page sees."""
+    s = content if isinstance(content, str) else ""
+    for _ in range(3):                     # as html_to_text reads it: some boards encode twice
+        un = html.unescape(s)
+        if un == s:
+            break
+        s = un
+    shown, found = _hydrate.strip_hidden(s) if "<" in s else (s, {})
+    if not found:
+        return _TO_TEXT(content)
+    text = _Cleaned(_TO_TEXT(shown))
+    text.found = found
+    return text
+
+
+for _name, _mod in list(sys.modules.items()):
+    if ((_name == "openroles.models" or _name.startswith("openroles.providers."))
+            and getattr(_mod, "html_to_text", None) is _TO_TEXT):
+        _mod.html_to_text = shown_text
 
 # The map is the person's: profile/boards.py names the employers, the token
 # each one's careers page reads, and the boards checked and refused. Every
@@ -292,7 +336,7 @@ def _desc(job) -> str | None:
 
 
 def _row(employer: str, job, location: str, desc: str | None) -> dict:
-    return {
+    row = {
         "id": job.id,
         "title": job.title,
         "company": employer,
@@ -303,6 +347,10 @@ def _row(employer: str, job, location: str, desc: str | None) -> dict:
         "desc": desc,
         "deadline": job.deadline or None,
     }
+    found = getattr(job.description, "found", None)
+    if found and desc:
+        row["posting_guard"] = _hydrate.said(found)
+    return row
 
 
 def _labels(job) -> list[str]:

@@ -64,6 +64,10 @@ export interface JobCard {
 
 export interface JobDetail extends JobCard {
   description: string | null
+  /** The description block as the page has it, markup and all. `description` drops
+   * every tag and keeps every element's words, a hidden one's too; the app finds what
+   * a reader never sees in this, by its own rule (tools/hydrate.py strip_hidden). */
+  descriptionHtml: string | null
   seniority: string | null
   employmentType: string | null
   jobFunction: string | null
@@ -131,12 +135,6 @@ function stripTags(html: string): string {
 
 function clean(html: string): string {
   return decodeHtmlEntities(stripTags(html))
-}
-
-/** Parse the job ID out of a LinkedIn job-view URL or URN. */
-function idFromUrl(url: string): string | null {
-  const m = url.match(/-(\d{6,})(?:\?|$)/) || url.match(/(\d{6,})/)
-  return m ? m[1] : null
 }
 
 /**
@@ -257,6 +255,7 @@ export function parseJobDetail(html: string, id: string): JobDetail {
     date: null,
     url: `https://www.linkedin.com/jobs/view/${id}`,
     description,
+    descriptionHtml: descHtml ?? null,
     seniority: criteria["seniority level"] ?? null,
     employmentType: criteria["employment type"] ?? null,
     jobFunction: criteria["job function"] ?? null,
