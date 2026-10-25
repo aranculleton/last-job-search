@@ -173,13 +173,13 @@ def test_a_second_chat_on_the_persons_computer_is_told_to_take_a_folder_of_its_o
     monkeypatch.setattr(sync_app, "CLOUD", False)
     # The first chat works in the copy itself, as CLAUDE.md says; it was told to move too
     # (2026-10-25). A second chat while the first is working there is told.
-    assert sync_app.own_folder(now=1000.0, chat="session_first") == ""
-    assert sync_app.own_folder(now=2000.0, chat="session_first") == ""
-    assert "--worktree" in sync_app.own_folder(now=3000.0, chat="session_second")
+    assert sync_app.own_folder(now=1000.0, chat="first-chat") == ""
+    assert sync_app.own_folder(now=2000.0, chat="first-chat") == ""
+    assert "--worktree" in sync_app.own_folder(now=3000.0, chat="second-chat")
     # Hours after the first chat's last sync, the main folder is nobody's.
     later = 3000.0 + sync_app.MAIN_CHAT_HOURS * 3600
-    assert sync_app.own_folder(now=later, chat="session_second") == ""
-    assert "--worktree" in sync_app.own_folder(now=later + 60, chat="session_first")
+    assert sync_app.own_folder(now=later, chat="second-chat") == ""
+    assert "--worktree" in sync_app.own_folder(now=later + 60, chat="first-chat")
     own = tmp_path / "me-two"
     g(me, "worktree", "add", "-q", "-b", "chat/two", str(own))
     monkeypatch.setattr(sync_app, "ROOT", str(own))

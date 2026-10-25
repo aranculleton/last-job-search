@@ -92,7 +92,7 @@ def test_a_setup_under_way_elsewhere_is_left_to_finish(repos):
     _origin, clone, branch = repos
     today = time.strftime("%Y-%m-%d")
     branch("claude/setup-now", {"profile/person.json": "{}",
-                                **_mark(started=today, chat="session_cloudchat1")})
+                                **_mark(started=today, chat="cloud-chat")})
     assert S.state(str(clone))[0] == "running"
     assert S.SAY["running"] == place.STILL_GOING and S.EXIT["running"] == 3
 
@@ -100,7 +100,7 @@ def test_a_setup_under_way_elsewhere_is_left_to_finish(repos):
 def test_a_setup_that_stopped_days_ago_is_carried_on(repos):
     _origin, clone, branch = repos
     branch("claude/setup-then", {"profile/person.json": "{}",
-                                 **_mark(started="2026-10-20", chat="session_cloudchat1")},
+                                 **_mark(started="2026-10-20", chat="cloud-chat")},
            days_ago=2)
     assert S.state(str(clone))[0] == "unfinished" and S.SAY["unfinished"] == place.STOPPED
 
@@ -112,18 +112,18 @@ def test_it_and_setups_own_first_step_say_the_same_about_one_setup(repos, monkey
     (found 2026-10-25)."""
     _origin, clone, branch = repos
     branch("master", {**DONE, **_mark(started=time.strftime("%Y-%m-%d"),
-                                      chat="session_cloudchat1")})
+                                      chat="cloud-chat")})
     _git(clone, "pull", "-q", "origin", "master")
     monkeypatch.setattr(S, "ROOT", str(clone))
     monkeypatch.setattr(place, "ROOT", str(clone))
-    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "session_laptopchat2")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "laptop-chat")
     monkeypatch.delenv("CLAUDE_CODE_REMOTE_SESSION_ID", raising=False)
     assert S.main(["--no-fetch"]) == 3
     said = capsys.readouterr().out.splitlines()
     assert said == ["running", place.STILL_GOING]
     assert place.setup_state(fetch=False)["say"] == said[1]
     # The chat that is setting up hears nothing, and carries on with /setup.
-    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "session_cloudchat1")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "cloud-chat")
     assert S.main(["--no-fetch"]) == 4
     assert capsys.readouterr().out.splitlines() == ["unfinished"]
 
