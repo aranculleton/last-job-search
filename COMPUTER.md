@@ -1,0 +1,98 @@
+# On your own computer
+
+**For you:** open the Claude desktop app, choose **Code**, pick a new empty folder, and
+paste the line your other chat gave you (or say "Set up my job search on this computer
+from github.com/aranculleton/last-job-search/blob/master/COMPUTER.md"). Claude does the
+rest. The only things that are yours: copying one code into GitHub's page to sign in, and
+on a Mac with nothing set up, clicking **Install** in a window from Apple.
+
+---
+
+The rest of this page is for Claude. Follow it in order. Install everything yourself;
+never send the person to Homebrew, winget, an installer or a terminal. Nothing here needs
+an administrator password. Say one plain line per step at most, and never show a command,
+a path, a branch or the word "repository" to the person. Put nothing on top of the steps:
+no notes about browsers, accounts or automation.
+
+`APP` below is a fresh shallow copy of the public app, kept outside the person's folder:
+`~/.cache/last-job-search-app` on a Mac or Linux, `%LOCALAPPDATA%\last-job-search-app` on
+Windows. `OWNER/NAME` is the person's own private copy, made from the app.
+
+## 1. What shell you have
+
+Run `uname -s` in the Bash tool. `Darwin` is a Mac, `Linux` is Linux; follow 2a. If there
+is no Bash tool, or it fails and a PowerShell tool works, this is Windows with no Git yet;
+follow 2b. Windows with Git Bash (`uname -s` says `MINGW64_NT...`) also follows 2b, from
+its step 2, using `python` where a command here says `python3` until step 5 has run.
+
+## 2a. Mac or Linux
+
+1. `git --version`. On a Mac with no developer tools this opens Apple's window: tell the
+   person "A window from Apple asks to install some tools: click Install. It takes a few
+   minutes." Then check every 30 seconds with `xcode-select -p` until it succeeds. On
+   Linux with no Git, Git comes only from the system, which asks for their password: ask
+   them to open Terminal and run `sudo apt-get install -y git` (`sudo dnf install -y git`
+   on Fedora, `sudo pacman -S git` on Arch), and say "done".
+2. `git clone -q --depth 1 https://github.com/aranculleton/last-job-search APP` (or
+   `git -C APP pull -q` when it is there).
+3. `python3 APP/tools/installs.py gh`. It puts GitHub's command line in `~/.local/bin`.
+
+## 2b. Windows
+
+1. In PowerShell:
+   `curl.exe -fsSL -o "$env:TEMP\computer_setup.ps1" https://raw.githubusercontent.com/aranculleton/last-job-search/master/tools/computer_setup.ps1`
+   Read the file. Then run it in the background:
+   `powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\computer_setup.ps1"`.
+   It installs Git, Python and GitHub's command line into the person's own folders, only
+   what is missing, and ends with `READY` and the full path of each. Use those paths
+   until the app is restarted: this chat's shell was started before they existed.
+2. `git clone -q --depth 1 https://github.com/aranculleton/last-job-search APP`, with the
+   `git:` path it printed.
+
+When it printed `restart:`, Git Bash is new: after the copy is set up (step 5), tell the
+person once, "Close the Claude app and open it again, so it can use what I installed.",
+and say that this chat can be continued after.
+
+## 3. Sign in to GitHub
+
+1. `gh auth status`. Signed in: go to step 4.
+2. Otherwise start `gh auth login --web --git-protocol https --hostname github.com` in the
+   background. It prints a one-time code. Tell the person: "Open github.com/login/device,
+   type this code: ABCD-1234, then press Authorize." Wait for the command to finish.
+3. `gh auth setup-git`, so Git uses the same sign-in.
+
+## 4. Put their copy in this folder
+
+1. Which copy: the one named in the person's message, else `python3 APP/tools/find_copy.py`.
+   One name: use it. Two or more: ask which, by name. None: they have not made one yet;
+   tell them "Your copy isn't on GitHub yet. Open github.com/aranculleton/last-job-search,
+   click Use this template, then Create a new repository, keep it Private, and tell me its
+   name." and wait.
+2. This folder empty: `gh repo clone OWNER/NAME .`. Not empty (the app may have put a
+   `.claude` folder here): `git init -q`, `git remote add origin
+   https://github.com/OWNER/NAME.git`, `git fetch -q origin`, then
+   `git checkout -q -B master --track origin/master` (the copy's own default branch, if
+   `git remote show origin` names another).
+
+## 5. Finish, without asking anything
+
+1. `python3 tools/env_check.py --fix` in the background (on Windows, `python` for
+   `python3` until it has run once: it adds the `python3` command). It installs LaTeX,
+   Bun and the Python packages where they are missing, and says one line each.
+2. `python3 tools/setup_state.py`, then by what it prints:
+   - `ready` or `ready-elsewhere`: ask nothing and run no setup. Say its line: the search
+     is ready on this computer, and it can read LinkedIn in their browser whenever they
+     ask. Then do the networking skill's "On a new computer" step.
+   - `running`: say its line, that their setup is still running in their other chat, and
+     start nothing.
+   - `unfinished` or `none`: run `/setup` and carry on there (a new chat in this same
+     folder works too).
+3. When the install in step 1 ends, say its outcome in one line (or nothing, if it all
+   went through), and the restart line from 2b if there was one.
+
+## If something does not work
+
+- A download fails: say the computer seems to be offline, and try again when they say so.
+- `env_check.py --fix` says something is theirs (a Linux package, Apple's window): give
+  that one line, nothing else.
+- Everything it installs can be checked any time with `python3 tools/env_check.py`.
