@@ -716,7 +716,7 @@ def _tinytex_bin() -> str | None:
         return None
     import glob
     root = os.path.join(HOME, "Library", "TinyTeX") if MAC else os.path.join(HOME, ".TinyTeX")
-    hits = sorted(d for d in glob.glob(os.path.join(root, "bin", "*")) if os.path.isdir(d))
+    hits = sorted(d for d in glob.glob(os.path.join(glob.escape(root), "bin", "*")) if os.path.isdir(d))
     return hits[0] if hits else None
 
 

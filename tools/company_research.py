@@ -229,7 +229,7 @@ def path(company, root=None, country=None) -> str | None:
     if os.path.exists(direct):
         plain = direct
     else:
-        for found in sorted(glob.glob(os.path.join(folder, "*.json"))):
+        for found in sorted(glob.glob(os.path.join(glob.escape(folder), "*.json"))):
             stem = os.path.splitext(os.path.basename(found))[0]
             if stem.startswith("_") or "--" in stem:
                 continue

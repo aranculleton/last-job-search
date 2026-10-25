@@ -349,7 +349,8 @@ def drafts(root: str | None = None) -> list[dict]:
     """Every kept draft object, from documents/applications/*/draft.json."""
     root = root or person.state()
     out = []
-    for path in sorted(glob.glob(os.path.join(root, "documents", "applications", "*", "draft.json"))):
+    for path in sorted(glob.glob(os.path.join(glob.escape(root), "documents", "applications",
+                                              "*", "draft.json"))):
         try:
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
