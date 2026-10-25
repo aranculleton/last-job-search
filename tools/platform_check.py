@@ -6,6 +6,10 @@ Windows, after taking away what a person would not have (Homebrew and MacTeX on 
 Mac, winget on Windows, sudo and TeX on Linux):
 
     python3 tools/platform_check.py install      env_check --fix, then each tool runs
+    python3 tools/platform_check.py python       the Python an app command runs under when
+                                                 python3 starts it (on a Mac, a current one
+                                                 in .venv, Apple's own untouched), and
+                                                 Python's own HTTPS checking certificates
     python3 tools/platform_check.py documents    a resume and letter in black and two
                                                  colours, fitted and checked, the colour
                                                  present only where one was asked for
@@ -24,8 +28,8 @@ Mac, winget on Windows, sudo and TeX on Linux):
                                                  and accents taken, the due list
     python3 tools/platform_check.py computer     a computer chat arriving in a copy that is
                                                  already set up, and its ordinary day
-    python3 tools/platform_check.py all          install, documents, general, seed, round,
-                                                 interview, networking
+    python3 tools/platform_check.py all          install, python, documents, general, seed,
+                                                 round, interview, networking
 
 Every step prints PASS or FAIL with what it saw and how long it took, keeps going after
 a failure, and the run exits 1 when any failed. Nothing reaches the network but the
@@ -46,7 +50,14 @@ import zipfile
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
 sys.path[:0] = [TOOLS, os.path.join(ROOT, "tests"), os.path.join(ROOT, "templates")]
-PY = sys.executable
+import local_path  # noqa: E402
+
+# This check runs under the repo's .venv, as any app command does (it imports pypdf
+# itself); every command it starts is started by the Python that started it, so each one
+# shows it finds the venv's Python by itself (on a Mac, Apple's python3 and a current
+# Python in .venv).
+local_path.run_in_venv()
+PY = os.environ.pop(local_path.REEXEC, "") or sys.executable
 EXAMPLE = os.path.join(ROOT, "profile.example")
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -93,8 +104,11 @@ def step_install() -> None:
     local_path.extend()
     for tool in ("lualatex", "xelatex"):
         check(f"install: {tool} found", bool(shutil.which(tool)), shutil.which(tool) or "")
-    import pdftext
-    check("install: the PDF reader is pypdf", pdftext.reader() == "pypdf", pdftext.reader())
+    # In the Python the app's commands use, which the install may have just made.
+    app = local_path.venv_python() if local_path.venv_runs() else PY
+    code, out, _ = run([app, "-c", "import sys; sys.path.insert(0, sys.argv[1]); "
+                        "import pdftext; print(pdftext.reader())", TOOLS])
+    check("install: the PDF reader is pypdf", out.strip() == "pypdf", out.strip())
     import portals
     portals.runtime.cache_clear()
     try:
@@ -105,6 +119,38 @@ def step_install() -> None:
     code, out, _ = run([gh, "--version"]) if gh else (127, "gh not found", 0)
     check("install: gh runs", code == 0, out.splitlines()[0] if out else "")
     print(f"info: Poppler's pdftotext here: {shutil.which('pdftotext') or 'no (not needed)'}")
+
+
+def _version(python: str) -> str:
+    code, out, _ = run([python, "-I", "-S", "-c", "import platform; print(platform.python_version())"])
+    return out.strip() if code == 0 else ""
+
+
+def step_python() -> None:
+    """Which Python an app command runs under when `python3` (whichever this computer has)
+    starts it: the repo's .venv's where that was made by another version. On a Mac, a
+    current one; Apple's own python3 still runs; and Python's own HTTPS checks
+    certificates."""
+    import python_floor
+    started = _version(PY)
+    made = local_path.venv_version()
+    other = local_path.venv_runs() and made and ".".join(map(str, made)) != \
+        ".".join(started.split(".")[:2])
+    code, out, took = run([PY, os.path.join(TOOLS, "python_floor.py"), "--which"], env=env_for())
+    want = local_path.venv_python() if other else PY
+    ran = out.strip().rsplit(" at ", 1)[-1]
+    same = os.path.normcase(os.path.realpath(ran)) == os.path.normcase(os.path.realpath(want))
+    check(f"python: {os.path.basename(PY)} ({started}) runs the app's commands under "
+          + (".venv's Python" if other else "itself"), code == 0 and same, out.strip(), took)
+    if sys.platform == "darwin":
+        ok = bool(made) and tuple(made) >= python_floor.CURRENT and local_path.venv_runs()
+        check(f"python: the app's Python on this Mac is {python_floor.CURRENT[0]}."
+              f"{python_floor.CURRENT[1]} or newer", ok, f".venv made by {made}")
+    code, out, took = run([PY, "-c", "import sys; print(sys.version.split()[0])"], env=env_for())
+    check(f"python: {PY} itself still runs", code == 0, out.strip(), took)
+    code, out, took = run([PY, os.path.join(TOOLS, "env_check.py"), "--https"], env=env_for())
+    check("python: Python's own HTTPS checks the certificate (urllib)",
+          code == 0 and ": ok," in out, out.strip(), took)
 
 
 def _tests(name: str):
@@ -337,6 +383,9 @@ def step_round() -> None:
     began = time.monotonic()
     out = os.path.join(work, "scrape")
     code, said = F.scrape(out)
+    if not os.path.isfile(os.path.join(out, "kept.json")):
+        check("round: the scrape keeps and drops what it always did", False, said[-1500:])
+        return
     with open(F.SCRAPE_GOLDEN, encoding="utf-8") as fh:
         want = json.load(fh)
     with open(os.path.join(out, "kept.json"), encoding="utf-8") as fh:
@@ -557,10 +606,12 @@ def _merge_two_chats(tmp: str, origin: str, env: dict) -> None:
     check("computer: two chats' new messages merge row by row", ok, out.strip(), took)
 
 
-STEPS = {"install": step_install, "documents": step_documents, "general": step_general,
+STEPS = {"install": step_install, "python": step_python, "documents": step_documents,
+         "general": step_general,
          "seed": step_seed, "round": step_round, "interview": step_interview,
          "networking": step_networking, "suite": step_suite, "computer": step_computer}
-ALL = ("install", "documents", "general", "seed", "round", "interview", "networking")
+ALL = ("install", "python", "documents", "general", "seed", "round", "interview",
+       "networking")
 
 
 def main(argv=None) -> int:

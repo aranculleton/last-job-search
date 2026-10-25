@@ -34,6 +34,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 try:
     import local_path  # the repo's .venv, where env_check --fix installs openpyxl
+    local_path.run_in_venv()
     local_path.use_venv()
 except Exception:  # noqa: BLE001
     pass

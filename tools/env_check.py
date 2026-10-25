@@ -79,6 +79,36 @@ def classify(exit_code: int, connect: str, code: str) -> str:
     return "unreachable"
 
 
+def https_host() -> str:
+    """The host Python's own HTTPS is tried on: one curl tries too, not LinkedIn's."""
+    urls = [u for _, u in hosts()]
+    return next((u for u in urls if "linkedin" not in u), urls[0] if urls else "")
+
+
+def https_check(url: str) -> tuple[str, str]:
+    """(verdict, detail) for Python's own HTTPS (urllib) to one host: "ok" when a TLS reply
+    came back verified, "certificates" when this Python could not check the certificate,
+    "unknown" when the host was not reached at all (curl's line says why)."""
+    import ssl
+    import urllib.error
+    import urllib.request
+    local_path.trust_store()
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            return "ok", f"HTTP {r.status}"
+    except urllib.error.HTTPError as e:      # any status is a reply over verified TLS
+        return "ok", f"HTTP {e.code}"
+    except (urllib.error.URLError, ssl.SSLError, OSError) as e:
+        reason = getattr(e, "reason", e)
+        if isinstance(reason, ssl.SSLCertVerificationError) or \
+                "CERTIFICATE_VERIFY_FAILED" in str(reason):
+            fix = (f"`{FIX} python` gives the app a Python that reads the Mac's certificates"
+                   if sys.platform == "darwin" else
+                   "set SSL_CERT_FILE to this computer's certificate bundle")
+            return "certificates", f"this Python cannot check certificates ({sys.executable}); {fix}"
+        return "unknown", f"not reached ({str(reason)[:80]})"
+
+
 def probe(url: str) -> tuple[str, str]:
     """(verdict, detail) for one URL, through whatever proxy the session uses."""
     if not shutil.which("curl"):
@@ -181,9 +211,15 @@ TOOLS = os.path.join(ROOT, "tools")
 VENV_FIRST = "import sys; sys.path.insert(0, sys.argv[1]); import local_path; local_path.use_venv(); "
 
 
+def app_python() -> str:
+    """The Python the app's commands run under here: the repo's .venv's where it starts
+    (an app command started by another one runs itself again under it), else this one."""
+    return local_path.venv_python() if local_path.venv_runs() else sys.executable
+
+
 def module_state(name: str) -> bool:
     """Is a Python module importable here? Asked apart, like pypdf, so a broken one cannot crash this."""
-    return subprocess.run([sys.executable, "-c", VENV_FIRST + f"import {name}", TOOLS],
+    return subprocess.run([app_python(), "-c", VENV_FIRST + f"import {name}", TOOLS],
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace").returncode == 0
 
@@ -191,7 +227,7 @@ def module_state(name: str) -> bool:
 def pypdf_state() -> str:
     """'ok', 'missing' or 'broken'. Run apart, because a pyo3 panic kills the
     interpreter rather than raising."""
-    p = subprocess.run([sys.executable, "-c", VENV_FIRST + "import pypdf; pypdf.PdfReader", TOOLS],
+    p = subprocess.run([app_python(), "-c", VENV_FIRST + "import pypdf; pypdf.PdfReader", TOOLS],
                        capture_output=True, text=True, encoding="utf-8", errors="replace")
     if p.returncode == 0:
         return "ok"
@@ -230,7 +266,7 @@ def linux_install(package: str, have=None) -> str:
 
 
 def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
-                gh_signed_in=None) -> list:
+                gh_signed_in=None, newer=None) -> list:
     """What this computer is missing, as [(what, the one command, whose)].
 
     The person's own computer, never a cloud session. Almost everything is one command
@@ -239,26 +275,39 @@ def local_fixes(system=None, have=None, module=None, py_ok=None, pypdf=None,
     for those; "sign-in" where the person signs in themselves (GitHub); "dialog" where a
     window of their computer's own asks them to click (Apple's command line tools, on a
     Mac with no Git or Python); and "password" only for what Linux installs from the
-    system (Git, Perl), which asks for it. Every argument is injectable so each machine
-    can be tested from any other.
+    system (Git, Perl), which asks for it. A Python too old for the app is not one of
+    those on Linux: uv installs a current one with no password (python_floor.linux_route).
+    `newer` is whether a Mac still needs the current Python (installs.needs_python). Every
+    argument is injectable so each machine can be tested from any other.
     """
     import python_floor
+    here = system is None                    # this computer, not one a test describes
     system = system or sys.platform
     have = have or shutil.which
     module = module or module_state
     py_ok = python_floor.ok() if py_ok is None else py_ok
     pypdf = pypdf or pypdf_state()
     mac, win = system == "darwin", system.startswith("win")
+    if newer is None:
+        made = local_path.venv_version()
+        newer = here and mac and sys.version_info[:2] < python_floor.CURRENT and not (
+            made and made >= python_floor.CURRENT and local_path.venv_runs())
     out = []
-    # Linux is the one place a missing Python or Git needs the system's own package manager,
-    # and so the person's password at a terminal: Claude's shell has no terminal for sudo.
-    # Which manager is read from what the computer has, not assumed to be Ubuntu's.
+    # Linux is the one place a missing Git needs the system's own package manager, and so
+    # the person's password at a terminal: Claude's shell has no terminal for sudo. Which
+    # manager is read from what the computer has, not assumed to be Ubuntu's. A Python too
+    # old for the app is uv's, there and on a Mac with no password.
     if not py_ok:
         out.append(("Python 3.9 or newer",
                     "xcode-select --install" if mac else
                     "powershell -ExecutionPolicy Bypass -File tools/computer_setup.ps1" if win
-                    else linux_install("python3", have),
-                    "dialog" if mac else "" if win else "yours"))
+                    else python_floor.linux_route(),
+                    "dialog" if mac else ""))
+    elif newer:
+        want = python_floor.CURRENT
+        out.append((f"Python {want[0]}.{want[1]} (this Mac's own is "
+                    f"{sys.version_info[0]}.{sys.version_info[1]}, which no longer gets "
+                    "security fixes)", f"{FIX} python", ""))
     if not have("git"):
         out.append(("Git", "xcode-select --install" if mac else f"{FIX} git" if win
                     else linux_install("git", have), "dialog" if mac else "" if win
@@ -293,7 +342,8 @@ def _gh_signed_in(have) -> bool:
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] in (["--help"], ["-h"]):
-        print("usage: python3 tools/env_check.py [--fix [what ...] | --allowlist | --say]")
+        print("usage: python3 tools/env_check.py [--fix [what ...] | --allowlist | --say | "
+              "--https [url]]")
         return 0
     if argv[:1] == ["--fix"]:
         if CLOUD:
@@ -304,6 +354,12 @@ def main(argv: list[str] | None = None) -> int:
     if argv[:1] == ["--allowlist"]:
         print("\n".join(allowlist()))
         return 0
+    if argv[:1] == ["--https"]:
+        url = argv[1] if argv[1:] else https_host()
+        verdict, detail = https_check(url)
+        print(f"Python {sys.version_info[0]}.{sys.version_info[1]}.{sys.version_info[2]} "
+              f"HTTPS to {url}: {verdict}, {detail}")
+        return 1 if verdict == "certificates" else 0
     if argv[:1] == ["--say"]:
         names = blocked_names()
         if names:
@@ -342,6 +398,10 @@ def main(argv: list[str] | None = None) -> int:
         gh = bool(shutil.which("gh"))
         line("GitHub's command line (gh)", gh, "" if gh else "missing; " + _install("gh"))
 
+    if https_host():
+        verdict, detail = https_check(https_host())
+        line("Python's own HTTPS (urllib)", verdict != "certificates", detail)
+
     print("job boards")
     blocked = []
     for name, url in hosts() + board_hosts():
@@ -360,4 +420,9 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    if sys.argv[1:2] != ["--fix"]:
+        # Report under the Python the app's commands run under (the repo's .venv), so what
+        # it says is installed is what they import. --fix runs where it was started, so a
+        # .venv that cannot start can still be made again.
+        local_path.run_in_venv()
     sys.exit(main())

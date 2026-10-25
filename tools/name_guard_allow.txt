@@ -175,3 +175,4 @@ Pell Aux                # invented, the same test
 User Shell Folders      # a Windows registry key, tools/network/export.py
 Zoë Ångström-Núñez       # invented: the accented name tools/platform_check.py renders a resume for
 Ørkenvik Logistik        # invented: an employer in the LinkedIn download tools/platform_check.py reads
+Install Certificates     # python.org's own script for a Mac ("Install Certificates.command"), not a name

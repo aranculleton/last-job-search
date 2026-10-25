@@ -2,7 +2,9 @@
 # first: Linux, a Mac and Windows, each after taking away what a person would not have.
 #
 #   person            every OS: the install route Claude runs (`env_check.py --fix`, no
-#                     Homebrew, no winget, no sudo, no administrator), then from the example
+#                     Homebrew, no winget, no sudo, no administrator; on the Mac a current
+#                     Python by uv, which every command started by Apple's python3 then runs
+#                     under, and Python's own HTTPS checked), then from the example
 #                     person: a resume and letter in black and two colours fitted and
 #                     checked, a general resume with no posting for an accented name, their
 #                     own LinkedIn download read into a profile seed, an offline round
@@ -30,6 +32,7 @@ on:
       - "tools/installs.py"
       - "tools/env_check.py"
       - "tools/local_path.*"
+      - "tools/python_floor.py"
       - "tools/pdftext.py"
       - "tools/verify_batch.*"
       - "tools/fit_to_page.py"
@@ -115,6 +118,16 @@ jobs:
 
       - name: Install the way Claude does (env_check.py --fix)
         run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py install
+
+      # On the Mac, $PERSON_PY is Apple's /usr/bin/python3 (3.9): --fix installed a current
+      # Python with uv and made .venv with it, and an app command it starts runs under that.
+      - name: The Python an app command runs under, and Python's own HTTPS
+        run: |
+          PATH="$PERSON_PATH"
+          "$PERSON_PY" --version
+          "$PERSON_PY" tools/python_floor.py --which
+          "$PERSON_PY" tools/env_check.py --https
+          "$PERSON_PY" tools/platform_check.py python
 
       - name: Documents, a general resume, a profile seed, a round, an interview pack, a networking day
         run: PATH="$PERSON_PATH" "$PERSON_PY" tools/platform_check.py documents general seed round interview networking

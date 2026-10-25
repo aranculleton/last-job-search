@@ -148,7 +148,7 @@ def test_python_packages_go_in_the_repos_own_venv_even_where_pip_is_refused(home
     calls = []
     left = {"n": 1}
 
-    def missing():
+    def missing(*python):
         left["n"] -= 1
         return ["pypdf", "pyyaml"] if left["n"] >= 0 else []
 
@@ -160,7 +160,7 @@ def test_python_packages_go_in_the_repos_own_venv_even_where_pip_is_refused(home
             os.makedirs(venv, exist_ok=True)
         return 0, ""
     monkeypatch.setattr(I, "missing_modules", missing)
-    monkeypatch.setattr(I, "pypdf_panics", lambda: False)
+    monkeypatch.setattr(I, "pypdf_panics", lambda *python: False)
     monkeypatch.setattr(I.local_path, "venv_site", lambda *a: None)
     monkeypatch.setattr(I, "_run", run)
     monkeypatch.setattr(I, "download", lambda url, dest: open(dest, "w").write("# get-pip"))

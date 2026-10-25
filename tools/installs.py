@@ -11,9 +11,21 @@ prints one plain line per thing as each is done, and ends with what, if anything
 the person. Nothing here asks for a password, needs Homebrew or winget, or changes
 anything outside the person's own folders and this repo:
 
-- the Python packages (requirements.txt) go in the repo's own `.venv`, which every tool
-  reads (local_path.use_venv), so a system Python that refuses installs (Debian and
-  Ubuntu's, PEP 668) or has no pip is no obstacle;
+- on a Mac, a current Python (python_floor.CURRENT), because Apple's `python3` is 3.9,
+  which has had no security fixes since October 2025: uv, by its own installer
+  (https://docs.astral.sh/uv/getting-started/installation/), into ~/.local/bin, then
+  `uv python install`, which puts it in ~/.local/share/uv/python
+  (https://docs.astral.sh/uv/reference/storage/). Apple's `python3` is left exactly as it
+  was: no `--default` (which would put a `python3` of uv's ahead of it), no Python
+  command added anywhere a shell looks, and no shell startup file changed by uv
+  (UV_NO_MODIFY_PATH): the app runs that Python through the repo's `.venv`, and an app
+  command started by Apple's `python3` runs itself again under it
+  (local_path.run_in_venv). A Linux whose Python is older than 3.9 gets the same, with no
+  sudo; any other Linux, and Windows, keep the Python they have;
+- the Python packages (requirements.txt) go in the repo's own `.venv`, made with that
+  Python where there is one, which every tool reads (local_path.use_venv, run_in_venv),
+  so a system Python that refuses installs (Debian and Ubuntu's, PEP 668) or has no pip
+  is no obstacle;
 - LaTeX is TinyTeX (yihui.org/tinytex), a TeX Live in one folder of the person's own,
   with the packages the templates use, then a test compile of both example documents.
   A LaTeX already here is kept: MiKTeX is set to install what it lacks without asking
@@ -49,6 +61,10 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
 sys.path.insert(0, TOOLS)
 import local_path  # noqa: E402
+import python_floor  # noqa: E402
+
+# Python's own HTTPS (the download fallback below) finds the system's certificates.
+local_path.trust_store()
 
 HOME = os.path.expanduser("~")
 WINDOWS = sys.platform.startswith("win")
@@ -73,6 +89,7 @@ CORE_TEX = [p for p in TEX_FILES if p != "fontawesome6"]
 TINYTEX_UNIX = "https://tinytex.yihui.org/install-bin-unix.sh"
 TINYTEX_WINDOWS = "https://tinytex.yihui.org/install-bin-windows.ps1"
 GET_PIP = "https://bootstrap.pypa.io/get-pip.py"
+UV_INSTALLER = "https://astral.sh/uv/install.sh"
 # Used only when the newest release cannot be looked up (a GitHub that refuses the
 # lookup but serves the download): versions that were published and checked 2026-10-25.
 GH_FALLBACK = "2.103.2"
@@ -303,23 +320,109 @@ def venv_python(venv: str = VENV) -> str:
         os.path.join(venv, "bin", "python")
 
 
-def missing_modules() -> list[str]:
-    """The Python packages this Python cannot import, the repo's .venv included."""
+def missing_modules(python: str | None = None) -> list[str]:
+    """The Python packages `python` (this one by default) cannot import, the repo's .venv
+    included where it was made by the same version."""
     probe = ("import sys; sys.path.insert(0, sys.argv[1]); import local_path; "
              "local_path.use_venv(); import importlib.util as u; "
              "print(' '.join(m for m in sys.argv[2:] if u.find_spec(m) is None))")
-    code, out = _run([sys.executable, "-c", probe, TOOLS, *[m for m, _ in MODULES]],
+    code, out = _run([python or sys.executable, "-c", probe, TOOLS, *[m for m, _ in MODULES]],
                      timeout=60)
     gone = out.split() if code == 0 else [m for m, _ in MODULES]
     return [pkg for mod, pkg in MODULES if mod in gone]
 
 
-def pypdf_panics() -> bool:
+def pypdf_panics(python: str | None = None) -> bool:
     """pypdf installed but crashing on import: a broken `cryptography` (a pyo3 panic)."""
     probe = ("import sys; sys.path.insert(0, sys.argv[1]); import local_path; "
              "local_path.use_venv(); import pypdf; pypdf.PdfReader")
-    code, out = _run([sys.executable, "-c", probe, TOOLS], timeout=60)
+    code, out = _run([python or sys.executable, "-c", probe, TOOLS], timeout=60)
     return code != 0 and "No module named" not in out
+
+
+def version_of(python: str) -> tuple | None:
+    """(major, minor) of a Python, by running it with nothing of the repo's."""
+    if python == sys.executable:
+        return tuple(sys.version_info[:2])
+    code, out = _run([python, "-I", "-S", "-c",
+                      "import sys; print('%d.%d' % sys.version_info[:2])"], timeout=60)
+    m = re.match(r"(\d+)\.(\d+)$", out.strip()) if code == 0 else None
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def _uv() -> str | None:
+    """uv where its installer puts it ($XDG_BIN_HOME, else ~/.local/bin), else on PATH."""
+    for d in (os.environ.get("XDG_BIN_HOME"), user_bin()):
+        exe = os.path.join(d, "uv.exe" if WINDOWS else "uv") if d else ""
+        if exe and os.path.isfile(exe):
+            return exe
+    return _which("uv")
+
+
+def _uv_env() -> dict:
+    env = dict(os.environ)
+    env.pop("VIRTUAL_ENV", None)
+    # No python3.13 command added to ~/.local/bin: nothing a shell runs changes.
+    env["UV_PYTHON_INSTALL_BIN"] = "0"
+    return env
+
+
+def managed_python(uv: str | None = None, want=None) -> str | None:
+    """The Python uv installed for `want` (python_floor.CURRENT), never a venv's or the
+    system's (`--system`, `--python-preference only-managed`)."""
+    uv = uv or _uv()
+    if not uv:
+        return None
+    want = want or python_floor.CURRENT
+    code, out = _run([uv, "python", "find", "--system", "--python-preference", "only-managed",
+                      f"{want[0]}.{want[1]}"], timeout=60, env=_uv_env(), cwd=HOME)
+    # The path is on stdout; uv's warnings, which _run adds after it, are not paths.
+    found = [ln.strip() for ln in out.splitlines() if ln.strip() and os.path.isfile(ln.strip())]
+    return found[0] if code == 0 and found else None
+
+
+def needs_python(mac: bool = MAC, here=None, venv=None, venv_runs=None) -> bool:
+    """Whether this computer needs the current Python installed: a Mac whose `.venv` and
+    running Python are both older than python_floor.CURRENT, or any other computer but
+    Windows whose Python is older than the floor. Each input can be given for a test."""
+    if WINDOWS:
+        return False
+    want = python_floor.CURRENT if mac else python_floor.FLOOR
+    here = tuple(here or sys.version_info[:2])
+    venv = local_path.venv_version() if venv is None else venv
+    runs = local_path.venv_runs() if venv_runs is None else venv_runs
+    if runs and venv and tuple(venv) >= want:
+        return False
+    return here < want
+
+
+def _made_by(root: str = ROOT) -> str | None:
+    """The Python the repo's `.venv` was made from, while it is still there."""
+    cfg = local_path._venv_cfg(root)
+    if cfg.get("executable") and os.path.isfile(cfg["executable"]):
+        return cfg["executable"]
+    home = cfg.get("home", "")
+    for name in ("python.exe",) if WINDOWS else ("python3", "python"):
+        if home and os.path.isfile(os.path.join(home, name)):
+            return os.path.join(home, name)
+    return None
+
+
+def venv_base() -> str:
+    """The Python the repo's `.venv` is made with: the current one uv installed, where the
+    install route put one (a Mac, or a Python older than the floor); else the Python a
+    working `.venv` was made from, kept whichever Python runs this (a `.venv` the
+    install route made is never made again by an older `python3`); else this one."""
+    if not WINDOWS and (MAC or not python_floor.ok()):
+        py = managed_python()
+        if py:
+            return py
+    made = local_path.venv_version(root_of(VENV))
+    if local_path.venv_runs(root_of(VENV)) and made and made >= python_floor.FLOOR:
+        py = _made_by(root_of(VENV))
+        if py:
+            return py
+    return sys.executable
 
 
 def latex_kind() -> str:
@@ -350,25 +453,32 @@ def runtime_here() -> str:
 
 # ------------------------------------------------------------------ the installs
 
-def fix_packages() -> str:
-    need = missing_modules()
-    broken = "pypdf" not in need and pypdf_panics()
+def fix_packages(base: str | None = None) -> str:
+    """The packages, in the repo's `.venv`, made with `base` (venv_base). A `.venv` made by
+    another version of Python, which `base` cannot use, is made again when this made it,
+    and left alone, with the reason, when something else did."""
+    venv = VENV
+    root = root_of(venv)
+    base = base or venv_base()
+    same = os.path.isdir(venv) and local_path.venv_runs(root) and \
+        local_path.venv_version(root) == version_of(base)
+    probe = venv_python(venv) if same else base
+    need = missing_modules(probe)
+    broken = "pypdf" not in need and pypdf_panics(probe)
     if not need and not broken:
         return "already here"
-    venv = VENV
-    made = local_path.venv_site() is not None
-    if os.path.isdir(venv) and not made:
+    if os.path.isdir(venv) and not same:
         if not os.path.exists(os.path.join(venv, OURS)):
             raise Failed(f"there is a folder {venv} made by another Python, which this one "
                          f"cannot use; I left it alone. Remove it, then run this again")
         shutil.rmtree(venv)
     if not os.path.isdir(venv):
-        code, out = _run([sys.executable, "-m", "venv", venv], timeout=300)
+        code, out = _run([base, "-m", "venv", venv], timeout=300)
         if code != 0:
             # Debian and Ubuntu leave out the part of venv that installs pip
             # (python3-venv, which needs a password): make it bare and fetch pip.
             shutil.rmtree(venv, ignore_errors=True)
-            code, out = _run([sys.executable, "-m", "venv", "--without-pip", venv], timeout=300)
+            code, out = _run([base, "-m", "venv", "--without-pip", venv], timeout=300)
             if code != 0:
                 raise Failed(f"could not make a place for the Python packages "
                              f"({out.strip().splitlines()[-1] if out.strip() else code})")
@@ -385,10 +495,14 @@ def fix_packages() -> str:
     if code != 0:
         raise Failed("could not install the Python packages: "
                      + (out.strip().splitlines() or ["no output"])[-1][:200])
-    still = missing_modules()
+    still = missing_modules(venv_python(venv))
     if still:
         raise Failed("installed, but " + ", ".join(still) + " still cannot be imported")
     return "installed (" + ", ".join(need or ["cffi", "cryptography"]) + ")"
+
+
+def root_of(venv: str) -> str:
+    return os.path.dirname(os.path.abspath(venv))
 
 
 def fix_runtime() -> str:
@@ -515,11 +629,55 @@ def fix_git() -> str:
                                   f"CLAUDE_CODE_GIT_BASH_PATH={bash}"))
 
 
+def install_uv() -> str:
+    """uv, by its official installer (curl -LsSf https://astral.sh/uv/install.sh | sh), into
+    ~/.local/bin, telling it to leave the shell's startup files alone (UV_NO_MODIFY_PATH,
+    https://docs.astral.sh/uv/reference/installer/): the app runs uv by its path, so nothing
+    a person types needs it, and the one place this route changes PATH stays the one
+    marked block persist() writes."""
+    have = _uv()
+    if have and _works([have, "--version"]):
+        return have
+    work = tempfile.mkdtemp(prefix="ljs_uv_")
+    script = os.path.join(work, "uv-installer.sh")
+    download(UV_INSTALLER, script)
+    env = dict(os.environ, UV_NO_MODIFY_PATH="1")
+    code, out = _run(["sh", script], timeout=600, env=env)
+    exe = _uv()
+    if code != 0 or not exe or not _works([exe, "--version"]):
+        raise Failed("could not install uv, which installs Python: "
+                     + (out.strip().splitlines() or [f"exit {code}"])[-1][:160])
+    return exe
+
+
+def install_python(want=None) -> str:
+    """The current Python, by uv, in the person's own folder; returns its path."""
+    want = want or python_floor.CURRENT
+    uv = install_uv()
+    code, out = _run([uv, "python", "install", f"{want[0]}.{want[1]}"], timeout=1200,
+                     env=_uv_env(), cwd=HOME)
+    py = managed_python(uv, want)
+    if code != 0 or not py:
+        raise Failed(f"could not install Python {want[0]}.{want[1]}: "
+                     + (out.strip().splitlines() or [f"exit {code}"])[-1][:160])
+    return py
+
+
 def fix_python() -> str:
-    """A `python3` command on Windows, where the python.org installer gives only
-    `python` and `py`, and `python3` is a shortcut that opens the Microsoft Store."""
+    """On a Mac, and on a Linux whose Python is older than the floor, the current Python
+    (install_python) and the repo's `.venv` made again with it. On Windows a `python3`
+    command, where the python.org installer gives only `python` and `py`, and `python3`
+    is a shortcut that opens the Microsoft Store."""
     if not WINDOWS:
-        return "already here"
+        if not needs_python():
+            return "already here"
+        py = install_python()
+        v = version_of(py)
+        packages = fix_packages(py)
+        return (f"installed (Python {v[0]}.{v[1]}, in your own folder; Apple's python3 is "
+                f"as it was; the Python packages: {packages})" if MAC else
+                f"installed (Python {v[0]}.{v[1]}, in your own folder; the Python packages: "
+                f"{packages})")
     real = os.path.normcase(os.path.realpath(sys.executable))
     found = shutil.which("python3")
     if found:
@@ -657,7 +815,8 @@ def fix_latex() -> str:
     return f"installed (TinyTeX, {took // 60} min {took % 60} s; both example documents compiled)"
 
 
-FIXES = {"git": ("Git", fix_git), "python": ("A python3 command", fix_python),
+FIXES = {"git": ("Git", fix_git),
+         "python": ("A python3 command" if WINDOWS else "A current Python", fix_python),
          "packages": ("The Python packages", fix_packages),
          "runtime": ("Node or Bun, for the job searches", fix_runtime),
          "gh": ("GitHub's command line", fix_gh), "latex": ("LaTeX, for the PDFs", fix_latex)}
@@ -671,6 +830,10 @@ def plan() -> list[tuple[str, str]]:
                     "PortableGit, in your own folder" if WINDOWS else linux_install("git")))
     if WINDOWS and not shutil.which("python3"):
         out.append(("python", "a python3 command for the Python you have"))
+    if needs_python():
+        want = python_floor.CURRENT
+        out.append(("python", f"Python {want[0]}.{want[1]} in your own folder (uv), with the "
+                              "packages moved to it"))
     if missing_modules():
         out.append(("packages", "the Python packages, in this folder's .venv"))
     if not runtime_here():
@@ -681,6 +844,13 @@ def plan() -> list[tuple[str, str]]:
     if not kind or (kind != "miktex" and tex_missing()):
         out.append(("latex", "TinyTeX and the template packages, then a test compile"))
     return out
+
+
+def default_todo(windows: bool = WINDOWS, mac: bool = MAC, floor_ok=None) -> list:
+    """What a bare `--fix` does: everything, but a new Python only where one is needed
+    (Windows' python3 command, a Mac's current Python, a Python under the floor)."""
+    floor_ok = python_floor.ok() if floor_ok is None else floor_ok
+    return [w for w in WHAT if w != "python" or windows or mac or not floor_ok]
 
 
 def main(argv=None) -> int:
@@ -704,8 +874,7 @@ def main(argv=None) -> int:
               f"choose from {', '.join(WHAT)}", file=sys.stderr)
         return 2
     failed, yours = [], []
-    todo = [w for w in WHAT if w in asked] if asked else \
-        [w for w in WHAT if w != "python" or WINDOWS]
+    todo = [w for w in WHAT if w in asked] if asked else default_todo()
     for what in todo:
         label, fn = FIXES[what]
         try:
