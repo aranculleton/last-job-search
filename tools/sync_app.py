@@ -882,14 +882,30 @@ def rewritten(old: str, new: str) -> bool:
         "merge-base", "--is-ancestor", old, new, check=False).returncode != 0
 
 
+def _own_commits(old: str) -> list[str]:
+    """The commits on this branch that are the person's own work, oldest first: not on the
+    old master or the new one, no merge (a sync's merge, or master's), and none of the app's
+    commits a sync brought in, whether or not this clone still has the app's refs. Listing
+    those too gave a `git cherry-pick` that stopped on the merge and carried nothing
+    (2026-10-25); the next sync brings the app's commits again anyway."""
+    app_side = []
+    merges = git("rev-list", "--merges", "HEAD", "--not", old, "origin/master",
+                 check=False).stdout.split()
+    for m in merges:
+        subject = git("log", "-1", "--format=%s", m, check=False).stdout.strip()
+        if subject.startswith(SYNC_SUBJECT):
+            app_side += git("rev-parse", f"{m}^@", check=False).stdout.split()[1:]
+    return git("rev-list", "--reverse", "--no-merges", "HEAD", "--not", old, "origin/master",
+               f"--remotes={REMOTE}", *app_side, check=False).stdout.split()
+
+
 def after_rewrite(old: str) -> int:
     """origin/master was rewritten. Merging it into a checkout made before conflicts on
     hundreds of files, and a person had to warn the session in their own prompt. A branch
     holding nothing beyond the old master moves to the new one; a branch with commits of its
     own is left alone, with those commits named and the way to carry them across."""
     branch = git("rev-parse", "--abbrev-ref", "HEAD", check=False).stdout.strip()
-    mine = git("rev-list", "--reverse", "HEAD", "--not", old, "origin/master",
-               check=False).stdout.split()
+    mine = _own_commits(old)
     if not mine:
         moved = (git("checkout", "-q", "-B", branch, "origin/master", check=False)
                  if branch and branch != "HEAD"
