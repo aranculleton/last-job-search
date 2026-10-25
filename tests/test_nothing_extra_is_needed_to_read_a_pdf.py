@@ -81,6 +81,11 @@ def test_where_pypdf_cannot_run_poppler_still_reads(tmp_path, monkeypatch):
     monkeypatch.setattr(pdftext, "_pypdf", lambda: None)
     assert pdftext.reader() == "pdftotext"
     assert "Morgan Ellis" in pdftext.text(pdf) and pdftext.pages(pdf) == 1
+    # Git for Windows brings pdftotext and no pdfinfo: the pages are still counted.
+    which = pdftext.shutil.which
+    monkeypatch.setattr(pdftext.shutil, "which", lambda n, *a, **k: None if n == "pdfinfo"
+                        else which(n, *a, **k))
+    assert pdftext.pages(_pdf(tmp_path / "two.pdf", pages=2)) == 2 and pdftext.pages(pdf) == 1
 
 
 def test_the_page_checks_use_it(tmp_path, no_poppler):
