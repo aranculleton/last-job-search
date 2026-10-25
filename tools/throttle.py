@@ -756,6 +756,28 @@ def first_seen(entries: dict, today: str = "", index: tuple | None = None):
     return of
 
 
+def sightings(entries: dict, today: str = "", index: tuple | None = None):
+    """A function from a posting to (the day its own link was first seen, the day the
+    posting it relists was first seen), each "" where there is none.
+
+    `first_seen`'s two halves, by the same index: a relist is the same title (title_key),
+    employer and city seen within RELIST_WINDOW days under another link. Staging says
+    "looks like a repost" from the second; it read titles as they were written, so a
+    posting the round dated as a relist was "new to this search" when it was staged."""
+    urls, pairs = _seen_index(entries, today) if index is None else index
+
+    def first(k) -> str:
+        days = _days_seen(entries[k]) if k is not None else []
+        return min(days) if days else ""
+
+    def of(job: dict) -> tuple[str, str]:
+        n = norm(job.get("url") or "")
+        own = urls.get(n) if n else None
+        other = pairs.get(_posting_key(job.get("title"), job.get("company"), job.get("location")))
+        return first(own), ("" if other is None or other == own else first(other))
+    return of
+
+
 def _read_do_not_target(path: str = DO_NOT_TARGET) -> dict | None:
     """do_not_target.json as read, or None when there is none or it cannot be read."""
     try:
