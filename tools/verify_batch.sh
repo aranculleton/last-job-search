@@ -92,6 +92,10 @@ PYX
   if [ "$st" -eq 3 ]; then skipped=1; vc=$(python3 "$ROOT/tools/verify_pdf.py" "$C" 2>&1) || p="$p SPACING_LETTER"
   elif [ "$st" -ne 0 ]; then p="$p SPACING_LETTER"; fi
   readers="$readers $(printf '%s\n%s\n' "$vr" "$vc" | grep -oE 'extractor: [a-z]+' | cut -d' ' -f2)"
+  # The design's rules, read off each PDF: its page size, one page, no text too small, nothing
+  # at the page's edge where parsers drop headers and footers, one column (tools/design_check.py).
+  python3 "$ROOT/tools/design_check.py" "$R" --for "$DRAFTS" --abbr "$a" > /dev/null 2>&1 || p="$p DESIGN_RESUME"
+  python3 "$ROOT/tools/design_check.py" "$C" --for "$DRAFTS" --abbr "$a" > /dev/null 2>&1 || p="$p DESIGN_LETTER"
   grep -qF -- "$EMAIL" $VB/vb_r1.txt && grep -qF -- "$PHONE" $VB/vb_r1.txt || p="$p CONTACT"
   # The round trip: every line the draft put on the page (contacts, headings, the summary,
   # each role's heading line and bullets, each skills line, education, certifications) must

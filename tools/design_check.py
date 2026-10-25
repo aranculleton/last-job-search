@@ -13,7 +13,7 @@ than off the .tex, so a font or a TeX install that behaves differently is caught
   - one column: the text, in the order a parser reads it, runs down the page, never back up
     (a two-column layout reads its second column after the first has reached the foot)
 
-    python3 tools/design_check.py <resume.pdf> [--design <name>] [--page letter|a4]
+    python3 tools/design_check.py <resume.pdf> [--page letter|a4 | --for <drafts.json> --abbr <a>]
     python3 tools/design_check.py --fonts     # every font in every engine, read back as an ATS would
     python3 tools/design_check.py --all [--out DIR]   # every design rendered and checked
 
@@ -324,6 +324,18 @@ def _market_page(app, env):
     return "letter" if "letter" in out.stdout else "a4"
 
 
+def page_for(drafts_path, abbr):
+    """"letter" or "a4": the page one draft in a batch asked for, from its design and market."""
+    import doc_design
+    with open(drafts_path, encoding="utf-8") as fh:
+        drafts = json.load(fh)
+    for a in drafts:
+        if a.get("abbr") == abbr:
+            vals, _name, _why = doc_design.choose(a)
+            return "letter" if doc_design.paper(vals) == "letterpaper" else "a4"
+    return None
+
+
 def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
@@ -335,6 +347,9 @@ def main(argv):
         return all_designs(out)
     pdf = argv[0]
     page = argv[argv.index("--page") + 1] if "--page" in argv else None
+    if "--for" in argv:
+        # The page the draft's design asked for: verify_batch passes the batch and the name.
+        page = page_for(argv[argv.index("--for") + 1], argv[argv.index("--abbr") + 1])
     found = check(pdf, page)
     body, small = sizes(_texts(pdf))
     print(f"{os.path.basename(pdf)}: body {body}pt, smallest {small}pt"
