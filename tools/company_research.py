@@ -73,6 +73,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import person  # noqa: E402
 from company_key import key as company_key  # noqa: E402
 from dates import as_date  # noqa: E402
+from safe_name import cap_bytes, windows_safe  # noqa: E402
 
 DIR = "company_research"
 # Research older than this is a lead to re-confirm, not a fact to repeat. Every
@@ -81,12 +82,16 @@ RESEARCH_FRESH_DAYS = 30
 # How long /network's "nobody relevant there" finding rules an employer out.
 PRESENCE_REVIEW_DAYS = 90
 
-_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+# Letters of any script are kept, as in a contact id: "[^a-z0-9]" emptied an employer
+# written in Chinese, Greek or Arabic, which could then never be saved, and the stem is
+# one Windows accepts (safe_name), so a repo holding it checks out there too.
+_NON_WORD = re.compile(r"[\W_]+")
 
 
 def file_key(company) -> str:
     """The filename stem for an employer: its company key, hyphenated."""
-    return _NON_ALNUM.sub("-", str(company_key(str(company or "")) or "").lower()).strip("-")
+    stem = _NON_WORD.sub("-", str(company_key(str(company or "")) or "").lower()).strip("-")
+    return windows_safe(cap_bytes(stem, 150).strip("-"), "-co")
 
 
 def _root(root=None) -> str:

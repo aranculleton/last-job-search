@@ -148,6 +148,29 @@ def test_the_plain_ways_of_asking_for_the_job_are_caught(text):
     assert compose.first_note_findings(text)
 
 
+@pytest.mark.parametrize("reader", ["peer", "decision_maker"])
+@pytest.mark.parametrize("text", [
+    "I'd love a referral for the Staff Data Scientist role.",
+    "Would you be open to giving me an internal referral?",
+    "Could you put my name forward for the planning role?",
+])
+def test_a_referral_asked_for_in_a_first_note_is_refused(text, reader):
+    note = "Hi Ana, I saw your talk on demand planning at the Leeds meetup. " + text
+    assert "asks_for_the_job" in {v.rule for v in compose.validate(note, "connection",
+                                                                   reader=reader)}
+
+
+def test_a_referral_mentioned_without_asking_for_one_is_not_an_ask():
+    for text in ("You came in through a referral, I read, and stayed six years.",
+                 "Your referral programme for graduates sounds generous."):
+        assert not compose.first_note_findings(text, reader="peer"), text
+
+
+def test_a_recruiter_may_still_be_asked():
+    assert not compose.first_note_findings(
+        "I'd love a referral for the Staff Data Scientist role.", reader="recruiter")
+
+
 def test_common_ground_about_openings_is_not_a_job_ask():
     assert not compose.first_note_findings("Your talk on the store openings in Leeds stuck with me")
 

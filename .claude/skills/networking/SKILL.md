@@ -968,6 +968,8 @@ almost always one.
 - `/reply <contact>`, classify a live thread and draft the reply
 - `/threads`, what is owed, what is due, what has gone cold
 - `/prep <contact>`, prep document for a booked call
+- `state.py received <id> --text-file <file>` logs their message as it came (`--scenario`,
+  `--date`, `--channel`), never written into the log by hand
 - `state.py nudge <id> --text-file <file>` logs a nudge that went, with its words;
   `state.py message <id> ...` any other later message (`--texts <file.json>` for several);
   `--attached <file>` on either (and on `sent`) names a file that went with it, and

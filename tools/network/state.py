@@ -39,6 +39,7 @@ Usage:
     python3 tools/network/state.py withdraw <contact_id>... [--all-due] [--reason "..."]
     python3 tools/network/state.py text <contact_id> --date YYYY-MM-DD --text-file <file>
     python3 tools/network/state.py message <contact_id> --text-file <file> [--attached <file>]
+    python3 tools/network/state.py received <contact_id> --text-file <file> [--date YYYY-MM-DD] [--channel C]
     python3 tools/network/state.py attach <contact_id> <file | unknown> [--date YYYY-MM-DD]
     python3 tools/network/state.py no-reply <contact_id> --why "<what they said>" [--look-again YYYY-MM-DD]
     python3 tools/network/state.py sent <contact_id>... (--text-file <file> | --draft | --no-note |
@@ -73,6 +74,7 @@ from company_key import key as company_key, fold as _ck_fold, row_key as _ck_row
 from throttle import (FINAL as _THROTTLE_FINAL, SILENCE_DAYS as _THROTTLE_SILENCE_DAYS,  # noqa: E402
                       UNSENT as _THROTTLE_UNSENT)
 import person  # noqa: E402
+from safe_name import windows_safe  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(_HERE))
 # The person's weekend, as Python weekday numbers (Monday 0). Saturday and
@@ -384,13 +386,17 @@ def contact_id(name: str | None, company: str | None) -> str:
     its legal name. Two people sharing a surname at one employer land on the same slug
     by design; `unique_contact_id` is what resolves that, because a collision
     has to be resolved against the ids that already exist, not guessed at here.
+
+    The id names the person's folder in documents/network/, so it is a name Windows
+    accepts too: with no employer, "Wren Con" was `con`, a folder Windows refuses, and a
+    repo holding it could not be checked out there (`safe_name.windows_safe`).
     """
     sn = _slug(surname(name))
     if not sn:
         raise ValueError(f"contact_id needs a name with a surname in it, got {name!r}")
     ck = _slug(company_key(company))
     if ck:
-        return f"{ck}_{sn}"
+        return windows_safe(f"{ck}_{sn}")
     # With no employer the surname is the whole id, and a one-letter surname
     # makes it useless: "Robin S" and "Quinn S" both became "s". Recruiter
     # contacts can arrive this way, initial only and no company named. Fall back to
@@ -398,8 +404,8 @@ def contact_id(name: str | None, company: str | None) -> str:
     if len(sn) < 2:
         full = _slug(name)
         if full:
-            return full
-    return sn
+            return windows_safe(full)
+    return windows_safe(sn)
 
 
 def _id_set(existing) -> set:
@@ -2178,6 +2184,127 @@ def followed_up(contacts, threads, contact_id, today, text="", date=None, channe
         else contact.get("next_action_due", "")
     _drop_draft(cid)
     return {"row": row, "said": note}
+
+
+RECEIVED_CHANNELS = ("message", "inmail", "email", "connection", "intro")
+
+
+def received(contacts, threads, contact_id, today, text="", date=None, channel="",
+             scenario="", subject="") -> dict:
+    """Record their message: what they wrote, the day it came, the way it came.
+
+    /reply step 6 says their message goes into the log at once, and there was no command
+    for it: every chat wrote the row into network_threads.csv by hand, some without its
+    words, so the message could never be read again or count as a reply that worked
+    (networking audit, 2026-10-25). This writes the row the export writes for a message
+    in: direction `in`, the channel, the scenario `reply.classify` reads (given, or read
+    here), a one-line summary and the full text.
+
+    The words are required. Raises ValueError for a contact not in the book, a message
+    with no words, an unknown scenario, and the same words from them on the same day
+    already logged (another chat logged it first). The contact's status follows the log
+    where the log decides it; an app-written follow-up line comes off, because a reply is
+    owed now, not a nudge. Returns {"row", "said"}; both lists change in place and the
+    caller saves them."""
+    day = _need_date(date or today, "date")
+    cid = str(contact_id or "").strip()
+    contact = already_contacted(contacts, contact_id=cid) if cid else None
+    if contact is None:
+        raise ValueError(f"no contact {cid!r} in the contact book")
+    name = contact.get("name") or cid
+    body = _paragraphs(text)
+    if not body:
+        raise ValueError("their words are needed, so the reply can be read again later: "
+                         "--text-file <file> with their message as it came")
+    rows = [r for r in threads_for(threads, cid) if _direction(r)]
+    for r in rows:
+        if (_direction(r) == "in" and str(r.get("date") or "") == day.isoformat()
+                and _same_words_sent(r.get("full_text"), body)):
+            raise ValueError(f"already logged: the same words from {name} on {day.isoformat()}")
+    chan = channel_of(str(channel or ""))
+    if chan and chan not in RECEIVED_CHANNELS:
+        raise ValueError(f"channel is one of {', '.join(RECEIVED_CHANNELS)}, not {channel!r}")
+    if not chan:
+        outs = [r for r in rows if _direction(r) == "out" and not is_withdrawal(r)]
+        chan = channel_of(outs[-1]) if outs else channel_of(contact)
+        # An answer on LinkedIn to a request or an InMail arrives as a message.
+        chan = "message" if chan in ("", "connection", "open_profile") else chan
+    scen = re.sub(r"[\s-]+", "_", str(scenario or "").strip().lower())
+    try:
+        import reply as _reply
+    except ImportError:  # the reader is beside this file; never without it in the app
+        _reply = None
+    # A scenario that says it was not a message (an acceptance, a request) would log their
+    # words as a click, and the thread would read as nobody having written.
+    if scen in ACCEPTED_SCENARIOS or scen in REQUEST_SCENARIOS:
+        raise ValueError(f"{scenario!r} records something they did, not a message: log a "
+                         "message with the scenario /reply read, or none")
+    if _reply is not None:
+        if not scen:
+            try:
+                scen = str(_reply.classify(body, rows, day).get("scenario") or "")
+            except (ValueError, TypeError):
+                scen = ""
+    machine = scen in AUTO_REPLY_SCENARIOS or auto_reply(body, subject, day) is not None
+    summary = ("Automatic reply" if machine else "They replied") + f" ({chan})"
+    row = {"contact_id": cid, "date": day.isoformat(), "direction": "in", "channel": chan,
+           "scenario": scen, "summary": summary, "full_text": body,
+           "subject": " ".join(str(subject or "").split())}
+    threads.append(row)
+    said = ""
+    stored = str(contact.get("status") or "").strip()
+    if stored in DERIVABLE or stored in ("", "connected_no_reply", "gone_cold"):
+        contact["status"] = derive_status(threads_for(threads, cid))
+    elif not machine:
+        said = (f"{name} is at {stored}, which the log does not decide: if this message "
+                f"changes that, state.py set {cid} --status <status>")
+    action = str(contact.get("next_action") or "").strip()
+    if (not machine and str(contact.get("status") or "") in schema.OWED_BY_US
+            and action and _APP_ACTION.fullmatch(action)):
+        contact["next_action"], contact["next_action_due"] = "", ""
+    return {"row": row, "said": said}
+
+
+def _cli_received(argv) -> int:
+    ap = argparse.ArgumentParser(
+        prog="state.py received",
+        description="Record a message they sent, with their words as it came.")
+    ap.add_argument("contact_id", help="who wrote")
+    ap.add_argument("--text-file", required=True, help="their message, as it came")
+    ap.add_argument("--date", default="", help="the day it came (default today)")
+    ap.add_argument("--channel", default="", choices=("",) + RECEIVED_CHANNELS,
+                    help="default: the way the thread runs (a message on LinkedIn)")
+    ap.add_argument("--scenario", default="",
+                    help="what /reply read it as (default: read here, the same way)")
+    ap.add_argument("--subject", default="")
+    ap.add_argument("--contacts", default=CONTACTS_CSV)
+    ap.add_argument("--threads", default=THREADS_CSV)
+    ap.add_argument("--today", default=datetime.date.today().isoformat())
+    a = ap.parse_args(argv)
+    try:
+        with open(a.text_file, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError as e:
+        print(f"received: cannot read {a.text_file}: {e.strerror or e}")
+        return 1
+    contacts, threads = load_contacts(a.contacts), load_threads(a.threads)
+    try:
+        got = received(contacts, threads, a.contact_id, a.today, text=text,
+                       date=a.date or None, channel=a.channel, scenario=a.scenario,
+                       subject=a.subject)
+    except ValueError as e:
+        print(f"received: not recorded: {a.contact_id}: {e}")
+        return 1
+    save_threads(threads, a.threads)
+    save_contacts(contacts, a.contacts)
+    row = got["row"]
+    status = (already_contacted(contacts, contact_id=a.contact_id) or {}).get("status", "")
+    print(f"received: {a.contact_id}: {row['summary']} on {row['date']}"
+          + (f", read as {row['scenario']}" if row["scenario"] else "")
+          + (f"; now {status}" if status else ""))
+    if got["said"]:
+        print(f"  {got['said']}")
+    return 0
 
 
 def _drop_draft(contact_id: str) -> bool:
@@ -4063,6 +4190,8 @@ def main(argv=None) -> int:
         return _cli_attach(argv[1:])
     if argv[:1] in (["nudge"], ["message"]):
         return _cli_followed_up(argv[1:], argv[0])
+    if argv[:1] == ["received"]:
+        return _cli_received(argv[1:])
     if argv[:1] == ["resent"]:
         return _cli_resent(argv[1:])
     if argv[:1] == ["unsend"]:

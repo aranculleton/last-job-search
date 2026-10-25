@@ -165,3 +165,8 @@ Fernhill Realty         # invented employer, the same test
 Northgate Quant Partners    # invented employer, the same test
 Quantitative Analyst    # a job title, the same test
 Quant Research          # a job title, the same test
+Wren Con                # invented, tests/test_a_name_every_computer_accepts.py
+Juno Nul                # invented, the same test
+Pell Aux                # invented, the same test
+Ρεν Άλαρντ              # invented: the fixtures' Wren Allard in Greek letters, the same test
+User Shell Folders      # a Windows registry key, tools/network/export.py
