@@ -188,13 +188,15 @@ def build(contacts, threads, tracker, today, docs=None):
     for item in state.resumes_owed(contacts, threads, tracker):
         if item["company_key"]:
             slot(item["company_key"], item["company"]).setdefault("resumes_owed", []).append(item)
+    index = state.by_contact(threads)       # one pass over the log, not one a contact
     for c in contacts:
         k = state.row_company_key(c) if hasattr(state, "row_company_key") else company_key(c.get("company"))
         if not k:
             continue
         e = slot(k, (c.get("company") or "").strip())
         e["contacts"].append(c)
-        for got in state.resumes_sent(threads, c.get("contact_id")):
+        cid = str(c.get("contact_id") or "").strip()
+        for got in state.resumes_sent(index.get(cid, []), cid):
             e.setdefault("resumes_sent", []).append(dict(got, name=c.get("name", "")))
         status = live.get(str(c.get("contact_id") or "").strip()) or ""
         e["heat"] = max(e["heat"], HEAT.get(status, 0))

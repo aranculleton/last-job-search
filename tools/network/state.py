@@ -3653,9 +3653,12 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
                       "reason": reason, "detail": detail})
 
     by_id = {str(c.get("contact_id") or "").strip(): c for c in contacts}
+    # One pass over the log for the book: threads_for per contact read the whole log once a
+    # contact, 25 of state.py's 29 seconds on 2,000 contacts (networking audit, 2026-10-25).
+    index = by_contact(threads)
     for cid, contact in by_id.items():
         made = None
-        for r in threads_for(threads, cid):
+        for r in _rows_of(index, cid):
             if says_resume_went(r) and not names_a_file(r):
                 if made is None:
                     made = [str(row.get("cv_file") or "").strip() for row in tracker or ()
@@ -3689,11 +3692,12 @@ def resume_findings(contacts, threads, tracker=None, reasons=None) -> list[dict]
         cid = str(contact.get("contact_id") or "").strip()
         # The portal route: it went in through the portal under their name, never to them,
         # so there is no message to log. Said by the row, or by what they asked for last.
-        if through_portal(row) or resume_route(threads, cid) == ROUTE_PORTAL:
+        mine = _rows_of(index, cid)
+        if through_portal(row) or resume_route(mine, cid) == ROUTE_PORTAL:
             continue
         day = as_date(row.get("date"))
         stem = _resume_stem(cv)
-        went = [s for s in resumes_sent(threads, cid)
+        went = [s for s in resumes_sent(mine, cid)
                 if (as_date(s["date"]) or datetime.date.min) >= (day or datetime.date.min)
                 or stem in {_resume_stem(f) for f in s["files"]}]
         if went or _settled_since(contact, day):
