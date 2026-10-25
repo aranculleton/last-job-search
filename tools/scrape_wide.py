@@ -211,7 +211,7 @@ def _remote_mark(location, remote: bool):
 
 def linkedin(q: str, loc: str, page: int, jobage: int,
              remote: bool = False) -> tuple[list[dict], str | None]:
-    cmd = ["node", "--no-warnings", LINKEDIN(), "search", "-q", q, "-l", loc,
+    cmd = [*portals.runtime(), LINKEDIN(), "search", "-q", q, "-l", loc,
            "--jobage", str(jobage), "--page", str(page), "--format", "json"]
     if remote:
         cmd += ["--remote", "remote"]
@@ -232,7 +232,7 @@ def _capped(text):
 
 
 def freehire(q: str, page: int, jobage: int) -> tuple[list[dict], str | None]:
-    d, err = run(["node", "--no-warnings", FREEHIRE(), "search", "-q", q,
+    d, err = run([*portals.runtime(), FREEHIRE(), "search", "-q", q,
                   "--country", PORTAL_COUNTRY, "--jobage", str(jobage), "--limit", "25",
                   "--page", str(page), "--format", "json"])
     out = []
@@ -253,7 +253,7 @@ def contract(skill: str, q: str, loc: str | None, page: int,
     fetching the real posting. Where the board's posting pages may not be
     fetched (`detail: false`), the snippet is all there is, and it is the body.
     """
-    cmd = (["node", "--no-warnings", portal_cli(skill), "search", "-q", q]
+    cmd = ([*portals.runtime(), portal_cli(skill), "search", "-q", q]
            + (["-l", loc] if loc else [])
            + (["--remote"] if remote else [])
            + ["--jobage", str(jobage), "--page", str(page), "--format", "json"])
@@ -1252,6 +1252,14 @@ def main() -> int:
     os.makedirs(a.out, exist_ok=True)
 
     on = portals.enabled()
+    # Nothing to run a portal's CLI with is not a thin market: say what is missing and stop,
+    # rather than probe every portal into a FileNotFoundError and end the round on exit 2.
+    if any(v and portals.has_cli(n) for n, v in on.items()):
+        try:
+            portals.runtime()
+        except portals.NoRuntime as e:
+            print(f"scrape_wide: {e}", file=sys.stderr)
+            return 1
     for name in portals.unknown():
         print(f"portals: PORTALS in profile/search.py names {name!r}, which is not "
               f"an installed portal, so it switches nothing", file=sys.stderr)

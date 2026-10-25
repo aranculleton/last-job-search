@@ -312,7 +312,7 @@ def _fetch(job: dict, timeout: int) -> dict:
         # this module's workers), and a board's refusal (THROTTLED, robots.txt)
         # kept wherever it falls in stderr, where only the last line was kept.
         d, err = portals.run_cli(
-            ["node", "--no-warnings", cli, "detail", str(ident), "--format", "json"],
+            [*portals.runtime(), cli, "detail", str(ident), "--format", "json"],
             timeout=timeout, empty=_no_body)
         if err:
             return {**job, "hydrate_error": f"detail {err}"}

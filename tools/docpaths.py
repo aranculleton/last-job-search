@@ -9,7 +9,7 @@ The prefix used to be a literal in about ten tools that had to agree, and the
 tracker stores these paths, so tools/doc_name.py matches against them: they
 come from here or they drift.
 
-    python3 tools/docpaths.py shell   # shell assignments for verify_batch.sh
+    python3 tools/docpaths.py shell   # the batch check's profile values, as shell assignments
 """
 
 from __future__ import annotations
@@ -135,7 +135,12 @@ def _ere(s: str) -> str:
 
 
 def shell() -> str:
-    """What verify_batch.sh needs from the profile, as shell assignments."""
+    """What the batch check needs from the profile, as shell assignments (values())."""
+    return "\n".join(f"{k}={shlex.quote(str(x))}" for k, x in values().items())
+
+
+def values() -> dict:
+    """What tools/verify_batch.py needs from the profile, by name."""
     roles = person.module("roles").ROLES
     heads = person.get("documents.headings")
     noun_ban = person.get("documents.banned_nouns", [])
@@ -169,7 +174,7 @@ def shell() -> str:
         BANNED_NOUNS="|".join(_ere(n) for n in noun_ban),
         BANNED_FLAG=("SAYS_" + re.sub(r"[^A-Z0-9]+", "_", noun_ban[0].upper())) if noun_ban else "",
     )
-    return "\n".join(f"{k}={shlex.quote(str(x))}" for k, x in v.items())
+    return v
 
 
 if __name__ == "__main__":

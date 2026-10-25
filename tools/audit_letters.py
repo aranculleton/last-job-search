@@ -248,14 +248,11 @@ def pdf_text(abbr):
     pdf = docpaths.letter_pdf(abbr)
     if not os.path.exists(pdf):
         raise FileNotFoundError(f"no compiled letter at {pdf}; render it before auditing")
+    import pdftext
     try:
-        out = subprocess.run(["pdftotext", "-layout", "-enc", "UTF-8", pdf, "-"],
-                             capture_output=True, text=True)
-    except FileNotFoundError as exc:
-        raise RuntimeError("pdftotext is not installed; see SETUP.md") from exc
-    if out.returncode != 0:
-        raise RuntimeError(f"pdftotext failed on {pdf}: {out.stderr.strip()[:200]}")
-    return out.stdout
+        return pdftext.text(pdf)
+    except pdftext.Unreadable as exc:
+        raise RuntimeError(str(exc)) from None
 
 
 # The opener 03-writing-style.md bans: a first sentence that announces the

@@ -62,6 +62,6 @@ def test_the_command_reads_a_drafts_file(tmp_path):
 
 
 def test_the_batch_checks_the_letters():
-    with open(os.path.join(ROOT, "tools", "verify_batch.sh"), encoding="utf-8") as fh:
+    with open(os.path.join(ROOT, "tools", "verify_batch.py"), encoding="utf-8") as fh:
         script = fh.read()
-    assert 'check_numbers.py" --drafts "$DRAFTS"' in script
+    assert '"check_numbers.py"), "--drafts", drafts' in script

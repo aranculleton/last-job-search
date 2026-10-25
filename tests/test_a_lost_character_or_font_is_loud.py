@@ -56,33 +56,60 @@ def test_a_compile_that_lost_characters_fails_and_says_which(tmp_path):
     assert "The PDF leaves them out" in said
 
 
-def _fonts(stdout, returncode=0):
-    def fake(cmd, **kw):
-        return subprocess.CompletedProcess(cmd, returncode, stdout, "")
-    return mock.patch.object(F.subprocess, "run", side_effect=fake)
-
-
-PDFFONTS = """name                                 type              encoding         emb sub uni object ID
------------------------------------- ----------------- ---------------- --- --- --- ---------
-MAIKTH+LMSans10-Bold                 CID Type 0C       Identity-H       yes yes yes     36  0
-Helvetica                            Type 1            WinAnsi          no  no  no      12  0
-T3Font_0                             Type 3            Custom           yes no  no      14  0
-"""
+def _pdf_with_fonts(path, fonts):
+    """A one-page PDF whose page uses `fonts`: (name, kind) with kind "embedded-cid",
+    "type1-not-embedded" or "type3". The facts pdffonts printed, built with pypdf."""
+    pytest.importorskip("pypdf")
+    from pypdf import PdfWriter
+    from pypdf.generic import (ArrayObject, DecodedStreamObject, DictionaryObject,
+                               NameObject, NumberObject)
+    w = PdfWriter()
+    page = w.add_blank_page(200, 200)
+    table = DictionaryObject()
+    for i, (name, kind) in enumerate(fonts):
+        f = DictionaryObject({NameObject("/Type"): NameObject("/Font")})
+        if kind == "embedded-cid":
+            prog = DecodedStreamObject()
+            prog.set_data(b"font program")
+            desc = DictionaryObject({NameObject("/Type"): NameObject("/FontDescriptor"),
+                                     NameObject("/FontName"): NameObject("/" + name),
+                                     NameObject("/FontFile3"): w._add_object(prog)})
+            kid = DictionaryObject({NameObject("/Type"): NameObject("/Font"),
+                                    NameObject("/Subtype"): NameObject("/CIDFontType0"),
+                                    NameObject("/BaseFont"): NameObject("/" + name),
+                                    NameObject("/FontDescriptor"): w._add_object(desc)})
+            f.update({NameObject("/Subtype"): NameObject("/Type0"),
+                      NameObject("/BaseFont"): NameObject("/" + name),
+                      NameObject("/DescendantFonts"): ArrayObject([w._add_object(kid)])})
+        elif kind == "type1-not-embedded":
+            f.update({NameObject("/Subtype"): NameObject("/Type1"),
+                      NameObject("/BaseFont"): NameObject("/" + name)})
+        else:
+            f.update({NameObject("/Subtype"): NameObject("/Type3"),
+                      NameObject("/Name"): NameObject("/" + name),
+                      NameObject("/FontMatrix"): ArrayObject([NumberObject(1)] * 6)})
+        table[NameObject(f"/F{i}")] = w._add_object(f)
+    page[NameObject("/Resources")] = DictionaryObject({NameObject("/Font"): table})
+    with open(path, "wb") as fh:
+        w.write(fh)
+    return str(path)
 
 
 def test_a_font_left_out_or_a_bitmap_font_is_named(tmp_path):
-    pdf = tmp_path / "r.pdf"
-    pdf.write_bytes(b"%PDF-1.4\n")
-    with _fonts(PDFFONTS):
-        assert F.font_problems(str(pdf)) == [
-            "the font Helvetica is not embedded in r.pdf, so the reader's machine puts another "
-            "in its place",
-            "the font T3Font_0 in r.pdf is a Type 3 (bitmap) font, which prints blurred and many "
-            "parsers read as nothing"]
-    with _fonts(PDFFONTS.split("Helvetica")[0]):
-        assert F.font_problems(str(pdf)) == []
-    with _fonts("", returncode=1):               # pdffonts could not read it: no guess
-        assert F.font_problems(str(pdf)) == []
+    # Read with pypdf (tools/pdftext.py), so the check needs nothing Poppler gave.
+    pdf = _pdf_with_fonts(tmp_path / "r.pdf", [("MAIKTH+LMSans10-Bold", "embedded-cid"),
+                                               ("Helvetica", "type1-not-embedded"),
+                                               ("T3Font_0", "type3")])
+    assert F.font_problems(pdf) == [
+        "the font Helvetica is not embedded in r.pdf, so the reader's machine puts another "
+        "in its place",
+        "the font T3Font_0 in r.pdf is a Type 3 (bitmap) font, which prints blurred and many "
+        "parsers read as nothing"]
+    clean = _pdf_with_fonts(tmp_path / "c.pdf", [("MAIKTH+LMSans10-Bold", "embedded-cid")])
+    assert F.font_problems(clean) == []
+    broken = tmp_path / "b.pdf"
+    broken.write_bytes(b"%PDF-1.4\n")              # nothing can read it: no guess
+    assert F.font_problems(str(broken)) == []
     assert F.font_problems(str(tmp_path / "none.pdf")) == []
 
 
@@ -101,8 +128,7 @@ def test_a_finished_render_with_a_font_left_out_stops(monkeypatch):
         F.fit(a)
 
 
-@pytest.mark.skipif(not (shutil.which("lualatex") and shutil.which("pdffonts")),
-                    reason="lualatex and Poppler are not installed here")
+@pytest.mark.skipif(not shutil.which("lualatex"), reason="lualatex is not installed here")
 def test_a_real_compile_of_a_character_the_font_lacks_fails(tmp_path):
     (tmp_path / "t.tex").write_text("\\documentclass{article}\n\\begin{document}\n"
                                     "Ellis \u2713 forecast\n\\end{document}\n", encoding="utf-8")
