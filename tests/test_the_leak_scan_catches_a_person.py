@@ -292,3 +292,15 @@ def test_an_employer_the_app_names_for_its_products_is_not_a_leak_and_the_list_i
                 pass
     for org in sorted(build_app.ALLOWED_ORGANIZATIONS):
         assert org in text, f"{org} is allowed but the app's own text never names it"
+
+
+def test_a_pdf_text_operator_in_the_design_check_is_not_an_employer(tmp_path, monkeypatch):
+    # The design check reads a page's text positions by the PDF's own two-letter operators;
+    # an employer's short name on a person's denylist can be the same two letters. Only the
+    # quoted operator in that file is set aside (2026-10-25).
+    short = "".join(["T", "D"])
+    t = _tree(tmp_path, {"tools/design_check.py": f'elif op in ("Td", "{short}"):\n'
+                                                   f"# applied to {short} last week\n",
+                         "tools/other.py": f'op = "{short}"\n'})
+    found = _scan(t, short + "\n", monkeypatch=monkeypatch)
+    assert found == ["tools/design_check.py:2: denylist entry 1", "tools/other.py:1: denylist entry 1"]

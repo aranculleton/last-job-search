@@ -102,6 +102,11 @@ ALLOW = (
     # ("Product", r"pattern") entry is set aside, and every comment and other line in
     # the file is still read.
     ("tools/bridges.py", r'\("[^"\n]{1,40}", r"[^"\n]*"\)'),
+    # A PDF's own two-letter text operators (the ones that set, move and show text), quoted
+    # where the design check reads a page's text positions: an employer's short name can
+    # share those letters.
+    # Only the quoted operator is set aside, and every other word in the file is read.
+    ("tools/design_check.py", r'"T[dDfLmjJ*]"'),
 )
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "venv"}

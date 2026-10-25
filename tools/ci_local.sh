@@ -58,16 +58,22 @@ for arg in "$@"; do
   [ "$arg" = "--quick" ] && QUICK=1
   [ "$arg" = "--full" ] && FULL=1
 done
-DATA_ONLY=0; CHANGED=""
+DATA_ONLY=0; APP_RELEASE=0; CHANGED=""
 if [ "$FULL" = "0" ] && [ -f profile/person.json ]; then
-  if CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"; then
-    DATA_ONLY=1
-  fi
+  CHANGED="$("$PY" tools/personal_paths.py --only-personal-changed 2>/dev/null)"
+  case $? in
+    0) DATA_ONLY=1 ;;
+    # The app files that changed are exactly the app's release (an update being landed):
+    # its own CI tested them on Linux, a Mac and Windows, so they are not tested again here.
+    2) DATA_ONLY=1; APP_RELEASE=1 ;;
+  esac
 fi
 # Run the app's own check, unless only the person's own files changed.
 app_check() {                  # app_check <runner> <name> <args...>
   local runner="$1" name="$2"; shift 2
-  if [ "$DATA_ONLY" = "1" ]; then
+  if [ "$APP_RELEASE" = "1" ]; then
+    skip "$name" "the app's own release, tested before it shipped; --full runs it"
+  elif [ "$DATA_ONLY" = "1" ]; then
     skip "$name" "only your own files changed; --full runs it"
   else
     "$runner" "$name" "$@"
@@ -180,7 +186,11 @@ fi
 
 echo
 echo "tests"
-if [ "$DATA_ONLY" = "1" ]; then
+if [ "$DATA_ONLY" = "1" ] && [ "${APP_RELEASE:-0}" = "1" ]; then
+  echo "  the app's files that changed are exactly its release, which its own checks passed on"
+  echo "  Linux, a Mac and Windows before it shipped, so its suites are skipped (--full runs them)"
+  skip "pytest (the app's suite, on the example person)" "the app's own release, tested before it shipped"
+elif [ "$DATA_ONLY" = "1" ]; then
   echo "  only your own files changed since master ($(printf '%s\n' "$CHANGED" | grep -c .)): the app's"
   echo "  own suites test the app, which did not change, so they are skipped (--full runs them)"
   skip "pytest (the app's suite, on the example person)" "only your own files changed"

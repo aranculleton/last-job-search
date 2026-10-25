@@ -107,3 +107,56 @@ def test_an_app_commit_held_only_by_origin_master_is_copied_by_its_commit(tmp_pa
     missing = "0" * 40
     said = rehearse_sync.copy_app(app_repo, str(tmp_path / "app2"), missing)
     assert said.startswith("000000000000 could not be copied from")
+
+
+def _person_with_app(tmp_path):
+    """A person's repo on master, and the app one release ahead under the sync's ref."""
+    me = str(tmp_path / "me")
+    os.makedirs(os.path.join(me, "tools"))
+    os.makedirs(os.path.join(me, "profile"))
+    _git(tmp_path, "init", "-q", "-b", "master", me)
+    with open(os.path.join(me, "tools", "x.py"), "w", encoding="utf-8") as fh:
+        fh.write("v = 1\n")
+    with open(os.path.join(me, "profile", "person.json"), "w", encoding="utf-8") as fh:
+        fh.write("{}\n")
+    _git(me, "add", "-A")
+    _git(me, "commit", "-qm", "start")
+    _git(me, "update-ref", "refs/remotes/origin/master", "HEAD")
+    _git(me, "switch", "-qc", "claude/update")
+    with open(os.path.join(me, "tools", "x.py"), "w", encoding="utf-8") as fh:
+        fh.write("v = 2\n")
+    _git(me, "commit", "-qam", "the app's release")
+    _git(me, "update-ref", "refs/remotes/app/release-tag", "HEAD")
+    return me
+
+
+def test_landing_the_apps_own_release_does_not_run_the_apps_suite_again(tmp_path):
+    # Its CI tested it on Linux, a Mac and Windows; again here cost about 8 minutes a merge
+    # and stopped a merge on Windows (2026-10-25).
+    me = _person_with_app(tmp_path)
+    app, _ = personal_paths.split(personal_paths.changed(me))
+    assert app == ["tools/x.py"] and personal_paths.the_apps_own(me, app)
+
+
+def test_an_app_file_edited_here_is_not_the_apps_release(tmp_path):
+    me = _person_with_app(tmp_path)
+    with open(os.path.join(me, "tools", "x.py"), "w", encoding="utf-8") as fh:
+        fh.write("v = 3\n")
+    _git(me, "commit", "-qam", "edited by hand")
+    app, _ = personal_paths.split(personal_paths.changed(me))
+    assert not personal_paths.the_apps_own(me, app)
+
+
+def test_an_uncommitted_edit_to_an_app_file_is_not_the_apps_release(tmp_path):
+    me = _person_with_app(tmp_path)
+    with open(os.path.join(me, "tools", "x.py"), "w", encoding="utf-8") as fh:
+        fh.write("v = 4\n")
+    app, _ = personal_paths.split(personal_paths.changed(me))
+    assert not personal_paths.the_apps_own(me, app)
+
+
+def test_with_no_app_fetched_the_suite_runs(tmp_path):
+    me = _person_with_app(tmp_path)
+    _git(me, "update-ref", "-d", "refs/remotes/app/release-tag")
+    app, _ = personal_paths.split(personal_paths.changed(me))
+    assert not personal_paths.the_apps_own(me, app)

@@ -223,3 +223,10 @@ jobs:
           python -c "import sys, locale; print(sys.stdout.encoding, locale.getpreferredencoding())"
           python tools/env_check.py --fix packages runtime latex
           python tools/platform_check.py computer general designs seed
+
+      - name: The whole test suite on Windows, every failure listed
+        if: always()
+        run: |
+          unset PYTHONUTF8 PYTHONIOENCODING
+          py=$(python -c "import sys; sys.path.insert(0, 'tools'); import local_path; print(local_path.venv_python() if local_path.venv_runs() else sys.executable)")
+          "$py" -m pytest tests -q -p no:cacheprovider -rf --tb=line 2>&1 | tail -n 400

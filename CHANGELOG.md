@@ -54,6 +54,11 @@ make sense to somebody whose repo just received it.
 - **Fewer first-time lines**: two a day at most, and a tip seen in one chat is not repeated
   in another.
 - **No email, and no other connections**: the app never reads your inbox.
+- **Taking an update is quicker**: the app's own tests are not run again on your computer
+  for an update its test machines already passed on Linux, a Mac and Windows. Your own
+  checks still run every time.
+- **A scheduled task runs at most once a day**: each run costs a whole chat's worth of
+  usage, so nothing is ever set to check every hour.
 
 ### Fixed
 
