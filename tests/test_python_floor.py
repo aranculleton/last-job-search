@@ -110,3 +110,26 @@ def test_a_pension_plans_name_and_its_short_name_are_one_employer():
     import company_key
     assert company_key.key("Fenwick Teachers' Pension Plan") == company_key.key("Fenwick Teachers'")
     assert company_key.key("Fenwick Teachers’ Pension Fund") == company_key.key("Fenwick Teachers'")
+
+
+def test_the_sentence_itself_reads_on_a_python_older_than_the_floor():
+    """SETUP.md sends a Linux whose Python is too old to `python3 tools/python_floor.py`
+    for the one command it needs. Its first line was `from __future__ import annotations`,
+    which Python 3.6 (RHEL 8's, Ubuntu 18.04's) refuses before running anything, so the
+    sentence was a SyntaxError (2026-10-25). Parsed here with 3.6's grammar, and no
+    annotation in it is evaluated."""
+    import ast
+    path = ROOT / "tools" / "python_floor.py"
+    with open(path, encoding="utf-8") as fh:
+        src = fh.read()
+    tree = ast.parse(src, feature_version=(3, 6))
+    futures = [a.name for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)
+               and n.module == "__future__" for a in n.names]
+    assert "annotations" not in futures
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            notes = [a.annotation for a in node.args.args + node.args.kwonlyargs] + [node.returns]
+            # A plain name (str, bool) reads on any Python; `str | None` or `list[str]`
+            # only on newer ones, so those are written as text.
+            assert all(n is None or isinstance(n, (ast.Constant, ast.Name)) for n in notes), \
+                node.name
