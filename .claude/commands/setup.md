@@ -197,7 +197,11 @@ Then the state files (setup-sections.md, the last section), and commit and push.
 >   name> and the careers pages of <the employers in `boards.py`>.
 > - Paste a posting, or its link, for a resume and cover letter written for it.
 > - Say **"who should I talk to at <employer>?"** to find people worth contacting.
-> - Updates arrive by themselves.
+>
+> Want a quick tour of everything else? Say **"show me around"**.
+
+When they say "show me around", or ask what the app can do or how to use something, run
+`python3 tools/tips.py tour` (or `tour <topic>`) and pass on what it prints, as it is.
 
 Nothing more about LinkedIn: no notice, no warning and no question. The job search uses no LinkedIn account.
 Claude never switches it off and never suggests it (setup-sections.md, `boards`). Signing in to LinkedIn, on a computer, is the reading step's own, when it needs it

@@ -531,11 +531,18 @@ def default_profile_reads(where: str) -> str:
 
 
 def setting() -> str:
+    """PROFILE_READS by reading.py's own rule (reads_setting): what the profile gives, and
+    "browser" where it gives none, so this check and the reads agree. "" before a profile
+    has any networking settings: nothing is read yet."""
     try:
         import person
         if not person.exists("networking.py"):
             return ""
-        return str(getattr(person.module("networking"), "PROFILE_READS", "") or "").lower()
+        net_dir = os.path.join(ROOT, "tools", "network")
+        if net_dir not in sys.path:
+            sys.path.append(net_dir)
+        import reading
+        return reading.reads_setting(person.module("networking"))
     except Exception:  # a check must never break the sync that runs it
         return ""
 
@@ -645,18 +652,19 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
     owner, name = repo()
     lines = check(where, setting(), tools, signed_in_ever(), fixes, owner, name, employer,
                   works=works_on(), has_local=has_local(), os_name=sys.platform)
+    steps = computer_steps(where, tools, today)
     if once and chat:
-        if not lines and _told_before(chat):
+        if not lines and not steps and _told_before(chat):
             # It had asked for something, and it is all here now: said once, so the
             # person who ran the commands hears it worked.
             mark_told(chat, (), today)
             return ("Place check (Claude: tell the person this once, in your own words): "
                     "everything it asked for is in place now; nothing more to do.")
-        if told(chat, lines, today, retell=bool(fixes)):
+        if told(chat, lines + steps, today, retell=bool(fixes)):
             return ""
-        mark_told(chat, lines, today)
+        mark_told(chat, lines + steps, today)
     if not lines:
-        return ""
+        return _steps_block(steps)
     import claude_surfaces
     used = [e for e in claude_surfaces.load()["entries"]
             if e.get("how") and claude_surfaces.say(e["id"], name=name, owner=owner)
@@ -670,7 +678,34 @@ def report(tools=None, employer: str = "", once: bool = False, env=None,
             "Never apply a choice for them, and never hold back work that does not need it. A "
             "[bracketed] condition is yours to test, never said):\n"
             + "\n".join("  " + l.replace("\n", "\n  ") for l in lines)
-            + "".join("\n  " + w for w in warn))
+            + "".join("\n  " + w for w in warn)
+            + ("\n" + _steps_block(steps) if steps else ""))
+
+
+def computer_steps(where: str, tools, today: datetime.date | None = None) -> list:
+    """On their computer, in a chat with a browser tool: what is still to do there (LinkedIn
+    signed in, its download), from `reading.py new-computer`. [] anywhere else, and when it
+    is all done."""
+    have = [str(t).strip().lower() for t in tools or ()]
+    if where != "local" or not set(have) & BROWSERS or not setting():
+        return []
+    try:
+        net_dir = os.path.join(ROOT, "tools", "network")
+        if net_dir not in sys.path:
+            sys.path.append(net_dir)
+        import reading
+        got = reading.new_computer(have, today)
+    except Exception:  # a check must never break the sync that runs it
+        return []
+    return [] if got == ["nothing to do: carry on"] else got
+
+
+def _steps_block(steps) -> str:
+    if not steps:
+        return ""
+    return ("On this computer (Claude: do these yourself, in order, after the person's request; "
+            "say only what a step prints for them, as it is):\n"
+            + "\n".join("  " + l for l in steps))
 
 
 def main(argv=None) -> int:
