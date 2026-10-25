@@ -623,12 +623,21 @@ def ruled_out(entries: dict, today: str = "") -> tuple[dict[str, str],
         n = norm(e.get("url") or u)
         if n:
             urls[n] = why
-        t = title_key(e.get("title"))
-        k = key(e.get("company"))
+        pair = entry_pair(e)
         days = _days_seen(e)
-        if t and k and (own_call or not relist_since or not days or max(days) >= relist_since):
-            pairs[(t, k, city(e["location"]) if e.get("location") else ANYWHERE)] = why
+        if pair and (own_call or not relist_since or not days or max(days) >= relist_since):
+            pairs[pair] = why
     return urls, pairs
+
+
+def entry_pair(e: dict) -> tuple[str, str, str] | None:
+    """The (title, employer key, city) a ruling on this entry covers, ANYWHERE for an
+    entry with no location, or None for one with no title or employer. `ruled_pair` reads
+    a posting against it."""
+    t, k = title_key(e.get("title")), key(e.get("company"))
+    if not (t and k):
+        return None
+    return (t, k, city(e["location"]) if e.get("location") else ANYWHERE)
 
 
 def ruled_pair(pairs: dict, job: dict) -> str:

@@ -161,3 +161,37 @@ def test_show_prints_the_list_numbered(tmp_path, monkeypatch, capsys):
     assert "   2. Thornbury Bank | Risk Analyst | age (relist): " in out
     assert "Acme Analytics" not in out
     assert filtered.main([]) == 2
+
+
+def test_a_relist_dropped_on_its_first_postings_ruling_stays_back(tmp_path):
+    """The person's ruling was on the posting's first link. A round dropped the relist on it
+    (the same title, employer and city), and bringing the relist back lifted rulings by the
+    relist's own link only, which held none: the next round dropped it again."""
+    import exclude
+    import prefilter
+    seen = str(tmp_path / "seen_jobs.json")
+    exclude.add("https://jobs.example/31", "the person: not this team", title="Supply Chain Analyst",
+                company="Acme Freight", basis="person", today="2026-10-20", path=seen,
+                location="Manchester, England, United Kingdom")
+    job = {"title": "Supply Chain Analyst", "company": "Acme Freight",
+           "location": "Manchester, England, United Kingdom", "url": "https://jobs.example/32"}
+    check = prefilter.already_ruled_out(seen, today=prefilter._dt.date(2026, 10, 25))
+    why = check(job)
+    assert why.startswith("excluded in seen_jobs.json")
+    rd, sd = str(tmp_path / "r9"), str(tmp_path / "summary")
+    _write(os.path.join(rd, "01_dropped.json"), [{**job, "prefilter_reason": why}])
+    _write(os.path.join(rd, "06_shortlist.json"), [])
+    filtered.write(rd, sd, "r9")
+    [(e, rank)] = filtered.back("r9", ["https://jobs.example/32"], why="I want this one",
+                                round_dir=rd, summary_dir=sd, today="2026-10-25", seen_path=seen)
+    assert rank == 1
+    check = prefilter.already_ruled_out(seen, today=prefilter._dt.date(2026, 10, 26))
+    assert check(job) == ""
+    (entry,) = json.load(open(seen, encoding="utf-8"))["seen"].values()
+    assert entry["status"] == "lifted" and entry["lifted_because"] == "I want this one"
+    # Another role at the employer is no relist of it, and its ruling is left alone.
+    exclude.add("https://jobs.example/33", "the person: not this team", title="Data Engineer",
+                company="Acme Freight", basis="person", today="2026-10-20", path=seen)
+    filtered.back("r9", ["https://jobs.example/32"], round_dir=rd, summary_dir=sd, seen_path=seen)
+    assert [e["status"] for e in json.load(open(seen, encoding="utf-8"))["seen"].values()] == [
+        "lifted", "excluded"]

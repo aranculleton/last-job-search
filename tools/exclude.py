@@ -332,24 +332,38 @@ def add_many(rulings, today: str = "", path=SEEN) -> int:
     return len(rulings)
 
 
-def _matcher(words: str = "", urls=()):
-    """Matches an entry by words in its reason, by its address, or by both."""
+def _matcher(words: str = "", urls=(), postings=()):
+    """Matches an entry by words in its reason, by its address, or by both. With
+    `postings`, an entry whose ruling covers one of them by its title, employer and city
+    (throttle.ruled_pair, as a round reads it) matches as its address would."""
     needle = (words or "").strip().lower()
     keys = {norm(u) or u for u in urls or ()}
-    if not keys and len(needle) < 3:
+    postings = [p for p in postings or () if isinstance(p, dict)]
+    if not keys and not postings and len(needle) < 3:
         raise ValueError("name the rulings: words from the reason (three letters or more) "
                          "or --url for each posting")
+
+    def covers(entry) -> bool:
+        if not postings:
+            return False
+        import throttle
+        pair = throttle.entry_pair(entry)
+        return bool(pair) and any(throttle.ruled_pair({pair: "ruled"}, p) for p in postings)
 
     def match(key, entry) -> bool:
         if needle and needle not in str(entry.get("exclusion_reason") or "").lower():
             return False
-        return not keys or bool({key, norm(entry.get("url") or "")} & keys)
+        if not keys and not postings:
+            return True
+        return bool({key, norm(entry.get("url") or "")} & keys) or covers(entry)
     return match
 
 
-def lift(words: str = "", why: str = "", today: str = "", path=SEEN, urls=()) -> list:
-    """Every exclusion whose reason holds `words` (and, with `urls`, only those), lifted."""
-    match = _matcher(words, urls)
+def lift(words: str = "", why: str = "", today: str = "", path=SEEN, urls=(),
+         postings=()) -> list:
+    """Every exclusion whose reason holds `words` (and, with `urls` or `postings`, only
+    those: by its address, or as a ruling on a posting's title, employer and city), lifted."""
+    match = _matcher(words, urls, postings)
     data = _load(path)
     out = []
     for key, entry in data["seen"].items():
