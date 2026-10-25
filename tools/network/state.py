@@ -1686,7 +1686,12 @@ def owed(contacts, threads, today) -> list[dict]:
         pending = request_pending(msgs)
         if pending is not None:
             if (today - pending).days < REQUEST_WITHDRAW_DAYS:
-                _action_row()
+                # The app's own "Once they accept: ..." line is no job while nobody has: it
+                # was listed overdue six working days after every request, with nothing to
+                # send (networking audit, 2026-10-25). A date of the person's own is owed.
+                if not (_APP_ACTION.fullmatch(" ".join(action.split()))
+                        and base["next_action_due"] in _app_dates(msgs, action)):
+                    _action_row()
                 continue
             items.append(dict(base, kind="request_pending", channel="connection",
                               since=pending.isoformat(),
