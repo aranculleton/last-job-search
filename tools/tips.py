@@ -35,6 +35,7 @@ import csv
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -153,6 +154,58 @@ TOUR = (
      "Your brief arrives on its days with what's due and news that matters to your search. "
      "Say \"move my brief\" to change the days or the time."),
 )
+# The same, on the page: one short card a tab, each pointing at its one button, and the
+# first-time lines in the page's words ("Say what's off in Chat"), never a chat's ("tell
+# me"). Nothing here runs unasked: the tour opens from Settings, a tip shows once at the end
+# of its tab (CAPABILITY_MAP G15).
+PAGE_TOUR = (
+    {"key": "todo", "tab": "todo", "title": "To do",
+     "text": "What is due, most urgent first. Each card has one button; tap Done when it is "
+             "done, or Not today."},
+    {"key": "jobs", "tab": "jobs", "title": "Jobs",
+     "text": "New roles scored out of 100 against what you want, with why. Tap Draft this on "
+             "one you want, or Add a job for a link of your own."},
+    {"key": "drafts", "tab": "ready", "title": "Drafts",
+     "text": "Your resume and letter for each role, checked. Get both files, apply on the "
+             "employer's own site, then tap I have applied."},
+    {"key": "messages", "tab": "messages", "title": "Messages",
+     "text": "Notes to people worth writing to. Copy one, send it on LinkedIn yourself, then "
+             "tap I sent it."},
+    {"key": "contacts", "tab": "people", "title": "Contacts",
+     "text": "Everyone you are talking to, and what is owed. When someone writes back, tap "
+             "They replied and paste what they said."},
+    {"key": "interviews", "tab": "interviews", "title": "Interviews",
+     "text": "Your prep for each interview, to read before it. Tap Prepare me to build it."},
+)
+PAGE_FIRST = {
+    "search": "Your first search here, so the ranking won't be perfect yet. Say what's off "
+              "in Chat (\"too junior\", \"not this kind of company\") and the next one learns.",
+    "apply": "Your first application here. Say in Chat anything you'd change in the wording, "
+             "and it sticks for the next one.",
+    "networking": "Your first notes here, so some may be off. Say in Chat who you wouldn't "
+                  "write to or what you'd say differently, and it sticks.",
+    "reply": "If a reply doesn't sound like you, change it before you send it and paste what "
+             "you sent: your edits teach it your voice.",
+    "interview": "Your first interview prep. Say in Chat which questions felt wrong or "
+                 "missing, and the next one fits you better.",
+    "prep": "Your first call prep. After the call, say in Chat how it went.",
+    "brief": "Your first brief. Say in Chat what you'd want more or less of.",
+    "general": "Anything made for you can be changed: say what's off in Chat and it sticks.",
+}
+
+
+def for_page(text: str) -> str:
+    """A tip in the page's words: a first-time line as PAGE_FIRST says it, and a chat's
+    "say"/"tell me" turned into Chat on the page."""
+    for area, first in FIRST.items():
+        if text == first:
+            return PAGE_FIRST[area]
+    out = text.replace(OFF_HINT, "")
+    out = re.sub(r"\bTell me\b", "Say in Chat", out)
+    out = re.sub(r"\btell me\b", "say in Chat", out)
+    return re.sub(r"\b[Ss]ay (\"[^\"]+\")", lambda m: f"Type {m.group(1)} in Chat", out)
+
+
 TOUR_OPEN = "Here's what you can say:"
 TOUR_CLOSE = ("Say \"tell me more about\" any of these for a few lines on it, or just ask "
               "how to do something.")
@@ -226,6 +279,11 @@ def _merge(a: dict, b: dict) -> dict:
 
 def load() -> dict:
     return _merge(_read(_path()), _on_master())
+
+
+def local() -> dict:
+    """This copy's own tips file, without what another chat has landed."""
+    return _read(_path())
 
 
 def save(state: dict) -> None:

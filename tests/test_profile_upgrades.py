@@ -373,7 +373,7 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert {u.id for u in U.REGISTRY if u.needs == "you"} == {"unconfirmed-facts",
                                                                  "method-routines", "linkedin-plan",
                                                                  "learned-choices", "profile-reads",
-                                                                 "connections-export", "work-place",
+                                                                 "connections-export",
                                                                  "profile-consistency",
                                                                  "campaign-notes", "message-texts",
                                                                  "voice-refresh",
@@ -395,8 +395,9 @@ def test_only_what_truly_needs_the_person_waits_for_them():
     assert not re.search(r"\bterms\b|\brisk", U.by_id("profile-reads").ask)
     # Only the person can download their own connections; Claude never touches LinkedIn.
     assert U.by_id("connections-export").steps().endswith("Nothing is sent to anyone.")
-    # Where they will mostly work is theirs to say; nothing in a profile answers it.
-    assert "computer, or on your phone or the web" in U.by_id("work-place").ask
+    # Where they will mostly work is no longer asked of anyone set up before the question:
+    # 4.0 recommends no chat on a computer (2026-10-25).
+    assert U.by_id("work-place").pending() == "" and U.by_id("work-place").needs == "nobody"
     # Two answers to what a recruiter checks first: only the person knows which is true.
     assert "you pick the right one" in U.by_id("profile-consistency").ask
     # Their own notes are folded into the prep document only on their yes.
@@ -447,8 +448,10 @@ def _read(*parts):
 
 
 def test_a_session_applies_them_without_being_asked():
-    claude = _read("CLAUDE.md")
-    step = claude[claude.index("5. **Profile upgrades"):claude.index("In the app itself")]
+    # The step lives in RUNBOOK.md, "Start of a session", since 4.0 (docs/rule_map.json).
+    runbook = _read("RUNBOOK.md")
+    start = runbook[runbook.index("## Start of a session"):]
+    step = start[start.index("5. **Profile upgrades"):start.index("In the app itself")]
     for must in ("run_in_background: true", 'isolation: "worktree"', "/upgrade",
                  "never offer them a list or wait for a yes", "at most three",
                  "undo it yourself"):

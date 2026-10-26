@@ -31,7 +31,7 @@ pip3 install -r requirements.txt
 
 node --version || bun --version || python3 tools/installs.py runtime   # the job-board CLIs; Claude's cloud containers ship both
 
-python3 -m pytest tests -q          # over 3,800 tests, for working on the app; a setup never waits on them
+python3 -m pytest tests -q          # the app's own tests, for working on the app; a setup never waits on them
 ```
 
 Three notes on why each piece is there:

@@ -38,3 +38,47 @@ profile/tips.json merge=ljs-state text eol=lf
 profile/learned.json merge=ljs-state text eol=lf
 profile/more_at.json merge=ljs-state text eol=lf
 documents/network/linkedin_export.json merge=ljs-state text eol=lf
+# The page's own files merge key by key: the answers given on it, its address and the
+# suggestions turned down, the person's settings, their own Tweak buttons and the record of
+# every tweak to an output (tools/merge_state.py JSON_FILES says how each one's writer uses it).
+profile/app.json merge=ljs-state text eol=lf
+profile/setup_answers.json merge=ljs-state text eol=lf
+profile/person.json merge=ljs-state text eol=lf
+profile/tweaks.json merge=ljs-state text eol=lf
+documents/applications/*/tweaks.json merge=ljs-state text eol=lf
+documents/network/*/tweaks.json merge=ljs-state text eol=lf
+# Every other JSON file the app writes into a person's copy that two chats can both change,
+# each merged as its writer uses it (tools/merge_state.py JSON_FILES). The JSON names the
+# app writes that need none are listed there too (JSON_NAMES), each with why.
+profile/build_versions.json merge=ljs-state text eol=lf
+profile/employers_judged.json merge=ljs-state text eol=lf
+profile/asked.json merge=ljs-state text eol=lf
+profile/place.json merge=ljs-state text eol=lf
+profile/routines.json merge=ljs-state text eol=lf
+profile/consistency_reviewed.json merge=ljs-state text eol=lf
+profile/tests/fixtures/score_baseline.json merge=ljs-state text eol=lf
+job_scraper/do_not_target.json merge=ljs-state text eol=lf
+documents/rounds/*.json merge=ljs-state text eol=lf
+documents/rounds/.sweep/cursor.json merge=ljs-state text eol=lf
+documents/rounds/added/jobs.json merge=ljs-state text eol=lf
+documents/rounds/kept/jobs.json merge=ljs-state text eol=lf
+documents/page_assets.json merge=ljs-state text eol=lf
+documents/network/page_reads_queue.json merge=ljs-state text eol=lf
+documents/applications/*/verify.json merge=ljs-state text eol=lf
+documents/network/own_profile_review.json merge=ljs-state text eol=lf
+documents/network/.page_reads.json merge=ljs-state text eol=lf
+documents/network/.signed_in.json merge=ljs-state text eol=lf
+documents/network/.shortlist.json merge=ljs-state text eol=lf
+documents/network/.reads_stopped.json merge=ljs-state text eol=lf
+documents/network/.search_filters.json merge=ljs-state text eol=lf
+documents/network/.inmail_credits.json merge=ljs-state text eol=lf
+documents/network/.title_yield.json merge=ljs-state text eol=lf
+documents/network/.composed/*.json merge=ljs-state text eol=lf
+documents/network/*/reading.json merge=ljs-state text eol=lf
+documents/network/*/own_facts.json merge=ljs-state text eol=lf
+documents/network/*/draft.parts.json merge=ljs-state text eol=lf
+documents/applications/*/campaign.json merge=ljs-state text eol=lf
+documents/applications/*/.interview_prep.built.json merge=ljs-state text eol=lf
+documents/applications/*/draft.json merge=ljs-state text eol=lf
+documents/applications/*/cost.json merge=ljs-state text eol=lf
+company_research/*.json merge=ljs-state text eol=lf

@@ -238,6 +238,21 @@ def write_rows(path: str, rows, columns) -> None:
         raise
 
 
+def tracker(path: str | None = None, refuse: bool = True) -> list[dict]:
+    """The application tracker's rows, the one loader: [] when there is no file; a file
+    git left with conflict markers refused, unless `refuse` is False (a read-only view
+    that must still show something, such as the network's join to the tracker)."""
+    if path is None:
+        import person
+        path = person.state("job_search_tracker.csv")
+    if not os.path.exists(path):
+        return []
+    try:
+        return read_rows(path) if refuse else dict_rows(path, refuse=False)
+    except OSError:
+        return []
+
+
 def read_rows(path: str, columns=(), create: bool = False) -> list[dict]:
     """Rows as dicts, with every one of `columns` present and every extra column kept.
 

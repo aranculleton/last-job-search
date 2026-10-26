@@ -31,7 +31,8 @@ token would publish exactly what the scan exists to keep out.
 Allowances (--allow FILE, or the app's own ALLOW below): "path-glob<TAB>regex".
 Text matching the regex on a line of a matching path is blanked before the
 token scan. The LICENSE copyright line is the one allowance the maintainer's
-name gets.
+name gets. In the market tables (tools/markets/) a job board's or a pay source's name,
+and its own address, are set aside where the name is the address's (market_allowance).
 
 Usage:
     python3 tools/leak_scan.py <tree> [--tokens FILE] [--allow FILE] [--show]
@@ -76,11 +77,12 @@ PLACEHOLDER_HANDLE = re.compile(r"^(?:example|your|yourname|your-name|your-handl
                                 r"example-(?:[a-z-]|%[0-9a-f]{2})+|"
                                 r"(?:[a-z-]|%[0-9a-f]{2})+-example)$", re.I)
 
-# Binary files the app may carry: vendored fonts and TeX packages, and the two
-# compiled example documents, which hold only placeholders.
+# Binary files the app may carry: vendored fonts and TeX packages, the two compiled
+# example documents, which hold only placeholders, and the README's pictures of the page,
+# drawn from the test sample, where every name is invented (2026-10-26).
 BINARY_OK = tuple(_regex(g) for g in (
     "cover_letters/OpenFonts/**", "texmf/**", "**/*.ttf", "**/*.otf", "**/*.pfb",
-    "**/*.tfm", "**/*.enc", "**/*.vf",
+    "**/*.tfm", "**/*.enc", "**/*.vf", "docs/images/**",
 ))
 
 # The app's own allowances. Kept tiny on purpose: every line is a decision.
@@ -92,6 +94,10 @@ ALLOW = (
     # capitals names nobody new (2026-10-25). Only the whole address is set aside.
     ("**", r"(?i)github\.com/aranculleton/last-job-search(?![-\w])"),
     ("**", r"(?i)aranculleton/last-job-search(?![-\w])"),
+    # And the same address in GitHub's "make a copy" link, which names the owner and the
+    # repository as two values (2026-10-26).
+    ("**", r"(?i)template_owner=aranculleton&template_name=last-job-search(?![-\w])"),
+    ("**", r"(?i)aranculleton%2Flast-job-search(?![-\w])"),
     # Nor is the address of openroles, the app's employer-board reader published as its
     # own library and vendored in tools/openroles/.
     ("**", r"(?i)github\.com/aranculleton/openroles(?![-\w])"),
@@ -108,6 +114,55 @@ ALLOW = (
     # Only the quoted operator is set aside, and every other word in the file is read.
     ("tools/design_check.py", r'"T[dDfLmjJ*]"'),
 )
+
+# The market tables (tools/markets/, read by /setup) are public facts about job markets,
+# and they name the national job boards of many countries. A board's name can be on the
+# maintainer's own denylist (a portal they built for themselves, an employer they applied
+# to that also runs a board), so inside these files, and only there, a board's name and its
+# own address are set aside where the board names its own site (a pay source's entry too,
+# in the same shape): the name agrees with a
+# label of the address ("Job Bank", www.jobbank.gc.ca). Nothing else in the files is: a
+# person's name, an email, an employer or a contact id written in them still fails, and so
+# does a board whose name is not its address's.
+MARKETS = _regex("tools/markets/**.json")
+_BOARD_SITE = re.compile(r'"name":\s*"([^"\\\n]{1,80})",[\s+]*"url":\s*"https://([A-Za-z0-9.-]+)')
+# Address labels that say nothing about whose site it is.
+_GENERIC_LABELS = {"www", "jobs", "job", "careers", "career", "work", "app", "search", "apply",
+                   "gov", "govt", "gouv", "gob", "gc", "co", "com", "org", "net", "ac", "edu",
+                   "info", "online", "portal", "web", "site", "my", "the"}
+_SECOND_LEVEL = {"co", "com", "gov", "gc", "gob", "gouv", "govt", "org", "net", "ac", "edu",
+                 "or", "ne", "go", "nic", "mil"}
+
+
+def _site(host: str) -> str:
+    """The part of an address its owner registered: eluta.ca, jobbank.gc.ca, seek.com.au."""
+    labels = host.lower().strip(".").split(".")
+    keep = 3 if len(labels) >= 3 and len(labels[-1]) == 2 and labels[-2] in _SECOND_LEVEL else 2
+    return ".".join(labels[-keep:])
+
+
+def _agrees(name: str, host: str) -> bool:
+    """Whether a board's name is its own address's: a label of the address that is not a
+    generic word, four letters or more, makes up at least half of the name's letters."""
+    folded = re.sub(r"[^a-z0-9]", "", plain(name).lower())
+    for label in host.lower().split("."):
+        if len(label) >= 4 and label not in _GENERIC_LABELS and label in folded \
+                and 2 * len(label) >= len(folded):
+            return True
+    return False
+
+
+def market_allowance(text: str) -> re.Pattern | None:
+    """For a market table (or its lines in a patch): a pattern that blanks each board's name
+    and its own address in a URL, for the boards whose name agrees with their address."""
+    parts = []
+    for name, host in _BOARD_SITE.findall(text):
+        if not _agrees(name, host):
+            continue
+        parts.append(r"(?<![A-Za-z0-9])" + re.escape(name) + r"(?![A-Za-z0-9])")
+        parts.append(r"(?<=//)(?:[A-Za-z0-9-]+\.)*" + re.escape(_site(host)) + r"(?![A-Za-z0-9-])")
+    return re.compile("|".join(dict.fromkeys(parts)), re.I) if parts else None
+
 
 SKIP_DIRS = {".git", "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", ".venv", "venv"}
 
@@ -251,8 +306,12 @@ def scan(tree: str, tokens, allow, show: bool = False, git: bool = False,
             if not any(r.match(rel) for r in BINARY_OK):
                 findings.append(f"{rel}: binary file that cannot be scanned and is not allowlisted")
             continue
-        findings += _scan_text(rel, data.decode("utf-8", errors="replace"),
-                               [rx for g, rx in allow if g.match(rel)], keyed, show)
+        text = data.decode("utf-8", errors="replace")
+        rules = [rx for g, rx in allow if g.match(rel)]
+        if MARKETS.match(rel):
+            boards = market_allowance(text)
+            rules += [boards] if boards else []
+        findings += _scan_text(rel, text, rules, keyed, show)
     return findings
 
 
@@ -275,6 +334,9 @@ def scan_text(paths: list[str], tokens, show: bool = False) -> list[str]:
         name = os.path.basename(p)
         for start, rel, chunk in _patch_chunks(text):
             rules = anywhere + [rx for g, rx in per_file if rel and g.match(rel)]
+            if rel and MARKETS.match(rel):
+                boards = market_allowance(chunk)
+                rules += [boards] if boards else []
             for f in _scan_text(name, chunk, rules, keyed, show):
                 head, ln, rest = f.split(":", 2)
                 out.append(f"{head}:{int(ln) + start}:{rest}")

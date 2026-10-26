@@ -1,0 +1,261 @@
+{
+  "name": "Singapore",
+  "country": "sg",
+  "aka": [
+    "SG",
+    "SGP",
+    "Republic of Singapore"
+  ],
+  "languages": [
+    "en",
+    "zh",
+    "ms",
+    "ta"
+  ],
+  "currency": "SGD",
+  "boards": [
+    {
+      "name": "MyCareersFuture",
+      "url": "https://www.mycareersfuture.gov.sg",
+      "kind": "public",
+      "source": "https://www.mycareersfuture.gov.sg/",
+      "quote": "Match jobs to your skills, explore new careers, and access job opportunities with government support",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.mycareersfuture.gov.sg/search?search=analyst",
+      "paths": {
+        "search": "/search?search=analyst",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Jobstreet",
+      "url": "https://sg.jobstreet.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/JobStreet",
+      "quote": "currently operates in Malaysia, Indonesia , the Philippines , and Singapore",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://sg.jobstreet.com/analyst-jobs",
+      "paths": {
+        "search": "/analyst-jobs",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://sg.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://sg.indeed.com/jobs?q=analyst&l=Singapore",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Singapore",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "Singapore Citizen or Permanent Resident",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/Singaporean_nationality_law",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "phrase": "Employment Pass (EP)",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://en.wikipedia.org/wiki/Foreign_workers_in_Singapore",
+      "quote": "The \"P, Q, R\" employment pass system was put into practice on 1 September 1998; a new \"S\" type employment pass was later introduced on 1 July 2004.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "S Pass",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Foreign_workers_in_Singapore",
+      "quote": "By 2010, the non-resident workforce had reached nearly 1.09 million, of these 870,000 were low- skilled foreign workers in Singapore; another 240,000 were skilled foreign worker, better-educated S-pass or employment pass holders.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "security clearance",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/Security_clearance",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Singapore)"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "resume or CV",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "topic": "pages",
+      "value": "one to two pages",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says this of resumes in general, not of this country"
+    },
+    {
+      "topic": "photo",
+      "value": "optional",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says photos are required in parts of Asia and Africa, which does not settle this country"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/List_of_date_formats_by_country",
+      "quote": "Afghanistan , Australia , Cameroon , France , Germany , India , Iran , Malaysia , Myanmar , Nepal , Poland , Russia , Singapore",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "British English",
+      "source": "https://en.wikipedia.org/wiki/Singapore_English",
+      "quote": "Singapore Standard English, which is grammatically similar to British English",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Occupational Wages (Ministry of Manpower)",
+      "url": "https://stats.mom.gov.sg/Pages/Occupational-Wages-Tables.aspx",
+      "what": "wages by occupation",
+      "source": "https://en.wikipedia.org/wiki/Ministry_of_Manpower_(Singapore)",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "name": "MyCareersFuture salary ranges",
+      "url": "https://www.mycareersfuture.gov.sg/",
+      "what": "the salary range most postings carry",
+      "source": "https://www.mycareersfuture.gov.sg/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Central Region",
+      "written": [
+        "Singapore",
+        "Central Region",
+        "Downtown Core",
+        "Raffles Place",
+        "Marina Bay"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Regions_of_Singapore",
+      "quote": "The regions of Singapore serve as urban planning subdivisions of the country at the highest level",
+      "on_page": [
+        "Central Region"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "West Region",
+      "written": [
+        "Jurong",
+        "Jurong East",
+        "West Region",
+        "one-north"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Regions_of_Singapore",
+      "quote": "The regions of Singapore serve as urban planning subdivisions of the country at the highest level",
+      "on_page": [
+        "West Region",
+        "Jurong East"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "East Region",
+      "written": [
+        "Changi",
+        "Tampines",
+        "East Region"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Regions_of_Singapore",
+      "quote": "The regions of Singapore serve as urban planning subdivisions of the country at the highest level",
+      "on_page": [
+        "East Region",
+        "Tampines"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

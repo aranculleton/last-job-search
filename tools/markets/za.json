@@ -1,0 +1,294 @@
+{
+  "name": "South Africa",
+  "country": "za",
+  "aka": [
+    "ZA",
+    "RSA",
+    "Republic of South Africa"
+  ],
+  "languages": [
+    "en",
+    "af",
+    "zu",
+    "xh"
+  ],
+  "currency": "ZAR",
+  "boards": [
+    {
+      "name": "PNet",
+      "url": "https://www.pnet.co.za",
+      "kind": "general",
+      "source": "https://www.pnet.co.za/",
+      "quote": "PNet is South Africa's number 1 job site. Search for jobs across South Africa",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.pnet.co.za/jobs/analyst",
+      "paths": {
+        "search": "/jobs/analyst",
+        "posting": "/jobs--"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "CareerJunction",
+      "url": "https://www.careerjunction.co.za",
+      "kind": "general",
+      "source": "https://www.careerjunction.co.za/",
+      "quote": "Job seekers can upload CVs and apply for Jobs on mobile or desktop",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.careerjunction.co.za/jobs/results?keywords=analyst",
+      "paths": {
+        "search": "/jobs/results?keywords=analyst",
+        "posting": "/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Careers24",
+      "url": "https://www.careers24.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Media24",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Careers24)",
+      "search": "https://www.careers24.com/jobs/kw-analyst/",
+      "paths": {
+        "search": "/jobs/kw-analyst/",
+        "posting": "/jobs/adverts/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://za.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://za.indeed.com/jobs?q=analyst&l=Johannesburg%2C+Gauteng",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Johannesburg%2C+Gauteng",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "South African citizen or permanent resident",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/South_African_nationality_law",
+      "quote": "To provide for the acquisition, loss and resumption of South African citizenship",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "work visa (critical skills, general work)",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_South_Africa",
+      "quote": "outlines high-demand occupations that qualify foreign professionals for a Critical Skills Visa",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "permanent residence permit",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/South_African_nationality_law",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: permanent residence)"
+    },
+    {
+      "phrase": "security clearance (State Security Agency vetting)",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/State_Security_Agency_(South_Africa)",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: vetting)"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV",
+      "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: South Africa)"
+    },
+    {
+      "topic": "pages",
+      "value": "two to three pages",
+      "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: South Africa, page)"
+    },
+    {
+      "topic": "photo",
+      "value": "not expected",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says photos are required in parts of Asia and Africa, which does not settle this country"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY (YYYY/MM/DD in official use)",
+      "source": "https://en.wikipedia.org/wiki/List_of_date_formats_by_country",
+      "quote": "West , Central , and Southern Africa : Nigeria , DRC , Sudan , South Africa , etc.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "South African English (British forms)",
+      "source": "https://en.wikipedia.org/wiki/South_African_English",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: British, spelling)"
+    }
+  ],
+  "pay": [
+    {
+      "name": "Quarterly Employment Statistics (Stats SA)",
+      "url": "https://www.statssa.gov.za/?page_id=1854&PPN=P0277",
+      "what": "earnings by industry",
+      "source": "https://en.wikipedia.org/wiki/Statistics_South_Africa",
+      "quote": "Statistics South Africa (officially the Department of Statistics South Africa , and often shortened to Stats SA ) is the national statistical service of South Africa .",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "PNet salary insights",
+      "url": "https://www.pnet.co.za/salary/",
+      "what": "salaries by job title",
+      "source": "https://www.pnet.co.za/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: salar)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Johannesburg",
+      "written": [
+        "Johannesburg",
+        "Gauteng",
+        "Sandton",
+        "Midrand",
+        "Pretoria"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Gauteng",
+      "quote": "Johannesburg , South Africa's financial capital",
+      "on_page": [
+        "Sandton",
+        "Midrand",
+        "Pretoria"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Cape Town",
+      "written": [
+        "Cape Town",
+        "Western Cape",
+        "Bellville",
+        "Stellenbosch"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Cape_Town",
+      "quote": "",
+      "on_page": [
+        "Bellville",
+        "Stellenbosch"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "metro": "Durban",
+      "written": [
+        "Durban",
+        "eThekwini",
+        "Umhlanga",
+        "KwaZulu-Natal"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Durban",
+      "quote": "is the third-most populous city in South Africa , after Johannesburg and Cape Town",
+      "on_page": [
+        "eThekwini",
+        "Umhlanga"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

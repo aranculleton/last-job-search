@@ -1,0 +1,290 @@
+{
+  "name": "Mexico",
+  "country": "mx",
+  "aka": [
+    "MX",
+    "México",
+    "United Mexican States"
+  ],
+  "languages": [
+    "es"
+  ],
+  "currency": "MXN",
+  "boards": [
+    {
+      "name": "OCC",
+      "url": "https://www.occ.com.mx",
+      "kind": "general",
+      "source": "https://www.occ.com.mx/",
+      "quote": "En nuestra bolsa de trabajo puedes filtrar por puesto, área, tipo de jornada, empresa o ubicación",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.occ.com.mx/empleos/de-analista/",
+      "paths": {
+        "search": "/empleos/de-analista/",
+        "posting": "/empleo/oferta/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Computrabajo",
+      "url": "https://mx.computrabajo.com",
+      "kind": "general",
+      "source": "https://mx.computrabajo.com/",
+      "quote": "Nuestra bolsa de trabajo publica nuevas ofertas de empleo cada día en todo México",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://mx.computrabajo.com/trabajo-de-analista",
+      "paths": {
+        "search": "/trabajo-de-analista",
+        "posting": "/ofertas-de-trabajo/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://mx.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://mx.indeed.com/jobs?q=analista&l=Ciudad+de+M%C3%A9xico",
+      "paths": {
+        "search": "/jobs?q=analista&l=Ciudad+de+M%C3%A9xico",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Portal del Empleo",
+      "url": "https://www.empleo.gob.mx",
+      "kind": "public",
+      "source": "https://es.wikipedia.org/wiki/Servicio_Nacional_de_Empleo",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404",
+      "search": "https://www.empleo.gob.mx/",
+      "paths": {
+        "search": "/",
+        "posting": null
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "residente temporal con permiso para trabajar",
+      "lang": "es",
+      "means": "work_right",
+      "source": "https://es.wikipedia.org/wiki/Instituto_Nacional_de_Migraci%C3%B3n",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "phrase": "residente permanente",
+      "lang": "es",
+      "means": "residence",
+      "source": "https://es.wikipedia.org/wiki/Instituto_Nacional_de_Migraci%C3%B3n",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "phrase": "nacionalidad mexicana",
+      "lang": "es",
+      "means": "citizenship",
+      "source": "https://es.wikipedia.org/wiki/Nacionalidad_mexicana",
+      "quote": "La nacionalidad mexicana se adquiere por nacimiento o por naturalización",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "oferta de empleo para el permiso de trabajo (sponsorship by the employer)",
+      "lang": "es",
+      "means": "sponsorship",
+      "source": "https://es.wikipedia.org/wiki/Instituto_Nacional_de_Migraci%C3%B3n",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "currículum vitae (CV)",
+      "source": "https://es.wikipedia.org/wiki/Curr%C3%ADculum_vitae",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "topic": "pages",
+      "value": "one to two pages",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the page says this of resumes in general, not of this country"
+    },
+    {
+      "topic": "photo",
+      "value": "optional, at the employer's choice",
+      "source": "https://es.wikipedia.org/wiki/Curr%C3%ADculum_vitae",
+      "quote": "La fotografía es opcional y depende de cada empleador",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/AAAA",
+      "source": "https://en.wikipedia.org/wiki/List_of_date_formats_by_country",
+      "quote": "DMY Europe : Italy , Netherlands , Turkey , Ireland , etc. North America : Mexico , various Caribbean islands",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Mexican Spanish",
+      "source": "https://en.wikipedia.org/wiki/Mexican_Spanish",
+      "quote": "Mexican Spanish ( Spanish : español mexicano ) is the variety of dialects and sociolects of the Spanish language spoken in Mexico",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Encuesta Nacional de Ocupación y Empleo (INEGI)",
+      "url": "https://www.inegi.org.mx/programas/enoe/15ymas/",
+      "what": "earnings by occupation and state",
+      "source": "https://www.inegi.org.mx/programas/enoe/15ymas/",
+      "quote": "Encuesta Nacional de Ocupación y Empleo (ENOE), población de 15 años y más de edad",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Observatorio Laboral (STPS)",
+      "url": "https://www.observatoriolaboral.gob.mx/",
+      "what": "pay by career and occupation",
+      "source": "https://www.observatoriolaboral.gob.mx/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: robots.txt could not be read (RuntimeError)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Ciudad de México",
+      "written": [
+        "Ciudad de México",
+        "CDMX",
+        "Mexico City",
+        "Estado de México",
+        "Naucalpan",
+        "Santa Fe"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Mexico_City",
+      "quote": "2026, it encompasses Mexico City itself and 84 adjacent municipalities of the State of Mexico , Hidalgo and Morelos , thus becoming the country’s first and only four-state metropolitan area. [ 3 ]",
+      "on_page": [
+        "Naucalpan",
+        "State of Mexico"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Guadalajara",
+      "written": [
+        "Guadalajara, Jal.",
+        "Zapopan",
+        "Tlaquepaque"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Guadalajara_metropolitan_area",
+      "quote": "",
+      "on_page": [
+        "Zapopan",
+        "Tlaquepaque"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "metro": "Monterrey",
+      "written": [
+        "Monterrey, N.L.",
+        "San Pedro Garza García",
+        "Apodaca",
+        "Guadalupe"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Monterrey_metropolitan_area",
+      "quote": "",
+      "on_page": [
+        "San Pedro Garza García",
+        "Apodaca"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ]
+}

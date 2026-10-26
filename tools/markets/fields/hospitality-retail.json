@@ -1,0 +1,97 @@
+{
+  "name": "Hospitality and retail",
+  "field": "hospitality-retail",
+  "aka": [
+    "hospitality",
+    "retail",
+    "hotel",
+    "restaurant",
+    "catering",
+    "food and beverage",
+    "tourism"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "Hosco",
+        "url": "https://www.hosco.com",
+        "kind": "field",
+        "source": "https://www.hosco.com/",
+        "quote": "The portal for candidates to find hospitality jobs, and the partner for hospitality companies that need talent",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.hosco.com/en/jobs",
+        "paths": {
+          "search": "/en/jobs",
+          "posting": "/en/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": 10.0,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "gb": [
+      {
+        "name": "Caterer.com",
+        "url": "https://www.caterer.com",
+        "kind": "field",
+        "source": "https://www.caterer.com/",
+        "quote": "Search for local hospitality jobs on Caterer.com, the UKs largest hospitality recruitment website",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.caterer.com/jobs/chef",
+        "paths": {
+          "search": "/jobs/chef",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "blocked",
+          "http": 0
+        }
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Banquet Manager",
+        "Catering Manager",
+        "Food Service Manager",
+        "Kitchen Manager",
+        "Restaurant Manager"
+      ],
+      "source": "https://www.onetonline.org/link/summary/11-9051.00",
+      "quote": "Sample of reported job titles: Banquet Manager, Catering Manager",
+      "on_page": [
+        "Banquet Manager",
+        "Catering Manager",
+        "Food Service Manager",
+        "Kitchen Manager",
+        "Restaurant Manager"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

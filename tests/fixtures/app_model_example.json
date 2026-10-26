@@ -1,0 +1,2520 @@
+{
+ "model": 1,
+ "made_at": "2026-10-25T18:00:00Z",
+ "rev": "934a8764f716",
+ "app": {
+  "version": "3.13.0",
+  "update_waiting": null,
+  "news": [
+   "Every resume's text is black.",
+   "A message that needs no answer can be marked so.",
+   "A file can go on a message already logged."
+  ],
+  "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared."
+ },
+ "person": {
+  "first_name": "Morgan",
+  "doc_noun": "CV",
+  "time_zone": "Europe/London",
+  "repo": "aranculleton/last-job-search",
+  "computer": true
+ },
+ "needs_you": [
+  {
+   "id": "q-app-dovecote_freight_inventory_analyst",
+   "kind": "confirm",
+   "title": "Did you apply to Dovecote Freight?",
+   "body": "The notes for Inventory Analyst say it went, but it is still marked as not sent.",
+   "options": [
+    {
+     "label": "Yes, I applied",
+     "action": "ready.applied"
+    },
+    {
+     "label": "Not yet",
+     "action": "ready.not_applied"
+    }
+   ],
+   "about": {
+    "company": "Dovecote Freight",
+    "role": "Inventory Analyst"
+   },
+   "rev": "c5f6aea812d3"
+  }
+ ],
+ "jobs": {
+  "round": "r9",
+  "made_at": "2026-10-26T00:38:39Z",
+  "met": false,
+  "summary": "4 roles on the shortlist, 4 scoring 60 or more and 2 scoring 75 or more. 3 left out, each with its reason.",
+  "rows": [
+   {
+    "id": "r9-1",
+    "rank": 1,
+    "score": 84,
+    "band": "strong",
+    "company": "Brindle Hart Logistics",
+    "title": "Demand Planning Analyst",
+    "place": "Manchester (hybrid)",
+    "remote": "hybrid",
+    "pay": {
+     "text": "not stated",
+     "stated": false,
+     "top": null,
+     "at_target": null
+    },
+    "posted_days": null,
+    "near": [],
+    "deadline": null,
+    "warm": null,
+    "draft_work": {
+     "kind": "draft",
+     "id": "draft~53f7957c22",
+     "args": {
+      "round": "r9",
+      "rank": 1,
+      "url": "https://jobs.example/brindle/demand",
+      "company": "Brindle Hart Logistics",
+      "title": "Demand Planning Analyst"
+     }
+    },
+    "why": [],
+    "from_round": null,
+    "added": false,
+    "kept": false,
+    "apply": {
+     "url": "https://jobs.example/brindle/demand",
+     "kind": "employer",
+     "checked_on": null,
+     "checked_at": null,
+     "status": "not_checked"
+    },
+    "notes": [],
+    "status": "new",
+    "questions": [
+     "Have you already applied?"
+    ],
+    "rev": "a524ede52511",
+    "alerts": [],
+    "suggest": null,
+    "related": {},
+    "draft": null
+   },
+   {
+    "id": "r9-2",
+    "rank": 2,
+    "score": 81,
+    "band": "strong",
+    "company": "Kestrel Mutual",
+    "title": "Claims Forecasting Analyst",
+    "place": "Manchester",
+    "remote": "",
+    "pay": {
+     "text": "not stated",
+     "stated": false,
+     "top": null,
+     "at_target": null
+    },
+    "posted_days": null,
+    "near": [],
+    "deadline": null,
+    "warm": null,
+    "draft_work": {
+     "kind": "draft",
+     "id": "draft~cc8b7338a4",
+     "args": {
+      "round": "r9",
+      "rank": 2,
+      "url": "https://jobs.example/kestrel/claims-forecasting",
+      "company": "Kestrel Mutual",
+      "title": "Claims Forecasting Analyst"
+     }
+    },
+    "why": [],
+    "from_round": null,
+    "added": false,
+    "kept": false,
+    "apply": {
+     "url": "https://jobs.example/kestrel/claims-forecasting",
+     "kind": "employer",
+     "checked_on": null,
+     "checked_at": null,
+     "status": "not_checked"
+    },
+    "notes": [],
+    "status": "ready",
+    "questions": [],
+    "rev": "e55990f08a98",
+    "alerts": [],
+    "suggest": null,
+    "related": {
+     "ready": [
+      "app-kestrel_mutual_claims_forecasting_analyst"
+     ],
+     "messages": [
+      "msg-kestrel_mutual_ansgar"
+     ],
+     "people": [
+      "kestrel_mutual_ansgar"
+     ]
+    },
+    "draft": "app-kestrel_mutual_claims_forecasting_analyst"
+   },
+   {
+    "id": "r9-3",
+    "rank": 3,
+    "score": 66,
+    "band": "good",
+    "company": "Dovecote Freight",
+    "title": "Inventory Analyst",
+    "place": "Remote, UK",
+    "remote": "remote",
+    "pay": {
+     "text": "not stated",
+     "stated": false,
+     "top": null,
+     "at_target": null
+    },
+    "posted_days": null,
+    "near": [],
+    "deadline": null,
+    "warm": null,
+    "draft_work": {
+     "kind": "draft",
+     "id": "draft~9c292cd157",
+     "args": {
+      "round": "r9",
+      "rank": 3,
+      "url": "https://jobs.example/dovecote/inventory",
+      "company": "Dovecote Freight",
+      "title": "Inventory Analyst"
+     }
+    },
+    "why": [],
+    "from_round": null,
+    "added": false,
+    "kept": false,
+    "apply": {
+     "url": "https://jobs.example/dovecote/inventory",
+     "kind": "employer",
+     "checked_on": null,
+     "checked_at": null,
+     "status": "not_checked"
+    },
+    "notes": [],
+    "status": "new",
+    "questions": [
+     "Have you already applied?"
+    ],
+    "rev": "cfdcee975b63",
+    "alerts": [],
+    "suggest": null,
+    "related": {},
+    "draft": null
+   },
+   {
+    "id": "r9-4",
+    "rank": 4,
+    "score": 62,
+    "band": "good",
+    "company": "Larkspur Retail",
+    "title": "Supply Analyst",
+    "place": "Leeds",
+    "remote": "",
+    "pay": {
+     "text": "not stated",
+     "stated": false,
+     "top": null,
+     "at_target": null
+    },
+    "posted_days": null,
+    "near": [],
+    "deadline": null,
+    "warm": "Juno at Larkspur Retail has replied to you: ask them first.",
+    "draft_work": {
+     "kind": "draft",
+     "id": "draft~dcf2f1fbbd",
+     "args": {
+      "round": "r9",
+      "rank": 4,
+      "url": "https://jobs.example/larkspur/supply",
+      "company": "Larkspur Retail",
+      "title": "Supply Analyst"
+     }
+    },
+    "why": [],
+    "from_round": null,
+    "added": false,
+    "kept": false,
+    "apply": {
+     "url": "https://jobs.example/larkspur/supply",
+     "kind": "employer",
+     "checked_on": null,
+     "checked_at": null,
+     "status": "not_checked"
+    },
+    "notes": [],
+    "status": "new",
+    "questions": [
+     "Have you already applied?"
+    ],
+    "rev": "30f61ab71dd0",
+    "alerts": [],
+    "suggest": {
+     "level": 2,
+     "id": "sg-warm-r9-4-5d1e3a77",
+     "kind": "warm",
+     "text": "Juno at Larkspur Retail replied to you on 2026-09-12: ask Juno about this role before applying.",
+     "why": "A reply is what makes a route warm, and a cold application first spends it.",
+     "action": {
+      "type": "work",
+      "label": "Write to Juno",
+      "kind": "reply",
+      "id": "reply~larkspur_retail_castellan",
+      "title": "Write to Juno at Larkspur Retail",
+      "args": {
+       "contact": "larkspur_retail_castellan"
+      }
+     },
+     "cost": {
+      "state": 2,
+      "label": "Some Claude, about a minute or two"
+     },
+     "since": "2026-10-25",
+     "rev": "2bc575fd9c93"
+    },
+    "related": {
+     "people": [
+      "larkspur_retail_castellan"
+     ],
+     "applications": [
+      "app-larkspur_retail_senior_supply_chain_analyst"
+     ],
+     "due": [
+      "due-reply-larkspur_retail_castellan"
+     ]
+    },
+    "draft": null
+   }
+  ],
+  "filtered": {
+   "count": 3,
+   "groups": [
+    {
+     "reason": "location",
+     "count": 2,
+     "items": [
+      {
+       "id": "r9-f1",
+       "company": "Quayside Foods",
+       "title": "Data Analyst",
+       "place": "London",
+       "url": "https://jobs.example/quayside/1",
+       "reason": "location: on-site outside Greater Manchester (london)",
+       "rev": "cde36ac432ac"
+      },
+      {
+       "id": "r9-f2",
+       "company": "Quayside Foods",
+       "title": "Planner",
+       "place": "Bristol",
+       "url": "https://jobs.example/quayside/2",
+       "reason": "location: on-site outside Greater Manchester (bristol)",
+       "rev": "542a63e5924c"
+      }
+     ],
+     "id": "filtered~location",
+     "rev": "9b6ba9490837"
+    },
+    {
+     "reason": "screen",
+     "count": 1,
+     "items": [
+      {
+       "id": "r9-f3",
+       "company": "Dovecote Freight",
+       "title": "Inventory Lead",
+       "place": "",
+       "url": "https://jobs.example/dovecote/lead",
+       "reason": "professional designation stated as a requirement",
+       "rev": "46e8ab8d54a0"
+      }
+     ],
+     "id": "filtered~screen",
+     "rev": "f42bc0491e9b"
+    }
+   ]
+  }
+ },
+ "ready": [
+  {
+   "id": "app-fernhill_freight_operations_analyst",
+   "slug": "",
+   "company": "Fernhill Freight",
+   "role": "Operations Analyst",
+   "pay": "not stated",
+   "place": "",
+   "apply": {
+    "url": "https://example.com/jobs/2",
+    "kind": "employer",
+    "checked_on": null,
+    "checked_at": null,
+    "status": "not_checked"
+   },
+   "files": [
+    {
+     "kind": "resume",
+     "name": "Morgan_Ellis_CV_Fernhill.pdf",
+     "asset": null,
+     "path": "cv/Morgan_Ellis_CV_Fernhill.pdf",
+     "pages": null
+    },
+    {
+     "kind": "letter",
+     "name": "Morgan_Ellis_Cover_Letter_Fernhill.pdf",
+     "asset": null,
+     "path": "cover_letters/Morgan_Ellis_Cover_Letter_Fernhill.pdf",
+     "pages": null
+    }
+   ],
+   "checks": {
+    "passed": false,
+    "line": "Not made yet: the CV and the letter",
+    "verify": null
+   },
+   "outreach": null,
+   "screening": [],
+   "status": "drafted",
+   "applied_on": null,
+   "rev": "e9f39efae808",
+   "near": [],
+   "tweaks_done": [],
+   "alerts": [
+    {
+     "level": 1,
+     "id": "al-checks-app-fernhill_freight_operations_analyst",
+     "kind": "checks",
+     "text": "Not made yet: the CV and the letter.",
+     "why": "Both documents are made and read back at the right length before anything is sent.",
+     "action": {
+      "type": "work",
+      "label": "Make it",
+      "kind": "draft",
+      "id": "draft~app-fernhill_freight_operations_analyst",
+      "title": "Make it: Fernhill Freight",
+      "args": {
+       "company": "Fernhill Freight",
+       "role": "Operations Analyst",
+       "application": "app-fernhill_freight_operations_analyst",
+       "redo": true
+      }
+     },
+     "cost": {
+      "state": 3,
+      "label": "A lot of Claude, several minutes"
+     }
+    }
+   ],
+   "suggest": null,
+   "related": {
+    "people": [
+     "fernhill_freight_halloway"
+    ],
+    "due": [
+     "due-nudge-fernhill_freight_halloway"
+    ]
+   },
+   "job": null
+  },
+  {
+   "id": "app-kestrel_mutual_claims_forecasting_analyst",
+   "slug": "kestrel_mutual_claims_forecasting_analyst_kestrel",
+   "company": "Kestrel Mutual",
+   "role": "Claims Forecasting Analyst",
+   "pay": "GBP 42,000 to 48,000",
+   "place": "Manchester",
+   "apply": {
+    "url": "https://jobs.example/kestrel/claims-forecasting",
+    "kind": "employer",
+    "checked_on": null,
+    "checked_at": null,
+    "status": "not_checked"
+   },
+   "files": [
+    {
+     "kind": "resume",
+     "name": "Morgan_Ellis_CV_Kestrel.pdf",
+     "asset": null,
+     "path": "cv/Morgan_Ellis_CV_Kestrel.pdf",
+     "pages": 1
+    },
+    {
+     "kind": "letter",
+     "name": "Morgan_Ellis_Cover_Letter_Kestrel.pdf",
+     "asset": null,
+     "path": "cover_letters/Morgan_Ellis_Cover_Letter_Kestrel.pdf",
+     "pages": 1
+    }
+   ],
+   "checks": {
+    "passed": true,
+    "line": "Made, right length: CV 1 page, letter 1 page",
+    "verify": null
+   },
+   "outreach": {
+    "to": "the hiring manager or the recruiter",
+    "text": "Hi [name], I have applied for the Claims Forecasting Analyst role. I build weekly forecasts in Python and SQL for operations teams in Manchester."
+   },
+   "screening": [
+    {
+     "q": "Do you have the right to work in the UK?",
+     "a": "Yes"
+    },
+    {
+     "q": "Will you now or in future need sponsorship?",
+     "a": "No"
+    }
+   ],
+   "status": "drafted",
+   "applied_on": null,
+   "rev": "9e57b48056f0",
+   "near": [],
+   "tweaks_done": [],
+   "alerts": [],
+   "suggest": null,
+   "related": {
+    "jobs": [
+     "r9-2"
+    ],
+    "messages": [
+     "msg-kestrel_mutual_ansgar"
+    ],
+    "people": [
+     "kestrel_mutual_ansgar"
+    ]
+   },
+   "job": "r9-2"
+  }
+ ],
+ "messages": [
+  {
+   "id": "msg-kestrel_mutual_ansgar",
+   "contact": "kestrel_mutual_ansgar",
+   "first_name": "Pell",
+   "employer": "Kestrel Mutual",
+   "channel": "linkedin_note",
+   "kind": "first_note",
+   "type": "first_note",
+   "subject": null,
+   "body": "Hi Pell, hope you're well. We were both at Leeds. I build forecasts for operations teams in Manchester. How is the claims analytics team set up?",
+   "count": {
+    "chars": 144,
+    "limit": 300,
+    "show": true,
+    "warn": false,
+    "over": false,
+    "label": "144 of 300 characters"
+   },
+   "warnings": [],
+   "open": {
+    "kind": "profile",
+    "doc": "reach/kestrel_mutual_ansgar",
+    "label": "Open their profile"
+   },
+   "application": null,
+   "text": "Hi Pell, hope you're well. We were both at Leeds. I build forecasts for operations teams in Manchester. How is the claims analytics team set up?",
+   "chars": 144,
+   "limit": 300,
+   "why": "You studied at the same place",
+   "due": null,
+   "hold": null,
+   "rev": "2ca9b4fd8d83",
+   "parts": false,
+   "tweaks_done": [],
+   "paste": null,
+   "alerts": [],
+   "suggest": null,
+   "related": {
+    "jobs": [
+     "r9-2"
+    ],
+    "ready": [
+     "app-kestrel_mutual_claims_forecasting_analyst"
+    ],
+    "people": [
+     "kestrel_mutual_ansgar"
+    ]
+   }
+  }
+ ],
+ "due": [
+  {
+   "id": "due-reply-larkspur_retail_castellan",
+   "kind": "reply",
+   "title": "Reply to Juno at Larkspur Retail",
+   "due": "2026-10-20",
+   "company": "Larkspur Retail",
+   "overdue_days": 5,
+   "action": "work:reply",
+   "sub": "reply",
+   "item": "larkspur_retail_castellan",
+   "work": {
+    "kind": "reply",
+    "id": "reply~larkspur_retail_castellan",
+    "args": {
+     "contact": "larkspur_retail_castellan"
+    }
+   },
+   "done": null,
+   "snooze": {
+    "action": "due.snooze",
+    "label": "Not today"
+   },
+   "rev": "97ebad924d9d",
+   "related": {
+    "jobs": [
+     "r9-4"
+    ],
+    "people": [
+     "larkspur_retail_castellan"
+    ],
+    "applications": [
+     "app-larkspur_retail_senior_supply_chain_analyst"
+    ]
+   }
+  },
+  {
+   "id": "due-nudge-fernhill_freight_halloway",
+   "kind": "nudge",
+   "title": "Nudge Wren at Fernhill Freight",
+   "due": "2026-09-29",
+   "company": "Fernhill Freight",
+   "overdue_days": 26,
+   "action": "work:follow_up",
+   "sub": "nudge",
+   "item": "fernhill_freight_halloway",
+   "work": {
+    "kind": "follow_up",
+    "id": "follow_up~fernhill_freight_halloway",
+    "args": {
+     "contact": "fernhill_freight_halloway"
+    }
+   },
+   "done": null,
+   "snooze": {
+    "action": "due.snooze",
+    "label": "Not today"
+   },
+   "rev": "58d174b7d5a4",
+   "related": {
+    "ready": [
+     "app-fernhill_freight_operations_analyst"
+    ],
+    "people": [
+     "fernhill_freight_halloway"
+    ]
+   }
+  }
+ ],
+ "people": [
+  {
+   "id": "larkspur_retail_castellan",
+   "first_name": "Juno",
+   "employer": "Larkspur Retail",
+   "status": "replied_needs_response",
+   "status_word": "Replied: your turn",
+   "owed": {
+    "label": "Draft a reply",
+    "kind": "reply",
+    "id": "reply~larkspur_retail_castellan",
+    "args": {
+     "contact": "larkspur_retail_castellan"
+    },
+    "ask": "Paste what they said, if it is not logged"
+   },
+   "last": "2026-09-12",
+   "next_action": "send the CV",
+   "due": "2026-10-20",
+   "route": "alumni",
+   "replied": true,
+   "live": true,
+   "call": null,
+   "paste": null,
+   "is_process_stage": false,
+   "related": {
+    "jobs": [
+     "r9-4"
+    ],
+    "applications": [
+     "app-larkspur_retail_senior_supply_chain_analyst"
+    ],
+    "due": [
+     "due-reply-larkspur_retail_castellan"
+    ]
+   },
+   "rev": "68ac7b6b3d24",
+   "alerts": [
+    {
+     "level": 1,
+     "id": "al-reply_owed-larkspur_retail_castellan",
+     "kind": "reply_owed",
+     "text": "Juno replied 43 days ago and is waiting for your answer.",
+     "why": "A reply left for a week reads as lost interest, and this conversation is the way to a referral.",
+     "action": {
+      "type": "work",
+      "label": "Draft a reply",
+      "kind": "reply",
+      "id": "reply~larkspur_retail_castellan",
+      "title": "Reply to Juno",
+      "args": {
+       "contact": "larkspur_retail_castellan"
+      }
+     },
+     "cost": {
+      "state": 2,
+      "label": "Some Claude, about a minute or two"
+     }
+    }
+   ],
+   "suggest": null
+  },
+  {
+   "id": "fernhill_freight_halloway",
+   "first_name": "Wren",
+   "employer": "Fernhill Freight",
+   "status": "awaiting_reply",
+   "status_word": "Sent",
+   "owed": {
+    "label": "Draft the nudge",
+    "kind": "follow_up",
+    "id": "follow_up~fernhill_freight_halloway",
+    "args": {
+     "contact": "fernhill_freight_halloway"
+    }
+   },
+   "last": "2026-09-21",
+   "next_action": "One nudge if no reply",
+   "due": "2026-09-29",
+   "route": "cold",
+   "replied": false,
+   "live": true,
+   "call": null,
+   "paste": null,
+   "is_process_stage": false,
+   "related": {
+    "ready": [
+     "app-fernhill_freight_operations_analyst"
+    ],
+    "due": [
+     "due-nudge-fernhill_freight_halloway"
+    ]
+   },
+   "rev": "b27405fc8c16",
+   "alerts": [],
+   "suggest": null
+  },
+  {
+   "id": "kestrel_mutual_ansgar",
+   "first_name": "Pell",
+   "employer": "Kestrel Mutual",
+   "status": "not_contacted",
+   "status_word": "Not written to",
+   "owed": null,
+   "last": null,
+   "next_action": "Send the first note; call if needed",
+   "due": null,
+   "route": "alumni",
+   "replied": false,
+   "live": true,
+   "call": null,
+   "paste": null,
+   "is_process_stage": false,
+   "related": {
+    "jobs": [
+     "r9-2"
+    ],
+    "ready": [
+     "app-kestrel_mutual_claims_forecasting_analyst"
+    ],
+    "messages": [
+     "msg-kestrel_mutual_ansgar"
+    ]
+   },
+   "rev": "289c0edef75a",
+   "alerts": [],
+   "suggest": null
+  }
+ ],
+ "interviews": [
+  {
+   "id": "int-thornbury_bank_risk_analyst",
+   "company": "Thornbury Bank",
+   "role": "Risk Analyst",
+   "status": "interview",
+   "next_stage": "Panel interview",
+   "when": "2026-10-28",
+   "prep": {
+    "path": "documents/applications/thornbury_bank_risk_analyst_thornbury/interview_prep.md",
+    "updated": "2026-10-26T00:38:39Z"
+   },
+   "questions": 2,
+   "all_day": true,
+   "time": null,
+   "zone": null,
+   "with": "the head of risk",
+   "stages": [
+    {
+     "label": "Phone screen",
+     "date": "2026-10-15",
+     "time": null,
+     "done": true,
+     "scheduled": false,
+     "with": "the recruiter"
+    },
+    {
+     "label": "Panel interview",
+     "date": "2026-10-28",
+     "time": null,
+     "done": false,
+     "scheduled": true,
+     "with": "the head of risk"
+    }
+   ],
+   "format": null,
+   "one_screen": null,
+   "practice": {
+    "questions": [
+     {
+      "question": "Tell me about a forecast you built",
+      "why": "screen",
+      "answer": null,
+      "draft": false
+     },
+     {
+      "question": "How do you check your data",
+      "why": "screen",
+      "answer": null,
+      "draft": false
+     }
+    ],
+    "reworked": [],
+    "bands": [
+     "Strong",
+     "Solid",
+     "Gap"
+    ],
+    "min_quote_words": 3
+   },
+   "sent_files": [
+    {
+     "kind": "resume",
+     "name": "Morgan_Ellis_CV_Thornbury.pdf",
+     "path": "cv/Morgan_Ellis_CV_Thornbury.pdf",
+     "asset": null,
+     "to": null,
+     "on": "2026-10-02"
+    },
+    {
+     "kind": "letter",
+     "name": "Morgan_Ellis_Cover_Letter_Thornbury.pdf",
+     "path": "cover_letters/Morgan_Ellis_Cover_Letter_Thornbury.pdf",
+     "asset": null,
+     "to": null,
+     "on": "2026-10-02"
+    }
+   ],
+   "referrer": null,
+   "past": false,
+   "rev": "8d545da8255f",
+   "alerts": [],
+   "suggest": null,
+   "related": {
+    "applications": [
+     "app-thornbury_bank_risk_analyst"
+    ]
+   },
+   "draft": null
+  }
+ ],
+ "done": {
+  "counts": {
+   "applied": 3,
+   "interviews": 1,
+   "offers": 0,
+   "replies": 1
+  },
+  "funnel": [
+   {
+    "stage": "applied",
+    "n": 3
+   },
+   {
+    "stage": "interview",
+    "n": 1
+   },
+   {
+    "stage": "offer",
+    "n": 0
+   }
+  ],
+  "weeks": [
+   {
+    "week": "2026-W36",
+    "applied": 0,
+    "replies": 0
+   },
+   {
+    "week": "2026-W37",
+    "applied": 1,
+    "replies": 1
+   },
+   {
+    "week": "2026-W38",
+    "applied": 0,
+    "replies": 0
+   },
+   {
+    "week": "2026-W39",
+    "applied": 0,
+    "replies": 0
+   },
+   {
+    "week": "2026-W40",
+    "applied": 1,
+    "replies": 0
+   },
+   {
+    "week": "2026-W41",
+    "applied": 0,
+    "replies": 0
+   },
+   {
+    "week": "2026-W42",
+    "applied": 0,
+    "replies": 0
+   },
+   {
+    "week": "2026-W43",
+    "applied": 0,
+    "replies": 0
+   }
+  ],
+  "applications": [
+   {
+    "company": "Thornbury Bank",
+    "role": "Risk Analyst",
+    "applied_on": "2026-10-02",
+    "status": "interview",
+    "last": "2026-10-20",
+    "live": true
+   },
+   {
+    "company": "Larkspur Retail",
+    "role": "Senior Supply Chain Analyst",
+    "applied_on": "2026-09-08",
+    "status": "applied",
+    "last": "2026-09-08",
+    "live": true
+   }
+  ]
+ },
+ "settings": [
+  {
+   "id": "setting-app_updates",
+   "key": "app_updates",
+   "label": "How updates arrive",
+   "kind": "choice",
+   "value": "auto",
+   "choices": [
+    [
+     "auto",
+     "By themselves"
+    ],
+    [
+     "when_asked",
+     "When I say"
+    ]
+   ],
+   "rev": "afcac89d77f8"
+  },
+  {
+   "id": "setting-tips",
+   "key": "tips",
+   "label": "Tips now and then",
+   "kind": "choice",
+   "value": "on",
+   "choices": [
+    [
+     "on",
+     "On"
+    ],
+    [
+     "off",
+     "Off"
+    ]
+   ],
+   "rev": "feb0a8260161"
+  },
+  {
+   "id": "setting-linkedin_plan",
+   "key": "linkedin_plan",
+   "label": "Your LinkedIn plan",
+   "kind": "choice",
+   "value": "premium",
+   "choices": [
+    [
+     "free",
+     "Free"
+    ],
+    [
+     "premium",
+     "Premium"
+    ]
+   ],
+   "rev": "7a6d0b2044ce"
+  },
+  {
+   "id": "setting-work_either",
+   "key": "work_either",
+   "label": "Where Claude works",
+   "kind": "choice",
+   "value": "cloud",
+   "choices": [
+    [
+     "cloud",
+     "The cloud chat"
+    ],
+    [
+     "computer",
+     "The chat on my computer"
+    ]
+   ],
+   "rev": "e383343cfc0e"
+  },
+  {
+   "id": "setting-suggestions",
+   "key": "suggestions",
+   "label": "Suggestions",
+   "kind": "choice",
+   "value": "on",
+   "choices": [
+    [
+     "on",
+     "On"
+    ],
+    [
+     "urgent",
+     "Only urgent"
+    ],
+    [
+     "off",
+     "Off"
+    ]
+   ],
+   "rev": "c798e39a6ab0"
+  }
+ ],
+ "brief": {
+  "date": "2026-10-23",
+  "lines": [
+   "2 replies owed",
+   "Kestrel Mutual is hiring analysts"
+  ],
+  "items": [
+   {
+    "text": "2 replies owed",
+    "item": null,
+    "section": "due"
+   },
+   {
+    "text": "Kestrel Mutual is hiring analysts",
+    "item": "app-kestrel_mutual_claims_forecasting_analyst",
+    "section": "ready"
+   }
+  ]
+ },
+ "setup": {
+  "state": "done",
+  "say": "",
+  "progress": {
+   "done": 6,
+   "total": 6,
+   "label": "6 of 6"
+  },
+  "next": null,
+  "steps": [],
+  "research": [],
+  "phases": [
+   {
+    "key": "copy",
+    "label": "Your private copy",
+    "status": "done"
+   },
+   {
+    "key": "questions",
+    "label": "Your answers",
+    "status": "done"
+   },
+   {
+    "key": "profile",
+    "label": "Your profile written",
+    "status": "done"
+   },
+   {
+    "key": "research",
+    "label": "The research",
+    "status": "done"
+   },
+   {
+    "key": "shortlist",
+    "label": "Your first shortlist",
+    "status": "done"
+   },
+   {
+    "key": "brief",
+    "label": "Your brief",
+    "status": "done"
+   }
+  ]
+ },
+ "updates": {
+  "version": "3.13.0",
+  "newest": "3.13.0",
+  "mode": "auto",
+  "waiting": null,
+  "changed": [
+   {
+    "version": "3.13.0",
+    "date": "2026-10-24",
+    "lines": [
+     "Every resume's text is black.",
+     "A message that needs no answer can be marked so.",
+     "A file can go on a message already logged.",
+     "How many people you write to at one employer is yours.",
+     "An InMail is written only for someone who will get it.",
+     "Saving your work runs the same in any shell."
+    ]
+   },
+   {
+    "version": "3.12.0",
+    "date": "2026-10-23",
+    "lines": [
+     "Nobody you have already written to is suggested again, on any channel.",
+     "Old connections are read before anyone writes to them.",
+     "Your own follow-up rule. (set up for you)",
+     "A new LinkedIn download every fortnight.",
+     "Applications are delivered one way.",
+     "The due list and the LinkedIn import are quicker, with the same answers."
+    ]
+   }
+  ],
+  "done": [],
+  "pending": []
+ },
+ "applications": [
+  {
+   "id": "app-thornbury_bank_risk_analyst",
+   "company": "Thornbury Bank",
+   "role": "Risk Analyst",
+   "status": "interview",
+   "status_word": "Interviewing",
+   "applied_on": "2026-10-02",
+   "last": "2026-10-20",
+   "live": true,
+   "next": {
+    "kind": "interview",
+    "label": "Panel interview",
+    "date": "2026-10-28"
+   },
+   "stages": [
+    {
+     "label": "Phone screen",
+     "date": "2026-10-15",
+     "done": true,
+     "scheduled": false
+    },
+    {
+     "label": "Panel interview",
+     "date": "2026-10-28",
+     "done": false,
+     "scheduled": true
+    }
+   ],
+   "channel": "company site",
+   "referrer": null,
+   "sent_files": [
+    "Morgan_Ellis_CV_Thornbury.pdf",
+    "Morgan_Ellis_Cover_Letter_Thornbury.pdf"
+   ],
+   "followed_up": 0,
+   "heard": [
+    "outcome.interview",
+    "outcome.rejected",
+    "outcome.offer",
+    "outcome.withdrawn"
+   ],
+   "rev": "16a35d81a7da",
+   "related": {
+    "interviews": [
+     "int-thornbury_bank_risk_analyst"
+    ]
+   }
+  },
+  {
+   "id": "app-larkspur_retail_senior_supply_chain_analyst",
+   "company": "Larkspur Retail",
+   "role": "Senior Supply Chain Analyst",
+   "status": "applied",
+   "status_word": "Applied",
+   "applied_on": "2026-09-08",
+   "last": "2026-09-08",
+   "live": true,
+   "next": null,
+   "stages": [],
+   "channel": "company site",
+   "referrer": null,
+   "sent_files": [
+    "Morgan_Ellis_CV_Larkspur.pdf",
+    "Morgan_Ellis_Cover_Letter_Larkspur.pdf"
+   ],
+   "followed_up": 0,
+   "heard": [
+    "outcome.interview",
+    "outcome.rejected",
+    "outcome.offer",
+    "outcome.withdrawn",
+    "outcome.no_response"
+   ],
+   "rev": "244c42f74ff6",
+   "related": {
+    "jobs": [
+     "r9-4"
+    ],
+    "people": [
+     "larkspur_retail_castellan"
+    ],
+    "due": [
+     "due-reply-larkspur_retail_castellan"
+    ]
+   }
+  }
+ ],
+ "referrals": [],
+ "message_budget": {
+  "plan": "premium",
+  "ready": 1,
+  "week": {
+   "sent": 0,
+   "limit": null
+  },
+  "day": {
+   "sent": 0,
+   "limit": null
+  },
+  "notes_left": null,
+  "inmail_credits": {
+   "left": 5,
+   "limit": 5
+  },
+  "note_chars": 300,
+  "line": "1 note ready. 0 sent this week."
+ },
+ "linkedin": {
+  "export": {
+   "id": "linkedin-export",
+   "state": "missing",
+   "requested_at": null,
+   "taken_on": null,
+   "age_days": null,
+   "due_on": null,
+   "due": true,
+   "every_days": 14,
+   "counts": {},
+   "changed": [],
+   "steps": {
+    "lines": [
+     "To get your LinkedIn messages, invitations and own profile as files:",
+     "1. On LinkedIn, open Settings & Privacy, then Data privacy, then Get a copy of your data (some accounts call it Download your data).",
+     "2. Choose the larger download, the whole archive, and request it. LinkedIn may ask for your password.",
+     "3. LinkedIn emails you a link anything from about ten minutes to a day later, and it works for 72 hours. Attach the ZIP, or only the files you want me to read: messages.csv and Invitations.csv for your history; Profile.csv, Positions.csv, Education.csv, Skills.csv and Certifications.csv for your own profile."
+    ],
+    "checked": "2026-10-21",
+    "link": "https://www.linkedin.com/help/linkedin/answer/50191"
+   },
+   "files": [
+    {
+     "kind": "connections",
+     "name": "Connections.csv",
+     "for": "history",
+     "needed": [
+      "First Name",
+      "Last Name"
+     ]
+    },
+    {
+     "kind": "messages",
+     "name": "messages.csv",
+     "for": "history",
+     "needed": [
+      "FROM",
+      "DATE",
+      "CONTENT"
+     ]
+    },
+    {
+     "kind": "invitations",
+     "name": "Invitations.csv",
+     "for": "history",
+     "needed": [
+      "To",
+      "Sent At",
+      "Direction"
+     ]
+    },
+    {
+     "kind": "profile",
+     "name": "Profile.csv",
+     "for": "profile",
+     "needed": [
+      "Headline"
+     ]
+    },
+    {
+     "kind": "positions",
+     "name": "Positions.csv",
+     "for": "profile",
+     "needed": [
+      "Company Name",
+      "Title"
+     ]
+    },
+    {
+     "kind": "education",
+     "name": "Education.csv",
+     "for": "profile",
+     "needed": [
+      "School Name"
+     ]
+    },
+    {
+     "kind": "skills",
+     "name": "Skills.csv",
+     "for": "profile",
+     "needed": [
+      "Name"
+     ]
+    },
+    {
+     "kind": "certifications",
+     "name": "Certifications.csv",
+     "for": "profile",
+     "needed": [
+      "Name"
+     ]
+    }
+   ],
+   "rev": "3f18bb475638"
+  },
+  "reading": {
+   "id": "linkedin-reader",
+   "page_reads": false,
+   "ok": null,
+   "checked_at": null,
+   "last_read_at": null,
+   "reads": 0,
+   "queue": [],
+   "rev": "1a9480c695ca"
+  }
+ },
+ "learned": [],
+ "help": {
+  "tip": {
+   "id": "tip-search",
+   "area": "search",
+   "tab": "jobs",
+   "text": "Your first search here, so the ranking won't be perfect yet. Say what's off in Chat (\"too junior\", \"not this kind of company\") and the next one learns.",
+   "rev": "fe7659d1001f"
+  },
+  "tour": [
+   {
+    "key": "todo",
+    "tab": "todo",
+    "title": "To do",
+    "text": "What is due, most urgent first. Each card has one button; tap Done when it is done, or Not today."
+   },
+   {
+    "key": "jobs",
+    "tab": "jobs",
+    "title": "Jobs",
+    "text": "New roles scored out of 100 against what you want, with why. Tap Draft this on one you want, or Add a job for a link of your own."
+   },
+   {
+    "key": "drafts",
+    "tab": "ready",
+    "title": "Drafts",
+    "text": "Your resume and letter for each role, checked. Get both files, apply on the employer's own site, then tap I have applied."
+   },
+   {
+    "key": "messages",
+    "tab": "messages",
+    "title": "Messages",
+    "text": "Notes to people worth writing to. Copy one, send it on LinkedIn yourself, then tap I sent it."
+   },
+   {
+    "key": "contacts",
+    "tab": "people",
+    "title": "Contacts",
+    "text": "Everyone you are talking to, and what is owed. When someone writes back, tap They replied and paste what they said."
+   },
+   {
+    "key": "interviews",
+    "tab": "interviews",
+    "title": "Interviews",
+    "text": "Your prep for each interview, to read before it. Tap Prepare me to build it."
+   }
+  ],
+  "off": false
+ },
+ "resume": {
+  "id": "resume-current",
+  "file": null,
+  "made_on": null,
+  "stale": false,
+  "work": {
+   "kind": "general_resume",
+   "id": "general_resume~current",
+   "args": {}
+  },
+  "rev": "99f8273659f7"
+ },
+ "search": {
+  "id": "search-settings",
+  "roles": [
+   "supply chain analyst",
+   "operations analyst",
+   "demand planning analyst",
+   "data analyst",
+   "logistics analyst",
+   "inventory analyst",
+   "business intelligence analyst",
+   "forecasting analyst"
+  ],
+  "places": [
+   "Manchester, England, United Kingdom",
+   "Salford, England, United Kingdom",
+   "Stockport, England, United Kingdom",
+   "United Kingdom"
+  ],
+  "pay": {
+   "floor": 42000,
+   "target": 48000,
+   "cut": 32000
+  },
+  "window_days": 14,
+  "employers": [],
+  "portals": [
+   {
+    "name": "freehire-search",
+    "on": true,
+    "why": "A free board that lists jobs from many sites."
+   },
+   {
+    "name": "linkedin-search",
+    "on": true,
+    "why": "LinkedIn's own job search. Its robots rules turn crawlers away; only you switch it off."
+   }
+  ],
+  "boards": [],
+  "rules": [],
+  "pause": null,
+  "rev": "629e4fcdbbd2"
+ },
+ "where": {
+  "id": "where",
+  "helper": {
+   "state": "not_set_up",
+   "title": null,
+   "say": "Recommended: Claude's helper in the cloud works when your computer is off. Set it up once."
+  },
+  "reading": {
+   "state": "open_in_app",
+   "say": "Open this page in the Claude desktop app, signed in to LinkedIn, and tap Check it works."
+  },
+  "computer": {
+   "state": "optional",
+   "since": null,
+   "say": "Only if you keep files on your computer for Claude."
+  },
+  "brief": {
+   "state": "ready",
+   "when": "Mondays and Thursdays at 7:56",
+   "say": "Your brief comes Mondays and Thursdays at 7:56."
+  },
+  "rev": "ecce8297604c"
+ },
+ "listener": {
+  "doc": "meta/listener",
+  "answered": "answered_at",
+  "quiet_after_s": 600,
+  "helper": "Job search: Claude's helper (keep this)",
+  "wake": {
+   "label": "Wake Claude",
+   "url": "https://claude.ai/code?prompt=Look%20after%20my%20job%20search%20page%20from%20now%20on%3A%20python3%20tools%2Fapp.py%20start%20--listen%20--helper&repositories=aranculleton%2Flast-job-search",
+   "prompt": "Look after my job search page from now on: python3 tools/app.py start --listen --helper"
+  },
+  "seen": {
+   "title": null,
+   "kind": null,
+   "helper": false,
+   "since": null,
+   "seen_at": null,
+   "seen_recently": false
+  }
+ },
+ "schedule": {
+  "set_up": true,
+  "when": "Mondays and Thursdays at 7:56",
+  "days": [
+   1,
+   4
+  ],
+  "time": "07:56",
+  "zone": "Europe/London",
+  "paused": null,
+  "waiting": 0,
+  "actions": {
+   "move": "brief.move",
+   "pause": "brief.pause",
+   "resume": "brief.resume"
+  },
+  "id": "schedule",
+  "rev": "924082ed0c71"
+ },
+ "people_count": {
+  "shown": 3,
+  "all": 3,
+  "live": 3,
+  "rest": 0
+ },
+ "lists": {
+  "applications": {
+   "total": 3,
+   "shown": 2,
+   "folded": {
+    "count": 1,
+    "days": 30
+   },
+   "parts": 1,
+   "doc": "list~applications",
+   "counts": {
+    "status": {
+     "applied": 1,
+     "interview": 1,
+     "rejected": 1
+    },
+    "employer": {
+     "Larkspur Retail": 1,
+     "Quayside Foods": 1,
+     "Thornbury Bank": 1
+    },
+    "applied": {
+     "90": 2,
+     "30": 1
+    }
+   }
+  },
+  "interviews": {
+   "total": 1,
+   "shown": 1,
+   "folded": {
+    "count": 0,
+    "days": 14
+   },
+   "parts": 1,
+   "doc": "list~interviews",
+   "counts": {
+    "status": {
+     "interview": 1
+    },
+    "past": {
+     "false": 1
+    }
+   }
+  },
+  "jobs": {
+   "total": 4,
+   "shown": 4,
+   "folded": {
+    "count": 0,
+    "days": null
+   },
+   "parts": 0,
+   "doc": null,
+   "counts": {
+    "status": {
+     "new": 3,
+     "ready": 1
+    },
+    "remote": {
+     "not said": 2,
+     "hybrid": 1,
+     "remote": 1
+    },
+    "band": {
+     "good": 2,
+     "strong": 2
+    },
+    "pay": {
+     "not_stated": 4
+    },
+    "posted": {
+     "never": 4
+    }
+   }
+  },
+  "people": {
+   "total": 3,
+   "shown": 3,
+   "folded": {
+    "count": 0,
+    "days": 60
+   },
+   "parts": 1,
+   "doc": "list~people",
+   "counts": {
+    "status": {
+     "awaiting_reply": 1,
+     "not_contacted": 1,
+     "replied_needs_response": 1
+    },
+    "route": {
+     "alumni": 2,
+     "cold": 1
+    },
+    "employer": {
+     "Fernhill Freight": 1,
+     "Kestrel Mutual": 1,
+     "Larkspur Retail": 1
+    },
+    "contacted": {
+     "90": 2,
+     "never": 1
+    },
+    "replied": {
+     "false": 2,
+     "true": 1
+    }
+   }
+  },
+  "ready": {
+   "total": 4,
+   "shown": 2,
+   "folded": {
+    "count": 2,
+    "days": 14
+   },
+   "parts": 0,
+   "doc": null,
+   "counts": {
+    "status": {
+     "drafted": 2
+    }
+   }
+  }
+ },
+ "tweaks": {
+  "rows": [
+   {
+    "p": "R1",
+    "outputs": [
+     "resume",
+     "letter"
+    ],
+    "label": "Look",
+    "control": "choice",
+    "values": [
+     "standard",
+     "classic",
+     "modern",
+     "compact",
+     "spacious"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Changes fonts, margins and where your name sits. Your words stay; one weak bullet may come off or go on to keep one page."
+   },
+   {
+    "p": "R2",
+    "outputs": [
+     "resume",
+     "letter"
+    ],
+    "label": "Text size",
+    "control": "toggle",
+    "values": [
+     "standard",
+     "larger"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Larger text is easier to read but fits one bullet fewer."
+   },
+   {
+    "p": "R3",
+    "outputs": [
+     "resume",
+     "letter"
+    ],
+    "label": "Spacing",
+    "control": "steps",
+    "values": [
+     "tighter",
+     "standard",
+     "roomier"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Roomier looks calmer and fits fewer bullets."
+   },
+   {
+    "p": "R4",
+    "outputs": [
+     "resume",
+     "letter"
+    ],
+    "label": "Name and dates",
+    "control": "choice",
+    "values": [
+     "name-left",
+     "name-centre",
+     "name-right",
+     "dates-left",
+     "dates-right",
+     "rules",
+     "no-rules"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Layout only."
+   },
+   {
+    "p": "R5",
+    "outputs": [
+     "resume",
+     "letter"
+    ],
+    "label": "Colour",
+    "control": "swatches",
+    "values": [
+     "black",
+     "navy",
+     "burgundy",
+     "forest",
+     "teal",
+     "plum",
+     "slate",
+     "blue"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Only the colour of your name, headings and bullet marks. Every word stays where it is."
+   },
+   {
+    "p": "R6",
+    "outputs": [
+     "resume"
+    ],
+    "label": "Bullets",
+    "control": "per-bullet",
+    "values": [
+     "another"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Swaps in another true bullet from your own history. Nothing is invented."
+   },
+   {
+    "p": "R7",
+    "outputs": [
+     "resume"
+    ],
+    "label": "Amount",
+    "control": "toggle",
+    "values": [
+     "fuller",
+     "space"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Leaves white space instead of adding bullets. Never fewer than each job's minimum."
+   },
+   {
+    "p": "R9",
+    "outputs": [
+     "resume"
+    ],
+    "label": "Skills line",
+    "control": "steps",
+    "values": [
+     "fewer",
+     "standard",
+     "more"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "How many skills show. Only skills you hold; the posting's own words come first."
+   },
+   {
+    "p": "R8",
+    "outputs": [
+     "resume"
+    ],
+    "label": "Summary words",
+    "control": "chips",
+    "values": [
+     "plainer",
+     "more_formal",
+     "shorter"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": false,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Rewrites only the summary. It cannot add anything you haven't said."
+   },
+   {
+    "p": "L1",
+    "outputs": [
+     "letter"
+    ],
+    "label": "Length",
+    "control": "steps",
+    "values": [
+     "short",
+     "standard",
+     "full"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [
+     "full"
+    ],
+    "hint": "Shorter letters get finished. The app keeps letters between 200 and 250 words."
+   },
+   {
+    "p": "L2",
+    "outputs": [
+     "letter"
+    ],
+    "label": "Tone",
+    "control": "chips",
+    "values": [
+     "plainer",
+     "more_formal",
+     "warmer"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": false,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Rewrites the opening, lead-in, bullets and closing in this tone. Facts do not change."
+   },
+   {
+    "p": "L4",
+    "outputs": [
+     "letter"
+    ],
+    "label": "Redo only",
+    "control": "chips",
+    "values": [
+     "p1",
+     "p2",
+     "cl_bullets",
+     "p4"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": false,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Rewrites just that part and re-checks it."
+   },
+   {
+    "p": "L5",
+    "outputs": [
+     "letter"
+    ],
+    "label": "Addressed to",
+    "control": "text",
+    "values": [],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Only a name you or the posting gave."
+   },
+   {
+    "p": "M1",
+    "outputs": [
+     "message"
+    ],
+    "label": "Length",
+    "control": "toggle",
+    "values": [
+     "brief",
+     "standard"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Brief drops the opening line and the question; the plan's limit always holds."
+   },
+   {
+    "p": "M2",
+    "outputs": [
+     "message"
+    ],
+    "label": "Formality",
+    "control": "steps",
+    "values": [
+     "formal",
+     "standard",
+     "casual"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Contractions, greeting and exclamation marks only. Facts stay."
+   },
+   {
+    "p": "M3",
+    "outputs": [
+     "message"
+    ],
+    "label": "Opening",
+    "control": "choice",
+    "values": [
+     "usual",
+     "none"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "How the note starts."
+   },
+   {
+    "p": "M4",
+    "outputs": [
+     "message"
+    ],
+    "label": "The ask",
+    "control": "choice",
+    "values": [
+     "another",
+     "pointer"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "How it ends. Asks for a chat, never the job."
+   },
+   {
+    "p": "M5",
+    "outputs": [
+     "message"
+    ],
+    "label": "Order",
+    "control": "choice",
+    "values": [
+     "them_first",
+     "me_second",
+     "question_then_me",
+     "me_first"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Which sentence comes first."
+   },
+   {
+    "p": "M6",
+    "outputs": [
+     "message"
+    ],
+    "label": "What to include",
+    "control": "toggles",
+    "values": [
+     "work_auth:on",
+     "work_auth:off",
+     "about_me:on",
+     "about_me:off"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Recruiters need your work rights. The words are fixed so they stay true."
+   },
+   {
+    "p": "M8",
+    "outputs": [
+     "message"
+    ],
+    "label": "Mention what you share",
+    "control": "toggle",
+    "values": [
+     "on",
+     "off"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Names the school or employer you both have. Only one you both have."
+   },
+   {
+    "p": "M7",
+    "outputs": [
+     "message"
+    ],
+    "label": "Another reason, or warmer",
+    "control": "chips",
+    "values": [
+     "reason",
+     "question",
+     "warmer"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": false,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Rewrites that part from what was read about them."
+   },
+   {
+    "p": "J1",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Minimum score",
+    "control": "choice",
+    "values": [
+     "all",
+     "60",
+     "75"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": "Below 60 is a long shot."
+   },
+   {
+    "p": "J2",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Work style",
+    "control": "chips",
+    "values": [
+     "any",
+     "remote",
+     "hybrid",
+     "on-site"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": "From the place text on each posting; not every posting says."
+   },
+   {
+    "p": "J3",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "How new",
+    "control": "choice",
+    "values": [
+     "any",
+     "3",
+     "7"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": "Old postings are often closed."
+   },
+   {
+    "p": "J4",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Pay",
+    "control": "choice",
+    "values": [
+     "any",
+     "stated",
+     "at_target"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": "Most postings omit pay; omitting it costs a role nothing."
+   },
+   {
+    "p": "J5",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Sort",
+    "control": "choice",
+    "values": [
+     "match",
+     "newest",
+     "deadline"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": ""
+   },
+   {
+    "p": "J6",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Search window",
+    "control": "choice",
+    "values": [
+     "7",
+     "14",
+     "30"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Longer finds older, more often closed, postings."
+   },
+   {
+    "p": "J7",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Where",
+    "control": "places",
+    "values": [],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Adds places to search and keep."
+   },
+   {
+    "p": "J8",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Job titles",
+    "control": "titles",
+    "values": [],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "A title must also pass the title filter, or it is searched and then dropped."
+   },
+   {
+    "p": "J9",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Employers to watch",
+    "control": "text",
+    "values": [],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Reads its own careers page."
+   },
+   {
+    "p": "J10",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Job sites",
+    "control": "toggles",
+    "values": [],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "A site that is off gets no request."
+   },
+   {
+    "p": "J11",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "How wide",
+    "control": "steps",
+    "values": [
+     "quick",
+     "standard",
+     "wide"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Wider reads more pages of each site."
+   },
+   {
+    "p": "J12",
+    "outputs": [
+     "jobs"
+    ],
+    "label": "Pay floor",
+    "control": "number",
+    "values": [],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "A stated range whose top is below this is flagged; below your cut line it is dropped."
+   },
+   {
+    "p": "I1",
+    "outputs": [
+     "interview"
+    ],
+    "label": "Stage and format",
+    "control": "form",
+    "values": [
+     "screen",
+     "behavioural",
+     "technical",
+     "case",
+     "coding",
+     "presentation"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Which stage this is for, and its format: as assumed, and said so."
+   },
+   {
+    "p": "I2",
+    "outputs": [
+     "interview"
+    ],
+    "label": "How much",
+    "control": "steps",
+    "values": [
+     "one_screen",
+     "standard",
+     "everything"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "The one screen is what you read in the minutes before."
+   },
+   {
+    "p": "I3",
+    "outputs": [
+     "interview"
+    ],
+    "label": "Sections shown",
+    "control": "ticks",
+    "values": [],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Hiding changes what you see, not what is checked."
+   },
+   {
+    "p": "I4",
+    "outputs": [
+     "interview"
+    ],
+    "label": "Answer length",
+    "control": "steps",
+    "values": [
+     "60",
+     "90",
+     "120"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": false,
+    "page_only": false,
+    "model_values": [],
+    "hint": "The time you will actually have. About 150 words a minute."
+   },
+   {
+    "p": "I5",
+    "outputs": [
+     "interview"
+    ],
+    "label": "Draft answers",
+    "control": "choice",
+    "values": [
+     "1",
+     "3",
+     "5"
+    ],
+    "state": 2,
+    "cost": "Some Claude, about a minute or two",
+    "code": false,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Marked Draft until you confirm. Written from your profile only."
+   },
+   {
+    "p": "B1",
+    "outputs": [
+     "brief"
+    ],
+    "label": "Length",
+    "control": "steps",
+    "values": [
+     "short",
+     "standard",
+     "long"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "How many owed items it lists."
+   },
+   {
+    "p": "B2",
+    "outputs": [
+     "brief"
+    ],
+    "label": "News items",
+    "control": "choice",
+    "values": [
+     "0",
+     "1",
+     "3",
+     "5"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Fewer is quicker to read."
+   },
+   {
+    "p": "B3",
+    "outputs": [
+     "brief"
+    ],
+    "label": "What counts",
+    "control": "toggles",
+    "values": [
+     "employers",
+     "market",
+     "bank",
+     "targets"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "Which news gets searched. The news on your right to work is always looked for."
+   },
+   {
+    "p": "B4",
+    "outputs": [
+     "brief"
+    ],
+    "label": "Days and time",
+    "control": "schedule",
+    "values": [],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "At most once a day."
+   },
+   {
+    "p": "B5",
+    "outputs": [
+     "brief"
+    ],
+    "label": "Parts shown",
+    "control": "ticks",
+    "values": [
+     "since",
+     "next_three",
+     "tip"
+    ],
+    "state": 1,
+    "cost": "A little Claude, about 30 seconds",
+    "code": true,
+    "page_only": false,
+    "model_values": [],
+    "hint": "What is owed is always shown."
+   },
+   {
+    "p": "P1",
+    "outputs": [
+     "page"
+    ],
+    "label": "Theme",
+    "control": "choice",
+    "values": [
+     "system",
+     "light",
+     "dark"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": ""
+   },
+   {
+    "p": "P2",
+    "outputs": [
+     "page"
+    ],
+    "label": "Text size",
+    "control": "choice",
+    "values": [
+     "small",
+     "standard",
+     "large"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": ""
+   },
+   {
+    "p": "P3",
+    "outputs": [
+     "page"
+    ],
+    "label": "Density",
+    "control": "choice",
+    "values": [
+     "comfortable",
+     "compact"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": ""
+   },
+   {
+    "p": "P5",
+    "outputs": [
+     "page"
+    ],
+    "label": "Jobs list",
+    "control": "choice",
+    "values": [
+     "to_look_at",
+     "applied"
+    ],
+    "state": 0,
+    "cost": "Free, instant",
+    "code": true,
+    "page_only": true,
+    "model_values": [],
+    "hint": ""
+   }
+  ],
+  "buttons": [],
+  "usual": {
+   "message": {
+    "M2": "standard"
+   },
+   "jobs": {
+    "J12": 42000
+   }
+  },
+  "rules": {}
+ },
+ "hints": {
+  "tweak": false
+ }
+}

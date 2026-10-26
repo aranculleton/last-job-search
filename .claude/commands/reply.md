@@ -111,4 +111,4 @@ If the person is a genuine mismatch, say so instead of drafting something
 optimistic. A polite two-line exit preserves the relationship at zero cost.
 
 End with the line `python3 tools/tips.py reply` prints, if it prints one (it decides when: the first time, then now and then). What they say back
-goes through CLAUDE.md, "Learning the person".
+goes through RUNBOOK.md, "Learning the person".

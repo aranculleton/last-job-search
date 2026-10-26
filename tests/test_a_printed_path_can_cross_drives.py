@@ -24,7 +24,6 @@ WALKS_INSIDE_ONE_ROOT = {
     "tools/network/state.py": 1,     # a walk of the state folder
     "tools/profile_names.py": 2,     # the app's own files, under ROOT
     "tools/save_state.py": 2,        # the checkout's files, under it
-    "tools/setup_state.py": 1,       # the checkout's files, under it
     "tools/sync_app.py": 1,          # the checkout's files, under it
     "tools/try_personal_tests.py": 1,  # the checkout's files, under it
     "tools/what_works.py": 1,        # a walk of the documents folder

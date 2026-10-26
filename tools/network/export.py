@@ -701,7 +701,39 @@ def requested(today=None) -> dict:
     return save_record({"requested_on": day.isoformat()})
 
 
-def since_last(before, after, plan, contacts, threads, today) -> list:
+# Asked for and not taken after a day: the brief says so, once.
+REMIND_AFTER_DAYS = 1
+REMIND_SAY = ("Your LinkedIn download was asked for on {day} and has not been taken yet: "
+              "LinkedIn emails the link, which works for 72 hours. Add the files on your page, "
+              "or attach the ZIP in a chat.")
+
+
+def waiting_line(today, briefs=()) -> str:
+    """The brief's one line for a download asked for a day or more ago and not taken since,
+    said once: no earlier brief since the request has said it. `briefs` is the earlier
+    briefs' text."""
+    st = _state()
+    today = st._need_date(today, "today")
+    rec = load_record()
+    asked = st.as_date(rec.get("requested_on"))
+    taken = st.as_date(rec.get("taken_on"))
+    if not asked or (taken and taken >= asked) or (today - asked).days < REMIND_AFTER_DAYS:
+        return ""
+    line = REMIND_SAY.format(day=asked.isoformat())
+    if any(line[:60] in str(b) for b in briefs):
+        return ""
+    return line
+
+
+def file_names() -> list:
+    """The files the app reads from a download, each with what it is for and the columns it
+    cannot do without: what the page lets the person add, and nothing else."""
+    use = {k: g for g in ("history", "profile") for k in GROUPS[g]}
+    return [{"kind": k, "name": FILES[k], "for": use.get(k, "history"),
+             "needed": list(NEEDED.get(k, ()))} for k in FILES]
+
+
+def since_last(before, after, plan, contacts, threads, today, counts=None) -> list:
     """What changed since the last download, in a line or two: new connections, requests
     accepted, replies, and requests still waiting past PENDING_DAYS. `before` is the
     connections the app held before this one was saved (the rows, or None) with the
@@ -735,6 +767,11 @@ def since_last(before, after, plan, contacts, threads, today) -> list:
         shown = ", ".join(str(names.get(i) or i) for i in ids[:5])
         return f" ({shown}{', ...' if len(ids) > 5 else ''})" if ids else ""
     waiting = pending(contacts, threads, today)["items"]
+    if counts is not None:
+        counts.update(new_connections=len(new),
+                      accepted=len({r.get("contact_id") for r in accepted}),
+                      replied=len({r.get("contact_id") for r in replies}),
+                      waiting=len(waiting))
     when = (since.isoformat() if since else "the last one")
     return [f"Since your last download ({when}): {len(new)} new connection"
             f"{'s' if len(new) != 1 else ''}, {len({r.get('contact_id') for r in accepted})} "
@@ -769,7 +806,13 @@ def take(srcs, contacts_path: str | None = None, threads_path: str | None = None
     if n or dated:
         st.save_threads(threads, tp)
         st.save_contacts(contacts, cp)
-    lines[:0] = since_last(before, tables[0]["rows"], plan, contacts, threads, today)
+    counts = {"imported": n}
+    changed = since_last(before, tables[0]["rows"], plan, contacts, threads, today, counts)
+    lines[:0] = changed
+    # What this download held and what changed since the one before, for the page and the
+    # brief to say without reading the files again.
+    counts.update({t["kind"]: len(t["rows"]) for t in tables if t.get("found")})
+    save_record({"counts": counts, "changed": changed})
     j = plan["joined"]
     people = j["profile address"] + j["name"]
     wrote = [u for u in plan["unmatched"] if u["sent"]]

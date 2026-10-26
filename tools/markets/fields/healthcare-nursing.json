@@ -1,0 +1,149 @@
+{
+  "name": "Healthcare and nursing",
+  "field": "healthcare-nursing",
+  "aka": [
+    "healthcare",
+    "health",
+    "nursing",
+    "nurse",
+    "medical",
+    "clinical",
+    "allied health"
+  ],
+  "boards": {
+    "gb": [
+      {
+        "name": "NHS Jobs",
+        "url": "https://www.jobs.nhs.uk",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/National_Health_Service",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: NHS Jobs)",
+        "search": "https://www.jobs.nhs.uk/candidate/search/results?keyword=nurse",
+        "paths": {
+          "search": "/candidate/search/results?keyword=nurse",
+          "posting": "/candidate/jobadvert/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+          "search": null,
+          "status": "unconfirmed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ]
+  },
+  "licences": {
+    "gb": [
+      {
+        "value": "NMC registration (Nursing and Midwifery Council PIN)",
+        "source": "https://en.wikipedia.org/wiki/Nursing_and_Midwifery_Council",
+        "quote": "The NMC maintains a register of all nurses , midwives and specialist community public health nurses and nursing associates eligible to practise within the UK.",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "us": [
+      {
+        "value": "RN licence after the NCLEX-RN",
+        "source": "https://en.wikipedia.org/wiki/NCLEX",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "au": [
+      {
+        "value": "AHPRA registration",
+        "source": "https://en.wikipedia.org/wiki/Australian_Health_Practitioner_Regulation_Agency",
+        "quote": "[ 13 ] On 1 July 2010, the National Registration and Accreditation Scheme (NRAS) began for 10 profession groups, each with their own boards, with a further four in 2012 and one in 2018. [ 1 ]",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "nz": [
+      {
+        "value": "Nursing Council of New Zealand registration and practising certificate",
+        "source": "https://en.wikipedia.org/wiki/Nursing_Council_of_New_Zealand",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ]
+  },
+  "pay": {
+    "gb": [
+      {
+        "name": "Agenda for Change pay bands",
+        "url": "https://www.nhsemployers.org/topics/pay-pensions-and-reward/pay-and-contracts/agenda-change",
+        "what": "NHS pay bands 1 to 9",
+        "source": "https://en.wikipedia.org/wiki/Agenda_for_Change",
+        "quote": "English National Health Service grading and pay system",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Charge Nurse",
+        "Staff Nurse",
+        "School Nurse",
+        "Relief Charge Nurse",
+        "Staff RN (Staff Registered Nurse)"
+      ],
+      "source": "https://www.onetonline.org/link/summary/29-1141.00",
+      "quote": "Sample of reported job titles: Certified Operating Room Nurse (CNOR), Charge Nurse",
+      "on_page": [
+        "Charge Nurse",
+        "Staff Nurse",
+        "School Nurse",
+        "Relief Charge Nurse",
+        "Staff RN (Staff Registered Nurse)"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "health record system",
+      "members": [
+        [
+          "Epic",
+          "(?-i:\\bEpic\\b)"
+        ],
+        [
+          "MEDITECH",
+          "\\bmeditech\\b"
+        ],
+        [
+          "eClinicalWorks",
+          "\\beclinicalworks\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/29-1141.00",
+      "quote": "Medical software - eClinicalWorks EHR software",
+      "on_page": [
+        "Epic Systems",
+        "MEDITECH software",
+        "eClinicalWorks EHR software"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

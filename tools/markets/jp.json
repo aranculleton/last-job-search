@@ -1,0 +1,293 @@
+{
+  "name": "Japan",
+  "country": "jp",
+  "aka": [
+    "JP",
+    "JPN",
+    "Nippon",
+    "Nihon",
+    "日本"
+  ],
+  "languages": [
+    "ja"
+  ],
+  "currency": "JPY",
+  "boards": [
+    {
+      "name": "Hello Work (ハローワーク)",
+      "url": "https://www.hellowork.mhlw.go.jp",
+      "kind": "public",
+      "source": "https://en.wikipedia.org/wiki/Hello_Work",
+      "quote": "is the Japanese English name for the Japanese government 's Employment Service Center",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.hellowork.mhlw.go.jp/kensaku/GECA110010.do?action=initDisp&screenId=GECA110010",
+      "paths": {
+        "search": "/kensaku/GECA110010.do?action=initDisp&screenId=GECA110010",
+        "posting": "/kensaku/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "no robots.txt published",
+        "search": true,
+        "status": "no_policy",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://jp.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://jp.indeed.com/jobs?q=%E3%82%A2%E3%83%8A%E3%83%AA%E3%82%B9%E3%83%88&l=%E6%9D%B1%E4%BA%AC%E9%83%BD",
+      "paths": {
+        "search": "/jobs?q=%E3%82%A2%E3%83%8A%E3%83%AA%E3%82%B9%E3%83%88&l=%E6%9D%B1%E4%BA%AC%E9%83%BD",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "doda",
+      "url": "https://doda.jp",
+      "kind": "general",
+      "source": "https://ja.wikipedia.org/wiki/%E3%83%91%E3%83%BC%E3%82%BD%E3%83%AB%E3%82%AD%E3%83%A3%E3%83%AA%E3%82%A2",
+      "quote": "人材紹介 dodaエージェントサービス - 正社員 としての就職を前提としたサービス",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://doda.jp/DodaFront/View/JobSearchList.action?k=%E3%82%A2%E3%83%8A%E3%83%AA%E3%82%B9%E3%83%88",
+      "paths": {
+        "search": "/DodaFront/View/JobSearchList.action?k=%E3%82%A2%E3%83%8A%E3%83%AA%E3%82%B9%E3%83%88",
+        "posting": "/DodaFront/View/JobSearchDetail/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (RuntimeError)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Rikunabi NEXT (リクナビNEXT)",
+      "url": "https://next.rikunabi.com",
+      "kind": "general",
+      "source": "https://ja.wikipedia.org/wiki/%E3%83%AA%E3%82%AF%E3%83%8A%E3%83%93NEXT",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: 転職者, 中途採用)",
+      "search": "https://next.rikunabi.com/lst/?fw=%E3%82%A2%E3%83%8A%E3%83%AA%E3%82%B9%E3%83%88",
+      "paths": {
+        "search": "/lst/?fw=%E3%82%A2%E3%83%8A%E3%83%AA%E3%82%B9%E3%83%88",
+        "posting": "/viewjob/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_found",
+        "http": 404
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "在留資格 (status of residence that permits the work)",
+      "lang": "ja",
+      "means": "work_right",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_Japan",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "phrase": "就労ビザ (work visa sponsored by the employer)",
+      "lang": "ja",
+      "means": "sponsorship",
+      "source": "https://en.wikipedia.org/wiki/Visa_policy_of_Japan",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "phrase": "永住者 (permanent resident)",
+      "lang": "ja",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/Japanese_nationality_law",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: permanent resident)"
+    },
+    {
+      "phrase": "日本国籍 (Japanese nationality)",
+      "lang": "ja",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/Japanese_nationality_law",
+      "quote": "Foreign nationals may acquire citizenship by naturalization after living in the country for at least five years",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "履歴書 (rirekisho) and 職務経歴書 (shokumu keirekisho)",
+      "source": "https://ja.wikipedia.org/wiki/%E5%B1%A5%E6%AD%B4%E6%9B%B8",
+      "quote": "日本では2020年まで 日本産業規格 （JIS）で様式例が定められ、多くのメーカーがこれを参考にした記入欄を設けた履歴書を販売していた",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "the rirekisho is a set form; the shokumu keirekisho runs to two or three pages",
+      "source": "https://ja.wikipedia.org/wiki/%E5%B1%A5%E6%AD%B4%E6%9B%B8",
+      "quote": "日本では2020年まで 日本産業規格 （JIS）で様式例が定められ、多くのメーカーがこれを参考にした記入欄を設けた履歴書を販売していた",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "a photo is expected on the rirekisho",
+      "source": "https://ja.wikipedia.org/wiki/%E5%B1%A5%E6%AD%B4%E6%9B%B8",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    },
+    {
+      "topic": "date_format",
+      "value": "YYYY年MM月DD日; Japanese era years also used",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Japan",
+      "quote": "The most commonly used date format in Japan is \"year month day (weekday)\"",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Japanese, unless the posting is in English",
+      "source": "https://en.wikipedia.org/wiki/Japanese_language",
+      "quote": "primarily in Japan , the only country where it is the national language",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "賃金構造基本統計調査 (Basic Survey on Wage Structure, MHLW)",
+      "url": "https://www.mhlw.go.jp/toukei/list/chinginkouzou.html",
+      "what": "pay by occupation, age, sex and prefecture",
+      "source": "https://ja.wikipedia.org/wiki/%E8%B3%83%E9%87%91%E6%A7%8B%E9%80%A0%E5%9F%BA%E6%9C%AC%E7%B5%B1%E8%A8%88%E8%AA%BF%E6%9F%BB",
+      "quote": "賃金構造基本統計調査 （ちんぎんこうぞうきほんとうけいちょうさ）とは 厚生労働省 が実施している 賃金 に関する 調査",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "job tag (職業情報提供サイト, MHLW)",
+      "url": "https://shigoto.mhlw.go.jp/User/",
+      "what": "pay and duties by occupation",
+      "source": "https://shigoto.mhlw.go.jp/User/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: robots.txt could not be read (HTTP 200 but the body is not a robots.txt)"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Tokyo",
+      "written": [
+        "東京都",
+        "Tokyo",
+        "Yokohama",
+        "Kawasaki",
+        "Saitama",
+        "Chiba"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Tokyo_Area",
+      "quote": "The Greater Tokyo Area is the third most populous metropolitan area in the world",
+      "on_page": [
+        "Yokohama",
+        "Kawasaki",
+        "Saitama",
+        "Chiba"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Osaka",
+      "written": [
+        "大阪",
+        "Osaka",
+        "Kyoto",
+        "Kobe",
+        "Keihanshin"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Keihanshin",
+      "quote": "is a metropolitan region in the Kansai region of Japan encompassing the metropolitan areas of the cities of Kyoto",
+      "on_page": [
+        "Kyoto",
+        "Osaka",
+        "Kobe"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Nagoya",
+      "written": [
+        "名古屋",
+        "Nagoya",
+        "Aichi"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Ch%C5%ABky%C5%8D_metropolitan_area",
+      "quote": "The metropolitan area stretches beyond the central city of Nagoya to other municipalities in Aichi Prefecture, as well as neighboring Gifu and Mie prefectures .",
+      "on_page": [
+        "Nagoya",
+        "Aichi"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

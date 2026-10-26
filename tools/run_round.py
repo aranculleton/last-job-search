@@ -277,7 +277,37 @@ SUMMARY_DIR = "documents/rounds"
 SUMMARY_FIELDS = ("priority", "fit", "fit_why", "opportunity", "title", "company", "location",
                   "date", "first_seen", "age_days", "url", "portal", "bar", "bar_reason",
                   "warm_route_note", "outreach_pending_note", "throttle_override_note",
-                  "drafted_note")
+                  "drafted_note", "apply_url", "link_kind", "link_status", "link_check",
+                  "near")
+LINK_FIELDS = ("apply_url", "link_kind", "link_status", "link_check")
+
+
+def link_checks(rows: list[dict], scraped: list[dict], now=None) -> list[dict]:
+    """Each kept row with its apply link checked against the employers' own boards as this
+    round read them (tools/apply_link.py), with no request of its own: a board the scrape
+    read is its listing, so a LinkedIn posting is matched to the employer's own and a
+    board's posting is open by being there. Only the link fields are added; the row's own
+    `url` stays as it was found, since rulings are keyed on it."""
+    import apply_link
+    from company_key import key as company_key
+    by_board: dict = {}
+    for r in scraped or []:
+        if isinstance(r, dict) and r.get("portal"):
+            by_board.setdefault((str(r["portal"]), company_key(r.get("company") or "")), []).append(r)
+
+    def read(employer, kind, token):
+        got = by_board.get((kind, company_key(employer)))
+        return (got, None) if got else ([], "this round did not read that board")
+    checker = apply_link.Checker(now=now, read=read)
+    out = []
+    for r in rows:
+        try:
+            shown = checker.shown(r)
+        except Exception:  # noqa: BLE001  a row the checker cannot read keeps no link fields
+            out.append(r)
+            continue
+        out.append(dict(r, **{k: shown[k] for k in LINK_FIELDS if shown.get(k)}))
+    return out
 
 
 def round_order(path: str) -> tuple:
@@ -301,16 +331,26 @@ def _read_json(path):
         return json.load(fh)
 
 
-def write_summary(shortlist_path, out_dir, name):
-    """The compact shortlist, and where it was written."""
+def write_summary(shortlist_path, out_dir, name, scraped_path=None):
+    """The compact shortlist, and where it was written. With `scraped_path` (the round's
+    scrape), each kept row's apply link is checked against what the round read
+    (link_checks), so a card says where to apply and whether it is still listed."""
     try:
         rows = _read_json(shortlist_path)
     except Exception:
         return None
     rows = rows if isinstance(rows, list) else list(rows.values())
     rows.sort(key=lambda r: -(r.get("priority") or 0))
+    kept = rows[:KEEP_TOP]
+    if scraped_path:
+        try:
+            scraped = _read_json(scraped_path)
+            scraped = scraped if isinstance(scraped, list) else list(scraped.values())
+        except Exception:
+            scraped = []
+        kept = link_checks(kept, scraped, datetime.datetime.now(datetime.timezone.utc))
     out = [{k: r.get(k) for k in SUMMARY_FIELDS if r.get(k) not in (None, "")}
-           for r in rows[:KEEP_TOP]]
+           for r in kept]
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "%s.json" % name)
     with open(path, "w", encoding="utf-8") as fh:
@@ -548,6 +588,16 @@ def round_dir(out: str) -> str:
     return os.path.normpath(out)
 
 
+def _job_age_days() -> int:
+    """How old a posting may be: the person's own search window (JOB_AGE_DAYS, set from
+    the page: 7, 14 or 30 days), else the app's rule of 14."""
+    try:
+        got = int(getattr(person.module("search"), "JOB_AGE_DAYS", 14) or 14)
+    except Exception:  # noqa: BLE001  no profile here, or a value that is not a number
+        return 14
+    return got if got in (7, 14, 30) else 14
+
+
 def main():
     try:  # a chat that carried on into a new day has not checked the app since
         import sync_app
@@ -559,7 +609,8 @@ def main():
     ap.add_argument("--pages", type=int, default=None,
                     help="default 5 in the cloud and 2 on a person's own computer "
                          "(scrape_wide.defaults; SCRAPE_PAGES in profile/search.py)")
-    ap.add_argument("--jobage", type=int, default=14, help="hard freshness rule, days")
+    ap.add_argument("--jobage", type=int, default=_job_age_days(),
+                    help="hard freshness rule, days (profile/search.py JOB_AGE_DAYS, else 14)")
     ap.add_argument("--workers", type=int, default=None,
                     help="default 10 in the cloud and 4 on their own computer (SCRAPE_WORKERS)")
     ap.add_argument("--top", type=int, default=40, help="shortlist length shown")
@@ -748,7 +799,7 @@ def main():
     # below returns, so every exit path leaves the same small footprint.
     summary = write_summary(f("06_shortlist.json"),
                             a.summary_dir or person.state(SUMMARY_DIR),
-                            os.path.basename(os.path.abspath(a.out)))
+                            os.path.basename(os.path.abspath(a.out)), scraped_path=scraped)
     if summary:
         print(f"shortlist summary: {local_path.rel(summary, ROOT)} "
               f"(top {KEEP_TOP}, no posting bodies) - commit this one")

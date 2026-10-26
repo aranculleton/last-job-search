@@ -124,8 +124,12 @@ def choose(draft: dict) -> tuple[str, str]:
         return check(own), "this application's own choice"
     s = setting()
     company = draft.get("company")
+    # The person's own usual colour (Tweak R5, "Keep this for next time"), under any
+    # employer or kind the setting names.
+    usual = str(person.get("documents.style", "") or "").strip()
     if not (s.get("kinds") or s.get("employers")):
-        return DEFAULT, "no style is set"
+        return (check(usual, "person.json documents.style"), "your usual colour") if usual \
+            else (DEFAULT, "no style is set")
     from company_key import key  # noqa: E402
     by_name = {key(k): v for k, v in (s.get("employers") or {}).items()}
     if company and key(company) in by_name:
@@ -133,6 +137,8 @@ def choose(draft: dict) -> tuple[str, str]:
     for kind in kinds_of(company):
         if kind in (s.get("kinds") or {}):
             return s["kinds"][kind], f"the kind {kind!r} in documents.styles"
+    if usual:
+        return check(usual, "person.json documents.style"), "your usual colour"
     return DEFAULT, "the employer is not on a list a style is set for"
 
 

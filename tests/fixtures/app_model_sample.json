@@ -1,0 +1,2244 @@
+{
+  "model": 1,
+  "made_at": "2026-10-25T08:00:00Z",
+  "rev": "5a1e0c4d",
+  "app": {
+    "version": "4.0.0",
+    "update_waiting": "4.0.1",
+    "news": [
+      "Apply links are checked before you see them",
+      "Each search shows its steps while it runs"
+    ],
+    "url": "https://claude.ai/code/artifact/00000000-0000-4000-8000-000000000000",
+    "privacy": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared."
+  },
+  "person": {
+    "first_name": "Morgan",
+    "doc_noun": "CV",
+    "time_zone": "Europe/London",
+    "repo": "morgan-example/job-search",
+    "computer": true
+  },
+  "needs_you": [
+    {
+      "id": "q-larkspur-data-looker",
+      "kind": "question",
+      "title": "Have you used Looker?",
+      "body": "The posting at Larkspur Retail asks for it. Your answer decides whether it goes on the CV.",
+      "options": [
+        {
+          "label": "Yes, I have",
+          "action": "consent.yes"
+        },
+        {
+          "label": "No",
+          "action": "consent.no"
+        }
+      ],
+      "about": {
+        "company": "Larkspur Retail",
+        "role": "Supply Chain Data Analyst"
+      },
+      "rev": "n1"
+    },
+    {
+      "id": "c-fernhill-ops-applied",
+      "kind": "confirm",
+      "title": "Did you apply to Fernhill Freight?",
+      "body": "The Operations Analyst application was ready on 20 September and is not marked as sent.",
+      "options": [
+        {
+          "label": "Yes, I applied",
+          "action": "confirm.applied"
+        },
+        {
+          "label": "Not yet",
+          "action": "confirm.not_yet"
+        },
+        {
+          "label": "Skip this role",
+          "action": "confirm.skip"
+        }
+      ],
+      "about": {
+        "company": "Fernhill Freight",
+        "role": "Operations Analyst"
+      },
+      "rev": "n2"
+    },
+    {
+      "id": "x-quayside-demand-status",
+      "kind": "conflict",
+      "title": "Two answers about Quayside Foods",
+      "body": "Your phone said applied at 09:12. Your laptop said not yet at 09:40. Which is right?",
+      "options": [
+        {
+          "label": "Applied",
+          "action": "conflict.applied"
+        },
+        {
+          "label": "Not yet",
+          "action": "conflict.not_yet"
+        }
+      ],
+      "about": {
+        "company": "Quayside Foods",
+        "role": "Demand Planning Analyst"
+      },
+      "rev": "n3"
+    },
+    {
+      "id": "q-sent-fernhill_freight_halloway",
+      "kind": "confirm",
+      "title": "Did your note to Wren go?",
+      "body": "You copied your follow-up to Wren on 23 October and it is not marked as sent.",
+      "options": [
+        {
+          "label": "Yes, it went",
+          "action": "msg.sent",
+          "item": "msg-wren-2",
+          "value": {
+            "outside": true
+          }
+        },
+        {
+          "label": "Not yet",
+          "action": "due.snooze",
+          "item": "due-fernhill-nudge",
+          "value": {
+            "until": "2026-10-27"
+          }
+        }
+      ],
+      "about": {
+        "company": "Fernhill Freight",
+        "contact": "fernhill_freight_halloway"
+      },
+      "rev": "n5"
+    }
+  ],
+  "jobs": {
+    "round": "r12",
+    "made_at": "2026-10-24T07:10:00Z",
+    "met": true,
+    "summary": "Searched 4 job sites and 12 employers: 6 worth a look.",
+    "rows": [
+      {
+        "id": "r12-1",
+        "rank": 1,
+        "score": 84,
+        "band": "strong",
+        "company": "Harbourline Bank",
+        "title": "Pricing Analyst",
+        "place": "Manchester",
+        "remote": "hybrid",
+        "pay": {
+          "text": "GBP 46,000 to 52,000",
+          "stated": true,
+          "at_target": true
+        },
+        "deadline": "2026-10-31",
+        "warm": null,
+        "apply": {
+          "url": "https://example.com/jobs/harbourline-pricing",
+          "kind": "employer",
+          "checked_at": "2026-10-25T06:40:00Z",
+          "status": "open"
+        },
+        "notes": [
+          "Hybrid, 2 days in the office",
+          "Asks for SQL and Python"
+        ],
+        "status": "new",
+        "questions": [
+          "Have you already applied?",
+          "Are you happy with a 12 month fixed term?"
+        ],
+        "rev": "j1",
+        "alerts": [],
+        "suggest": null,
+        "posted_days": 5,
+        "near": [
+          {
+            "asked": "Tableau",
+            "have": "Power BI",
+            "yes": false
+          },
+          {
+            "asked": "Snowflake",
+            "have": "PostgreSQL",
+            "yes": false
+          }
+        ],
+        "related": {
+          "people": [
+            "harbourline_bank_bea"
+          ],
+          "interviews": [
+            "int-harbourline-risk"
+          ]
+        },
+        "draft": null
+      },
+      {
+        "id": "r12-2",
+        "rank": 2,
+        "score": 79,
+        "band": "strong",
+        "company": "Larkspur Retail",
+        "title": "Supply Chain Data Analyst",
+        "place": "Leeds",
+        "remote": "on site",
+        "pay": {
+          "text": "GBP 44,000",
+          "stated": true
+        },
+        "deadline": null,
+        "warm": "Juno at Larkspur Retail replied last week: ask her first",
+        "apply": {
+          "url": "https://example.com/jobs/larkspur-data",
+          "kind": "board",
+          "checked_at": "2026-10-24T18:00:00Z",
+          "status": "open"
+        },
+        "notes": [
+          "Leeds office, 5 days"
+        ],
+        "status": "drafting",
+        "questions": [
+          "Have you already applied?"
+        ],
+        "rev": "j2",
+        "alerts": [],
+        "suggest": null,
+        "related": {
+          "messages": [
+            "msg-juno-1",
+            "msg-kit-1"
+          ],
+          "people": [
+            "larkspur_retail_castellan",
+            "larkspur_retail_ltd_kit"
+          ],
+          "interviews": [
+            "int-larkspur-supply"
+          ]
+        },
+        "draft": null
+      },
+      {
+        "id": "r12-3",
+        "rank": 3,
+        "score": 71,
+        "band": "good",
+        "company": "Copperleaf Pay",
+        "title": "Data Analyst, Payments",
+        "place": "Manchester",
+        "remote": "remote",
+        "pay": {
+          "text": "not stated",
+          "stated": false
+        },
+        "deadline": null,
+        "warm": null,
+        "apply": {
+          "url": "https://example.com/jobs/copperleaf-data",
+          "kind": "linkedin",
+          "checked_at": null,
+          "status": "not_checked"
+        },
+        "notes": [],
+        "status": "new",
+        "questions": [
+          "Have you already applied?"
+        ],
+        "rev": "j3",
+        "alerts": [
+          {
+            "level": 1,
+            "id": "al-referral_hold-r12-3",
+            "kind": "referral_hold",
+            "text": "Tamsin has put your name forward at Copperleaf Pay: do not apply cold.",
+            "why": "A cold application lands as a second, worse record of you, and the referral is the one that loses.",
+            "action": {
+              "type": "go",
+              "label": "See Tamsin",
+              "to": "people",
+              "item": "copperleaf_pay_tamsin"
+            },
+            "cost": {
+              "state": 0,
+              "label": "Free, instant"
+            }
+          }
+        ],
+        "suggest": null,
+        "posted_days": 2,
+        "related": {
+          "ready": [
+            "app-copperleaf-payments"
+          ],
+          "messages": [
+            "msg-ash-1"
+          ],
+          "people": [
+            "copperleaf_pay_tamsin",
+            "copperleaf_pay_ash"
+          ],
+          "interviews": [
+            "int-copperleaf-payments"
+          ]
+        },
+        "draft": "app-copperleaf-payments"
+      },
+      {
+        "id": "r12-4",
+        "rank": 4,
+        "score": 66,
+        "band": "good",
+        "company": "Ellerwick Trust",
+        "title": "Research Analyst",
+        "place": "Salford",
+        "remote": "hybrid",
+        "pay": {
+          "text": "GBP 38,000 to 42,000",
+          "stated": true
+        },
+        "deadline": "2026-11-14",
+        "warm": null,
+        "apply": {
+          "url": "https://example.com/jobs/ellerwick-insight",
+          "kind": "employer",
+          "checked_at": "2026-10-25T06:41:00Z",
+          "status": "open"
+        },
+        "notes": [
+          "Charity sector"
+        ],
+        "status": "ready",
+        "questions": [],
+        "rev": "j4",
+        "alerts": [],
+        "suggest": null,
+        "related": {
+          "ready": [
+            "app-ellerwick-insight"
+          ],
+          "messages": [
+            "msg-priya-thanks"
+          ],
+          "people": [
+            "ellerwick_trust_priya"
+          ]
+        },
+        "draft": "app-ellerwick-insight"
+      },
+      {
+        "id": "r12-5",
+        "rank": 5,
+        "score": 62,
+        "band": "fair",
+        "company": "Brackenridge Advisory",
+        "title": "Analytics Consultant",
+        "place": "Manchester",
+        "remote": "hybrid",
+        "pay": {
+          "text": "GBP 40,000 to 45,000",
+          "stated": true
+        },
+        "deadline": null,
+        "warm": null,
+        "apply": {
+          "url": "https://example.com/jobs/brackenridge-consultant",
+          "kind": "aggregator",
+          "checked_at": "2026-10-25T06:42:00Z",
+          "status": "closed"
+        },
+        "notes": [
+          "The listing has closed since the search"
+        ],
+        "status": "new",
+        "questions": [
+          "Have you already applied?"
+        ],
+        "rev": "j5",
+        "alerts": [
+          {
+            "level": 1,
+            "id": "al-closed-r12-5",
+            "kind": "closed",
+            "text": "This posting has closed.",
+            "why": "The employer's own board no longer lists it (checked 2026-10-25).",
+            "action": {
+              "type": "act",
+              "label": "Set it aside",
+              "action": "job.dismiss",
+              "item": "r12-5",
+              "value": {
+                "why": "closed"
+              }
+            },
+            "cost": {
+              "state": 0,
+              "label": "Free, instant"
+            }
+          }
+        ],
+        "suggest": null,
+        "related": {
+          "messages": [
+            "msg-noor-1"
+          ],
+          "people": [
+            "brackenridge_advisory_noor"
+          ]
+        },
+        "draft": null
+      },
+      {
+        "id": "r12-6",
+        "rank": 6,
+        "score": 60,
+        "band": "fair",
+        "company": "Kestrel Mutual",
+        "title": "Reporting Analyst",
+        "place": "Stockport",
+        "remote": "hybrid",
+        "pay": {
+          "text": "GBP 34,000",
+          "stated": true
+        },
+        "deadline": null,
+        "warm": null,
+        "apply": {
+          "url": "https://example.com/jobs/kestrel-reporting",
+          "kind": "board",
+          "checked_at": "2026-10-25T06:43:00Z",
+          "status": "open"
+        },
+        "notes": [],
+        "status": "dismissed",
+        "questions": [],
+        "rev": "j6",
+        "alerts": [],
+        "suggest": null,
+        "related": {
+          "people": [
+            "kestrel_mutual_sasha",
+            "kestrel_mutual_pia"
+          ]
+        },
+        "draft": null
+      }
+    ],
+    "filtered": {
+      "count": 41,
+      "groups": [
+        {
+          "reason": "outside Greater Manchester and not remote",
+          "count": 19
+        },
+        {
+          "reason": "already seen in an earlier search",
+          "count": 12
+        },
+        {
+          "reason": "senior manager roles",
+          "count": 7
+        },
+        {
+          "reason": "needs a driving licence",
+          "count": 3,
+          "items": [
+            {
+              "id": "r12-f1",
+              "company": "Fernhill Freight",
+              "title": "Transport Planning Analyst",
+              "place": "Manchester",
+              "url": "https://example.com/jobs/fernhill-transport",
+              "reason": "needs a driving licence",
+              "rev": "f1"
+            },
+            {
+              "id": "r12-f2",
+              "company": "Brackmoor Retail",
+              "title": "Field analyst",
+              "place": "Bolton",
+              "url": "https://example.com/jobs/brackmoor-field",
+              "reason": "needs a driving licence",
+              "rev": "f2"
+            },
+            {
+              "id": "r12-f3",
+              "company": "Quayside Foods",
+              "title": "Route Analyst",
+              "place": "Salford",
+              "url": "https://example.com/jobs/quayside-route",
+              "reason": "needs a driving licence",
+              "rev": "f3"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "ready": [
+    {
+      "id": "app-ellerwick-insight",
+      "slug": "ellerwick_insight",
+      "company": "Ellerwick Trust",
+      "role": "Research Analyst",
+      "pay": "GBP 38,000 to 42,000",
+      "place": "Salford",
+      "apply": {
+        "url": "https://example.com/jobs/ellerwick-insight",
+        "status": "open"
+      },
+      "files": [
+        {
+          "kind": "resume",
+          "name": "Morgan_Ellis_CV_Ellerwick.pdf",
+          "asset": "0f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "path": "cv/Morgan_Ellis_CV_Ellerwick.pdf",
+          "pages": 1
+        },
+        {
+          "kind": "letter",
+          "name": "Morgan_Ellis_Cover_Letter_Ellerwick.pdf",
+          "asset": "1f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "path": "cover_letters/Morgan_Ellis_Cover_Letter_Ellerwick.pdf",
+          "pages": 1
+        }
+      ],
+      "checks": {
+        "passed": true,
+        "line": "All checks passed"
+      },
+      "outreach": {
+        "to": "the hiring manager",
+        "text": "Hello, I have applied for the Research Analyst role. I spent three years turning store and supplier data into weekly plans, and the trust's work on food poverty is why I applied. I would welcome a short call if that is useful."
+      },
+      "screening": [
+        {
+          "q": "Do you need sponsorship to work in the UK?",
+          "a": "No"
+        },
+        {
+          "q": "What is your notice period?",
+          "a": "One month"
+        },
+        {
+          "q": "Why do you want to work for us?",
+          "a": "Your insight team's reports on food access shape how partners plan, and that is the kind of analysis I want my work to feed."
+        }
+      ],
+      "status": "drafted",
+      "rev": "a1",
+      "applied_on": null,
+      "alerts": [],
+      "suggest": {
+        "level": 2,
+        "id": "sg-near-app-ellerwick-insight-3f2a9c1d",
+        "kind": "near",
+        "text": "The posting asks for Tableau; you have Power BI, and your CV does not show it. Add Power BI?",
+        "why": "Power BI is on your profile and is the same kind of tool.",
+        "action": {
+          "type": "work",
+          "label": "Add Power BI",
+          "kind": "tweak",
+          "id": "tweak~app-ellerwick-insight~near",
+          "title": "Add Power BI: Ellerwick Trust",
+          "args": {
+            "target": {
+              "id": "app-ellerwick-insight",
+              "output": "resume",
+              "company": "Ellerwick Trust",
+              "rev": "a1"
+            },
+            "text": "Show Power BI where the posting asks for Tableau."
+          }
+        },
+        "cost": {
+          "state": 2,
+          "label": "Some Claude, about a minute or two"
+        },
+        "since": "2026-10-25",
+        "rev": "s1"
+      },
+      "near": [
+        {
+          "asked": "Tableau",
+          "have": "Power BI",
+          "yes": false
+        }
+      ],
+      "related": {
+        "jobs": [
+          "r12-4"
+        ],
+        "messages": [
+          "msg-priya-thanks"
+        ],
+        "people": [
+          "ellerwick_trust_priya"
+        ]
+      },
+      "job": "r12-4"
+    },
+    {
+      "id": "app-quayside-demand",
+      "slug": "quayside_demand",
+      "company": "Quayside Foods",
+      "role": "Demand Planning Analyst",
+      "pay": "not stated",
+      "place": "Manchester",
+      "apply": {
+        "url": "https://example.com/jobs/3",
+        "status": "not_checked"
+      },
+      "files": [
+        {
+          "kind": "resume",
+          "name": "Morgan_Ellis_CV_Quayside.pdf",
+          "asset": null,
+          "path": "cv/Morgan_Ellis_CV_Quayside.pdf",
+          "pages": 1
+        }
+      ],
+      "checks": {
+        "passed": false,
+        "line": "One check needs you: the CV runs to a second page by two lines"
+      },
+      "outreach": null,
+      "screening": [],
+      "status": "drafted",
+      "rev": "a2",
+      "applied_on": null,
+      "alerts": [
+        {
+          "level": 1,
+          "id": "al-checks-app-quayside-demand",
+          "kind": "checks",
+          "text": "One check needs you: the CV runs to a second page by two lines.",
+          "why": "Both documents are made and read back at the right length before anything is sent.",
+          "action": {
+            "type": "work",
+            "label": "Make it again",
+            "kind": "draft",
+            "id": "draft~app-quayside-demand",
+            "title": "Make it again: Quayside Foods",
+            "args": {
+              "company": "Quayside Foods",
+              "role": "Demand Planning Analyst",
+              "application": "app-quayside-demand",
+              "redo": true
+            }
+          },
+          "cost": {
+            "state": 3,
+            "label": "A lot of Claude, several minutes"
+          }
+        }
+      ],
+      "suggest": null,
+      "related": {
+        "messages": [
+          "msg-rafe-1"
+        ],
+        "people": [
+          "quayside_foods_ivo",
+          "quayside_foods_rafe"
+        ]
+      },
+      "job": null
+    },
+    {
+      "id": "app-copperleaf-payments",
+      "slug": "copperleaf_payments",
+      "company": "Copperleaf Pay",
+      "role": "Data Analyst, Payments",
+      "pay": "not stated",
+      "place": "Manchester",
+      "apply": {
+        "url": "https://example.com/jobs/copperleaf-payments",
+        "status": "open"
+      },
+      "files": [
+        {
+          "kind": "resume",
+          "name": "Morgan_Ellis_CV_Copperleaf.pdf",
+          "asset": "2f1e2d3c4b5a69788796a5b4c3d2e1f0",
+          "path": "cv/Morgan_Ellis_CV_Copperleaf.pdf",
+          "pages": 1
+        }
+      ],
+      "checks": {
+        "passed": true,
+        "line": "All checks passed"
+      },
+      "outreach": null,
+      "screening": [],
+      "status": "drafted",
+      "rev": "a3",
+      "applied_on": null,
+      "alerts": [],
+      "suggest": null,
+      "near": [],
+      "for_contact": {
+        "id": "copperleaf_pay_tamsin",
+        "first_name": "Tamsin"
+      },
+      "route": "to_them",
+      "related": {
+        "jobs": [
+          "r12-3"
+        ],
+        "messages": [
+          "msg-ash-1"
+        ],
+        "people": [
+          "copperleaf_pay_tamsin",
+          "copperleaf_pay_ash"
+        ],
+        "interviews": [
+          "int-copperleaf-payments"
+        ]
+      },
+      "job": "r12-3"
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg-juno-1",
+      "contact": "larkspur_retail_castellan",
+      "first_name": "Juno",
+      "employer": "Larkspur Retail",
+      "channel": "linkedin_message",
+      "kind": "reply",
+      "text": "Hi Juno, thank you for coming back to me so quickly. Thursday at 12 suits me well. I would love to hear how the planning team splits its week between stores and suppliers.",
+      "chars": 171,
+      "limit": 8000,
+      "why": "Juno replied on 20 October",
+      "due": "2026-10-25",
+      "rev": "m1",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "related": {
+        "jobs": [
+          "r12-2"
+        ],
+        "messages": [
+          "msg-kit-1"
+        ],
+        "people": [
+          "larkspur_retail_castellan",
+          "larkspur_retail_ltd_kit"
+        ],
+        "interviews": [
+          "int-larkspur-supply"
+        ]
+      }
+    },
+    {
+      "id": "msg-wren-2",
+      "contact": "fernhill_freight_halloway",
+      "first_name": "Wren",
+      "employer": "Fernhill Freight",
+      "channel": "linkedin_message",
+      "kind": "follow_up",
+      "text": "Hi Wren, a quick follow-up on my note last month. If a short call about how your analytics team plans its week would suit, I am free most mornings.",
+      "chars": 147,
+      "limit": 8000,
+      "why": "Your note went unanswered for 5 working days",
+      "due": "2026-10-24",
+      "rev": "m2",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "related": {
+        "people": [
+          "fernhill_freight_halloway",
+          "fernhill_freight_odile"
+        ]
+      }
+    },
+    {
+      "id": "msg-ash-1",
+      "contact": "copperleaf_pay_ash",
+      "first_name": "Ash",
+      "employer": "Copperleaf Pay",
+      "channel": "linkedin_note",
+      "kind": "first_note",
+      "text": "Hi Ash, I saw you moved to Copperleaf Pay from Quayside Foods, where I did my placement. I work on supply chain analytics in Manchester. Would you be open to a short chat about how your data team works?",
+      "chars": 202,
+      "limit": 300,
+      "why": "You both worked at Quayside Foods",
+      "due": "2026-10-25",
+      "rev": "m3",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "wave": "w2026-43",
+      "wave_label": "First notes this week",
+      "related": {
+        "jobs": [
+          "r12-3"
+        ],
+        "ready": [
+          "app-copperleaf-payments"
+        ],
+        "people": [
+          "copperleaf_pay_tamsin",
+          "copperleaf_pay_ash"
+        ],
+        "interviews": [
+          "int-copperleaf-payments"
+        ]
+      }
+    },
+    {
+      "id": "msg-kit-1",
+      "contact": "larkspur_retail_ltd_kit",
+      "first_name": "Kit",
+      "employer": "Larkspur Retail Ltd",
+      "channel": "linkedin_note",
+      "kind": "first_note",
+      "text": "Hi Kit, I read your post on store-level forecasting at Larkspur. I build demand models for retail in Manchester and would value ten minutes on how your team tests a forecast before it ships.",
+      "chars": 190,
+      "limit": 300,
+      "why": "Writes about store-level forecasting",
+      "due": "2026-10-25",
+      "rev": "m4",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "wave": "w2026-43",
+      "wave_label": "First notes this week",
+      "related": {
+        "jobs": [
+          "r12-2"
+        ],
+        "messages": [
+          "msg-juno-1"
+        ],
+        "people": [
+          "larkspur_retail_castellan",
+          "larkspur_retail_ltd_kit"
+        ],
+        "interviews": [
+          "int-larkspur-supply"
+        ]
+      }
+    },
+    {
+      "id": "msg-rafe-1",
+      "contact": "quayside_foods_rafe",
+      "first_name": "Rafe",
+      "employer": "Quayside Foods",
+      "channel": "linkedin_note",
+      "kind": "first_note",
+      "text": "Hi Rafe, we overlapped at Quayside Foods in 2023 when I was on the planning placement. I am now looking at analyst roles in food supply chains. Could I ask you a few questions about the team?",
+      "chars": 191,
+      "limit": 300,
+      "why": "You both worked at Quayside Foods",
+      "due": "2026-10-26",
+      "rev": "m5",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "wave": "w2026-43",
+      "wave_label": "First notes this week",
+      "related": {
+        "ready": [
+          "app-quayside-demand"
+        ],
+        "people": [
+          "quayside_foods_ivo",
+          "quayside_foods_rafe"
+        ]
+      }
+    },
+    {
+      "id": "msg-noor-1",
+      "contact": "brackenridge_advisory_noor",
+      "first_name": "Noor",
+      "employer": "Brackenridge Advisory",
+      "channel": "inmail",
+      "kind": "first_note",
+      "text": "Hello Noor, I am an analyst in Manchester with four years in retail supply chains, and I saw Brackenridge is growing its analytics practice in the north. Is there anything coming up that a planning analyst could help with? I would be glad to send my CV.",
+      "chars": 253,
+      "limit": null,
+      "why": "A recruiter for the analytics practice",
+      "due": "2026-10-27",
+      "rev": "m6",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "subject": "Analytics roles in your Manchester team",
+      "body": "Hello Noor, I am an analyst in Manchester with four years in retail supply chains, and I saw Brackenridge is growing its analytics practice in the north. Is there anything coming up that a planning analyst could help with? I would be glad to send my CV.",
+      "warnings": [
+        "Claude left this as it is: it mentions your CV before they have asked for it."
+      ],
+      "related": {
+        "jobs": [
+          "r12-5"
+        ],
+        "people": [
+          "brackenridge_advisory_noor"
+        ]
+      }
+    },
+    {
+      "id": "msg-priya-thanks",
+      "contact": "ellerwick_trust_priya",
+      "first_name": "Marisol",
+      "employer": "Ellerwick Trust",
+      "channel": "email",
+      "kind": "thank_you",
+      "text": "Hi Marisol,\n\nThank you for the call on Thursday. Hearing how the insight team turns food bank data into monthly plans made the role much clearer.\n\nI will send the two examples I mentioned by Friday.\n\nBest wishes,\nMorgan",
+      "chars": 217,
+      "limit": null,
+      "why": "Your call on 22 October",
+      "due": "2026-10-25",
+      "rev": "m7",
+      "alerts": [],
+      "suggest": null,
+      "hold": null,
+      "subject": "Thank you for Thursday",
+      "body": "Hi Marisol,\n\nThank you for the call on Thursday. Hearing how the insight team turns food bank data into monthly plans made the role much clearer.\n\nI will send the two examples I mentioned by Friday.\n\nBest wishes,\nMorgan",
+      "related": {
+        "jobs": [
+          "r12-4"
+        ],
+        "ready": [
+          "app-ellerwick-insight"
+        ],
+        "people": [
+          "ellerwick_trust_priya"
+        ]
+      }
+    }
+  ],
+  "due": [
+    {
+      "id": "due-fernhill-nudge",
+      "kind": "nudge",
+      "title": "Nudge Fernhill Freight about the Operations Analyst role",
+      "due": "2026-10-23",
+      "overdue_days": 2,
+      "action": "work:follow_up",
+      "contact": "fernhill_freight_halloway",
+      "item": "msg-wren-2",
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d1"
+    },
+    {
+      "id": "due-juno-reply",
+      "kind": "reply",
+      "title": "Reply to Juno at Larkspur Retail",
+      "due": "2026-10-25",
+      "overdue_days": 0,
+      "action": "work:reply",
+      "contact": "larkspur_retail_castellan",
+      "item": "msg-juno-1",
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d2"
+    },
+    {
+      "id": "due-larkspur-prep",
+      "kind": "prep",
+      "title": "Prepare for the Larkspur Retail phone screen",
+      "due": "2026-10-27",
+      "overdue_days": 0,
+      "action": "work:prep",
+      "interview": "int-larkspur-supply",
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d3"
+    },
+    {
+      "id": "due-harbourline-thanks",
+      "kind": "thank_you",
+      "title": "Thank-you note after your Harbourline Bank first interview",
+      "due": "2026-10-23",
+      "overdue_days": 2,
+      "action": "work:follow_up",
+      "interview": "int-harbourline-risk",
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d4"
+    },
+    {
+      "id": "due-tamsin-resume",
+      "kind": "resume",
+      "title": "Send your CV to Tamsin",
+      "due": "2026-10-25",
+      "overdue_days": 0,
+      "action": "work:resume_for_contact",
+      "contact": "copperleaf_pay_tamsin",
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d5"
+    },
+    {
+      "id": "due-quayside-ops-follow",
+      "kind": "follow_up",
+      "title": "Follow up on the Quayside Foods Operations Analyst application",
+      "due": "2026-10-28",
+      "overdue_days": 0,
+      "action": "work:follow_up",
+      "application": "app-quayside-ops",
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d6"
+    },
+    {
+      "id": "due-request-odile",
+      "kind": "request_pending",
+      "title": "Connection request to Odile at Fernhill Freight not accepted",
+      "due": "2026-10-19",
+      "overdue_days": 6,
+      "action": "work:follow_up",
+      "contact": "fernhill_freight_odile",
+      "steps": [
+        "On LinkedIn, open My Network, then Manage (it says See all when invitations to you are waiting), then the Sent tab.",
+        "Withdraw beside a name takes that request back. It goes one at a time, so start with the oldest.",
+        "They are not told, and you cannot invite the same person again for up to three weeks."
+      ],
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d7"
+    },
+    {
+      "id": "due-request-pia",
+      "kind": "request_pending",
+      "title": "Connection request to Pia at Kestrel Mutual not accepted",
+      "due": "2026-10-21",
+      "overdue_days": 4,
+      "action": "work:follow_up",
+      "contact": "kestrel_mutual_pia",
+      "steps": [
+        "On LinkedIn, open My Network, then Manage (it says See all when invitations to you are waiting), then the Sent tab.",
+        "Withdraw beside a name takes that request back. It goes one at a time, so start with the oldest.",
+        "They are not told, and you cannot invite the same person again for up to three weeks."
+      ],
+      "done": {
+        "action": "due.done",
+        "label": "Done"
+      },
+      "rev": "d8"
+    }
+  ],
+  "people": [
+    {
+      "id": "larkspur_retail_castellan",
+      "first_name": "Juno",
+      "employer": "Larkspur Retail",
+      "status": "replied_needs_response",
+      "last": "2026-10-20",
+      "next_action": "Reply",
+      "due": "2026-10-25",
+      "rev": "p-castellan",
+      "thread": [
+        {
+          "from": "you",
+          "on": "2026-10-14",
+          "text": "Hi Juno, I saw we were both at Leeds. I work on supply chain analytics in Manchester and I am looking at analyst roles in retail planning. Would you be open to a short chat about your team?"
+        },
+        {
+          "from": "them",
+          "on": "2026-10-20",
+          "text": "Hi Morgan, happy to. Thursday lunchtime works for me, would 12 suit?"
+        }
+      ],
+      "related": {
+        "jobs": [
+          "r12-2"
+        ],
+        "messages": [
+          "msg-juno-1",
+          "msg-kit-1"
+        ],
+        "interviews": [
+          "int-larkspur-supply"
+        ]
+      }
+    },
+    {
+      "id": "fernhill_freight_halloway",
+      "first_name": "Wren",
+      "employer": "Fernhill Freight",
+      "status": "awaiting_reply",
+      "last": "2026-09-21",
+      "next_action": "One nudge if no reply",
+      "due": "2026-10-24",
+      "rev": "p-halloway",
+      "related": {
+        "messages": [
+          "msg-wren-2"
+        ]
+      }
+    },
+    {
+      "id": "copperleaf_pay_tamsin",
+      "first_name": "Tamsin",
+      "employer": "Copperleaf Pay",
+      "status": "referral_in_progress",
+      "last": "2026-10-18",
+      "next_action": "Send her your CV",
+      "due": "2026-10-25",
+      "rev": "p-tamsin",
+      "related": {
+        "jobs": [
+          "r12-3"
+        ],
+        "ready": [
+          "app-copperleaf-payments"
+        ],
+        "messages": [
+          "msg-ash-1"
+        ],
+        "interviews": [
+          "int-copperleaf-payments"
+        ]
+      }
+    },
+    {
+      "id": "copperleaf_pay_ash",
+      "first_name": "Ash",
+      "employer": "Copperleaf Pay",
+      "status": "not_contacted",
+      "last": null,
+      "next_action": "First note",
+      "due": null,
+      "rev": "p-ash",
+      "related": {
+        "jobs": [
+          "r12-3"
+        ],
+        "ready": [
+          "app-copperleaf-payments"
+        ],
+        "messages": [
+          "msg-ash-1"
+        ],
+        "interviews": [
+          "int-copperleaf-payments"
+        ]
+      }
+    },
+    {
+      "id": "quayside_foods_ivo",
+      "first_name": "Ivo",
+      "employer": "Quayside Foods",
+      "status": "connected_no_reply",
+      "last": "2026-07-01",
+      "next_action": null,
+      "due": null,
+      "rev": "p-ivo",
+      "related": {
+        "ready": [
+          "app-quayside-demand"
+        ],
+        "messages": [
+          "msg-rafe-1"
+        ]
+      }
+    },
+    {
+      "id": "kestrel_mutual_sasha",
+      "first_name": "Sasha",
+      "employer": "Kestrel Mutual",
+      "status": "closed",
+      "last": "2026-06-12",
+      "next_action": null,
+      "due": null,
+      "rev": "p-sasha",
+      "related": {
+        "jobs": [
+          "r12-6"
+        ]
+      }
+    },
+    {
+      "id": "ellerwick_trust_priya",
+      "first_name": "Marisol",
+      "employer": "Ellerwick Trust",
+      "status": "in_conversation",
+      "last": "2026-10-22",
+      "next_action": "Thank-you note",
+      "due": "2026-10-25",
+      "rev": "p-priya",
+      "related": {
+        "jobs": [
+          "r12-4"
+        ],
+        "ready": [
+          "app-ellerwick-insight"
+        ],
+        "messages": [
+          "msg-priya-thanks"
+        ]
+      }
+    },
+    {
+      "id": "harbourline_bank_bea",
+      "first_name": "Bea",
+      "employer": "Harbourline Bank",
+      "status": "call_booked",
+      "last": "2026-10-21",
+      "next_action": "Call",
+      "due": "2026-10-29",
+      "call": {
+        "day": "2026-10-29",
+        "time": "15:00",
+        "prep": null
+      },
+      "rev": "p-bea",
+      "related": {
+        "jobs": [
+          "r12-1"
+        ],
+        "interviews": [
+          "int-harbourline-risk"
+        ]
+      }
+    },
+    {
+      "id": "larkspur_retail_ltd_kit",
+      "first_name": "Kit",
+      "employer": "Larkspur Retail Ltd",
+      "status": "not_contacted",
+      "last": null,
+      "next_action": "First note",
+      "due": "2026-10-25",
+      "rev": "p-kit",
+      "related": {
+        "jobs": [
+          "r12-2"
+        ],
+        "messages": [
+          "msg-juno-1",
+          "msg-kit-1"
+        ],
+        "interviews": [
+          "int-larkspur-supply"
+        ]
+      }
+    },
+    {
+      "id": "quayside_foods_rafe",
+      "first_name": "Rafe",
+      "employer": "Quayside Foods",
+      "status": "not_contacted",
+      "last": null,
+      "next_action": "First note",
+      "due": "2026-10-26",
+      "rev": "p-rafe",
+      "related": {
+        "ready": [
+          "app-quayside-demand"
+        ],
+        "messages": [
+          "msg-rafe-1"
+        ]
+      }
+    },
+    {
+      "id": "brackenridge_advisory_noor",
+      "first_name": "Noor",
+      "employer": "Brackenridge Advisory",
+      "status": "not_contacted",
+      "last": null,
+      "next_action": "First note",
+      "due": "2026-10-27",
+      "rev": "p-noor",
+      "related": {
+        "jobs": [
+          "r12-5"
+        ],
+        "messages": [
+          "msg-noor-1"
+        ]
+      }
+    },
+    {
+      "id": "fernhill_freight_odile",
+      "first_name": "Odile",
+      "employer": "Fernhill Freight",
+      "status": "awaiting_reply",
+      "last": "2026-09-28",
+      "next_action": "Withdraw the request",
+      "due": "2026-10-19",
+      "rev": "p-odile",
+      "related": {
+        "messages": [
+          "msg-wren-2"
+        ]
+      }
+    },
+    {
+      "id": "kestrel_mutual_pia",
+      "first_name": "Pia",
+      "employer": "Kestrel Mutual",
+      "status": "awaiting_reply",
+      "last": "2026-09-30",
+      "next_action": "Withdraw the request",
+      "due": "2026-10-21",
+      "rev": "p-pia",
+      "related": {
+        "jobs": [
+          "r12-6"
+        ]
+      }
+    }
+  ],
+  "interviews": [
+    {
+      "id": "int-larkspur-supply",
+      "company": "Larkspur Retail",
+      "role": "Senior Supply Chain Analyst",
+      "next_stage": "Phone screen",
+      "when": "2026-10-28T13:00:00Z",
+      "prep": {
+        "path": "documents/applications/larkspur_supply/interview_prep.md",
+        "updated": "2026-10-24T19:30:00Z"
+      },
+      "questions": 9,
+      "alerts": [],
+      "suggest": null,
+      "status": "interview",
+      "time": "13:00",
+      "format": "Phone",
+      "with": "the recruiter",
+      "application": "app-larkspur-supply",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-10-02",
+          "done": true
+        },
+        {
+          "name": "Phone screen",
+          "on": "2026-10-28",
+          "done": false
+        }
+      ],
+      "sent_files": [
+        {
+          "kind": "resume",
+          "name": "Morgan_Ellis_CV_Larkspur.pdf"
+        },
+        {
+          "kind": "letter",
+          "name": "Morgan_Ellis_Cover_Letter_Larkspur.pdf"
+        }
+      ],
+      "one_screen": {
+        "questions": [
+          {
+            "q": "Tell me about yourself.",
+            "with": "Three years of store and supplier data turned into weekly plans, then why Larkspur."
+          },
+          {
+            "q": "Why Larkspur Retail?",
+            "with": "Their move to store-level forecasting, and your own forecasting work."
+          },
+          {
+            "q": "Tell me about a forecast that was wrong.",
+            "with": "The bank holiday miss, what you changed, and the next quarter's error."
+          },
+          {
+            "q": "How do you explain a model to a store manager?",
+            "with": "The one-page plan you made for the regional team."
+          },
+          {
+            "q": "What do you need from a manager?",
+            "with": "Clear priorities, and room to fix the data under a report."
+          }
+        ],
+        "hooks": [
+          "The weekly plan the regional team still uses",
+          "Cutting stock-outs on chilled lines",
+          "Your Leeds degree"
+        ],
+        "money": "GBP 44,000 is the posted figure, and it suits you.",
+        "avoid": [
+          "Calling the last employer's data a mess"
+        ]
+      },
+      "practice": {
+        "questions": [
+          "Tell me about yourself.",
+          "Why Larkspur Retail?",
+          "Tell me about a forecast that was wrong.",
+          "How do you explain a model to a store manager?",
+          "What do you need from a manager?"
+        ],
+        "reworked": 0
+      },
+      "related": {
+        "jobs": [
+          "r12-2"
+        ],
+        "messages": [
+          "msg-juno-1",
+          "msg-kit-1"
+        ],
+        "people": [
+          "larkspur_retail_castellan",
+          "larkspur_retail_ltd_kit"
+        ]
+      },
+      "draft": null
+    },
+    {
+      "id": "int-harbourline-risk",
+      "company": "Harbourline Bank",
+      "role": "Credit Risk Analyst",
+      "next_stage": "Second interview",
+      "when": "2026-11-04",
+      "prep": null,
+      "questions": 0,
+      "alerts": [],
+      "suggest": null,
+      "status": "interview",
+      "time": null,
+      "format": "Video",
+      "with": "the hiring manager",
+      "application": "app-harbourline-risk",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-10-09",
+          "done": true
+        },
+        {
+          "name": "First interview",
+          "on": "2026-10-22",
+          "done": true
+        },
+        {
+          "name": "Second interview",
+          "on": "2026-11-04",
+          "done": false
+        }
+      ],
+      "related": {
+        "jobs": [
+          "r12-1"
+        ],
+        "people": [
+          "harbourline_bank_bea"
+        ]
+      },
+      "draft": null
+    },
+    {
+      "id": "int-copperleaf-payments",
+      "company": "Copperleaf Pay",
+      "role": "Data Analyst, Payments",
+      "next_stage": "Recruiter call",
+      "when": "2026-10-30T10:00:00Z",
+      "time": "10:00",
+      "format": "Phone",
+      "with": "the recruiter",
+      "prep": null,
+      "questions": 0,
+      "alerts": [],
+      "suggest": null,
+      "status": "interview",
+      "application": null,
+      "referrer": {
+        "id": "copperleaf_pay_tamsin",
+        "first_name": "Tamsin"
+      },
+      "stages": [
+        {
+          "name": "Referred by Tamsin",
+          "on": "2026-10-18",
+          "done": true
+        },
+        {
+          "name": "Recruiter call",
+          "on": "2026-10-30",
+          "done": false
+        }
+      ],
+      "related": {
+        "jobs": [
+          "r12-3"
+        ],
+        "ready": [
+          "app-copperleaf-payments"
+        ],
+        "messages": [
+          "msg-ash-1"
+        ],
+        "people": [
+          "copperleaf_pay_tamsin",
+          "copperleaf_pay_ash"
+        ]
+      },
+      "draft": "app-copperleaf-payments"
+    }
+  ],
+  "done": {
+    "counts": {
+      "applied": 24,
+      "interviews": 3,
+      "offers": 0,
+      "replies": 7
+    },
+    "funnel": [
+      {
+        "stage": "applied",
+        "n": 24
+      },
+      {
+        "stage": "replied",
+        "n": 7
+      },
+      {
+        "stage": "interview",
+        "n": 3
+      },
+      {
+        "stage": "offer",
+        "n": 0
+      }
+    ],
+    "weeks": [
+      {
+        "week": "2026-W36",
+        "applied": 2,
+        "replies": 0
+      },
+      {
+        "week": "2026-W37",
+        "applied": 4,
+        "replies": 1
+      },
+      {
+        "week": "2026-W38",
+        "applied": 3,
+        "replies": 1
+      },
+      {
+        "week": "2026-W39",
+        "applied": 1,
+        "replies": 0
+      },
+      {
+        "week": "2026-W40",
+        "applied": 3,
+        "replies": 2
+      },
+      {
+        "week": "2026-W41",
+        "applied": 4,
+        "replies": 1
+      },
+      {
+        "week": "2026-W42",
+        "applied": 2,
+        "replies": 0
+      },
+      {
+        "week": "2026-W43",
+        "applied": 5,
+        "replies": 2
+      }
+    ],
+    "applications": [
+      {
+        "company": "Larkspur Retail",
+        "role": "Senior Supply Chain Analyst",
+        "applied_on": "2026-10-02",
+        "status": "interview",
+        "last": "2026-10-20",
+        "id": "app-larkspur-supply"
+      },
+      {
+        "company": "Harbourline Bank",
+        "role": "Credit Risk Analyst",
+        "applied_on": "2026-10-09",
+        "status": "interview",
+        "last": "2026-10-22",
+        "id": "app-harbourline-risk"
+      },
+      {
+        "company": "Fernhill Freight",
+        "role": "Operations Analyst",
+        "applied_on": "2026-09-20",
+        "status": "applied",
+        "last": "2026-09-20",
+        "id": "app-fernhill-ops"
+      },
+      {
+        "company": "Quayside Foods",
+        "role": "Inventory Analyst",
+        "applied_on": "2026-08-01",
+        "status": "rejected",
+        "last": "2026-08-29",
+        "id": "app-quayside-inventory-2026-08"
+      },
+      {
+        "company": "Brackmoor Retail",
+        "role": "Stock Analyst",
+        "applied_on": "2026-09-12",
+        "status": "applied",
+        "last": "2026-09-12",
+        "id": "app-brackmoor-stock-2026-09"
+      },
+      {
+        "company": "Copperleaf Pay",
+        "role": "Data Analyst",
+        "applied_on": "2026-09-03",
+        "status": "closed",
+        "last": "2026-10-18",
+        "id": "app-copperleaf-data-2026-09"
+      },
+      {
+        "company": "Ellerwick Trust",
+        "role": "Research Analyst",
+        "applied_on": null,
+        "status": "drafted",
+        "last": "2026-10-24",
+        "id": "app-ellerwick-insight"
+      },
+      {
+        "company": "Kestrel Mutual",
+        "role": "Reporting Analyst",
+        "applied_on": "2026-07-02",
+        "status": "rejected",
+        "last": "2026-07-20",
+        "id": "app-kestrel-reporting-2026-07"
+      },
+      {
+        "company": "Fernhill Freight",
+        "role": "Data Analyst",
+        "applied_on": "2026-06-11",
+        "status": "rejected",
+        "last": "2026-07-01",
+        "id": "app-fernhill-data-2026-06"
+      },
+      {
+        "company": "Brackenridge Advisory",
+        "role": "Analytics Consultant",
+        "applied_on": "2026-06-20",
+        "status": "withdrawn",
+        "last": "2026-06-30",
+        "id": "app-brackenridge-analytics-2026-06"
+      },
+      {
+        "company": "Copperleaf Pay",
+        "role": "Pricing Analyst",
+        "applied_on": "2026-05-14",
+        "status": "closed",
+        "last": "2026-06-20",
+        "id": "app-copperleaf-pricing-2026-05"
+      },
+      {
+        "company": "Harbourline Bank",
+        "role": "Data Analyst",
+        "applied_on": "2026-05-02",
+        "status": "rejected",
+        "last": "2026-05-30",
+        "id": "app-harbourline-data-2026-05"
+      },
+      {
+        "company": "Larkspur Retail",
+        "role": "Stock Analyst",
+        "applied_on": "2026-04-18",
+        "status": "rejected",
+        "last": "2026-05-10",
+        "id": "app-larkspur-stock-2026-04"
+      },
+      {
+        "company": "Quayside Foods",
+        "role": "Operations Analyst",
+        "applied_on": "2026-10-14",
+        "status": "applied",
+        "last": "2026-10-14",
+        "id": "app-quayside-ops"
+      },
+      {
+        "company": "Ellerwick Trust",
+        "role": "Data Analyst",
+        "applied_on": "2026-10-16",
+        "status": "rejected",
+        "last": "2026-10-23",
+        "id": "app-ellerwick-data-2026-10"
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "app_updates",
+      "label": "Updates",
+      "kind": "choice",
+      "value": "auto",
+      "choices": [
+        [
+          "auto",
+          "By themselves"
+        ],
+        [
+          "when_asked",
+          "When I say"
+        ]
+      ],
+      "id": "setting-app_updates",
+      "rev": "st1"
+    },
+    {
+      "key": "tips",
+      "label": "Tips now and then",
+      "kind": "choice",
+      "value": "on",
+      "choices": [
+        [
+          "on",
+          "On"
+        ],
+        [
+          "off",
+          "Off"
+        ]
+      ],
+      "id": "setting-tips",
+      "rev": "st2"
+    },
+    {
+      "key": "linkedin_plan",
+      "label": "Your LinkedIn plan",
+      "kind": "choice",
+      "value": "premium",
+      "choices": [
+        [
+          "free",
+          "Free"
+        ],
+        [
+          "premium",
+          "Premium"
+        ]
+      ],
+      "id": "setting-linkedin_plan",
+      "rev": "st3"
+    },
+    {
+      "key": "work_either",
+      "label": "Work either chat can do goes to",
+      "kind": "choice",
+      "value": "cloud",
+      "choices": [
+        [
+          "cloud",
+          "The cloud chat"
+        ],
+        [
+          "computer",
+          "The chat on my computer"
+        ]
+      ],
+      "id": "setting-work_either",
+      "rev": "st4"
+    },
+    {
+      "key": "suggestions",
+      "label": "Suggestions",
+      "kind": "choice",
+      "value": "on",
+      "choices": [
+        [
+          "on",
+          "On"
+        ],
+        [
+          "urgent",
+          "Only urgent"
+        ],
+        [
+          "off",
+          "Off"
+        ]
+      ],
+      "id": "setting-suggestions",
+      "rev": "st5"
+    }
+  ],
+  "brief": {
+    "date": "2026-10-25",
+    "lines": [
+      {
+        "text": "Juno replied: your turn",
+        "item": "larkspur_retail_castellan"
+      },
+      {
+        "text": "Larkspur Retail phone screen on Wednesday at 1pm",
+        "item": "int-larkspur-supply"
+      },
+      {
+        "text": "A new search found 6 roles worth a look",
+        "item": "r12-1"
+      }
+    ]
+  },
+  "learned": [
+    {
+      "id": "learned-1",
+      "area": "documents",
+      "rule": "Plainer words in letters, no stock pleasantries",
+      "said": "too formal",
+      "on": "2026-10-20",
+      "retired": false,
+      "rev": "le1"
+    }
+  ],
+  "message_budget": {
+    "plan": "premium",
+    "week": {
+      "sent": 3,
+      "limit": 20
+    },
+    "day": {
+      "sent": 0,
+      "limit": 5
+    },
+    "inmail_credits": 4
+  },
+  "applications": [
+    {
+      "company": "Larkspur Retail",
+      "role": "Senior Supply Chain Analyst",
+      "applied_on": "2026-10-02",
+      "status": "interview",
+      "last": "2026-10-20",
+      "id": "app-larkspur-supply",
+      "rev": "ap1",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-10-02",
+          "done": true
+        },
+        {
+          "name": "Phone screen",
+          "on": "2026-10-28",
+          "done": false
+        }
+      ],
+      "next": {
+        "what": "Phone screen",
+        "on": "2026-10-28",
+        "interview": "int-larkspur-supply"
+      }
+    },
+    {
+      "company": "Harbourline Bank",
+      "role": "Credit Risk Analyst",
+      "applied_on": "2026-10-09",
+      "status": "interview",
+      "last": "2026-10-22",
+      "id": "app-harbourline-risk",
+      "rev": "ap2",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-10-09",
+          "done": true
+        },
+        {
+          "name": "First interview",
+          "on": "2026-10-22",
+          "done": true
+        },
+        {
+          "name": "Second interview",
+          "on": "2026-11-04",
+          "done": false
+        }
+      ],
+      "next": {
+        "what": "Second interview",
+        "on": "2026-11-04",
+        "interview": "int-harbourline-risk"
+      }
+    },
+    {
+      "company": "Fernhill Freight",
+      "role": "Operations Analyst",
+      "applied_on": "2026-09-20",
+      "status": "applied",
+      "last": "2026-09-20",
+      "id": "app-fernhill-ops",
+      "rev": "ap3",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-09-20",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Quayside Foods",
+      "role": "Inventory Analyst",
+      "applied_on": "2026-08-01",
+      "status": "rejected",
+      "last": "2026-08-29",
+      "id": "app-quayside-inventory-2026-08",
+      "rev": "ap4",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-08-01",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Brackmoor Retail",
+      "role": "Stock Analyst",
+      "applied_on": "2026-09-12",
+      "status": "applied",
+      "last": "2026-09-12",
+      "id": "app-brackmoor-stock-2026-09",
+      "rev": "ap5",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-09-12",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Copperleaf Pay",
+      "role": "Data Analyst",
+      "applied_on": "2026-09-03",
+      "status": "closed",
+      "last": "2026-10-18",
+      "id": "app-copperleaf-data-2026-09",
+      "rev": "ap6",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-09-03",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Ellerwick Trust",
+      "role": "Research Analyst",
+      "applied_on": null,
+      "status": "drafted",
+      "last": "2026-10-24",
+      "id": "app-ellerwick-insight",
+      "rev": "ap7",
+      "stages": [],
+      "draft": "app-ellerwick-insight"
+    },
+    {
+      "company": "Kestrel Mutual",
+      "role": "Reporting Analyst",
+      "applied_on": "2026-07-02",
+      "status": "rejected",
+      "last": "2026-07-20",
+      "id": "app-kestrel-reporting-2026-07",
+      "rev": "ap8",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-07-02",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Fernhill Freight",
+      "role": "Data Analyst",
+      "applied_on": "2026-06-11",
+      "status": "rejected",
+      "last": "2026-07-01",
+      "id": "app-fernhill-data-2026-06",
+      "rev": "ap9",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-06-11",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Brackenridge Advisory",
+      "role": "Analytics Consultant",
+      "applied_on": "2026-06-20",
+      "status": "withdrawn",
+      "last": "2026-06-30",
+      "id": "app-brackenridge-analytics-2026-06",
+      "rev": "ap10",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-06-20",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Copperleaf Pay",
+      "role": "Pricing Analyst",
+      "applied_on": "2026-05-14",
+      "status": "closed",
+      "last": "2026-06-20",
+      "id": "app-copperleaf-pricing-2026-05",
+      "rev": "ap11",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-05-14",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Harbourline Bank",
+      "role": "Data Analyst",
+      "applied_on": "2026-05-02",
+      "status": "rejected",
+      "last": "2026-05-30",
+      "id": "app-harbourline-data-2026-05",
+      "rev": "ap12",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-05-02",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Larkspur Retail",
+      "role": "Stock Analyst",
+      "applied_on": "2026-04-18",
+      "status": "rejected",
+      "last": "2026-05-10",
+      "id": "app-larkspur-stock-2026-04",
+      "rev": "ap13",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-04-18",
+          "done": true
+        }
+      ]
+    },
+    {
+      "company": "Quayside Foods",
+      "role": "Operations Analyst",
+      "applied_on": "2026-10-14",
+      "status": "applied",
+      "last": "2026-10-14",
+      "id": "app-quayside-ops",
+      "rev": "ap14",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-10-14",
+          "done": true
+        }
+      ],
+      "next": {
+        "what": "Follow up",
+        "on": "2026-10-28",
+        "due": "due-quayside-ops-follow"
+      }
+    },
+    {
+      "company": "Ellerwick Trust",
+      "role": "Data Analyst",
+      "applied_on": "2026-10-16",
+      "status": "rejected",
+      "last": "2026-10-23",
+      "id": "app-ellerwick-data-2026-10",
+      "rev": "ap15",
+      "stages": [
+        {
+          "name": "Applied",
+          "on": "2026-10-16",
+          "done": true
+        }
+      ]
+    }
+  ],
+  "where": {
+    "helper": {
+      "state": "ready",
+      "title": "Job search: Claude's helper (keep this)"
+    },
+    "reading": {
+      "state": "desktop"
+    },
+    "computer": {
+      "state": "optional",
+      "steps": []
+    },
+    "brief": {
+      "state": "ready",
+      "when": "Mondays and Thursdays at 7:38"
+    }
+  },
+  "search": {
+    "rev": "se1",
+    "roles": [
+      "Supply Chain Analyst",
+      "Demand Planning Analyst"
+    ],
+    "places": [
+      "Greater Manchester",
+      "Leeds",
+      "remote in the UK"
+    ],
+    "pay": "At least GBP 38,000",
+    "avoid": "Gambling, and roles with weekend shifts",
+    "portals": [
+      {
+        "name": "linkedin",
+        "label": "LinkedIn",
+        "on": true,
+        "why": "Its own rules ask crawlers to stay away from its job search; it stays on until you switch it off."
+      },
+      {
+        "name": "freehire",
+        "label": "freehire",
+        "on": true
+      },
+      {
+        "name": "reed",
+        "label": "Reed",
+        "on": true
+      },
+      {
+        "name": "cv_library",
+        "label": "CV-Library",
+        "on": false
+      }
+    ],
+    "boards": [
+      {
+        "employer": "Harbourline Bank",
+        "system": "greenhouse"
+      },
+      {
+        "employer": "Larkspur Retail",
+        "system": "workday"
+      }
+    ],
+    "rules": [
+      {
+        "id": "rule-driving",
+        "words": "Roles that need a driving licence",
+        "count": 3,
+        "basis": "screening",
+        "rev": "ru1"
+      },
+      {
+        "id": "rule-senior",
+        "words": "Senior manager roles",
+        "count": 7,
+        "basis": "person",
+        "rev": "ru2"
+      }
+    ]
+  },
+  "resume": {
+    "file": "documents/cv/Morgan_Ellis_CV_current.pdf",
+    "name": "Morgan_Ellis_CV_current.pdf",
+    "asset": "3f1e2d3c4b5a69788796a5b4c3d2e1f0",
+    "made_on": "2026-10-03",
+    "stale": false
+  },
+  "tip": {
+    "area": "search",
+    "text": "First goes are the least fitted to you. Say what's off in Chat and the next one learns.",
+    "rev": "tp1"
+  },
+  "linkedin_export": {
+    "id": "2026-10",
+    "due": true,
+    "state": "due",
+    "url": "https://www.linkedin.com/mypreferences/d/download-my-data",
+    "since_line": "Your last download was 16 days ago: 4 new conversations since.",
+    "steps": [
+      "On LinkedIn, open Settings & Privacy, then Data privacy, then Get a copy of your data (some accounts call it Download your data).",
+      "Choose the larger download, the whole archive, and request it. LinkedIn may ask for your password.",
+      "LinkedIn emails you a link anything from about ten minutes to a day later, and it works for 72 hours."
+    ],
+    "files": [
+      "messages.csv",
+      "connections.csv",
+      "invitations.csv"
+    ],
+    "rev": "lx1"
+  },
+  "reading_steps": {
+    "steps": [
+      "Show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+      "Sign in to LinkedIn there yourself.",
+      "In the browser's menu, choose Keep cookies, so you stay signed in after you quit the app."
+    ]
+  },
+  "schedule": {
+    "id": "schedule",
+    "set_up": true,
+    "when": "Mondays and Thursdays at 7:38",
+    "days": [
+      1,
+      4
+    ],
+    "time": "07:38",
+    "zone": "Europe/London",
+    "paused_until": null,
+    "paused": null,
+    "waiting": [],
+    "actions": {
+      "move": "brief.move",
+      "pause": "brief.pause",
+      "resume": "brief.resume"
+    },
+    "rev": "sc1"
+  },
+  "listener": {
+    "doc": "meta/listener",
+    "answered": "answered_at",
+    "quiet_after_s": 600,
+    "helper": "Job search: Claude's helper (keep this)",
+    "wake": {
+      "label": "Wake Claude",
+      "url": "https://claude.ai/code?prompt=Answer%20my%20job%20search%20page&repositories=morgan-example%2Fjob-search",
+      "prompt": "Answer my job search page"
+    }
+  }
+}

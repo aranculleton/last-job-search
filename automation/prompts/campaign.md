@@ -16,14 +16,14 @@ repo (never the app's), titled `Job search: <Employer> campaign`, with this as i
 Without that tool (a chat on the person's computer), give them the steps to open a new chat
 on their computer (`python3 tools/claude_surfaces.py steps local-chat`) and that prompt in a
 code block to paste there. Nothing else: the new chat makes its own folder itself
-(`python3 tools/sync_app.py --worktree <employer>`, CLAUDE.md), and they are never told how. Then, either way: `python3 tools/interview_pack.py campaign "<Employer>" --yes
+(`python3 tools/sync_app.py --worktree <employer>`, RUNBOOK.md step 4), and they are never told how. Then, either way: `python3 tools/interview_pack.py campaign "<Employer>" --yes
 "<the chat's title or id>"`. From then on `open_actions.py --due` and the brief show that
 employer as handled by its campaign chat, and the rest of the search leaves it alone. On a
 no: `campaign "<Employer>" --no`, and it is never offered again for this process.
 
 ## Every session in the campaign chat
 
-1. **Start like any session** (CLAUDE.md, "Start of every session"): master, then
+1. **Start like any session** (RUNBOOK.md, "Start of a session"): master, then
    `python3 tools/sync_app.py --if-stale --on "<this model>"`, in this chat's own folder.
    `python3 tools/model_guide.py interview --on "<this model>"`: when it prints a line, it
    goes first in the reply.
@@ -47,7 +47,7 @@ no: `campaign "<Employer>" --no`, and it is never offered again for this process
 7. **Drafts for the recruiter and the referrer** when something is owed (a thank-you, a
    confirmation, a check-in), in the person's voice (`learned.py brief messages`), never
    sent: the person sends.
-8. **Land on master** at the end of every session (CLAUDE.md, "Master is the trunk").
+8. **Land on master** at the end of every session (RUNBOOK.md, "Landing on master").
 
 ## The rubric
 

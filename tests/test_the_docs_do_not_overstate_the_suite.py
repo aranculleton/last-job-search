@@ -97,23 +97,13 @@ class TestTheClaimedFloorIsReal(unittest.TestCase):
         """The fallback has to be an undercount or it could pass a false claim."""
         self.assertLessEqual(count_by_parsing(), self.actual)
 
-    def test_the_readme_states_a_floor_rather_than_an_exact_count(self):
-        self.assertRegex(self.readme, CLAIM,
-                         "state the suite size as a floor (\"over 1,400\"), because "
-                         "an exact count is stale on the next commit")
-
-    def test_every_claimed_floor_is_cleared(self):
-        checked = 0
+    def test_no_doc_states_the_suite_size(self):
+        # The maintainer's call (2026-10-26): a count changes every release, and a number
+        # quoted to look impressive reads as padding. No doc states one, so none goes stale.
         for name, text in self.docs.items():
-            for m in CLAIM.finditer(text):
-                checked += 1
-                claimed = int((m.group(1) or m.group(2)).replace(",", ""))
-                with self.subTest(doc=name, claimed=claimed):
-                    self.assertLessEqual(
-                        claimed, self.actual,
-                        f"{name} claims over {claimed:,} tests; the suite has "
-                        f"{self.actual:,}. Lower the claim or write the tests.")
-        self.assertGreater(checked, 1, "no suite-size claims found to check")
+            with self.subTest(doc=name):
+                self.assertNotRegex(text, CLAIM, f"{name} states the suite size: say what the "
+                                    "tests cover instead")
 
     def test_the_claimed_file_count_is_not_above_what_exists(self):
         for name, text in self.docs.items():

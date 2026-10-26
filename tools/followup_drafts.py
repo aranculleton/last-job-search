@@ -63,7 +63,9 @@ POSTING_FIT = 60
 WRITE_HERE_MAX = 4
 # Nudges are a few lines long; the pack keeps each in a fenced block under this marker so
 # the next run can reuse a draft still right for an item still due.
-_MARK = re.compile(r"^<!-- draft id=(?P<id>\S+) kind=(?P<kind>\S+) source=(?P<source>\S+) -->$")
+# An application's id holds its employer's key, which can have a space in it ("app:kestrel
+# mutual::..."): read up to " kind=", or its draft was never found again.
+_MARK = re.compile(r"^<!-- draft id=(?P<id>.+?) kind=(?P<kind>\S+) source=(?P<source>\S+) -->$")
 _FENCE = "```"
 
 

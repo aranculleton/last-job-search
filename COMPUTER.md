@@ -14,9 +14,9 @@ an administrator password. Say one plain line per step at most, and never show a
 a path, a branch or the word "repository" to the person. Put nothing on top of the steps:
 no notes about browsers, accounts or automation.
 
-The person's message reads like "Open my job search on this computer: github.com/OWNER/NAME.
-Steps: https://github.com/aranculleton/last-job-search/blob/master/COMPUTER.md". A chat
-that is to give them that line prints it with `python3 tools/setup_state.py --paste`.
+The person's message reads like "Open my job search on this computer. My copy is
+github.com/OWNER/NAME. Follow github.com/aranculleton/last-job-search/blob/master/COMPUTER.md".
+A chat that is to give them that line prints it with `python3 tools/app.py start --paste`.
 
 `APP` below is a fresh shallow copy of the public app, kept outside the person's folder:
 `~/.cache/last-job-search-app` on a Mac or Linux, `%LOCALAPPDATA%\last-job-search-app` on
@@ -83,16 +83,20 @@ and say that this chat can be continued after.
 1. `python3 tools/env_check.py --fix` in the background (on Windows, `python` for
    `python3` until it has run once: it adds the `python3` command). It installs LaTeX,
    Bun and the Python packages where they are missing, and says one line each.
-2. `python3 tools/setup_state.py`, then by what it prints:
-   - `ready` or `ready-elsewhere`: ask nothing and run no setup. Say its line: the search
-     is ready on this computer, and it can read LinkedIn in their browser whenever they
-     ask. Then do the networking skill's "On a new computer" step.
-   - `running`: say its line, that their setup is still going in their other chat, and
-     start nothing.
-   - `unfinished`: say its line if it prints one (their setup stopped part-way) and, on
-     their "carry on", run `/setup`, which finishes it from what is written. With no line,
-     this chat is the one setting up: carry on with `/setup`.
-   - `none`: run `/setup` and carry on there (a new chat in this same folder works too).
+2. `python3 tools/app.py start --on "<this chat's model>" --tools "<its browser tools>"`,
+   the one start every chat runs, then by its first line:
+   - `app start: set up` (or `set up elsewhere`, which it brings in first): ask nothing and
+     run no setup. Say one line: the search is ready on this computer too. Do what else it
+     prints (it says whether this chat looks after the page: usually another chat does, and
+     then this one neither publishes nor watches it), then the networking skill's "On a new
+     computer" step.
+   - `app start: setup going in another chat`: say its line, that their setup is still going
+     in their other chat, and start nothing.
+   - `app start: setup stopped`: say its line and, on their "carry on", run `/setup`, which
+     finishes it from what is written. `setup self`: this chat is the one setting up; carry
+     on with `/setup`.
+   - `app start: setting up`: run `/setup` and carry on there (a new chat in this same folder
+     works too).
 3. When the install in step 1 ends, say its outcome in one line (or nothing, if it all
    went through), and the restart line from 2b if there was one.
 

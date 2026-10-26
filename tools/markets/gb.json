@@ -1,0 +1,291 @@
+{
+  "name": "United Kingdom",
+  "country": "gb",
+  "aka": [
+    "UK",
+    "U.K.",
+    "Great Britain",
+    "Britain",
+    "England",
+    "Scotland",
+    "Wales",
+    "Northern Ireland"
+  ],
+  "languages": [
+    "en"
+  ],
+  "currency": "GBP",
+  "boards": [
+    {
+      "name": "Find a job",
+      "url": "https://findajob.dwp.gov.uk",
+      "kind": "public",
+      "source": "https://www.gov.uk/find-a-job",
+      "quote": "Search and apply for jobs in Great Britain using",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://findajob.dwp.gov.uk/search?q=analyst&w=Manchester",
+      "paths": {
+        "search": "/search?q=analyst&w=Manchester",
+        "posting": "/details/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 200 but the body is not a robots.txt)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://uk.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://uk.indeed.com/jobs?q=analyst&l=Manchester",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Manchester",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "Reed",
+      "url": "https://www.reed.co.uk",
+      "kind": "general",
+      "source": "https://www.reed.co.uk/",
+      "quote": "Jobs and Recruitment on Reed.co.uk, the UK's #1 job site",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.reed.co.uk/jobs/analyst-jobs-in-manchester",
+      "paths": {
+        "search": "/jobs/analyst-jobs-in-manchester",
+        "posting": "/jobs/analyst/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Totaljobs",
+      "url": "https://www.totaljobs.com",
+      "kind": "general",
+      "source": "https://www.totaljobs.com/",
+      "quote": "Search 140000 jobs in the UK.",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.totaljobs.com/jobs/analyst/in-manchester",
+      "paths": {
+        "search": "/jobs/analyst/in-manchester",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 0
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "right to work in the UK",
+      "lang": "en",
+      "means": "work_right",
+      "source": "https://www.gov.uk/prove-right-to-work",
+      "quote": "Find out how to prove your right to work in the UK to an employer",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "visa sponsorship (certificate of sponsorship, Skilled Worker visa)",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://www.gov.uk/skilled-worker-visa",
+      "quote": "have a ‘certificate of sponsorship’ ( CoS ) from your employer with information about the role you’ve been offered in the UK",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "indefinite leave to remain (settled status)",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://www.gov.uk/settle-in-the-uk",
+      "quote": "There are different ways to apply for indefinite leave to remain (settle in the UK) - check if you're eligible",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "security clearance (SC, DV)",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://www.gov.uk/government/publications/united-kingdom-security-vetting-clearance-levels/national-security-vetting-clearance-levels",
+      "quote": "Enhanced Developed Vetting is required for a very small number of agreed, specific posts",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV",
+      "source": "https://nationalcareers.service.gov.uk/careers-advice/cv-sections",
+      "quote": "A CV is your first chance to promote yourself",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "two pages",
+      "source": "https://nationalcareers.service.gov.uk/careers-advice/cv-sections",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: 2 pages)"
+    },
+    {
+      "topic": "photo",
+      "value": "no photo, and no age, marital status or children",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "while this is not accepted in the UK, U.S., and some European countries",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY; month and year (June 2024) on a CV",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_the_United_Kingdom",
+      "quote": "records the date using the day–month–year format (31 December 1999, 31/12/99 or 31/12/1999)",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "British English (en-GB)",
+      "source": "https://en.wikipedia.org/wiki/American_and_British_English_spelling_differences",
+      "quote": "British English spellings mostly follow Johnson's A Dictionary of the English Language (1755)",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Annual Survey of Hours and Earnings (Office for National Statistics)",
+      "url": "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours",
+      "what": "earnings by occupation and region",
+      "source": "https://www.ons.gov.uk/employmentandlabourmarket/peopleinwork/earningsandworkinghours/bulletins/annualsurveyofhoursandearnings/latest",
+      "quote": "Measures of employee earnings, using data from the Annual Survey of Hours and Earnings (ASHE).",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "National Careers Service job profiles",
+      "url": "https://nationalcareers.service.gov.uk/explore-careers",
+      "what": "a typical starting and experienced salary for each job",
+      "source": "https://nationalcareers.service.gov.uk/explore-careers",
+      "quote": "Explore careers View all job profiles alphabetically and filter by category.",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "London",
+      "written": [
+        "London",
+        "Greater London",
+        "City of London",
+        "Croydon",
+        "Canary Wharf"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_London",
+      "quote": "It contains 33 local government districts : the 32 London boroughs",
+      "on_page": [
+        "City of London",
+        "Croydon"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Manchester",
+      "written": [
+        "Manchester",
+        "Greater Manchester",
+        "Salford",
+        "Stockport",
+        "Trafford"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Manchester",
+      "quote": "For local government purposes the county comprises ten metropolitan boroughs",
+      "on_page": [
+        "Salford",
+        "Stockport",
+        "Trafford"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Birmingham",
+      "written": [
+        "Birmingham",
+        "West Midlands",
+        "Wolverhampton",
+        "Solihull",
+        "Coventry"
+      ],
+      "source": "https://en.wikipedia.org/wiki/West_Midlands_conurbation",
+      "quote": "The five most populous are highlighted with Birmingham and Wolverhampton sub-divisions in orange and the Dudley , Walsall and Solihull sub-divisions in green.",
+      "on_page": [
+        "Wolverhampton",
+        "Solihull",
+        "Coventry"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

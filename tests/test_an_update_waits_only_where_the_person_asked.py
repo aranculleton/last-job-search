@@ -92,9 +92,17 @@ def test_the_option_is_described_where_every_session_reads_it():
 
 
 def test_the_setting_is_the_persons_own_never_the_apps():
+    # Nothing a profile is made from sets it. The page's own code (templates/app/) names it
+    # only to offer the choice in Settings, written on the person's tap, and its usual value
+    # there is "by themselves".
+    page = os.path.join("templates", "app") + os.sep
     for rel in repo_files.tracked(root=ROOT):
+        if os.path.normpath(rel).startswith(page):
+            continue
         if rel.startswith("profile.example/") or rel.startswith("templates/"):
             assert '"app_updates"' not in _read(os.path.join(ROOT, rel)), rel
+    app_js = _read(os.path.join(ROOT, "templates", "app", "app.js"))
+    assert re.search(r'USUAL = \{[^}]*app_updates: "auto"', app_js), "the page's usual is not by themselves"
 
 
 def test_a_security_fix_is_offered_never_forced_where_they_choose():

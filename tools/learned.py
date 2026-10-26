@@ -109,7 +109,7 @@ def load() -> list[dict]:
     return [r for r in (rows or []) if isinstance(r, dict)]
 
 
-def _data() -> dict:
+def file_data() -> dict:
     path = _path()
     if not path:
         return {}
@@ -121,6 +121,7 @@ def _data() -> dict:
     return data if isinstance(data, dict) else {"entries": data}
 
 
+_data = file_data  # the module's own name for it; other modules call file_data
 
 
 def _writable() -> str:
@@ -135,13 +136,16 @@ def _writable() -> str:
     return path
 
 
-def _save(rows: list[dict], offers_: list[dict] | None = None) -> None:
+def save_entries(rows: list[dict], offers_: list[dict] | None = None) -> None:
     path = _writable()
     data = _data()                       # what else the file keeps (the skips) stays
     data.update({"entries": rows, "offers": offers_ if offers_ is not None else all_offers()})
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
         fh.write("\n")
+
+
+_save = save_entries  # the module's own name for it; other modules call save_entries
 
 
 def entries(area: str | None = None) -> list[dict]:
@@ -152,7 +156,7 @@ def entries(area: str | None = None) -> list[dict]:
 
 def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
            today: str | None = None, overrides=(), replaces=(), answers: bool = True,
-           length=()) -> dict:
+           length=(), via: str = "", output: str = "") -> dict:
     """Keep one reaction, in the person's own words (`said`, kept as said). Returns the
     entry written, with `conflicts`: the earlier active rules it contradicts, for the
     person to choose between. `replaces` retires earlier entries by number, once they
@@ -176,6 +180,12 @@ def record(area: str, said: str, rule: str, applied_to=(), never_say=(),
     lengths = parse_lengths(length)
     if lengths:
         entry["length"] = lengths
+    # Where it was said ("page tweak": typed into the page's Tweak box) and about which
+    # kind of output: tools/tweak.py promote reads them to offer a button.
+    if str(via or "").strip():
+        entry["via"] = str(via).strip()
+    if str(output or "").strip():
+        entry["output"] = str(output).strip()
     rows = load()
     for n in replaces:
         if not 1 <= int(n) <= len(rows):
@@ -198,9 +208,12 @@ _HEDGES = {"recently", "just", "currently", "now", "really", "very", "so", "the"
            "with", "that", "this", "is", "am", "be", "been", "have", "has", "it", "your"}
 
 
-def _content(text: str) -> set[str]:
+def content_words(text: str) -> set[str]:
     return {w for w in re.findall(r"[a-z][a-z']+", str(text or "").lower())
             if w not in _HEDGES and len(w) > 2}
+
+
+_content = content_words  # the module's own name for it; other modules call content_words
 
 
 # A phrase a rule names only to forbid it ("never describe the move as relocating") is not
@@ -531,8 +544,11 @@ def dislikes(text: str) -> list[str]:
     return [m.group(0) for _, rx in never_say() for m in rx.finditer(str(text or ""))]
 
 
-def _key(r: dict) -> tuple:
+def entry_key(r: dict) -> tuple:
     return (r.get("date"), r.get("area"), r.get("rule"))
+
+
+_key = entry_key  # the module's own name for it; other modules call entry_key
 
 
 def superseded(rows: list[dict] | None = None) -> dict:
@@ -976,6 +992,22 @@ def pending() -> list[dict]:
     return [r for r in _load_pending() if not r.get("answered")]
 
 
+def note(text: str, output: str = "") -> dict | None:
+    """Words the person typed into the page's Tweak box, put on this chat's list like any
+    reaction said in the chat (the hook never sees them: they arrive through the page's
+    database). From then on every composer refuses and the turn cannot end until they are
+    recorded or skipped, `--via "page tweak"` with the output's kind."""
+    row = note_reaction(text, cue="page tweak", again=True)
+    if row is not None and output:
+        rows = _load_pending()
+        for r in rows:
+            if r.get("said") == row["said"] and not r.get("answered"):
+                r["output"] = output
+        _save_pending(rows)
+        row["output"] = output
+    return row
+
+
 def note_reaction(text: str, cue: str = "", again: bool = False) -> dict | None:
     """Put a reaction on this chat's list, once. `again` is a new message from the person,
     which counts even in words they used before; read back from the transcript, a
@@ -1008,7 +1040,8 @@ def resolve_pending(said: str = "") -> None:
     _save_pending(rows)
 
 
-def skip(said: str, why: str, today: str | None = None) -> dict:
+def skip(said: str, why: str, today: str | None = None, via: str = "",
+         output: str = "") -> dict:
     """A reaction that sets no rule (a one-off, or not a reaction at all), with the reason:
     the explicit alternative to recording it."""
     if not str(why or "").strip():
@@ -1016,6 +1049,10 @@ def skip(said: str, why: str, today: str | None = None) -> dict:
     data = _data()
     row = {"date": today or dt.date.today().isoformat(), "said": str(said or "").strip(),
            "why": " ".join(str(why).split())}
+    if str(via or "").strip():
+        row["via"] = str(via).strip()
+    if str(output or "").strip():
+        row["output"] = str(output).strip()
     path = _writable()
     if path:
         data.setdefault("skipped", []).append(row)
@@ -1251,9 +1288,16 @@ def main(argv=None) -> int:
     r.add_argument("--length", action="append", default=[],
                    help="how long they asked a kind of message to run, in words: "
                         "<kind>[:<reader>]=<words>, e.g. inmail=170")
+    r.add_argument("--via", default="", help="where it was said: \"page tweak\" for the page's box")
+    r.add_argument("--output", default="", help="the kind of output it was about: resume, letter, message")
     k = sub.add_parser("skip")
     k.add_argument("--said", required=True)
     k.add_argument("--why", required=True)
+    k.add_argument("--via", default="")
+    k.add_argument("--output", default="")
+    nt = sub.add_parser("note", help="words typed into the page's Tweak box, held like any reaction")
+    nt.add_argument("--said", required=True)
+    nt.add_argument("--output", default="")
     sub.add_parser("pending")
     t = sub.add_parser("retire")
     t.add_argument("n", type=int, nargs="+")
@@ -1299,7 +1343,7 @@ def main(argv=None) -> int:
                   f"{row.get('rule')}  (said: \"{row.get('said')}\")")
     elif a.cmd == "record":
         e = record(a.area, a.said, a.rule, a.applied_to, a.never_say, overrides=a.overrides,
-                   replaces=a.replaces, length=a.length)
+                   replaces=a.replaces, length=a.length, via=a.via, output=a.output)
         print(f"learned: {e['area']}: {e['rule']}")
         for kind, per in (e.get("length") or {}).items():
             print("  length: " + ", ".join(f"{kind} to {'any reader' if who == 'any' else who}"
@@ -1331,8 +1375,13 @@ def main(argv=None) -> int:
             print(f"  If the earlier rule stands: python3 tools/learned.py retire {new} "
                   f"(retires the new entry {new})")
     elif a.cmd == "skip":
-        skip(a.said, a.why)
+        skip(a.said, a.why, via=a.via, output=a.output)
         print(f"learned: not a rule ({a.why}); {len(pending())} reaction(s) still unrecorded")
+    elif a.cmd == "note":
+        got = note(a.said, a.output)
+        print("learned: held like any reaction: record it (learned.py record ... --via \"page "
+              "tweak\") or skip it (learned.py skip ... --via \"page tweak\") before the turn "
+              "ends" if got else "learned: already on the list")
     elif a.cmd == "pending":
         rows = pending()
         for r in rows:

@@ -496,19 +496,13 @@ def _alumni_text() -> str:
     return ""
 
 
-def _work_place() -> str:
-    """No answer yet to where they will mostly work (tools/place.py, /setup's question)."""
-    if not person.exists("person.json"):
-        return ""
-    try:
-        import json
-        with open(person.path("place.json"), encoding="utf-8") as fh:
-            if json.load(fh).get("works_on"):
-                return ""
-    except (OSError, ValueError):
-        pass
-    return ("set up before the app asked where you will mostly work, so it cannot say when "
-            "a chat is in the wrong place for your settings")
+def _work_place_retired() -> str:
+    """Retired 2026-10-25 with the place question's "if you have one you can use, say yes":
+    4.0 recommends no chat on a computer (the page and the cloud chats Claude makes do
+    everything, and the page reads LinkedIn profiles itself in the desktop app), so nobody
+    set up before the question needs to be asked it. /setup still asks it where a chat cannot
+    tell, with no recommendation. Kept so a no recorded against it still reads."""
+    return ""
 
 
 def _ruling_parts() -> str:
@@ -1232,16 +1226,8 @@ REGISTRY: tuple[Upgrade, ...] = (
             paths=("profile/learned.json",),
             priority=2),
     Upgrade("work-place", "2026-10-18",
-            "told when a chat is in the wrong place for your settings, and where to go instead",
-            _work_place, "ask its question with the session's other questions, as written; "
-            "the trade-off `python3 tools/place.py ask` prints only if they ask why or are "
-            "unsure; record the answer with `python3 tools/place.py record "
-            "computer|phone|both` and give the one line it prints. Change no setting",
-            "question", "~1 min",
-            priority=4, needs="you",
-            ask="Will you mostly use this on a computer, or on your phone or the web?",
-            why_ask="Some things, like reading a profile in your own browser, only work in a "
-                    "chat on your computer, so I set things up for where you will be."),
+            "nothing: retired, since no chat on a computer is recommended any more",
+            _work_place_retired, "nothing to do", "question", "~0 min", priority=4),
     Upgrade("ruling-parts", "2026-10-17",
             "a change to one of your rules puts back only the postings ruled out by that rule",
             _ruling_parts, "run `python3 tools/exclude.py cite`, then follow `python3 "
@@ -1615,6 +1601,16 @@ REGISTRY = REGISTRY + _method_upgrades()
 # new name goes here or in an upgrade's `names`; tests/test_profile_upgrades.py
 # fails on one in neither.
 SAFE_DEFAULTS: dict[str, str] = {
+    # Written only by the page's Tweak panel, "Keep this for next time" (tools/tweak.py,
+    # 2026-10-25); with none, every document and search is as it was before the setting.
+    "person.json:documents.fill": "\"fuller\": the page is filled with bullets, as before",
+    "person.json:documents.letter_words": "none: a letter is held to 200 to 250 words, as "
+                                          "before",
+    "person.json:documents.skills_max": "\"standard\": the skills line keeps its 18 "
+                                        "skills, as before",
+    "person.json:documents.style": "none: the colour comes from documents.styles or is "
+                                   "black, as before",
+    "search.JOB_AGE_DAYS": "14, the search window run_round.py used before it was a setting",
     # Read in the browser a chat has, with no question first, since 2026-10-25: the question
     # and its warnings kept a person's computer chat from reading at all.
     "networking.PROFILE_READS": "\"browser\": the profiles of the people a run writes to are "
@@ -2074,7 +2070,7 @@ def remember_listed(rows: list[tuple[Upgrade, str]]) -> None:
         pass
 
 
-def _listed_ids() -> list[str]:
+def listed_ids() -> list[str]:
     try:
         with open(_listed_path(), encoding="utf-8") as fh:
             got = json.load(fh)
@@ -2082,6 +2078,9 @@ def _listed_ids() -> list[str]:
         return []
     return [i for i in (got.get("ids") or []) if isinstance(i, str)] \
         if isinstance(got, dict) and got.get("sync") == _sync_head()[0] else []
+
+
+_listed_ids = listed_ids  # the module's own name for it; other modules call listed_ids
 
 
 def already_in_place(rows: list[tuple[Upgrade, str]]) -> list[str]:
@@ -2287,6 +2286,7 @@ def main(argv: list[str] | None = None) -> int:
                   "python3 tools/profile_upgrades.py --take")
         else:
             print("Profile upgrades: none pending.")
+        say_page()
         return 0
     if a.after:
         claim()
@@ -2316,7 +2316,21 @@ def main(argv: list[str] | None = None) -> int:
         remember_listed(rows)
     text = block(rows)
     print(text or "Profile upgrades: none pending.")
+    say_page()
     return 0
+
+
+def say_page() -> None:
+    """The person's page, missing or out of date, said where every sync prints: this file is
+    always the copy the sync just brought in, so a chat whose instructions predate the page
+    still publishes it (tools/app_setup.py page_line). Never breaks the sync."""
+    try:
+        import app_setup
+        said = app_setup.page_line()
+    except Exception:  # noqa: BLE001
+        said = ""
+    if said:
+        print(said)
 
 
 if __name__ == "__main__":

@@ -1021,7 +1021,7 @@ def pull_master() -> int:
     if git("merge", "-q", "--no-edit", "origin/master", check=False).returncode:
         git("merge", "--abort", check=False)
         print("sync_app: stopped, nothing changed. master does not merge cleanly into this "
-              "branch: run `git merge origin/master` and settle it (CLAUDE.md says how).")
+              "branch: run `git merge origin/master` and settle it (RUNBOOK.md, \"Landing on master\", says how).")
         return 1
     print("sync_app: brought in master (what other chats merged).")
     return 0

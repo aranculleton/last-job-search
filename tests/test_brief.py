@@ -9,7 +9,6 @@ two seconds on a large state. Invented people only, no network.
 from __future__ import annotations
 
 import datetime as dt
-import json
 import os
 import random
 import shutil
@@ -105,18 +104,12 @@ def test_write_does_the_upkeep_and_keeps_the_record_and_the_pack(tmp_path):
     assert "## Needs writing" in pack and "Juno Castellan" in pack
 
 
-def test_the_json_is_the_pages_brief_due_and_messages_with_no_private_detail(tmp_path):
+def test_the_page_builds_its_own_brief_and_the_old_json_is_gone(tmp_path):
+    """brief.py --json built the page's brief, due and messages a second way, with ids of
+    its own, and nothing ran it: the page's come from tools/app_model.py (2026-10-25)."""
+    assert not hasattr(brief, "page_parts")
     r = _run(_state(tmp_path), "--today", TODAY, "--json")
-    got = json.loads(r.stdout)
-    assert set(got) == {"brief", "due", "messages"}
-    assert got["brief"]["date"] == TODAY and got["brief"]["lines"][0].startswith("Sunday brief")
-    for d in got["due"]:
-        assert set(d) == {"id", "kind", "title", "due", "overdue_days", "action"}
-        assert d["kind"] in ("follow_up", "reply", "interview", "nudge")
-    text = r.stdout
-    # A contact's own words, address and profile link never reach the page.
-    assert "happy to help" not in text and "linkedin.com/in" not in text and "@" not in text
-    assert "Reply to Juno (Larkspur Retail)" in [d["title"] for d in got["due"]]
+    assert r.returncode == 2 and "--json" in r.stderr
 
 
 # ------------------------------------------------------------------ the news

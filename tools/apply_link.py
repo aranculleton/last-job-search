@@ -147,7 +147,12 @@ def kind(url) -> str:
 
 
 def _stamp(now) -> str:
-    return (now or dt.datetime.now()).strftime("%Y-%m-%d %H:%M")
+    """When a link was checked, in UTC and saying so: a chat in the cloud and one on the
+    person's computer keep different clocks, and a time with no zone was read as either.
+    A time given with no zone is this computer's own, turned to UTC. Readers take the old
+    stamps too (no zone: the day is kept, the time is not claimed)."""
+    t = now or dt.datetime.now(dt.timezone.utc)
+    return t.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
 
 def board_for(company):

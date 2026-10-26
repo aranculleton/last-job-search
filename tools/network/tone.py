@@ -417,6 +417,17 @@ def preferred_name(name) -> str:
     return ""
 
 
+def greeting_name(name) -> str:
+    """The name a message greets someone by, or "" when there is nobody to greet: the one
+    rule the composers, the follow-ups, the brief and the page all use. An address on its
+    own (an email where a name should be) greets nobody."""
+    text = " ".join(str(name or "").split())
+    if not text or "@" in text.split()[0]:
+        return ""
+    first = first_name(text)
+    return first if first[:1].isalpha() else ""
+
+
 def first_name(name) -> str:
     """The given name, for the greeting and for the name-tic rule.
 

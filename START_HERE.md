@@ -9,14 +9,17 @@ nothing to install first: a phone is enough. Another agent tool? See [AGENTS.md]
 
 <!-- claude-surface: make-copy -->
 <!-- checked 2026-10-25;
-https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template
+https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository
 -->
 To make your own private copy:
-1. On github.com/aranculleton/last-job-search, choose Use this template, then Create a new
-   repository. On a phone, its web browser works for this.
-2. Owner: you. Name: anything, say my-job-search. Choose Private: your copy will hold your
-   work history.
-3. Choose Create repository from template.
+1. Open this link, signed in to GitHub:
+   github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private
+   A phone's web browser works too.
+2. It opens with the job search as the template and Private chosen. Check Private, then
+   choose Create repository.
+3. If the form opens empty: on github.com/aranculleton/last-job-search, choose Use this
+   template, then Create a new repository, choose Private, then Create repository from
+   template.
 
 Screens change: if yours looks different, tell Claude what you see.
 <!-- /claude-surface -->
@@ -41,8 +44,8 @@ Screens change: if yours looks different, tell Claude what you see.
 
 Claude asks two short rounds of questions, does the research itself and shows your first
 shortlist: up to an hour of its time, and you can put it down meanwhile. No resume? Say
-"build one with me" and Claude makes it with you, one job at a time. It ends by setting up
-your brief, twice a week. If it says it can't reach job sites (recommended, once):
+"build one with me" and Claude makes it with you, one job at a time. It ends by opening your
+private page and your twice-weekly brief. If it says it can't reach job sites (recommended, once):
 
 <!-- claude-surface: cloud-internet -->
 <!-- checked 2026-10-25; https://code.claude.com/docs/en/cloud-environments -->

@@ -1,0 +1,66 @@
+{
+  "name": "Marketing and communications",
+  "field": "marketing-communications",
+  "aka": [
+    "marketing",
+    "communications",
+    "PR",
+    "public relations",
+    "advertising",
+    "content",
+    "brand"
+  ],
+  "boards": {},
+  "titles": [
+    {
+      "value": [
+        "Communications Consultant",
+        "Communications Specialist",
+        "Content Strategist",
+        "Market Analyst",
+        "Market Research Analyst",
+        "Market Researcher"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1161.00",
+      "quote": "Sample of reported job titles: Business Development Specialist, Communications Consultant",
+      "on_page": [
+        "Communications Consultant",
+        "Communications Specialist",
+        "Content Strategist",
+        "Market Analyst",
+        "Market Research Analyst",
+        "Market Researcher"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "marketing automation",
+      "members": [
+        [
+          "HubSpot",
+          "\\bhubspot\\b"
+        ],
+        [
+          "Marketo",
+          "\\bmarketo\\b"
+        ],
+        [
+          "Eloqua",
+          "\\beloqua\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1161.00",
+      "quote": "Sales and marketing software - Google Ads; HubSpot software",
+      "on_page": [
+        "HubSpot software",
+        "Marketo Marketing Automation",
+        "Oracle Eloqua"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

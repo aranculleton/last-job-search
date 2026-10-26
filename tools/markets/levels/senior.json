@@ -1,0 +1,23 @@
+{
+  "name": "Senior",
+  "level": "senior",
+  "aka": [
+    "senior",
+    "lead",
+    "principal",
+    "manager",
+    "head of"
+  ],
+  "boards": {},
+  "norms": {
+    "*": [
+      {
+        "value": "search firms recruit below executive level too, so a senior person registers with the firms of their field",
+        "source": "https://en.wikipedia.org/wiki/Executive_search",
+        "quote": "there has been a move towards using executive search for lower-level positions",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  }
+}

@@ -61,7 +61,7 @@ def app_rules() -> dict:
         # Every character the profile bans, and the dash typed as "--" or "---",
         # which is how LaTeX writes both. The name is the one profiles place.
         r["em-dash"] = ("ERROR", "em-dash", L.dash_pattern,
-                        "No em dashes anywhere, per CLAUDE.md and rule 7, nor any other "
+                        "No em dashes anywhere, per the writing guide's rule 1, nor any other "
                         "character documents.banned_characters names, typed as -- or --- "
                         "included.")
     for n in L.nouns:

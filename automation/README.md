@@ -22,8 +22,9 @@ Tell any Claude chat "the scheduled tasks are down" and point it at this file.
 **Setup makes the brief for you, and asks nothing.** At the end of `/setup` a cloud chat makes
 it: its own chat, **Job search: morning brief**, on your private repo; a task bound to that
 chat, Mondays and Thursdays at 7:38 your time; and one first brief a few minutes later, so you
-see it work (`python3 tools/routines.py brief` prints the calls). Say "move my brief" to change
-the days or the time. Anywhere it was not made, say "set up my brief" in any chat.
+see it work (`python3 tools/routines.py brief` prints the calls). Change its days or time, or
+pause it for a break, on your page (Settings), or say "move my brief" in any chat. Anywhere it
+was not made, say "set up my brief" in any chat.
 
 Two set-ups work reliably, and they trade the same thing: where the briefing arrives. Setup
 makes (a).
@@ -73,6 +74,34 @@ Code, installed apart from the desktop app and signed in to the same claude.ai a
 it refuses to run without an interactive terminal: Claude cannot run it from its own shell,
 only the person can, in theirs.
 <!-- /claude-surface -->
+
+### For Claude: the rules of setting it up
+
+- **"Set up my brief" is set-up (a), and `/setup` does it at its end, asking nothing.** First
+  list the account's scheduled tasks (`list_triggers`, every page) and run `python3
+  tools/routines.py brief --triggers <each page>`: a brief that exists, whatever it is called,
+  is attached to and never made twice, and a task that only looks like one is asked about.
+- **In a cloud chat** with none, `brief` prints the calls to make, in order:
+  `create_session` on the person's private repo, titled "Job search: morning brief" and with
+  no prompt; `create_trigger` bound to that chat (`persistent_session_id`), `CRON_TZ=<their
+  zone> 38 7 * * 1,4`, the stub as its prompt, `connectors: []`; and a one-off `run_once_at`
+  first brief bound to the same chat, never `fire_trigger`. Then `routines.py record`, and
+  land it. A chat told "Set up my brief in this chat" binds the task to itself the same way.
+- **On their computer** (`python3 tools/claude_surfaces.py show <id>` for remote-trigger,
+  routines-cloud, routines-local and cli-cloud): with the `RemoteTrigger` tool, make it
+  yourself as (b), on the private repo, the stub as its prompt, notifications on, recorded as
+  `routines_screen`; without it, give them once the steps `claude_surfaces.py steps
+  routines-cloud` prints. Never start a cloud chat from your own shell, and never make a
+  desktop scheduled task for the brief (both below).
+- The lines `routines.py brief` prints are for you: act on them, and tell the person only the
+  one line it gives ("Your brief is set up: Mondays and Thursdays at 7:38, ..."), never its
+  file, id or task name.
+- The final reply of a run is the message; nothing depends on `fire_trigger`. Only a change
+  of schedule needs `update_trigger` or the routine's own page; a change to what a task does
+  is a pull request on its prompt file.
+- **Every dated follow-up is automatic by construction**: the brief reads `next_action_due`
+  from `network_contacts.csv` and the nudge schedule from the tracker, so a reminder is a
+  date written into a state file, never another routine.
 
 ### The prompt each task stores
 
@@ -209,7 +238,8 @@ can still make it.
 | Ask | What the chat does |
 |---|---|
 | "Make the brief shorter", "add X to the TLDR", "stop drafting on Fridays" | Writes it into `profile/CLAUDE.md`, section "This search's automation", which every run reads and which is yours. The prompt files under `prompts/` are the app's: a sync puts an edit to them back. Takes effect on the next run. |
-| "Move the brief to 7:30", "run the round on Wednesdays too" | Edits `cron` in `profile/routines.json` and, for (a), calls `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), the same where it can see the task, and otherwise says what to change on the routine's own page. Merges the registry. |
+| "Move the brief to 7:30", "run the round on Wednesdays too" | For the brief, `python3 tools/routines.py move --days <days> --time <time>` (the page's own way too: its action `brief.move`) writes `cron` in `profile/routines.json` and keeps the one call owed; for another task, edit its `cron`. Then, for (a), `update_trigger` on that `trigger_id` with the new cron (`CRON_TZ=<zone>` first); for (b), the same where it can see the task, and otherwise says what to change on the routine's own page; `routines.py called <n>` once made. Merges the registry. |
+| "I'm taking a break until 8 November", "pause my search" | `python3 tools/routines.py pause --until <date>` (the page's `brief.pause`): every follow-up is held (a contact's next action opens `HOLD until <date>`, a live application carries `DO NOT CHASE until <date>`), and the calls it lists turn the brief off and make one brief for the day they come back, which lifts the break. `routines.py resume` (`brief.resume`) ends it early and puts each hold back as it was. |
 | "Switch everything to <city> time" | Changes `timezone` and every `cron` to `CRON_TZ=<IANA zone>` at the same local times, applies them the same way, merges. |
 | "Add a task that does Y" | A new kind of task needs its own prompt file in the app (`prompts/<key>.md`), so it is a change to the app: the maintainer makes it, anyone else gets it written up as an issue. Until then, what an existing task should also do goes in `profile/CLAUDE.md`. |
 | "Pause the shortlist" | `update_trigger` with `enabled: false` (or the routine's own page), and `"paused": "<date> <reason>"` on the entry. |

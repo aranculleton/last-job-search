@@ -1,0 +1,283 @@
+{
+  "name": "France",
+  "country": "fr",
+  "aka": [
+    "FR",
+    "French Republic",
+    "République française"
+  ],
+  "languages": [
+    "fr"
+  ],
+  "currency": "EUR",
+  "boards": [
+    {
+      "name": "France Travail",
+      "url": "https://candidat.francetravail.fr",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "quote": "FRANCE TRAVAIL (French public employment service) On the website: https://www.francetravail.fr",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://candidat.francetravail.fr/offres/recherche?motsCles=analyste&lieux=75D",
+      "paths": {
+        "search": "/offres/recherche?motsCles=analyste&lieux=75D",
+        "posting": "/offres/recherche/detail/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "partial",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Apec",
+      "url": "https://www.apec.fr",
+      "kind": "general",
+      "source": "https://fr.wikipedia.org/wiki/Association_pour_l%27emploi_des_cadres",
+      "quote": "est une association française , privée et paritaire, financée par les cotisations des cadres et des entreprises du secteur privé",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.apec.fr/candidat/recherche-emploi.html/emploi?motsCles=analyste",
+      "paths": {
+        "search": "/candidat/recherche-emploi.html/emploi?motsCles=analyste",
+        "posting": "/candidat/recherche-emploi.html/emploi/detail-offre/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://fr.indeed.com",
+      "kind": "general",
+      "source": "https://fr.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed est un métamoteur de recherche d'emploi, lancé en novembre 2004 aux États-Unis",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://fr.indeed.com/jobs?q=analyste&l=Paris",
+      "paths": {
+        "search": "/jobs?q=analyste&l=Paris",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "HelloWork",
+      "url": "https://www.hellowork.com",
+      "kind": "general",
+      "source": "https://fr.wikipedia.org/wiki/HelloWork",
+      "quote": "les différents sites régionaux de la marque RegionsJob sont regroupés sous une seule plateforme nationale HelloWork",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.hellowork.com/fr-fr/emploi/recherche.html?k=analyste&l=Paris",
+      "paths": {
+        "search": "/fr-fr/emploi/recherche.html?k=analyste&l=Paris",
+        "posting": "/fr-fr/emplois/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "partial",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "titre de séjour et autorisation de travail",
+      "lang": "fr",
+      "means": "work_right",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "quote": "For non-EU citizens, a valid residence permit and a work permit are required",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "nationalité française ou d'un État membre de l'UE (fonction publique)",
+      "lang": "fr",
+      "means": "citizenship",
+      "source": "https://fr.wikipedia.org/wiki/Fonction_publique_fran%C3%A7aise",
+      "quote": "certains corps sont accessibles par concours aux étrangers de toutes nationalités",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "carte de résident",
+      "lang": "fr",
+      "means": "residence",
+      "source": "https://fr.wikipedia.org/wiki/Carte_de_r%C3%A9sident_(France)",
+      "quote": "la carte de résident est un titre de séjour qui permet à un étranger de résider sur le territoire français pour une durée de 10 ans ou plus",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "habilitation secret défense",
+      "lang": "fr",
+      "means": "clearance",
+      "source": "https://fr.wikipedia.org/wiki/Habilitation_secret-d%C3%A9fense",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404"
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV, with a lettre de motivation",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "quote": "A ‘CV’ (curriculum vitae), which should be no more than two pages in length",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "one page, two at most",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "quote": "which should be no more than two pages in length, usually contains the following sections",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "optional",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: photo)"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_France",
+      "quote": "France most commonly records the date using the day-month-year order with an oblique stroke or slash",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "French, unless the posting is in English",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-france_en",
+      "quote": "Copies of your qualifications and sworn translations in French",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Salaires (Insee)",
+      "url": "https://www.insee.fr/fr/statistiques?theme=26",
+      "what": "pay by sector, occupation and region",
+      "source": "https://www.insee.fr/fr/statistiques/2011542",
+      "quote": "Description des emplois privés et publics et des salaires",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Baromètre des rémunérations des cadres (Apec)",
+      "url": "https://corporate.apec.fr/",
+      "what": "managerial pay by function and region",
+      "source": "https://fr.wikipedia.org/wiki/Association_pour_l%27emploi_des_cadres",
+      "quote": "dont l'objectif est le service",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the quote is too short to prove anything"
+    }
+  ],
+  "places": [
+    {
+      "metro": "Paris",
+      "written": [
+        "Paris",
+        "Île-de-France",
+        "La Défense",
+        "Boulogne-Billancourt",
+        "Saint-Denis"
+      ],
+      "source": "https://en.wikipedia.org/wiki/%C3%8Ele-de-France",
+      "quote": "the skyscrapers of La Défense , the largest purpose-built business district of Europe",
+      "on_page": [
+        "La Défense",
+        "Boulogne-Billancourt",
+        "Saint-Denis"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Lyon",
+      "written": [
+        "Lyon",
+        "Métropole de Lyon",
+        "Villeurbanne"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Lyon",
+      "quote": "The Villeurbanne ward is coterminous with the namesake commune",
+      "on_page": [
+        "Villeurbanne",
+        "Métropole de Lyon"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Marseille",
+      "written": [
+        "Marseille",
+        "Aix-en-Provence",
+        "Aix-Marseille-Provence"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Aix-Marseille-Provence_Metropolis",
+      "quote": "is the métropole , an intercommunal structure, centred on the cities of Marseille",
+      "on_page": [
+        "Marseille",
+        "Aix-en-Provence"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

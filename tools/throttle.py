@@ -98,10 +98,13 @@ LEGACY_SPELLINGS = {"no response": "no_response", "offer declined": "offer_decli
                     "interviewing": "interview"}
 
 
-def _spellings(*canonical) -> frozenset:
+def spellings(*canonical) -> frozenset:
     """The canonical statuses and every older spelling of them."""
     return frozenset(canonical) | {old for old, new in LEGACY_SPELLINGS.items()
                                    if new in canonical}
+
+
+_spellings = spellings  # the module's own name for it; other modules call spellings
 
 
 # Tracker statuses that close an application. `declined` is not in the canonical
@@ -495,7 +498,7 @@ def _tracker_rows(path: str = TRACKER) -> list[dict]:
     """The tracker's rows, [] when there is none, refused when a merge left conflict
     markers in it (csv_store.read_rows, the one state-file reader)."""
     import csv_store
-    return csv_store.read_rows(path)
+    return csv_store.tracker(path)
 
 
 def _contact_rows(path: str = CONTACTS) -> list[dict]:

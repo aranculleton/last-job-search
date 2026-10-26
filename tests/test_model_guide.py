@@ -62,3 +62,26 @@ def test_the_days_sync_carries_the_check(capsys):
     assert "Model check (Sonnet)" in capsys.readouterr().out
     sync_app.model_check("")
     assert '--on "<the model' in capsys.readouterr().out
+
+
+def test_a_chat_started_for_page_work_gets_the_model_that_work_needs():
+    """A child chat started for a kind of page work runs on the model the work needs
+    (G18): search on a cheaper one, and drafting, the audits and anything a contact reads
+    never below the chat that started it (11-cost-model.md: the session's own)."""
+    import page_db
+    strongest = {"draft", "resume_for_contact", "tweak", "prep", "network", "reply",
+                 "follow_up", "brief"}
+    for kind in page_db.WORK_KINDS:
+        assert kind in G.WORK, kind              # every kind the page queues is placed
+    for kind in strongest:
+        assert G.TASKS[G.WORK[kind]][0] == "strongest", kind
+        for on in ("Fable 5.1", "Opus 5.5", "claude-opus-5-5"):
+            assert G.for_work(kind, on)["model"] is None, (kind, on)      # its own
+        for on in ("Sonnet 5.5", "Haiku 5.5"):
+            assert G.for_work(kind, on)["model"] == "opus", (kind, on)    # up, never down
+        assert G.for_work(kind, "")["model"] is None
+        assert G.for_work(kind, "Mystery 9")["model"] is None             # never guessed
+    assert G.for_work("search", "Opus 5.5")["model"] == "sonnet"
+    assert G.for_work("search", "Sonnet 5.5")["model"] is None
+    assert G.for_work("search", "Haiku 5.5")["model"] == "sonnet"         # what it needs
+    assert G.for_work("listen", "Fable 5.1")["model"] == "sonnet"

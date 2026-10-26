@@ -20,15 +20,17 @@
   "entries": [
     {
       "id": "make-copy",
-      "claim": "A private copy of the app is made from its GitHub page with Use this template, then Create a new repository: the person's own account as the owner, any name, Private chosen, then Create repository from template. On a phone the same page works in a web browser; GitHub Mobile can also create a repository from a template (its changelog, 2026-05-11), though whether it lists a template owned by another account was not checked.",
+      "claim": "A private copy of the app is made from one link: github.com/new with the app as the template (template_owner, template_name), the person's own account as the owner (owner=@me, while signed in), a name and visibility=private, which GitHub documents as pre-filling the new-repository form; the person checks it and creates it. Parameters that are invalid or not permitted are ignored, so the form may open empty; then the template page's own way works: Use this template, then Create a new repository, Private chosen, then Create repository from template. On a phone the same pages work in a web browser; GitHub Mobile can also create a repository from a template (its changelog, 2026-05-11), though whether it lists a template owned by another account was not checked. The pre-filled form's own button was not seen signed in; it is said as Create repository.",
       "goal": "make your own private copy",
-      "how": "on github.com/aranculleton/last-job-search, Use this template, then Create a new repository, with you as the owner, Private chosen, then Create repository from template",
+      "how": "open github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private signed in to GitHub, check that Private is chosen, then Create repository; or on github.com/aranculleton/last-job-search, Use this template, then Create a new repository, Private chosen, then Create repository from template",
       "steps": [
-        "On github.com/aranculleton/last-job-search, choose Use this template, then Create a new repository. On a phone, its web browser works for this.",
-        "Owner: you. Name: anything, say my-job-search. Choose Private: your copy will hold your work history.",
-        "Choose Create repository from template."
+        "Open this link, signed in to GitHub: github.com/new?template_owner=aranculleton&template_name=last-job-search&owner=%40me&name=my-job-search&visibility=private A phone's web browser works too.",
+        "It opens with the job search as the template and Private chosen. Check Private, then choose Create repository.",
+        "If the form opens empty: on github.com/aranculleton/last-job-search, choose Use this template, then Create a new repository, choose Private, then Create repository from template."
       ],
       "sources": [
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository", "quote": "You can use query parameters to pre-fill form fields when creating a new repository."},
+        {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-new-repository", "quote": "Alternatively, while signed in use @me to specify your user account as the owner."},
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Above the file list, click Use this template."},
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Choose a repository visibility."},
         {"url": "https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template", "quote": "Click Create repository from template."},
@@ -36,7 +38,7 @@
       ],
       "status": "documented",
       "verified_on": "2026-10-25",
-      "verified_against": "docs.github.com's template page and GitHub's changelog of 2026-05-11, read 2026-10-25",
+      "verified_against": "docs.github.com's new-repository page (its URL query parameters: name, owner with @me, visibility public or private, template_owner and template_name), its template page, and GitHub's changelog of 2026-05-11, read 2026-10-25",
       "ui_sensitive": true
     },
     {
@@ -314,6 +316,13 @@
         "Paste the line into Setup script, then save.",
         "It applies from your next new chat. In this one, Claude installs the same tools itself."
       ],
+      "page_goal": "make each new chat start with the PDF tools in place",
+      "page_steps": [
+        "Open your helper chat (Job search: Claude's helper) at claude.ai/code.",
+        "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
+        "Paste the line into Setup script, then save.",
+        "It applies from the next new chat. Come back to this page and tap Done."
+      ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "open the environment settings dialog and enter your script in the Setup script field"},
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "select the caret after the session title at the top, then select Edit cloud environment ."}
@@ -331,6 +340,13 @@
       "steps": [
         "At the top of this chat, open the small arrow after its title and choose Edit cloud environment.",
         "Set Network access to Full, then save. It reaches this chat within about a minute."
+      ],
+      "page_goal": "let Claude reach job sites",
+      "page_steps": [
+        "Open your helper chat (Job search: Claude's helper) at claude.ai/code.",
+        "At the top of that chat, open the small arrow after its title and choose Edit cloud environment.",
+        "Set Network access to Full, then save. It reaches Claude within about a minute.",
+        "Come back to this page and tap Done."
       ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/cloud-environments", "quote": "The default level, Trusted, allows package registries and other allowlisted domains."},
@@ -519,6 +535,13 @@
         "In the browser's \u22ee menu, choose Keep cookies, so you stay signed in after you quit the app.",
         "Say done here."
       ],
+      "page_goal": "sign in to LinkedIn once in the app's browser and stay signed in",
+      "page_steps": [
+        "In the Claude desktop app, show the app's browser: Cmd+Shift+B on a Mac, or Ctrl+Shift+B on Windows.",
+        "Sign in to LinkedIn there yourself.",
+        "In the browser's ⋮ menu, choose Keep cookies, so you stay signed in after you quit the app.",
+        "Come back to this page and tap Done."
+      ],
       "sources": [
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "The Browser pane uses a clean browser profile, separate from your personal browser, with none of your saved logins or history"},
         {"url": "https://code.claude.com/docs/en/desktop", "quote": "Choose whether the Browser keeps cookies after you quit the app with Keep cookies in the Browser pane's \u22ee menu, so you don't have to sign in again"}
@@ -526,6 +549,88 @@
       "status": "documented",
       "verified_on": "2026-10-25",
       "verified_against": "code.claude.com/docs/en/desktop read 2026-10-25",
+      "ui_sensitive": true
+    },
+    {
+      "id": "find-page",
+      "claim": "A page a chat publishes stays in the person's Claude account. claude.ai/code/artifacts lists every page they have made, and the page's own header links to it; in the Claude app the same pages are under Artifacts in its side menu, on a computer and on a phone. A chat can pin a page to that side menu with the Artifact tool's pin action, which the app offers once, after the first publish. Whether the phone app shows a page Claude Code published, and a pinned one, was not checked on a phone.",
+      "goal": "open your job search page again",
+      "how": "open claude.ai/code/artifacts signed in to Claude and choose your job search; in the Claude app, the same pages are under Artifacts in its side menu",
+      "steps": [
+        "Open claude.ai/code/artifacts, signed in to Claude. It lists every page Claude made for you.",
+        "Choose your job search. In the Claude app, on a computer or a phone, the same pages are under Artifacts in its side menu."
+      ],
+      "ask": "Shall I pin your job search page to the side of Claude, so it is always one step away?",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "The header also links to your gallery at claude.ai/code/artifacts, which lists every artifact you have created."
+        },
+        {
+          "url": "https://support.claude.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them",
+          "quote": "Everything you make is saved to the Artifacts tab in your Claude sidebar, so you can find it again from any conversation."
+        },
+        {
+          "url": "https://support.claude.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them",
+          "quote": "Ask for a design, deck, or doc in any chat, view the result in the Artifacts tab, and edit the artifact."
+        },
+        {
+          "url": "tool:Artifact",
+          "quote": "adds the artifact to, or removes it from, the person's pinned list in their claude.ai sidebar"
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310 (\"Find your artifacts\", \"Where you can use artifacts\"), read 2026-10-25; the pin from the Artifact tool's own description in Claude Code; not observed on a phone",
+      "ui_sensitive": true
+    },
+    {
+      "id": "page-watch",
+      "claim": "A chat that publishes a page watches it: a comment sent to Claude on it reaches that chat at once, and every chat that watches the page is woken by it. A watch Claude Code started by itself can end after the page goes several hours without activity; publishing it again, or asking Claude to watch it, starts it again. In a cloud chat a watch is a wake subscription the artifact service holds, not a live connection. Claude stops replying on its own to a page after 60 sent comments or thread activations on it within an hour, and picks up as that hour's comments age out.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "After your session publishes an artifact, Claude Code watches that artifact for comments."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "A watch that Claude Code started on its own can end after the artifact goes several hours without activity."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "To start the watch again, publish the artifact again or ask Claude to watch it."
+        },
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "Claude also stops replying on its own to an artifact after it handles 60 sent comments or thread activations on that artifact within an hour."
+        },
+        {
+          "url": "tool:ArtifactComments",
+          "quote": "in this remote session a watch is a durable wake subscription held by the artifact service, not a live connection"
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Let Claude reply to comments on its own\") read 2026-10-25, and the ArtifactComments tool's own description in a cloud chat; that every watching chat is woken was observed on 2026-10-25",
+      "ui_sensitive": false
+    },
+    {
+      "id": "page-share",
+      "claim": "A page is visible only to the person who published it until they share it from the Share control in the page's header. A page carries what it shows inside itself, so anyone it is shared with can read that, even where the page then shows them only a notice: the job search page holds first names, employers, the person's drafts and their setup answers.",
+      "line": "Only you can open this page unless you share it. It holds first names, employers, your drafts and your setup answers, so keep it unshared.",
+      "sources": [
+        {
+          "url": "https://code.claude.com/docs/en/artifacts",
+          "quote": "A new artifact is visible only to you. To share it, open the artifact in your browser and use the Share control in the page header."
+        },
+        {
+          "url": "https://support.claude.com/en/articles/9487310-what-are-artifacts-and-how-do-i-use-them",
+          "quote": "Artifacts start private to you."
+        }
+      ],
+      "status": "documented",
+      "verified_on": "2026-10-25",
+      "verified_against": "code.claude.com/docs/en/artifacts (\"Share an artifact\") and support.claude.com article 9487310, read 2026-10-25; that a shared page carries its embedded data is how a published page works (one self-contained document)",
       "ui_sensitive": true
     }
   ]

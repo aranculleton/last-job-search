@@ -1,0 +1,281 @@
+{
+  "name": "Germany",
+  "country": "de",
+  "aka": [
+    "DE",
+    "Deutschland",
+    "Federal Republic of Germany"
+  ],
+  "languages": [
+    "de"
+  ],
+  "currency": "EUR",
+  "boards": [
+    {
+      "name": "Jobsuche der Bundesagentur für Arbeit",
+      "url": "https://www.arbeitsagentur.de",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "You will find Germany’s biggest jobs portal at https://www.arbeitsagentur.de/jobsuche",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.arbeitsagentur.de/jobsuche/suche?was=Analyst&wo=Berlin",
+      "paths": {
+        "search": "/jobsuche/suche?was=Analyst&wo=Berlin",
+        "posting": "/jobsuche/jobdetail/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "StepStone",
+      "url": "https://www.stepstone.de",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "Indeed private job board: https://www.indeed.com StepStone private job board: https://www.stepstone.de",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.stepstone.de/jobs/analyst/in-berlin",
+      "paths": {
+        "search": "/jobs/analyst/in-berlin",
+        "posting": "/stellenangebote--"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://de.indeed.com",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "Monster private job board: https://www.monster.de Indeed private job board: https://www.indeed.com",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://de.indeed.com/jobs?q=Analyst&l=Berlin",
+      "paths": {
+        "search": "/jobs?q=Analyst&l=Berlin",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "XING",
+      "url": "https://www.xing.com",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "XING (job and traineeship offers, direct search and contact opportunities): https://www.xing.com",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.xing.com/jobs/search?keywords=Analyst&location=Berlin",
+      "paths": {
+        "search": "/jobs/search?keywords=Analyst&location=Berlin",
+        "posting": "/jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": false,
+        "status": "partial",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "Aufenthaltstitel, der die Erwerbstätigkeit erlaubt",
+      "lang": "de",
+      "means": "work_right",
+      "source": "https://de.wikipedia.org/wiki/Aufenthaltstitel",
+      "quote": "muss jeder Aufenthaltstitel erkennen lassen, ob und gegebenenfalls unter welchen Bedingungen die Ausübung einer Erwerbstätigkeit erlaubt ist",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Niederlassungserlaubnis (settlement permit)",
+      "lang": "de",
+      "means": "residence",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "a long-term resident EU residence permit, or a settlement permit",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "EU-Staatsangehörigkeit (no work permit needed)",
+      "lang": "de",
+      "means": "citizenship",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "Nationals of the European Union (EU) Member States enjoy unlimited freedom of movement for workers and are not subject to any restrictions as regards work permits",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Sicherheitsüberprüfung (Ü1, Ü2, Ü3)",
+      "lang": "de",
+      "means": "clearance",
+      "source": "https://de.wikipedia.org/wiki/Sicherheits%C3%BCberpr%C3%BCfung",
+      "quote": "Die Sicherheitsüberprüfung in Deutschland ist ein abgestuftes Verfahren zur Überprüfung von Personen, die mit sicherheitsempfindlichen Tätigkeiten betraut werden sollen",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "Lebenslauf (CV), sent with an Anschreiben and certificates",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "It is advisable to compile a single PDF document containing all your application documents, such as cover letter, CV, certificates and references",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "two pages at most, in table form, newest first",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "The CV, in table format, should not be more than two pages long",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "a photo is still usual, though not required by law",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-germany_en",
+      "quote": "a friendly application photograph with a neutral background remains part of a job application in Germany",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD.MM.YYYY; MM/YYYY for periods on a Lebenslauf",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Germany",
+      "quote": "The traditional all-numeric form of writing Gregorian dates in German is the little-endian day.month.year order",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "German, unless the posting is in English",
+      "source": "https://de.wikipedia.org/wiki/Deutsche_Staatsangeh%C3%B6rigkeit",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ],
+  "pay": [
+    {
+      "name": "Entgeltatlas (Bundesagentur für Arbeit)",
+      "url": "https://web.arbeitsagentur.de/entgeltatlas/",
+      "what": "median pay by occupation, region, age and sex",
+      "source": "https://web.arbeitsagentur.de/entgeltatlas/",
+      "quote": "Was verdienen Menschen in welchem Beruf - Entgeltinformationen aus der Beschäftigungsstatistik der Bundesagentur für Arbeit",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Verdienste (Statistisches Bundesamt, Destatis)",
+      "url": "https://www.destatis.de/DE/Themen/Arbeit/Verdienste/_inhalt.html",
+      "what": "earnings statistics by sector and occupation",
+      "source": "https://www.destatis.de/DE/Themen/Arbeit/Verdienste/_inhalt.html",
+      "quote": "Daten zum Thema Verdienst in Deutschland (u.a.",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Berlin",
+      "written": [
+        "Berlin",
+        "Potsdam",
+        "Metropolregion Berlin/Brandenburg"
+      ],
+      "source": "https://de.wikipedia.org/wiki/Metropolregion_Berlin/Brandenburg",
+      "quote": "so leben alleine in Berlin und Potsdam mehr als 60 Prozent der Gesamtbevölkerung der Metropolregion",
+      "on_page": [
+        "Berlin",
+        "Potsdam"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Hamburg",
+      "written": [
+        "Hamburg",
+        "Metropolregion Hamburg",
+        "Lüneburg",
+        "Lübeck"
+      ],
+      "source": "https://de.wikipedia.org/wiki/Metropolregion_Hamburg",
+      "quote": "Die Europäische Metropolregion Hamburg ist eine von elf Metropolregionen in Deutschland",
+      "on_page": [
+        "Lüneburg",
+        "Lübeck"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "München",
+      "written": [
+        "München",
+        "Munich",
+        "Augsburg",
+        "Ingolstadt",
+        "Metropolregion München"
+      ],
+      "source": "https://de.wikipedia.org/wiki/Metropolregion_M%C3%BCnchen",
+      "quote": "Die Metropolregion München umfasst die Gebietskörperschaften der Landeshauptstadt München und der kreisfreien Städte Augsburg , Ingolstadt",
+      "on_page": [
+        "Augsburg",
+        "Ingolstadt"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

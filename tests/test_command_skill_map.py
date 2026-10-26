@@ -1,4 +1,4 @@
-"""The command and skill inventory in CLAUDE.md must match the files on disk.
+"""The command and skill inventory in RUNBOOK.md must match the files on disk.
 
 Skills and commands with similar names, like /network and /networking, are
 easy to confuse. They are not alternatives: `networking` is
@@ -6,7 +6,9 @@ the skill that holds the rules and `/network` is one of the four actions it
 owns. `/prep` and `/interview` are worse, because both mean "prep" in English
 and they take different arguments and read different files.
 
-CLAUDE.md now carries the map. A map that drifts is worse than none, so this
+RUNBOOK.md carries the map ("Commands and skills: what routes where"), moved there from
+CLAUDE.md in 4.0 so the core every call loads stays short (docs/rule_map.json); CLAUDE.md
+points at it. A map that drifts is worse than none, so this
 asserts it against the filesystem: every command it names exists, every command
 file is named, and the disambiguation notes are still in the files they warn
 about.
@@ -17,7 +19,7 @@ import sys
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLAUDE_MD = os.path.join(ROOT, "CLAUDE.md")
+MAP_MD = os.path.join(ROOT, "RUNBOOK.md")
 COMMANDS = os.path.join(ROOT, ".claude", "commands")
 SKILLS = os.path.join(ROOT, ".claude", "skills")
 AGENT_SKILLS = os.path.join(ROOT, ".agents", "skills")
@@ -28,7 +30,8 @@ SECTION = "## Commands and skills: what routes where"
 
 
 def claude_md():
-    return open(CLAUDE_MD, encoding="utf-8").read()
+    """The file the map lives in (RUNBOOK.md since 4.0)."""
+    return open(MAP_MD, encoding="utf-8").read()
 
 
 def mapped_section():
@@ -59,13 +62,17 @@ class TheMapMatchesTheFilesystem(unittest.TestCase):
     def test_the_section_exists(self):
         self.assertIn(SECTION, claude_md())
 
+    def test_the_core_points_at_the_map(self):
+        core = open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
+        self.assertIn('RUNBOOK.md, "Commands and skills: what routes where"', core)
+
     def test_every_command_named_in_the_map_is_reachable(self):
         """Either a file in .claude/commands/, or a skill's declared name."""
         named = set(re.findall(r"`/([a-z-]+)`", mapped_section()))
         reachable = on_disk() | skill_names()
         missing = sorted(n for n in named if n not in reachable)
         self.assertEqual(missing, [],
-                         "CLAUDE.md names slash commands that are neither a command "
+                         "RUNBOOK.md names slash commands that are neither a command "
                          "file nor a skill's declared name")
 
     def test_every_command_on_disk_is_named_in_the_map(self):
@@ -73,7 +80,7 @@ class TheMapMatchesTheFilesystem(unittest.TestCase):
         unlisted = sorted(on_disk() - named)
         self.assertEqual(unlisted, [],
                          "these commands exist but the map does not mention them, "
-                         "so nobody reading CLAUDE.md can discover them")
+                         "so nobody reading the map can discover them")
 
     def test_a_skill_whose_declared_name_differs_from_its_folder_is_flagged(self):
         """job-scraper declares `name: scrape`, so /scrape works with no command
@@ -106,7 +113,7 @@ class TheMapMatchesTheFilesystem(unittest.TestCase):
 
 
 class TheAmbiguousPairsAreDisambiguatedWhereTheyLive(unittest.TestCase):
-    """A warning in CLAUDE.md is not enough: the command file is what gets read
+    """A warning in the map is not enough: the command file is what gets read
     when the command runs."""
 
     def test_prep_says_it_is_not_interview(self):

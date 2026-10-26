@@ -963,3 +963,43 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ------------------------------------------------------------------ formality (Tweak M2)
+
+# Contractions, the greeting and exclamation marks only: nothing a reader would take as a
+# different fact. "Formal" writes them out, "casual" folds the commonest back.
+_LONG = (("I'm", "I am"), ("I've", "I have"), ("I'd", "I would"), ("I'll", "I will"),
+         ("you're", "you are"), ("it's", "it is"), ("that's", "that is"), ("there's", "there is"),
+         ("we're", "we are"), ("don't", "do not"), ("doesn't", "does not"), ("didn't", "did not"),
+         ("can't", "cannot"), ("won't", "will not"), ("isn't", "is not"), ("wasn't", "was not"),
+         ("wouldn't", "would not"), ("couldn't", "could not"), ("haven't", "have not"))
+_SHORT = (("I am", "I'm"), ("I would", "I'd"), ("I will", "I'll"), ("you are", "you're"),
+          ("it is", "it's"), ("that is", "that's"), ("do not", "don't"), ("does not", "doesn't"),
+          ("did not", "didn't"), ("cannot", "can't"), ("will not", "won't"), ("is not", "isn't"))
+FORMALITY = ("formal", "standard", "casual")
+
+
+def _swap(text: str, pairs) -> str:
+    for a, b in pairs:
+        text = re.sub(r"(?<![\w'’])" + re.escape(a).replace("'", "['’]") + r"(?![\w'’])",
+                      lambda m, b=b: (b[:1].upper() + b[1:]) if m.group(0)[:1].isupper()
+                      and not b.startswith("I") else b, text)
+        if a[:1].islower():
+            cap = a[:1].upper() + a[1:]
+            text = re.sub(r"(?<![\w'’])" + re.escape(cap).replace("'", "['’]") + r"(?![\w'’])",
+                          b[:1].upper() + b[1:], text)
+    return text
+
+
+def formality(text: str, level: str) -> str:
+    """A message in another register, its facts untouched: "formal" writes the contractions
+    out, opens on "Hello" for "Hi" and ends no sentence on "!"; "casual" folds the commonest
+    contractions back; "standard" leaves it as written."""
+    if level == "formal":
+        text = _swap(text, _LONG)
+        text = re.sub(r"^Hi(?=[ ,])", "Hello", text)
+        return re.sub(r"!", ".", text)
+    if level == "casual":
+        return _swap(text, _SHORT)
+    return text

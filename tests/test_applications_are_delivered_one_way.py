@@ -20,7 +20,11 @@ def _read(*parts):
 
 
 def test_the_rule_is_written_once_and_every_hand_over_points_at_it():
-    rule = _read("CLAUDE.md")
+    # 4.0: the page comes first (CLAUDE.md, "Every output is shown"), and the rule for the
+    # chat, where no page can be published, lives in RUNBOOK.md (docs/rule_map.json).
+    core = " ".join(_read("CLAUDE.md").split())
+    assert 'RUNBOOK.md, "Delivering in the chat"' in core
+    rule = _read("RUNBOOK.md").split("## Delivering in the chat", 1)[1].split("\n## ", 1)[0]
     assert "**Applications, one or a batch, are delivered one way**" in rule
     for words in ("Per role, one file-sending call", "pay (or \"pay not stated\")",
                   "role | apply link", "does not open from the desktop app"):

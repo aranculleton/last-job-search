@@ -1,0 +1,230 @@
+{
+  "boards": [
+    {
+      "name": "Remote OK",
+      "url": "https://remoteok.com",
+      "kind": "remote",
+      "source": "https://remoteok.com/",
+      "quote": "Find a career where you can work remotely from anywhere",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://remoteok.com/remote-data-jobs",
+      "paths": {
+        "search": "/remote-data-jobs",
+        "posting": "/remote-jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": 1.0,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Remotive",
+      "url": "https://remotive.com",
+      "kind": "remote",
+      "source": "https://remotive.com/",
+      "quote": "All our 137,327 jobs are curated and fully remote",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://remotive.com/remote-jobs/data",
+      "paths": {
+        "search": "/remote-jobs/data",
+        "posting": "/remote-jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Working Nomads",
+      "url": "https://www.workingnomads.com",
+      "kind": "remote",
+      "source": "https://www.workingnomads.com/",
+      "quote": "Discover fully remote jobs worldwide for digital nomads and remote workers",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.workingnomads.com/jobs",
+      "paths": {
+        "search": "/jobs",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Himalayas",
+      "url": "https://himalayas.app",
+      "kind": "remote",
+      "source": "https://himalayas.app/",
+      "quote": "Himalayas is the leading remote job board",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://himalayas.app/jobs",
+      "paths": {
+        "search": "/jobs",
+        "posting": "/companies/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "JustRemote",
+      "url": "https://justremote.co",
+      "kind": "remote",
+      "source": "https://justremote.co/",
+      "quote": "Give up the commute, work remotely and do what you love, daily, from anywhere",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://justremote.co/remote-jobs",
+      "paths": {
+        "search": "/remote-jobs",
+        "posting": "/remote-jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Jobspresso",
+      "url": "https://jobspresso.co",
+      "kind": "remote",
+      "source": "https://jobspresso.co/",
+      "quote": "Jobspresso is the easiest way to find remote jobs, careers and other remote work opportunities",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://jobspresso.co/remote-work/",
+      "paths": {
+        "search": "/remote-work/",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": 3.0,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "We Work Remotely",
+      "url": "https://weworkremotely.com",
+      "kind": "remote",
+      "source": "https://weworkremotely.com/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: a bot check (HTTP 403) instead of the page",
+      "search": "https://weworkremotely.com/remote-jobs/search?term=data",
+      "paths": {
+        "search": "/remote-jobs/search?term=data",
+        "posting": "/remote-jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "FlexJobs",
+      "url": "https://www.flexjobs.com",
+      "kind": "remote",
+      "source": "https://www.flexjobs.com/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: robots.txt could not be read (RuntimeError)",
+      "search": "https://www.flexjobs.com/search?search=data",
+      "paths": {
+        "search": "/search?search=data",
+        "posting": "/publicjobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (RuntimeError)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ]
+}

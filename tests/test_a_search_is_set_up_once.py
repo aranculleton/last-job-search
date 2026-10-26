@@ -141,8 +141,8 @@ def test_setup_marks_its_start_and_its_end(tmp_path, monkeypatch):
 def test_setup_looks_first_lands_the_profile_at_once_and_never_starts_again():
     text = open(SETUP, encoding="utf-8").read()
     step0 = text[text.index("## Step 0"):text.index("## Step 1")]
-    assert "python3 tools/place.py state" in step0
-    assert step0.index("place.py") < text.index("Let's set up your job search")
+    assert "python3 tools/app.py start" in step0          # the one detector says it (4.0)
+    assert step0.index("app.py start") < text.index("Let's set up your job search")
     assert "never for a resume" in step0 and "that is `/reset`" in step0
     assert "Your search is already set up; this computer is ready for it too." in step0
     assert "\"On a new computer\"" in step0
@@ -150,9 +150,11 @@ def test_setup_looks_first_lands_the_profile_at_once_and_never_starts_again():
     assert "python3 tools/place.py started" in step2 and "land it on master" in step2
     step5 = text[text.index("## Step 5"):]
     assert "python3 tools/place.py finished" in step5
-    claude = open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
-    start = claude[claude.index("## Start of every session"):claude.index("## App-owned files")]
-    assert "place.py state" in start and "never set up again" in start
+    # The start's steps live in RUNBOOK.md since 4.0 (docs/rule_map.json).
+    runbook = open(os.path.join(ROOT, "RUNBOOK.md"), encoding="utf-8").read()
+    start = runbook[runbook.index("## Start of a session"):runbook.index("\n## 0. ")]
+    assert "app.py start" in start and "place.setup_state" in start
+    assert "never set up again" in start
 
 
 def test_the_message_a_computer_chat_starts_from_opens_the_search():

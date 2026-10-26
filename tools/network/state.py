@@ -244,7 +244,7 @@ def load_tracker(path: str = TRACKER_CSV) -> list[dict]:
     """The application tracker, read only. Nothing here ever writes it (read the way a
     spreadsheet saved it: csv_store.read_text)."""
     import csv_store
-    return csv_store.dict_rows(path, refuse=False)
+    return csv_store.tracker(path, refuse=False)
 
 
 # ---------------------------------------------------------------- identity
@@ -750,7 +750,8 @@ def duplicate_line(found, this_id="") -> str:
     others = [(n, i) for n, i in zip(names, ids) if i and i != this_id] or [("", this_id)]
     who = ", ".join("%s (%s)" % (n, i) if n else i for n, i in others)
     return ("may be the same person as %s: %s. Never merged. If it is one person, close the "
-            "newer row (state.py close) and keep the one that holds the messages; if not, write "
+            "newer row (state.py set <its id> --status closed --note \"the same person\") "
+            "and keep the one that holds the messages; if not, write "
             "\"not the same person as %s\" in this row's notes."
             % (who, found.get("reason", ""), others[0][1]))
 
@@ -775,13 +776,16 @@ _CHANNEL_ALIASES = {
 }
 
 
-def _direction(row) -> str:
+def direction(row) -> str:
     d = str(row.get("direction") or "").strip().lower()
     if d in _OUT:
         return "out"
     if d in _IN:
         return "in"
     return ""
+
+
+_direction = direction  # the module's own name for it; other modules call direction
 
 
 def channel_of(row) -> str:

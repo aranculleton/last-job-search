@@ -15,7 +15,9 @@ git switch -c claude/ops-<YYYY-MM-DD>-morning_brief origin/master && python3 too
 gather: the app's updates, the Python side, earlier runs' unsaved work, the follow-ups
 drafted by code and checked, the preps rebuilt, the quiet applications closed, and the
 day's record and pack written. It prints the message with `<NEWS>` still to fill, then the
-lines **FOR CLAUDE**, which are yours alone. Act on each FOR CLAUDE line:
+lines **FOR CLAUDE**, which are yours alone. Where the person has a page, it prints **PAGE
+FIRST** instead: do those steps (their ticks there are applied before anything is counted);
+the last one prints the message. Act on each FOR CLAUDE line:
 
 - an earlier run's work not saved: `_common.md` step 3;
 - `/upgrade 20`: run it; one plain line per change goes at the end of the message;
@@ -50,7 +52,8 @@ python3 tools/save_state.py && git commit -qm "Brief <YYYY-MM-DD>" && set -o pip
 
 `brief.py news` puts the news in the day's record, leaves out any link an earlier brief
 sent, and notes a freeze or layoffs at an employer with a live application on that row.
-Then open the PR and merge it, as `_common.md` "Landing work" says.
+Then open the PR and merge it, as `_common.md` "Landing work" says. With a page, bring it up
+to date as its FOR CLAUDE line says. Never publish the page or watch it.
 
 ## 5. The message
 
@@ -62,6 +65,7 @@ line says "draft ready". Change a line it printed only where you know it is wron
 nothing about how the brief was made. Under 200 words, for a phone. It is
 sent on each of the brief's days even when nothing is owed: silence is the alarm.
 
-When the person answers in this chat later, record each answer the way the line asks:
+With a page, they answer there (its To do), and the message links it. When they answer in
+this chat later, record each answer the way the line asks:
 `python3 tools/confirm.py applied|not-applied "<Employer>::<role>"` for an application they
 say went or did not, `/outcome` for a result, `/reply <name>` for a reply.

@@ -108,9 +108,9 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-22", False, "the probe reads the boards side by side, the same verdicts in the same order"),
             (20, "2026-10-22", False, "add-portal works out the board, its name, market and test query instead of asking"),
             (21, "2026-10-22", False, "the boards section no longer asks about job-alert emails"),
-            (22, "2026-10-25", False, "portals run under Node or Bun, whichever the computer has; with neither a round stops with one plain line and never reads as a thin market; command output is read as UTF-8 on every computer; setup's board research runs in the background, every target employer's hiring system looked up at once, and the lookup works before the profile is finished; hidden text on employer boards is removed"),
+            (22, "2026-10-25", False, "portals run under Node or Bun, whichever the computer has; with neither a round stops with one plain line and never reads as a thin market; command output is read as UTF-8 on every computer; setup's board research runs in the background, every target employer's hiring system looked up at once, and the lookup works before the profile is finished; hidden text on employer boards is removed; board research starts from the market tables, and a board from them is built only through /add-portal; /add-portal names /setup for the rule that nobody is asked to name a board (the short CLAUDE.md of 4.0); employer boards are read by openroles 0.4.0: hidden text left out by its own rule, Lever, Ashby and Gem read from their HTML, inline tags join the words around them, and a robots.txt with many wildcards is matched at once"),
         ),
-        "fingerprint": "5629e2a4ff632b41",
+        "fingerprint": "30dd4f711127d1ce",
     },
     "search": {
         "setup": True, "by": "upgrade", "priority": 2, "time": "~20 min",
@@ -130,15 +130,16 @@ METHODS: dict[str, dict] = {
             (7, "2026-10-18", False, "the profile-reads question says finding people never needs a read, and that a read is for the best ten a run finds"),
             (8, "2026-10-19", False, "skills.py may list the tools a field treats as interchangeable (FAMILIES); the app's own list applies without it"),
             (9, "2026-10-22", False, "the setup question on reading profiles says reads go one page at a time and stop at LinkedIn's first sign"),
-            (10, "2026-10-25", False, "setup's search section moved to setup-sections.md with the same rules; what the person was not asked is written from a default, never a question"),
+            (10, "2026-10-25", False, "setup's search section moved to setup-sections.md with the same rules; what the person was not asked is written from a default, never a question; a field's titles and interchangeable tools come from the market tables first"),
         ),
-        "fingerprint": "2fbec184b44223b7",
+        "fingerprint": "5159c542e7ce331a",
     },
     "market": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~15 min",
         "gives": "eligibility, pay and places checked the way your market words them",
         "run": "/setup --section market",
-        "files": (".claude/skills/job-application-assistant/04-job-evaluation.md",),
+        "files": (".claude/skills/job-application-assistant/04-job-evaluation.md",
+                  "tools/markets.py", "tools/markets/*"),
         "versions": (
             _first(),
             (2, "2026-10-15", True, "eligibility written for any work status, your country, your "
@@ -150,9 +151,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
             (5, "2026-10-17", False, "salary and market research reads the one company-research cache and its freshness rule"),
             (6, "2026-10-21", False, "Wording"),
-            (7, "2026-10-25", False, "setup's market section moved to setup-sections.md; pay, eligibility wording and place names are researched in the background while the person answers"),
+            (7, "2026-10-25", False, "setup's market section moved to setup-sections.md; pay, eligibility wording and place names are researched in the background while the person answers; setup reads the market tables the app ships first (boards with their robots.txt verdicts, eligibility wording, document conventions, pay sources and place names for 20 countries, 18 fields, four career levels, regional and remote boards, each fact cited and checked by code) and researches only what they lack; a profile already made is not redone; the tool families quote only the tools' own names, never a vendor's"),
         ),
-        "fingerprint": "b2f949d1f76f1329",
+        "fingerprint": "b8e92bc46b539082",
     },
     "documents": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -164,9 +165,9 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", True, "Skills headings in your own words, page count and section order "
                                     "for your career, and a letter that greets in your language"),
             (3, "2026-10-18", False, "asks early where the person will mostly work and records it in profile/place.json"),
-            (4, "2026-10-25", False, "setup's documents section moved to setup-sections.md; the local conventions are researched in the background; a new person's page design is chosen per kind of employer (classic or modern), never asked"),
+            (4, "2026-10-25", False, "setup's documents section moved to setup-sections.md; the local conventions are researched in the background; a new person's page design is chosen per kind of employer (classic or modern), never asked; the conventions come from the market tables first"),
         ),
-        "fingerprint": "00a8f39ae95c9352",
+        "fingerprint": "d4be7bd7b396ebc9",
     },
     "voice": {
         "setup": True, "by": "upgrade", "priority": 3, "time": "~10 min",
@@ -198,9 +199,9 @@ METHODS: dict[str, dict] = {
             (4, "2026-10-19", False, "every STAR story ends on a Use for line naming the questions it answers"),
             (5, "2026-10-19", False, "the interview template's permit answer follows your own disclosure rule, and a stock answer can name the kinds of employer it is not for"),
             (6, "2026-10-20", False, "the interview guide lets an answer be drafted when the person asks, marked for them to confirm, and points its examples at their own stories"),
-            (7, "2026-10-25", False, "setup reads the resume they attach or paste (never a folder to drop it in), takes the rest from it or a default marked to confirm, and asks four questions in one message; no resume is fine: say \"build one with me\" and a short guided interview, one job per message and phone-sized, builds the history, seeded from their LinkedIn where it can be, never inventing a result"),
+            (7, "2026-10-25", False, "setup reads the resume they attach or paste (never a folder to drop it in), takes the rest from it or a default marked to confirm, and asks four questions in one message; no resume is fine: say \"build one with me\" and a short guided interview, one job per message and phone-sized, builds the history, seeded from their LinkedIn where it can be, never inventing a result; on the app page, setup asks its questions one at a time and resumes a setup left part-way"),
         ),
-        "fingerprint": "21c69df3c29a8de3",
+        "fingerprint": "ab8d5582cd337899",
     },
     # ---- what the build makes over time and keeps
     "prep-docs": {
@@ -238,9 +239,9 @@ METHODS: dict[str, dict] = {
             (20, "2026-10-22", False, "the prep document is sent with the part to read, not pasted whole"),
             (21, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (22, "2026-10-22", False, "a prep document is sent as a copy named for whose it is; an older pack for the round the document covers is folded in, not counted as a round already told"),
-            (23, "2026-10-25", True, "the research a prep cites is named by its real file; a copy sent is named apart from every other (requisition numbers and levels kept, the label never cut), carries no tool comments, and is remade when a hand edit passes the check; a path printed across two Windows drives no longer stops it; a prep finds its application from one index of the tracker, so a brief rebuilding every prep is twice as fast; an application's folder is found by the paths module, not the outreach one"),
+            (23, "2026-10-25", True, "the research a prep cites is named by its real file; a copy sent is named apart from every other (requisition numbers and levels kept, the label never cut), carries no tool comments, and is remade when a hand edit passes the check; a path printed across two Windows drives no longer stops it; a prep finds its application from one index of the tracker, so a brief rebuilding every prep is twice as fast; tool families of one name merge into one; a prep goes on the person's page first, and in the chat only where there is no page; an application's folder is found by the paths module, not the outreach one"),
         ),
-        "fingerprint": "65d7725805f6cca0",
+        "fingerprint": "d8de77d2f374a467",
     },
     "drafts": {
         "by": "upgrade", "priority": 2, "applies": "unsent_drafts", "time": "~5 min",
@@ -248,7 +249,8 @@ METHODS: dict[str, dict] = {
         "run": "for each tracker row still at `drafted`, python3 tools/fit_to_page.py "
                "documents/applications/<slug>/draft.json, then tools/verify_batch.sh on them; "
                "never one already sent",
-        "files": ("templates/*", "tools/render_application.py", "tools/fit_to_page.py",
+        "files": ("templates/*.py", "templates/README.md", "tools/render_application.py",
+                  "tools/fit_to_page.py",
                   "tools/posting_profile.py", "tools/draft_pack.py", "tools/draft_audit.py",
                   "tools/draft_cost.py",
                   "tools/skills_block.py", "tools/allocate.py", "tools/bullet_library.py",
@@ -326,9 +328,10 @@ METHODS: dict[str, dict] = {
             (48, "2026-10-23", False, "applications are delivered one way: per role one file-sending call with resume and letter, captioned role, employer, pay, location and apply link, then one index table; paths as plain text, never markdown links. An audit ruling no longer settles a longer sentence edited after it, an edit to the outreach note is kept in the note, and a newer model correction is never overwritten by an older edit"),
             (49, "2026-10-24", False, "the posting profile reads a degree's other way in past a semicolon, as the score does; the run book saves with tools/save_state.py and tells nobody but the maintainer of a problem with the app; verify_batch reads whole bullets for repeats and its skills check runs under a Mac's sed; every resume's text is black (name, headings, rule, contact line, links, bullet marks), with nothing else moved; drafts made before keep theirs until re-rendered; voice_check counts the person's own wording in a message (their opener and close, a message they approved) as theirs, never a finding, and a letter is held to the house style as before; save_state.py stages a file of the person's that was taken away as removed; on moderncv 2.4 and later (a Mac's TeX) the name is drawn 9.5pt higher, its box unchanged, so a text extractor reads it apart from the city and nothing else moves"),
             (50, "2026-10-24", False, "a resume and its letter can take a colour per kind of employer (person.json documents.styles, templates/doc_style.py), or one a draft names; black when nothing chooses one, so every draft renders exactly as before; a colour moves no word, and the claims check reads no font key as a word"),
-            (51, "2026-10-25", True, "PDFs are read with pypdf, Poppler only where present; verify_batch runs in Python with the same checks and exit codes; a LaTeX compile stops after 300 s and says so; compiles run where the files were written; an employer's accented letters stay in file names (existing names kept); every file is read and written as UTF-8; a general resume, for their main target role with no posting, is staged with `stage_picks.py general`, fitted, checked (no letter) and kept as their current resume, in their default colour or black; a design per kind of employer, employer, person or draft sets the fonts, sizes, margins, page and alignment (person.json documents.design and designs, templates/doc_design.py), the template exactly when none is chosen, and verify_batch checks each PDF against the rules an ATS needs (tools/design_check.py); a path printed across two Windows drives no longer stops a step; a pick's apply link is cleaned of tracking and checked against the employer's own listing; a redraft keeps the row's date; the run book names the update setting; the grounding auditor starts without the app's CLAUDE.md, which it never needed, and each audit costs about 13,000 fewer tokens; every design is checked with the app's own Python, which reads PDFs; staging quotes no posting above the fence, dates relists as the round does, and never calls a sibling board's posting closed; works in folders with brackets in their names; the drafting pack is written with plain line ends; pages are counted with pdftotext alone; the general resume's fallback runs under Git Bash; every value reaching a .tex is escaped for where it lands; a LaTeX error is never a clean fit; neither audit can be skipped; two-page resumes and letter paper pass the design check; every contact line is checked; non-Latin employer names get their own file name; posting words are fenced; one summary budget and one requisition rule. Unsent drafts are made again; a font reached through a folder with a space goes beside the document; an application's folder and its name live in docpaths, still offered by outreach under the same names; a PDF's pages are counted from pdftotext when pdfinfo gives no count"),
+            (51, "2026-10-25", True, "PDFs are read with pypdf, Poppler only where present; verify_batch runs in Python with the same checks and exit codes; a LaTeX compile stops after 300 s and says so; compiles run where the files were written; an employer's accented letters stay in file names (existing names kept); every file is read and written as UTF-8; a general resume, for their main target role with no posting, is staged with `stage_picks.py general`, fitted, checked (no letter) and kept as their current resume, in their default colour or black; a design per kind of employer, employer, person or draft sets the fonts, sizes, margins, page and alignment (person.json documents.design and designs, templates/doc_design.py), the template exactly when none is chosen, and verify_batch checks each PDF against the rules an ATS needs (tools/design_check.py); a path printed across two Windows drives no longer stops a step; a pick's apply link is cleaned of tracking and checked against the employer's own listing; a redraft keeps the row's date; the run book names the update setting; the grounding auditor starts without the app's CLAUDE.md, which it never needed, and each audit costs about 13,000 fewer tokens; every design is checked with the app's own Python, which reads PDFs; staging quotes no posting above the fence, dates relists as the round does, and never calls a sibling board's posting closed; works in folders with brackets in their names; the drafting pack is written with plain line ends; pages are counted with pdftotext alone; the general resume's fallback runs under Git Bash; every value reaching a .tex is escaped for where it lands; a LaTeX error is never a clean fit; neither audit can be skipped; two-page resumes and letter paper pass the design check; every contact line is checked; non-Latin employer names get their own file name; posting words are fenced; one summary budget and one requisition rule. Unsent drafts are made again; a font reached through a folder with a space goes beside the document; an application's folder is found with one read of the tracker; a document can be tweaked on demand: look, size, spacing, colour, a bullet swapped for another true one, who the letter is to, and wording redrafted through both audits; tool families of one name merge into one, so a tool both name is assessed once; the session rules the long CLAUDE.md carried (the start, the command map, saving and landing on master, delivering in a chat, what goes where, learning the person) now live in RUNBOOK.md, and an application goes on the person's page first; an application's folder and its name live in docpaths, still offered by outreach under the same names; new optional document settings (fill, letter words, skills count, style) and a verify record each page reads; where setup stands is said by app.py start alone, and one chat answers the page while every other leaves it alone; the run book says every state file the app writes merges between two chats; a PDF's pages are counted from pdftotext when pdfinfo gives no count"),
+            (52, "2026-10-26", False, "templates/app/palettes.py, which this method's templates/*.py takes in, moved the page to the rosé pine colours; a page action that changed the tracker reads it again at once (docpaths.forget_abbreviations); the em dash check cites the writing guide's rule 1; no document changes"),
         ),
-        "fingerprint": "13f48ff98e3c5dec",
+        "fingerprint": "935ec28ac9b29ecc",
     },
     "interview": {
         "by": "upgrade", "priority": 2, "applies": "live_interviews", "time": "~15 min",
@@ -361,9 +364,10 @@ METHODS: dict[str, dict] = {
             (19, "2026-10-22", False, "the pack is built before the stage is asked, and sent once per turn that changed it"),
             (20, "2026-10-22", False, "ends with a short first-time note or an occasional tip, not a line every session"),
             (21, "2026-10-22", False, "the document is sent as a copy named for the employer and role; an older pack for the round it covers, under any name, is folded in rather than listed as an earlier round"),
-            (22, "2026-10-25", True, "the pack's one screen stops asking for a reason they already wrote; a stage booked with the pack is written into outcome.md; the questions asked are recorded under the right role; a path printed across two Windows drives no longer stops it; works in folders with brackets in their names; an application's folder is found by the paths module, not the outreach one"),
+            (22, "2026-10-25", True, "the pack's one screen stops asking for a reason they already wrote; a stage booked with the pack is written into outcome.md; the questions asked are recorded under the right role; a path printed across two Windows drives no longer stops it; works in folders with brackets in their names; the pack goes on the person's page first, and in the chat only where there is no page; an application's folder is found by the paths module, not the outreach one; rebooking a stage keeps the blank line after it, so the next heading no longer runs into it"),
+            (23, "2026-10-26", False, "a stage booked with a time keeps it on its outcome.md line (scheduled <day> HH:MM), and booked again for the same day with no time it stays; the page reads the pack's one screen, its practice questions with the person's own answers and its format (one_screen, practice, format_of); an answer kept to work on is written once and can be taken off again; a process registered from the page keeps its call's time; next_stage is public; packs already made stay as they are"),
         ),
-        "fingerprint": "f494958fdb6c043c",
+        "fingerprint": "d0bce9e5a955d68f",
     },
     "research": {
         "by": "upgrade", "priority": 3, "applies": "live_applications", "time": "~5 min each",
@@ -482,9 +486,10 @@ METHODS: dict[str, dict] = {
             (57, "2026-10-24", False, "a second message to someone on a day one already went is refused unless --also; no-reply for a message that needs no answer; attach names the file on the newest message; the app's own follow-up line comes off anyone who has written since"),
             (58, "2026-10-24", False, "a headline that writes the employer short (\"at <Name>\" for \"<Name> Asset Management\") and a card count (\"500+\" on its own line) no longer read as having moved on; the number of people at one employer is the person's (PEOPLE_PER_EMPLOYER, more-at); an InMail is drafted only once their message window says free or credits allow"),
             (59, "2026-10-24", False, "a bare 'happy to connect' is no longer a referral offer; a chat offered is its own reading (settle a time); a phrase from a message the person approved is their own wording in every message; the first-round tip is not shown to someone whose log shows notes already sent; a chat declined ('not available to chat') is still a no, a talk with somebody else is not a chat offered; the same-day refusal counts messages only, never a call, an acceptance or a request; 'National Bank' for 'National Bank of <place>' is the same employer; the later word for one employer stands"),
-            (60, "2026-10-25", False, "their reply is logged by command (state.py received); a referral asked for in a first note is refused; a reading checks first whether LinkedIn is signed in and, signed out, asks them once to sign in, with nothing else said about it; profiles are read in the browser unless the person said paste or off; contact ids are names every computer accepts; the LinkedIn download has a status (request, waiting, take, fresh) and is found in Windows and OneDrive folders; the tracker is read whatever a spreadsheet saved it as; their own LinkedIn download's positions, education and skills can seed a resume; a nudge is drafted by code first (tools/followup_drafts.py), and a hand-written one is checked in one call; messages from a LinkedIn download are dated on the person's own clock; a referral ask goes only to someone who has replied; the close ends with a full stop; an export saved with Windows line ends reads the same"),
+            (60, "2026-10-25", False, "their reply is logged by command (state.py received); a referral asked for in a first note is refused; a reading checks first whether LinkedIn is signed in and, signed out, asks them once to sign in, with nothing else said about it; profiles are read in the browser unless the person said paste or off; contact ids are names every computer accepts; the LinkedIn download has a status (request, waiting, take, fresh) and is found in Windows and OneDrive folders; the tracker is read whatever a spreadsheet saved it as; their own LinkedIn download's positions, education and skills can seed a resume; a nudge is drafted by code first (tools/followup_drafts.py), and a hand-written one is checked in one call; messages from a LinkedIn download are dated on the person's own clock; a referral ask goes only to someone who has replied; the close ends with a full stop; an export saved with Windows line ends reads the same; job rows and drafts carry the near matches a posting asks for; the outreach rules the long CLAUDE.md repeated live in the skill's \"The rules every outreach keeps\"; a message's type, subject, body, count and warnings for the page, one plan reader and one greeting helper, and a sent message logged once"),
+            (61, "2026-10-26", False, "two printed lines name the command that closes a contact (state.py set --status closed); the message log's direction is public (state.direction); nothing to redo"),
         ),
-        "fingerprint": "5ed16c44633003e6",
+        "fingerprint": "883f09aaef2cb9b9",
     },
     "network-notes": {
         "by": "network", "priority": 2, "applies": "queued_notes", "time": "~10 min",
@@ -496,7 +501,7 @@ METHODS: dict[str, dict] = {
                "documents/network/<contact_id>/draft.md with compose.first_note(..., reading=) "
                "and reading.same_ground() across them; update any file of theirs that lists "
                "the old notes (a send pack) to match, and show the new notes; nothing is sent",
-        "files": ("tools/network/reading.py",),
+        "files": ("tools/network/reading.py", "tools/network/parts.py"),
         "versions": (
             _first(),
             (2, "2026-10-17", True, "each note rests on something read about the person: "
@@ -533,9 +538,9 @@ METHODS: dict[str, dict] = {
             (31, "2026-10-22", False, "a batch of six or more notes all in one sentence order is not saved, and reading.py batch says so; the queue is checked at the next save or batch, not redone; a removed reading limit's own comment goes with it"),
             (32, "2026-10-23", False, "a card-only note to someone known only from a connection made long ago is refused until their profile is read"),
             (33, "2026-10-24", False, "drafts honour the person's number at one employer (more-at) and hold an InMail until their message window is checked; an Open Profile note is held to an InMail's length; a reading is judged on the day given (grounded today=); nothing is kept in the example person"),
-            (34, "2026-10-25", False, "a phone is asked only for what a phone can send, in its short wording; the Chrome wording names the tab Claude opened; a path printed across two Windows drives no longer stops a reading; works in folders with brackets in their names; moved reading-ledger files are named with /"),
+            (34, "2026-10-25", False, "a phone is asked only for what a phone can send, in its short wording; the Chrome wording names the tab Claude opened; a path printed across two Windows drives no longer stops a reading; works in folders with brackets in their names; moved reading-ledger files are named with /; a first note keeps the parts it was built from, so a tweak rebuilds it without a rewrite; a reading the page made is logged as a computer chat's is"),
         ),
-        "fingerprint": "26d975cf641daaec",
+        "fingerprint": "9e0304be7b9bb02e",
     },
     "screening": {
         "by": "round", "priority": 2,
@@ -579,9 +584,10 @@ METHODS: dict[str, dict] = {
             (27, "2026-10-22", False, "a graduate degree offered beside a bachelor's is no graduate bar, in the screen and the posting profile as in the score; curly apostrophes read like straight ones"),
             (28, "2026-10-23", False, "a bachelor's named after the graduate degree, or written B.Sc., B.S. or B.A., is read as the other way in, and a PhD offered beside a master's either way round is a master's bar; flags and scores only, nothing to redo"),
             (29, "2026-10-24", False, "a years bar is lost only to a preference word that governs it, not one about tech or a marketplace in the same sentence; experience in business operations is not a company's age; a degree's other way in is read in its own words (through work, research or projects, practical experience, in lieu of a degree); a degree's other way in counts only in the degree's own sentence, and a preference after another figure belongs to that figure"),
-            (30, "2026-10-25", False, "job-alert dates are no longer read (the mail reader was removed); every screen reads its files as UTF-8; a years bar and a degree route are read in more words (N or more years, years' experience, 7+ years in a field, an equivalent combination); a language named as a market is ranked, not cut, and its rulings are released; one role per employer keeps the best fit; a posting past its deadline stays out; bringing a relist back lifts the ruling that dropped it; the bar reads the tech list as the sector does; a referral in progress holds cold applications by its stored status"),
+            (30, "2026-10-25", False, "job-alert dates are no longer read (the mail reader was removed); every screen reads its files as UTF-8; a years bar and a degree route are read in more words (N or more years, years' experience, 7+ years in a field, an equivalent combination); a language named as a market is ranked, not cut, and its rulings are released; one role per employer keeps the best fit; a posting past its deadline stays out; bringing a relist back lifts the ruling that dropped it; the bar reads the tech list as the sector does; a referral in progress holds cold applications by its stored status; a round keeps each job's apply link and its check, made from the boards the round already read; /rank points at RUNBOOK.md for what a reaction changes; the throttle reads the tracker through the one loader"),
+            (31, "2026-10-26", False, "the seen-jobs file's reader and writer and the status spellings have public names the page's engine calls (exclude.load_seen, save_seen, reason_group, throttle.spellings); nothing screened differently"),
         ),
-        "fingerprint": "70e251a9e43c8642",
+        "fingerprint": "6f3cd0d27ac0cd82",
     },
     "routines": {
         "by": "you", "priority": 3, "applies": "routines",
@@ -598,9 +604,10 @@ METHODS: dict[str, dict] = {
             (6, "2026-10-18", False, "the words for making the brief from a computer come from the registry, and Claude never starts a cloud chat from its own shell"),
             (7, "2026-10-21", False, "The job round judges employers the bar does not know yet before applying the bar"),
             (8, "2026-10-22", False, "plain words to the person: no file, id, command or pull request link"),
-            (9, "2026-10-25", False, "the brief is made at the end of setup with no questions (Mondays and Thursdays at 07:38 in the person's own zone, in a chat of its own); list_triggers' own shape is read and a brief under any name is found; a brief turned off or whose last run failed is flagged; push alone is enough for the old relay; a task set to run more than once a day is refused, since every run pays a whole chat again"),
+            (9, "2026-10-25", False, "the brief is made at the end of setup with no questions (Mondays and Thursdays at 07:38 in the person's own zone, in a chat of its own); list_triggers' own shape is read and a brief under any name is found; a brief turned off or whose last run failed is flagged; push alone is enough for the old relay; a task set to run more than once a day is refused, since every run pays a whole chat again; Claude's rules for setting the brief up moved from CLAUDE.md to automation/README.md; the brief's days and time are moved, and a break is taken until a date, from the page (routines.py move, pause and resume: the brief and every follow-up held, put back exactly on return), with the scheduled-task calls only a chat can make kept until it makes them"),
+            (10, "2026-10-26", False, "at_most_daily is public; the page moves the brief and takes a break through move, pause and resume, the one break the search has"),
         ),
-        "fingerprint": "8535b9a61978d37e",
+        "fingerprint": "ac65ce319ce5a64d",
     },
     "expand": {
         "by": "upgrade", "priority": 4, "time": "~15 min",
@@ -612,6 +619,26 @@ METHODS: dict[str, dict] = {
             (2, "2026-10-15", False, "docs corrected against the code: what the commands, skills and guides say now matches what the tools do"),
         ),
         "fingerprint": "7fe28c77d24d08c2",
+    },
+    "page": {
+        "by": "upgrade", "priority": 2, "applies": "app_page", "time": "~1 min",
+        "gives": "your app page published again with the current design",
+        # Every version of the page is its own code changing under every open window, and an
+        # open page has it only from a republish: a wording fix entered with rerun False never
+        # reached one. So every version reruns (`behind`), and only the chat that answers the
+        # page publishes it; any other asks that chat to (tools/app_listen.py).
+        "every_version": True,
+        "run": "ask the chat that answers the page to republish it, never publishing it from "
+               "here: python3 tools/app.py republish <scratch>/republish, then send the batch "
+               "it prints to the page (ArtifactData batch, to the profile/app.json url)",
+        "files": ("templates/app/*", "tools/app_page.py"),
+        "versions": (
+            _first("no page: everything was shown in the chat"),
+            (2, "2026-10-25", True, "the app page: everything the search shows, live progress "
+                                    "for every job, ticks with undo, talking to Claude in it; the page also carries setup, updates, alerts with one suggestion per card, lists that show everything live and fold finished history, and links between a job, its drafts, its contacts and its interview; contact addresses are owner-only documents in the page's database"),
+            (3, "2026-10-26", True, "the page in the rosé pine colours on the layout spec: one summary and one row of controls a screen, every tap sent in the engine's own shape with its item's rev, the engine's stage and cost tables embedded, links only by the engine's own; outcomes, replies, calls and referrals on the page; message cards with copy, counts, open and I sent it; waves; the item view; the LinkedIn download and profile reading; where Claude works, your search, your brief, and the one listener; the work list knows the republish kind"),
+        ),
+        "fingerprint": "b1c809b85f10d7dc",
     },
     "upskill": {
         "by": "upgrade", "priority": 4, "applies": "upskill_plans", "time": "~10 min",
@@ -656,6 +683,8 @@ KEEPS_NOTHING: dict[str, str] = {
                          "upgrade or a safe default, which tests/test_profile_upgrades.py holds",
     "*/.gitkeep": "an empty folder's marker",
     "CLAUDE.md": "read afresh by every session",
+    "tools/CLAUDE.md": "a note Claude Code loads when a chat opens the app's code; it keeps nothing",
+    "docs/rule_map.json": "where each rule of the long CLAUDE.md went, read by a test; it keeps nothing",
     "AGENTS.md": "read afresh by every session",
     "GEMINI.md": "read afresh by every session; it only points to AGENTS.md",
     "README.md": "documentation, read when needed",
@@ -698,9 +727,21 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/followup_drafts.py": "drafts afresh every run; a pack is the day's",
     "tools/cost_meter.py": "development tooling: measures what a run reads, keeps nothing",
     ".claude/agents/news-reader.md": "searches afresh for each brief; keeps nothing",
+    "tools/app.py": "the page's view, derived from the state files on every run",
+    "tools/tweak.py": "applies a change the person asked for, on demand; the record it keeps of their changes (tweaks.json) is theirs and is never remade",
+    "tools/app_setup.py": "builds the setup steps the page shows from the profile, on every run; keeps nothing",
+    "tools/app_alerts.py": "derives each card's alerts and its one suggestion from the records, on every run; a No thanks is kept by the page's own action",
+    "tools/added_jobs.py": "a job the person added on the page, kept in their own records by the writers that already keep jobs; keeps nothing of its own",
+    "tools/profile_set.py": "writes one profile setting the person changed on the page through the profile's own files; keeps nothing of its own",
+    "tools/app_lists.py": "derives the page's lists, their folds and filter counts from the records, on every run; keeps nothing",
+    "tools/app_model.py": "the page's view, derived from the state files on every run",
+    "tools/page_db.py": "reads and writes the page's database dumps; keeps nothing of its own",
+    "tools/app_actions.py": "writes the person's own answers through confirm, exclude, state.py, learned and settings; nothing it wrote is remade",
+    "docs/images/page-demo.gif": "a short recording of the page for the README, from the test sample; never in a person's search",
+    "tools/app_listen.py": "names the one chat that answers the page, in the page's own database and a record in the git folder that is never committed; read afresh at every start",
+    ".claude/skills/app/SKILL.md": "the chat's procedure when the page rings, read afresh each time",
     "tools/confirm.py": "writes the person's own word about an application into the tracker; nothing it wrote is ever remade",
     "tools/filtered.py": "shows and brings back a round's filtered postings; the list is rewritten every round",
-    "tools/setup_state.py": "reads whether a search is set up; derived on every run",
     "tools/platform_check.py": "the app's own proof on every platform; never runs in a person's search",
     "tools/py.sh": "finds the Python to run; leaves nothing behind",
     "tools/safe_name.py": "makes a file name safe on every computer; computed on every run",
@@ -736,6 +777,10 @@ KEEPS_NOTHING: dict[str, str] = {
                           "note in .git of what it has read",
     "tools/csv_store.py": "reads and writes a state CSV in place; keeps nothing",
     "tools/release.py": "publishes the app's releases from its own CI; keeps nothing in a repo",
+    "tools/public_names.py": "development tooling: checks no public name goes unannounced, keeps nothing",
+    "tools/public_names.json": "the names the last release shipped, read by a check; keeps nothing",
+    "docs/removed_names.json": "the public names the app took away on purpose, read by a check; "
+                               "keeps nothing",
     "tools/name_guard_allow.txt": "the name guard's list of invented names; keeps nothing",
     "tools/build_app.py": "development tooling",
     "tools/save_state.py": "stages the person's files for a commit; leaves nothing of its own",
@@ -755,7 +800,7 @@ KEEPS_NOTHING: dict[str, str] = {
     "tools/claude_surfaces.json": "the registry of what Claude's surfaces can do, dated and "
                                   "sourced: the app's words, read in place, never copied",
     "tools/place.py": "says, once in a chat, whether the chat suits the person's settings; its one "
-                      "record, profile/place.json, is /setup's question and the work-place upgrade's",
+                      "record, profile/place.json, is /setup's question",
     "tools/setup_env.sh": "sets up the container, which is new every session",
 }
 
@@ -910,7 +955,8 @@ def behind(name: str, have: dict[str, int] | None = None) -> list[tuple]:
     """The versions after this repo's that ask for what an earlier one made to be redone."""
     have = recorded() if have is None else have
     mine = have.get(name, 1)
-    return [v for v in METHODS[name]["versions"] if v[0] > mine and v[2]]
+    every = bool(METHODS[name].get("every_version"))
+    return [v for v in METHODS[name]["versions"] if v[0] > mine and (v[2] or every)]
 
 
 # ------------------------------------------------------------------ applies
@@ -955,6 +1001,7 @@ APPLIES = {
     "contacts": lambda: _has_rows(person.state("network_contacts.csv")),
     "routines": lambda: person.exists("routines.json"),
     "upskill_plans": lambda: bool(glob.glob(person.state("upskill", "*.md"))),
+    "app_page": lambda: person.exists("app.json"),
 }
 
 

@@ -111,7 +111,7 @@ Enter this branch from the `followup` argument (Step 0) or from the offer under 
 2. Apply the writing style rules from `03-writing-style.md` (no cliches, no em-dashes, warm but direct), and match the application's language - draw the register from the archived cover letter.
 3. Write roughly **60 to 120 words**: address the `contact_person` from the tracker if present (otherwise the team, in the application's language); one sentence restating interest in the specific role; one concrete value-reminder drawn from the submitted materials; one polite question about the timeline. No pressure, no "just checking in" filler.
 4. Shape it for the `channel` column: email (with a subject line reusing the application's headline), LinkedIn message (shorter, no subject), or portal message (plain text).
-5. Present the draft and iterate until the user is happy. End with the line `python3 tools/tips.py reply` prints, if it prints one (it decides when: the first time, then now and then). What they say back goes through CLAUDE.md, "Learning the person".
+5. Present the draft and iterate until the user is happy. End with the line `python3 tools/tips.py reply` prints, if it prints one (it decides when: the first time, then now and then). What they say back goes through RUNBOOK.md, "Learning the person".
 
 **Logging.** Once the user confirms they will send it (or have sent it), log it in the same turn - an unlogged follow-up breaks the next run's quiet-days math:
 
@@ -179,7 +179,7 @@ Then count the `outcome.md` files under `documents/applications/` with a **final
 
 - If 3 or more are resolved (or 2+ share a pattern - same role type rejected twice, same sector going silent), run `python3 tools/what_works.py brief search`: the interview rate by fit band, route and channel, which says whether the scores are predicting anything. When it reports a clear difference, put its lines in Step 6.
 - When this update ticked an interview stage or resolved one that had any, run `python3 tools/what_works.py brief interviews` too: how far applications get, and where they stop most. Its lines go in Step 6.
-- Do **not** write anything into `04-job-evaluation.md`, `profile/search.py` or other framework files yourself. Changing how roles score is the person's call, made with them and recorded through `tools/learned.py` (CLAUDE.md, "Learning the person").
+- Do **not** write anything into `04-job-evaluation.md`, `profile/search.py` or other framework files yourself. Changing how roles score is the person's call, made with them and recorded through `tools/learned.py` (RUNBOOK.md, "Learning the person").
 
 ---
 

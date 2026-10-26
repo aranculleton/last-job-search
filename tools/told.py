@@ -16,7 +16,6 @@ by the interview pack, the call prep and the message checks before the profile's
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -235,31 +234,30 @@ def clash(answer: str, company: str) -> str:
 
 def record(company: str, where: str = "", clear: bool = False) -> str:
     """Write what `company` heard into person.json; returns the line to say."""
-    path = person.path("person.json")
-    with open(path, encoding="utf-8") as fh:
-        data = json.load(fh)
-    ident = data.setdefault("identity", {})
-    told = {str(k): str(v) for k, v in (ident.get(KEY) or {}).items()}
-    k = company_key(company)
-    same = [c for c in told if company_key(c) == k]
-    for c in same:
-        told.pop(c)
-    if not clear:
-        if not str(where).strip():
-            raise ValueError("say the place they were told, or --clear")
-        told[company] = " ".join(str(where).split())
-    if told:
-        ident[KEY] = told
-    else:
-        ident.pop(KEY, None)
-    with open(path, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
-    person.reset()
+    if not clear and not str(where).strip():
+        raise ValueError("say the place they were told, or --clear")
+
+    said = {}
+
+    def change(data):
+        ident = data.setdefault("identity", {})
+        told = {str(k): str(v) for k, v in (ident.get(KEY) or {}).items()}
+        k = company_key(company)
+        same = [c for c in told if company_key(c) == k]
+        for c in same:
+            told.pop(c)
+        if not clear:
+            told[company] = " ".join(str(where).split())
+        if told:
+            ident[KEY] = told
+        else:
+            ident.pop(KEY, None)
+        said.update(same=bool(same), place=told.get(company, ""))
+    person.update(change)
     if clear:
         return ("%s: back to your own place (%s)." % (company, home() or "none recorded")
-                if same else "%s: nothing was recorded for it." % company)
-    return "%s heard: %s. Packs and message checks for %s use it." % (company, told[company],
+                if said["same"] else "%s: nothing was recorded for it." % company)
+    return "%s heard: %s. Packs and message checks for %s use it." % (company, said["place"],
                                                                     company)
 
 

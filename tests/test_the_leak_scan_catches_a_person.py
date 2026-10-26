@@ -348,3 +348,54 @@ def test_a_committed_file_in_a_folder_a_working_copy_builds_is_scanned_too(tmp_p
     subprocess.run(["git", "-C", repo, "add", "-f", "venv/notes.txt", "README.md"], check=True)
     got = leak_scan.scan(repo, tokens, allow)
     assert [f.split(":")[0] for f in got] == ["venv/notes.txt"], got
+
+
+def _market_table(entries, note=""):
+    """A market table the way tools/markets.py writes one: two-space JSON, each board
+    opening on its name and then its url."""
+    import json
+    return json.dumps({"country": "zz", "boards": entries, "note": note}, indent=2) + "\n"
+
+
+def test_a_board_in_a_market_table_is_not_a_leak_and_a_person_there_still_is(tmp_path,
+                                                                             monkeypatch):
+    """The market tables name each country's public job boards, and a board the maintainer
+    built a portal for can be on their denylist. Inside tools/markets/ only, a board's name
+    and its own address are set aside, where the name is the address's; a person's name, an
+    email, an employer or a contact id written there still fails (2026-10-25)."""
+    board = "Zorblax" + " Jobs"
+    site = "zorblaxjobs" + ".example"
+    person, employer, contact = "Quillon Varga", "Quayside Foods", "corwin" + "_haldane"
+    email = "quillon" + "@" + "realmail.net"
+    ok = {"name": board, "url": "https://www." + site, "kind": "general",
+          "source": "https://www." + site + "/about", "quote": board + " lists jobs in every town"}
+    not_its_own = {"name": employer, "url": "https://jobs.example.org", "kind": "general"}
+    files = {
+        "tools/markets/zz.json": _market_table([ok], f"{person} at {employer}, {email}, {contact}"),
+        "tools/markets/fields/yy.json": _market_table([not_its_own]),
+        "tools/other.py": f"# {board} is searched\n",
+    }
+    t = _tree(tmp_path, files)
+    found = _scan(t, "\n".join([board, person, "=" + employer, contact]), monkeypatch=monkeypatch)
+    where = sorted((f.split(":")[0], f.split(": ", 1)[1]) for f in found)
+    assert ("tools/markets/zz.json", "denylist entry 1") not in where     # the board itself
+    assert ("tools/other.py", "denylist entry 1") in where                # outside the tables
+    for entry in ("denylist entry 2", "denylist entry 3", "denylist entry 4", "email address"):
+        assert ("tools/markets/zz.json", entry) in where, entry
+    # A board whose name is not its own address's is read like any other line.
+    assert ("tools/markets/fields/yy.json", "denylist entry 3") in where
+
+
+def test_a_board_in_a_market_tables_diff_is_not_a_leak_either(tmp_path):
+    """A commit's patch holds the table's added lines: the board in them passes as it does in
+    the tree, and a person in them still fails."""
+    board, site, person = "Zorblax" + " Jobs", "zorblaxjobs" + ".example", "Quillon Varga"
+    table = _market_table([{"name": board, "url": "https://www." + site}], person)
+    patch = tmp_path / "patches.txt"
+    patch.write_text("commit abc\nAdd a market table\n"
+                     "diff --git a/tools/markets/zz.json b/tools/markets/zz.json\n"
+                     "+++ b/tools/markets/zz.json\n"
+                     + "".join("+" + line + "\n" for line in table.splitlines()),
+                     encoding="utf-8")
+    found = leak_scan.scan_text([str(patch)], leak_scan.tokens_from([board, person]))
+    assert [f.split(": ", 1)[1] for f in found] == ["denylist entry 2"], found

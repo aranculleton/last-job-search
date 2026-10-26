@@ -1671,6 +1671,20 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
                           "signin` when it says so, and read each profile, nothing clicked",
                     "say": f"I'll read the LinkedIn profiles of the people worth writing to, in {pane}.",
                     "signin": not signed_in}
+        import place as _place
+        if _place.page_reads():
+            # The page, open in the Claude desktop app, reads LinkedIn as the person and has
+            # lately: the profiles are queued for it, never a move to a computer chat.
+            return {"route": "page", "browser": "your page in the Claude desktop app",
+                    "usable": True,
+                    "do": ("queue each profile for the page: `reading.py queue-page <contact>"
+                           "...`; it reads them while it is open in the desktop app, and each "
+                           "reading arrives as a reading.done action that `app.py apply` logs "
+                           "the way `reading.py read` does. Write from what is read already "
+                           "meanwhile; never fetch linkedin.com here"),
+                    "say": "Your page reads their profiles when it is open in the Claude "
+                           "desktop app.",
+                    "signin": False}
         import place
         if "chrome-off" in have:
             say = ("Your setting reads profiles in your own browser, but Claude in Chrome is "
@@ -1705,6 +1719,59 @@ def route(tools=(), consent: str | None = None, env=None, signed_in: bool | None
             "say": (f"For the one or two who matter most, send {hand} and I'll make the note "
                     "about them; the rest are written from what the search found."),
             "signin": False}
+
+
+# ------------------------------------------------------------------- the page's readings
+
+# Profiles queued for the page to read in the Claude desktop app (route "page"): the page
+# reads each, and its text arrives as a reading.done action that tools/app.py apply logs
+# through the very `reading.py read` a computer chat runs (app_actions._reading_done).
+PAGE_QUEUE = ("documents", "network", "page_reads_queue.json")
+
+
+def page_queue() -> list:
+    try:
+        with open(person.state(*PAGE_QUEUE), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (OSError, ValueError):
+        return []
+    return [q for q in got if isinstance(q, dict) and q.get("contact")] \
+        if isinstance(got, list) else []
+
+
+def _save_queue(rows: list) -> None:
+    p = person.state(*PAGE_QUEUE)
+    os.makedirs(os.path.dirname(p), exist_ok=True)
+    with open(p, "w", encoding="utf-8") as fh:
+        json.dump(rows, fh, indent=1, sort_keys=True)
+        fh.write("\n")
+
+
+def queue_for_page(ids, mode: str = "deep", today: str = "") -> list:
+    """Add each contact to the page's reading queue once; returns the ids newly queued."""
+    rows = page_queue()
+    have = {q["contact"] for q in rows}
+    day = today or datetime.date.today().isoformat()
+    added = []
+    for cid in ids:
+        path(cid)                                    # a contact id, or ValueError
+        if cid not in have:
+            rows.append({"contact": cid, "mode": mode if mode in READ_MODES else "deep",
+                         "asked_on": day})
+            have.add(cid)
+            added.append(cid)
+    if added:
+        _save_queue(rows)
+    return added
+
+
+def page_read_done(cid: str) -> bool:
+    rows = page_queue()
+    left = [q for q in rows if q["contact"] != cid]
+    if len(left) != len(rows):
+        _save_queue(left)
+        return True
+    return False
 
 
 # ------------------------------------------------------------------- storage
@@ -2859,6 +2926,13 @@ def write_draft(contact_id: str, note: str, name: str = "", card_only: bool = Fa
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8") as fh:
         fh.write(draft_text(contact_id, note, name, card_only=card_only))
+    try:
+        # What the composer made it from, when it made exactly these words: a tweak on the
+        # page then changes one part with no model (tools/network/parts.py).
+        import parts
+        parts.adopt(contact_id, str(note))
+    except Exception:  # noqa: BLE001
+        pass
     return p
 
 
@@ -4956,6 +5030,10 @@ def main(argv: list | None = None) -> int:
                                              "start there: LinkedIn signed in, then its download")
     nc.add_argument("--tools", default="",
                     help="this chat's browser tools, comma-separated: browser, chrome, enable")
+    qp = sub.add_parser("queue-page", help="queue profiles for the page to read in the Claude "
+                                           "desktop app (route: page)")
+    qp.add_argument("contact_ids", nargs="+")
+    qp.add_argument("--mode", choices=READ_MODES, default="deep")
     ro = sub.add_parser("route", help="how this session reads profiles, and what to tell the person")
     ro.add_argument("--tools", default="",
                     help="what the session has, comma-separated: browser, chrome, enable")
@@ -5233,6 +5311,17 @@ def main(argv: list | None = None) -> int:
         for line in new_computer([t for t in a.tools.split(",") if t.strip()]):
             print(line)
         return EXIT["ok"]
+    if a.cmd == "queue-page":
+        try:
+            got = queue_for_page(a.contact_ids, a.mode)
+        except ValueError as e:
+            print(f"reading: {e}")
+            return 1
+        left = len(page_queue())
+        print(f"queued for the page: {', '.join(got) if got else 'nothing new'} "
+              f"({left} waiting). The page reads them while it is open in the Claude desktop "
+              "app; carry on with what is read already.")
+        return 0
     if a.cmd == "route":
         r_ = route([t for t in a.tools.split(",") if t.strip()])
         print(f"route: {r_['route']} ({surface()})"

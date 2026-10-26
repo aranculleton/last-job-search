@@ -9,9 +9,9 @@ before the next one, the LinkedIn download and own-profile reminders, an update 
 and the news searches to run. The model's part of a run is the news and the message.
 
     python3 tools/brief.py                     # the brief, as text for a chat (under 2,500 characters)
-    python3 tools/brief.py --json              # the page's `brief` and `due` (and the drafts as `messages`)
     python3 tools/brief.py --write             # also the day's upkeep and records (below)
     python3 tools/brief.py --start --on "<model>" --write   # a scheduled run's whole start
+    python3 tools/brief.py --write --page-applied           # after the page's ticks are applied
     python3 tools/brief.py news < items.txt    # the news reader's items, into today's record
 
 --write does what the brief has always done to the state: closes the applications gone
@@ -27,6 +27,15 @@ output kept in a file; then the brief is gathered by a fresh process, so an upda
 sync just took is the code that runs. What the sync printed reaches the brief as lines
 already decided: an update waiting (said once: left out when the last brief said it),
 job sites blocked, upgrades to run, questions for the end. Nothing is pasted twice.
+
+Where the person has a page (profile/app.json `url`), the brief is the page's too. What
+they ticked there changes what is owed, so `--start` stops before gathering and prints the
+steps that apply those ticks first (`app.py apply`, code alone); `--page-applied` then
+gathers. The message links the page's To do rather than a file on GitHub, its questions are
+on the page as To do cards, and the run brings the page up to date (`app.py view`) after it
+lands. It never publishes the page and never watches it: one chat answers the page
+(tools/app_listen.py). A break the person took (`routines.py pause`) holds the brief: a run
+during it says so in one line, and the run on the day it ends lifts it.
 
 Plain Python, standard library, no network of its own (the sync in --start fetches). The
 same state files and --today always print the same text.
@@ -59,6 +68,28 @@ RECORD_OWED = 30       # the record lists this many owed; the pack holds every o
 NEWS_MAX = 5           # in the record; the message carries at most three
 MESSAGE_NEWS = 3
 QUERIES_MAX = 6
+# The person's own settings for the brief (person.json `brief`, set from the page's Tweak
+# panel): how many owed items the message lists (B1), how many news items (B2), which news
+# searches run (B3, never the work-rights one), and which parts it shows (B5, never Owed).
+LENGTHS = {"short": 2, "standard": 4, "long": 6}
+NEWS_CHOICES = (0, 1, 3, 5)
+NEWS_GROUPS = ("employers", "rights", "market", "bank", "targets")
+NEVER_OFF = ("rights",)
+PARTS = ("since", "next_three", "tip")
+
+
+def setting(name: str):
+    """One of the person's brief settings, checked; the app's default when unset or unknown."""
+    got = person.get(f"brief.{name}", None)
+    if name == "length":
+        return got if got in LENGTHS else "standard"
+    if name == "news":
+        return got if got in NEWS_CHOICES else MESSAGE_NEWS
+    if name == "leave_out":
+        return [g for g in (got or []) if g in NEWS_GROUPS and g not in NEVER_OFF]
+    if name == "hide":
+        return [p for p in (got or []) if p in PARTS]
+    return got
 QUIET_DAYS = 14        # nothing sent for this long: "little going out" leads
 UNCONFIRMED_DAYS = (7, 45)   # drafted this long and not marked sent: ask whether it went
 DEFAULT_SINCE_DAYS = 7
@@ -124,7 +155,7 @@ def _read(path: str) -> str:
 def first_name(name) -> str:
     try:
         import tone
-        return tone.first_name(name) or str(name or "")
+        return tone.greeting_name(name) or str(name or "")
     except Exception:
         return str(name or "").split(" ")[0]
 
@@ -263,17 +294,19 @@ def queries(today: dt.date, live_employers: list[str], claude_md: str) -> list[s
     country = COUNTRY.get(country_code, country_code)
     city = str(_net("HOME_CITY", "") or str(person.get("identity.location", "") or "").split(",")[0]).strip()
     names, sectors = target_names(claude_md)
-    out = ["%s news %s" % (n, month) for n in live_employers[:2]]
+    off = set(setting("leave_out"))
+    out = ["%s news %s" % (n, month) for n in live_employers[:2]] if "employers" not in off else []
     status = str(_net("STATUS_NAME", "") or "").strip()
     if status and not re.search(r"citizen", status, re.I):
         out.append("%s %s rule changes %s" % (status, country, today.year))
     field = re.split(r",|;", sectors[0])[0].strip() if sectors else "data and analytics"
-    if city:
+    if city and "market" not in off:
         out.append("%s %s hiring or layoffs %s" % (city, field.lower(), month))
     bank = "European Central Bank" if country_code in EURO else CENTRAL_BANK.get(country_code, "")
-    if bank:
+    if bank and "bank" not in off:
         out.append("%s interest rate decision %s" % (bank, month))
-    targets = [n for n in names if company_key(n) not in {company_key(x) for x in live_employers}]
+    targets = [n for n in names if company_key(n) not in {company_key(x) for x in live_employers}
+               ] if "targets" not in off else []
     room = max(QUERIES_MAX - len(out), 1 if targets else 0)
     if targets:
         start = (today.toordinal() // 3) % len(targets)
@@ -382,7 +415,44 @@ def start(argv: list[str], model: str) -> int:
         fh.write("date: %s\nexit: %d\nearlier: %s\nsetup: %s\n---\n%s%s"
                  % (today.isoformat(), r.returncode, branches, setup, r.stdout or "",
                     r.stderr or ""))
+    url = page_url()
+    if url and "--page-applied" not in argv:
+        sys.stdout.write(page_first(url, argv))
+        return 0
     return subprocess.run([py, os.path.abspath(__file__)] + argv, cwd=ROOT).returncode
+
+
+def page_url() -> str:
+    """The person's page (profile/app.json `url`), or "" when none is published."""
+    try:
+        with open(person.path("app.json"), encoding="utf-8") as fh:
+            got = json.load(fh)
+    except (person.NoProfile, OSError, ValueError):
+        return ""
+    url = str(got.get("url") or "") if isinstance(got, dict) else ""
+    return url if url.startswith("https://claude.ai/") else ""
+
+
+def page_first(url: str, argv: list[str]) -> str:
+    """What a run with a page does before the brief is gathered: the ticks made on the page
+    are applied (code, exactly once, with receipts), so the brief never lists as owed what
+    the person already marked done there. Then the brief itself."""
+    keep = []
+    for flag in ("--write", "--today"):
+        if flag in argv:
+            i = argv.index(flag)
+            keep += argv[i:i + (2 if flag == "--today" else 1)]
+    rest = " ".join(keep + ["--page-applied"])
+    return "\n".join([
+        "PAGE FIRST, FOR CLAUDE (the person's ticks on their page change what is owed):",
+        "1. ArtifactData query, url %s, collection actions, then collection receipts, each "
+        "with out_dir <D> (a new folder in your scratchpad) and query.limit 1000." % url,
+        "2. python3 tools/app.py apply <D> --chat brief --claim, then send the batch it names "
+        "(ArtifactData batch). Refused: another chat is applying them; go to 4.",
+        "3. python3 tools/app.py apply <D> --chat brief, then send every batch it prints.",
+        "4. python3 tools/brief.py %s (the brief itself), and carry on with the prompt's "
+        "step 1 from what it prints. Keep <D> for the page's refresh in step 4." % rest,
+        ""])
 
 
 # ---------------------------------------------------------------- the brief
@@ -438,6 +508,7 @@ def _gather(today: dt.date, write: bool) -> dict:
     lead = _lead(counts, replies, nudges_due, sent_lately, warm, owned, today)
 
     sync = read_sync(today)
+    brk = _break(today, write)
     update = sync.get("update", "")
     if update and update in last_text:
         update = ""                         # said in the last brief: once is enough
@@ -450,6 +521,8 @@ def _gather(today: dt.date, write: bool) -> dict:
         more = len(sync["changed"]) - 1
         lines.append("Updated: %s%s." % (sync["changed"][0].rstrip(". "),
                                          ", and %d more" % more if more > 0 else ""))
+    if brk.get("over"):
+        lines.append(brk["over"])
     if closed:
         lines.append("%s as no reply: %s. Say if any is still open." % (
             "Closing" if write else "Would close", "; ".join(
@@ -479,12 +552,34 @@ def _gather(today: dt.date, write: bool) -> dict:
         "what_counts": what_counts(claude_md), "skip_links": links_sent(earlier),
         "sync": sync, "export_line": export_line, "profile_line": profile_line,
         "write_here": followup_drafts.to_write_here(got),
-        "url": _brief_url(iso), "tip": "", "written": write,
+        "url": _brief_url(iso), "page": page_url(), "tip": "", "written": write,
+        "paused": brk.get("until", "") if brk and brk.get("until", "") > iso else "",
     }
     if write:
         b["tip"] = _tip(today)
         write_record(b)
     return b
+
+
+def _break(today: dt.date, write: bool) -> dict:
+    """A break the person took on the page (routines.py pause): {"until"} while it runs; on
+    or after its last day, with `write`, it is lifted here ("over" says so) and the calls
+    that turn the brief back on are left for the run to make."""
+    try:
+        import routines
+        got = routines.paused()
+    except Exception:  # noqa: BLE001  no profile or no registry: no break
+        return {}
+    if not got:
+        return {}
+    if got["until"] > today.isoformat() or not write:
+        return got
+    try:
+        routines.resume(today.isoformat())
+    except Exception:  # noqa: BLE001  the next run tries again
+        return got
+    return {"over": "Welcome back: your break is over, and everything below is what is "
+                    "waiting for you."}
 
 
 def _preps(iso: str) -> dict:
@@ -631,7 +726,10 @@ def _what_works(tracker, today) -> str:
 def _export_due(today, threads) -> str:
     try:
         import export
-        return export.due(today, threads) or ""
+        return export.due(today, threads) or export.waiting_line(
+            today, [_read(p) for p in earlier_briefs(today)
+                    if os.path.basename(p)[:10] >= str(export.load_record().get(
+                        "requested_on") or "")]) or ""
     except Exception:
         return ""
 
@@ -693,7 +791,9 @@ def _next_three(got, counts, replies, drafted, preps, export_line, profile_line,
         m = re.search(r"\"([^\"]+)\"", profile_line)
         if m:
             add("own_profile", m.group(1))
-    if export_line and "asked for on" not in export_line:
+    if export_line and export_line.startswith("Your LinkedIn download was asked for on"):
+        add("export_wait", export_line)
+    elif export_line and "asked for on" not in export_line:
         m = re.search(r"(\d+) days old", export_line)
         add("export", "Ask LinkedIn for a new copy of your data%s; say \"LinkedIn download\" in a "
             "chat and I'll give you the steps." % (" (yours is %s days old)" % m.group(1) if m else ""))
@@ -728,6 +828,10 @@ def _tip(today) -> str:
 
 
 def _brief_url(iso: str) -> str:
+    """Where the message sends the person: their page's To do, else the day's record."""
+    url = page_url()
+    if url:
+        return url + "#todo"
     try:
         r = subprocess.run(["git", "remote", "get-url", "origin"], cwd=ROOT, text=True,
                            capture_output=True, timeout=10, encoding="utf-8", errors="replace")
@@ -763,19 +867,30 @@ def _short_date(iso: str) -> str:
 
 def message_lines(b: dict, owed_max: int = 4) -> list[str]:
     """The message as a phone shows it, news left for the model to put in."""
+    if b.get("paused"):
+        return ["Your search is paused until %s. Nothing is chased meanwhile." % _short_date(
+            b["paused"])] + (["Your page: " + b["url"]] if b.get("page") else [])
     out = [headline(b), b["lead"], "", "Owed"]
     owed = b["owed"]
     out += ["- " + o["text"] for o in owed[:owed_max]] or ["Nothing owed"]
     if len(owed) > owed_max:
         out.append("- and %d more in the full brief" % (len(owed) - owed_max))
     out += ["- " + s for s in b["set_aside"]]
-    out += ["", since_line(b)]
+    hide = set(setting("hide"))
+    if "since" not in hide:
+        out += ["", since_line(b)]
     out += b["lines"]
-    out += ["", "Next three"] + ["%d. %s" % (n, t) for n, t in enumerate(b["next_three"], 1)]
-    out += ["", "News", "<NEWS>"]
+    if "next_three" not in hide:
+        out += ["", "Next three"] + ["%d. %s" % (n, t) for n, t in enumerate(b["next_three"], 1)]
+    if setting("news"):
+        out += ["", "News", "<NEWS>"]
+    asks = len((b.get("sync") or {}).get("questions") or [])
+    if b.get("page") and asks:
+        out += ["", "%d question%s wait%s for you on your page." % (
+            asks, "" if asks == 1 else "s", "s" if asks == 1 else "")]
     if b["url"]:
-        out += ["", "Full brief: " + b["url"]]
-    if b["tip"]:
+        out += ["", ("Your page: " if b.get("page") else "Full brief: ") + b["url"]]
+    if b["tip"] and "tip" not in hide:
         out += [b["tip"]]
     return out
 
@@ -784,6 +899,9 @@ def claude_lines(b: dict) -> list[str]:
     """For the model only: what it acts on. Never in the message."""
     s = b["sync"] or {}
     out = []
+    if b.get("paused"):
+        return ["paused until %s: the message is the line above, as it is; no news search, no "
+                "drafts, nothing else to do or save" % b["paused"]]
     if not s and b.get("written"):
         out.append("the start did not run today: run python3 tools/brief.py --start --on "
                    "\"<model>\" --write")
@@ -799,7 +917,10 @@ def claude_lines(b: dict) -> list[str]:
     if s.get("upgrades"):
         out.append("run /upgrade 20 now (%d waiting); one plain line per change it made goes at "
                    "the end of the message" % len(s["upgrades"]))
-    if s.get("questions"):
+    if s.get("questions") and b.get("page"):
+        out.append("the questions are on the page as To do cards: ask none in the message, "
+                   "which says how many wait there")
+    elif s.get("questions"):
         out.append("at most three questions at the end of the message, each as written: "
                    + " | ".join(q for q in s["questions"][:3]))
     if b["write_here"]:
@@ -812,10 +933,26 @@ def claude_lines(b: dict) -> list[str]:
                        " (the first %d; the rest wait in the pack)" % most if n > most else ""))
     if b["profile_line"]:
         out.append("own profile question: a yes runs python3 tools/network/own_profile.py check")
-    out.append("news: the news-reader agent, given these searches: %s" % " | ".join(b["queries"]))
+    n = setting("news")
+    out.append("news: the news-reader agent, given these searches: %s; at most %d item%s in the "
+               "message (the person's setting)" % (" | ".join(b["queries"]), n, "" if n == 1 else "s")
+               if n else "news: none in the message, by the person's setting: run no news search")
     out.append("since %s; links already sent: %s" % (
         b["since"], " ".join(b["skip_links"][:10]) or "none"))
     out.append("what counts: " + b["what_counts"])
+    if b.get("page"):
+        out.append("the page, after landing (step 4): ArtifactData query, url %s, collections "
+                   "view and meta, out_dir <D>; python3 tools/app.py view <D>/view --dump <D> "
+                   "--chat brief; send every batch it prints. Never publish or watch the page"
+                   % b["page"])
+    try:
+        import routines
+        owed = routines.calls()
+    except Exception:  # noqa: BLE001
+        owed = []
+    if owed:
+        out.append("scheduled-task changes the page asked for: python3 tools/routines.py calls "
+                   "lists %d; make each, then routines.py called <n>" % len(owed))
     if b["pack"]:
         out.append("wrote " + local_path.rel(b["pack"], person.state()).replace(os.sep, "/"))
     return out
@@ -823,68 +960,14 @@ def claude_lines(b: dict) -> list[str]:
 
 def render_text(b: dict) -> str:
     """The brief for a chat, under TEXT_MAX characters: the message, then the lines for Claude."""
-    for owed_max in (6, 4, 3, 2):
+    start = LENGTHS[setting("length")]
+    for owed_max in [n for n in (6, 4, 3, 2) if n <= start] or [2]:
         body = "\n".join(message_lines(b, owed_max))
         tail = "\n".join(["", "FOR CLAUDE, never in the message:"] + ["- " + x for x in claude_lines(b)])
         text = body + "\n" + tail + "\n"
         if len(text) <= TEXT_MAX:
             return text
     return text[:TEXT_MAX - 40].rsplit("\n", 1)[0] + "\n... (cut at %d characters)\n" % TEXT_MAX
-
-
-def page_parts(b: dict) -> dict:
-    """The page's `brief`, `due` and `messages` (CONTRACT.md): first names and employers only,
-    the person's own drafts, never a contact's words, address or profile link."""
-    lines = [ln for ln in message_lines(b) if ln and ln != "<NEWS>" and ln != "News"
-             and not ln.startswith("Full brief:")]
-    due = []
-    msgs = []
-    for i in b["drafts"]:
-        if i.get("held") or i.get("quiet") or i.get("old") or i.get("kind") == "request_pending":
-            continue
-        kind = ("interview" if i.get("kind") == "interview" else
-                "nudge" if i.get("half") == "application" else
-                "reply" if i.get("kind") in ("reply", "resume") else "follow_up")
-        who = _first_and_employer(i)
-        title = {"interview": "Interview: %s" % who, "nudge": "Follow up: %s" % who,
-                 "reply": "Reply to %s" % who, "follow_up": "Follow up with %s" % who}[kind]
-        action = {"interview": "work:prep", "nudge": "work:follow_up", "reply": "work:reply",
-                  "follow_up": "work:follow_up"}[kind]
-        due.append({"id": "due-" + _id(i["id"]), "kind": kind, "title": title, "due": i.get("due"),
-                    "overdue_days": max(i.get("late") or 0, 0), "action": action})
-        d = i["draft"]
-        if d["status"] in ("ready", "check") and i.get("half") == "contact":
-            c_first = first_name((i.get("name") or "").split(" (")[0])
-            employer = (i.get("name") or "").split(" (", 1)[1].rstrip(")") if " (" in (i.get("name") or "") else ""
-            msgs.append({"id": "msg-" + _id(i["id"]), "contact": i.get("contact_id"),
-                         "first_name": c_first, "employer": employer,
-                         "channel": _channel(d["kind"]), "kind": "reply" if kind == "reply" else "follow_up",
-                         "text": d["text"], "chars": d["chars"], "limit": d["limit"],
-                         "why": "; ".join(d["warnings"]) or d.get("why") or "",
-                         "due": i.get("due"), "rev": _rev(d["text"])})
-    return {"brief": {"date": b["date"], "lines": lines}, "due": due, "messages": msgs}
-
-
-def _first_and_employer(i) -> str:
-    name = i.get("name") or ""
-    if i.get("half") == "contact" and " (" in name:
-        person_, employer = name.split(" (", 1)
-        return "%s (%s)" % (first_name(person_), employer.rstrip(")"))
-    return name
-
-
-def _channel(kind: str) -> str:
-    return {"connection": "linkedin_note", "nudge": "linkedin_message", "dm": "linkedin_message",
-            "reply": "linkedin_message", "inmail": "inmail", "email": "email"}.get(kind, "linkedin_message")
-
-
-def _id(raw) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", str(raw or "").lower()).strip("-")[:60]
-
-
-def _rev(text: str) -> str:
-    import hashlib
-    return hashlib.sha1(str(text).encode("utf-8")).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------- the record
@@ -1023,11 +1106,12 @@ def main(argv=None) -> int:
             "; noted on the tracker for %s" % ", ".join(got["noted"]) if got["noted"] else ""))
         return 0
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--json", action="store_true", help="the page's brief, due and messages")
     ap.add_argument("--write", action="store_true", help="do the day's upkeep and write the records")
     ap.add_argument("--start", action="store_true", help="a scheduled run's start, then the brief")
     ap.add_argument("--on", default="", help="with --start: the model this run is on")
     ap.add_argument("--today", default="")
+    ap.add_argument("--page-applied", dest="page_applied", action="store_true",
+                    help="the page's ticks are applied: gather the brief")
     a = ap.parse_args(argv)
     if a.start:
         rest = [x for x in argv if x != "--start"]
@@ -1037,10 +1121,7 @@ def main(argv=None) -> int:
         return 1
     today = _today(a.today)
     b = gather(today, write=a.write)
-    if a.json:
-        print(json.dumps(page_parts(b), indent=1, ensure_ascii=False))
-    else:
-        sys.stdout.write(render_text(b))
+    sys.stdout.write(render_text(b))
     return 0
 
 

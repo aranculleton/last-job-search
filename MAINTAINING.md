@@ -56,6 +56,29 @@ These apply whenever the change is to the app, whichever repo the session starte
 - **No example may be a disguised person.** An example resume, story, message or incident is
   invented, or it is the example person in `profile.example/`. A real case with the names
   swapped is still that person.
+- **Changing any app-owned file starts here**, whichever repo the session started in:
+  CLAUDE.md sends every session to this section first, and `tools/CLAUDE.md` and
+  `tests/CLAUDE.md` say so again when a session opens a file there (Claude Code loads a
+  folder's CLAUDE.md when it reads, writes or edits a file in that folder:
+  code.claude.com/docs/en/memory, "How CLAUDE.md files load"). In a person's own copy an app
+  file is never edited: the next sync puts it back.
+- **The core CLAUDE.md stays short, and every rule has a home.** It loads on every call of
+  every chat (and a subagent's, unless it sets `omitClaudeMd`), so it holds only what every
+  chat needs, and every other rule lives in the file the work that needs it already reads:
+  `docs/rule_map.json` lists each rule with its file and an anchor phrase, and
+  `tests/test_core_rules_have_a_home.py` fails when an anchor goes missing, a rule's home is
+  a file the command that needs it does not read, CLAUDE.md grows past 12,000 characters, or
+  a bolded rule is added to it with no map entry. Claude Code's own guidance is the reason:
+  "target under 200 lines per CLAUDE.md file. Longer files consume more context and reduce
+  adherence", and an `@` import does not help, "because imported files load together with
+  the CLAUDE.md that imports them" (code.claude.com/docs/en/memory).
+- **The saved workflows and the two subagents are pinned.** `draft-applications` drafts and
+  audits a batch (RUNBOOK.md step 2); `repo-audit` (optional `{focus}`) is four sonnet
+  readers over docs, code, networking state and records, a sceptic per slice that re-checks
+  every finding against the cited lines, then one ranking pass, and it is read-only.
+  `tools/lint_skills.py` checks the subagents' frontmatter, and a test pins the two models
+  (`employer-researcher` on sonnet, `grounding-auditor` with none set, so the session's own),
+  so the auditor cannot be quietly downgraded.
 - Small PRs and batched commits. A change that touches how documents, scores or messages
   come out is checked by rendering the same inputs before and after and comparing the
   outputs; any difference is named in the PR, or it is a bug.
@@ -106,13 +129,14 @@ Every rule below follows from that.
 
 ## Master is the trunk
 
-The rules are in CLAUDE.md, "Master is the trunk. Finish on it, start from it.", which every
-session reads. In short: start with `python3 tools/sync_app.py --pull` (CLAUDE.md, "Start of
-every session", step 1), never a bare `git merge`, because the sync refuses a master whose
-history was rewritten; finish with the work on master through a pull request, merged with CI
-green (`./tools/ci_local.sh` on a private repo, Actions on the public app); leave no merged
-branch; and name the branch when the work cannot be finished. **Never push to master
-without CI green**: it is the branch every other session starts from.
+The rules are in RUNBOOK.md, "4. Record and persist, then land on master", which CLAUDE.md's
+"Saving" sends every session to. In short: start with `python3 tools/sync_app.py --pull`
+(RUNBOOK.md, "Start of a session", step 1), never a bare `git merge`, because the sync refuses
+a master whose history was rewritten; finish with the work on master through a pull request,
+merged with CI green (`./tools/ci_local.sh` on a private repo, Actions on the public app);
+leave no merged branch; and when the work cannot be finished, push it and say so in one plain
+line, never naming the branch to the person. **Never push to master without CI green**: it is
+the branch every other session starts from.
 
 ## Releasing
 
@@ -170,7 +194,8 @@ reason in one line in the reply.
    uncommitted that stopped the next sync.
 2. A small PR that renames `## [Unreleased]` in `CHANGELOG.md` to
    `## [X.Y.Z] - <date>` and opens a fresh `## [Unreleased]` above it. Merge it with CI
-   green.
+   green. It also carries `python3 tools/public_names.py snapshot`, so the names this
+   release ships are the ones the next must keep, or list in `docs/removed_names.json`.
 3. Nothing: merging it is the release. `.github/workflows/release.yml` runs
    `tools/release.py publish`, which tags `vX.Y.Z` on that commit and publishes the
    CHANGELOG section as its notes, once. The tag is what every repo's next sync reads.
@@ -194,8 +219,7 @@ everything uncommitted, and no hook catches it: the allowlist in `tools/security
 holds one hook only, the reaction check in `tools/learned.py`, and never a start-of-session
 one.
 
-The table in CLAUDE.md under "Memory: the repo remembers, the chat does not" says what
-goes where. The short version: an application, a message sent or received, a fact learned
+The table in RUNBOOK.md, "What changes, and where it goes", says what goes where. The short version: an application, a message sent or received, a fact learned
 about an employer, a posting ruled out, a contact whose situation changed. All of it is a
 file edit, and the edit happens before the reply.
 

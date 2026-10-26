@@ -108,7 +108,8 @@ def source(eid: str, reg=None) -> str:
             + (f"; official page: {page}" if page else "") + "; check it today before giving it]")
 
 
-def steps(eid: str, reg=None, today=None, name: str = "your copy", owner: str = "") -> list:
+def steps(eid: str, reg=None, today=None, name: str = "your copy", owner: str = "",
+          page: bool = False) -> list:
     """An entry's steps for a person who said yes, one action a line, headed by what they are
     for: never shown before they asked. An entry with a path and no steps gives its path as
     the one step, and one with neither its claim: `steps` on eight entries printed only a
@@ -119,8 +120,11 @@ def steps(eid: str, reg=None, today=None, name: str = "your copy", owner: str = 
     apart from them: inside them, every message that passes steps on word for word carried
     a file path or a date, and grew past its length the day the entry aged."""
     e = entry(eid, reg)
-    goal = e.get("goal", "")
-    body = [_fill(x, name, owner) for x in e.get("steps", ())]
+    # On the page there is no "this chat": an entry used on a card carries steps worded for
+    # it (`page_steps`, the helper chat named, Done being the card's own button).
+    use_page = page and e.get("page_steps")
+    goal = e.get("page_goal", "") if use_page else e.get("goal", "")
+    body = [_fill(x, name, owner) for x in (e["page_steps"] if use_page else e.get("steps", ()))]
     if not body and e.get("how"):
         how = _fill(e["how"], name, owner)
         body = [how[:1].upper() + how[1:].rstrip(".") + "."]

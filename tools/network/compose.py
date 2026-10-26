@@ -1678,7 +1678,16 @@ def first_note(name, common_ground="", question=None, about_me=ABOUT_ME, ask=_DE
     if told:
         import reading as _reading
         read = bool(_reading.has_read(reading) or _reading.card_enough(reading))
-    return Note(_first_note_voice(note), rtype, recruiter, shape, read=read, card_only=card_only)
+    out = Note(_first_note_voice(note), rtype, recruiter, shape, read=read, card_only=card_only)
+    # Its parts, kept under its own text (tools/network/parts.py): the draft writer keeps
+    # them beside draft.md, so a tweak on the page builds the note again with one part
+    # changed, through this same composer, and needs no model.
+    try:
+        import parts
+        parts.remember("first_note", asked, str(out), default=_DEFAULT)
+    except Exception:  # noqa: BLE001  a note is never refused for its record
+        pass
+    return out
 
 
 def _reaches_fix(name, their=()) -> str:

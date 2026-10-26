@@ -27,7 +27,7 @@ JARGON = re.compile(r"\b(?:proxy|allow-?list(?:ed)?|egress|network polic\w*|doma
                     r"(?-i:CONNECT)|403|407|repository|repo|worktree|branch|CLI|config\w*|YAML|"
                     r"environment variables?|connect_rejected)\b", re.I)
 BUTTONS = ("Edit cloud environment", "Network access", "Setup script", "Create a new repository",
-           "Create repository from template", "Only select repositories",
+           "Create repository from template", "Create repository", "Only select repositories",
            "Change repository visibility", "Make this repository private")
 
 
@@ -83,7 +83,7 @@ def test_every_message_the_place_check_says_unasked_is_plain():
     for name in dir(place):
         if name.startswith("SHORT_") and isinstance(getattr(place, name), str):
             _plain(getattr(place, name))
-    for line in (place.QUESTION, place.TRADE_OFF, place.RECOMMEND, place.TWO_CHATS):
+    for line in (place.QUESTION, place.TRADE_OFF, place.TWO_CHATS):
         _plain(line)
 
 
@@ -149,7 +149,7 @@ def test_what_setup_says_to_the_person_is_plain_and_short():
     four = next(q for q in quoted if q.startswith("Thanks."))
     assert len(re.findall(r"^\d\. ", four, re.M)) == 4
     # The place question, asked only where the chat cannot tell, is one short question.
-    ask = f"{place.QUESTION} {place.TRADE_OFF} {place.RECOMMEND}"
+    ask = f"{place.QUESTION} {place.TRADE_OFF}"
     _plain(ask)
     assert ask.count("?") == 1 and len(ask.split()) <= 40
 

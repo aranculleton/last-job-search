@@ -123,8 +123,10 @@ def test_a_branch_already_on_the_new_master_is_not_stopped(tmp_path, monkeypatch
 
 
 def test_the_first_step_of_a_session_is_the_sync_not_a_bare_merge():
-    text = open(os.path.join(ROOT, "CLAUDE.md"), encoding="utf-8").read()
-    step = text.split("1. **Pull master**", 1)[1].split("\n2. ", 1)[0]
+    # The steps live in RUNBOOK.md, "Start of a session", since 4.0 (docs/rule_map.json).
+    text = open(os.path.join(ROOT, "RUNBOOK.md"), encoding="utf-8").read()
+    start = text[text.index("## Start of a session"):]
+    step = start.split("1. **Pull master**", 1)[1].split("\n2. ", 1)[0]
     assert "sync_app.py --pull" in step and "git merge origin/master" not in step
 
 
@@ -171,7 +173,7 @@ def test_a_second_chat_on_the_persons_computer_is_told_to_take_a_folder_of_its_o
     _origin, me = _setup(tmp_path)
     monkeypatch.setattr(sync_app, "ROOT", str(me))
     monkeypatch.setattr(sync_app, "CLOUD", False)
-    # The first chat works in the copy itself, as CLAUDE.md says; it was told to move too
+    # The first chat works in the copy itself, as RUNBOOK.md step 4 says; it was told to move too
     # (2026-10-25). A second chat while the first is working there is told.
     assert sync_app.own_folder(now=1000.0, chat="first-chat") == ""
     assert sync_app.own_folder(now=2000.0, chat="first-chat") == ""

@@ -365,12 +365,15 @@ def test_the_route_is_chosen_for_the_person_and_never_asks_them_to_press_anythin
                                         "CLAUDE_CODE_ENTRYPOINT": "remote_web"})
     assert len(web["say"].split()) <= place.SHORT_WORDS and "Save to PDF" not in web["say"]
     desk = reading.route([], "browser", CLOUD_DESKTOP)
-    # A cloud chat in the desktop app with no browser says finding works and offers the
-    # move to two chats, never a paste: the person is at a computer. It makes no choice.
+    # A cloud chat in the desktop app with no browser says finding works and that the page,
+    # opened in the desktop app, reads them (4.0 recommends no move to a computer chat); a
+    # chat on the computer is only the other way. Never a paste: the person is at a computer.
     assert desk["say"].startswith("Finding people works in this chat.")
     assert "To set up a chat on your computer:\n1. Install the Claude desktop app" in desk["say"]
     assert "\n2. Open its Code tab." in desk["say"] and "GitHub Desktop" not in desk["say"]
-    assert "Two chats work best" in desk["say"] and "one or two who matter most" not in desk["say"]
+    assert "Your page reads them when you open it in the Claude desktop app." in desk["say"]
+    assert "the chat on your computer can" not in desk["say"]
+    assert "one or two who matter most" not in desk["say"]
     assert not desk["usable"] and desk["route"] == "hand"
     paste = reading.route([], "paste", CLOUD_PHONE)
     assert paste["say"].startswith("For the one or two who matter most, send screenshots")

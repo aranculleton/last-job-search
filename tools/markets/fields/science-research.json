@@ -1,0 +1,136 @@
+{
+  "name": "Science and research",
+  "field": "science-research",
+  "aka": [
+    "science",
+    "research",
+    "scientist",
+    "laboratory",
+    "life sciences",
+    "R&D"
+  ],
+  "boards": {
+    "*": [
+      {
+        "name": "Nature Careers",
+        "url": "https://www.nature.com",
+        "kind": "field",
+        "source": "https://www.nature.com/",
+        "quote": "Nature is the world’s leading multidisciplinary science journal",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.nature.com/naturecareers/jobs/",
+        "paths": {
+          "search": "/naturecareers/jobs/",
+          "posting": "/naturecareers/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      },
+      {
+        "name": "Science Careers",
+        "url": "https://jobs.sciencecareers.org",
+        "kind": "field",
+        "source": "https://jobs.sciencecareers.org/",
+        "quote": "Jobs in Science & Technology from Science Careers",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://jobs.sciencecareers.org/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "documents": {
+    "*": [
+      {
+        "topic": "academic_cv",
+        "value": "a research CV listing publications, grants and methods",
+        "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+        "quote": "Example of the type of extensive CV used in academia, in this case 69 pages long",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Clinical Research Scientist",
+        "Medical Researcher",
+        "Research Scientist",
+        "Researcher",
+        "Scientist",
+        "Study Director"
+      ],
+      "source": "https://www.onetonline.org/link/summary/19-1042.00",
+      "quote": "Sample of reported job titles: Clinical Laboratory Scientist (Clinical Lab Scientist), Clinical Pharmacologist",
+      "on_page": [
+        "Clinical Research Scientist",
+        "Medical Researcher",
+        "Research Scientist",
+        "Researcher",
+        "Scientist",
+        "Study Director"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "statistics package",
+      "members": [
+        [
+          "SPSS",
+          "\\bspss\\b"
+        ],
+        [
+          "Minitab",
+          "\\bminitab\\b"
+        ],
+        [
+          "SAS",
+          "(?-i:\\bSAS\\b)"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/19-1042.00",
+      "quote": "Analytical or scientific software - BioArray Software Environment BASE",
+      "on_page": [
+        "IBM SPSS Statistics",
+        "Minitab",
+        "SAS"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

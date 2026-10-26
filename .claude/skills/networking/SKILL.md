@@ -70,7 +70,62 @@ They are not alternatives, and the names are close enough to pick wrongly.
   real interview on a tracked application and takes a company rather than a person.
 
 `/networking` is not a command. See "Commands and skills: what routes where" in
-`CLAUDE.md` for the full map.
+`RUNBOOK.md` for the full map.
+
+## The rules every outreach keeps
+
+Load this skill before any outreach. It is an **extension of this system, not a parallel
+one**: the join is `tools/company_key.py` (above), and company findings cache in the
+existing `company_research/`. State lives in `network_contacts.csv` and
+`network_threads.csv` beside the tracker, saved with the rest (`python3 tools/save_state.py`).
+**Status is derived from the messages wherever the log can know it**, so it cannot drift
+from the evidence. What the log cannot know (a call booked, a referral in flight, a
+conversation gone cold, a close) is stored on the contact row by whoever learns it
+(`state.py set`), and wins over the log. `networking/connection_targets.md` is research
+notes only. **Not a contact store**: `network_contacts.csv` is, and anyone named in that file
+is a row in it.
+
+Every rule below is enforced in code; each section further down has the detail.
+
+- **Nobody is shown as someone to write to without the one check**: `python3
+  tools/network/surface.py` (`surface.check()`; `--file` for a list made any other way). It
+  reads the contact book, their whole thread on every channel and the bar, and prints NOT
+  with the reason for anyone not to show. Never join files or check people by hand.
+- The search budget is `tools/network/sources.py`; alumni and referral routes come before
+  cold; tier 1 only on a quoted live hiring signal; each person is read before anyone writes
+  to them (`reading.py`, `/network` step 5); and someone already contacted is never surfaced.
+- **Outreach is for referrals, in three stages never compressed into one:** a first note that
+  asks for a conversation (`compose.first_note()`), the conversation, then a referral ask for
+  one linked role (`compose.referral_ask()`).
+- **Who reads a first note decides what it says** (`compose.READER_TYPES`, each a setting in
+  `profile/networking.py`): a recruiter may be told the role wanted and the person's work
+  authorization, a decision-maker the role wanted (their work authorization once the
+  messages the person approves say it), and a decision-maker gets the open ask ("anything
+  coming up"); asking whether they are hiring, or for a referral, is a recruiter's alone; a
+  peer is told neither unless that message asks.
+- Before a draft is shown, `compose.advise()`: the draft is rewritten on its warnings first,
+  and a warning the rewrite leaves standing is shown with the draft for the person to decide,
+  never in place of the rewrite.
+- Connection notes are the plan's limit, 200 characters on a free LinkedIn plan and 300 on
+  Premium (`schema.LIMITS`, from `LINKEDIN_PLAN`), hard: `compose.py` raises, never
+  truncates.
+- No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays
+  on**: only the person switches it off, never a session. Profiles are read in the person's
+  own browser: by the page itself when it is open in the Claude desktop app, or by a chat on
+  their computer.
+- **A chat on the person's computer** starts with "On a new computer" below
+  (`reading.py new-computer`): LinkedIn signed in, then its download, unprompted.
+- Never claim anything not in `profile/01-candidate-profile.md`.
+- **A LinkedIn download the person gives is taken first**, before anything is written from
+  it: `python3 tools/network/export.py take <the ZIP or its folder>` saves it and imports its
+  message history in one step. Never read its files straight from where it was downloaded.
+- A resume sent to a contact is logged with its file (`state.py message <id> --attached
+  <file>`). One made for them is staged with `stage_picks.py --for-contact <id>`, and
+  RECONCILE (`python3 tools/network/state.py`) says where the two disagree, because the chat
+  that logs the ask and the chat that drafts the resume are often two chats at once.
+- Before drafting anything, `python3 tools/learned.py brief messages` and `python3
+  tools/what_works.py brief messages` (RUNBOOK.md, "Learning the person"); what the person
+  says back about a draft goes through the same section.
 
 ## Discovery
 

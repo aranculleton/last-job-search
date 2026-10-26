@@ -1,0 +1,285 @@
+{
+  "name": "Ireland",
+  "country": "ie",
+  "aka": [
+    "IE",
+    "Republic of Ireland",
+    "Éire",
+    "Eire"
+  ],
+  "languages": [
+    "en",
+    "ga"
+  ],
+  "currency": "EUR",
+  "boards": [
+    {
+      "name": "JobsIreland",
+      "url": "https://jobsireland.ie",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "Jobs Ireland www.jobsireland.ie Civil Services Vacancies www.publicjobs.ie Jobs.ie www.jobs.ie Irish Jobs www.irishjobs.ie",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://jobsireland.ie/en-US/job-search?Keywords=analyst",
+      "paths": {
+        "search": "/en-US/job-search?Keywords=analyst",
+        "posting": "/en-US/job-Details"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_found",
+        "http": 404
+      }
+    },
+    {
+      "name": "IrishJobs.ie",
+      "url": "https://www.irishjobs.ie",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "Jobs Ireland www.jobsireland.ie Civil Services Vacancies www.publicjobs.ie Jobs.ie www.jobs.ie Irish Jobs www.irishjobs.ie",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.irishjobs.ie/jobs/analyst/in-dublin",
+      "paths": {
+        "search": "/jobs/analyst/in-dublin",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Jobs.ie",
+      "url": "https://www.jobs.ie",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "Jobs Ireland www.jobsireland.ie Civil Services Vacancies www.publicjobs.ie Jobs.ie www.jobs.ie Irish Jobs www.irishjobs.ie",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.jobs.ie/jobs/analyst/in-dublin",
+      "paths": {
+        "search": "/jobs/analyst/in-dublin",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "allowed",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 0
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://ie.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://ie.indeed.com/jobs?q=analyst&l=Dublin",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Dublin",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "Stamp 4 (permission to work without an employment permit)",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://www.irishimmigration.ie/registering-your-immigration-permission/information-on-registering/immigration-permissions-and-stamps/",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: HTTP 404"
+    },
+    {
+      "phrase": "Critical Skills Employment Permit / General Employment Permit",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://enterprise.gov.ie/en/what-we-do/workplace-and-skills/employment-permits/permit-types/critical-skills-employment-permit/",
+      "quote": "The Critical Skills Employment Permit is designed to attract highly skilled people into the labour market",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "EU/EEA citizen (no permit needed)",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "If you are a member of EU and/ or European Economic Area (EEA) a residence permit is not required",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "Garda vetting",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://vetting.garda.ie/",
+      "quote": "National Vetting Bureau (Children and Vulnerable Persons) Act 2012",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV, with a cover letter",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "Your CV should be one to two pages long and provide an account of you",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "one to two pages",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "Your CV should be one to two pages long",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "only if the form asks for one",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-ireland_en",
+      "quote": "You only need to supply a photograph if this is requested on the form",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Ireland",
+      "quote": "In Ireland , the date is written in the order \"day month year\"",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Irish and British English (en-IE)",
+      "source": "https://en.wikipedia.org/wiki/Hiberno-English",
+      "quote": "The writing standards of Irish English, such as its spelling, align with British English .",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Earnings (CSO, Central Statistics Office)",
+      "url": "https://www.cso.ie/en/statistics/earnings/",
+      "what": "earnings by sector and occupation",
+      "source": "https://www.cso.ie/en/statistics/earnings/",
+      "quote": "Earnings - CSO - Central Statistics Office",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "IrishJobs salary survey",
+      "url": "https://www.irishjobs.ie/salary-checker/",
+      "what": "salaries by job title",
+      "source": "https://www.irishjobs.ie/",
+      "quote": "View our Irish Salary Survey, Career Advice, Jobs in Ireland plus much more",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Dublin",
+      "written": [
+        "Dublin",
+        "Greater Dublin Area",
+        "County Dublin",
+        "Kildare",
+        "Wicklow",
+        "Meath"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Greater_Dublin_Area",
+      "quote": "Map of Dublin and its hinterland, showing: Dublin city (red), city and suburbs (orange), Dublin Metropolitan Area (Yellow), Greater Dublin Area",
+      "on_page": [
+        "Kildare",
+        "Wicklow",
+        "Meath"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Cork",
+      "written": [
+        "Cork",
+        "County Cork",
+        "Ballincollig",
+        "Douglas"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Cork_(city)",
+      "quote": "cabinet approval was given for a further extension of the Cork City boundary, to include Cork Airport , Douglas , Ballincollig",
+      "on_page": [
+        "Ballincollig",
+        "Douglas"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Galway",
+      "written": [
+        "Galway",
+        "County Galway",
+        "Salthill"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Galway",
+      "quote": "is a city in (and the county town of) County Galway",
+      "on_page": [
+        "County Galway",
+        "Salthill"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

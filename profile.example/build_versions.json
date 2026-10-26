@@ -8,8 +8,8 @@
     "version": 4
   },
   "drafts": {
-    "date": "2026-10-25",
-    "version": 51
+    "date": "2026-10-26",
+    "version": 52
   },
   "expand": {
     "date": "2026-10-15",
@@ -20,8 +20,8 @@
     "version": 7
   },
   "interview": {
-    "date": "2026-10-25",
-    "version": 22
+    "date": "2026-10-26",
+    "version": 23
   },
   "market": {
     "date": "2026-10-25",
@@ -32,8 +32,12 @@
     "version": 34
   },
   "networking": {
-    "date": "2026-10-25",
-    "version": 60
+    "date": "2026-10-26",
+    "version": 61
+  },
+  "page": {
+    "date": "2026-10-26",
+    "version": 3
   },
   "prep-docs": {
     "date": "2026-10-25",
@@ -44,12 +48,12 @@
     "version": 9
   },
   "routines": {
-    "date": "2026-10-25",
-    "version": 9
+    "date": "2026-10-26",
+    "version": 10
   },
   "screening": {
-    "date": "2026-10-25",
-    "version": 30
+    "date": "2026-10-26",
+    "version": 31
   },
   "search": {
     "date": "2026-10-25",

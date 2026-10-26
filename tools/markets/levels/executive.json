@@ -1,0 +1,93 @@
+{
+  "name": "Executive",
+  "level": "executive",
+  "aka": [
+    "executive",
+    "director",
+    "vice president",
+    "VP",
+    "C-suite",
+    "chief"
+  ],
+  "boards": {
+    "us": [
+      {
+        "name": "Ladders",
+        "url": "https://www.theladders.com",
+        "kind": "executive",
+        "source": "https://en.wikipedia.org/wiki/The_Ladders",
+        "quote": "Their search service only lists vetted job offers with annual salaries of $100,000 or more",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://www.theladders.com/jobs/search-jobs",
+        "paths": {
+          "search": "/jobs/search-jobs",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "robots.txt could not be read (HTTP 403)",
+          "search": null,
+          "status": "unconfirmed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ],
+    "gb": [
+      {
+        "name": "Exec-Appointments",
+        "url": "https://www.exec-appointments.com",
+        "kind": "executive",
+        "source": "https://www.exec-appointments.com/",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the source could not be read: robots.txt could not be read (HTTP 202)",
+        "search": "https://www.exec-appointments.com/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "robots.txt could not be read (HTTP 202)",
+          "search": null,
+          "status": "unconfirmed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ]
+  },
+  "norms": {
+    "*": [
+      {
+        "value": "most executive roles are filled through search firms, retained (paid in stages) or contingent (paid on a hire)",
+        "source": "https://en.wikipedia.org/wiki/Executive_search",
+        "quote": "The contractual relationship between client and executive search firm falls into two broad categories: contingent and retained",
+        "checked": "2026-10-25",
+        "verified": true
+      },
+      {
+        "value": "search consultants work from their own contacts at the most senior levels, so being known to them matters more than applying",
+        "source": "https://en.wikipedia.org/wiki/Executive_search",
+        "quote": "Executive search agents/professionals typically have a wide range of personal contacts in their industry or field of specialty",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  }
+}

@@ -241,23 +241,48 @@ def slug(company, role, abbr=""):
     return s
 
 
+# (path, mtime_ns, size) -> {(employer key, role slug): abbr}. Every caller asks for one
+# application, and the due list asks for every live one: each call read the whole tracker
+# again and keyed every row, so 500 rows took 14 seconds (2026-10-25). The tracker is read
+# once for each state of the file.
+_ABBR_INDEX: dict = {}
+
+
+def _abbr_index(path):
+    import csv_store
+    from company_key import key as company_key
+    st = os.stat(path)
+    stamp = (path, st.st_mtime_ns, st.st_size)
+    got = _ABBR_INDEX.get(stamp)
+    if got is not None:
+        return got
+    csv_store.refuse_conflicts(path)
+    rows = csv_store.dict_rows(path, refuse=False)
+    rx = resume_name_rx()
+    got = {}
+    for r in rows:                     # the last row written under a name wins, as before
+        m = rx.search(r.get("cv_file") or "")
+        if m:
+            got[(company_key(r.get("company")), slug("x", r.get("role") or "x"))] = m.group(1)
+    _ABBR_INDEX.clear()
+    _ABBR_INDEX[stamp] = got
+    return got
+
+
+def forget_abbreviations() -> None:
+    """Read the tracker again on the next ask: a writer in this process changed it within
+    the file system's clock step (two seconds on some), so its time and size can match."""
+    _ABBR_INDEX.clear()
+
+
 def _abbr_on_file(company, role):
     """The abbreviation the tracker's row for this application was written under."""
-    import csv_store
-    csv_store.refuse_conflicts(person.state("job_search_tracker.csv"))
+    from company_key import key as company_key
     try:
-        rows = csv_store.dict_rows(person.state("job_search_tracker.csv"), refuse=False)
+        index = _abbr_index(person.state("job_search_tracker.csv"))
     except OSError:
         return ""
-    from company_key import key as company_key
-    want = (company_key(company), slug("x", role))
-    rx = resume_name_rx()
-    for r in reversed(rows):
-        got = (company_key(r.get("company")), slug("x", r.get("role") or "x"))
-        m = rx.search(r.get("cv_file") or "")
-        if got == want and m:
-            return m.group(1)
-    return ""
+    return index.get((company_key(company), slug("x", role)), "")
 
 
 def without_ref(role) -> str:

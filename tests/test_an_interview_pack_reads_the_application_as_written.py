@@ -69,8 +69,8 @@ def test_stages_written_by_hand_are_read_from_their_headings():
 
 def test_after_every_stage_on_record_the_next_is_the_next_round():
     held = [{"label": "Screen", "done": True, "scheduled": False, "date": "2026-09-10", "with": ""}]
-    assert interview_pack._next_stage(held)["label"] == "Round 2"
-    assert interview_pack._next_stage([]) == {}
+    assert interview_pack.next_stage(held)["label"] == "Round 2"
+    assert interview_pack.next_stage([]) == {}
 
 
 def _ctx(contacts, notes="", outcome="", date=""):

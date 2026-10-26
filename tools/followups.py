@@ -301,11 +301,9 @@ def _first_name(name) -> str:
     brackets ("Xiu Mei (Sally) Ho" came out "Xiu") and read "Halloway, Wren"
     as "Halloway". An address on its own is still nobody to greet.
     """
-    parts = state.person_name(name).split()
-    if not parts or "@" in parts[0]:
+    if not state.person_name(name).split():
         return ""
-    first = tone.first_name(name)
-    return first if first[:1].isalpha() else ""
+    return tone.greeting_name(name)
 
 
 def recipient(row: dict, people=(), docs: str = DOCS,

@@ -145,6 +145,8 @@ else
   printf '  %-42s n/a   (a person'"'"'s own, in profile/tests/fixtures)\n' "scoring baseline"
 fi
 run "framework version guard" "$PY" tools/check_framework_version.py
+# A name a person's own tests may use is never taken away without saying so.
+run "public names stay, or are listed as gone" "$PY" tools/public_names.py check
 # A person's scheduled tasks: a missing prompt file, a mistyped id or a cron
 # with no CRON_TZ fails here rather than at seven in the morning. The app's
 # own tests check the example's registry.

@@ -56,22 +56,31 @@ BROWSERS = {"browser", "chrome", "enable"}
 # used to come first and stop a cloud chat with no profile written, telling the person to
 # start again on their computer (2026-10-25): setup works the same everywhere, so it never
 # stops, and the computer chat is offered once, at the end.
+# It recommends nothing (4.0, 2026-10-25): "If you have one you can use, say yes" went with
+# the recommendation of a chat on the computer.
 QUESTION = "Will you also use Claude on a computer, in its desktop app?"
-TRADE_OFF = ("Everything works here. On a computer it can also read people's LinkedIn "
-             "profiles before you write to them.")
-RECOMMEND = "If you have one you can use, say yes."
+TRADE_OFF = ("Everything works here. Opened in the desktop app, your page can also read "
+             "people's LinkedIn profiles before you write to them.")
 # The set-up that works for nearly everyone with a computer, said where a person decides
 # where to work (/setup's question, its next step) and in the check a cloud chat on a
 # computer gives. Told only "a computer does more", people kept every chat in the cloud and
 # found out at their first networking run that profiles cannot be read there.
-TWO_CHATS = ("Two chats work best: one on your computer for everything you do, and your brief "
-             "in the cloud, which arrives even when your computer is off.")
+# 4.0 (2026-10-25): no move to a computer chat is recommended any more. The page and the
+# cloud chats Claude makes do everything; the page reads LinkedIn profiles itself when it
+# is opened in the Claude desktop app; a chat on the computer is optional, for files kept
+# there. Someone who already has one keeps it, and hears SHORT_HAS_LOCAL as before.
+CHATS = ("Everything works in your cloud chats and on your page. A chat on your computer is "
+         "optional: it is only for files kept on that computer.")
+# The old name, which CLAUDE.md still reads until it is rewritten for 4.0.
+TWO_CHATS = CHATS
 # The one message a computer chat starts from: it names the person's copy and the page that
 # takes an empty folder to a copy that is set up (COMPUTER.md, the app's). The words are
 # the registry's (claude_surfaces local-chat, its last step), so a doc and a chat say one thing.
 COMPUTER_PAGE = "github.com/aranculleton/last-job-search/blob/master/COMPUTER.md"
-SHORT_TWO_CHATS = ("Two chats work best: one on your computer for everything you do, and your "
-                   "brief in the cloud. Ask me how to move.")
+# Where profiles are read now, said to someone with no browser in this chat: the page, opened
+# in the desktop app, reads them as the person (host:claude_browser, proven 2026-10-25).
+PAGE_READS = ("Finding people works here. Your page reads their LinkedIn profiles when you "
+              "open it in the Claude desktop app.")
 # Said instead to a person who already has a chat on their computer (place.json
 # "computer_chat"): what this chat can do, with no move to make.
 SHORT_HAS_LOCAL = ("Finding people works here. Their profiles are read in your chat on your "
@@ -89,6 +98,7 @@ FINDING_WORKS = ("Finding people works in this chat. Reading their profiles befo
 # what the person had to wade through (2026-10-25).
 CLOUD_LINK_NOW = ("This chat reads profiles in the Claude desktop app's browser on your "
                   "computer, while the app stays open there.")
+# 4.0: no longer said; the page, opened in the desktop app, is what reads them (PAGE_READS).
 CLOUD_LINK_NOT = ("This chat can't reach that browser just now; the chat on your computer can.")
 PASTE_TOP = ("Or paste the profile of the one or two who matter most, here, and I'll write "
              "to them from it.")
@@ -106,13 +116,11 @@ IF_NO_BROWSER = ("[only if this chat has no browser tool: no Claude_Browser tool
 # sentences and no links. The steps, with their dated paths and official pages, come only
 # when the person asks how or says they want to move (`place.py how`): a block of 150 words
 # and two URLs at the end of every reply was the part nobody read.
-SHORT_REMOTE = ("Finding people works here. Reading their profiles before writing to them needs "
-                "a chat on your computer, which you can also use from your phone.")
-SHORT_CLOUD = ("Finding people works here, but reading their profiles before writing to them "
-               "needs a chat on your computer.")
+SHORT_REMOTE = PAGE_READS
+SHORT_CLOUD = PAGE_READS
 SHORT_LOCAL = ("Finding people works here. Reading their profiles before writing to them needs "
                "a browser this chat can use, such as the Claude desktop app's own.")
-SHORT_PASTE = "Or paste the one or two who matter most. Ask me how if you want to move."
+SHORT_PASTE = "Or paste the one or two who matter most."
 SHORT_LINK_NOW = CLOUD_LINK_NOW
 SHORT_WORDS = 60     # the most any one default message may run to (tests/test_place.py)
 
@@ -218,6 +226,10 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
     out = []
     have = None if tools is None else {str(t).lower() for t in tools} & BROWSERS
     then = f"find me people at {employer}" if employer else "find me people at <employer>"
+    if setting == "browser" and not have and page_reads():
+        # The page reads in the desktop app, and has lately: a browser that can read, so
+        # nothing to tell about reading.
+        setting = "page"
     if setting == "browser":
         # By the tools the chat has, never by where it was started: a phone chat linked
         # to the computer reads profiles as well as a chat on it does (claude_surfaces:
@@ -232,13 +244,12 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
             line = ({"phone": SHORT_REMOTE + " " + SHORT_PASTE,
                      "web": SHORT_REMOTE + " " + SHORT_PASTE,
                      "local": SHORT_LOCAL + " Ask me how."}
-                    .get(where, SHORT_CLOUD + " " + SHORT_TWO_CHATS))
+                    .get(where, SHORT_CLOUD + " " + SHORT_PASTE))
             out.append(line if have is not None else IF_NO_BROWSER + line)
         else:
             if where in ("phone", "web"):
-                line = (f"{FINDING_WORKS} The chat on your computer can do the reading, and you "
-                        f"can use it from your phone. {_say('remote-control', owner, name, False)}"
-                        f" {PASTE_TOP}")
+                line = (f"{FINDING_WORKS} Your page reads them when you open it in the Claude "
+                        f"desktop app on a computer. {PASTE_TOP}")
             elif where == "local" and linux_kind(os_name or "none") in ("other", "wsl"):
                 # No desktop app here (Fedora, Arch: claude_surfaces linux-computer), and in
                 # WSL no Claude in Chrome either: the way that works, said first.
@@ -263,14 +274,16 @@ def check(where: str, setting: str, tools=None, signed_in: bool = False, fixes=(
                         f"Claude in Chrome does it from a terminal: {_say('chrome', owner, name, False)}"
                         f" {PASTE_TOP}")
             else:
-                line = (f"{FINDING_WORKS} {CLOUD_LINK_NOT} {TWO_CHATS} "
+                # Asked how, in a cloud chat at a computer (the desktop app, or a start not
+                # known): the page first, which needs nothing new, opened right there; a chat
+                # on the computer only as the other way, for someone who wants one. Nothing
+                # to paste: the person is at a computer.
+                line = (f"{FINDING_WORKS} Your page reads them when you open it in the Claude "
+                        "desktop app. If you would also like a chat on your computer: "
                         f"{_continue_locally(owner, name, then)}")
             out.append(line if have is not None else IF_NO_BROWSER + line)
-    elif works in ("computer", "both") and where != "local" and not has_local:
-        # Not reading profiles in their browser, a person with a computer still does best
-        # with two chats, and an existing one who set up in the cloud was never told.
-        out.append((TWO_CHATS + " " + _continue_locally(owner, name, "carry on")) if detail
-                   else SHORT_TWO_CHATS)
+    # A person with a computer is no longer told to move to it (4.0): nothing is said here
+    # that the page does not already do.
     if where == "local" and fixes:
         # Claude runs every one: a person was once sent to Terminal (and on Windows to
         # PowerShell) to paste commands they could not read (2026-10-25). A mark says only what
@@ -293,9 +306,8 @@ def next_step(works_on: str, where: str, owner: str = "", name: str = "my-job-se
     the profile is written wherever the person is, and a computer chat is offered once, with
     the one message that sets it up (2026-10-25)."""
     if works_on in ("computer", "both") and where != "local":
-        return (f"{TWO_CHATS} When you are at your computer, open the Claude desktop app on a new "
-                f"empty folder (Local, under the message box) and paste this: "
-                f"{computer_paste(owner, name)} Ask me for the steps if you want them.")
+        return (f"{CHATS} On your computer, open your page in the Claude desktop app: it reads "
+                "LinkedIn profiles there by itself.")
     if works_on == "phone" and where == "local":
         return (f"Carry on here. On your phone, open claude.ai/code and choose {name}: both "
                 "work on your copy on GitHub.")
@@ -318,13 +330,16 @@ def _profile_file() -> str:
     return person.path(PLACE_FILE)
 
 
-def _place() -> dict:
+def place_record() -> dict:
     try:
         with open(_profile_file(), encoding="utf-8") as fh:
             got = json.load(fh)
         return got if isinstance(got, dict) else {}
     except Exception:  # no profile, no file, or a bad one: unknown
         return {}
+
+
+_place = place_record  # the module's own name for it; other modules call place_record
 
 
 def works_on() -> str:
@@ -447,23 +462,39 @@ def _going(mark: dict, last_commit: float | None, now: float, chat: str = "") ->
     return "going"
 
 
-def setup_state(now: float | None = None, chat: str | None = None, fetch: bool = True) -> dict:
+def setup_state(now: float | None = None, chat: str | None = None, fetch: bool = True,
+                profile: str | None = None) -> dict:
     """Where the person's search stands, for a chat about to decide whether to run /setup.
 
     {"state", "ref", "say", "do"}: "here" (a profile in this folder), "self" (this chat is
     the one setting it up), "landed" (on master, not yet here), "branch" (on another chat's
     branch that never reached master), "going" (being written by another chat now),
     "stopped" (written part-way, nothing new for STALLED_HOURS), or "none" (nowhere: run
-    /setup). `say` is the one line for the person, or ""."""
+    /setup). `say` is the one line for the person, or "".
+
+    The one detector: `app.py start` (tools/app_setup.py) names its answer, for every chat
+    and for the page. `profile` is a profile folder other than this copy's own (LJS_PROFILE):
+    its last commit is read where it lives, and no other chat's branch is looked at, since
+    those branches hold this copy's profile, not that one."""
     import time
     now = time.time() if now is None else now
     chat = this_chat() if chat is None else chat
+    own = profile is None or os.path.normcase(os.path.abspath(profile)) == os.path.normcase(
+        os.path.join(ROOT, "profile"))
 
     def last(ref: str) -> float | None:
-        got = _git("log", "-1", "--format=%ct", ref, "--", "profile").strip()
+        if own:
+            got = _git("log", "-1", "--format=%ct", ref, "--", "profile").strip()
+        else:
+            try:
+                got = subprocess.run(["git", "-C", profile, "log", "-1", "--format=%ct", "--", "."],
+                                     capture_output=True, text=True, encoding="utf-8",
+                                     errors="replace", timeout=30).stdout.strip()
+            except (OSError, subprocess.TimeoutExpired):
+                got = ""
         return float(got) if got.isdigit() else None
 
-    here = os.path.join(ROOT, "profile")
+    here = os.path.join(ROOT, "profile") if own else profile
     if os.path.isfile(os.path.join(here, "person.json")):
         try:
             with open(os.path.join(here, PLACE_FILE), encoding="utf-8") as fh:
@@ -479,6 +510,8 @@ def setup_state(now: float | None = None, chat: str | None = None, fetch: bool =
                            "stopped": "on \"carry on\", finish /setup from what is written"}[going]}
         return {"state": "here", "ref": "HEAD", "say": "", "do": "set up: never run /setup "
                 "again here; it is not a reset"}
+    if not own:
+        return {"state": "none", "ref": "", "say": "", "do": "no profile there: run /setup"}
     if fetch:
         _git("fetch", "-q", "origin", timeout=60)
     found = []
@@ -550,6 +583,36 @@ def setting() -> str:
         return got if got in reading.READS_SETTINGS else reading.reads_setting(None)
     except Exception:  # a check must never break the sync that runs it
         return ""
+
+
+# The page, opened in the Claude desktop app, reads LinkedIn as the person through its own
+# browser (host:claude_browser). Once it has read a page lately ("Check it works" on the page,
+# or a profile it read for a chat), it counts as a browser that can read: nobody is sent to a
+# chat on their computer for reading, and readings are queued for the page.
+PAGE_READS_FILE = ("documents", "network", ".page_reads.json")
+PAGE_READS_DAYS = 14
+
+
+def page_reads_record() -> dict:
+    try:
+        import person
+        with open(person.state(*PAGE_READS_FILE), encoding="utf-8") as fh:
+            got = json.load(fh)
+        return got if isinstance(got, dict) else {}
+    except Exception:  # no record, or no profile: the page has not read anything yet
+        return {}
+
+
+def page_reads(today: datetime.date | None = None) -> bool:
+    """Has the page read a LinkedIn page successfully in the last PAGE_READS_DAYS days?"""
+    rec = page_reads_record()
+    days = [str(rec.get(k) or "")[:10] for k in ("checked_at", "last_read_at")
+            if rec.get("ok") or k == "last_read_at"]
+    days = [d for d in days if re.match(r"^\d{4}-\d{2}-\d{2}$", d)]
+    if not days:
+        return False
+    last = datetime.date.fromisoformat(max(days))
+    return ((today or datetime.date.today()) - last).days <= PAGE_READS_DAYS
 
 
 def signed_in_ever() -> bool:
@@ -728,7 +791,7 @@ def main(argv=None) -> int:
                     help="say nothing if this chat was told these words in the last week")
     a = ap.parse_args(argv)
     if a.cmd == "ask":
-        print(f"{QUESTION} {TRADE_OFF} {RECOMMEND}")
+        print(f"{QUESTION} {TRADE_OFF}")
         return 0
     if a.cmd == "state":
         got = setup_state()
@@ -743,7 +806,7 @@ def main(argv=None) -> int:
     if a.cmd == "auto":
         got = auto_answer(surface())
         if not got:
-            print(f"ask, once, at the end of setup: {QUESTION} {TRADE_OFF} {RECOMMEND}")
+            print(f"ask, once, at the end of setup: {QUESTION} {TRADE_OFF}")
             return 0
         print(f"place: recorded {got} in {local_path.rel(record(got), ROOT)} (not asked: "
               "this chat can tell)")

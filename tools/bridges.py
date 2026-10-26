@@ -111,6 +111,21 @@ FAMILIES = [
 ]
 _SKILLS = person.module("skills")
 FAMILIES = FAMILIES + [tuple(f) for f in getattr(_SKILLS, "FAMILIES", None) or ()]
+
+
+def _merged(families) -> list:
+    """Families of one name as one family: a profile's "CRM" from its field's market table
+    and the app's own "CRM" are the same kind of tool, so a tool in either bridges to a tool
+    in the other, and a tool both name is assessed once, not twice (2026-10-25)."""
+    out: dict[str, list] = {}
+    for fam, *members in families:
+        have = out.setdefault(str(fam).casefold(), [fam])
+        names = {str(m[0]).casefold() for m in have[1:]}
+        have += [m for m in members if str(m[0]).casefold() not in names]
+    return [tuple(f) for f in out.values()]
+
+
+FAMILIES = _merged(FAMILIES)
 _FAMILY_RX = [(fam, [(name, re.compile(pat, re.I)) for name, pat in members])
               for fam, *members in FAMILIES]
 # What the person holds: the skills inventory, the list a resume may claim from.

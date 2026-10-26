@@ -2,8 +2,8 @@
 
 Works through the profile upgrades Claude can do alone (`tools/profile_upgrades.py`,
 `needs: "nobody"`), most urgent first, and hands back the questions only the person can
-answer. Nobody has to know which upgrades exist or ask for them: CLAUDE.md "Start of
-every session" step 5 starts this in a background agent whenever the sync lists one, and
+answer. Nobody has to know which upgrades exist or ask for them: RUNBOOK.md, "Start of
+a session", step 5, starts this in a background agent whenever the sync lists one, and
 every scheduled run (the twice-weekly brief, and the optional round) runs it first
 (`automation/prompts/_common.md` step 2). The person's own request never
 waits for it.
@@ -53,9 +53,18 @@ For each `needs: "nobody"` entry, until the budget is spent:
    would change goes beside the old one as `[CONFIRM: ...]`. Then check it: `python3 tools/profile_upgrades.py --check <id>` must
    print `done`. If it does not, undo what you changed for it and record why.
 5. Commit only what this upgrade changed, on its own:
-   `Profile upgrade: <id>` as the subject, one line saying what was written as the body.
-   Profile files take a plain `git add`; force-add only what CLAUDE.md's persistence rule
-   says to.
+   `Profile upgrade: <id>` as the subject, one line saying what was written as the body,
+   in plain words for the person: the page's Updates section shows that line, with an undo
+   (`app.py apply` runs `git revert` of this commit when they tap it), so each commit is one
+   change and nothing else.
+6. **On the page.** Where the person has a page (`profile/app.json` holds its address) and
+   this chat can write its database (ArtifactData), the run is one work item of kind `update`,
+   `update~upgrades-<YYYYMMDD>`: `status: running` and one plain line in `steps` at each
+   upgrade boundary, in the same message as the next upgrade's first command, `done` with
+   `result.summary` at the end (the `app` skill). Never ask the person anything from here:
+   the questions go to the page as cards by themselves (Step 5).
+   Profile files take a plain `git add`; `python3 tools/save_state.py` stages the rest
+   (RUNBOOK.md step 4), and nothing else is forced in.
 
 Stop at the budget even mid-list: the rest are picked up next session. An upgrade cut off
 part way is undone, never committed half done.
@@ -92,12 +101,15 @@ Return, in this order and nothing else:
    the session gives a question's steps only after a yes and its reason only after "why?".
 4. The branch these commits are on, if it is not the session's own.
 
-The session merges the branch, gives the person the plain part of each line from 1 (what it
-changed, never the commit or the command) at the end of its reply,
+With a page, the session merges the branch and brings the page's data up to date
+(`python3 tools/app.py view`): the page shows each change with its undo, and asks the
+questions from 3 itself, one card each (Yes, or Not now), so the chat says nothing about them.
+Without one, the session merges the branch, gives the person the plain part of each line from
+1 (what it changed, never the commit or the command) at the end of its reply,
 and asks at most three of the questions from 3, each short and alone: no list of ids, no
 version numbers, no paragraph. A yes brings that question's steps (five at most, under the
 line saying when they were checked and the page to check them against, which is checked
-that day before they are given: CLAUDE.md, "A step on another company's site"; an entry's
+that day before they are given: CLAUDE.md, "Talking to the person"; an entry's
 `check` line in the plan is yours, never said); a
 "why?" brings its one-sentence reason; a no gets "No problem, I'll ask again in a month."
 and `python3 tools/profile_upgrades.py --no <id>`. Answers go into the profile where their

@@ -1,0 +1,3606 @@
+{
+ "about": "Every rule of the CLAUDE.md before 4.0 (each bolded rule and each never or always sentence, and the rows of its memory table), with the file it now lives in and a phrase that file holds. `readers` says which files each kind of work reads, in the order it reaches them. tests/test_core_rules_have_a_home.py holds both.",
+ "before": {
+  "file": "CLAUDE.md",
+  "as_of": "2026-10-25, before 4.0",
+  "characters": 54234,
+  "lines": 737,
+  "sections": [
+   "Role",
+   "The person",
+   "Start of every session",
+   "App-owned files and personal files",
+   "Claude does the tailoring, and keeps doing it",
+   "Developer rules: changing the app itself",
+   "Master is the trunk. Finish on it, start from it.",
+   "Persistence rule for a person's repo (deviates from upstream)",
+   "Environment notes for cloud sessions",
+   "Automation: what runs without anyone asking",
+   "Orchestration: workflows and model choice",
+   "Commands and skills: what routes where",
+   "Repo Structure",
+   "Workflow for New Job Applications",
+   "Job Search Behaviour",
+   "Networking and Outreach",
+   "A step on another company's site is checked before it is given",
+   "Every output is shown, never only filed",
+   "Talking to the person: plain words, one recommendation, short",
+   "Learning the person: it grows with them",
+   "What works: it learns from results, not only from what they say",
+   "Memory: the repo remembers, the chat does not",
+   "What changes, and where it goes",
+   "Verification Checklist"
+  ]
+ },
+ "cap": 12000,
+ "readers": {
+  "every chat": {
+   "main": true,
+   "files": [
+    "CLAUDE.md"
+   ],
+   "why": "the core loads at launch in every chat Claude Code starts in this repo"
+  },
+  "start": {
+   "main": true,
+   "files": [
+    "CLAUDE.md",
+    "RUNBOOK.md"
+   ],
+   "why": "the start command's lines; the core sends the chat to RUNBOOK.md, \"Start of a session\""
+  },
+  "saving": {
+   "main": true,
+   "files": [
+    "CLAUDE.md",
+    "RUNBOOK.md"
+   ],
+   "why": "saving and landing; the core's \"Saving\" sends the chat to RUNBOOK.md step 4"
+  },
+  "routing": {
+   "main": true,
+   "files": [
+    "CLAUDE.md",
+    "RUNBOOK.md"
+   ],
+   "why": "which command or skill; the core's pointer table names RUNBOOK.md"
+  },
+  "brief set-up": {
+   "main": true,
+   "files": [
+    "CLAUDE.md",
+    "automation/README.md"
+   ],
+   "why": "\"set up my brief\"; the core's pointer table names automation/README.md"
+  },
+  "maintainer": {
+   "main": true,
+   "files": [
+    "CLAUDE.md",
+    "MAINTAINING.md",
+    "tools/CLAUDE.md",
+    "tests/CLAUDE.md"
+   ],
+   "touches": [
+    "tools/",
+    "tests/"
+   ],
+   "why": "changing the app: the core sends the chat to MAINTAINING.md, and tools/ and tests/ load their own CLAUDE.md"
+  },
+  "/apply": {
+   "main": true,
+   "files": [
+    ".claude/commands/apply.md",
+    "RUNBOOK.md",
+    ".claude/skills/job-application-assistant/verification-checklist.md"
+   ]
+  },
+  "/scrape": {
+   "main": true,
+   "files": [
+    ".claude/skills/job-scraper/SKILL.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/rank": {
+   "main": true,
+   "files": [
+    ".claude/commands/rank.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/setup": {
+   "main": true,
+   "files": [
+    ".claude/commands/setup.md",
+    ".claude/skills/job-application-assistant/setup-sections.md",
+    "automation/README.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/network": {
+   "main": true,
+   "files": [
+    ".claude/commands/network.md",
+    ".claude/skills/networking/SKILL.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/reply": {
+   "main": true,
+   "files": [
+    ".claude/commands/reply.md",
+    ".claude/skills/networking/SKILL.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/threads": {
+   "main": true,
+   "files": [
+    ".claude/commands/threads.md",
+    ".claude/skills/networking/SKILL.md"
+   ]
+  },
+  "/prep": {
+   "main": true,
+   "files": [
+    ".claude/commands/prep.md",
+    ".claude/skills/networking/SKILL.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/interview": {
+   "main": true,
+   "files": [
+    ".claude/commands/interview.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/outcome": {
+   "main": true,
+   "files": [
+    ".claude/commands/outcome.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/upgrade": {
+   "main": true,
+   "files": [
+    ".claude/commands/upgrade.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "/add-portal": {
+   "main": true,
+   "files": [
+    ".claude/commands/add-portal.md"
+   ]
+  },
+  "/add-template": {
+   "main": true,
+   "files": [
+    ".claude/commands/add-template.md"
+   ]
+  },
+  "/expand": {
+   "main": true,
+   "files": [
+    ".claude/commands/expand.md"
+   ]
+  },
+  "/html-report": {
+   "main": true,
+   "files": [
+    ".claude/commands/html-report.md"
+   ]
+  },
+  "/reset": {
+   "main": true,
+   "files": [
+    ".claude/commands/reset.md"
+   ]
+  },
+  "job-application-assistant skill": {
+   "main": true,
+   "files": [
+    ".claude/skills/job-application-assistant/SKILL.md",
+    ".claude/commands/apply.md",
+    "RUNBOOK.md"
+   ],
+   "why": "loads on its trigger words (a posting, a resume, show me around)"
+  },
+  "page": {
+   "main": true,
+   "files": [
+    ".claude/skills/app/SKILL.md",
+    "RUNBOOK.md"
+   ],
+   "why": "the page rang this chat"
+  },
+  "scheduled run": {
+   "main": true,
+   "files": [
+    "automation/prompts/_common.md",
+    "automation/README.md"
+   ]
+  },
+  "scheduled round": {
+   "main": true,
+   "files": [
+    "automation/prompts/job_round.md",
+    "RUNBOOK.md"
+   ]
+  },
+  "grounding-auditor": {
+   "main": false,
+   "files": [
+    ".claude/agents/grounding-auditor.md"
+   ],
+   "why": "a subagent that starts without the project's CLAUDE.md files (omitClaudeMd)"
+  }
+ },
+ "rules": [
+  {
+   "id": "role-1",
+   "was": "Role",
+   "rule": "The app covers: finding the work.",
+   "bold": "Finding the work",
+   "home": "CLAUDE.md",
+   "anchor": "finding the work",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-2",
+   "was": "Role",
+   "rule": "The app covers: job fit evaluation.",
+   "bold": "Job fit evaluation",
+   "home": "CLAUDE.md",
+   "anchor": "job fit",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-3",
+   "was": "Role",
+   "rule": "The app covers: resume tailoring.",
+   "bold": "Resume tailoring",
+   "home": "CLAUDE.md",
+   "anchor": "tailored resumes and cover letters",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-4",
+   "was": "Role",
+   "rule": "The app covers: cover letter writing.",
+   "bold": "Cover letter writing",
+   "home": "CLAUDE.md",
+   "anchor": "tailored resumes and cover letters",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-5",
+   "was": "Role",
+   "rule": "The app covers: verifying what it produced.",
+   "bold": "Verifying what it produced",
+   "home": "CLAUDE.md",
+   "anchor": "verifying what it made",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-6",
+   "was": "Role",
+   "rule": "The app covers: networking.",
+   "bold": "Networking",
+   "home": "CLAUDE.md",
+   "anchor": "networking, interview preparation",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-7",
+   "was": "Role",
+   "rule": "The app covers: interview preparation.",
+   "bold": "Interview preparation",
+   "home": "CLAUDE.md",
+   "anchor": "interview preparation",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "role-8",
+   "was": "Role",
+   "rule": "The app covers: career strategy.",
+   "bold": "Career strategy",
+   "home": "CLAUDE.md",
+   "anchor": "career strategy",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "never-submits",
+   "was": "Role",
+   "rule": "It never submits or sends anything; every document stops as a file and a person sends it.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "**It never submits or sends anything**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "It never submits or sends anything"
+  },
+  {
+   "id": "one-page",
+   "was": "new in 4.0",
+   "rule": "Everything the person sees and does is on their own page; a chat is where the work runs.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Everything the person sees and does is on their own page",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "profile-import",
+   "was": "The person",
+   "rule": "The person's summary is imported from profile/CLAUDE.md.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "@profile/CLAUDE.md",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "grounded",
+   "was": "The person",
+   "rule": "A claim is grounded when a file person.json grounding.sources names carries it.",
+   "bold": "grounded",
+   "home": "CLAUDE.md",
+   "anchor": "`person.json` `grounding.sources` names carries it",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "grounded"
+  },
+  {
+   "id": "never-a-source",
+   "was": "The person",
+   "rule": "An older resume, a tailored draft or the chat is never a source until the fact is written into 01.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "is never a source until the fact is written into `01`",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "01-wins",
+   "was": "The person",
+   "rule": "Where the sources disagree, 01 wins, and the disagreement is a bug to report and fix.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "`01` wins, and the disagreement is a bug to report and fix rather than a choice to make",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "profile-forms",
+   "was": "The person",
+   "rule": "The rest of profile/ is the same person in the form the tools read.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "the same person in the form the tools read",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "no-profile-setup",
+   "was": "The person",
+   "rule": "With no profile/, setup starts only once app.py start (place.setup_state) says there is none anywhere.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Only with none anywhere (`setting up`) does `/setup` start",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "app-or-copy",
+   "was": "Start of every session",
+   "rule": "This repo is either the app (public, no profile/) or a person's private copy.",
+   "bold": [
+    "the app",
+    "a person's repo"
+   ],
+   "home": "CLAUDE.md",
+   "anchor": "This repo is either the app",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "start-command",
+   "was": "new in 4.0",
+   "rule": "Every chat starts with python3 tools/app.py start and does what it prints.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Run it first in every chat, new or old, whatever an earlier copy of these instructions said",
+   "needed_by": [
+    "every chat"
+   ],
+   "changed": "4.0: the five start steps run inside one command; what each line means is RUNBOOK.md, \"Start of a session\""
+  },
+  {
+   "id": "start-meaning",
+   "was": "Start of every session",
+   "rule": "What each line the start prints means.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "What each line means: RUNBOOK.md, \"Start of a session\"",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "pull-master",
+   "was": "Start of every session",
+   "rule": "Pull master with sync_app.py --pull; it never merges a rewritten master; exit 1 means do what it printed.",
+   "bold": "Pull master",
+   "home": "RUNBOOK.md",
+   "anchor": "It never merges a master whose history was rewritten",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "take-updates",
+   "was": "Start of every session",
+   "rule": "Take the app's updates; the sync never sends anything back and ends with the model check, which goes first in the reply when it applies.",
+   "bold": "Take the app's updates",
+   "home": "RUNBOOK.md",
+   "anchor": "never sends anything back, and ends with the day's model check",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "place-check",
+   "was": "Start of every session",
+   "rule": "The place check's words go at the end of the reply; it offers a choice and never makes it.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "It offers a choice and never makes it.",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "no-computer-chat",
+   "was": "Start of every session",
+   "rule": "Which set-up the place check recommends.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "It recommends no move to a chat on a computer",
+   "needed_by": [
+    "start"
+   ],
+   "changed": "4.0, the maintainer's instruction: no longer two chats with one on the computer for everything; the page and the cloud chats do everything and a computer chat is optional (place.CHATS)"
+  },
+  {
+   "id": "app-leak",
+   "was": "Start of every session",
+   "rule": "In the maintainer's own copy an APP LEAK line goes first in the reply.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "an `APP LEAK` line goes first in the reply",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "add-repo",
+   "was": "Start of every session",
+   "rule": "Exit 2: attach the app read-only with add_repo and try once more, else one line and carry on.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`access=\"read\"`) and try once more",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "never-put-to-person",
+   "was": "Start of every session",
+   "rule": "Never put a sync to the person: saving and updating are always yes.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Never put it to the person: saving and updating are always yes",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "updates-arrive",
+   "was": "Start of every session",
+   "rule": "Updates arrive by themselves unless the person asks to choose: then app_updates when_asked, and --update when they say.",
+   "bold": "Updates arrive by themselves",
+   "home": "CLAUDE.md",
+   "anchor": "write `\"app_updates\": \"when_asked\"` into `profile/person.json` for them",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "updates-arrive-detail",
+   "was": "Start of every session",
+   "rule": "Under when_asked the sync only looks and says once per version that an update waits.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "when a newer version is waiting it prints one line, once per version",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "never-press",
+   "was": "Start of every session",
+   "rule": "Never press them for an update, and nothing waits on it.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Never press them for it, and nothing waits on it.",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "no-profile",
+   "was": "Start of every session",
+   "rule": "No profile/: app.py start says where setup stands first, before anything is asked.",
+   "bold": "No `profile/`?",
+   "home": "RUNBOOK.md",
+   "anchor": "`app.py start` has already said where setup stands, before anything is",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "never-set-up-again",
+   "was": "Start of every session",
+   "rule": "A profile here is never set up again (that is /reset), and nothing is asked.",
+   "bold": "A profile here is never set up again",
+   "home": "RUNBOOK.md",
+   "anchor": "**A profile here is never set up again** (that is `/reset`)",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "sync-changes",
+   "was": "Start of every session",
+   "rule": "Say in one plain line what changed: never a file, a command, a version or a git word.",
+   "bold": "If the sync brought changes",
+   "home": "RUNBOOK.md",
+   "anchor": "never a file, a command, a version or a git word",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "upgrades-apply",
+   "was": "Start of every session",
+   "rule": "Profile upgrades apply themselves; nobody has to ask.",
+   "bold": "Profile upgrades apply themselves; nobody has to ask.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Profile upgrades apply themselves; nobody has to ask.**",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "never-offer-list",
+   "was": "Start of every session",
+   "rule": "Never offer the person a list of upgrades or wait for a yes.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "never offer them a list or wait for a yes",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "claude-alone",
+   "was": "Start of every session",
+   "rule": "What Claude can do alone runs as a background /upgrade agent in a worktree.",
+   "bold": "What Claude can do alone",
+   "home": "RUNBOOK.md",
+   "anchor": "`run_in_background: true`, `isolation: \"worktree\"`",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "request-never-waits",
+   "was": "Start of every session",
+   "rule": "The person's request never waits for the upgrade.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Their request never waits for it.",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "merge-upgrade",
+   "was": "Start of every session",
+   "rule": "When it reports, merge its branch, then state.py follow-ups --write.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "state.py follow-ups --write`: it worked from an older copy of the messages",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "end-of-reply",
+   "was": "Start of every session",
+   "rule": "At the end of the reply, one plain line per change; undo it yourself.",
+   "bold": "At the end of your reply",
+   "home": "RUNBOOK.md",
+   "anchor": "if they want one undone, undo it yourself (`git revert`)",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "needs-person",
+   "was": "Start of every session",
+   "rule": "Ask at most three questions, at the end, each as its short plain question first.",
+   "bold": [
+    "What needs the person",
+    "each as its short plain question first"
+   ],
+   "home": "RUNBOOK.md",
+   "anchor": "ask at most three, at the end of the session, never at the start",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "no-problem",
+   "was": "Start of every session",
+   "rule": "A no gets one line, and --no records it.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "\"No problem, I'll ask again in a month.\"",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "never-paste-id",
+   "was": "Start of every session",
+   "rule": "Never paste a long block, an id, a version number or the word upgrade.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Never paste a long block, an id, a version number or the word \"upgrade\".",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "answer-at-marker",
+   "was": "Start of every session",
+   "rule": "Write each answer where its marker was and commit it.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Write each answer where its marker was and commit it.",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "upgrades-old-copy",
+   "was": "Start of every session",
+   "rule": "If the sync printed nothing about upgrades, run profile_upgrades.py yourself.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "run `python3 tools/profile_upgrades.py` yourself and do the same",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "one-chat-per-update",
+   "was": "Start of every session",
+   "rule": "One chat per update; --take hands them over; the chat that brought it lands it promptly.",
+   "bold": "One chat per update.",
+   "home": "RUNBOOK.md",
+   "anchor": "**One chat per update.**",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "every-day",
+   "was": "Start of every session",
+   "rule": "A chat that carries on for days runs the check every day, before each new piece of work.",
+   "bold": "A chat that carries on for days does this every day, not once.",
+   "home": "RUNBOOK.md",
+   "anchor": "**A chat that carries on for days does this every day, not once.**",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "if-stale-core",
+   "was": "Start of every session",
+   "rule": "Before each new piece of work in a long chat, sync_app.py --if-stale.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "before each new piece of work: after the day's first check it does nothing",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "reminder-is-code",
+   "was": "Start of every session",
+   "rule": "run_round.py and stage_picks.py print a reminder when the check was skipped.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "that reminder is code",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "app-never-profile",
+   "was": "Start of every session",
+   "rule": "The app has no profile and must never get one.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "and it must never get one",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "never-edit-app",
+   "was": "App-owned files and personal files",
+   "rule": "In a person's copy, never edit an app-owned file; the next sync puts it back.",
+   "bold": "In a person's repo, never edit an app-owned file.",
+   "home": "CLAUDE.md",
+   "anchor": "**In a person's copy, never edit an app-owned file.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "In a person's copy, never edit an app-owned file."
+  },
+  {
+   "id": "personal-paths",
+   "was": "App-owned files and personal files",
+   "rule": "tools/personal_paths.py is the line between the person's files and the app's.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "`tools/personal_paths.py` is the line",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "never-report",
+   "was": "App-owned files and personal files",
+   "rule": "Never tell a person who is not the maintainer that the app has a problem, or ask them to report one.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "never tell them the app has a problem or ask them to report one",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "own-tests-public",
+   "was": "App-owned files and personal files",
+   "rule": "A person's own tests use the app's public names only.",
+   "bold": "A person's own tests (`profile/tests`) use the app's public names only.",
+   "home": "RUNBOOK.md",
+   "anchor": "use the app's public names only",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "own-tests-fail",
+   "was": "App-owned files and personal files",
+   "rule": "When they fail after an update, Claude brings them in line in the same turn, never a question for the person.",
+   "bold": "When they fail after an update",
+   "home": "RUNBOOK.md",
+   "anchor": "never a question or a to-do for the person, who hears one plain line at most",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "own-tests-tool",
+   "was": "App-owned files and personal files",
+   "rule": "sync_app.py --own-tests says which fail, why and what to do.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`python3 tools/sync_app.py --own-tests` sorts every failing test",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "own-rules",
+   "was": "App-owned files and personal files",
+   "rule": "A person's own rules go in profile/, never in an app file.",
+   "bold": "A person's own rules go in `profile/`",
+   "home": "CLAUDE.md",
+   "anchor": "**A person's own rules go in `profile/`**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "A person's own rules go in `profile/`"
+  },
+  {
+   "id": "setup-plain",
+   "was": "Claude does the tailoring, and keeps doing it",
+   "rule": "/setup asks plain questions only.",
+   "bold": null,
+   "home": ".claude/commands/setup.md",
+   "anchor": "They answer a few plain questions about themselves",
+   "needed_by": [
+    "/setup"
+   ]
+  },
+  {
+   "id": "never-name-board",
+   "was": "Claude does the tailoring, and keeps doing it",
+   "rule": "Nobody is asked to name a job board, an ATS, a spelling or a setting.",
+   "bold": null,
+   "home": ".claude/commands/setup.md",
+   "anchor": "Never ask them to name a job board, a hiring system, a spelling, a pay source or any setting",
+   "needed_by": [
+    "/setup"
+   ]
+  },
+  {
+   "id": "never-name-board-portal",
+   "was": "Claude does the tailoring, and keeps doing it",
+   "rule": "/add-portal works the board's basics out and never asks.",
+   "bold": null,
+   "home": ".claude/commands/add-portal.md",
+   "anchor": "Nobody is asked to name a job board or a config value",
+   "needed_by": [
+    "/add-portal"
+   ]
+  },
+  {
+   "id": "research-ats",
+   "was": "Claude does the tailoring, and keeps doing it",
+   "rule": "Claude researches the person's market: boards, employer boards (ats_boards.py --find), wording, pay norms, conventions.",
+   "bold": null,
+   "home": ".claude/commands/setup.md",
+   "anchor": "ats_boards.py --find",
+   "needed_by": [
+    "/setup"
+   ]
+  },
+  {
+   "id": "research-cited",
+   "was": "Claude does the tailoring, and keeps doing it",
+   "rule": "Everything researched is cited and stored in profile/.",
+   "bold": null,
+   "home": ".claude/commands/setup.md",
+   "anchor": "then each research file as it arrives, both cited.",
+   "needed_by": [
+    "/setup"
+   ]
+  },
+  {
+   "id": "keeps-going",
+   "was": "Claude does the tailoring, and keeps doing it",
+   "rule": "It keeps going without being asked: a thin round, an uncovered board, a missing employer board, a wrong gate.",
+   "bold": "And it keeps going without being asked.",
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**And it keeps going without being asked.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "read-maintaining",
+   "was": "Developer rules: changing the app itself",
+   "rule": "Before changing any app-owned file, read MAINTAINING.md, Developer rules.",
+   "bold": "Before changing any app-owned file, read `MAINTAINING.md`, \"Developer rules\"",
+   "home": "CLAUDE.md",
+   "anchor": "before changing any app-owned file read MAINTAINING.md, \"Developer rules\"",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "read-maintaining-nested",
+   "was": "Developer rules: changing the app itself",
+   "rule": "The same rule, loaded when a chat opens app code.",
+   "bold": null,
+   "home": "tools/CLAUDE.md",
+   "anchor": "**Before changing any file here, read `MAINTAINING.md`, \"Developer rules\"**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "docs-first",
+   "was": "Developer rules: changing the app itself",
+   "rule": "Claude's own documentation and similar projects are looked at first, unasked.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**Look first at how it is meant to be done, and how others do it**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "app-branch-ci",
+   "was": "Developer rules: changing the app itself",
+   "rule": "The change is made in the app, on a branch, merged with CI green.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**Changes are made in the app**, on a branch, through a pull request, and merged only with CI green",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "leak-scan",
+   "was": "Developer rules: changing the app itself",
+   "rule": "The leak scan passes on the exact tree before anything is pushed.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**Nothing reaches the app until the leak scan has passed on the exact tree being pushed, branches included**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "no-disguised",
+   "was": "Developer rules: changing the app itself",
+   "rule": "No example is a disguised person.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**No example may be a disguised person.**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "never-named",
+   "was": "Developer rules: changing the app itself",
+   "rule": "A real person a run turns up is described, never named (name_guard.py).",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**A real person a run turns up is described, never named**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "profile-upgrade",
+   "was": "Developer rules: changing the app itself",
+   "rule": "A change an existing user would have to act on is a profile upgrade.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**Never ship a feature that only works after a person does something nobody told them about.**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "build-version",
+   "was": "Developer rules: changing the app itself",
+   "rule": "A change to a part of the build that leaves something behind is a new version in build_versions.py.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**A better way of doing any part of the build reaches every older repo by itself.**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "core-short",
+   "was": "new in 4.0",
+   "rule": "The core CLAUDE.md stays short, and every rule has a home in the rule map.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "**The core CLAUDE.md stays short, and every rule has a home.**",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "tests-nested",
+   "was": "new in 4.0",
+   "rule": "Before changing a test, read MAINTAINING.md; never weaken a pin.",
+   "bold": null,
+   "home": "tests/CLAUDE.md",
+   "anchor": "never weaken a pin to make a change pass",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "start-pull",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Start by pulling master and taking the app's updates, before writing anything.",
+   "bold": "Start by pulling master and taking the app's updates",
+   "home": "RUNBOOK.md",
+   "anchor": "**Start by pulling master and taking the app's updates**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "finish-master",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Finish by getting the work onto master: PR, ci_local --quick, merge.",
+   "bold": "Finish by getting the work onto master.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Finish by getting the work onto master.**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "land-core",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Land the work on master before the chat ends.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "land it on master before the chat ends",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "no-merged-branch",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Never leave a merged branch around, and never start new work on an old one.",
+   "bold": "Never leave a merged branch around",
+   "home": "RUNBOOK.md",
+   "anchor": "**Never leave a merged branch around**, and never start new work on an old one.",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "unfinished",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Unfinished work is pushed and said in one plain line; the person is never given a branch name.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "the person is never given a branch name",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "state-merge",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Two chats changing the same state file merge row by row; tell the person which answer was kept.",
+   "bold": "Two chats changing the same state file is not a conflict to resolve by hand.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Two chats changing the same state file is not a conflict to resolve by hand.**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "fetch-merge",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "git fetch origin master, then git merge origin/master, each a command of its own.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "each a command of its own, so that merge happens in the container",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "on-computer",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "On the person's own computer a chat lands its work with gh.",
+   "bold": "On the person's own computer",
+   "home": "RUNBOOK.md",
+   "anchor": "**On a computer of your own** (no GitHub tools in the chat; `gh` is the route",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "first-chat",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "The first chat on a computer works in the copy itself.",
+   "bold": "The first chat on a computer works in the copy itself",
+   "home": "RUNBOOK.md",
+   "anchor": "the first chat works in the copy itself",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "second-chat",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "A second chat there at the same time works in a folder of its own, made first.",
+   "bold": "a second chat open there at the same time works in a folder of its own, made before any other work",
+   "home": "RUNBOOK.md",
+   "anchor": "a second chat open there at the same time works in a folder of its own",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "never-chained",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Each git and gh command runs alone, the merge above all, never chained.",
+   "bold": "Each runs as a command of its own, the merge above all, never chained",
+   "home": "RUNBOOK.md",
+   "anchor": "**Run each line as a command of its own, the merge above all: never chained",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "never-chained-core",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "The same, said where every chat reads it.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "each git and gh command on its own line, never chained",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "ci-green",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Never push to master without CI green.",
+   "bold": "not",
+   "home": "RUNBOOK.md",
+   "anchor": "**never push to master without CI green**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "ci-green-core",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "The same, said where every chat reads it.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "never onto master without CI green (in a person's copy, `./tools/ci_local.sh --quick`)",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "green-local",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "On a private copy, green is established locally with ci_local.sh --quick.",
+   "bold": "On a private repo, green is established locally, and that is the rule: `./tools/ci_local.sh --quick`",
+   "home": "RUNBOOK.md",
+   "anchor": "**On a private copy, green is established locally, and that is the rule: `./tools/ci_local.sh --quick`**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "quick-skips",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "--quick skips only the compile of the app's example documents, which a person's copy never edits.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "which a person's copy never edits",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "name-skips",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Say so in the pull request and name anything reported as SKIP.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "name anything it reported as SKIP",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "ci-why",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Why, and the one case worth a billed CI run, is in MAINTAINING.md.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "MAINTAINING.md, \"CI on a private repo\"",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "batch-commits",
+   "was": "Master is the trunk. Finish on it, start from it.",
+   "rule": "Batch the commits and push once, when a unit of work is finished.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Batch the commits and push once a unit of work is finished.",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "private-persist",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "A person's copy is private, nothing persists unless committed, and the state is committed there.",
+   "bold": "private",
+   "home": "RUNBOOK.md",
+   "anchor": "nothing persists unless it is committed, and the state is committed there",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "persist-core",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "The same, said where every chat reads it.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Nothing persists unless it is committed",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "upstream-tracker",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "Upstream's never-commit-the-tracker rule is for public forks.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Upstream's \"never commit the tracker\" rule is for public forks.",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "no-gitignore",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "Never edit .gitignore; security_guards.py enforces it.",
+   "bold": "Do not edit `.gitignore`",
+   "home": "CLAUDE.md",
+   "anchor": "never edit `.gitignore`",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "no-gitignore-why",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "Why: security_guards.py enforces it in CI, so ignored files are forced in instead.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "**Do not edit `.gitignore`**: `tools/security_guards.py` enforces it in CI",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "save-state",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "python3 tools/save_state.py stages the person's files.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "`python3 tools/save_state.py` stages the person's files",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "save-any-shell",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "save_state.py is the rule as code, so it works in any shell.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`save_state.py` is the rule as code, so it works in any shell",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "plain-add",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "profile and networking take a plain git add, never -f.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "with a plain `git add`, never `-f`, which would force in the caches under `profile/tests/`",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "threads-never-lost",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "network_threads.csv is the file that must never be lost.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`network_threads.csv` is the file that must never be lost",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "rounds-outside",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "documents/rounds/<round>.json sits outside the ignored rounds/ on purpose.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "sits outside the ignored `rounds/` on purpose",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "build-noise",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "Build noise is never staged, nor salary_data.json.",
+   "bold": "Build noise is never staged",
+   "home": "RUNBOOK.md",
+   "anchor": "**Build noise is never staged**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "build-noise-core",
+   "was": "Persistence rule for a person's repo (deviates from upstream)",
+   "rule": "Never force in build noise.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "never force in build noise",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "setup-env",
+   "was": "Environment notes for cloud sessions",
+   "rule": "./tools/setup_env.sh sets the container up; its header line is cached in the setup script.",
+   "bold": "`./tools/setup_env.sh` sets the container up",
+   "home": "RUNBOOK.md",
+   "anchor": "**`./tools/setup_env.sh` sets the container up**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "not-hook",
+   "was": "Environment notes for cloud sessions",
+   "rule": "It is not a SessionStart hook, on purpose.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "It is not a SessionStart hook, on purpose",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "env-errors",
+   "was": "Environment notes for cloud sessions",
+   "rule": "fontawesome5.sty not found is an unset TEXMFHOME; a pyo3 panic is a broken cffi.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`File fontawesome5.sty not found` is an unset `TEXMFHOME`",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "board-unreachable",
+   "was": "Environment notes for cloud sessions",
+   "rule": "A job board the session cannot reach: check the proxy status for connect_rejected.",
+   "bold": "A job board the session cannot reach",
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**A job board the session cannot reach**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "no-route-around",
+   "was": "Environment notes for cloud sessions",
+   "rule": "A policy denial is not a bug: do not route around it.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "do not route around it",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "env-say",
+   "was": "Environment notes for cloud sessions",
+   "rule": "Tell the person what env_check.py --say prints, word for word.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "tools/env_check.py --say` prints, word for word",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "no-search-blocked",
+   "was": "Environment notes for cloud sessions",
+   "rule": "Until it is fixed, run no search; /apply with pasted text still works.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "Until it is fixed, run no search: a web search in its place finds old, closed jobs.",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "auto-registry",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "automation/README.md is the whole story; profile/routines.json is the registry.",
+   "bold": "`automation/README.md` is the whole story; `profile/routines.json` is the registry",
+   "home": "automation/README.md",
+   "anchor": "registry, `profile/routines.json`",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "auto-pointer",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "The brief and other scheduled tasks: automation/README.md.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "The brief and other scheduled tasks",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "brief-twice",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "The default is one task, a brief twice a week.",
+   "bold": "a brief twice a week",
+   "home": "automation/README.md",
+   "anchor": "**a brief, twice a week**",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "round-optional",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "A scheduled job round is optional and off by default.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "it is off by default",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "setups",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Two set-ups work: (a) one chat per task, (b) a routine with the repo ticked.",
+   "bold": [
+    "(a)",
+    "(b)"
+   ],
+   "home": "automation/README.md",
+   "anchor": "### (a) One chat per briefing",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "normal-pr",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Changing what a task does is a normal pull request.",
+   "bold": "changing what a task does is a normal PR",
+   "home": "automation/README.md",
+   "anchor": "changing what a task does is a pull request and never an edit to the task",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "schedule-change",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Only a schedule change needs update_trigger or the routine's own page.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "Only a change of schedule needs `update_trigger` or the routine's own page",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "final-reply",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "The final reply is the message; nothing depends on fire_trigger.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "nothing depends on `fire_trigger`",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "never-archive",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Never archive, delete or rebuild an older shared chat that still relays.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "**If yours still works, do not archive, delete or rebuild that chat.**",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "never-fire-test",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Never test a chat-bound task with fire_trigger: a one-off run_once_at task instead.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "**Never test a chat-bound task with `fire_trigger`.**",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "routines-check",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "routines.py check validates the registry.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "`python3 tools/routines.py check` reads `profile/routines.json`",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "set-up-my-brief",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Set up my brief is set-up (a), and /setup does it at its end, asking nothing.",
+   "bold": "\"Set up my brief\" is set-up (a) in `automation/README.md`, and `/setup` does it at its end, asking nothing.",
+   "home": "automation/README.md",
+   "anchor": "**\"Set up my brief\" is set-up (a), and `/setup` does it at its end, asking nothing.**",
+   "needed_by": [
+    "brief set-up",
+    "/setup"
+   ]
+  },
+  {
+   "id": "brief-exists",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "A brief that exists, whatever it is called, is attached to and never made twice.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "is attached to and never made twice",
+   "needed_by": [
+    "brief set-up",
+    "/setup"
+   ]
+  },
+  {
+   "id": "brief-cloud",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "The brief always runs in the cloud.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "The brief always runs in the cloud",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "cloud-calls",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "In a cloud chat: create_session, create_trigger bound to it, a one-off first brief, never fire_trigger.",
+   "bold": "In a cloud chat",
+   "home": "automation/README.md",
+   "anchor": "`create_trigger` bound to that chat (`persistent_session_id`)",
+   "needed_by": [
+    "brief set-up",
+    "/setup"
+   ]
+  },
+  {
+   "id": "computer-brief",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "On their computer: with RemoteTrigger, make it as (b); without, give the steps once.",
+   "bold": "On their computer",
+   "home": "automation/README.md",
+   "anchor": "with the `RemoteTrigger` tool, make it yourself as (b)",
+   "needed_by": [
+    "brief set-up",
+    "/setup"
+   ]
+  },
+  {
+   "id": "never-cloud-shell",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Never start a cloud chat from your own shell.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "Claude cannot start a cloud chat from its own shell on your computer, so it never tries",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "never-desktop-task",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Never make a desktop scheduled task for the brief.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "A scheduled task that runs on your computer is never used for it",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "never-file-id",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Tell the person only the one line routines.py brief gives, never its file, id or task name.",
+   "bold": null,
+   "home": "automation/README.md",
+   "anchor": "never its file, id or task name",
+   "needed_by": [
+    "brief set-up",
+    "/setup"
+   ]
+  },
+  {
+   "id": "silence",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Silence is the alarm: a brief day with no brief means the automation is broken.",
+   "bold": "Silence is the alarm",
+   "home": "automation/README.md",
+   "anchor": "silence always means something failed",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "followups-auto",
+   "was": "Automation: what runs without anyone asking",
+   "rule": "Every dated follow-up is automatic by construction: a date in a state file, never another routine.",
+   "bold": "Every dated follow-up is automatic by construction",
+   "home": "automation/README.md",
+   "anchor": "**Every dated follow-up is automatic by construction**",
+   "needed_by": [
+    "brief set-up"
+   ]
+  },
+  {
+   "id": "model-check",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "model_guide.py prints nothing when the model fits; otherwise its line goes first.",
+   "bold": "Which model, and how hard it thinks.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Which model, and how hard it thinks.**",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "models-pinned",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "Models are pinned per stage to 11-cost-model.md; anything that could put a false claim in front of an employer is never downgraded.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "runs on the session's own model and is never downgraded",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "workflows",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "The draft-applications workflow and its args.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`draft-applications`, whose args are the contents of `draft_args.json`",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "repo-audit",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "The repo-audit workflow: four sonnet readers, a sceptic, one ranking pass; read-only.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "four sonnet readers over docs, code, networking state and records",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "subagents",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "Two subagents carry the same split for a single /apply, an /interview or a networking call.",
+   "bold": "subagents",
+   "home": "RUNBOOK.md",
+   "anchor": "Two subagents in `.claude/agents/` carry the same split",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "auditor-pinned",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "lint_skills.py checks their frontmatter and a test pins the two models.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "so the auditor cannot be quietly downgraded",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "drafting-path",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "The drafting path: stage, consent, the pack, the workflow, audit, assemble.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "python3 tools/stage_picks.py assemble \"$SCRATCH/r1\"",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "both-audits",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "Every draft that will be sent gets both audits; one the code audit alone passed is never assembled.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "a draft the code audit alone passed is never assembled",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "skill-consent",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "A skill a posting names that the profile does not hold is the person's call, every time.",
+   "bold": "A skill a posting names that the profile does not hold is the person's call, every time",
+   "home": "RUNBOOK.md",
+   "anchor": "**A skill a posting names that the profile does not hold is the person's call, every time**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "name-not-reused",
+   "was": "Orchestration: workflows and model choice",
+   "rule": "stage never reuses a name another application was sent under.",
+   "bold": "never reuses a name another application was sent under",
+   "home": "RUNBOOK.md",
+   "anchor": "`stage` **never reuses a name another application was sent under**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "skills-commands",
+   "was": "Commands and skills: what routes where",
+   "rule": "Skills are knowledge that loads by topic; commands are typed with a slash.",
+   "bold": [
+    "Skills",
+    "Commands"
+   ],
+   "home": "RUNBOOK.md",
+   "anchor": "**Skills** are knowledge that loads when a topic comes up",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "scrape-name",
+   "was": "Commands and skills: what routes where",
+   "rule": "job-scraper declares the name scrape.",
+   "bold": "`scrape`",
+   "home": "RUNBOOK.md",
+   "anchor": "`job-scraper` (declared name: **`scrape`**)",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "no-skill-commands",
+   "was": "Commands and skills: what routes where",
+   "rule": "/html-report and /upgrade belong to no skill.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Also `/html-report` and `/upgrade`",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "two-slash",
+   "was": "Commands and skills: what routes where",
+   "rule": "Two things are typed with a slash; /scrape and /upskill have no command file.",
+   "bold": [
+    "Two things are typed with a slash.",
+    "`/scrape` and `/upskill` work with no command file behind them"
+   ],
+   "home": "RUNBOOK.md",
+   "anchor": "**`/scrape` and `/upskill` work with no command file behind them**",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "pairs",
+   "was": "Commands and skills: what routes where",
+   "rule": "The pairs that get confused: networking (skill) vs /network (command).",
+   "bold": [
+    "The pairs that get confused:",
+    "`networking` (skill) vs `/network` (command)."
+   ],
+   "home": "RUNBOOK.md",
+   "anchor": "**`networking` (skill) vs `/network` (command).**",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "prep-vs-interview",
+   "was": "Commands and skills: what routes where",
+   "rule": "/prep prepares a networking call; /interview a real interview.",
+   "bold": [
+    "`/prep` vs `/interview`.",
+    "networking call",
+    "real interview"
+   ],
+   "home": "RUNBOOK.md",
+   "anchor": "**`/prep` vs `/interview`.**",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "prep-vs-interview-core",
+   "was": "Commands and skills: what routes where",
+   "rule": "The same pair, named in the core's pointer table.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "`/prep` is a networking call; `/interview` a real interview",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "recruiter-screen",
+   "was": "Commands and skills: what routes where",
+   "rule": "A recruiter screen on a live hiring process is an interview stage.",
+   "bold": "A recruiter screen on a live hiring process is an interview stage",
+   "home": "RUNBOOK.md",
+   "anchor": "**A recruiter screen on a live hiring process is an interview stage**",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "prep-me",
+   "was": "Commands and skills: what routes where",
+   "rule": "Prep me for <employer> is almost always /interview; if ambiguous, ask.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "\"Prep me for <employer>\" is almost always `/interview`.",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "living-doc",
+   "was": "Commands and skills: what routes where",
+   "rule": "Each process keeps one living interview_prep.md, updated in place and sent again on every change.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Each process keeps one living document, `interview_prep.md` in its folder",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "scraper-vs-scrape",
+   "was": "Commands and skills: what routes where",
+   "rule": "job-scraper and scrape are one skill.",
+   "bold": "`job-scraper` vs `scrape`.",
+   "home": "RUNBOOK.md",
+   "anchor": "**`job-scraper` vs `scrape`.**",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "agents-skills",
+   "was": "Commands and skills: what routes where",
+   "rule": ".agents/skills/ are search tools, never invoked directly.",
+   "bold": "`.claude/skills/` vs `.agents/skills/`.",
+   "home": "RUNBOOK.md",
+   "anchor": "they are never invoked directly",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "portals",
+   "was": "Commands and skills: what routes where",
+   "rule": "A person turns a shipped portal off in profile/search.py PORTALS, never in its SKILL.md.",
+   "bold": "Portals and employer boards.",
+   "home": "RUNBOOK.md",
+   "anchor": "a person turns either off in `profile/search.py` `PORTALS`, never in its `SKILL.md`",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "openroles",
+   "was": "Commands and skills: what routes where",
+   "rule": "The vendored openroles in tools/openroles/ is never edited here.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "in `tools/openroles/` (never edited here)",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "openroles-nested",
+   "was": "Commands and skills: what routes where",
+   "rule": "The same, loaded when a chat opens app code.",
+   "bold": null,
+   "home": "tools/CLAUDE.md",
+   "anchor": "`tools/openroles/` is vendored from openroles and never edited here.",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "tools-direct",
+   "was": "Commands and skills: what routes where",
+   "rule": "Tools run directly, not through a slash command: RUNBOOK.md's table.",
+   "bold": "Tools run directly, not through a slash command",
+   "home": "RUNBOOK.md",
+   "anchor": "## Tools run directly, not through a slash command",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "run-round-exit",
+   "was": "Commands and skills: what routes where",
+   "rule": "run_round.py exits 0 met, 2 missed, 1 a stage broke.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "**Exit 0 met, exit 2 missed, exit 1 a stage actually broke**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "not-contact-store",
+   "was": "Repo Structure",
+   "rule": "networking/connection_targets.md is research notes only, not a contact store.",
+   "bold": "Not a contact store",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**Not a contact store**: `network_contacts.csv` is",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "repo-structure",
+   "was": "Repo Structure",
+   "rule": "Where things are: cv/, cover_letters/, .claude/skills/, .agents/skills/.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "**Where things are**",
+   "needed_by": [
+    "routing"
+   ]
+  },
+  {
+   "id": "apply-takes-it",
+   "was": "Workflow for New Job Applications",
+   "rule": "A posting given is /apply's, which takes it from there.",
+   "bold": null,
+   "home": ".claude/skills/job-application-assistant/SKILL.md",
+   "anchor": "When the user provides a job posting (URL or text), follow this workflow",
+   "needed_by": [
+    "job-application-assistant skill"
+   ]
+  },
+  {
+   "id": "fit-first",
+   "was": "Workflow for New Job Applications",
+   "rule": "Always evaluate fit first: gates, the four weighted dimensions, the 0-100 score and band, before drafting.",
+   "bold": "Always evaluate fit first",
+   "home": ".claude/commands/apply.md",
+   "anchor": "**Always evaluate fit first** against `profile/04-job-evaluation.md`",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "same-pipeline",
+   "was": "Workflow for New Job Applications",
+   "rule": "One application and a batch take the same pipeline.",
+   "bold": null,
+   "home": ".claude/commands/apply.md",
+   "anchor": "so one application and twenty come out alike",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "allocated",
+   "was": "Workflow for New Job Applications",
+   "rule": "Bullets are allocated per posting by allocate.py, never hand-picked.",
+   "bold": "allocated per posting",
+   "home": "RUNBOOK.md",
+   "anchor": "Bullets are **allocated per posting** by `tools/allocate.py`, never hand-picked",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "layout",
+   "was": "Workflow for New Job Applications",
+   "rule": "The renderer enforces the layout.",
+   "bold": null,
+   "home": ".claude/commands/apply.md",
+   "anchor": "the layout the renderer enforces",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "filenames",
+   "was": "Workflow for New Job Applications",
+   "rule": "Filenames are human-looking.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "filenames are human-looking",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "outreach-every",
+   "was": "Workflow for New Job Applications",
+   "rule": "Every application gets an outreach note and a kept draft.json.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "every application gets one",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "fix-in-draft",
+   "was": "Workflow for New Job Applications",
+   "rule": "A finding is fixed in the draft object, never by hand in the .tex.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A finding is fixed in the draft object and rendered again, never by hand in the `.tex`",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "verify-both",
+   "was": "Workflow for New Job Applications",
+   "rule": "Verify both documents.",
+   "bold": "Verify both documents",
+   "home": "RUNBOOK.md",
+   "anchor": "**Verify both documents**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "talking-points",
+   "was": "Workflow for New Job Applications",
+   "rule": "Interview talking points come from /interview.",
+   "bold": null,
+   "home": ".claude/skills/job-application-assistant/SKILL.md",
+   "anchor": "### Step 4: Interview Preparation",
+   "needed_by": [
+    "job-application-assistant skill"
+   ]
+  },
+  {
+   "id": "profile-doc-rules",
+   "was": "Workflow for New Job Applications",
+   "rule": "The profile can add document rules of its own, followed exactly like the app's.",
+   "bold": "Important:",
+   "home": "CLAUDE.md",
+   "anchor": "and they are followed exactly like the app's",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "someone-else",
+   "was": "Workflow for New Job Applications",
+   "rule": "A resume for somebody other than the candidate: RUNBOOK.md, Documents for someone else.",
+   "bold": "A resume for somebody other than the candidate",
+   "home": "CLAUDE.md",
+   "anchor": "A resume for somebody other than the candidate",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "search-end-to-end",
+   "was": "Job Search Behaviour",
+   "rule": "Run a job search end to end and stop at the ranked shortlist.",
+   "bold": "When the user asks to run a job search, scan, or scrape, run the search end to end and stop at the ranked shortlist.",
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**When the user asks to run a job search, scan, or scrape, run the search end to end and stop at the ranked shortlist.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "search-core",
+   "was": "Job Search Behaviour",
+   "rule": "The core names where a job search's rules live.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "A job search: run it end to end, rank down, the hard cuts, stop at the shortlist and ask",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "yield-target",
+   "was": "Job Search Behaviour",
+   "rule": "Expand and repeat, up to 3 rounds, until at least 5 postings at 60+, 2 of them 75+.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**Yield target: at least 5 postings scoring 60+, of which 2 score 75+.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "apply-link",
+   "was": "Job Search Behaviour",
+   "rule": "Every posting presented carries a clickable apply link.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**Every posting presented, and every posting documents are drafted for, carries a clickable apply link.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "stop-ask",
+   "was": "Job Search Behaviour",
+   "rule": "Stop there and ask which to take forward; draft nothing unasked.",
+   "bold": "Stop there and ask",
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**Stop there and ask** which ones to take forward",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "already-applied",
+   "was": "Job Search Behaviour",
+   "rule": "Before drafting anything, ask whether they have already applied and record the answer.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**Before drafting anything, confirm the user has not already applied.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "rank-down",
+   "was": "Job Search Behaviour",
+   "rule": "Rank down, do not cut.",
+   "bold": "Rank down, do not cut.",
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**Rank down, do not cut.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "hard-cuts",
+   "was": "Job Search Behaviour",
+   "rule": "The hard cuts, each on a quoted sentence.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**Only these are hard cuts**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "no-salary",
+   "was": "Job Search Behaviour",
+   "rule": "A posting with no stated salary loses nothing.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "**A posting with no stated salary is not penalized.**",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "never-pad",
+   "was": "Job Search Behaviour",
+   "rule": "Never pad a thin run with sub-60 postings, and never relax a gate or the location filter.",
+   "bold": null,
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "Never pad a thin run with sub-60 postings, and never relax a gate or the location filter to hit the number.",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "rules-every-search",
+   "was": "Job Search Behaviour",
+   "rule": "The rules every search keeps, and why.",
+   "bold": "The rules every search keeps, and why",
+   "home": ".claude/skills/job-scraper/SKILL.md",
+   "anchor": "## The rules every search keeps",
+   "needed_by": [
+    "/scrape"
+   ]
+  },
+  {
+   "id": "extension",
+   "was": "Networking and Outreach",
+   "rule": "Networking is an extension of this system, not a parallel one.",
+   "bold": "extension of this system, not a parallel one",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**extension of this system, not a parallel one**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "status-derived",
+   "was": "Networking and Outreach",
+   "rule": "Status is derived from the messages wherever the log can know it; what it cannot know is stored on the row and wins.",
+   "bold": "Status is derived from the messages wherever the log can know it",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**Status is derived from the messages wherever the log can know it**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "load-skill",
+   "was": "Networking and Outreach",
+   "rule": "Load the networking skill before any outreach; every networking rule is in it.",
+   "bold": "Every networking rule is in the networking skill, and enforced in code",
+   "home": "CLAUDE.md",
+   "anchor": "load the networking skill before any outreach",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "no-linkedin-core",
+   "was": "Networking and Outreach",
+   "rule": "No LinkedIn page is ever fetched.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "no LinkedIn page is ever fetched",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "enforced-list",
+   "was": "Networking and Outreach",
+   "rule": "The search budget, alumni and referral routes first, tier 1 on a quoted signal, reading first, nobody contacted twice.",
+   "bold": null,
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "someone already contacted is never surfaced",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "surface",
+   "was": "Networking and Outreach",
+   "rule": "Nobody is shown as someone to write to without surface.py.",
+   "bold": "Nobody is shown as someone to write to without the one check",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**Nobody is shown as someone to write to without the one check**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "never-join",
+   "was": "Networking and Outreach",
+   "rule": "Never join files or check people by hand.",
+   "bold": null,
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "Never join files or check people by hand.",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "three-stages",
+   "was": "Networking and Outreach",
+   "rule": "Outreach is for referrals, in three stages never compressed into one.",
+   "bold": "Outreach is for referrals, in three stages never compressed into one:",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**Outreach is for referrals, in three stages never compressed into one:**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "who-reads",
+   "was": "Networking and Outreach",
+   "rule": "Who reads a first note decides what it says.",
+   "bold": "Who reads a first note decides what it says",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**Who reads a first note decides what it says**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "advise",
+   "was": "Networking and Outreach",
+   "rule": "compose.advise(): rewritten on its warnings first; a warning left standing is shown for the person to decide.",
+   "bold": null,
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "shown with the draft for the person to decide, never in place of the rewrite",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "limits",
+   "was": "Networking and Outreach",
+   "rule": "Connection notes are the plan's limit, hard: compose.py raises, never truncates.",
+   "bold": null,
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "`compose.py` raises, never truncates",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "no-linkedin-fetch",
+   "was": "Networking and Outreach",
+   "rule": "No LinkedIn profile is ever fetched from a session; LinkedIn's job search stays on.",
+   "bold": "stays on",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "No LinkedIn profile is ever fetched from a session, and LinkedIn's job search **stays on**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "new-computer",
+   "was": "Networking and Outreach",
+   "rule": "A chat on the person's computer starts with On a new computer.",
+   "bold": "A chat on the person's computer",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**A chat on the person's computer** starts with \"On a new computer\"",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "never-claim",
+   "was": "Networking and Outreach",
+   "rule": "Never claim anything not in profile/01-candidate-profile.md.",
+   "bold": null,
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "Never claim anything not in `profile/01-candidate-profile.md`.",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "never-claim-auditor",
+   "was": "Networking and Outreach",
+   "rule": "The auditor traces every claim to a grounding source.",
+   "bold": null,
+   "home": ".claude/agents/grounding-auditor.md",
+   "anchor": "**Every claim about the candidate traces to a grounding source**",
+   "needed_by": [
+    "grounding-auditor"
+   ]
+  },
+  {
+   "id": "linkedin-download",
+   "was": "Networking and Outreach",
+   "rule": "A LinkedIn download is taken first with export.py take; never read straight from Downloads.",
+   "bold": "A LinkedIn download the person gives is taken first",
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "**A LinkedIn download the person gives is taken first**",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "resume-attached",
+   "was": "Networking and Outreach",
+   "rule": "A resume sent to a contact is logged with its file; RECONCILE says where two chats disagree.",
+   "bold": null,
+   "home": ".claude/skills/networking/SKILL.md",
+   "anchor": "RECONCILE (`python3 tools/network/state.py`) says where the two disagree",
+   "needed_by": [
+    "/network",
+    "/reply",
+    "/threads",
+    "/prep"
+   ]
+  },
+  {
+   "id": "steps-registry",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "Steps on another company's screens come from claude_surfaces.json.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "only the steps `python3 tools/claude_surfaces.py steps <id>` prints",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "check-that-day",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "Before giving one, check its official page that day (a web search for linkedin.com).",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "only after checking the official page it names that day",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "give-what-it-says",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "Where the page says something else, give what it says.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Where the page says something else, give what it says",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "could-not-check",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "Where it cannot be checked, say I could not check this today.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "say \"I could not check this today\"",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "never-from-memory",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "Never pass on a step about another site from memory.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Never pass on a step about another site from memory.",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "dated-for-claude",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "Each step's date and official page are for Claude, never the person.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "(`claude_surfaces.source`, on stderr from `steps` and `say`, and a comment in a doc's block), never the person",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "fix-entry",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "A step that no longer matches its page is fixed in the registry.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "re-read the page, correct the entry",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "screen-test",
+   "was": "A step on another company's site is checked before it is given",
+   "rule": "A screen name outside the registry fails tests/test_claude_surfaces.py.",
+   "bold": null,
+   "home": "MAINTAINING.md",
+   "anchor": "`tests/test_claude_surfaces.py` fails on a vocabulary phrase outside the registry",
+   "needed_by": [
+    "maintainer"
+   ]
+  },
+  {
+   "id": "page-first",
+   "was": "Every output is shown, never only filed",
+   "rule": "Everything the person asked for goes on their page first.",
+   "bold": "in the reply",
+   "home": "CLAUDE.md",
+   "anchor": "**Everything the person asked for goes on their page first**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Everything the person asked for goes on their page first",
+   "changed": "4.0, the maintainer's instruction: the page comes first; delivering in the reply is the fallback where no page can be published (RUNBOOK.md, \"Delivering in the chat\")"
+  },
+  {
+   "id": "page-view",
+   "was": "new in 4.0",
+   "rule": "Bring the page up to date with app.py view; files in the page's own store.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "bring the page up to date with `python3 tools/app.py view`",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "republish",
+   "was": "new in 4.0",
+   "rule": "Republish only when the page's own code changed.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "republish only when the page's own code changed",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "page-answer",
+   "was": "new in 4.0",
+   "rule": "When the request came from the page, the answer goes back there.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "When the request came from the page, the answer goes back there",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "question-on-page",
+   "was": "new in 4.0",
+   "rule": "A question for the person goes on the page as a To do card, never left waiting in a chat.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "A question for the person goes on the page too, as a To do card, never left waiting in a chat.",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "read-section",
+   "was": "new in 4.0",
+   "rule": "Read only the section a pointer names, never a whole long file: what a chat reads stays in its context.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Read only the section a row names",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "no-page",
+   "was": "new in 4.0",
+   "rule": "Where no page can be published, the chat is the page.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Where no page can be published, the chat is the page",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "in-reply",
+   "was": "Every output is shown, never only filed",
+   "rule": "Without a page, every output arrives in the reply; nobody goes looking in the repo.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "every output arrives **in the reply**",
+   "needed_by": [
+    "/apply",
+    "/prep",
+    "/interview",
+    "/network",
+    "/reply"
+   ]
+  },
+  {
+   "id": "paste-full",
+   "was": "Every output is shown, never only filed",
+   "rule": "Text they will send is pasted in full, ready to copy.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Text they will send (messages, notes, questions) is pasted in full",
+   "needed_by": [
+    "/apply",
+    "/prep",
+    "/interview",
+    "/network",
+    "/reply"
+   ]
+  },
+  {
+   "id": "shown-name",
+   "was": "Every output is shown, never only filed",
+   "rule": "A document is sent under a name that says whose it is (shown.py).",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "as the copy `python3 tools/shown.py <file>` makes",
+   "needed_by": [
+    "/prep",
+    "/interview"
+   ]
+  },
+  {
+   "id": "no-sendfile",
+   "was": "Every output is shown, never only filed",
+   "rule": "Where the chat has no SendUserFile, paste the one screen and write the full path on its own line.",
+   "bold": "Where the chat has no SendUserFile",
+   "home": "RUNBOOK.md",
+   "anchor": "**Where the chat has no SendUserFile**",
+   "needed_by": [
+    "/apply",
+    "/prep",
+    "/interview",
+    "/network",
+    "/reply"
+   ]
+  },
+  {
+   "id": "path-record",
+   "was": "Every output is shown, never only filed",
+   "rule": "The file path is the record, never the answer on its own.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "A file path is the record, never the answer on its own.",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "path-record-detail",
+   "was": "Every output is shown, never only filed",
+   "rule": "I've put it in documents/... is not done; show the new version, not where it went.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "show the new version, not where it went",
+   "needed_by": [
+    "/apply",
+    "/prep",
+    "/interview",
+    "/network",
+    "/reply"
+   ]
+  },
+  {
+   "id": "apps-one-way",
+   "was": "Every output is shown, never only filed",
+   "rule": "Applications, one or a batch, are delivered one way.",
+   "bold": "Applications, one or a batch, are delivered one way",
+   "home": "RUNBOOK.md",
+   "anchor": "**Applications, one or a batch, are delivered one way**",
+   "needed_by": [
+    "/apply",
+    "scheduled round"
+   ]
+  },
+  {
+   "id": "per-role",
+   "was": "Every output is shown, never only filed",
+   "rule": "Per role, one file-sending call with resume and letter, captioned.",
+   "bold": "Per role, one file-sending call",
+   "home": "RUNBOOK.md",
+   "anchor": "**Per role, one file-sending call**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "index-table",
+   "was": "Every output is shown, never only filed",
+   "rule": "Then one index table in the reply: role | apply link.",
+   "bold": "Then one index table in the reply",
+   "home": "RUNBOOK.md",
+   "anchor": "**Then one index table in the reply**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "no-md-link",
+   "was": "Every output is shown, never only filed",
+   "rule": "No markdown link to a file in the repo.",
+   "bold": "No markdown link to a file in the repo",
+   "home": "RUNBOOK.md",
+   "anchor": "**No markdown link to a file in the repo**",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "never-one-caption",
+   "was": "Every output is shown, never only filed",
+   "rule": "Never one caption listing every file, never a table of file links, never one message per role in place of the index.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Never one caption listing every file, never a table of file links",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "never-used",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Most people have never used a terminal, GitHub or a cloud setting.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Most people using this have never used a terminal, GitHub or a cloud setting",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "plain-english",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Plain English: no word they would have to look up.",
+   "bold": "Plain English.",
+   "home": "CLAUDE.md",
+   "anchor": "**Plain English.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Plain English."
+  },
+  {
+   "id": "one-rec",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "One recommendation, with why; other options only if they ask.",
+   "bold": "One recommendation.",
+   "home": "CLAUDE.md",
+   "anchor": "**One recommendation.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "One recommendation."
+  },
+  {
+   "id": "clear-steps",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Clear steps: one action a line, numbered.",
+   "bold": "Clear steps.",
+   "home": "CLAUDE.md",
+   "anchor": "**Clear steps.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Clear steps."
+  },
+  {
+   "id": "short",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Short: reasons, detail and alternatives come when they ask, never before.",
+   "bold": "Short.",
+   "home": "CLAUDE.md",
+   "anchor": "Reasons, detail and alternatives come when they ask, never before.",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Short."
+  },
+  {
+   "id": "git-yours",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Git and GitHub are yours, done without asking and never explained.",
+   "bold": "Git and GitHub are yours, done without asking and never explained.",
+   "home": "CLAUDE.md",
+   "anchor": "**Git and GitHub are yours, done without asking and never explained.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Git and GitHub are yours, done without asking and never explained."
+  },
+  {
+   "id": "never-repeated",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Lines a tool prints for Claude are never repeated.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "are never repeated",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "tools-words",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "The tools' own messages are passed on as they are, never reworded into jargon.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "pass them on as they are, never reworded into jargon",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "draft-not-claim",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "A draft they ask for is not a claim.",
+   "bold": "A draft they ask for is not a claim.",
+   "home": "CLAUDE.md",
+   "anchor": "**A draft they ask for is not a claim.**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "A draft they ask for is not a claim."
+  },
+  {
+   "id": "never-refuse",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "Never refuse and never question whether it happened.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "Never refuse and never question whether it happened.",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "confirm-first",
+   "was": "Talking to the person: plain words, one recommendation, short",
+   "rule": "A draft reaches the profile, or anything an employer or a contact sees, only once the person confirms it.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "A draft reaches the profile, or anything an employer or a contact sees, only once the person confirms it",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "learned-kept",
+   "was": "Learning the person: it grows with them",
+   "rule": "Their reactions are kept for good in profile/learned.json; no sync or upgrade changes them.",
+   "bold": "they are kept for good in `profile/learned.json`",
+   "home": "RUNBOOK.md",
+   "anchor": "**they are kept for good in `profile/learned.json`**",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "defaults-stay",
+   "was": "Learning the person: it grows with them",
+   "rule": "The app's defaults are where everyone starts; the person's reactions outrank every default.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "The person's own reactions outrank every default",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "whenever-reacts",
+   "was": "Learning the person: it grows with them",
+   "rule": "Whenever the person reacts to anything, it is recorded.",
+   "bold": "Whenever the person reacts to anything",
+   "home": "CLAUDE.md",
+   "anchor": "**Whenever the person reacts to anything**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Whenever the person reacts to anything"
+  },
+  {
+   "id": "enforced",
+   "was": "Learning the person: it grows with them",
+   "rule": "It is enforced by the hook, not remembered.",
+   "bold": "This is enforced, not remembered",
+   "home": "CLAUDE.md",
+   "anchor": "**enforced, not remembered**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "enforced, not remembered"
+  },
+  {
+   "id": "four-steps",
+   "was": "Learning the person: it grows with them",
+   "rule": "Apply it now, make it stick, record it, say in one line what changes.",
+   "bold": null,
+   "home": "CLAUDE.md",
+   "anchor": "say in one line what is different from now on",
+   "needed_by": [
+    "every chat"
+   ]
+  },
+  {
+   "id": "make-stick",
+   "was": "Learning the person: it grows with them",
+   "rule": "Make it stick in the profile setting it governs; a kind becomes the rule that covers all of them.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "**Make it stick where it governs.**",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "rulings-change",
+   "was": "Learning the person: it grows with them",
+   "rule": "Rulings change, and that is normal: undo the ruling in the same turn.",
+   "bold": "Rulings change, and that is normal:",
+   "home": "RUNBOOK.md",
+   "anchor": "**Rulings change, and that is normal:**",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "lapsed",
+   "was": "Learning the person: it grows with them",
+   "rule": "When a screening rule changes, run exclude.py lapsed in the same turn and restamp.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "run `exclude.py lapsed` in the same turn",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "record",
+   "was": "Learning the person: it grows with them",
+   "rule": "Record it with learned.py record in their own words.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "python3 tools/learned.py record --area",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "never-say",
+   "was": "Learning the person: it grows with them",
+   "rule": "--never-say for wording they never want; tone.py and voice_check.py flag it.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Add `--never-say \"<phrase>\"` for wording they never want",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "overrides",
+   "was": "Learning the person: it grows with them",
+   "rule": "Ask once which wins where their rule and a check disagree; CONTRADICTS: ask which stands.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "When it lists `CONTRADICTS`, ask which stands, with both dates",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "edit-records",
+   "was": "Learning the person: it grows with them",
+   "rule": "An edit made before sending records itself when the send is logged with its words.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "An edit made before sending records itself when the send is logged with its words.",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "read-before",
+   "was": "Learning the person: it grows with them",
+   "rule": "Read before drafting: learned.py brief <area> first, its rules over any default.",
+   "bold": "Read before drafting.",
+   "home": "CLAUDE.md",
+   "anchor": "**Read before drafting**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "Read before drafting"
+  },
+  {
+   "id": "tips",
+   "was": "Learning the person: it grows with them",
+   "rule": "End with the one line tips.py prints, and nothing if it prints nothing.",
+   "bold": "Ask, lightly, and now and then a tip.",
+   "home": "RUNBOOK.md",
+   "anchor": "**Ask, lightly, and now and then a tip.**",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "tips-never-own",
+   "was": "Learning the person: it grows with them",
+   "rule": "Never write a tip of your own, never more than one a reply, never in place of the work.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Never write one of your own, never more than one a reply, and never in place of the work.",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "tour",
+   "was": "Learning the person: it grows with them",
+   "rule": "When they ask what it can do, tips.py tour, passed on as it prints.",
+   "bold": "When they ask what it can do or how to use a part of it",
+   "home": ".claude/skills/job-application-assistant/SKILL.md",
+   "anchor": "\"Show me around\", or a question about what the app can do or how to use something: `python3 tools/tips.py tour`",
+   "needed_by": [
+    "job-application-assistant skill"
+   ]
+  },
+  {
+   "id": "updates-taught",
+   "was": "Learning the person: it grows with them",
+   "rule": "An update that would change a locked setting changes nothing and records learned.py offer.",
+   "bold": "Updates and what they have taught it.",
+   "home": ".claude/commands/upgrade.md",
+   "anchor": "learned.py offer",
+   "needed_by": [
+    "/upgrade"
+   ]
+  },
+  {
+   "id": "no-for-now",
+   "was": "Learning the person: it grows with them",
+   "rule": "A no to any question is for now, never for ever.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A no to any question is for now, never for ever",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "kept-30",
+   "was": "Learning the person: it grows with them",
+   "rule": "A kept choice is offered again after 30 days, saying when it was kept.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "is offered again after 30 days, saying when it was kept",
+   "needed_by": [
+    "start"
+   ]
+  },
+  {
+   "id": "ww-before",
+   "was": "What works: it learns from results, not only from what they say",
+   "rule": "Before drafting, what_works.py brief beside the learned brief.",
+   "bold": "Before drafting",
+   "home": "RUNBOOK.md",
+   "anchor": "**Before drafting**, beside the learned brief",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "ww-shape",
+   "was": "What works: it learns from results, not only from what they say",
+   "rule": "Match the shape of what worked, never its words or another person's facts.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "match the shape of what worked, never its words or another person's facts",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "ww-result",
+   "was": "What works: it learns from results, not only from what they say",
+   "rule": "When a result arrives, what_works.py event, one line in the reply.",
+   "bold": "When a result arrives",
+   "home": "RUNBOOK.md",
+   "anchor": "**When a result arrives**",
+   "needed_by": [
+    "/outcome",
+    "/reply"
+   ]
+  },
+  {
+   "id": "ww-chance",
+   "was": "What works: it learns from results, not only from what they say",
+   "rule": "A difference is reported only when both groups are big enough and the gap unlikely to be chance.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A difference is reported only when both groups are big enough",
+   "needed_by": [
+    "/apply",
+    "/network",
+    "/reply",
+    "/interview",
+    "/prep",
+    "/outcome",
+    "/rank"
+   ]
+  },
+  {
+   "id": "ww-lift",
+   "was": "What works: it learns from results, not only from what they say",
+   "rule": "A resume that reached an interview lifts its bullets a little, never over one the posting asks for.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "never outranks one the posting asks for",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "ww-fulltext",
+   "was": "What works: it learns from results, not only from what they say",
+   "rule": "A message logged without its full_text can never be an example.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A message logged without its `full_text` can never be an example.",
+   "needed_by": [
+    "/reply",
+    "/network"
+   ]
+  },
+  {
+   "id": "ephemeral",
+   "was": "Memory: the repo remembers, the chat does not",
+   "rule": "Sessions are ephemeral cloud containers: what matters is written down and committed.",
+   "bold": "ephemeral cloud containers",
+   "home": "RUNBOOK.md",
+   "anchor": "**ephemeral cloud containers**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "standing-rule",
+   "was": "Memory: the repo remembers, the chat does not",
+   "rule": "Whenever something changes, write it down before replying.",
+   "bold": "The standing rule: whenever something changes, write it down before replying.",
+   "home": "CLAUDE.md",
+   "anchor": "**whenever something changes, write it down before replying**",
+   "needed_by": [
+    "every chat"
+   ],
+   "core_bold": "whenever something changes, write it down before replying"
+  },
+  {
+   "id": "standing-rule-detail",
+   "was": "Memory: the repo remembers, the chat does not",
+   "rule": "Not at the end of the session, not when asked.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Not at the end of the session, not when asked.",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-applied",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: Applied to something, anywhere, including outside this repo",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Applied to something, anywhere, including outside this repo",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-status",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: An application changed status (interview, offer, rejection, silence)",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "An application changed status (interview, offer, rejection, silence)",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-interview-booked",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: An interview was booked",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "An interview was booked",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-questions",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: The questions an interview asked, and which stories landed",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "The questions an interview asked, and which stories landed",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-learned-role",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: Anything learned about a role, employer or process",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Anything learned about a role, employer or process",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-messaged",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: Messaged someone, or they replied",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Messaged someone, or they replied",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-resume-sent",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: Sent a contact a resume",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Sent a contact a resume",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-new-person",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: A new person worth contacting",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A new person worth contacting",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-contact-changed",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: python3 tools/network/state.py set <contact> --status <s> --next-action \"<what>\"",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "`python3 tools/network/state.py set <contact> --status <s> --next-action \"<what>\" --due <date> --note \"<what happened>\"`, never by hand",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-no-presence",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: An employer turns out to have no relevant presence at all",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "An employer turns out to have no relevant presence at all",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-ruled-out",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: A posting was ruled out",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A posting was ruled out",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-fact",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: A fact about the candidate: a skill, a gap, a date, a constraint",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A fact about the candidate: a skill, a gap, a date, a constraint",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-told",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: They told one employer a different place from the profile's",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "They told one employer a different place from the profile's",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-reaction",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: A reaction or preference: a message, a person, a job, the voice, the questions",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "A reaction or preference: a message, a person, a job, the voice, the questions",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-research",
+   "was": "What changes, and where it goes",
+   "rule": "Where it goes: Company research that cost a fetch",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "Company research that cost a fetch",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "table-page",
+   "was": "new in 4.0",
+   "rule": "Something done on the page is applied by app.py apply, never by hand.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "applied by `python3 tools/app.py apply`, the `app` skill, never by hand",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "derived",
+   "was": "What changes, and where it goes",
+   "rule": "open_actions.py is derived, never stored: fix the state file, not the view.",
+   "bold": "derived, never stored",
+   "home": "RUNBOOK.md",
+   "anchor": "**derived, never stored**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "commit-unit",
+   "was": "What changes, and where it goes",
+   "rule": "Commit and push whenever a unit of work finishes.",
+   "bold": "Commit and push whenever a unit of work finishes",
+   "home": "RUNBOOK.md",
+   "anchor": "**Commit and push whenever a unit of work finishes**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "tracker-only",
+   "was": "What changes, and where it goes",
+   "rule": "The tracker only knows what was recorded: ask whether they already applied.",
+   "bold": "The tracker only knows what was recorded.",
+   "home": "RUNBOOK.md",
+   "anchor": "**The tracker only knows what was recorded.**",
+   "needed_by": [
+    "saving"
+   ]
+  },
+  {
+   "id": "every-item",
+   "was": "Verification Checklist",
+   "rule": "Go through every item of the verification checklist before presenting anything.",
+   "bold": "every",
+   "home": "RUNBOOK.md",
+   "anchor": "go through **every** item in",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "checklist-file",
+   "was": "Verification Checklist",
+   "rule": "The checklist itself.",
+   "bold": null,
+   "home": ".claude/skills/job-application-assistant/verification-checklist.md",
+   "anchor": "Factual accuracy",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "pdfs-mandatory",
+   "was": "Verification Checklist",
+   "rule": "Both documents compiled and read back as PDFs is mandatory, never skipped; the text layer as an ATS parses it.",
+   "bold": null,
+   "home": "RUNBOOK.md",
+   "anchor": "is mandatory, never skipped",
+   "needed_by": [
+    "/apply"
+   ]
+  },
+  {
+   "id": "one-line-report",
+   "was": "Verification Checklist",
+   "rule": "Report it in one line, plus each item that failed or needs the person's call; never the whole list.",
+   "bold": null,
+   "home": ".claude/commands/apply.md",
+   "anchor": "Never the whole list.",
+   "needed_by": [
+    "/apply"
+   ]
+  }
+ ]
+}

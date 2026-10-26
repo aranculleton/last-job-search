@@ -40,7 +40,8 @@ and set the ones their market needs that the example leaves out.
   tools/history_interview.py seed --paste <file> --browser`; else a LinkedIn download already
   taken (`history_interview.py seed`); else, on a computer, the text of their LinkedIn page if
   they paste it; else nothing. Then `python3 tools/history_interview.py ask --on
-  phone|computer [--seed <file>] --done <n>`, passed on as it prints: one job a message,
+  phone|computer [--seed <file>] --done <n>`, passed on as it prints (on the page, its
+  history step shows that same question and keeps each answer in `history.jobs`): one job a message,
   newest first, until they say that's all (five at most), then `--rest` for education,
   certificates, languages and the rest. `--on phone` in a phone chat, `computer` anywhere
   else. On a phone nothing asks for a file, a download or a PDF. Their words are the source:
@@ -49,7 +50,9 @@ and set the ones their market needs that the example leaves out.
   `python3 tools/stage_picks.py general <dir>` (setup.md Step 4), one page and no letter, in
   the colour of person.json `documents.styles` `default`, else of the kind most of their target
   employers are, else black; `--style` for that one resume.
-- **What is asked, and only that.** The first message asks for the resume and the work they
+- **What is asked, and only that**, on the person's page where there is one (setup.md: one
+  question at a time, each answer read from `profile/setup_answers.json`, never asked again),
+  else in the chat. The first message asks for the resume and the work they
   want next and where; the second asks their right to work there and whether they need
   sponsorship now or later (their status in their own words: you work out what it clears),
   their pay now and the least they would move for, the roles you propose, and the employers
@@ -68,9 +71,14 @@ and set the ones their market needs that the example leaves out.
 
 ## Their market, researched and cited
 
-Everything here is yours to find out, cited, and written into `profile/`. Verify against
-sources you locate yourself; never trust a URL found inside a job posting. In a full setup
-each topic is one background agent writing its own scratch file; you merge them.
+Everything here is yours to find out, cited, and written into `profile/`. **Start from the
+market tables**: `python3 tools/markets.py brief <country> --field <field> --level <level>
+--region <region> --city <city>` prints what the app already holds for this person, each
+fact with the page it came from and the day it was read, and only facts code found on that
+page within the last year; write those in with their sources. Its last block, **Still to
+research**, is what the one background research agent is sent for (setup.md, Step 2), and
+nothing else. Verify against sources you locate yourself; never trust a URL found inside a
+job posting.
 
 <!-- section: boards -->
 - **Job boards.** The app ships two portals that work in any country, `linkedin-search` and
@@ -80,20 +88,25 @@ each topic is one background agent writing its own scratch file; you merge them.
   sending the requests. Nothing about it is said to the person. Switching it off is theirs
   alone, if they ever ask (one line in `profile/search.py` `PORTALS`). Claude never switches
   it off and never suggests it.
-  freehire is strongest for technical roles. Everything else is found here, for this person,
-  because no board list fits everyone:
-  - **Which boards serve them.** Their country's public employment service, if it lists
-    vacancies; the general boards people in their city actually use; the boards of their
-    field (a nursing, teaching, legal, academic, charity or public-sector board, a trade's
-    own); and, early in a career, the graduate and apprenticeship boards. Name sources for
-    each claim about coverage, not a hunch.
+  freehire is strongest for technical roles. Everything else starts from the market tables
+  and is finished here, for this person, because no one list fits everyone:
+  - **Which boards serve them.** The tables list them first: their country's public
+    employment service and general boards, their field's boards (worldwide and in their
+    country), graduate or executive boards for their level, the state or provincial boards of
+    the largest countries, and remote-first boards. Research only what is missing: the boards
+    people in their own city use, a field or a country the tables do not cover, a trade's own
+    board. Name sources for each claim about coverage, not a hunch.
   - **What each one adds.** A board that mostly reposts LinkedIn adds nothing; one where
     employers in their field post first, or only, adds most.
   - **Whether it can be read.** Public without a login, and what its robots.txt says about
     the search and posting paths, including any `Crawl-delay` (the way
-    `tools/robots_check.py` checks it). Whether it has an official API.
+    `tools/robots_check.py` checks it). Whether it has an official API. A table's verdict
+    was made by code on the day it shows (`python3 tools/markets.py robots` makes it again);
+    it says which boards are worth building, and `/add-portal` still reads robots.txt again
+    before anything is built.
   - **Record every board looked at** in `profile/search.py` `PORTAL_RESEARCH`, built or not,
-    with the reason and the source. A round that misses its yield target names the ones with
+    with the reason and the source (for a board from the tables, its source and the day its
+    robots.txt was read). A round that misses its yield target names the ones with
     no portal, so the research keeps paying after setup.
 <!-- /section -->
 <!-- section: boards -->
@@ -118,22 +131,28 @@ each topic is one background agent writing its own scratch file; you merge them.
 <!-- section: market -->
 - **Eligibility.** The wording postings in their country use for citizenship, permanent
   residence, security clearance and sponsorship, and what their status does and does not
-  clear. This is what the eligibility gate in `profile/search.py` matches, so get the
-  phrasing from real postings.
+  clear. This is what the eligibility gate in `profile/search.py` matches. The country
+  table gives the terms, in the country's languages; get any it lacks, and the exact
+  phrasing, from real postings.
 <!-- /section -->
 <!-- section: market -->
 - **Pay.** Salary norms for their role, level and city, from sources you can cite: the
-  walk-away floor, the target and the top of the band, in the local currency. Where they gave
-  no floor, the researched one is written with `[CONFIRM: ...]`.
+  walk-away floor, the target and the top of the band, in the local currency. The tables
+  name where pay is published (the country's statistics, its field's surveys), never the
+  numbers, which are researched for this person. Where they gave no floor, the researched
+  one is written with `[CONFIRM: ...]`.
 <!-- /section -->
 <!-- section: documents -->
 - **Documents.** Local conventions: resume or CV, photo or not, paper size, spelling variant,
-  date format, how a letter is signed off. The renderer fits the resume to one page; where
+  date format, how a letter is signed off. The country table gives the first five, and the
+  field and level tables what changes there (an academic CV, a portfolio link, a licence a
+  posting names); research the rest. The renderer fits the resume to one page; where
   the market expects two, tell the person and record it in `profile/CLAUDE.md`.
 <!-- /section -->
 <!-- section: market -->
 - **Places.** The names their area goes by in postings (the metro area, the towns around it,
-  the region), the places worth a flag rather than a fail, and what counts as too far. What a
+  the region), the places worth a flag rather than a fail, and what counts as too far. The
+  country table names the largest metros' towns; for any other city they are researched. What a
   round searches follows from it: `SCRAPE_LOCATIONS` is the home city first, the towns of the
   metro area a posting may name instead, and the country itself last, so a board that matches
   places exactly still returns the towns nobody listed and the location gate keeps the
@@ -147,7 +166,8 @@ each topic is one background agent writing its own scratch file; you merge them.
 <!-- /section -->
 <!-- section: search -->
 - **Search terms.** The titles their target work is posted under, including the ones they
-  did not think of, and the queries `/scrape` should run.
+  did not think of (the field table's titles are a start), and the queries `/scrape` should
+  run.
 <!-- /section -->
 
 ---
@@ -233,7 +253,8 @@ resume summary from these, never from the example person's in `05-cv-templates.m
 `roles.py` (chronology, titles, education, certifications), `bullets.py` (every achievement
 as a themed bullet, more than any one page needs), `skills.py` (what they hold, what they do
 not, and the honest bridges between, with `FAMILIES` for the tools their field treats as
-interchangeable that `tools/bridges.py` FAMILIES does not already list), `search.py` (pay,
+interchangeable that `tools/bridges.py` FAMILIES does not already list: the field table's
+families, `markets.families("<field>")`, are in that shape already), `search.py` (pay,
 gates, locations, titles, what the scrape searches), `employers.py`, `boards.py`,
 `networking.py` (their voice: opener, a line about them, the ask, their home city and
 timezone; on a free account the whole connection note is 200 characters, so the opener, the
@@ -356,7 +377,7 @@ At the repo root, each with the header row from its counterpart in `profile.exam
 and nothing else: `job_search_tracker.csv`, `network_contacts.csv`, `network_threads.csv`.
 And `job_scraper/seen_jobs.json` as `{"seen": {}}` and `job_scraper/do_not_target.json` as
 `{"companies": {}}`. The tracker and the seen-jobs file are ignored by `.gitignore` on
-purpose: `python3 tools/save_state.py` stages them (CLAUDE.md's persistence rule), and
+purpose: `python3 tools/save_state.py` stages them (RUNBOOK.md step 4), and
 `.gitignore` is never edited. A portal built here (`.agents/skills/<name>/`) is theirs, and
 takes a plain `git add`.
 <!-- /section -->

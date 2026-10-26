@@ -233,7 +233,7 @@ def holds(entry, rules_now: str | None = None, parts_now: dict | None = None) ->
     return entry["rules"] == (rules_now or rules_fingerprint())
 
 
-def _load(path=SEEN) -> dict:
+def load_seen(path=SEEN) -> dict:
     from throttle import as_seen
     try:
         with open(path, encoding="utf-8") as fh:
@@ -242,7 +242,10 @@ def _load(path=SEEN) -> dict:
         return {"seen": {}}
 
 
-def _save(data, path=SEEN) -> None:
+_load = load_seen  # the module's own name for it; other modules call load_seen
+
+
+def save_seen(data, path=SEEN) -> None:
     # A bare file name ("seen.json") has no folder to make: os.makedirs("") raised, so
     # `text_screen.py --seen seen.json` crashed on its first cut and wrote nothing.
     folder = os.path.dirname(path)
@@ -253,6 +256,9 @@ def _save(data, path=SEEN) -> None:
         json.dump(data, fh, indent=INDENT, ensure_ascii=False)
         fh.write("\n")
     os.replace(tmp, path)
+
+
+_save = save_seen  # the module's own name for it; other modules call save_seen
 
 
 def _stamp_rules(entry: dict, names=(), fp: str = "", parts: dict | None = None) -> None:
@@ -398,8 +404,11 @@ def unreviewed(path=SEEN) -> list:
     return [e for e in _load(path)["seen"].values() if _needs_review(e)]
 
 
-def _group(reason: str) -> str:
+def reason_group(reason: str) -> str:
     return re.split(r"[:;.(,]", reason.strip().lower())[0].strip()[:60] or "(no reason)"
+
+
+_group = reason_group  # the module's own name for it; other modules call reason_group
 
 
 def _grouped(entries) -> list:

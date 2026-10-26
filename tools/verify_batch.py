@@ -157,6 +157,28 @@ def _say(text):
     sys.stdout.flush()
 
 
+def _record(entry: dict, flags: list, resume_pages, letter_pages, letter: bool) -> None:
+    """This application's checks, kept beside it as verify.json for the page's "the checks
+    that ran" (FUNCTIONS_SPEC 1.3): each flag this run raised, the pages, the day. A run
+    that cannot place the application (no company or role) keeps nothing."""
+    if not entry.get("company") or not entry.get("role"):
+        return
+    try:
+        import datetime as dt
+        import outreach
+        folder = outreach.app_folder(entry["company"], entry["role"])
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, "verify.json"), "w", encoding="utf-8") as fh:
+            json.dump({"at": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                       "abbr": entry.get("abbr"), "flags": flags,
+                       "pages": {"resume": resume_pages,
+                                 "letter": letter_pages if letter else None}},
+                      fh, indent=1)
+            fh.write("\n")
+    except Exception:  # noqa: BLE001  a record that cannot be kept never fails the checks
+        pass
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if not argv or argv[0] in ("-h", "--help"):
@@ -306,6 +328,8 @@ def main(argv=None) -> int:
         b = sum(1 for line in r_lines if BULLET.search(line))
         tb += b
         n += 1
+        _record(next((x for x in batch if x.get("abbr") == a), {}), p.split(), rp, cp,
+                bool(c_pdf))
         _say("%-9s %s/%s  %-4s %-14s %s" % (a, rp_s, cp_s, b, cnt, p))
         if lost:
             _say("          contact lines not on the page: " + "; ".join(lost))

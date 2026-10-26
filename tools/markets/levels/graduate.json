@@ -1,0 +1,238 @@
+{
+  "name": "Graduate or entry level",
+  "level": "graduate",
+  "aka": [
+    "graduate",
+    "entry",
+    "entry level",
+    "junior",
+    "new grad",
+    "student",
+    "intern",
+    "early career"
+  ],
+  "boards": {
+    "us": [
+      {
+        "name": "Handshake",
+        "url": "https://joinhandshake.com",
+        "kind": "graduate",
+        "source": "https://en.wikipedia.org/wiki/Handshake_(company)",
+        "quote": "Handshake is an American employment website for job listings, primarily for college students",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://joinhandshake.com/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/stu/jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "gb": [
+      {
+        "name": "TARGETjobs",
+        "url": "https://targetjobs.co.uk",
+        "kind": "graduate",
+        "source": "https://targetjobs.co.uk/",
+        "quote": "Visit targetjobs for all the latest graduate jobs, schemes and internships",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://targetjobs.co.uk/graduate-jobs",
+        "paths": {
+          "search": "/graduate-jobs",
+          "posting": "/graduate-jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "ie": [
+      {
+        "name": "gradireland",
+        "url": "https://gradireland.com",
+        "kind": "graduate",
+        "source": "https://gradireland.com/",
+        "quote": "Visit gradireland for all the latest graduate jobs, programmes and internships",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://gradireland.com/graduate-jobs",
+        "paths": {
+          "search": "/graduate-jobs",
+          "posting": "/graduate-jobs/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "ca": [
+      {
+        "name": "TalentEgg",
+        "url": "https://talentegg.ca",
+        "kind": "graduate",
+        "source": "https://talentegg.ca/",
+        "quote": "Student jobs and graduate jobs site for Canadian students and new graduates",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://talentegg.ca/jobs",
+        "paths": {
+          "search": "/jobs",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "blocked",
+          "http": 500
+        }
+      }
+    ],
+    "au": [
+      {
+        "name": "GradConnection",
+        "url": "https://au.gradconnection.com",
+        "kind": "graduate",
+        "source": "https://au.gradconnection.com/",
+        "quote": "Find Graduate Jobs and Internships in Australia 779 Graduate and Internship Programs",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://au.gradconnection.com/graduate-jobs/",
+        "paths": {
+          "search": "/graduate-jobs/",
+          "posting": "/employers/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "in": [
+      {
+        "name": "Internshala",
+        "url": "https://internshala.com",
+        "kind": "graduate",
+        "source": "https://internshala.com/",
+        "quote": "career platform, offering 120K+ paid internships, jobs, and online courses",
+        "checked": "2026-10-25",
+        "verified": true,
+        "search": "https://internshala.com/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/detail/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ],
+    "jp": [
+      {
+        "name": "Rikunabi (new graduates)",
+        "url": "https://job.rikunabi.com",
+        "kind": "graduate",
+        "source": "https://en.wikipedia.org/wiki/Simultaneous_recruiting_of_new_graduates",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: Rikunabi)",
+        "search": "https://job.rikunabi.com/2027/search/",
+        "paths": {
+          "search": "/2027/search/",
+          "posting": "/2027/company/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "",
+          "search": true,
+          "status": "allowed",
+          "posting": true,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "open",
+          "http": 200
+        }
+      }
+    ]
+  },
+  "norms": {
+    "jp": [
+      {
+        "value": "new graduates are hired together, once a year, through a set calendar (shinsotsu ikkatsu saiyō)",
+        "source": "https://en.wikipedia.org/wiki/Simultaneous_recruiting_of_new_graduates",
+        "quote": "is the business custom in which companies hire new university graduates",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  }
+}

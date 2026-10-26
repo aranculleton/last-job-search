@@ -385,7 +385,8 @@ def build(a):
             clean(a.get("tools", "")),
             context=" ".join([summary] + [b for j in jobs if j["employer"] not in _NO_SKILLS
                                           for b in j["bullets"]]),
-            posting=a.get("posting", ""), company=a["company"], consented=yes)),
+            posting=a.get("posting", ""), company=a["company"], consented=yes,
+            max_tokens=skills_block.size_for(a))),
         p1=clean(a["p1"]), p2=clean(a["p2"]), lead=clean(a["lead"]),
         # rstrip(": ") left a trailing period, and the template appends a
         # colon, so a bullet label could render ".:" on a one-page document.

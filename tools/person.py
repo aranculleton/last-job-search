@@ -306,6 +306,51 @@ def paper(kind: str = "resume") -> str:
     return "letterpaper" if country() in LETTER_COUNTRIES else "a4paper"
 
 
+REMOVE = object()
+
+
+def update(change) -> dict:
+    """Change person.json in one place, atomically: `change(data)` edits the parsed file in
+    place, and the file is written whole (a temporary file, then a rename, so a reader never
+    sees half of it). The one writer of person.json; returns the data written."""
+    import json
+    p = path("person.json")
+    with open(p, encoding="utf-8") as fh:
+        data = json.load(fh)
+    change(data)
+    tmp = p + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(data, fh, indent=2, ensure_ascii=False)
+        fh.write("\n")
+    os.replace(tmp, p)
+    reset()
+    return data
+
+
+def put(dotted, value) -> object:
+    """One value in person.json by dotted key (or a list of keys, for a name with a dot in
+    it); REMOVE takes it out. Returns what was there before (_MISSING when nothing was)."""
+    parts = list(dotted) if isinstance(dotted, (list, tuple)) else str(dotted).split(".")
+    seen = {}
+
+    def change(data):
+        here = data
+        for k in parts[:-1]:
+            if not isinstance(here.get(k), dict):
+                here[k] = {}
+            here = here[k]
+        seen["before"] = here.get(parts[-1], _MISSING)
+        if value is REMOVE:
+            here.pop(parts[-1], None)
+        else:
+            here[parts[-1]] = value
+    update(change)
+    return seen["before"]
+
+
+MISSING = _MISSING
+
+
 def reset() -> None:
     """Forget cached files. Tests that switch LJS_PROFILE call this."""
     _modules.clear()

@@ -649,7 +649,7 @@ than recommending one. If LinkedIn says its weekly invitation limit is reached, 
 note that following costs nothing and lets the request go out warm the week after.
 
 End with the line `python3 tools/tips.py networking` prints, if it prints one (it decides when: the first time, then now and then). What they say back
-goes through CLAUDE.md, "Learning the person".
+goes through RUNBOOK.md, "Learning the person".
 
 ## When they say a note went
 
@@ -700,7 +700,7 @@ day are never logged twice. `state.py sent` does the three steps below at once:
 3. **The draft file**, `documents/network/<contact_id>/draft.md`, is deleted: it was the
    unsent copy. Commit the two CSVs.
 
-An edit they made before sending is a reaction to the draft (CLAUDE.md, "Learning the
+An edit they made before sending is a reaction to the draft (RUNBOOK.md, "Learning the
 person"). A note they decide not to send leaves the contact at `not_contacted`, or closed
 with their reason if they do not want that person contacted.
 

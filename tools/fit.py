@@ -564,7 +564,26 @@ def fit(job: dict) -> dict:
                        f"or not asked of {_HIM}")
 
     pts = max(0, min(100, pts))
-    return {"fit": pts, "fit_why": why, "location_verdict": lv}
+    return {"fit": pts, "fit_why": why, "location_verdict": lv, "near": near_matches(body)}
+
+
+NEAR_MAX = 5
+
+
+def near_matches(text) -> list:
+    """The tools the posting asks for that the person does not hold and holds one of the same
+    kind for, as [{asked, have}] (bridges.assess, the reading the score above already makes),
+    so a card can say "Asked for Tableau, you have Power BI" with no second reading."""
+    try:
+        import bridges
+        found = bridges.assess(text or "")
+    except Exception:  # noqa: BLE001  no skill map: nothing to say
+        return []
+    out = []
+    for a in found:
+        if a.verdict == bridges.BRIDGE and a.have and a.asked not in {x["asked"] for x in out}:
+            out.append({"asked": a.asked, "have": a.have[0]})
+    return out[:NEAR_MAX]
 
 
 def interviewed_at(tracker: str | None = None) -> dict:

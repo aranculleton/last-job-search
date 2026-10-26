@@ -1,0 +1,281 @@
+{
+  "name": "Poland",
+  "country": "pl",
+  "aka": [
+    "PL",
+    "Polska",
+    "Republic of Poland"
+  ],
+  "languages": [
+    "pl"
+  ],
+  "currency": "PLN",
+  "boards": [
+    {
+      "name": "ePraca (Centralna Baza Ofert Pracy)",
+      "url": "https://oferty.praca.gov.pl",
+      "kind": "public",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "district employment services , which publish job offers in ePraca",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://oferty.praca.gov.pl/portal/lista-ofert?Stanowisko=analityk",
+      "paths": {
+        "search": "/portal/lista-ofert?Stanowisko=analityk",
+        "posting": "/portal/lista-ofert/szczegoly-oferty/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "no robots.txt published",
+        "search": true,
+        "status": "no_policy",
+        "posting": true,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "open",
+        "http": 200
+      }
+    },
+    {
+      "name": "Pracuj.pl",
+      "url": "https://www.pracuj.pl",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "Links to examples of websites with employment offers in Poland: https://www.pracuj.pl",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.pracuj.pl/praca/analityk;kw",
+      "paths": {
+        "search": "/praca/analityk;kw",
+        "posting": "/praca/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 403)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://pl.indeed.com",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "https://www.infopraca.pl https://jobs.pl https://pl.indeed.com https://jober.pl https://www.aplikuj.pl https://linguajob.pl",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://pl.indeed.com/jobs?q=analityk&l=Warszawa",
+      "paths": {
+        "search": "/jobs?q=analityk&l=Warszawa",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    },
+    {
+      "name": "OLX Praca",
+      "url": "https://www.olx.pl",
+      "kind": "general",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "https://gratka.pl https://www.olx.pl/praca https://rocketjobs.pl Links: Title/name URL Public Employment Services Platform",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.olx.pl/praca/q-analityk/",
+      "paths": {
+        "search": "/praca/q-analityk/",
+        "posting": "/oferta/praca/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be read (HTTP 403)",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "zezwolenie na pracę / karta pobytu z dostępem do rynku pracy",
+      "lang": "pl",
+      "means": "work_right",
+      "source": "https://pl.wikipedia.org/wiki/Karta_pobytu",
+      "quote": "dokument wydany cudzoziemcowi , który uzyskał zezwolenie na pobyt czasowy",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "obywatelstwo państwa członkowskiego UE",
+      "lang": "pl",
+      "means": "citizenship",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "Nationals of EU or EFTA Member States may work in Poland without having to obtain a work permit",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "zezwolenie na pobyt stały",
+      "lang": "pl",
+      "means": "residence",
+      "source": "https://pl.wikipedia.org/wiki/Karta_pobytu",
+      "quote": "Karta pobytu – dokument wydany cudzoziemcowi , który uzyskał zezwolenie na pobyt czasowy, zezwolenie na pobyt stały, zezwolenie na pobyt rezydenta długoterminowego Unii Europejskiej , ochronę uzupełniającą , zgodę na pobyt ze względów humanitarnych lub status uchodźcy w Polsce [ 1 ] .",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "poświadczenie bezpieczeństwa",
+      "lang": "pl",
+      "means": "clearance",
+      "source": "https://pl.wikipedia.org/wiki/Po%C5%9Bwiadczenie_bezpiecze%C5%84stwa",
+      "quote": "Poświadczenie bezpieczeństwa – dokument tworzony w oparciu o ustawę o ochronie informacji niejawnych",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV (życiorys), with a list motywacyjny and a data-processing consent clause (klauzula RODO)",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "The following consent to the processing of personal data, confirmed with a handwritten signature, should be included underneath the CV:",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "one page, two at most",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "it should take up one, maximum two A4 pages of white paper",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "photo",
+      "value": "common but optional",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: photo)"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD.MM.YYYY",
+      "source": "https://en.wikipedia.org/wiki/Date_and_time_notation_in_Poland",
+      "quote": "other conventions prevail, such as the day-month-year order",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "Polish, or English where the posting is in English",
+      "source": "https://eures.europa.eu/living-and-working/living-and-working-conditions/living-and-working-conditions-poland_en",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Polish, CV)"
+    }
+  ],
+  "pay": [
+    {
+      "name": "Wynagrodzenia (GUS, Statistics Poland)",
+      "url": "https://stat.gov.pl/obszary-tematyczne/rynek-pracy/pracujacy-zatrudnieni-wynagrodzenia-koszty-pracy/",
+      "what": "average pay by sector and region",
+      "source": "https://stat.gov.pl/obszary-tematyczne/rynek-pracy/pracujacy-zatrudnieni-wynagrodzenia-koszty-pracy/",
+      "quote": "Przeciętne zatrudnienie i wynagrodzenia w gospodarce narodowej",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "name": "Ogólnopolskie Badanie Wynagrodzeń (Sedlak & Sedlak)",
+      "url": "https://wynagrodzenia.pl/",
+      "what": "salary survey by position and city",
+      "source": "https://wynagrodzenia.pl/",
+      "quote": "wynagrodzenia.pl - Sedlak & Sedlak | wynagrodzenia.pl",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Warszawa",
+      "written": [
+        "Warszawa",
+        "Warsaw",
+        "Piaseczno",
+        "Otwock"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Warsaw_metropolitan_area",
+      "quote": "Warsaw metropolitan area Urban area From top, left to right: Skyline of Warsaw",
+      "on_page": [
+        "Piaseczno",
+        "Otwock"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Kraków",
+      "written": [
+        "Kraków",
+        "Krakow",
+        "Wieliczka",
+        "Skawina"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Krak%C3%B3w_metropolitan_area",
+      "quote": "powiat krakowski – gminas: urban-rural – Krzeszowice , Skała , Skawina , Słomniki , Świątniki Górne ,",
+      "on_page": [
+        "Wieliczka",
+        "Skawina"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Katowice",
+      "written": [
+        "Katowice",
+        "Górnośląsko-Zagłębiowska Metropolia",
+        "Gliwice",
+        "Sosnowiec"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Upper_Silesian_metropolitan_area",
+      "quote": "Katowice metropolitan area , commonly known as Upper Silesian metropolitan area",
+      "on_page": [
+        "Katowice"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

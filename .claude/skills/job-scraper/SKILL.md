@@ -15,8 +15,8 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(bun --version), Bash(bun run 
 
 ## The rules every search keeps
 
-These are the rules CLAUDE.md summarises, in full. Most are enforced in code; this is what
-the code is doing and why.
+These are the rules every round keeps, in full: CLAUDE.md points here. Most are enforced in
+code; this is what the code is doing and why.
 
 **When the user asks to run a job search, scan, or scrape, run the search end to end and
 stop at the ranked shortlist.** The deliverable is a ranked, scored table plus the context
@@ -154,7 +154,14 @@ Only draft unprompted if the user has explicitly said to in that request.
   field or level is built for the person by `/add-portal` (which `/setup` runs for the
   boards its research found), lives in their repo as a personal path
   (`tools/personal_paths.py`), and is searched by every round, kept to the `crawl-delay`
-  its `SKILL.md` declares. The app never carries one: its leak scan fails if it does.
+  its `SKILL.md` declares. The app never carries a portal of its own beyond those two
+  (`.agents/skills/` is a personal path, and its leak scan fails on one there). What it does
+  carry is the market tables (`tools/markets/`, read with `tools/markets.py`): public facts
+  about the national, field, graduate, executive, regional and remote boards of many
+  countries, each with the robots.txt verdict code made for its search and posting paths
+  and the day it was read, which `/setup` reads before it researches anything. A board from
+  a table is searched only once `/add-portal` has built it in the person's repo, after
+  reading its robots.txt again.
   `python3 tools/portals.py` prints what the next round will search, and the boards
   researched for the person (`PORTAL_RESEARCH`) that have no portal yet.
 - **Employer boards are the third source, and not a portal.** `tools/ats_boards.py` reads
@@ -165,6 +172,23 @@ Only draft unprompted if the user has explicitly said to in that request.
   and `scrape_wide.py` calls it, so `run_round.py` needs nothing extra. `--probe` re-checks
   every token. A board whose robots.txt disallows it is refused, and so is SmartRecruiters
   by its API's; the reasons are recorded beside each.
+
+### A board the chat cannot reach, and a round that comes back thin
+
+- **A job board the session cannot reach** may be blocked by the chat's cloud settings:
+  check `curl -sS "$HTTPS_PROXY/__agentproxy/status"` for `connect_rejected`. That is a
+  policy denial, not a bug: do not route around it. Tell the person what `python3
+  tools/env_check.py --say` prints, word for word (a round prints the same under "Tell the
+  person"): one recommended fix in numbered steps, which reaches the running chat within
+  about a minute. The day's sync checks it and prints the same words first, and the page
+  shows it as a To do card. Until it is fixed, run no search: a web search in its place
+  finds old, closed jobs. `/apply <pasted posting text>` still works.
+- **And it keeps going without being asked.** When a round comes back thin, a good posting
+  arrives from a board that is not covered, an employer they mention has no board on file,
+  or a gate cuts something it should not for their market, propose the fix, do the research
+  (`/add-portal` for a board, after checking robots.txt the way `tools/robots_check.py`
+  does; `tools/ats_boards.py --find "<Employer>"` for an employer's own board), and record
+  it in `profile/`, cited.
 
 ## One command
 
@@ -195,7 +219,10 @@ Optional arguments:
 
 ### Step 5: Present Results
 
-One line of counts, then the table, then a line only for what is off. Never more.
+On the person's page first (CLAUDE.md, "Every output is shown"): the round reaches the page's
+Jobs list through `python3 tools/app.py view`, and the chat says the counts line below and
+where it is. Where there is no page, the chat shows it this way: one line of counts, then the
+table, then a line only for what is off. Never more.
 
 ```
 **P of N cleared the pass bar (60+), Q of them strong (75+); target 5 and 2: met** (or: missed after R rounds)

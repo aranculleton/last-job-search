@@ -104,15 +104,13 @@ openroles.configure(user_agent=UA, robots_agents=ROBOTS_AGENTS)
 
 # ------------------------------------------------------------ what no reader sees
 #
-# tools/hydrate.py takes out of a posting what a browser never shows (a hidden element,
-# a comment, a script), and it can find those only in markup. openroles turns each
-# board's HTML into text first (models.html_to_text), keeping the words of every
-# element, hidden or not, so by the time a board's body reached the guard nothing was
-# left to tell them apart, and a sentence styled display:none read as part of the job.
-# So a body is cleaned while it is still markup, by hydrate's own rule, and openroles
-# then makes its text from what is left. openroles is never edited here: each of its
-# readers looks the converter up by name when it runs, and the name is pointed at this
-# one. The fix belongs in openroles' html_to_text, and this goes when it is made there.
+# openroles leaves out of a board's text what a browser never shows (a hidden element, a
+# comment, a script) since 0.4.0, so the words come from its rule alone. What it took out
+# is still worth saying: a posting that hides text from its readers may be talking to a
+# machine, and the shortlist warns about it (row["posting_guard"], tools/hydrate.py's
+# words). So the converter each reader calls is wrapped to note what hydrate finds hidden
+# in the markup, and nothing else: openroles is never edited here, and each reader looks
+# the converter up by name when it runs.
 import openroles.models as _or_models  # noqa: E402
 import hydrate as _hydrate  # noqa: E402
 
@@ -125,17 +123,17 @@ class _Cleaned(str):
 
 
 def shown_text(content) -> str:
-    """openroles' text of a board's HTML, made from what a reader of the page sees."""
+    """openroles' text of a board's HTML, noting what was hidden in it."""
     s = content if isinstance(content, str) else ""
     for _ in range(3):                     # as html_to_text reads it: some boards encode twice
         un = html.unescape(s)
         if un == s:
             break
         s = un
-    shown, found = _hydrate.strip_hidden(s) if "<" in s else (s, {})
+    found = _hydrate.strip_hidden(s)[1] if "<" in s else {}
     if not found:
         return _TO_TEXT(content)
-    text = _Cleaned(_TO_TEXT(shown))
+    text = _Cleaned(_TO_TEXT(content))
     text.found = found
     return text
 

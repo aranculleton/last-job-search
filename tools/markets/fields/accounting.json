@@ -1,0 +1,114 @@
+{
+  "name": "Accounting and audit",
+  "field": "accounting",
+  "aka": [
+    "accounting",
+    "accountancy",
+    "audit",
+    "tax",
+    "bookkeeping"
+  ],
+  "boards": {},
+  "licences": {
+    "us": [
+      {
+        "value": "CPA (Certified Public Accountant)",
+        "source": "https://en.wikipedia.org/wiki/Certified_Public_Accountant",
+        "quote": "In the United States, \"CPA\" is an initialism for Certified Public Accountant which is a designation given by a state governing agency, whereas other countries around the world have their own designations, which may be equivalent to \"CPA\".",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "gb": [
+      {
+        "value": "ACA (ICAEW), ACCA or CIMA",
+        "source": "https://en.wikipedia.org/wiki/Association_of_Chartered_Certified_Accountants",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "ca": [
+      {
+        "value": "CPA (Chartered Professional Accountant)",
+        "source": "https://en.wikipedia.org/wiki/Chartered_Professional_Accountant",
+        "quote": "Chartered Professional Accountant ( CPA ; French : comptable professionnel agréé ) is the professional designation which united the three Canadian accounting designations that previously existed:",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ],
+    "au": [
+      {
+        "value": "CA (Chartered Accountants ANZ) or CPA Australia",
+        "source": "https://en.wikipedia.org/wiki/Chartered_Accountants_Australia_and_New_Zealand",
+        "quote": "Chartered Accountants Australia and New Zealand",
+        "checked": "2026-10-25",
+        "verified": true
+      }
+    ]
+  },
+  "pay": {
+    "*": [
+      {
+        "name": "Robert Half Salary Guide",
+        "url": "https://www.roberthalf.com/us/en/insights/salary-guide",
+        "what": "finance and accounting pay by role and city",
+        "source": "https://en.wikipedia.org/wiki/Robert_Half",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "no sentence on the page says it (looked for: salary)"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Accountant",
+        "Auditor",
+        "Cost Accountant",
+        "Financial Auditor",
+        "Financial Reporting Accountant",
+        "General Accountant",
+        "Internal Auditor"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-2011.00",
+      "quote": "Sample of reported job titles: Accountant, Accounting Officer",
+      "on_page": [
+        "Accountant",
+        "Auditor",
+        "Cost Accountant",
+        "Financial Auditor",
+        "Financial Reporting Accountant",
+        "General Accountant",
+        "Internal Auditor"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "accounting package",
+      "members": [
+        [
+          "QuickBooks",
+          "\\bquickbooks\\b"
+        ],
+        [
+          "Sage 50",
+          "\\bsage\\s?50\\b"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-2011.00",
+      "quote": "Accounting software - Intuit QuickBooks ; Sage 50 Accounting",
+      "on_page": [
+        "Intuit QuickBooks",
+        "Sage 50 Accounting"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

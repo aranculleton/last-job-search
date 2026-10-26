@@ -5,6 +5,7 @@
     python3 tools/confirm.py not-applied <rows...> [--source chat|page]
     python3 tools/confirm.py skip <rows...>          # they decided not to send it
     python3 tools/confirm.py closed <rows...>        # the posting closed before it went
+    python3 tools/confirm.py reopen <rows...>        # a draft they set aside, back among the drafts
     python3 tools/confirm.py check [--ticks <file>]
 
 A row is named by its file name (the ABBR in <Prefix>_Resume_<ABBR>), its round slug (the
@@ -52,6 +53,9 @@ ACTIONS = {
     "not-applied": "drafted",
     "skip": "withdrawn",
     "closed": "withdrawn",
+    # They changed their mind about one they said they would not send: it is a draft again.
+    # The undo of skip and closed, so every answer on the page can be taken back.
+    "reopen": "drafted",
 }
 
 
@@ -71,15 +75,21 @@ def takes(action: str, row) -> bool:
         return st in throttle.UNSENT or _search_closed(row)
     if action == "not-applied":
         return st in throttle.UNSENT or st == "applied"
+    if action == "reopen":
+        # Set aside by the person (skip, closed), never a close the search or an employer made.
+        return st == "withdrawn" and not _search_closed(row) and not throttle.applied_on(row)
     return st in throttle.UNSENT
 
 
-def _abbr(row) -> str:
+def abbr(row) -> str:
     """The ABBR in the row's resume file name, <Prefix>_Resume_<ABBR>."""
     import docpaths
     stem = os.path.splitext(os.path.basename(str(row.get("cv_file") or "")))[0]
     m = re.search(r"_(?:Resume|CV|%s)_(.+)$" % re.escape(docpaths.noun_word()), stem)
     return m.group(1) if m else ""
+
+
+_abbr = abbr  # the module's own name for it; other modules call abbr
 
 
 def _slug(company) -> str:
@@ -90,8 +100,11 @@ def _words(s) -> set:
     return set(re.findall(r"[a-z0-9]+", throttle.title_key(s)))
 
 
-def _label(row) -> str:
+def label(row) -> str:
     return f"{row.get('company') or '?'} | {row.get('role') or 'role not recorded'}"
+
+
+_label = label  # the module's own name for it; other modules call label
 
 
 def _employer(ref: str, company) -> bool:
@@ -182,8 +195,11 @@ def resolve(action: str, refs, rows) -> list:
     return out
 
 
-def _note(row, text: str) -> None:
+def add_note(row, text: str) -> None:
     row["notes"] = ((row.get("notes") or "").rstrip() + " | " + text).strip(" |")
+
+
+_note = add_note  # the module's own name for it; other modules call add_note
 
 
 def apply(action: str, rows: list, today: dt.date, on: str = "", source=None,
@@ -210,6 +226,10 @@ def apply(action: str, rows: list, today: dt.date, on: str = "", source=None,
             r["applied_on"] = ""
             what = f"{before} -> drafted, not sent"
             _note(r, f"{today.isoformat()}: not applied, confirmed ({by})")
+        elif action == "reopen":
+            r["applied_on"] = ""
+            what = f"{before} -> drafted, back among the drafts"
+            _note(r, f"{today.isoformat()}: back among the drafts, not sent yet ({by})")
         else:
             r["applied_on"] = ""
             why = "they chose not to send it" if action == "skip" else "the posting closed first"
@@ -257,6 +277,39 @@ def add_applied(company: str, role: str, url: str = "", on: str = "", source=Non
     rows.append(row)
     csv_store.write_rows(path, rows, record_drafts.HEADER)
     return row
+
+
+# What happened after an application went, as /outcome Step 4 writes it: the row's status
+# in the canonical spelling and a short dated note, every other field kept (FUNCTIONS_SPEC
+# 1.2). The page's "I heard back" and /outcome write the same way through this.
+OUTCOMES = ("interview", "offer", "hired", "rejected", "withdrawn", "no_response",
+            "offer_declined")
+OUTCOME_SAID = {"interview": "interview", "offer": "offer received", "hired": "offer accepted",
+                "rejected": "rejected", "withdrawn": "withdrew", "no_response": "no response",
+                "offer_declined": "offer declined"}
+
+
+def record_outcome(row: dict, status: str, today: dt.date, note: str = "", source=None,
+                   now: dt.datetime | None = None) -> bool:
+    """Write `status` onto an application that went, with a dated note. False, and nothing
+    written, when the row is at that status already (said twice, or by two chats); a row
+    that never went is refused: it is confirmed applied first, with its day."""
+    if status not in OUTCOMES:
+        raise Refused(f"{status} is not an outcome ({', '.join(OUTCOMES)})")
+    st = _status(row)
+    if st in throttle.UNSENT or not st:
+        raise Refused(f"{_label(row)} is not marked as sent: mark it applied first, with the "
+                      "day it went")
+    if st == status:
+        return False
+    by = SOURCES.get(source, source)
+    row["status"] = status
+    row["confirmed_by"] = by
+    row["confirmed_at"] = (now or dt.datetime.now()).strftime("%Y-%m-%d %H:%M")
+    words = " ".join(str(note or "").split())
+    _note(row, f"{today.isoformat()}: {OUTCOME_SAID[status]}" + (f", {words}" if words else "")
+          + f" ({by})")
+    return True
 
 
 # A draft whose notes say it went: what a chat wrote down without changing the status.

@@ -130,13 +130,10 @@ INTERVIEWING = followups.LIVE_PROCESS - {"offer"}
 
 def _tracker(path=TRACKER):
     import csv_store
-    try:
-        return csv_store.dict_rows(path)
-    except OSError:
-        return []
+    return csv_store.tracker(path)
 
 
-def _network(contacts, threads):
+def network_views(contacts, threads):
     """Every contact's derived status, and the two throttle views read from it.
 
     The heat, the replied-contact recipients and the referral holds all need
@@ -150,6 +147,9 @@ def _network(contacts, threads):
         live[cid] = state.effective_status(c, list(index.get(cid, ())))
     return (live, throttle.warm_routes(rows=contacts, live=live),
             throttle.referral_holds(rows=contacts, live=live))
+
+
+_network = network_views  # the module's own name for it; other modules call network_views
 
 
 def build(contacts, threads, tracker, today, docs=None):
@@ -296,7 +296,7 @@ def render(entries, today, only_live=True):
 # ---------------------------------------------------------------- --due
 
 
-def _stages(row):
+def stages(row):
     """(the application's folder, its files, its outcome.md stages), each empty when absent."""
     folder = docpaths.app_folder(row.get("company"), row.get("role") or "")
     try:
@@ -305,6 +305,9 @@ def _stages(row):
             return folder, files, what_works.outcome_stages(fh.read())
     except OSError:
         return folder, [], []
+
+
+_stages = stages  # the module's own name for it; other modules call stages
 
 
 def _has_pack(files, stage, folder="") -> bool:
@@ -452,8 +455,11 @@ def _stored_draft(contact) -> str:
     return notes.split("| DRAFT:", 1)[1].strip() if "| DRAFT:" in notes else ""
 
 
-def due_items(contacts, threads, tracker, today, docs=None):
+def due_items(contacts, threads, tracker, today, docs=None, network=None):
     """Everything due today or overdue in both halves, plus what a hold is keeping back.
+
+    `network` is `_network(contacts, threads)` when the caller has it already (the page's
+    model does): on a big contact book it is the slowest part, and was worked out twice.
 
     Contacts: everything `state.owed` lists, which is only ever what is owed
     now (a reply the moment they answer, a nudge once its clock has run, a
@@ -535,7 +541,7 @@ def due_items(contacts, threads, tracker, today, docs=None):
             "held": [h for h in (state.action_hold(c.get("next_action"), today),) if h],
             "quiet": False, "kind": "resume", "status": c.get("status", ""),
             "contact_id": r["contact_id"], "old": old})
-    _, warm, holds = _network(contacts, threads)
+    _, warm, holds = network or _network(contacts, threads)
     for n in followups.review(tracker, today, warm, holds, docs or followups.DOCS):
         quiet = n["state"] == "quiet" and n["notice"]
         if n["state"] not in ("due", "held") and not quiet:
@@ -580,8 +586,11 @@ def campaigns(tracker) -> dict:
     return out
 
 
-def _urgency(i):
+def urgency(i):
     return (i["half"] != "contact", i["rank"], -i["late"], i["name"].lower())
+
+
+_urgency = urgency  # the module's own name for it; other modules call urgency
 
 
 def _digest(label, items, late=True, note=""):

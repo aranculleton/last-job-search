@@ -294,6 +294,23 @@ def compile_letter(abbr):
                     os.path.dirname(docpaths.letter_tex(abbr)), letter_pdf(abbr))
 
 
+# The shortest a letter body may be asked to run to (Tweak L1, "Short"): the app keeps every
+# letter between 200 and 250 words (draft_audit.BODY_WORDS).
+MIN_LETTER_WORDS = 205
+
+
+def letter_words(a) -> int:
+    """The most words this letter's body may run to: the draft's own `max_words` (a tweak),
+    else the person's documents.letter_words, else MAX_BODY_WORDS; never under
+    MIN_LETTER_WORDS or over MAX_BODY_WORDS."""
+    want = a.get("max_words") or person.get("documents.letter_words", None) or MAX_BODY_WORDS
+    try:
+        want = int(want)
+    except (TypeError, ValueError):
+        want = MAX_BODY_WORDS
+    return max(MIN_LETTER_WORDS, min(MAX_BODY_WORDS, want))
+
+
 def body_words(a):
     """Words the candidate actually wrote: the four blocks plus the bullets,
     labels included (the label is printed, so the reader reads it). This is
@@ -543,7 +560,9 @@ def fit(a):
         pages = _render_resume(a)
     # Fill the page. Add a bullet, recompile, and keep it only if the resume is
     # still within its pages; otherwise put the page back the way it was and stop.
-    for _ in range(8):
+    # "Leave some space" (Tweak R7): the page is not filled back up to its last line.
+    fill = str(a.get("fill") or person.get("documents.fill", "") or "fuller")
+    for _ in range(0 if fill == "space" else 8):
         if pages > PAGES:
             break
         snapshot = [list(j["bullets"]) for j in a["jobs"]]
@@ -570,11 +589,12 @@ def fit(a):
                                 "it ships with), then render again.")
         return (pages, _lines(resume_pdf(abbr))), 0
     lpages = _render_letter(a)
+    most = letter_words(a)
     for _ in range(9):
         words = body_words(a)
-        if lpages <= 1 and words <= MAX_BODY_WORDS:
+        if lpages <= 1 and words <= most:
             break
-        if not trim_letter(a, max(8, words - MAX_BODY_WORDS), page_over=lpages > 1):
+        if not trim_letter(a, max(8, words - most), page_over=lpages > 1):
             break
         lpages = _render_letter(a)
     # Settle the page reference in the footer now that the layout is final.

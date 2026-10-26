@@ -1,0 +1,256 @@
+{
+  "name": "New Zealand",
+  "country": "nz",
+  "aka": [
+    "NZ",
+    "Aotearoa",
+    "Aotearoa New Zealand"
+  ],
+  "languages": [
+    "en",
+    "mi"
+  ],
+  "currency": "NZD",
+  "boards": [
+    {
+      "name": "SEEK",
+      "url": "https://www.seek.co.nz",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Seek_Limited",
+      "quote": "SEEK also operates in China, Hong Kong, Indonesia, Malaysia, New Zealand",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.seek.co.nz/analyst-jobs/in-Auckland",
+      "paths": {
+        "search": "/analyst-jobs/in-Auckland",
+        "posting": "/job/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 403
+      }
+    },
+    {
+      "name": "Trade Me Jobs",
+      "url": "https://www.trademe.co.nz",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Trade_Me",
+      "quote": "Trade Me Property followed in 2005 along with Trade Me Jobs in 2006",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://www.trademe.co.nz/a/jobs/search?search_string=analyst",
+      "paths": {
+        "search": "/a/jobs/search?search_string=analyst",
+        "posting": "/a/jobs/"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "robots.txt could not be decided within 60s",
+        "search": null,
+        "status": "unconfirmed",
+        "posting": null,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "not_tried",
+        "http": null
+      }
+    },
+    {
+      "name": "Indeed",
+      "url": "https://nz.indeed.com",
+      "kind": "general",
+      "source": "https://en.wikipedia.org/wiki/Indeed",
+      "quote": "Indeed is currently available in over 60 countries and 28 languages",
+      "checked": "2026-10-25",
+      "verified": true,
+      "search": "https://nz.indeed.com/jobs?q=analyst&l=Auckland",
+      "paths": {
+        "search": "/jobs?q=analyst&l=Auckland",
+        "posting": "/viewjob?jk=0"
+      },
+      "robots": {
+        "checked": "2026-10-25",
+        "why": "",
+        "search": true,
+        "status": "partial",
+        "posting": false,
+        "crawl_delay": null,
+        "ai_input": null
+      },
+      "public_search": {
+        "checked": "2026-10-25",
+        "status": "blocked",
+        "http": 401
+      }
+    }
+  ],
+  "eligibility": [
+    {
+      "phrase": "New Zealand citizen or resident",
+      "lang": "en",
+      "means": "citizenship",
+      "source": "https://en.wikipedia.org/wiki/New_Zealand_nationality_law",
+      "quote": "[ 46 ] All British subjects who were born, naturalised, or resident for at least 12 months in New Zealand automatically acquired New Zealand citizenship on 1 January 1949.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "phrase": "a visa with work rights (Accredited Employer Work Visa)",
+      "lang": "en",
+      "means": "sponsorship",
+      "source": "https://en.wikipedia.org/wiki/Immigration_to_New_Zealand",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: Accredited Employer)"
+    },
+    {
+      "phrase": "resident visa",
+      "lang": "en",
+      "means": "residence",
+      "source": "https://en.wikipedia.org/wiki/Immigration_to_New_Zealand",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: resident visa)"
+    },
+    {
+      "phrase": "security clearance (NZSIS vetting)",
+      "lang": "en",
+      "means": "clearance",
+      "source": "https://en.wikipedia.org/wiki/New_Zealand_Security_Intelligence_Service",
+      "quote": "is responsible for performing checks on government employees who require security clearance",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "documents": [
+    {
+      "topic": "noun",
+      "value": "CV",
+      "source": "https://www.careers.govt.nz/",
+      "quote": "Explore 800+ career ideas, qualifications, courses, CV templates",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "pages",
+      "value": "two to three pages",
+      "source": "https://en.wikipedia.org/wiki/Curriculum_vitae",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: New Zealand, page)"
+    },
+    {
+      "topic": "photo",
+      "value": "no photo",
+      "source": "https://en.wikipedia.org/wiki/R%C3%A9sum%C3%A9",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "no sentence on the page says it (looked for: New Zealand)"
+    },
+    {
+      "topic": "date_format",
+      "value": "DD/MM/YYYY",
+      "source": "https://en.wikipedia.org/wiki/List_of_date_formats_by_country",
+      "quote": "South Asia : Pakistan and Bangladesh Oceania : Papua New Guinea , New Zealand , etc.",
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "topic": "spelling",
+      "value": "New Zealand English (British forms: colour, organise)",
+      "source": "https://en.wikipedia.org/wiki/New_Zealand_English",
+      "quote": "the British spelling of double- L is universally used",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "pay": [
+    {
+      "name": "Income and earnings (Stats NZ)",
+      "url": "https://www.stats.govt.nz/topics/income",
+      "what": "earnings by industry, occupation and region",
+      "source": "https://www.stats.govt.nz/topics/income",
+      "quote": "",
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the source could not be read: a bot check (HTTP 200) instead of the page"
+    },
+    {
+      "name": "careers.govt.nz job profiles",
+      "url": "https://www.careers.govt.nz/jobs-database/",
+      "what": "pay ranges for each job",
+      "source": "https://www.careers.govt.nz/",
+      "quote": "Explore 800+ career ideas, qualifications, courses, CV templates, job videos, Interest quiz and more.",
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "places": [
+    {
+      "metro": "Auckland",
+      "written": [
+        "Auckland",
+        "Auckland CBD",
+        "North Shore",
+        "Manukau"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Auckland",
+      "quote": "the Manukau Harbour to the south-west, and the Waitākere Ranges",
+      "on_page": [
+        "North Shore",
+        "Manukau"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Wellington",
+      "written": [
+        "Wellington",
+        "Lower Hutt",
+        "Upper Hutt",
+        "Porirua"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Wellington_Region",
+      "quote": "The Wellington urban area, including the cities of Wellington , Porirua , Lower Hutt , and Upper Hutt",
+      "on_page": [
+        "Lower Hutt",
+        "Porirua"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    },
+    {
+      "metro": "Christchurch",
+      "written": [
+        "Christchurch",
+        "Canterbury"
+      ],
+      "source": "https://en.wikipedia.org/wiki/Christchurch",
+      "quote": "",
+      "on_page": [
+        "Canterbury"
+      ],
+      "checked": "2026-10-25",
+      "verified": false,
+      "why": "the sentence found on the page does not say it"
+    }
+  ]
+}

@@ -697,7 +697,7 @@ def _record(text) -> list:
     return out
 
 
-def _next_stage(stages, today="") -> dict:
+def next_stage(stages, today="") -> dict:
     """The stage this pack is for, when none is named: the next one booked, else the next undone.
     A booked stage whose date has passed and nobody ticked was most likely held: it is passed
     over, as a held one would be."""
@@ -819,7 +819,7 @@ def _built_for(folder, stages, found, today="") -> str:
     if not built or found.get("scheduled"):
         return ""
     last = built[-1]
-    # Held as _next_stage reads it: ticked, or booked for a day now past.
+    # Held as next_stage reads it: ticked, or booked for a day now past.
     held = any((s["done"] or s["scheduled"] and today and s.get("date") and s["date"] < today)
                and (_same_round(s["label"], last) or s["step"] == what_works.stage_step(last))
                for s in stages)
@@ -898,7 +898,7 @@ def process_channel(contact) -> str:
 
 
 def register_process(company, contact_id, role, stage="", date="", with_="", today=None,
-                     contacts=None, posting="") -> tuple:
+                     contacts=None, posting="", time="") -> tuple:
     """Make a hiring process with no application something every reader can see: a
     tracker row (PROCESS_NOTE) and its folder with an outcome.md, the booked stage on it
     when given. Returns (row, folder, added). Run twice, it changes nothing."""
@@ -969,28 +969,36 @@ def register_process(company, contact_id, role, stage="", date="", with_="", tod
                 "by %s.\n" % (company, role, "" if screen_first else "- [ ] Phone screen\n",
                               today, name))
     if _text(stage):
-        text = _with_stage(text, stage, date, with_)
+        text = _with_stage(text, stage, date, with_, time)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(text)
     return have, folder, added
 
 
-def _with_stage(text, stage, date="", with_="") -> str:
+def _with_stage(text, stage, date="", with_="", time="") -> str:
     """outcome.md's text with this stage booked on its checklist: `- [ ] <stage> (scheduled
     <date>, with <who>)`, the line the brief, /outcome and every pack read."""
-    same = re.compile(r"^- \[ \] %s(?:\s*\(.*\))?\s*$" % re.escape(stage), re.M | re.I)
+    # [ \t], never \s: in a multi-line match \s ate the newline and the blank line after a
+    # rebooked stage, so booking it twice ran the next heading into it.
+    same = re.compile(r"^- \[ \] %s(?:[ \t]*\(.*\))?[ \t]*$" % re.escape(stage), re.M | re.I)
     hits = list(same.finditer(text))
     if not _text(with_) and hits:
         # Rebooked with a new date only: the interviewer already on the line stays.
         had = re.search(r",\s*with\s+([^)]*)\)", hits[0].group(0))
         with_ = had.group(1).strip() if had else ""
+    if not what_works.clock(time) and hits:
+        # Said again for the same day with no time: the time on the line stays.
+        was = what_works.outcome_stages("## Interview stages reached\n" + hits[0].group(0))
+        if was and was[0]["date"] == _text(date):
+            time = was[0].get("time") or ""
+    when = "%s %s" % (date, what_works.clock(time)) if what_works.clock(time) else date
     line = "- [ ] %s%s" % (stage, " (scheduled %s%s)" % (
-        date, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
+        when, ", with %s" % with_ if _text(with_) else "") if _text(date) else "")
     if not hits:
         # A bare template line for the same step ("Phone screen" when a recruiter screen
         # is booked) is this stage under another name: it is replaced, never doubled.
         step = what_works.stage_step(stage)
-        hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)\s*$", text, re.M)
+        hits = [m for m in re.finditer(r"^- \[ \] ([^(\n]+?)[ \t]*$", text, re.M)
                 if what_works.stage_step(m.group(1)) == step][:1]
     if hits:
         # The first keeps its place with the new date; any later copies go, line and all.
@@ -1008,7 +1016,7 @@ def _with_stage(text, stage, date="", with_="") -> str:
     return text.rstrip("\n") + "\n\n## Interview stages reached\n%s\n" % line
 
 
-def record_stage(folder, company, role, stage, date, with_="", today=None) -> str:
+def record_stage(folder, company, role, stage, date, with_="", today=None, time="") -> str:
     """Book a stage given to `pack --write` in the process's outcome.md, the record the
     brief reminds from and every later pack reads: given there with a date, it was used
     for that one pack and recorded nowhere (interview audit, 2026-10-25). An outcome.md not
@@ -1019,12 +1027,54 @@ def record_stage(folder, company, role, stage, date, with_="", today=None) -> st
         text = ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview stages "
                 "reached\n\n## Notes\n- %s: %s booked for %s.\n"
                 % (company, role, _text(today) or dt.date.today().isoformat(), stage, date))
-    text = _with_stage(text, stage, date, with_)
+    text = _with_stage(text, stage, date, with_, time)
     os.makedirs(folder, exist_ok=True)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(text)
     m = re.search(r"^- \[ \] %s.*$" % re.escape(stage), text, re.M | re.I)
     return m.group(0) if m else ""
+
+
+# The archive's own Status word for each tracker outcome (documents/README.md), and the
+# checklist line an offer ticks.
+ARCHIVE_STATUS = {"hired": "hired", "rejected": "rejected", "no_response": "no_response",
+                  "offer_declined": "offer_declined", "withdrawn": "interview_only"}
+
+
+def record_result(folder, company, role, status, date, today=None) -> str:
+    """What happened, written into outcome.md as /outcome Step 3 writes it: an offer ticks
+    "Offer received" with its day; a resolution sets **Status:** and **Date resolved:**;
+    every line already there is kept. An outcome.md not there yet is started in the form
+    documents/README.md gives. Returns the text written."""
+    out = os.path.join(folder, "outcome.md")
+    text = _read(out) or ("# Outcome: %s - %s\n\n**Status:** in_progress\n\n## Interview "
+                          "stages reached\n\n## Notes\n" % (company, role))
+    day = _text(date) or _text(today) or dt.date.today().isoformat()
+    if status == "offer":
+        line = "- [x] Offer received (%s)" % day
+        hit = re.search(r"^- \[[ xX]\] Offer received.*$", text, re.M)
+        if hit:
+            text = text[:hit.start()] + line + text[hit.end():]
+        else:
+            text = _with_stage(text, "Offer received", "", "").replace(
+                "- [ ] Offer received", line, 1)
+    word = ARCHIVE_STATUS.get(status)
+    if word:
+        if re.search(r"^\*\*Status:\*\*.*$", text, re.M):
+            text = re.sub(r"^\*\*Status:\*\*.*$", "**Status:** %s" % word, text, count=1,
+                          flags=re.M)
+        else:
+            text = re.sub(r"^(# .*\n)", r"\1\n**Status:** %s\n" % word, text, count=1)
+        if re.search(r"^\*\*Date resolved:\*\*.*$", text, re.M):
+            text = re.sub(r"^\*\*Date resolved:\*\*.*$", "**Date resolved:** %s" % day, text,
+                          count=1, flags=re.M)
+        else:
+            text = re.sub(r"^(\*\*Status:\*\*.*)$", r"\1\n**Date resolved:** %s" % day, text,
+                          count=1, flags=re.M)
+    os.makedirs(folder, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    return text
 
 
 def gather(company, role="", stage="", date="", with_="", today=None, story_map=None,
@@ -1058,7 +1108,7 @@ def gather(company, role="", stage="", date="", with_="", today=None, story_map=
     if not stage:
         # Nothing on record yet means the first conversation, which is a screen
         # at nearly every employer; /interview asks, and passes --stage when not.
-        found = _next_stage(stages, today)
+        found = next_stage(stages, today)
         stage = _built_for(folder, stages, found, today) or found.get("label") or "Phone screen"
         date, with_ = date or found.get("date", ""), with_ or found.get("with", "")
     else:
@@ -1221,7 +1271,8 @@ def likely_questions(ctx) -> list:
     for part in order:
         for question, why, source, extra in (group[part] if isinstance(part, str) else part):
             add(question, why, source, **extra)
-    return out[:MAX_QUESTIONS]
+    # "Everything" (Tweak I2) shows a third more questions; the rest of the pack is the same.
+    return out[:MAX_QUESTIONS + (6 if person.get("prep.detail", "") == "everything" else 0)]
 
 
 # A question about pay, by whole word: "payments data" and "Payward" are not pay.
@@ -3396,7 +3447,7 @@ def conditional_questions(ctx) -> list:
     return out
 
 
-def _owned(text) -> dict:
+def owned_sections(text) -> dict:
     """{section: body lines} for the sections the person writes in, from the last version."""
     out, cur = {}, None
     for line in str(text or "").splitlines():
@@ -3411,7 +3462,10 @@ def _owned(text) -> dict:
     return out
 
 
-def _answer_blocks(lines) -> dict:
+_owned = owned_sections  # the module's own name for it; other modules call owned_sections
+
+
+def answer_blocks(lines) -> dict:
     """{normalised question: (question, [answer lines])} from the Your answers section."""
     out, q, body = {}, None, []
     for line in list(lines or ()) + ["### "]:
@@ -3423,6 +3477,9 @@ def _answer_blocks(lines) -> dict:
         elif q is not None and not line.startswith(INTENT_MARK):
             body.append(line)
     return out
+
+
+_answer_blocks = answer_blocks  # the module's own name for it; other modules call answer_blocks
 
 
 def _found_out(text) -> list:
@@ -3720,9 +3777,28 @@ def record_campaign(company, role, chat="", declined=False, today=None) -> str:
 
 # ---------------------------------------------------------------- the pack
 
+# What the person may hide from their pack (Tweak I2 and I3; person.json `prep`): hiding
+# changes what they see, never what is checked. These are never hidden: what they wrote,
+# the one screen with its do-not-say lines, the gaps and the money.
+NEVER_HIDDEN = ("On one screen", "Your answers", "To rework", "Notes",
+                "Gaps and honest framing", "Money and eligibility")
+DETAILS = ("one_screen", "standard", "everything")
+
+
+def hidden() -> set:
+    """The sections the person's settings leave out of the pack they read."""
+    detail = person.get("prep.detail", "standard")
+    if detail == "one_screen":
+        return {s for s in SECTIONS if s not in NEVER_HIDDEN}
+    return {s for s in (person.get("prep.hide", None) or []) if s in SECTIONS
+            and s not in NEVER_HIDDEN}
+
+
 def _section(title, lines, empty) -> list:
     if title not in SECTIONS:
         raise ValueError("%r is not one of the pack's SECTIONS" % title)
+    if title in hidden():
+        return []
     return ["## " + title, ""] + (list(lines) if lines else ["- " + empty]) + [""]
 
 
@@ -4332,6 +4408,12 @@ def add_asked(company, role, stage, question, story="", landed="", note="", date
     return path
 
 
+def rework_entry(question, note, date=None, where="mock") -> str:
+    """The line To rework keeps for one answer to work on."""
+    return '- %s, %s: "%s": %s' % (_text(date) or dt.date.today().isoformat(), where,
+                                   _text(question), _text(note))
+
+
 def add_rework(company, role, stage, question, note, date=None, where="mock") -> str:
     """An answer to work on, appended under To rework in the process's living document (or
     an older stage's pack, where the process predates it)."""
@@ -4343,8 +4425,9 @@ def add_rework(company, role, stage, question, note, date=None, where="mock") ->
     if not text:
         raise LookupError("no pack for %s at %s yet: build it first (pack --write)"
                           % (stage, company))
-    line = '- %s, %s: "%s": %s' % (_text(date) or dt.date.today().isoformat(), where,
-                                   _text(question), _text(note))
+    line = rework_entry(question, note, date, where)
+    if line in _rework_lines(text):
+        return path                     # kept already: the same answer, the same day
     m = re.search(r"^## To rework\s*$", text, re.M)
     if not m:
         text = text.rstrip() + "\n\n## To rework\n\n" + line + "\n"
@@ -4436,6 +4519,162 @@ def feedback_lines(question, band, points) -> list:
     out = ["**%s.** %s" % (_text(band).capitalize(), _text(question))]
     out += ["- You said \"%s\": %s" % (_text(q).strip(" \"'"), _text(n)) for q, n in points]
     return out
+
+
+# ---------------------------------------------------------------- what the page reads
+
+# The page shows a process's living document as a reading view (FUNCTIONS_SPEC 1.8): the one
+# screen, the questions to practise with the person's own answers, what is kept to rework.
+# Read here, from the document this file wrote, so the page and the pack never disagree on
+# what it says; code only, no model call.
+
+
+def section_lines(text, title) -> list:
+    """The lines under `## <title>` in a living document, up to the next `## `."""
+    m = re.search(r"^## %s\s*$" % re.escape(title), str(text or ""), re.M)
+    if not m:
+        return []
+    body = text[m.end():]
+    nxt = re.search(r"^## ", body, re.M)
+    return (body[:nxt.start()] if nxt else body).splitlines()
+
+
+_BOLD_LEAD = re.compile(r"^\*\*(.+?):\*\*\s*(.*)$")
+_SOURCE_TAIL = re.compile(r"\s*\(source: ([^()]*)\)\s*$")
+_SCREEN_PART = {"likely questions, and what to answer with": "questions", "hooks": "hooks",
+                "do not say": "do_not_say"}
+
+
+def _plain(text) -> str:
+    return " ".join(re.sub(r"\*\*|__", "", str(text or "")).split())
+
+
+def one_screen(text) -> dict | None:
+    """The "On one screen" section as parts: {assessing, hear, questions [{question,
+    answer}], hooks [{text, source}], money, do_not_say [{text, source}]}; each item that
+    uses a phrase the person banned carries `careful`. None when there is no such section."""
+    lines = section_lines(text, "On one screen")
+    if not any(ln.strip() for ln in lines):
+        return None
+    out = {"assessing": None, "hear": None, "questions": [], "hooks": [], "money": None,
+           "do_not_say": []}
+    part, last = None, None
+    for ln in lines:
+        s = ln.strip()
+        if not s or s in (voice_check.QUOTED_OPEN, voice_check.QUOTED_CLOSE):
+            continue
+        if s.startswith("- careful:") and last is not None:
+            last["careful"] = _plain(s[len("- careful:"):]).strip()
+            continue
+        head = re.fullmatch(r"\*\*(.+?)\*\*", s)
+        if head and head.group(1).lower() in _SCREEN_PART:
+            part, last = _SCREEN_PART[head.group(1).lower()], None
+            continue
+        lead = _BOLD_LEAD.match(s)
+        if lead:
+            name = lead.group(1).lower()
+            value = _plain(lead.group(2)).rstrip(".") or None
+            if name == "what they are assessing":
+                out["assessing"] = value
+            elif name == "what they want to hear":
+                out["hear"] = value
+            elif name == "money":
+                out["money"] = value
+            part, last = None, None
+            continue
+        if part == "questions":
+            m = re.match(r"^\d+\.\s+(.*)$", s)
+            if m:
+                q, _sep, a = m.group(1).partition(" -> ")
+                last = {"question": _plain(q), "answer": _plain(a) or None}
+                out["questions"].append(last)
+        elif part in ("hooks", "do_not_say") and s.startswith("- "):
+            body = s[2:]
+            src = _SOURCE_TAIL.search(body)
+            last = {"text": _plain(body[:src.start()] if src else body),
+                    "source": src.group(1).strip() if src else None}
+            out[part].append(last)
+    return out
+
+
+def _last_parens(text) -> tuple:
+    """(what comes before, what is inside) for a line ending in one balanced parenthetical,
+    nested ones within it kept: "Q? (asked here before (Phone screen); source: x)"."""
+    t = str(text or "").rstrip()
+    if not t.endswith(")"):
+        return t, ""
+    depth = 0
+    for i in range(len(t) - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(t[i], 0)
+        if depth == 0:
+            return t[:i].rstrip(), t[i + 1:-1]
+    return t, ""
+
+
+def practice(text) -> dict:
+    """What the page practises from (FUNCTIONS_SPEC 1.8): {questions [{question, why, answer,
+    draft}], reworked [lines], bands, min_quote_words}. `answer` is what the person wrote to
+    say under Your answers (their words only, notes out), `draft` whether it still carries a
+    draft's mark; `reworked` the lines kept under To rework. The band and the quote rule are
+    the ones `feedback` holds every point to, so the page can check its own feedback before
+    showing it."""
+    written = _answer_blocks(_owned(text).get("Your answers"))
+    qs = []
+    # An older pack, written before its sections, lists its questions at the top level.
+    for ln in section_lines(text, "Likely questions") or str(text or "").splitlines():
+        if not ln.startswith("- **Q.** "):
+            continue
+        head, inside = _last_parens(ln[len("- **Q.** "):])
+        why = inside.rsplit("; source: ", 1)[0] if "; source: " in inside else ""
+        q = _plain(head if why or "; source: " in inside else ln[len("- **Q.** "):])
+        mine = (written.get(what_works._norm(q)) or ("", []))[1]
+        said = [x.strip() for x in spoken(mine) if x.strip()]
+        qs.append({"question": q, "why": _plain(why) or None,
+                   "answer": " ".join(said) or None, "draft": prep.drafted(mine)})
+    return {"questions": qs[:MAX_QUESTIONS], "reworked": rework_lines(text),
+            "bands": list(BANDS), "min_quote_words": MIN_QUOTE_WORDS}
+
+
+def format_of(text) -> dict | None:
+    """The format section as the page shows it: {names, assumed, told}. `names` are the
+    kinds of round it prepares for ("Screen", "Case"), `assumed` whether the document had
+    to assume them, `told` what the person was told about how the round runs. None when the
+    document has no such section."""
+    lines = section_lines(text, "The format")
+    if not any(ln.strip() for ln in lines):
+        return None
+    names = [m.group(1) for ln in lines for m in [re.match(r"^- \*\*(.+?)\.\*\*", ln)] if m]
+    told = [_plain(_SOURCE_TAIL.sub("", ln.split(": ", 1)[1]))
+            for ln in lines if ln.startswith("- What you were told about this round: ")]
+    return {"names": names, "assumed": any(ln.startswith("- Assumed ") for ln in lines),
+            "told": told}
+
+
+def rework_lines(text) -> list:
+    """The lines kept under "To rework" in a living document."""
+    return _rework_lines(text)
+
+
+def remove_rework(company, role, stage, line) -> bool:
+    """Take one line back off To rework (the undo of `add_rework`). True when it was there."""
+    folder = docpaths.app_folder(company, role)
+    path = os.path.join(folder, LIVING)
+    if not os.path.exists(path):
+        path = os.path.join(folder, pack_name(stage))
+    text = _read(path)
+    kept = _rework_lines(text)
+    if line not in kept:
+        return False
+    m = re.search(r"^## To rework\s*$", text, re.M)
+    body = text[m.end():]
+    nxt = re.search(r"^## ", body, re.M)
+    end = m.end() + (nxt.start() if nxt else len(body))
+    rest = [k for k in kept if k != line]
+    text = text[:m.end()] + "\n\n" + ("\n".join(rest) if rest else "- " + REWORK_EMPTY) + "\n\n" \
+        + text[end:].lstrip()
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text.rstrip() + "\n")
+    return True
 
 
 # ---------------------------------------------------------------- CLI

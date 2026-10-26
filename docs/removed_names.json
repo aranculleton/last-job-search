@@ -1,0 +1,117 @@
+{
+ "about": "Public names the app took away on purpose: a top-level name in tools/ or templates/ with no leading underscore, outside tools/openroles/, which a person's own tests may use. tools/public_names.py check fails on a name gone from tools/public_names.json unless it is listed here with the date, the reason and the CHANGELOG line that tells people, and that line is in CHANGELOG.md. Each entry: {\"module\": \"tools/<file>.py\", \"name\": \"<name>\", \"date\": \"YYYY-MM-DD\", \"reason\": \"<why it went>\", \"changelog\": \"<the CHANGELOG line, as written there>\"}.",
+ "removed": [
+  {
+   "module": "tools/env_check.py",
+   "name": "BREW",
+   "date": "2026-10-25",
+   "reason": "the computer set-up no longer installs Homebrew: tools/installs.py puts what is missing in the person's own folders, with no password",
+   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "SHORT_SIGN_IN",
+   "date": "2026-10-25",
+   "reason": "the sign-in is asked for by the reading step, once, when it finds the person signed out; said by the place check too, it came before any reading (tests/test_place.py)",
+   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "SHORT_TWO_CHATS",
+   "date": "2026-10-25",
+   "reason": "4.0 recommends no chat on the computer for everything; place.CHATS is what is said now",
+   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "SIGN_IN_ONCE",
+   "date": "2026-10-25",
+   "reason": "the sign-in is asked for by the reading step, once, when it finds the person signed out; said by the place check too, it came before any reading (tests/test_place.py)",
+   "changelog": "**Four messages your own checks might have named were retired**: `env_check.BREW`, `place.SHORT_SIGN_IN`, `place.SHORT_TWO_CHATS` and `place.SIGN_IN_ONCE`. The reading step now asks for the LinkedIn sign-in itself, once, when it finds you signed out; the set-up of a computer needs no Homebrew; and no chat on the computer is recommended for everything."
+  },
+  {
+   "module": "tools/place.py",
+   "name": "RECOMMEND",
+   "date": "2026-10-25",
+   "reason": "4.0 recommends no chat on the computer: the place question is asked where a chat cannot tell, with no recommendation",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/brief.py",
+   "name": "page_parts",
+   "date": "2026-10-25",
+   "reason": "a second builder of the page's brief, due and messages that nothing ran; the page's come from tools/app_model.py",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "EXIT",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "PAGE",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "READY",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "ROOT",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "SAY",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "STATES",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "main",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "paste",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "state",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  },
+  {
+   "module": "tools/setup_state.py",
+   "name": "this_copy",
+   "date": "2026-10-25",
+   "reason": "a third command for the one setup detector: python3 tools/app.py start says where setup stands (place.setup_state), and app.py start --paste prints the line for a new computer (app.paste_line)",
+   "changelog": "**More names your own checks might use were retired**: `place.RECOMMEND` (\"If you have one you can use, say yes\") and `brief.page_parts` (with `brief.py --json`), and the command `tools/setup_state.py` with its names (`setup_state.EXIT`, `PAGE`, `READY`, `ROOT`, `SAY`, `STATES`, `main`, `paste`, `state`, `this_copy`). No chat on a computer is recommended any more, the page builds its own brief, and `python3 tools/app.py start` is the one way any chat finds out where setup stands (`--paste` prints the line for a new computer)."
+  }
+ ]
+}

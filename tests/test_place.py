@@ -60,12 +60,17 @@ def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
         # Numbered steps, one action a line: one long sentence of destinations lost a
         # person who had only used the cloud (2026-10-20). No GitHub Desktop: the chat on the
         # computer makes the copy itself, from one message (COMPUTER.md).
+        # 4.0: the page first, which needs nothing new (it reads profiles when opened in the
+        # desktop app); a chat on the computer only as the other way, steps and all, for a
+        # person who asked how and would rather have one.
+        assert "Your page reads them when you open it in the Claude desktop app" in said
+        assert said.index("Your page reads") < said.index("To set up a chat on your computer")
         assert "To set up a chat on your computer:\n1. Install the Claude desktop app" in said
         assert "\n2. Open its Code tab." in said
         assert "github.com/example-owner/my-job-search" in said and "COMPUTER.md" in said
         assert said.endswith(claude_surfaces.CLOSING)
-        # The set-up that works, said plainly; no paste offered to a person at a computer.
-        assert place.TWO_CHATS in said and place.PASTE_TOP not in said
+        # No paste offered to a person at a computer: the page opened there reads them.
+        assert place.CHATS not in said and place.PASTE_TOP not in said
     # Not knowing the chat's tools, it asks the chat to look before it says anything.
     said = _say("desktop-cloud", "browser", [])
     unsure = _say("desktop-cloud", "browser", None)
@@ -77,7 +82,7 @@ def test_a_cloud_chat_with_no_browser_says_finding_works_and_where_to_read():
     assert _say("desktop-cloud", "browser", ["browser"]) == place.CLOUD_LINK_NOW
     assert "documentation" not in place.CLOUD_LINK_NOW + place.CLOUD_LINK_NOT
     assert len(place.CLOUD_LINK_NOW.split()) <= 25
-    assert place.CLOUD_LINK_NOT in said
+    assert place.CLOUD_LINK_NOT not in said         # 4.0: the page reads them, not a move
 
 
 def test_a_chat_that_pastes_hears_nothing_anywhere():
@@ -86,11 +91,14 @@ def test_a_chat_that_pastes_hears_nothing_anywhere():
         assert _say(where, "", None) == ""
 
 
-def test_a_phone_or_the_web_is_offered_the_computers_chat_and_never_an_install():
+def test_a_phone_or_the_web_is_pointed_at_the_page_and_never_an_install():
+    """4.0: no move to a computer chat is suggested; the page reads profiles itself when it is
+    opened in the Claude desktop app."""
     for where in ("phone", "web"):
         said = _say(where, "browser", [])
         assert said.startswith(place.FINDING_WORKS)
-        assert "/remote-control" in said and "claude remote-control --chrome" in said
+        assert "Your page reads them" in said and place.PASTE_TOP in said
+        assert "remote-control" not in said and "chat on your computer" not in said
         assert not re.search(r"\binstall", said, re.I)
     # A phone chat linked to the computer reads as well as one on it: by tools, not place.
     # Signing in is the reading step's own (reading.py asks when it finds them signed out).
@@ -159,14 +167,14 @@ def test_nothing_missing_says_nothing():
 
 def test_the_next_step_after_setups_question_never_stops_the_chat():
     """It once told a cloud chat to stop with nothing written and start again on the
-    computer (2026-10-25). Setup is the same everywhere; the computer chat is offered once,
-    at its end, with the one message that sets it up."""
+    computer (2026-10-25). Setup is the same everywhere, and since 4.0 a computer is for the
+    page in the desktop app: no chat to move to, and nothing to paste."""
     for where in ("web", "desktop-cloud", "phone", "unknown"):
         for answer in ("computer", "both"):
             step = place.next_step(answer, where, *REPO)
-            assert step.startswith(place.TWO_CHATS)
-            assert place.computer_paste(*REPO) in step and "COMPUTER.md" in step
-            assert "github.com/example-owner/my-job-search" in step
+            assert step.startswith(place.CHATS)
+            assert "open your page in the Claude desktop app" in step
+            assert "COMPUTER.md" not in step and place.computer_paste(*REPO) not in step
             for stop in ("close this chat", "start again", "set me up", "stop"):
                 assert stop not in step.lower(), stop
             assert len(step.split()) <= 80
@@ -177,9 +185,10 @@ def test_the_next_step_after_setups_question_never_stops_the_chat():
         assert step.startswith("Carry on here")
         assert "COMPUTER.md" not in step
         _clean(step)
-    _clean(place.QUESTION + " " + place.TRADE_OFF + " " + place.RECOMMEND)
+    _clean(place.QUESTION + " " + place.TRADE_OFF)
+    assert not hasattr(place, "RECOMMEND")          # 4.0 recommends no computer chat
     assert "local" not in place.TRADE_OFF.lower() and "cloud" not in place.TRADE_OFF.lower()
-    assert len((place.QUESTION + " " + place.TRADE_OFF + " " + place.RECOMMEND).split()) <= 40
+    assert len((place.QUESTION + " " + place.TRADE_OFF).split()) <= 40
 
 
 def test_where_they_work_is_recorded_without_asking_where_the_chat_can_tell():
@@ -365,28 +374,29 @@ def test_what_every_chat_says_unasked_is_two_or_three_short_sentences_and_no_lin
                     assert "http" not in said and "At the time of writing" not in said
                     assert said.count(". ") + said.count(": ") <= 4
     short = place.check("desktop-cloud", "browser", [], False, (), *REPO)
-    assert short == [place.SHORT_CLOUD + " " + place.SHORT_TWO_CHATS]
-    assert "Ask me how" in place.SHORT_TWO_CHATS and "paste" not in short[0].lower()
-    # Two chats, said wherever the person decides where to work, and on the computer, where
-    # the brief is in the cloud.
+    assert short == [place.SHORT_CLOUD + " " + place.SHORT_PASTE]
+    assert "move" not in short[0] and "chat on your computer" not in short[0]
+    # Where the person decides where to work: the page and the cloud, a computer chat only
+    # optional; on the computer, the brief is in the cloud.
     for answer, where in (("both", "web"), ("computer", "web")):
-        assert place.TWO_CHATS in place.next_step(answer, where, *REPO)
+        assert place.CHATS in place.next_step(answer, where, *REPO)
     assert place.BRIEF_LOCAL in place.next_step("computer", "local", *REPO)
     # The steps are all still there for the person who asks.
     assert "To set up a chat on your computer:" in _say("desktop-cloud", "browser", [])
 
 
-def test_an_existing_person_at_a_computer_hears_about_two_chats_without_browser_reads():
-    """Two chats is said to a person with a computer in a cloud chat even when they do not
-    read profiles in their browser: someone who set up in the cloud was never told."""
+def test_nobody_with_a_computer_is_told_to_move_to_it():
+    """4.0 (2026-10-25): two chats were said to everyone with a computer; now the page and
+    the cloud chats do everything, and a person not reading profiles in a browser hears
+    nothing from the place check, wherever they are."""
     for works in ("computer", "both"):
         for where in ("desktop-cloud", "web", "unknown"):
-            short = place.check(where, "paste", [], False, (), *REPO, works=works)
-            assert short == [place.SHORT_TWO_CHATS]
-            _clean(short[0])
-            said = "\n".join(place.check(where, "paste", [], False, (), *REPO, detail=True,
-                                         works=works))
-            assert said.startswith(place.TWO_CHATS) and "To set up a chat on your computer:" in said
+            assert place.check(where, "paste", [], False, (), *REPO, works=works) == []
+            assert place.check(where, "paste", [], False, (), *REPO, detail=True,
+                               works=works) == []
         assert place.check("local", "paste", [], False, (), *REPO, works=works) == []
+    # Someone who already has a computer chat keeps hearing the line that names it.
+    assert place.check("web", "browser", [], False, (), *REPO,
+                       has_local=True) == [place.SHORT_HAS_LOCAL]
     assert place.check("web", "paste", [], False, (), *REPO, works="phone") == []
     assert place.check("web", "paste", [], False, (), *REPO) == []      # never asked yet

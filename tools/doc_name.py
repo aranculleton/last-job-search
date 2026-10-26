@@ -200,10 +200,7 @@ def tracker_rows(path: str = TRACKER) -> list[dict]:
     """The rows, through csv_store.read_rows, the one state-file reader: a conflicted file
     is refused, and a short row's missing cells read as blanks, never None."""
     import csv_store
-    try:
-        return csv_store.read_rows(path)
-    except OSError:
-        return []
+    return csv_store.tracker(path)
 
 
 def _norm(s: str) -> str:

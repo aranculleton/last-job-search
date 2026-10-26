@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.join(ROOT, "tools"))
 import apply_link as al  # noqa: E402
 from lookup_score import norm  # noqa: E402
 
-NOW = dt.datetime(2026, 10, 25, 9, 30)
+NOW = dt.datetime(2026, 10, 25, 9, 30, tzinfo=dt.timezone.utc)
 
 
 def test_tracking_comes_off_and_the_job_stays():
@@ -119,7 +119,7 @@ def test_a_linkedin_posting_is_matched_on_the_employers_own_board():
     assert got["apply_url"] == "https://boards.greenhouse.io/oakmere/jobs/456?gh_jid=456"
     assert got["link_status"] == "open"
     assert got["link_check"] == ("open on Oakmere Foods's own board (matched by title), "
-                                 "checked 2026-10-25 09:30")
+                                 "checked 2026-10-25 09:30 UTC")
     assert calls == [("Oakmere Foods", "greenhouse", "oakmere")]
 
 
@@ -129,7 +129,7 @@ def test_a_boards_own_posting_no_longer_listed_is_closed():
     got = al.shown(row, now=NOW, read=_reader([]), boards=BOARD)
     assert got["link_status"] == "closed"
     assert got["link_check"] == ("closed: no longer on Oakmere Foods's own board, "
-                                 "checked 2026-10-25 09:30")
+                                 "checked 2026-10-25 09:30 UTC")
     listed = dict(row, url=LISTING[0]["url"], title="Supply Chain Analyst")
     got = al.shown(listed, now=NOW, read=_reader([]), boards=BOARD)
     assert (got["link_status"], got["apply_url"]) == ("open", LISTING[0]["url"])

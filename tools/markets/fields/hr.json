@@ -1,0 +1,148 @@
+{
+  "name": "Human resources",
+  "field": "hr",
+  "aka": [
+    "HR",
+    "human resources",
+    "people",
+    "talent acquisition",
+    "recruitment",
+    "recruiting"
+  ],
+  "boards": {
+    "gb": [
+      {
+        "name": "People Management Jobs (CIPD)",
+        "url": "https://jobs.peoplemanagement.co.uk",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/Chartered_Institute_of_Personnel_and_Development",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it",
+        "search": "https://jobs.peoplemanagement.co.uk/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "robots.txt could not be read (RuntimeError)",
+          "search": null,
+          "status": "unconfirmed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ],
+    "us": [
+      {
+        "name": "SHRM HR Jobs",
+        "url": "https://hrjobs.shrm.org",
+        "kind": "field",
+        "source": "https://en.wikipedia.org/wiki/Society_for_Human_Resource_Management",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it",
+        "search": "https://hrjobs.shrm.org/jobs/",
+        "paths": {
+          "search": "/jobs/",
+          "posting": "/job/"
+        },
+        "robots": {
+          "checked": "2026-10-25",
+          "why": "robots.txt could not be read (HTTP 403)",
+          "search": null,
+          "status": "unconfirmed",
+          "posting": null,
+          "crawl_delay": null,
+          "ai_input": null
+        },
+        "public_search": {
+          "checked": "2026-10-25",
+          "status": "not_tried",
+          "http": null
+        }
+      }
+    ]
+  },
+  "licences": {
+    "gb": [
+      {
+        "value": "CIPD membership level (Associate, Chartered)",
+        "source": "https://en.wikipedia.org/wiki/Chartered_Institute_of_Personnel_and_Development",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ],
+    "us": [
+      {
+        "value": "SHRM-CP or SHRM-SCP certification",
+        "source": "https://en.wikipedia.org/wiki/Society_for_Human_Resource_Management",
+        "quote": "",
+        "checked": "2026-10-25",
+        "verified": false,
+        "why": "the sentence found on the page does not say it"
+      }
+    ]
+  },
+  "titles": [
+    {
+      "value": [
+        "Corporate Recruiter",
+        "HR Analyst (Human Resources Analyst)",
+        "HR Coordinator (Human Resources Coordinator)",
+        "HR Generalist (Human Resources Generalist)",
+        "Recruiter"
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1071.00",
+      "quote": "Sample of reported job titles: Corporate Recruiter, Employment Representative",
+      "on_page": [
+        "Corporate Recruiter",
+        "HR Analyst (Human Resources Analyst)",
+        "HR Coordinator (Human Resources Coordinator)",
+        "HR Generalist (Human Resources Generalist)",
+        "Recruiter"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ],
+  "families": [
+    {
+      "family": "HR system",
+      "members": [
+        [
+          "Workday",
+          "(?-i:\\bWorkday\\b)"
+        ],
+        [
+          "PeopleSoft",
+          "\\bpeoplesoft\\b"
+        ],
+        [
+          "SAP",
+          "(?-i:\\bSAP\\b)"
+        ]
+      ],
+      "source": "https://www.onetonline.org/link/summary/13-1071.00",
+      "quote": "Enterprise resource planning ERP software - Microsoft Dynamics",
+      "on_page": [
+        "Workday software",
+        "Oracle PeopleSoft",
+        "SAP software"
+      ],
+      "checked": "2026-10-25",
+      "verified": true
+    }
+  ]
+}

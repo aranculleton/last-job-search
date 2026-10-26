@@ -796,6 +796,9 @@ def test_two_next_steps_of_the_apps_own_still_take_the_later():
 
 
 def test_the_employers_where_more_may_be_written_to_merge_by_employer():
+    """Changed 2026-10-25, deliberately: this pinned ours' rows, then theirs'. The file's
+    writer (reading.more_at) keeps it sorted by employer, so a merge in any other order
+    rewrote lines it had not merged; it is now written as its writer writes it."""
     base = [{"employer": "Quayside Foods", "limit": 4, "said": "more there", "date": "2026-10-20"}]
     ours = base + [{"employer": "Larkspur Retail", "limit": 3, "said": "a few more",
                     "date": "2026-10-24"}]
@@ -804,8 +807,8 @@ def test_the_employers_where_more_may_be_written_to_merge_by_employer():
     text, problems = M.merge(json.dumps(base), json.dumps(ours), json.dumps(theirs),
                              "profile/more_at.json")
     assert not problems
-    assert [r["employer"] for r in json.loads(text)] == ["Quayside Foods", "Larkspur Retail",
-                                                          "Lanternfish"]
+    assert [r["employer"] for r in json.loads(text)] == ["Lanternfish", "Larkspur Retail",
+                                                          "Quayside Foods"]
 
 
 def test_the_other_side_is_read_from_gits_name_for_it_in_any_case(monkeypatch):

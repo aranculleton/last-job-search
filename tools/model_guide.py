@@ -4,6 +4,8 @@
     python3 tools/model_guide.py apply --on "<this session's model>"   # a line, or nothing
     python3 tools/model_guide.py --on "<this session's model>"         # the day's check
     python3 tools/model_guide.py --all                                 # the whole table
+    python3 tools/model_guide.py --work draft --on "<this session's model>"
+                                    # the model a chat started for that kind of page work gets
 
 A session runs it when a piece of work starts. It prints nothing when the model already
 fits, so a fitting session spends no words on it. When it does not fit it says which way
@@ -75,6 +77,46 @@ ALIASES = {
     "reset": "tracking",
     "upgrade": "research", "add-portal": "build", "upskill": "advice",
 }
+
+
+# Each kind of work the page queues (tools/page_db.py WORK_KINDS), as the work above. A
+# chat started for one gets the model that work needs (`for_work`). Networking runs write
+# the first notes a person reads, and the brief writes follow-ups, so both are outreach:
+# whatever a contact or an employer reads runs on the strongest model, never a cheaper one
+# (.claude/skills/job-application-assistant/11-cost-model.md).
+WORK = {
+    "search": "search", "draft": "apply", "resume_for_contact": "apply", "tweak": "apply",
+    "general_resume": "apply", "prep": "interview", "interview": "interview",
+    "network": "outreach", "reply": "outreach", "follow_up": "outreach", "brief": "outreach",
+    "research": "research", "update": "research", "talk": "chat", "files": "tracking",
+    "republish": "tracking", "listen": "chat",
+    # One posting the person added, scored as /apply Step 1 scores it (the gates, then fit);
+    # a look over their own LinkedIn profile, which every contact reads.
+    "evaluate": "apply", "own_profile": "outreach",
+}
+# The model picker's aliases (code.claude.com/docs/en/model-config, "Model aliases"), which
+# follow the newest model of each tier, so nothing here names a version.
+ALIAS = {"frontier": "fable", "strongest": "opus", "balanced": "sonnet", "fast": "haiku"}
+
+
+def for_work(kind: str, on: str = "") -> dict:
+    """The model a chat started for a kind of page work gets, given the model of the chat
+    that starts it: {kind, task, tier, effort, model, why}. `model` is an alias to pass to
+    create_session, or None to leave it out, so the new chat runs on the starter's own.
+
+    Each gets the tier its work wants ("sonnet" for a search started from Opus, "opus" for a
+    draft started from Sonnet), and work that wants the strongest model is never moved
+    below the starter's own: from Opus or Fable it is None, the starter's own. A model this
+    guide does not know is left alone (None): an inherited default is a smaller mistake
+    than a wrong downgrade."""
+    task = WORK.get(kind, "chat")
+    tier, effort, why = TASKS[task]
+    have = tier_of(on) if on else None
+    model = None
+    if have is not None and have != tier:
+        model = None if tier == "strongest" and RANK[have] > RANK[tier] else ALIAS[tier]
+    return {"kind": kind, "task": task, "tier": tier, "effort": effort, "model": model,
+            "why": why}
 
 
 # Each kind of work in a sentence the person reads.
@@ -179,7 +221,13 @@ def main(argv: list[str]) -> int:
     ap.add_argument("work", nargs="?", help="a command (apply, /scrape) or a kind of work")
     ap.add_argument("--on", default="", help="the model this session runs on")
     ap.add_argument("--all", action="store_true", help="print the whole table")
+    ap.add_argument("--work", dest="page_work", default="",
+                    help="a kind of page work: the model a chat started for it gets")
     a = ap.parse_args(argv)
+    if a.page_work:
+        import json
+        print(json.dumps(for_work(a.page_work, a.on), ensure_ascii=False))
+        return 0
     if not a.work and a.on and not a.all:
         print(summary(a.on))
         return 0

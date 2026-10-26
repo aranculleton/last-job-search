@@ -555,9 +555,14 @@ def step_computer() -> None:
                           env=cenv, timeout=1800)
     check("computer: what this computer lacks, installed in the background", code == 0,
           out.strip(), took)
-    code, out, took = run([PY, "tools/setup_state.py", "--no-fetch"], cwd=here, env=cenv)
+    # COMPUTER.md step 5: the one start every chat runs. The copy's origin is a folder here,
+    # so it is told what GitHub would say about it (private), and asks nothing.
+    code, out, took = run([PY, "tools/app.py", "start", "--on", "check", "--tools", "none",
+                           "--chat", "computer-check"], cwd=here,
+                          env=dict(cenv, LJS_COPY="private"))
     check("computer: an already set-up copy is ready and asks nothing",
-          code == 0 and out.startswith("ready") and "?" not in out, out.strip(), took)
+          code == 0 and out.startswith("app start: set up") and "Traceback" not in out,
+          out.strip(), took)
     for label, cmd, codes in (
             ("pull master", [PY, "tools/sync_app.py", "--pull"], (0,)),
             ("take the app's update", [PY, "tools/sync_app.py", "--on", "check", "--tools",
