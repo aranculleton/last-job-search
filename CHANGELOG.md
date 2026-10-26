@@ -92,6 +92,13 @@ make sense to somebody whose repo just received it.
 
 ### Changed
 
+- **What a person's own tests may see change in 4.0** (each deliberate):
+  `tools/verify_batch.sh` hands over to `tools/verify_batch.py`, which now runs every check
+  (`check_numbers`, `voice_check`, `--soft-ok`), so a test that reads the script's text reads
+  the Python file instead; the example cover letter dates itself with a placeholder, never
+  `\today`, because each letter keeps the date it was made; a round's folder holds a
+  `filtered/` folder beside its file; and `stage_picks.py assemble` needs both audits for a
+  pick, naming one with no code audit as missing rather than stopping the batch.
 - **Every change to your page's own design reaches an open page**, a small wording fix too.
 - **The page's privacy line says what is true**: only you can open it unless you share it,
   and it holds first names, employers, your drafts and your setup answers, so keep it
